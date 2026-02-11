@@ -3,3 +3,7 @@ This is an open-source project that incorporates an open-source artificial intel
 這是一個搭載開源人工智慧模型的IoT裝置（ESP32、麥克風、攝影機等），專為視障人士設計的開源專案。
 
 參考來源：https://github.com/AI-FanGe/OpenAIglasses_for_Navigation (AI 智能盲人眼镜系统 🤖👓)
+
+
+XIAO ESP32-S3 Sense notion筆記資料：
+https://www.notion.so/XIAO-ESP32-S3-Sense-2f9cd2f379818066a8aedc41570dab27?source=copy_link
