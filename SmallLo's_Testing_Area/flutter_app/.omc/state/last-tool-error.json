@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd C:/Users/owo/Desktop/OpenAIDevice_For_VisualImpairment && rm -rf \\\"SmallLo's_Testing_Area/server\\\" && mv flutter_app \\\"SmallLo's_Testing_Area/\\\" && ls \\\"SmallLo's_Testing_Area/\\\"\",\"desc...",
+  "error": "Exit code 1\nmv: cannot move 'flutter_app' to \"SmallLo's_Testing_Area/flutter_app\": Device or resource busy",
+  "timestamp": "2026-03-15T18:09:19.627Z",
+  "retry_count": 1
+}
