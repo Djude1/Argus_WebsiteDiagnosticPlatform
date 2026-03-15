@@ -26,7 +26,7 @@ pygame==2.5.2
 
 # Aliyun DashScope SDK (ASR & Qwen-Omni)
 dashscope==1.14.1
-openai==1.3.5  # For DashScope compatibility mode
+openai>=2.0.0  # Upgraded for httpx 0.28+ compatibility
 
 # Environment & Configuration
 python-dotenv==1.0.0
