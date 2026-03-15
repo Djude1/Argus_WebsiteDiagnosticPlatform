@@ -17,6 +17,7 @@ class CameraStreamService {
   CameraController? _cameraController;
   bool _isStreaming = false;
   int _fps = AppConstants.cameraFps;
+  DateTime? _lastFrameTime;
 
   final StreamController<int> _fpsController = StreamController<int>.broadcast();
   final StreamController<int> _latencyController = StreamController<int>.broadcast();
@@ -73,6 +74,18 @@ class CameraStreamService {
   void _processFrame(CameraImage image) {
     if (!_isStreaming) return;
 
+    // FPS throttling: skip frame if not enough time has elapsed
+    final now = DateTime.now();
+    final frameInterval = Duration(milliseconds: 1000 ~/ _fps);
+
+    if (_lastFrameTime != null) {
+      final elapsed = now.difference(_lastFrameTime!);
+      if (elapsed < frameInterval) {
+        return; // Skip this frame to maintain target FPS
+      }
+    }
+
+    _lastFrameTime = now;
     final startTime = DateTime.now();
 
     // Convert to JPEG
