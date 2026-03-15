@@ -4,7 +4,7 @@ class AppConstants {
 
   // Default server configuration
   static const String defaultServerIp = '192.168.1.100';
-  static const int defaultServerPort = 8081;
+  static const int defaultServerPort = 8000;
 
   // WebSocket endpoints
   static String cameraWsPath(String ip, int port) =>
