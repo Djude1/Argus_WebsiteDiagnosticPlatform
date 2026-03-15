@@ -105,17 +105,41 @@ class CameraStreamService {
       return image.planes.first.bytes;
     }
 
+    // Validate plane count for YUV formats
+    if (image.planes.length < 3) {
+      _logger.e('Invalid plane count: ${image.planes.length}, expected 3 for YUV');
+      // Return a placeholder black frame instead of crashing
+      final placeholder = img.Image(width: image.width, height: image.height);
+      return Uint8List.fromList(img.encodeJpg(placeholder, quality: 50));
+    }
+
     // Convert YUV420 to RGB then to JPEG
     final rgbImage = img.Image(width: image.width, height: image.height);
 
+    final yPlane = image.planes[0];
+    final uPlane = image.planes[1];
+    final vPlane = image.planes[2];
+
+    final yRowStride = yPlane.bytesPerRow;
+    final uvRowStride = uPlane.bytesPerRow;
+    final uvPixelStride = uPlane.bytesPerRow ~/ (image.width ~/ 2);
+
     for (int y = 0; y < image.height; y++) {
       for (int x = 0; x < image.width; x++) {
-        final yIndex = y * image.width + x;
-        final uvIndex = (y ~/ 2) * (image.width ~/ 2) + (x ~/ 2);
+        final yIndex = y * yRowStride + x;
+        final uvIndex = (y ~/ 2) * uvRowStride + (x ~/ 2) * uvPixelStride;
 
-        final yValue = image.planes[0].bytes[yIndex];
-        final uValue = image.planes[1].bytes[uvIndex];
-        final vValue = image.planes[2].bytes[uvIndex];
+        // Bounds checking to prevent crashes on various devices
+        if (yIndex >= yPlane.bytes.length ||
+            uvIndex >= uPlane.bytes.length ||
+            uvIndex >= vPlane.bytes.length) {
+          rgbImage.setPixelRgb(x, y, 0, 0, 0);
+          continue;
+        }
+
+        final yValue = yPlane.bytes[yIndex];
+        final uValue = uPlane.bytes[uvIndex];
+        final vValue = vPlane.bytes[uvIndex];
 
         final r = (yValue + 1.402 * (vValue - 128)).clamp(0, 255).toInt();
         final g = (yValue - 0.344 * (uValue - 128) - 0.714 * (vValue - 128))
