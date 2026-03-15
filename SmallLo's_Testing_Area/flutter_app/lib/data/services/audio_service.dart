@@ -23,6 +23,7 @@ class AudioService {
 
   bool _isRecording = false;
   bool _isPlaying = false;
+  bool _isDisposed = false;
   String? _currentRecordingPath;
 
   final StreamController<bool> _recordingStateController =
@@ -31,6 +32,9 @@ class AudioService {
       StreamController<bool>.broadcast();
   final StreamController<String> _statusController =
       StreamController<String>.broadcast();
+
+  StreamSubscription<Uint8List>? _audioResponseSubscription;
+  StreamSubscription<String>? _transcriptSubscription;
 
   Stream<bool> get recordingState => _recordingStateController.stream;
   Stream<bool> get playingState => _playingStateController.stream;
@@ -56,12 +60,16 @@ class AudioService {
   }
 
   void _listenToAudioResponses() {
-    _wsService.audioResponses.listen((audioData) {
-      _playAudio(audioData);
+    _audioResponseSubscription = _wsService.audioResponses.listen((audioData) {
+      if (!_isDisposed) {
+        _playAudio(audioData);
+      }
     });
 
-    _wsService.transcripts.listen((transcript) {
-      _statusController.add('AI: $transcript');
+    _transcriptSubscription = _wsService.transcripts.listen((transcript) {
+      if (!_isDisposed) {
+        _statusController.add('AI: $transcript');
+      }
     });
   }
 
@@ -156,12 +164,19 @@ class AudioService {
 
   /// Dispose resources.
   Future<void> dispose() async {
+    _isDisposed = true;
+
+    // Cancel stream subscriptions to prevent memory leaks
+    await _audioResponseSubscription?.cancel();
+    await _transcriptSubscription?.cancel();
+
     await _recorder.stop();
     await _recorder.dispose();
     await _player.dispose();
-    _recordingStateController.close();
-    _playingStateController.close();
-    _statusController.close();
+
+    await _recordingStateController.close();
+    await _playingStateController.close();
+    await _statusController.close();
   }
 }
 
