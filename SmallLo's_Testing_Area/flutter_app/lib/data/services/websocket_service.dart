@@ -34,6 +34,7 @@ class WebSocketService {
   ServerConfig _config = const ServerConfig();
   int _reconnectAttempts = 0;
   Timer? _heartbeatTimer;
+  bool _isDisposed = false;
 
   /// Update server configuration.
   void updateConfig(ServerConfig config) {
@@ -135,6 +136,11 @@ class WebSocketService {
   }
 
   void _attemptReconnect() {
+    if (_isDisposed) {
+      _logger.i('Service disposed, skipping reconnect');
+      return;
+    }
+
     if (_reconnectAttempts >= AppConstants.maxReconnectAttempts) {
       _logger.e('Max reconnect attempts reached');
       _connectionStatusController.add(ConnectionStatus.error);
@@ -146,7 +152,9 @@ class WebSocketService {
     _logger.i('Reconnect attempt $_reconnectAttempts');
 
     Future.delayed(AppConstants.reconnectDelay, () {
-      connect();
+      if (!_isDisposed) {
+        connect();
+      }
     });
   }
 
@@ -188,6 +196,7 @@ class WebSocketService {
 
   /// Dispose resources.
   void dispose() {
+    _isDisposed = true;
     disconnect();
     _viewerFrameController.close();
     _audioResponseController.close();
