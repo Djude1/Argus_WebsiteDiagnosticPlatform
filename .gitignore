@@ -50,3 +50,7 @@ Djude_Area/Android/.flutter-plugins-dependencies
 
 # Virtual environments
 SmallLo's_Testing_Area/venv/
+
+# Large model files
+mobileclip_blt.ts
+*.ts
