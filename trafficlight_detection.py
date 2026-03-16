@@ -18,7 +18,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ========= 配置参数 =========
-YOLO_MODEL_PATH = r"C:\Users\Administrator\Desktop\rebuild1002\model\trafficlight.pt"
+# 使用環境變數或相對路徑
+_project_root = os.path.dirname(os.path.abspath(__file__))
+YOLO_MODEL_PATH = os.getenv("TRAFFICLIGHT_MODEL", os.path.join(_project_root, "model", "trafficlight.pt"))
 
 # ========= 显示参数 =========
 CONF_THRESHOLD = 0.25  # 置信度阈值

@@ -28,8 +28,8 @@ def _get_recorder():
             _recorder_imported = True  # 标记已尝试，避免重复
     return _sync_recorder
 
-# 兼容旧工程中的示例音频（保留）
-AUDIO_BASE_DIR = r"C:\Users\Administrator\Desktop\rebuild1002\music"
+# 兼容旧工程中的示例音频（保留）- 使用相对路径
+AUDIO_BASE_DIR = os.getenv("AUDIO_BASE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "music"))
 
 # 新增：voice 目录与映射表
 # 使用脚本所在目录的 voice 文件夹，避免工作目录问题
