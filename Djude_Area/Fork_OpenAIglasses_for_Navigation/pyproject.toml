@@ -1,0 +1,33 @@
+[project]
+name = "fork-openaiglasses-for-navigation"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dashscope==1.14.1",
+    "fastapi==0.104.1",
+    "google-cloud-speech>=2.37.0",
+    "librosa>=0.11.0",
+    "markupsafe==2.1.5",
+    "mediapipe==0.10.8",
+    "numpy<2",
+    "openai==1.3.5",
+    "opencv-contrib-python==4.8.1.78",
+    "opencv-python==4.8.1.78",
+    "pyaudio==0.2.14",
+    "pydub==0.25.1",
+    "pygame==2.5.2",
+    "python-dotenv==1.0.0",
+    "python-multipart==0.0.6",
+    "soundfile>=0.13.1",
+    "starlette==0.27.0",
+    "torch==2.0.1",
+    "torchvision==0.15.2",
+    "ultralytics==8.3.200",
+    "uvicorn[standard]==0.24.0",
+    "websockets==12.0",
+]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu118"

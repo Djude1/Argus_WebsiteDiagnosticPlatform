@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>聲紋管理 Dashboard — AI 智慧眼鏡</title>
+<style>
+  :root {
+    --bg: #0b0f14; --card: #121821; --card2: #0e1521;
+    --text: #e6edf3; --muted: #8b9ab0; --line: #1f2937;
+    --ok: #3fb950; --err: #f85149; --warn: #d29922;
+    --blue: #2f86ff; --purple: #a371f7;
+    --panel: rgba(18,24,33,.7);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang TC",
+          "Hiragino Sans GB", "Microsoft JhengHei", sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── 頂部導航 ── */
+  nav {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    background: var(--card);
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .sep { color: var(--line); }
+
+  /* ── 主網格 ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 16px;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── 卡片 ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; letter-spacing: .05em;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--blue);
+    box-shadow: 0 0 8px var(--blue);
+  }
+
+  /* ── 狀態列 ── */
+  .status-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .status-row:last-child { border-bottom: none; }
+  .status-label { color: var(--muted); }
+  .badge {
+    font-size: 12px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid; font-weight: 600;
+  }
+  .badge-ok  { color: var(--ok);   border-color: var(--ok);   background: rgba(63,185,80,.08); }
+  .badge-err { color: var(--err);  border-color: var(--err);  background: rgba(248,81,73,.08); }
+  .badge-warn{ color: var(--warn); border-color: var(--warn); background: rgba(210,153,34,.08); }
+  .badge-info{ color: var(--blue); border-color: var(--blue); background: rgba(47,134,255,.08); }
+
+  /* ── 按鈕 ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    cursor: pointer; border: 1px solid; transition: opacity .15s, transform .1s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary  { background: var(--blue);   border-color: var(--blue);   color: #fff; }
+  .btn-danger   { background: #3d1212;       border-color: var(--err);    color: var(--err); }
+  .btn-ghost    { background: transparent;   border-color: #304057;       color: var(--muted); }
+  .btn-success  { background: #122812;       border-color: var(--ok);     color: var(--ok); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+  /* ── Toggle 開關 ── */
+  .toggle-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line); gap: 12px;
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-info { flex: 1; }
+  .toggle-name { font-size: 14px; font-weight: 600; }
+  .toggle-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; background: #1f2937;
+    border-radius: 999px; cursor: pointer; transition: background .25s;
+    border: 1px solid #304057;
+  }
+  .slider::before {
+    content: ""; position: absolute;
+    width: 18px; height: 18px; left: 3px; top: 2px;
+    background: #8b9ab0; border-radius: 50%; transition: transform .25s, background .25s;
+  }
+  input:checked + .slider { background: var(--blue); border-color: var(--blue); }
+  input:checked + .slider::before { transform: translateX(20px); background: #fff; }
+
+  /* ── 進度條（錄製倒數）── */
+  .progress-wrap { margin-top: 12px; }
+  .progress-bar-bg {
+    height: 6px; background: #1f2937; border-radius: 999px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; background: var(--blue); border-radius: 999px;
+    transition: width .5s linear; width: 0%;
+  }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--muted); margin-top: 6px;
+  }
+
+  /* ── 波形動畫 ── */
+  .waveform-wrap {
+    margin-top: 12px; padding: 8px 10px;
+    background: #080e18; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .waveform-label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--muted); margin-bottom: 6px;
+  }
+  .waveform-bars {
+    display: flex; align-items: flex-end; gap: 2px; height: 40px;
+  }
+  .waveform-bar {
+    flex: 1; border-radius: 2px; min-height: 2px;
+    transition: height .08s ease;
+  }
+
+  /* ── 音量儀表 ── */
+  .meter-wrap { margin-top: 14px; }
+  .meter-label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--muted); margin-bottom: 6px;
+  }
+  .meter-bar-bg {
+    height: 20px; background: #0d1421; border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .meter-bar-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, var(--ok) 0%, #ffd700 70%, var(--err) 95%);
+    transition: width .15s ease-out; width: 0%;
+  }
+  .meter-value { font-size: 13px; color: var(--text); font-weight: 600; }
+
+  /* ── 相似度量表 ── */
+  .sim-gauge-wrap { margin-top: 14px; }
+  .sim-gauge-bg {
+    height: 28px; background: #0d1421; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--line); position: relative;
+  }
+  .sim-gauge-fill {
+    height: 100%; border-radius: 8px;
+    background: linear-gradient(90deg, var(--err) 0%, var(--warn) 50%, var(--ok) 100%);
+    transition: width .4s ease; width: 0%;
+  }
+  .sim-gauge-threshold {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: rgba(255,255,255,.6);
+  }
+  .sim-gauge-label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff; mix-blend-mode: difference;
+  }
+
+  /* ── 驗證結果 ── */
+  .result-box {
+    margin-top: 14px; padding: 14px 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card2);
+    font-size: 14px;
+  }
+  .result-pass { border-color: var(--ok);  background: rgba(63,185,80,.05); }
+  .result-fail { border-color: var(--err); background: rgba(248,81,73,.05); }
+  .result-icon { font-size: 20px; margin-right: 6px; }
+  .result-sim  { font-size: 22px; font-weight: 700; }
+  .result-sub  { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Debug 日誌 ── */
+  #debugLog {
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 12px; line-height: 1.7;
+    background: #080e18; border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px;
+    height: 100%; min-height: 200px; overflow-y: auto;
+    color: #a0b0c8;
+  }
+  #debugLog::-webkit-scrollbar { width: 6px; }
+  #debugLog::-webkit-scrollbar-track { background: #0d1420; }
+  #debugLog::-webkit-scrollbar-thumb { background: #2a3446; border-radius: 3px; }
+  .log-ok   { color: var(--ok); }
+  .log-err  { color: var(--err); }
+  .log-warn { color: var(--warn); }
+  .log-info { color: var(--blue); }
+  .log-muted{ color: #4a5568; }
+  .log-ts   { color: #3a4556; margin-right: 6px; }
+
+  /* ── 歷史紀錄表格 ── */
+  .history-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px;
+       padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 10px; border-bottom: 1px solid rgba(31,41,55,.5); }
+  tr:hover td { background: rgba(47,134,255,.04); }
+  .pass-row td:first-child { border-left: 3px solid var(--ok); }
+  .fail-row td:first-child { border-left: 3px solid var(--err); }
+  .skip-row td:first-child { border-left: 3px solid var(--warn); }
+
+  /* ── 佈局輔助 ── */
+  .left-col  { display: flex; flex-direction: column; gap: 16px; }
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+  .full-col  { grid-column: 1 / -1; }
+  .btn-row   { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .spacer    { flex: 1; }
+
+  /* ── SSE 連線指示燈 ── */
+  .conn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--err); display: inline-block; margin-right: 4px;
+    transition: background .3s;
+  }
+  .conn-dot.connected { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 頂部導航 -->
+<nav>
+  <a href="/">← 返回主頁</a>
+  <span class="sep">|</span>
+  <span class="title">聲紋管理 Dashboard</span>
+  <span class="spacer"></span>
+  <span style="font-size:12px;color:var(--muted)">
+    <span class="conn-dot" id="connDot"></span>
+    <span id="connLabel">SSE 未連線</span>
+  </span>
+</nav>
+
+<div class="grid">
+
+  <!-- ── 左欄 ── -->
+  <div class="left-col">
+
+    <!-- 系統狀態卡 -->
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>系統狀態</div>
+      <div class="status-row">
+        <span class="status-label">聲紋是否已錄製</span>
+        <span class="badge badge-warn" id="statusEnrolled">讀取中…</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">說話人驗證</span>
+        <span class="badge badge-warn" id="statusEnabled">讀取中…</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">後端引擎</span>
+        <span class="badge badge-info" id="statusBackend">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">相似度門檻</span>
+        <span class="badge badge-info" id="statusThreshold">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">持續監測</span>
+        <span class="badge badge-warn" id="statusContinuous">關閉</span>
+      </div>
+    </div>
+
+    <!-- 聲紋錄製卡 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--purple);box-shadow:0 0 8px var(--purple)"></span>聲紋錄製</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        對著麥克風正常說話 10 秒，系統將自動建立您的聲紋特徵。
+      </p>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-primary" id="btnEnroll">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          開始錄製聲紋
+        </button>
+        <button class="btn btn-danger btn-sm" id="btnDelete">刪除聲紋</button>
+      </div>
+      <div class="progress-wrap" id="enrollProgress" style="display:none">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="enrollBar"></div></div>
+        <div class="progress-label">
+          <span>錄製中，請說話…</span>
+          <span id="enrollRemain">10s</span>
+        </div>
+      </div>
+      <!-- 錄製期間麥克風波形 -->
+      <div class="waveform-wrap" id="enrollWaveform" style="display:none">
+        <div class="waveform-label">
+          <span>麥克風音量</span>
+          <span id="enrollRmsVal">—</span>
+        </div>
+        <div class="waveform-bars" id="enrollBars"></div>
+      </div>
+      <div class="result-box" id="enrollResult" style="display:none"></div>
+    </div>
+
+    <!-- 功能開關卡 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--ok);box-shadow:0 0 8px var(--ok)"></span>功能開關</div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">說話人驗證</div>
+          <div class="toggle-desc">啟用後，只有授權聲紋的使用者指令才會被處理</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="togVerify">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">持續監測模式</div>
+          <div class="toggle-desc">每 2 秒自動比對一次聲紋，即時顯示相似度</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="togContinuous">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">旁路喚醒詞</div>
+          <div class="toggle-desc">跳過「哈囉曼波」，所有語音直接送 AI 處理</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="togBypass">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 單次測試卡 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--warn);box-shadow:0 0 8px var(--warn)"></span>聲紋驗證測試</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        對著麥克風說話 3 秒，系統比對後顯示相似度與驗證結果。
+      </p>
+      <button class="btn btn-ghost" id="btnTest">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        開始 3 秒驗證測試
+      </button>
+      <div class="progress-wrap" id="testProgress" style="display:none">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="testBar" style="background:var(--warn)"></div></div>
+        <div class="progress-label">
+          <span>測試收音中…</span>
+          <span id="testRemain">3s</span>
+        </div>
+      </div>
+      <div class="result-box" id="testResult" style="display:none"></div>
+    </div>
+
+  </div><!-- /left-col -->
+
+  <!-- ── 右欄 ── -->
+  <div class="right-col">
+
+    <!-- 即時音量 + 相似度儀表 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:#ffd700;box-shadow:0 0 8px #ffd700"></span>即時音量 &amp; 相似度</div>
+
+      <!-- 音量儀表 -->
+      <div style="margin-bottom:18px">
+        <div class="meter-label">
+          <span>麥克風音量 (RMS)</span>
+          <span class="meter-value" id="rmsValue">—</span>
+        </div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" id="rmsFill"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          靜音門檻：<span id="rmsThreshold">—</span>
+        </div>
+      </div>
+
+      <!-- 即時波形（任何時候都顯示） -->
+      <div class="waveform-wrap" style="margin-bottom:18px">
+        <div class="waveform-label"><span>即時波形</span></div>
+        <div class="waveform-bars" id="mainBars"></div>
+      </div>
+
+      <!-- 相似度量表 -->
+      <div class="sim-gauge-wrap">
+        <div class="meter-label">
+          <span>聲紋相似度（最近一次）</span>
+          <span class="meter-value" id="simValue">—</span>
+        </div>
+        <div class="sim-gauge-bg">
+          <div class="sim-gauge-fill" id="simFill"></div>
+          <div class="sim-gauge-threshold" id="simThresholdLine" style="left:82%"></div>
+          <div class="sim-gauge-label" id="simGaugeLabel">等待數據…</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          白線 = 門檻值 (<span id="simThresholdVal">—</span>)
+          <span id="lastVerifyStatus" style="font-weight:600"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 持續監測歷史 -->
+    <div class="card" style="flex:1">
+      <div class="card-title">
+        <span class="dot"></span>監測歷史
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" id="btnClearHistory">清除</button>
+      </div>
+      <div class="history-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>時間</th>
+              <th>類型</th>
+              <th>相似度</th>
+              <th>RMS</th>
+              <th>結果</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">等待監測事件…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /right-col -->
+
+  <!-- ── 全寬 Debug 日誌 ── -->
+  <div class="card full-col" style="padding-bottom:0">
+    <div class="card-title" style="margin-bottom:10px">
+      <span class="dot" style="background:var(--muted);box-shadow:none"></span>
+      Debug 日誌
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" id="btnClearLog">清除</button>
+    </div>
+    <div id="debugLog"></div>
+  </div>
+
+</div><!-- /grid -->
+
+<script>
+// ==============================
+// 工具函式
+// ==============================
+const $ = id => document.getElementById(id);
+
+// ==============================
+// 波形動畫初始化
+// ==============================
+const NBARS = 28;
+const RMS_MAX_WAVE = 3000;
+
+function initBars(containerId, color = 'var(--blue)') {
+  const el = $(containerId);
+  for (let i = 0; i < NBARS; i++) {
+    const b = document.createElement('div');
+    b.className = 'waveform-bar';
+    b.style.background = color;
+    b.style.height = '2px';
+    el.appendChild(b);
+  }
+  return { el, buf: new Float32Array(NBARS), idx: 0 };
+}
+
+function pushBar(wave, rms) {
+  const h = Math.max(2, Math.min(38, (rms / RMS_MAX_WAVE) * 38));
+  wave.buf[wave.idx % NBARS] = h;
+  wave.idx++;
+  const bars = wave.el.children;
+  for (let i = 0; i < NBARS; i++) {
+    const bi = (wave.idx - NBARS + i + NBARS) % NBARS;
+    bars[i].style.height = wave.buf[bi] + 'px';
+    // 顏色依音量變化（低=藍，高=橙紅）
+    const pct = wave.buf[bi] / 38;
+    bars[i].style.background = pct > 0.7
+      ? `hsl(${20 - pct * 20}, 90%, 60%)`
+      : `hsl(${210 + pct * 40}, 80%, 60%)`;
+  }
+}
+
+const mainWave   = initBars('mainBars');
+const enrollWave = initBars('enrollBars', 'var(--purple)');
+
+function nowStr() {
+  return new Date().toLocaleTimeString('zh-TW', { hour12: false });
+}
+
+function log(msg, cls = '') {
+  const div = $('debugLog');
+  const line = document.createElement('div');
+  line.innerHTML = `<span class="log-ts">${nowStr()}</span><span class="${cls}">${msg}</span>`;
+  div.appendChild(line);
+  div.scrollTop = div.scrollHeight;
+  // 最多保留 500 行
+  while (div.children.length > 500) div.removeChild(div.firstChild);
+}
+
+function addHistory(type, sim, rms, passed) {
+  const tbody = $('historyBody');
+  // 移除「等待」佔位列
+  if (tbody.rows.length === 1 && tbody.rows[0].cells.length === 1) tbody.innerHTML = '';
+
+  const time = nowStr();
+  let typeLabel, rowClass, resultLabel;
+
+  if (type === 'verify') {
+    typeLabel = '驗證';
+    rowClass = passed ? 'pass-row' : 'fail-row';
+    resultLabel = passed
+      ? `<span style="color:var(--ok);font-weight:700">✅ 通過</span>`
+      : `<span style="color:var(--err);font-weight:700">❌ 拒絕</span>`;
+  } else if (type === 'silence') {
+    typeLabel = '靜音';
+    rowClass = 'skip-row';
+    resultLabel = `<span style="color:var(--warn)">— 跳過</span>`;
+  } else {
+    typeLabel = type;
+    rowClass = '';
+    resultLabel = '—';
+  }
+
+  const simTxt = (sim !== null && sim !== undefined) ? sim.toFixed(4) : '—';
+  const rmsTxt = (rms !== null && rms !== undefined) ? Math.round(rms) : '—';
+
+  const tr = document.createElement('tr');
+  tr.className = rowClass;
+  tr.innerHTML = `<td>${time}</td><td>${typeLabel}</td><td>${simTxt}</td><td>${rmsTxt}</td><td>${resultLabel}</td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+
+  // 最多保留 200 行
+  while (tbody.rows.length > 200) tbody.removeChild(tbody.lastChild);
+}
+
+// ==============================
+// 查詢系統狀態（輪詢 /api/enroll_status）
+// ==============================
+async function fetchStatus() {
+  try {
+    const r = await fetch('/api/enroll_status');
+    const d = await r.json();
+    const sv = d.speaker_verifier || {};
+
+    // 聲紋是否已錄製
+    const enrolled = sv.enrolled;
+    const el = $('statusEnrolled');
+    if (enrolled) {
+      el.textContent = '已錄製';
+      el.className = 'badge badge-ok';
+    } else {
+      el.textContent = '未錄製';
+      el.className = 'badge badge-err';
+    }
+
+    // 驗證是否啟用
+    const enabled = sv.enabled;
+    const ee = $('statusEnabled');
+    if (enabled) {
+      ee.textContent = '已啟用';
+      ee.className = 'badge badge-ok';
+    } else {
+      ee.textContent = '已停用';
+      ee.className = 'badge badge-warn';
+    }
+    $('togVerify').checked = !!enabled;
+
+    // 後端
+    $('statusBackend').textContent = sv.backend || '—';
+
+    // 門檻
+    const thr = sv.threshold;
+    $('statusThreshold').textContent = thr !== undefined ? thr : '—';
+    $('simThresholdVal').textContent  = thr !== undefined ? thr : '—';
+    $('rmsThreshold').textContent     = sv.rms_threshold !== undefined ? sv.rms_threshold : '—';
+
+    // 門檻白線位置
+    if (thr !== undefined) {
+      $('simThresholdLine').style.left = (thr * 100) + '%';
+    }
+
+    // 錄製倒數更新
+    if (d.enrolling) {
+      const rem = d.remaining_sec;
+      const pct = Math.max(0, Math.min(100, (1 - rem / 10) * 100));
+      $('enrollBar').style.width = pct + '%';
+      $('enrollRemain').textContent = rem.toFixed(1) + 's';
+      $('enrollProgress').style.display = '';
+    } else {
+      $('enrollProgress').style.display = 'none';
+    }
+
+  } catch (e) {
+    log('狀態查詢失敗：' + e, 'log-err');
+  }
+}
+
+// ==============================
+// SSE 連線
+// ==============================
+let sseSource = null;
+
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource('/api/speaker_events');
+
+  sseSource.onopen = () => {
+    $('connDot').classList.add('connected');
+    $('connLabel').textContent = 'SSE 已連線';
+    log('SSE 事件串流已連線', 'log-ok');
+  };
+
+  sseSource.onerror = () => {
+    $('connDot').classList.remove('connected');
+    $('connLabel').textContent = 'SSE 已中斷';
+    log('SSE 連線中斷，10 秒後重連…', 'log-warn');
+    sseSource.close();
+    setTimeout(connectSSE, 10000);
+  };
+
+  sseSource.onmessage = evt => {
+    let data;
+    try { data = JSON.parse(evt.data); } catch { return; }
+    handleEvent(data);
+  };
+}
+
+function handleEvent(data) {
+  const type = data.type;
+
+  if (type === 'rms') {
+    updateRms(data.rms);
+    pushBar(mainWave, data.rms);
+    // 錄製中同步更新錄製波形
+    if ($('enrollProgress').style.display !== 'none') {
+      pushBar(enrollWave, data.rms);
+      $('enrollRmsVal').textContent = data.rms;
+      $('enrollWaveform').style.display = '';
+    }
+
+  } else if (type === 'silence') {
+    updateRms(data.rms);
+    log(`靜音（RMS=${data.rms}，門檻=${data.threshold}），跳過驗證`, 'log-muted');
+    addHistory('silence', null, data.rms, null);
+
+  } else if (type === 'verify') {
+    updateRms(data.rms);
+    updateSim(data.similarity, data.threshold, data.passed);
+    const icon = data.passed ? '✅' : '❌';
+    const cls  = data.passed ? 'log-ok' : 'log-err';
+    log(`${icon} 相似度=${data.similarity.toFixed(4)}  門檻=${data.threshold}  RMS=${data.rms}`, cls);
+    addHistory('verify', data.similarity, data.rms, data.passed);
+    $('lastVerifyStatus').textContent = data.passed ? '✅ 通過' : '❌ 拒絕';
+    $('lastVerifyStatus').style.color = data.passed ? 'var(--ok)' : 'var(--err)';
+
+  } else if (type === 'verify_skip') {
+    log('無聲紋可比對（請先錄製聲紋）', 'log-warn');
+
+  } else if (type === 'enroll_done') {
+    const cls = data.ok ? 'log-ok' : 'log-err';
+    log('錄製完成：' + data.message, cls);
+    showEnrollResult(data.ok, data.message);
+    $('enrollWaveform').style.display = 'none';
+    fetchStatus();  // 重新整理狀態
+  }
+}
+
+// ==============================
+// RMS 音量儀表
+// ==============================
+const RMS_MAX = 3000;  // 顯示上限
+
+function updateRms(rms) {
+  $('rmsValue').textContent = Math.round(rms);
+  const pct = Math.min(100, (rms / RMS_MAX) * 100);
+  $('rmsFill').style.width = pct + '%';
+}
+
+// ==============================
+// 相似度量表
+// ==============================
+function updateSim(sim, threshold, passed) {
+  $('simValue').textContent = sim.toFixed(4);
+  $('simFill').style.width  = (sim * 100) + '%';
+  if (threshold !== undefined) {
+    $('simThresholdLine').style.left = (threshold * 100) + '%';
+    $('simThresholdVal').textContent = threshold;
+  }
+  $('simGaugeLabel').textContent = sim.toFixed(4);
+
+  // 更新門檻線位置
+  $('simGaugeLabel').style.color = passed ? 'var(--ok)' : 'var(--err)';
+}
+
+// ==============================
+// 錄製結果顯示
+// ==============================
+function showEnrollResult(ok, msg) {
+  const box = $('enrollResult');
+  box.style.display = '';
+  box.className = 'result-box ' + (ok ? 'result-pass' : 'result-fail');
+  box.innerHTML = `<span class="result-icon">${ok ? '✅' : '❌'}</span>${msg}`;
+}
+
+function showTestResult(data) {
+  const box = $('testResult');
+  box.style.display = '';
+  if (data.status === 'recording') {
+    box.className = 'result-box';
+    box.innerHTML = '收音中，請稍候…';
+    return;
+  }
+  if (data.status === 'done') {
+    const ok = data.passed;
+    box.className = 'result-box ' + (ok ? 'result-pass' : 'result-fail');
+    const simTxt = data.similarity !== null ? (data.similarity * 100).toFixed(2) + '%' : '—';
+    box.innerHTML = `
+      <div><span class="result-icon">${ok ? '✅' : '❌'}</span>${data.message}</div>
+      <div class="result-sim">${simTxt}</div>
+      <div class="result-sub">相似度 ${data.similarity} | 門檻 ${data.threshold}</div>`;
+    updateSim(data.similarity, data.threshold, ok);
+  } else {
+    box.className = 'result-box';
+    box.innerHTML = data.message || JSON.stringify(data);
+  }
+}
+
+// ==============================
+// 按鈕：錄製聲紋
+// ==============================
+let enrollTimer = null;
+
+$('btnEnroll').addEventListener('click', async () => {
+  clearInterval(enrollTimer);
+  $('enrollResult').style.display = 'none';
+  $('enrollProgress').style.display = '';
+  $('enrollBar').style.width = '0%';
+  $('enrollRemain').textContent = '10s';
+  $('btnEnroll').disabled = true;
+
+  try {
+    const r = await fetch('/api/enroll_speaker', { method: 'POST' });
+    const d = await r.json();
+    log(`開始錄製聲紋：${d.message}`, 'log-info');
+
+    const total = 10;
+    const start = Date.now();
+    enrollTimer = setInterval(async () => {
+      const elapsed = (Date.now() - start) / 1000;
+      const pct = Math.min(100, (elapsed / total) * 100);
+      const rem = Math.max(0, total - elapsed);
+      $('enrollBar').style.width = pct + '%';
+      $('enrollRemain').textContent = rem.toFixed(1) + 's';
+      if (elapsed >= total) {
+        clearInterval(enrollTimer);
+        $('btnEnroll').disabled = false;
+        // 等待 SSE 的 enroll_done 事件
+      }
+    }, 200);
+
+  } catch (e) {
+    log('錄製請求失敗：' + e, 'log-err');
+    $('btnEnroll').disabled = false;
+    $('enrollProgress').style.display = 'none';
+  }
+});
+
+// ==============================
+// 按鈕：刪除聲紋
+// ==============================
+$('btnDelete').addEventListener('click', async () => {
+  if (!confirm('確定要刪除已儲存的聲紋嗎？')) return;
+  try {
+    const r = await fetch('/api/delete_speaker', { method: 'POST' });
+    const d = await r.json();
+    log('聲紋已刪除：' + JSON.stringify(d), 'log-warn');
+    $('enrollResult').style.display = 'none';
+    fetchStatus();
+  } catch (e) {
+    log('刪除失敗：' + e, 'log-err');
+  }
+});
+
+// ==============================
+// Toggle：說話人驗證
+// ==============================
+$('togVerify').addEventListener('change', async e => {
+  const enabled = e.target.checked;
+  try {
+    const r = await fetch(`/api/speaker_verify_toggle?enabled=${enabled}`, { method: 'POST' });
+    const d = await r.json();
+    log(`說話人驗證已${enabled ? '開啟' : '關閉'}`, enabled ? 'log-ok' : 'log-warn');
+    fetchStatus();
+  } catch (err) {
+    log('切換失敗：' + err, 'log-err');
+  }
+});
+
+// ==============================
+// Toggle：持續監測
+// ==============================
+let continuousState = false;
+
+$('togContinuous').addEventListener('change', async e => {
+  const enabled = e.target.checked;
+  continuousState = enabled;
+  const el = $('statusContinuous');
+  try {
+    const r = await fetch(`/api/verify_continuous?enabled=${enabled}`, { method: 'POST' });
+    const d = await r.json();
+    el.textContent  = enabled ? '開啟' : '關閉';
+    el.className    = 'badge ' + (enabled ? 'badge-ok' : 'badge-warn');
+    log(`持續監測已${enabled ? '開啟' : '關閉'}`, enabled ? 'log-ok' : 'log-warn');
+  } catch (err) {
+    log('切換失敗：' + err, 'log-err');
+    e.target.checked = !enabled;  // 回滾 UI
+  }
+});
+
+// ==============================
+// Toggle：旁路喚醒詞
+// ==============================
+$('togBypass').addEventListener('change', async e => {
+  const enabled = e.target.checked;
+  try {
+    await fetch(`/api/bypass_wake?enabled=${enabled}`, { method: 'POST' });
+    log(`旁路喚醒詞已${enabled ? '開啟' : '關閉'}`, enabled ? 'log-warn' : 'log-info');
+  } catch (err) {
+    log('切換失敗：' + err, 'log-err');
+    e.target.checked = !enabled;
+  }
+});
+
+// ==============================
+// 按鈕：驗證測試
+// ==============================
+let testTimer = null;
+
+$('btnTest').addEventListener('click', async () => {
+  clearInterval(testTimer);
+  $('testResult').style.display = 'none';
+  $('testProgress').style.display = '';
+  $('testBar').style.width = '0%';
+  $('testRemain').textContent = '3s';
+  $('btnTest').disabled = true;
+
+  try {
+    const r = await fetch('/api/test_speaker_verify', { method: 'POST' });
+    const d = await r.json();
+    log(`開始驗證測試：${d.message}`, 'log-info');
+
+    const total = 3;
+    const start = Date.now();
+    testTimer = setInterval(async () => {
+      const elapsed = (Date.now() - start) / 1000;
+      const pct = Math.min(100, (elapsed / total) * 100);
+      const rem = Math.max(0, total - elapsed);
+      $('testBar').style.width = pct + '%';
+      $('testRemain').textContent = rem.toFixed(1) + 's';
+      if (elapsed >= total + 0.5) {
+        clearInterval(testTimer);
+        $('testProgress').style.display = 'none';
+        $('btnTest').disabled = false;
+        // 查詢結果
+        try {
+          const rr = await fetch('/api/verify_result');
+          const dd = await rr.json();
+          showTestResult(dd);
+          if (dd.status === 'done') {
+            const cls = dd.passed ? 'log-ok' : 'log-err';
+            log(`驗證測試結果：${dd.message}（相似度=${dd.similarity}，門檻=${dd.threshold}）`, cls);
+          }
+        } catch (ex) {
+          log('查詢驗證結果失敗：' + ex, 'log-err');
+        }
+      }
+    }, 200);
+
+  } catch (e) {
+    log('驗證測試請求失敗：' + e, 'log-err');
+    $('btnTest').disabled = false;
+    $('testProgress').style.display = 'none';
+  }
+});
+
+// ==============================
+// 清除按鈕
+// ==============================
+$('btnClearLog').addEventListener('click', () => { $('debugLog').innerHTML = ''; });
+$('btnClearHistory').addEventListener('click', () => {
+  $('historyBody').innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">等待監測事件…</td></tr>';
+});
+
+// ==============================
+// 初始化
+// ==============================
+fetchStatus();
+setInterval(fetchStatus, 5000);  // 每 5 秒輪詢一次狀態
+connectSSE();
+log('頁面已載入，開始初始化…', 'log-info');
+</script>
+</body>
+</html>
