@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO 即時物件辨識</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>YOLO 即時物件辨識</h1>
+            <p class="subtitle">開放詞彙偵測系統</p>
+        </header>
+
+        <div class="main-content">
+            <!-- 視頻區域 -->
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas"></canvas>
+                    <div class="video-overlay">
+                        <div class="fps-display" id="fpsDisplay">FPS: --</div>
+                        <div class="object-count" id="objectCount">物件: 0</div>
+                    </div>
+                    <div class="no-camera" id="noCameraMessage">
+                        <div class="camera-icon">📷</div>
+                        <p>請允許攝影機權限</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 控制面板 -->
+            <div class="control-panel">
+                <button id="startBtn" class="btn btn-primary">
+                    <span class="btn-icon">▶</span>
+                    開始偵測
+                </button>
+                <button id="stopBtn" class="btn btn-secondary" disabled>
+                    <span class="btn-icon">⏹</span>
+                    停止
+                </button>
+                <button id="captureBtn" class="btn btn-accent" disabled>
+                    <span class="btn-icon">📷</span>
+                    截圖
+                </button>
+            </div>
+
+            <!-- 檢測結果列表 -->
+            <div class="results-section">
+                <h2>檢測結果</h2>
+                <div class="results-container" id="resultsContainer">
+                    <div class="empty-state">
+                        <p>尚未開始偵測</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 統計資訊 -->
+            <div class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFrames">0</div>
+                    <div class="stat-label">總幀數</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgFps">--</div>
+                    <div class="stat-label">平均 FPS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalDetections">0</div>
+                    <div class="stat-label">檢測物件</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="connectionStatus">●</div>
+                    <div class="stat-label">連線狀態</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 設定面板 -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <h3>設定</h3>
+                <button id="closeSettings" class="close-btn">&times;</button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label for="serverUrl">伺服器地址</label>
+                    <input type="text" id="serverUrl" value="" placeholder="ws://localhost:8000">
+                </div>
+                <div class="setting-item">
+                    <label for="resolution">解析度</label>
+                    <select id="resolution">
+                        <option value="640x480">640 x 480</option>
+                        <option value="1280x720" selected>1280 x 720</option>
+                        <option value="1920x1080">1920 x 1080</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label for="frameRate">幀率</label>
+                    <select id="frameRate">
+                        <option value="10">10 FPS</option>
+                        <option value="15" selected>15 FPS</option>
+                        <option value="30">30 FPS</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 浮動設定按鈕 -->
+        <button id="settingsBtn" class="settings-btn" title="設定">
+            ⚙
+        </button>
+
+        <!-- 通知區域 -->
+        <div class="notification" id="notification"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

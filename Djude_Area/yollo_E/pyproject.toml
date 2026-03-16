@@ -26,9 +26,14 @@ dependencies = [
     
     # 日誌
     "loguru>=0.7.0",
-    
+
     # 進度條
     "tqdm>=4.66.0",
+
+    # 網頁伺服器
+    "fastapi>=0.3.0",
+    "uvicorn>=0.0.0",
+    "websockets>=10.0",
 ]
 
 [project.optional-dependencies]

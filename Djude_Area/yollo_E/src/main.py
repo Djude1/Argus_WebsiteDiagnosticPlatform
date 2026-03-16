@@ -645,8 +645,28 @@ def main():
         "--source",
         type=str,
         default="webcam",
-        choices=["esp32", "webcam"],
-        help="影像來源 (esp32 或 webcam)",
+        choices=["esp32", "webcam", "web"],
+        help="影像來源 (esp32, webcam 或 web)",
+    )
+
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="啟動網頁伺服器模式",
+    )
+
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="伺服器地址 (預設 0.0.0.0)",
+    )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="伺服器端口 (預設 8000)",
     )
 
     parser.add_argument("--model", type=str, default=None, help="模型檔案路徑")
@@ -663,7 +683,24 @@ def main():
 
     args = parser.parse_args()
 
-    # 建立並執行系統
+    # 網頁模式
+    if args.web:
+        # 確保 src 目錄在路徑中
+        _src_path = Path(__file__).resolve().parent
+        if str(_src_path) not in sys.path:
+            sys.path.insert(0, str(_src_path))
+        from web_server import WebDetectionServer
+
+        server = WebDetectionServer(
+            model_path=args.model,
+            confidence=args.confidence,
+            host=args.host,
+            port=args.port,
+        )
+        server.run()
+        return
+
+    # 原有模式
     system = YOLODetectionSystem(
         source=args.source,
         model_path=args.model,
