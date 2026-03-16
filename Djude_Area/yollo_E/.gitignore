@@ -1,0 +1,99 @@
+# ============================================
+# YOLO 日常物品辨識系統 - Git 忽略規則
+# ============================================
+
+# 敏感資訊
+.env
+*.pem
+*.key
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虛擬環境
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 模型檔案 (太大不上傳)
+models/pretrained/*.pt
+models/custom/*.pt
+*.onnx
+*.engine
+*.tflite
+
+# 資料庫
+data/database/*.db
+data/database/*.sqlite
+
+# 訓練資料
+data/datasets/raw/*
+data/datasets/annotated/*
+!data/datasets/raw/.gitkeep
+!data/datasets/annotated/.gitkeep
+
+# 訓練輸出
+runs/
+weights/
+results/
+
+# 日誌
+logs/
+*.log
+
+# 截圖和錄影
+screenshots/
+recordings/
+*.mp4
+*.avi
+*.jpg
+*.png
+*.jpeg
+
+# 系統
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 測試覆蓋率
+htmlcov/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+
+# 臨時檔案
+tmp/
+temp/
+*.tmp
