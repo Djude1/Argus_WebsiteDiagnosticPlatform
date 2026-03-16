@@ -1,0 +1,52 @@
+
+# Environment variables
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model files (too large for git)
+model/*.pt
+model/*.pth
+model/*.task
+model/*.onnx
+
+# Recordings
+recordings/
+
+# OMC state
+.omc/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+Djude_Area/Android/.dart_tool/
+Djude_Area/Android/.packages
+Djude_Area/Android/.pub/
+Djude_Area/Android/build/
+Djude_Area/Android/.flutter-plugins
+Djude_Area/Android/.flutter-plugins-dependencies
+
+# Virtual environments
+SmallLo's_Testing_Area/venv/
