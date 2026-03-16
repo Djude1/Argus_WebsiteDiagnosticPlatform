@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Create release package
+      run: |
+        mkdir -p release_package
+
+        # 複製核心檔案
+        cp -r app_main.py release_package/
+        cp -r navigation_master.py release_package/
+        cp -r workflow_*.py release_package/
+        cp -r yoloe_backend.py release_package/
+        cp -r yolomedia.py release_package/
+        cp -r trafficlight_detection.py release_package/
+        cp -r audio_player.py release_package/
+        cp -r audio_stream.py release_package/
+        cp -r audio_compressor.py release_package/
+        cp -r bridge_io.py release_package/
+        cp -r asr_core.py release_package/
+        cp -r omni_client.py release_package/
+        cp -r nemotron_vision.py release_package/
+        cp -r qwen_extractor.py release_package/
+        cp -r obstacle_detector_client.py release_package/
+        cp -r sync_recorder.py release_package/
+        cp -r speaker_verifier.py release_package/
+        cp -r requirements.txt release_package/
+        cp -r RELEASE.md release_package/README.md
+
+        # 複製目錄
+        cp -r static release_package/
+        cp -r voice release_package/
+        cp -r music release_package/
+        cp -r Djude_Area release_package/
+
+        # 複製除錯腳本
+        cp debug_*.py release_package/
+        cp start_server.bat release_package/
+
+        # 建立 model 目錄（模型需另外下載）
+        mkdir -p release_package/model
+        echo "請從 ModelScope 下載模型檔案到此目錄" > release_package/model/README.txt
+
+        # 建立 .env 範例
+        cat > release_package/.env.example << 'EOF'
+# API 金鑰
+DASHSCOPE_API_KEY=your_dashscope_key
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key
+
+# 模型路徑
+BLIND_PATH_MODEL=model/yolo-seg.pt
+OBSTACLE_MODEL=model/yoloe-11l-seg.pt
+YOLOE_MODEL_PATH=model/yoloe-11l-seg.pt
+TRAFFICLIGHT_MODEL=model/trafficlight.pt
+SHOPPING_MODEL=model/shoppingbest5.pt
+HAND_LANDMARKER_PATH=model/hand_landmarker.task
+
+# 伺服器設定
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8081
+EOF
+
+        # 壓縮
+        cd release_package
+        tar -czvf ../ai-glasses-server.tar.gz .
+        cd ..
+
+    - name: Upload server artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-package
+        path: ai-glasses-server.tar.gz
+
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0'
+        channel: 'stable'
+
+    - name: Build APK
+      run: |
+        cd Djude_Area/Android
+        flutter pub get
+        flutter build apk --debug
+
+    - name: Rename APK
+      run: |
+        mv Djude_Area/Android/build/app/outputs/flutter-apk/app-debug.apk ai-glasses-android-debug.apk
+
+    - name: Upload Android artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: ai-glasses-android-debug.apk
+
+  release:
+    needs: [build-server, build-android]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download server artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: server-package
+
+    - name: Download Android artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: android-apk
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ai-glasses-server.tar.gz
+          ai-glasses-android-debug.apk
+        body: |
+          ## AI 智慧眼鏡 ${{ github.ref_name }}
+
+          ### 下載項目
+
+          | 檔案 | 說明 |
+          |------|------|
+          | `ai-glasses-server.tar.gz` | Python 伺服器端 |
+          | `ai-glasses-android-debug.apk` | Android App (Debug) |
+
+          ### 伺服器安裝
+          1. 解壓縮 `ai-glasses-server.tar.gz`
+          2. 從 [ModelScope](https://www.modelscope.cn/models/archifancy/AIGlasses_for_navigation) 下載模型到 `model/`
+          3. 複製 `.env.example` 為 `.env` 並填入 API 金鑰
+          4. `pip install -r requirements.txt`
+          5. `python app_main.py`
+
+          ### Android App 安裝
+          1. 將 `ai-glasses-android-debug.apk` 傳到手機
+          2. 開啟「允許安裝未知來源」
+          3. 點擊 APK 安裝
+          4. 確保手機與伺服器在同一 WiFi
+
+          ### 功能模組
+          - 盲道導航
+          - 過馬路輔助
+          - 紅綠燈偵測
+          - 物品搜尋
+          - 語音對話
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
