@@ -114,8 +114,28 @@ def generate_self_signed_cert(cert_dir: Path) -> Tuple[Path, Path]:
         x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Taiwan"),
         x509.NameAttribute(NameOID.LOCALITY_NAME, "Taipei"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "YOLO Detection"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "yollo.local"),
     ])
+
+    # SAN (Subject Alternative Names) - 支援多種訪問方式
+    san_list = [
+        # DNS 名稱
+        x509.DNSName("localhost"),
+        x509.DNSName("*.local"),
+        x509.DNSName("yollo.local"),
+        # 本地迴環
+        x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+        x509.IPAddress(ipaddress.IPv4Address("0.0.0.0")),
+    ]
+
+    # 添加 Tailscale IP 範圍 (100.64.0.0/10)
+    # 添加一些常見的 Tailscale IP
+    try:
+        for i in range(256):
+            san_list.append(x509.IPAddress(ipaddress.IPv4Address(f"100.64.{i}.1")))
+            san_list.append(x509.IPAddress(ipaddress.IPv4Address(f"100.65.{i}.1")))
+    except Exception:
+        pass  # 如果添加太多 SAN 失敗，跳過
 
     # 建立證書 (有效期 10 年)
     cert = x509.CertificateBuilder().subject_name(
@@ -131,12 +151,7 @@ def generate_self_signed_cert(cert_dir: Path) -> Tuple[Path, Path]:
     ).not_valid_after(
         datetime.datetime.utcnow() + datetime.timedelta(days=3650)
     ).add_extension(
-        x509.SubjectAlternativeName([
-            x509.DNSName("localhost"),
-            x509.DNSName("*.local"),
-            x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
-            x509.IPAddress(ipaddress.IPv4Address("0.0.0.0")),
-        ]),
+        x509.SubjectAlternativeName(san_list),
         critical=False,
     ).sign(private_key, hashes.SHA256())
 

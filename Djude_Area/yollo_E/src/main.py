@@ -682,6 +682,12 @@ def main():
         help="伺服器端口 (預設 8080)",
     )
 
+    parser.add_argument(
+        "--ssl",
+        action="store_true",
+        help="啟用 HTTPS 模式 (自動生成自簽名證書，用於 Cloudflare Tunnel)",
+    )
+
     parser.add_argument("--model", type=str, default=None, help="模型檔案路徑")
 
     parser.add_argument("--custom", action="store_true", help="使用自定義訓練的模型")
@@ -706,7 +712,23 @@ def main():
         _src_path = Path(__file__).resolve().parent
         if str(_src_path) not in sys.path:
             sys.path.insert(0, str(_src_path))
-        from web_server import WebDetectionServer
+        from web_server import WebDetectionServer, generate_self_signed_cert
+
+        # 處理 SSL/HTTPS
+        ssl_certfile = None
+        ssl_keyfile = None
+
+        if args.ssl:
+            cert_dir = Path(__file__).parent.parent / "certs"
+            try:
+                ssl_certfile, ssl_keyfile = generate_self_signed_cert(cert_dir)
+            except ImportError:
+                logger.error("生成 SSL 證書需要 'cryptography' 套件")
+                logger.info("請安裝: pip install cryptography")
+                sys.exit(1)
+            except Exception as e:
+                logger.error(f"生成 SSL 證書失敗: {e}")
+                sys.exit(1)
 
         server = WebDetectionServer(
             model_path=args.model,
@@ -714,7 +736,7 @@ def main():
             host=args.host,
             port=args.port,
         )
-        server.run()
+        server.run(ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile)
         return
 
     # 原有模式

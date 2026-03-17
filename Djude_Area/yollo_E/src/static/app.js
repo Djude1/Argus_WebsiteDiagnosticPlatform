@@ -89,6 +89,12 @@ class YOLOWebApp {
             this.settingsPanel.classList.remove('open');
         });
 
+        // 複製 URL 按鈕
+        this.copyUrlBtn = document.getElementById('copyUrlBtn');
+        if (this.copyUrlBtn) {
+            this.copyUrlBtn.addEventListener('click', () => this.copyUrl());
+        }
+
         // 設定預設伺服器地址
         // 自動根據頁面協議選擇 ws:// 或 wss://
         // 頁面是 HTTPS 時，後端也應該使用 HTTPS (啟動時加 --ssl 參數)
@@ -767,6 +773,22 @@ class YOLOWebApp {
             });
         } else {
             this._fallbackCopy(logText);
+        }
+    }
+
+    copyUrl() {
+        const currentUrl = window.location.href;
+
+        // 使用 Clipboard API 複製
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(currentUrl).then(() => {
+                this.showNotification('連結已複製到剪貼簿', 'success');
+                this.debugLog(`[系統] 已複製連結: ${currentUrl}`, 'success');
+            }).catch(err => {
+                this._fallbackCopy(currentUrl);
+            });
+        } else {
+            this._fallbackCopy(currentUrl);
         }
     }
 

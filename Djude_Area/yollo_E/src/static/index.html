@@ -86,7 +86,11 @@
             <div class="settings-content">
                 <div class="setting-item">
                     <label for="serverUrl">伺服器地址</label>
-                    <input type="text" id="serverUrl" value="" placeholder="ws://localhost:8000">
+                    <div class="input-with-button">
+                        <input type="text" id="serverUrl" value="" placeholder="ws://localhost:8000" readonly>
+                        <button id="copyUrlBtn" class="copy-btn" title="複製連結">📋 複製</button>
+                    </div>
+                    <div class="setting-hint" id="currentUrlHint"></div>
                 </div>
                 <div class="setting-item">
                     <label for="resolution">解析度</label>

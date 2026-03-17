@@ -416,6 +416,57 @@ header h1 {
     border-color: var(--primary-color);
 }
 
+/* 輸入框與按鈕組合 */
+.input-with-button {
+    display: flex;
+    gap: 8px;
+}
+
+.input-with-button input {
+    flex: 1;
+    padding: 12px;
+    background-color: var(--background-color);
+    border: 1px solid var(--text-secondary);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: monospace;
+}
+
+.input-with-button input[readonly] {
+    opacity: 0.7;
+    cursor: text;
+}
+
+.copy-btn {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, var(--primary-color), #3db892);
+    border: none;
+    border-radius: 8px;
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+}
+
+.copy-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(78, 204, 163, 0.4);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.setting-hint {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
 .settings-btn {
     position: fixed;
     bottom: 30px;
