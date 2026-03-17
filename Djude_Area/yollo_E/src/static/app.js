@@ -18,8 +18,12 @@ class YOLOWebApp {
         // 除錯面板
         this.debugContent = document.getElementById('debugContent');
         this.clearDebugBtn = document.getElementById('clearDebugBtn');
+        this.copyDebugBtn = document.getElementById('copyDebugBtn');
         if (this.clearDebugBtn) {
             this.clearDebugBtn.addEventListener('click', () => this.clearDebug());
+        }
+        if (this.copyDebugBtn) {
+            this.copyDebugBtn.addEventListener('click', () => this.copyDebug());
         }
 
         this.startBtn = document.getElementById('startBtn');
@@ -314,8 +318,25 @@ class YOLOWebApp {
         this.httpApiUrl = `${protocol}${httpUrl}`;
         this.useHttpMode = true;
 
-        this.debugLog(`HTTP API URL: ${this.httpApiUrl}`, 'info');
-        this.showNotification('HTTP 模式已啟用', 'success');
+        // 檢測混合內容問題 (HTTPS 頁面 + HTTP API)
+        const pageIsHttps = window.location.protocol === 'https:';
+        const apiIsHttp = this.httpApiUrl.startsWith('http://');
+
+        if (pageIsHttps && apiIsHttp) {
+            this.debugLog('====================================', 'error');
+            this.debugLog('⚠️ 混合內容警告', 'error');
+            this.debugLog('頁面是 HTTPS，但 API 是 HTTP', 'error');
+            this.debugLog('瀏覽器會阻止此連線！', 'error');
+            this.debugLog('====================================', 'error');
+            this.debugLog('解決方案:', 'warning');
+            this.debugLog('1. 使用 HTTP 訪問此頁面 (http://localhost:8080)', 'info');
+            this.debugLog('2. 或設定伺服器支援 HTTPS', 'info');
+            this.debugLog('====================================', 'error');
+            this.showNotification('⚠️ HTTPS 頁面無法連接 HTTP API', 'error');
+        } else {
+            this.debugLog(`HTTP API URL: ${this.httpApiUrl}`, 'info');
+            this.showNotification('HTTP 模式已啟用', 'success');
+        }
         this.connectionStatus.className = 'connected';
     }
 
@@ -727,6 +748,48 @@ class YOLOWebApp {
         if (this.debugContent) {
             this.debugContent.innerHTML = '';
         }
+    }
+
+    copyDebug() {
+        if (!this.debugContent) return;
+
+        // 取得所有日誌文字
+        const logLines = this.debugContent.querySelectorAll('.debug-line');
+        const logText = Array.from(logLines)
+            .map(line => line.textContent)
+            .join('\n');
+
+        // 使用 Clipboard API 複製
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(logText).then(() => {
+                this.showNotification('日誌已複製到剪貼簿', 'success');
+                this.debugLog('[系統] 日誌已複製', 'success');
+            }).catch(err => {
+                // 復備方法
+                this._fallbackCopy(logText);
+            });
+        } else {
+            this._fallbackCopy(logText);
+        }
+    }
+
+    _fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        try {
+            document.execCommand('copy');
+            this.showNotification('日誌已複製到剪貼簿', 'success');
+            this.debugLog('[系統] 日誌已複製', 'success');
+        } catch (err) {
+            this.debugLog('[系統] 複製失敗: ' + err.message, 'error');
+        }
+
+        document.body.removeChild(textarea);
     }
 }
 

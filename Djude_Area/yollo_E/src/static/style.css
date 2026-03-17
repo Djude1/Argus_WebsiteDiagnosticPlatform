@@ -502,6 +502,11 @@ header h1 {
     font-weight: 600;
 }
 
+.debug-header-buttons {
+    display: flex;
+    gap: 6px;
+}
+
 .debug-clear-btn {
     background: transparent;
     border: 1px solid var(--primary-color);
