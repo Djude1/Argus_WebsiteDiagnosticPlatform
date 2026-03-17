@@ -9,11 +9,13 @@
 
 import asyncio
 import base64
+import ipaddress
 import json
+import ssl
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, Tuple
 from datetime import datetime
 
 import cv2
@@ -65,6 +67,96 @@ logger.info("=" * 60)
 logger.info("YOLO 網頁偵測伺服器啟動中...")
 logger.info(f"日誌檔案: {log_file}")
 logger.info("=" * 60)
+
+
+# ============================================
+# SSL 證書生成 (自簽名)
+# ============================================
+
+def generate_self_signed_cert(cert_dir: Path) -> Tuple[Path, Path]:
+    """生成自簽名 SSL 證書
+
+    Args:
+        cert_dir: 證書存放目錄
+
+    Returns:
+        (cert_file, key_file) 證書和金鑰檔案路徑
+    """
+    cert_file = cert_dir / "server.crt"
+    key_file = cert_dir / "server.key"
+
+    # 如果證書已存在，直接返回
+    if cert_file.exists() and key_file.exists():
+        logger.info(f"使用現有 SSL 證書: {cert_file}")
+        return cert_file, key_file
+
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("生成自簽名 SSL 證書...")
+
+    # 創建自簽名證書
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID, ExtensionOID
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives import serialization
+    import datetime
+
+    # 生成私鑰
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+
+    # 建立證書主體
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "TW"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Taiwan"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, "Taipei"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "YOLO Detection"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+    ])
+
+    # 建立證書 (有效期 10 年)
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        private_key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).not_valid_after(
+        datetime.datetime.utcnow() + datetime.timedelta(days=3650)
+    ).add_extension(
+        x509.SubjectAlternativeName([
+            x509.DNSName("localhost"),
+            x509.DNSName("*.local"),
+            x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+            x509.IPAddress(ipaddress.IPv4Address("0.0.0.0")),
+        ]),
+        critical=False,
+    ).sign(private_key, hashes.SHA256())
+
+    # 寫入證書檔案
+    with open(cert_file, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    # 寫入私鑰檔案
+    with open(key_file, "wb") as f:
+        f.write(private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ))
+
+    logger.success(f"SSL 證書已生成: {cert_file}")
+    logger.info(f"私鑰已生成: {key_file}")
+    logger.warning("此證書為自簽名，瀏覽器會顯示安全警告，這是正常的")
+
+    return cert_file, key_file
 
 
 class WebDetectionServer:
@@ -416,34 +508,64 @@ class WebDetectionServer:
                 logger.warning(f"發送結果失敗: {e}")
                 self.result_clients.discard(client)
 
-    def run(self):
-        """啟動伺服器"""
+    def run(self, ssl_certfile: Optional[Path] = None, ssl_keyfile: Optional[Path] = None):
+        """啟動伺服器
+
+        Args:
+            ssl_certfile: SSL 證書檔案路徑 (如提供則啟用 HTTPS)
+            ssl_keyfile: SSL 私鑰檔案路徑
+        """
         import uvicorn
+
+        is_https = ssl_certfile is not None and ssl_keyfile is not None
+        protocol = "https" if is_https else "http"
 
         logger.info("=" * 60)
         logger.info("YOLO 網頁檢測伺服器啟動")
         logger.info("=" * 60)
-        logger.info(f"監聽地址: http://{self.host}:{self.port}")
+        logger.info(f"監聽地址: {protocol}://{self.host}:{self.port}")
+        if is_https:
+            logger.info(f"SSL 證書: {ssl_certfile}")
+            logger.info(f"SSL 私鑰: {ssl_keyfile}")
         logger.info(f"模型路徑: {self.model_path}")
         logger.info(f"信心度門檻: {self.confidence}")
         logger.info(f"運算裝置: {get_device()}")
         logger.info(f"日誌檔案: {log_file}")
         logger.info("=" * 60)
         logger.info("可用端點:")
-        logger.info("  GET  /health              - 健康檢查")
-        logger.info("  GET  /                    - 主頁面")
-        logger.info("  POST /api/detect/v2      - 物件檢測 API (推薦)")
-        logger.info("  WS   /ws/video            - 影像串流")
-        logger.info("  WS   /ws/result           - 結果串流")
+        logger.info(f"  GET  /health              - 健康檢查")
+        logger.info(f"  GET  /                    - 主頁面")
+        logger.info(f"  POST /api/detect/v2      - 物件檢測 API (推薦)")
+        logger.info(f"  WS   /ws/video            - 影像串流 ({'WSS' if is_https else 'WS'})")
+        logger.info(f"  WS   /ws/result           - 結果串流 ({'WSS' if is_https else 'WS'})")
+        logger.info("=" * 60)
+
+        if is_https:
+            logger.info("HTTPS 模式已啟用")
+            logger.info("適用於 Cloudflare Tunnel、Dev Tunnel 等公網服務")
+            logger.warning("首次訪問時瀏覽器會顯示安全警告 (自簽名證書)")
+            logger.warning("這是正常的，請點擊「繼續訪問」或「接受風險」")
+        else:
+            logger.info("HTTP 模式")
+            logger.warning("如需 Cloudflare Tunnel/Dev Tunnel，請使用 --ssl 參數啟用 HTTPS")
         logger.info("=" * 60)
         logger.info("伺服器啟動中... 按 CTRL+C 停止")
         logger.info("")
+
+        # SSL 配置
+        ssl_config = {}
+        if is_https:
+            ssl_config = {
+                "ssl_keyfile": str(ssl_keyfile),
+                "ssl_certfile": str(ssl_certfile),
+            }
 
         uvicorn.run(
             self.app,
             host=self.host,
             port=self.port,
-            log_level="warning",  # 降低 uvicorn 自有日誌，使用我們的自訂日誌
+            log_level="warning",
+            **ssl_config,
         )
 
 
@@ -454,6 +576,21 @@ def main():
     parser = argparse.ArgumentParser(
         description="YOLO 網頁檢測伺服器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+範例:
+  python -m src.web_server                    # HTTP 模式 (localhost:8080)
+  python -m src.web_server --ssl              # HTTPS 模式 (自動生成證書)
+  python -m src.web_server --ssl --port 8443  # HTTPS 模式 (自訂端口)
+  python -m src.web_server --host 0.0.0.0     # 允許外部訪問
+
+HTTPS 模式說明:
+  --ssl 參數會自動生成自簽名證書，適用於:
+  - Cloudflare Tunnel
+  - VS Code Dev Tunnel
+  - 其他公網隧道服務
+
+  證書存儲位置: certs/server.crt, certs/server.key
+        """,
     )
 
     parser.add_argument(
@@ -481,7 +618,27 @@ def main():
         "--port",
         type=int,
         default=8080,
-        help="伺服器端口",
+        help="伺服器端口 (HTTP: 8080, HTTPS: 建議 8443)",
+    )
+
+    parser.add_argument(
+        "--ssl",
+        action="store_true",
+        help="啟用 HTTPS 模式 (自動生成自簽名證書)",
+    )
+
+    parser.add_argument(
+        "--cert-file",
+        type=str,
+        default=None,
+        help="SSL 證書檔案路徑 (與 --ssl 同時使用時覆蓋自動生成)",
+    )
+
+    parser.add_argument(
+        "--key-file",
+        type=str,
+        default=None,
+        help="SSL 私鑰檔案路徑 (與 --ssl 同時使用時覆蓋自動生成)",
     )
 
     args = parser.parse_args()
@@ -493,7 +650,32 @@ def main():
         port=args.port,
     )
 
-    server.run()
+    # 處理 SSL/HTTPS
+    ssl_certfile = None
+    ssl_keyfile = None
+
+    if args.ssl:
+        cert_dir = Path(__file__).parent.parent / "certs"
+
+        if args.cert_file and args.key_file:
+            # 使用指定的證書
+            ssl_certfile = Path(args.cert_file)
+            ssl_keyfile = Path(args.key_file)
+            logger.info(f"使用指定的 SSL 證書: {ssl_certfile}")
+        else:
+            # 自動生成證書
+            try:
+                ssl_certfile, ssl_keyfile = generate_self_signed_cert(cert_dir)
+            except ImportError:
+                logger.error("生成 SSL 證書需要 'cryptography' 套件")
+                logger.info("請安裝: pip install cryptography")
+                logger.info("或使用 --cert-file 和 --key-file 指定現有證書")
+                sys.exit(1)
+            except Exception as e:
+                logger.error(f"生成 SSL 證書失敗: {e}")
+                sys.exit(1)
+
+    server.run(ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile)
 
 
 if __name__ == "__main__":

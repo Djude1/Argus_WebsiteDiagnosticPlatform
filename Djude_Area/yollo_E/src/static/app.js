@@ -90,30 +90,26 @@ class YOLOWebApp {
         });
 
         // 設定預設伺服器地址
-        // 優先使用 localhost，因為 Dev Tunnel 可能不支援 WebSocket/HTTP 請求轉發
+        // 自動根據頁面協議選擇 ws:// 或 wss://
+        // 頁面是 HTTPS 時，後端也應該使用 HTTPS (啟動時加 --ssl 參數)
         const isDevTunnel = window.location.hostname.includes('devtunnels.ms') ||
                             window.location.hostname.includes('portmap.io') ||
-                            window.location.hostname.includes('localtunnel');
-        const isNonLocal = window.location.hostname !== 'localhost' &&
-                           window.location.hostname !== '127.0.0.1' &&
-                           !window.location.hostname.startsWith('192.168.') &&
-                           !window.location.hostname.startsWith('10.') &&
-                           !window.location.hostname.startsWith('172.16.');
+                            window.location.hostname.includes('localtunnel') ||
+                            window.location.hostname.includes('trycloudflare.com');
 
-        // 檢測環境並選擇適當的伺服器地址
-        if (isDevTunnel || (window.location.protocol === 'https:' && isNonLocal)) {
-            // Dev Tunnel 或公網 HTTPS：使用 localhost (假設用戶在本地運行伺服器)
-            this.serverUrlInput.value = 'ws://localhost:8080';
-            this.debugLog('檢測到 Dev Tunnel 或公網連線', 'warning');
-            this.debugLog('已自動切換到 localhost:8080', 'info');
-            this.debugLog('請確保本地伺服器正在運行', 'warning');
-            this.showNotification('已切換到本地伺服器 (localhost:8080)', 'warning');
-        } else {
-            // 本地或內網環境：使用當前主機
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const defaultHost = window.location.hostname || 'localhost';
-            const defaultPort = window.location.port || '8080';
-            this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const defaultHost = window.location.hostname || 'localhost';
+        const defaultPort = window.location.port || (window.location.protocol === 'https:' ? '8443' : '8080');
+        this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
+
+        // 顯示環境提示
+        if (isDevTunnel) {
+            this.debugLog('檢測到隧道服務', 'info');
+            this.debugLog('請確保後端使用 --ssl 參數啟動', 'warning');
+            this.debugLog('例如: python -m src.web_server --ssl --port 8443', 'info');
+        } else if (window.location.protocol === 'https:') {
+            this.debugLog('HTTPS 模式', 'info');
+            this.debugLog('請確保後端使用 --ssl 參數啟動', 'warning');
         }
 
         // 視頻載入後設定畫布尺寸
@@ -325,16 +321,17 @@ class YOLOWebApp {
         if (pageIsHttps && apiIsHttp) {
             this.debugLog('====================================', 'error');
             this.debugLog('⚠️ 混合內容警告', 'error');
-            this.debugLog('頁面是 HTTPS，但 API 是 HTTP', 'error');
+            this.debugLog('頁面: HTTPS | API: HTTP', 'error');
             this.debugLog('瀏覽器會阻止此連線！', 'error');
             this.debugLog('====================================', 'error');
             this.debugLog('解決方案:', 'warning');
-            this.debugLog('1. 使用 HTTP 訪問此頁面 (http://localhost:8080)', 'info');
-            this.debugLog('2. 或設定伺服器支援 HTTPS', 'info');
+            this.debugLog('後端啟動時添加 --ssl 參數:', 'info');
+            this.debugLog('python -m src.web_server --ssl --port 8443', 'success');
+            this.debugLog('然後訪問: https://你的域名:8443', 'info');
             this.debugLog('====================================', 'error');
-            this.showNotification('⚠️ HTTPS 頁面無法連接 HTTP API', 'error');
+            this.showNotification('⚠️ 需要後端啟用 HTTPS (--ssl)', 'error');
         } else {
-            this.debugLog(`HTTP API URL: ${this.httpApiUrl}`, 'info');
+            this.debugLog(`HTTP(S) API URL: ${this.httpApiUrl}`, 'info');
             this.showNotification('HTTP 模式已啟用', 'success');
         }
         this.connectionStatus.className = 'connected';
