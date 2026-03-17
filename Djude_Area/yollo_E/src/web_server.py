@@ -58,7 +58,7 @@ class WebDetectionServer:
 
         # 統計資訊
         self.frame_count = 0
-        self.start_time = None
+        self.start_time = time.time()
         self.fps = 0.0
 
         # 建立 FastAPI 應用

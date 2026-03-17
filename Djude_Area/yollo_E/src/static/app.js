@@ -76,10 +76,11 @@ class YOLOWebApp {
             this.settingsPanel.classList.remove('open');
         });
 
-        // 設定預設伺服器地址
+        // 設定預設伺服器地址（根據頁面協議自動選擇 ws 或 wss）
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const defaultHost = window.location.hostname || 'localhost';
         const defaultPort = window.location.port || '8000';
-        this.serverUrlInput.value = `ws://${defaultHost}:${defaultPort}`;
+        this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
 
         // 視頻載入後設定畫布尺寸
         this.localVideo.addEventListener('loadedmetadata', () => {
