@@ -31,8 +31,8 @@ dependencies = [
     "tqdm>=4.66.0",
 
     # 網頁伺服器
-    "fastapi>=0.3.0",
-    "uvicorn>=0.0.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.30.0",
     "websockets>=10.0",
 ]
 

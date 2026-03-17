@@ -15,6 +15,13 @@ class YOLOWebApp {
         this.overlayCanvas = document.getElementById('overlayCanvas');
         this.ctx = this.overlayCanvas.getContext('2d');
 
+        // 除錯面板
+        this.debugContent = document.getElementById('debugContent');
+        this.clearDebugBtn = document.getElementById('clearDebugBtn');
+        if (this.clearDebugBtn) {
+            this.clearDebugBtn.addEventListener('click', () => this.clearDebug());
+        }
+
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.captureBtn = document.getElementById('captureBtn');
@@ -42,6 +49,8 @@ class YOLOWebApp {
         this.resultSocket = null;
         this.mediaStream = null;
         this.frameInterval = null;
+        this.useHttpMode = false; // HTTP 後援模式
+        this.httpApiUrl = ''; // HTTP API URL
 
         // 統計
         this.stats = {
@@ -79,7 +88,7 @@ class YOLOWebApp {
         // 設定預設伺服器地址（根據頁面協議自動選擇 ws 或 wss）
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const defaultHost = window.location.hostname || 'localhost';
-        const defaultPort = window.location.port || '8000';
+        const defaultPort = window.location.port || '8080';
         this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
 
         // 視頻載入後設定畫布尺寸
@@ -95,6 +104,12 @@ class YOLOWebApp {
             this.stop();
         });
 
+        // 記錄初始設定
+        this.debugLog(`頁面已載入`);
+        this.debugLog(`WebSocket URL: ${this.serverUrlInput.value}`);
+        this.debugLog(`User Agent: ${navigator.userAgent.substring(0, 50)}...`);
+        this.debugLog(`HTTPS: ${window.location.protocol === 'https:'}`);
+
         this.showNotification('準備就緒，點擊「開始偵測」啟動', 'success');
     }
 
@@ -106,7 +121,10 @@ class YOLOWebApp {
             const [width, height] = this.resolutionSelect.value.split('x').map(Number);
             const frameRate = parseInt(this.frameRateSelect.value);
 
+            this.debugLog(`啟動參數: ${width}x${height} @ ${frameRate}fps`);
+
             // 請求攝影機權限
+            this.debugLog('正在請求攝影機權限...');
             this.showNotification('正在請求攝影機權限...', 'warning');
 
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -151,70 +169,153 @@ class YOLOWebApp {
             this.showNotification('偵測已啟動', 'success');
 
         } catch (error) {
-            console.error('啟動失敗:', error);
-            this.showNotification(`啟動失敗: ${error.message}`, 'error');
+            console.error('[DEBUG] 啟動失敗:', error);
+            console.error('[DEBUG] 錯誤類型:', error.constructor.name);
+            console.error('[DEBUG] 錯誤訊息:', error.message);
+            console.error('[DEBUG] 錯誤堆疊:', error.stack);
+
+            // 顯示詳細錯誤訊息
+            let errorMsg = error.message || '未知錯誤';
+            if (errorMsg === 'undefined' || !errorMsg) {
+                errorMsg = '連線失敗，請檢查伺服器位址';
+            }
+            this.showNotification(`啟動失敗: ${errorMsg}`, 'error');
+
+            // 清理資源
+            this.stop();
         }
     }
 
     async connectWebSocket() {
         const serverUrl = this.serverUrlInput.value;
 
+        this.showNotification(`正在連接伺服器: ${serverUrl}`, 'warning');
+
+        // 先嘗試 WebSocket，失敗則使用 HTTP 模式
+        try {
+            await this._tryWebSocketConnect(serverUrl);
+            this.debugLog('WebSocket 連線成功', 'success');
+        } catch (wsError) {
+            this.debugLog(`WebSocket 連線失敗: ${wsError.message}`, 'warning');
+            this.debugLog('切換至 HTTP 後援模式...', 'info');
+
+            // 切換到 HTTP 模式
+            await this._initHttpMode(serverUrl);
+        }
+    }
+
+    async _tryWebSocketConnect(serverUrl) {
         return new Promise((resolve, reject) => {
+            let resultConnected = false;
+            let videoConnected = false;
+            let connectionTimeout = setTimeout(() => {
+                if (!resultConnected || !videoConnected) {
+                    reject(new Error(`連接超時 (結果:${resultConnected ? '✓' : '✗'}, 視頻:${videoConnected ? '✓' : '✗'})`));
+                }
+            }, 5000); // 5秒超時 (更快以切換到 HTTP)
+
             try {
                 // 結果 WebSocket
+                console.log('[DEBUG] 連接結果 WebSocket:', `${serverUrl}/ws/result`);
                 this.resultSocket = new WebSocket(`${serverUrl}/ws/result`);
 
                 this.resultSocket.onopen = () => {
-                    console.log('結果 WebSocket 已連接');
+                    console.log('[DEBUG] 結果 WebSocket 已連接');
                     this.connectionStatus.className = 'connected';
-                    resolve();
+                    resultConnected = true;
+                    this.debugLog('結果 WebSocket 已連接', 'success');
+
+                    if (resultConnected && videoConnected) {
+                        clearTimeout(connectionTimeout);
+                        resolve();
+                    }
                 };
 
                 this.resultSocket.onmessage = (event) => {
-                    this.handleDetectionResult(JSON.parse(event.data));
+                    console.log('[DEBUG] 收到檢測結果:', event.data);
+                    try {
+                        const result = JSON.parse(event.data);
+                        this.handleDetectionResult(result);
+                    } catch (e) {
+                        console.error('[DEBUG] 解析結果失敗:', e, event.data);
+                    }
                 };
 
                 this.resultSocket.onerror = (error) => {
-                    console.error('結果 WebSocket 錯誤:', error);
+                    console.error('[DEBUG] 結果 WebSocket 錯誤:', error);
                     this.connectionStatus.className = 'disconnected';
+                    clearTimeout(connectionTimeout);
+                    // 不要直接 reject，讓視頻 WebSocket 的錯誤來處理
                 };
 
-                this.resultSocket.onclose = () => {
-                    console.log('結果 WebSocket 已斷開');
+                this.resultSocket.onclose = (event) => {
+                    console.log('[DEBUG] 結果 WebSocket 已斷開', event.code, event.reason);
                     this.connectionStatus.className = 'disconnected';
                 };
 
                 // 視頻 WebSocket
+                console.log('[DEBUG] 連接視頻 WebSocket:', `${serverUrl}/ws/video`);
                 this.videoSocket = new WebSocket(`${serverUrl}/ws/video`);
 
                 this.videoSocket.onopen = () => {
-                    console.log('視頻 WebSocket 已連接');
+                    console.log('[DEBUG] 視頻 WebSocket 已連接');
+                    videoConnected = true;
+                    this.debugLog('視頻 WebSocket 已連接', 'success');
+
+                    if (resultConnected && videoConnected) {
+                        clearTimeout(connectionTimeout);
+                        resolve();
+                    }
                 };
 
                 this.videoSocket.onerror = (error) => {
-                    console.error('視頻 WebSocket 錯誤:', error);
-                    reject(error);
+                    console.error('[DEBUG] 視頻 WebSocket 錯誤:', error);
+                    clearTimeout(connectionTimeout);
+                    reject(new Error(`WebSocket 連線失敗`));
+                };
+
+                this.videoSocket.onclose = (event) => {
+                    console.log('[DEBUG] 視頻 WebSocket 已斷開', event.code, event.reason);
                 };
 
             } catch (error) {
+                console.error('[DEBUG] WebSocket 建立失敗:', error);
+                clearTimeout(connectionTimeout);
                 reject(error);
             }
         });
+    }
+
+    async _initHttpMode(serverUrl) {
+        // 將 ws:// 或 wss:// 轉換為 http:// 或 https://
+        let httpUrl = serverUrl.replace(/^wss?:\/\//, '');
+        const protocol = serverUrl.startsWith('wss://') ? 'https://' : 'http://';
+        this.httpApiUrl = `${protocol}${httpUrl}`;
+        this.useHttpMode = true;
+
+        this.debugLog(`HTTP API URL: ${this.httpApiUrl}`, 'info');
+        this.showNotification('HTTP 模式已啟用', 'success');
+        this.connectionStatus.className = 'connected';
     }
 
     startFrameSender(frameRate) {
         const interval = 1000 / frameRate;
 
         this.frameInterval = setInterval(() => {
-            if (!this.isRunning || !this.videoSocket || this.videoSocket.readyState !== WebSocket.OPEN) {
-                return;
+            if (!this.isRunning) return;
+
+            // WebSocket 模式檢查
+            if (!this.useHttpMode) {
+                if (!this.videoSocket || this.videoSocket.readyState !== WebSocket.OPEN) {
+                    return;
+                }
             }
 
             this.sendFrame();
         }, interval);
     }
 
-    sendFrame() {
+    async sendFrame() {
         if (!this.localVideo.videoWidth) return;
 
         // 建立臨時畫布來擷取幀
@@ -230,14 +331,58 @@ class YOLOWebApp {
         const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
 
         // 發送到伺服器
-        this.videoSocket.send(dataUrl);
+        try {
+            if (this.useHttpMode) {
+                // HTTP 模式
+                await this._sendFrameHttp(dataUrl);
+            } else {
+                // WebSocket 模式
+                this.videoSocket.send(dataUrl);
+            }
 
-        // 更新統計
-        this.stats.framesSent++;
-        this.totalFrames.textContent = this.stats.framesSent;
+            // 更新統計
+            this.stats.framesSent++;
+            this.totalFrames.textContent = this.stats.framesSent;
+
+            // 每 30 幀記錄一次
+            if (this.stats.framesSent % 30 === 1) {
+                this.debugLog(`已發送 ${this.stats.framesSent} 幀 (${this.useHttpMode ? 'HTTP' : 'WebSocket'})`, 'info');
+            }
+        } catch (e) {
+            this.debugLog(`發送失敗: ${e.message}`, 'error');
+        }
+    }
+
+    async _sendFrameHttp(dataUrl) {
+        try {
+            const response = await fetch(`${this.httpApiUrl}/api/detect/v2`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: dataUrl })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            // 處理檢測結果
+            this.handleDetectionResult(result);
+        } catch (e) {
+            this.debugLog(`HTTP 檢測失敗: ${e.message}`, 'error');
+        }
     }
 
     handleDetectionResult(result) {
+        // 記錄收到結果
+        this.debugLog(`收到結果: ${result.count} 個物件, FPS: ${result.fps}`, 'success');
+
         // 更新 FPS
         this.fpsDisplay.textContent = `FPS: ${result.fps}`;
 
@@ -432,6 +577,11 @@ class YOLOWebApp {
 
         this.connectionStatus.className = '';
 
+        // 重置 HTTP 模式
+        this.useHttpMode = false;
+        this.httpApiUrl = '';
+
+        this.debugLog('偵測已停止', 'info');
         this.showNotification('偵測已停止', 'warning');
     }
 
@@ -467,6 +617,34 @@ class YOLOWebApp {
         setTimeout(() => {
             notification.classList.remove('show');
         }, 3000);
+
+        // 同時寫入除錯面板
+        this.debugLog(message, type);
+    }
+
+    debugLog(message, type = 'info') {
+        if (!this.debugContent) return;
+
+        const timestamp = new Date().toLocaleTimeString();
+        const line = document.createElement('div');
+        line.className = `debug-line debug-${type}`;
+        line.textContent = `[${timestamp}] ${message}`;
+
+        this.debugContent.appendChild(line);
+
+        // 自動滾動到底部
+        this.debugContent.scrollTop = this.debugContent.scrollHeight;
+
+        // 限制行數
+        while (this.debugContent.children.length > 50) {
+            this.debugContent.removeChild(this.debugContent.firstChild);
+        }
+    }
+
+    clearDebug() {
+        if (this.debugContent) {
+            this.debugContent.innerHTML = '';
+        }
     }
 }
 

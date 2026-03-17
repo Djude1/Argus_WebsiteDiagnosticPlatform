@@ -65,16 +65,47 @@ class ESP32Config:
 class ModelConfig:
     """模型配置 - 支援 YOLOE 開放詞彙實例分割模型"""
 
+    # 模型路徑 (相對於專案根目錄)
     model_path: str = field(default_factory=lambda: os.getenv("MODEL_PATH", "yoloe-26s-seg.pt"))
     custom_model_path: str = field(
         default_factory=lambda: os.getenv("CUSTOM_MODEL_PATH", "models/custom/yoloe_custom.pt")
     )
+    # 輕量級模型選項
+    lightweight_model_path: str = field(
+        default_factory=lambda: os.getenv("LIGHTWEIGHT_MODEL_PATH", "yolov8n.pt")
+    )
+    # 使用輕量級模型 (適合 CPU 或低階 GPU)
+    use_lightweight: bool = field(
+        default_factory=lambda: os.getenv("USE_LIGHTWEIGHT_MODEL", "false").lower() == "true"
+    )
+    # 強制使用 CPU (即使有 GPU)
+    force_cpu: bool = field(
+        default_factory=lambda: os.getenv("FORCE_CPU", "false").lower() == "true"
+    )
+
     confidence_threshold: float = field(
         default_factory=lambda: float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
     )
     iou_threshold: float = field(default_factory=lambda: float(os.getenv("IOU_THRESHOLD", "0.45")))
     # YOLOE 開放詞彙偵測類別（可自訂任何物品，留空則使用模型內建類別）
     detection_classes: str = field(default_factory=lambda: os.getenv("DETECTION_CLASSES", ""))
+
+    @property
+    def full_model_path(self) -> Path:
+        """取得完整的模型檔案路徑"""
+        path = Path(self.model_path)
+        if path.is_absolute():
+            return path
+        # 相對於專案根目錄 (src 的上一層)
+        return Path(__file__).parent.parent / path
+
+    @property
+    def full_lightweight_path(self) -> Path:
+        """取得完整的輕量級模型檔案路徑"""
+        path = Path(self.lightweight_model_path)
+        if path.is_absolute():
+            return path
+        return Path(__file__).parent.parent / path
 
 
 @dataclass
@@ -158,11 +189,41 @@ def get_esp32_stream_url() -> str:
     return config.esp32.stream_url
 
 
-def get_model_path(use_custom: bool = False) -> str:
-    """取得模型路徑"""
+def get_model_path(use_custom: bool = False, use_lightweight: bool = None) -> str:
+    """取得模型路徑
+
+    參數:
+        use_custom: 使用自訂模型
+        use_lightweight: 使用輕量級模型 (None 則根據配置自動判斷)
+
+    回傳:
+        模型檔案的完整路徑
+    """
+    cfg = config.model
     if use_custom:
-        return config.model.custom_model_path
-    return config.model.model_path
+        path = cfg.custom_model_path
+    elif use_lightweight is None:
+        path = cfg.lightweight_model_path if cfg.use_lightweight else cfg.model_path
+    else:
+        path = cfg.lightweight_model_path if use_lightweight else cfg.model_path
+
+    # 轉換為完整路徑
+    path_obj = Path(path)
+    if path_obj.is_absolute():
+        return str(path_obj)
+    return str(Path(__file__).parent.parent / path)
+
+
+def get_device() -> str:
+    """取得運算裝置
+
+    回傳:
+        "cpu" 如果強制使用 CPU
+        "auto" 否則自動判斷
+    """
+    if config.model.force_cpu:
+        return "cpu"
+    return "auto"
 
 
 def get_db_path() -> Path:

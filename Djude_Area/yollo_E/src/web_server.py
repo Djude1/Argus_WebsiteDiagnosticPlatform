@@ -28,7 +28,7 @@ _src_path = Path(__file__).resolve().parent
 if str(_src_path) not in sys.path:
     sys.path.insert(0, str(_src_path))
 
-from config import get_config, get_model_path
+from config import get_config, get_model_path, get_device
 from detection.yolo_detector import YOLODetector
 from detection.label_mapper import LabelMapper
 
@@ -41,7 +41,7 @@ class WebDetectionServer:
         model_path: str = None,
         confidence: float = 0.5,
         host: str = "0.0.0.0",
-        port: int = 8000,
+        port: int = 8080,
     ):
         self.model_path = model_path or get_model_path()
         self.confidence = confidence
@@ -109,6 +109,72 @@ class WebDetectionServer:
         async def health_check():
             """健康檢查"""
             return {"status": "ok", "fps": self.fps, "frame_count": self.frame_count}
+
+        @self.app.post("/api/detect")
+        async def detect_endpoint(request: dict):
+            """HTTP 物件檢測 API (適用於不支援 WebSocket 的環境)"""
+            try:
+                # 取得 base64 編碼的影像
+                data = request.get("image", "")
+
+                # 解碼 base64
+                if data.startswith("data:image"):
+                    header, base64_data = data.split(",", 1)
+                    image_data = base64.b64decode(base64_data)
+                else:
+                    image_data = base64.b64decode(data)
+
+                # 轉換為 numpy 陣列
+                nparr = np.frombuffer(image_data, np.uint8)
+                frame = cv2.imdecode(nparr)
+
+                if frame is None:
+                    return {"error": "無法解析影像"}, 400
+
+                # 執行 YOLO 檢測
+                result = await self._detect_frame(frame)
+
+                return result
+
+            except Exception as e:
+                logger.error(f"HTTP 檢測錯誤: {e}")
+                return {"error": str(e)}, 500
+
+        from pydantic import BaseModel
+        from fastapi import Body
+
+        class DetectRequest(BaseModel):
+            image: str
+
+        @self.app.post("/api/detect/v2")
+        async def detect_endpoint_v2(request: DetectRequest):
+            """HTTP 物件檢測 API v2 (使用 Pydantic)"""
+            try:
+                # 取得 base64 編碼的影像
+                data = request.image
+
+                # 解碼 base64
+                if data.startswith("data:image"):
+                    header, base64_data = data.split(",", 1)
+                    image_data = base64.b64decode(base64_data)
+                else:
+                    image_data = base64.b64decode(data)
+
+                # 轉換為 numpy 陣列
+                nparr = np.frombuffer(image_data, np.uint8)
+                frame = cv2.imdecode(nparr)
+
+                if frame is None:
+                    return {"error": "無法解析影像"}
+
+                # 執行 YOLO 檢測
+                result = await self._detect_frame(frame)
+
+                return result
+
+            except Exception as e:
+                logger.error(f"HTTP 檢測錯誤: {e}")
+                return {"error": str(e)}
 
     async def _handle_video_stream(self, websocket: WebSocket):
         """處理視頻串流"""
@@ -179,10 +245,12 @@ class WebDetectionServer:
             self.detector = YOLODetector(
                 model_path=self.model_path,
                 confidence_threshold=self.confidence,
-                device="auto",
+                device=get_device(),
                 prompt_classes=prompt_classes,
+                use_fp16=not self.config.model.force_cpu,  # CPU 模式不使用 FP16
             )
             logger.info(f"YOLO 模型已載入: {self.model_path}")
+            logger.info(f"運算裝置: {get_device()}")
 
         # 計時
         start_time = time.time()
@@ -210,8 +278,7 @@ class WebDetectionServer:
                 "class_name": det.class_name,
                 "class_name_cn": det.class_name_cn or det.class_name,
                 "confidence": round(det.confidence, 3),
-                "bbox": [int(x) for x in det.bbox] if det.bbox is not None else None,
-                "mask": det.mask.tolist() if det.mask is not None else None,
+                "bbox": list(det.bbox.to_tuple()) if det.bbox is not None else None,
             })
 
         return {
@@ -291,7 +358,7 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
+        default=8080,
         help="伺服器端口",
     )
 

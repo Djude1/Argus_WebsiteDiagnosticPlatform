@@ -33,7 +33,7 @@ if __name__ == "__main__" and __package__ is None:
     _src_path = Path(__file__).resolve().parent
     if str(_src_path) not in sys.path:
         sys.path.insert(0, str(_src_path))
-    from config import get_config, get_esp32_stream_url, get_model_path, get_db_path
+    from config import get_config, get_esp32_stream_url, get_model_path, get_db_path, get_device
     from camera.esp32_stream import ESP32StreamReceiver
     from camera.webcam_fallback import WebcamReceiver
     from detection.yolo_detector import YOLODetector, FrameDetectionResult
@@ -53,7 +53,7 @@ if __name__ == "__main__" and __package__ is None:
     from annotation.models import AnnotationRecord, AnnotationStatus
 else:
     # 套件匯入模式
-    from .config import get_config, get_esp32_stream_url, get_model_path, get_db_path
+    from .config import get_config, get_esp32_stream_url, get_model_path, get_db_path, get_device
     from .camera.esp32_stream import ESP32StreamReceiver
     from .camera.webcam_fallback import WebcamReceiver
     from .detection.yolo_detector import YOLODetector, FrameDetectionResult
@@ -81,6 +81,7 @@ class YOLODetectionSystem:
         source: str = "esp32",
         model_path: str = None,
         use_custom_model: bool = False,
+        use_lightweight: bool = False,
         confidence: float = 0.5,
         save_to_db: bool = True,
         save_images: bool = False,
@@ -93,6 +94,7 @@ class YOLODetectionSystem:
             source: 影像來源 ("esp32" 或 "webcam")
             model_path: 模型路徑
             use_custom_model: 是否使用自定義模型
+            use_lightweight: 是否使用輕量級模型
             confidence: 信心度門檻
             save_to_db: 是否儲存到資料庫
             save_images: 是否儲存辨識圖片
@@ -103,6 +105,7 @@ class YOLODetectionSystem:
         self.save_to_db = save_to_db
         self.save_images = save_images
         self.display = display
+        self.use_lightweight = use_lightweight
 
         # 載入配置
         self.config = get_config()
@@ -111,7 +114,7 @@ class YOLODetectionSystem:
         if model_path:
             self.model_path = model_path
         else:
-            self.model_path = get_model_path(use_custom=use_custom_model)
+            self.model_path = get_model_path(use_custom=use_custom_model, use_lightweight=use_lightweight)
 
         # 初始化元件
         self.camera = None
@@ -175,10 +178,11 @@ class YOLODetectionSystem:
             self.detector = YOLODetector(
                 model_path=self.model_path,
                 confidence_threshold=self.confidence,
-                device="auto",
+                device=get_device(),
                 prompt_classes=prompt_classes,  # 傳遞開放詞彙類別
             )
             logger.info(f"YOLO 模型已載入: {self.model_path}")
+            logger.info(f"運算裝置: {get_device()}")
 
             # 初始化攝影機
             if self.source == "esp32":
@@ -629,13 +633,22 @@ def main():
 使用範例:
   # 使用 ESP32 串流
   python main.py --source esp32
-  
+
   # 使用本地 Webcam
   python main.py --source webcam
-  
+
+  # 使用輕量級模型 (適合 CPU 或低階 GPU)
+  python main.py --source webcam --lightweight
+
+  # 強制使用 CPU 模式
+  python main.py --source webcam --cpu
+
+  # 網頁模式 + 輕量級模型 + CPU
+  python main.py --web --lightweight --cpu
+
   # 使用自定義模型
   python main.py --model models/custom/yoloe_custom.pt
-  
+
   # 不顯示視窗（背景執行）
   python main.py --no-display
         """,
@@ -665,13 +678,17 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="伺服器端口 (預設 8000)",
+        default=8080,
+        help="伺服器端口 (預設 8080)",
     )
 
     parser.add_argument("--model", type=str, default=None, help="模型檔案路徑")
 
     parser.add_argument("--custom", action="store_true", help="使用自定義訓練的模型")
+
+    parser.add_argument("--lightweight", action="store_true", help="使用輕量級模型 (yolov8n.pt，適合 CPU)")
+
+    parser.add_argument("--cpu", action="store_true", help="強制使用 CPU 運算 (即使有 GPU)")
 
     parser.add_argument("--confidence", type=float, default=0.5, help="信心度門檻 (0.0 - 1.0)")
 
@@ -701,10 +718,20 @@ def main():
         return
 
     # 原有模式
+    # 處理輕量級模型和 CPU 模式選項
+    import os
+    if args.lightweight:
+        os.environ["USE_LIGHTWEIGHT_MODEL"] = "true"
+        logger.info("使用輕量級模型模式")
+    if args.cpu:
+        os.environ["FORCE_CPU"] = "true"
+        logger.info("強制使用 CPU 模式")
+
     system = YOLODetectionSystem(
         source=args.source,
         model_path=args.model,
         use_custom_model=args.custom,
+        use_lightweight=args.lightweight,
         confidence=args.confidence,
         save_to_db=not args.no_db,
         save_images=args.save_images,
