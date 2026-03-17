@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final appProvider  = context.read<AppProvider>();
     final authProvider = context.read<AuthProvider>();
 
-    final err = await authProvider.login(
+    final err = await authProvider.loginAdmin(
       _userCtrl.text.trim(),
       _passCtrl.text,
       appProvider.api,
@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (err != null) {
       setState(() { _error = err; });
     } else {
-      await appProvider.startAllServices(token: '');
+      await appProvider.startAllServices();
       appProvider.startPollingNavState();
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     }
