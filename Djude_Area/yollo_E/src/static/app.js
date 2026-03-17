@@ -85,11 +85,32 @@ class YOLOWebApp {
             this.settingsPanel.classList.remove('open');
         });
 
-        // 設定預設伺服器地址（根據頁面協議自動選擇 ws 或 wss）
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const defaultHost = window.location.hostname || 'localhost';
-        const defaultPort = window.location.port || '8080';
-        this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
+        // 設定預設伺服器地址
+        // 優先使用 localhost，因為 Dev Tunnel 可能不支援 WebSocket/HTTP 請求轉發
+        const isDevTunnel = window.location.hostname.includes('devtunnels.ms') ||
+                            window.location.hostname.includes('portmap.io') ||
+                            window.location.hostname.includes('localtunnel');
+        const isNonLocal = window.location.hostname !== 'localhost' &&
+                           window.location.hostname !== '127.0.0.1' &&
+                           !window.location.hostname.startsWith('192.168.') &&
+                           !window.location.hostname.startsWith('10.') &&
+                           !window.location.hostname.startsWith('172.16.');
+
+        // 檢測環境並選擇適當的伺服器地址
+        if (isDevTunnel || (window.location.protocol === 'https:' && isNonLocal)) {
+            // Dev Tunnel 或公網 HTTPS：使用 localhost (假設用戶在本地運行伺服器)
+            this.serverUrlInput.value = 'ws://localhost:8080';
+            this.debugLog('檢測到 Dev Tunnel 或公網連線', 'warning');
+            this.debugLog('已自動切換到 localhost:8080', 'info');
+            this.debugLog('請確保本地伺服器正在運行', 'warning');
+            this.showNotification('已切換到本地伺服器 (localhost:8080)', 'warning');
+        } else {
+            // 本地或內網環境：使用當前主機
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const defaultHost = window.location.hostname || 'localhost';
+            const defaultPort = window.location.port || '8080';
+            this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
+        }
 
         // 視頻載入後設定畫布尺寸
         this.localVideo.addEventListener('loadedmetadata', () => {
@@ -356,11 +377,17 @@ class YOLOWebApp {
     async _sendFrameHttp(dataUrl) {
         const requestStart = Date.now();
         const payloadSize = dataUrl.length;
+        const requestUrl = `${this.httpApiUrl}/api/detect/v2`;
 
         try {
+            // 顯示請求 URL (每 30 幀一次，避免日誌過多)
+            if (!this._lastUrlLog || this.stats.framesSent - this._lastUrlLog >= 30) {
+                this.debugLog(`API URL: ${requestUrl}`, 'info');
+                this._lastUrlLog = this.stats.framesSent;
+            }
             this.debugLog(`發送 HTTP 請求，資料大小: ${(payloadSize / 1024).toFixed(1)} KB`, 'info');
 
-            const response = await fetch(`${this.httpApiUrl}/api/detect/v2`, {
+            const response = await fetch(requestUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -402,7 +429,15 @@ class YOLOWebApp {
 
             if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
                 errorType = '網路連線失敗';
-                errorDetail += ' - 檢查伺服器是否運行或網路連線';
+                errorDetail += ` (URL: ${requestUrl})`;
+                // 首次錯誤時顯示完整診斷資訊
+                if (this._httpErrorCount === 1) {
+                    this.debugLog(`===== 連線診斷 =====`, 'warning');
+                    this.debugLog(`API URL: ${requestUrl}`, 'info');
+                    this.debugLog(`請確保伺服器在 ${this.httpApiUrl} 運行`, 'warning');
+                    this.debugLog(`可在設定中更改伺服器地址`, 'info');
+                    this.debugLog(`==================`, 'warning');
+                }
             } else if (errorDetail.includes('HTTP 413') || errorDetail.includes('413')) {
                 errorType = '請求太大';
                 errorDetail += ' - 請嘗試降低影像解析度';
