@@ -354,7 +354,12 @@ class YOLOWebApp {
     }
 
     async _sendFrameHttp(dataUrl) {
+        const requestStart = Date.now();
+        const payloadSize = dataUrl.length;
+
         try {
+            this.debugLog(`發送 HTTP 請求，資料大小: ${(payloadSize / 1024).toFixed(1)} KB`, 'info');
+
             const response = await fetch(`${this.httpApiUrl}/api/detect/v2`, {
                 method: 'POST',
                 headers: {
@@ -363,19 +368,61 @@ class YOLOWebApp {
                 body: JSON.stringify({ image: dataUrl })
             });
 
+            const requestTime = Date.now() - requestStart;
+
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                // 嘗試讀取錯誤訊息
+                let errorDetail = `HTTP ${response.status}`;
+                try {
+                    const errorData = await response.text();
+                    if (errorData) {
+                        errorDetail += `: ${errorData.substring(0, 100)}`;
+                    }
+                } catch (e) {
+                    // 無法讀取錯誤詳情
+                }
+                this.debugLog(`HTTP 錯誤 (${requestTime}ms): ${errorDetail}`, 'error');
+                throw new Error(errorDetail);
             }
 
             const result = await response.json();
             if (result.error) {
+                this.debugLog(`伺服器錯誤: ${result.error}`, 'error');
                 throw new Error(result.error);
             }
+
+            this.debugLog(`HTTP 請求成功 (${requestTime}ms)`, 'success');
 
             // 處理檢測結果
             this.handleDetectionResult(result);
         } catch (e) {
-            this.debugLog(`HTTP 檢測失敗: ${e.message}`, 'error');
+            // 分類錯誤類型
+            let errorType = '未知錯誤';
+            let errorDetail = e.message || '無法識別的錯誤';
+
+            if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
+                errorType = '網路連線失敗';
+                errorDetail += ' - 檢查伺服器是否運行或網路連線';
+            } else if (errorDetail.includes('HTTP 413') || errorDetail.includes('413')) {
+                errorType = '請求太大';
+                errorDetail += ' - 請嘗試降低影像解析度';
+            } else if (errorDetail.includes('HTTP 504') || errorDetail.includes('504')) {
+                errorType = '伺服器超時';
+                errorDetail += ' - 處理時間過長，請降低影像解析度或幀率';
+            } else if (errorDetail.includes('HTTP 500')) {
+                errorType = '伺服器內部錯誤';
+                errorDetail += ' - 請檢查伺服器日誌';
+            }
+
+            // 每 10 個錯誤記錄一次完整堆疊
+            if (!this._httpErrorCount) this._httpErrorCount = 0;
+            this._httpErrorCount++;
+            if (this._httpErrorCount % 10 === 1) {
+                this.debugLog(`[${errorType}] ${errorDetail}`, 'error');
+                console.error('[HTTP Debug]', errorType, errorDetail, e);
+            } else {
+                this.debugLog(`[${errorType}]`, 'error');
+            }
         }
     }
 
