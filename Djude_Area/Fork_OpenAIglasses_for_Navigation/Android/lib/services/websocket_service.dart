@@ -15,8 +15,9 @@ class WebSocketService {
   final String host;
   final int    port;
   final bool   secure;
+  final String? baseUrl;
 
-  WebSocketService({required this.host, required this.port, this.secure = false});
+  WebSocketService({required this.host, required this.port, this.secure = false, this.baseUrl});
 
   // ── Camera WS ────────────────────────────────────────────────────────────
   WebSocketChannel?   _cameraWs;
@@ -33,7 +34,7 @@ class WebSocketService {
     _cameraWs?.sink.close();
     _cameraSub?.cancel();
     _cameraWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsCamera(host, port, secure: secure)),
+      Uri.parse(AppConstants.wsCamera(host, port, secure: secure, baseUrl: baseUrl)),
     );
     // 監聽關閉事件，自動重連
     _cameraSub = _cameraWs!.stream.listen(
@@ -71,7 +72,7 @@ class WebSocketService {
     _audioWs?.sink.close();
     _audioWsSub?.cancel();
     _audioWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsAudio(host, port, secure: secure)),
+      Uri.parse(AppConstants.wsAudio(host, port, secure: secure, baseUrl: baseUrl)),
     );
     _audioWsSub = _audioWs!.stream.listen(
       (_) {},
@@ -103,7 +104,7 @@ class WebSocketService {
     _uiWs?.sink.close();
     _uiSub?.cancel();
     _uiWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsUi(host, port, secure: secure)),
+      Uri.parse(AppConstants.wsUi(host, port, secure: secure, baseUrl: baseUrl)),
     );
     _uiSub = _uiWs!.stream.listen(
       (data) {
@@ -142,7 +143,7 @@ class WebSocketService {
     _imuWs?.sink.close();
     _imuSub?.cancel();
     _imuWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsImu(host, port, secure: secure)),
+      Uri.parse(AppConstants.wsImu(host, port, secure: secure, baseUrl: baseUrl)),
     );
     _imuSub = _imuWs!.stream.listen(
       (_) {},
@@ -182,7 +183,7 @@ class WebSocketService {
     _viewerWs?.sink.close();
     _viewerSub?.cancel();
     _viewerWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsViewer(host, port, secure: secure)),
+      Uri.parse(AppConstants.wsViewer(host, port, secure: secure, baseUrl: baseUrl)),
     );
     _viewerSub = _viewerWs!.stream.listen(
       (data) {

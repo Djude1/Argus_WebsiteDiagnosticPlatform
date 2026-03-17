@@ -17,13 +17,15 @@ import '../services/contacts_service.dart';
 
 class AppProvider extends ChangeNotifier {
   // ── 伺服器設定 ──────────────────────────────────────────────────────────
-  String _host   = AppConstants.defaultHost;
-  int    _port   = AppConstants.defaultPort;
-  bool   _secure = AppConstants.defaultSecure;
+  String _host    = AppConstants.defaultHost;
+  int    _port    = AppConstants.defaultPort;
+  bool   _secure  = AppConstants.defaultSecure;
+  String _baseUrl = AppConstants.defaultBaseUrl;
 
-  String get host   => _host;
-  int    get port   => _port;
-  bool   get secure => _secure;
+  String get host    => _host;
+  int    get port    => _port;
+  bool   get secure  => _secure;
+  String get baseUrl => _baseUrl;
 
   // ── 服務層 ──────────────────────────────────────────────────────────────
   late ApiService       _api;
@@ -67,9 +69,10 @@ class AppProvider extends ChangeNotifier {
   // ── 初始化 ──────────────────────────────────────────────────────────────
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _host   = prefs.getString(AppConstants.keyHost)  ?? AppConstants.defaultHost;
-    _port   = prefs.getInt(AppConstants.keyPort)      ?? AppConstants.defaultPort;
-    _secure = prefs.getBool(AppConstants.keySecure)   ?? AppConstants.defaultSecure;
+    _host    = prefs.getString(AppConstants.keyHost)    ?? AppConstants.defaultHost;
+    _port    = prefs.getInt(AppConstants.keyPort)       ?? AppConstants.defaultPort;
+    _secure  = prefs.getBool(AppConstants.keySecure)    ?? AppConstants.defaultSecure;
+    _baseUrl = prefs.getString(AppConstants.keyBaseUrl) ?? AppConstants.defaultBaseUrl;
     _rebuildServices();
 
     await _tts.setLanguage('zh-TW');
@@ -80,19 +83,21 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _rebuildServices() {
-    _api = ApiService(host: _host, port: _port, secure: _secure);
-    _ws  = WebSocketService(host: _host, port: _port, secure: _secure);
+    _api = ApiService(host: _host, port: _port, secure: _secure, baseUrl: _baseUrl);
+    _ws  = WebSocketService(host: _host, port: _port, secure: _secure, baseUrl: _baseUrl);
   }
 
-  /// 更新伺服器設定（自動發現或手動設定後呼叫）
-  Future<void> updateServerSettings(String host, int port, {bool? secure}) async {
-    _host   = host;
-    _port   = port;
-    _secure = secure ?? _secure;
+  /// 更新伺服器設定（支援完整 URL 或 host+port）
+  Future<void> updateServerSettings(String host, int port, {bool? secure, String? baseUrl}) async {
+    _host    = host;
+    _port    = port;
+    _secure  = secure ?? _secure;
+    _baseUrl = baseUrl ?? _baseUrl;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.keyHost,   host);
+    await prefs.setString(AppConstants.keyHost,    host);
     await prefs.setInt(AppConstants.keyPort,       port);
-    await prefs.setBool(AppConstants.keySecure,   _secure);
+    await prefs.setBool(AppConstants.keySecure,    _secure);
+    await prefs.setString(AppConstants.keyBaseUrl, _baseUrl);
     _rebuildServices();
     notifyListeners();
   }

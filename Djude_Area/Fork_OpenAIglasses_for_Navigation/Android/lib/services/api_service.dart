@@ -10,10 +10,11 @@ class ApiService {
   final String host;
   final int    port;
   final bool   secure;
+  final String? baseUrl;
 
-  ApiService({required this.host, required this.port, this.secure = false}) {
+  ApiService({required this.host, required this.port, this.secure = false, this.baseUrl}) {
     _dio = Dio(BaseOptions(
-      baseUrl:        AppConstants.httpBase(host, port, secure: secure),
+      baseUrl:        AppConstants.httpBase(host, port, secure: secure, baseUrl: baseUrl),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ));
