@@ -89,6 +89,22 @@ class ModelConfig:
     iou_threshold: float = field(default_factory=lambda: float(os.getenv("IOU_THRESHOLD", "0.45")))
     # YOLOE 開放詞彙偵測類別（可自訂任何物品，留空則使用模型內建類別）
     detection_classes: str = field(default_factory=lambda: os.getenv("DETECTION_CLASSES", ""))
+    # 偵測影像大小
+    detection_imgsz: int = field(
+        default_factory=lambda: int(os.getenv("DETECTION_IMGSZ", "640"))
+    )
+    # 記錄用信心度門檻（高於此值才記錄至日誌）
+    record_confidence_threshold: float = field(
+        default_factory=lambda: float(os.getenv("RECORD_CONFIDENCE_THRESHOLD", "0.55"))
+    )
+    # 穩定器滑動視窗大小
+    stabilizer_window_size: int = field(
+        default_factory=lambda: int(os.getenv("STABILIZER_WINDOW_SIZE", "3"))
+    )
+    # 穩定器最低命中次數
+    stabilizer_min_hits: int = field(
+        default_factory=lambda: int(os.getenv("STABILIZER_MIN_HITS", "2"))
+    )
 
     @property
     def full_model_path(self) -> Path:
