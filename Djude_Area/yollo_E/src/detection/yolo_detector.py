@@ -192,14 +192,21 @@ class YOLODetector:
                 try:
                     enhanced, mapping = self._prompt_enhancer.enhance_list(self.prompt_classes)
                     self._enhanced_to_original = mapping
-                    self.model.set_classes(enhanced)
-                    logger.info(f"設定開放詞彙偵測類別（共 {len(enhanced)} 個，已增強提示）")
+
+                    # 正確方式：使用 get_text_pe() 生成文字嵌入，再設定類別
+                    # 這能大幅提升開放詞彙偵測的準確率
+                    text_embeddings = self.model.get_text_pe(enhanced)
+                    self.model.set_classes(enhanced, text_embeddings)
+
+                    logger.info(f"設定開放詞彙偵測類別（共 {len(enhanced)} 個，已增強提示 + 文字嵌入）")
                     for orig, enh in zip(self.prompt_classes[:5], enhanced[:5]):
                         logger.debug(f"  {orig} → {enh}")
                     if len(self.prompt_classes) > 5:
                         logger.debug(f"  ... 及其他 {len(self.prompt_classes) - 5} 個類別")
                 except Exception as e:
                     logger.warning(f"設定偵測類別失敗 (使用內建類別): {e}")
+                    import traceback
+                    logger.debug(traceback.format_exc())
 
             # FP16 半精度加速（僅在 CUDA 可用時啟用，且在 set_classes 之後）
             # 注意：CLIP 模型需要 FP32，所以必須先設定類別再啟用 FP16
@@ -270,7 +277,17 @@ class YOLODetector:
         iou = iou_threshold if iou_threshold is not None else self.iou_threshold
 
         # 執行推論
-        results = self.model(image, conf=conf, iou=iou, classes=classes, verbose=False)
+        # imgsz=640 是預設值，增加可提升準確率但會降低速度
+        # 對於 YOLOE 開放詞彙模型，使用較高的解析度可以提升小物件的偵測率
+        results = self.model(
+            image,
+            conf=conf,
+            iou=iou,
+            classes=classes,
+            imgsz=640,  # 可調整為 1280 提升準確率（會降低速度）
+            augment=False,  # 設為 True 可提升準確率但會大幅降低速度
+            verbose=False
+        )
 
         inference_time = (time.time() - start_time) * 1000  # 轉換為毫秒
         self._frame_count += 1
