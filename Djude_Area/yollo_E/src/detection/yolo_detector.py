@@ -185,15 +185,8 @@ class YOLODetector:
                 self.model.to(self.device)
                 self._cuda_available = "cuda" in str(self.device).lower()
 
-            # FP16 半精度加速（僅在 CUDA 可用時啟用）
-            if self.use_fp16 and self._cuda_available:
-                try:
-                    self.model.model.half()  # 轉換為 FP16
-                    logger.info("已啟用 FP16 半精度加速")
-                except Exception as e:
-                    logger.warning(f"FP16 加速啟用失敗: {e}")
-
             # YOLOE 開放詞彙功能：設定要偵測的類別（使用增強提示）
+            # 注意：必須在啟用 FP16 之前設定，因為 CLIP 模型需要 FP32
             if self._is_yoloe and self.prompt_classes:
                 try:
                     enhanced, mapping = self._prompt_enhancer.enhance_list(self.prompt_classes)
@@ -206,6 +199,15 @@ class YOLODetector:
                         logger.debug(f"  ... 及其他 {len(self.prompt_classes) - 5} 個類別")
                 except Exception as e:
                     logger.warning(f"設定偵測類別失敗 (使用內建類別): {e}")
+
+            # FP16 半精度加速（僅在 CUDA 可用時啟用，且在 set_classes 之後）
+            # 注意：CLIP 模型需要 FP32，所以必須先設定類別再啟用 FP16
+            if self.use_fp16 and self._cuda_available:
+                try:
+                    self.model.model.half()  # 轉換為 FP16
+                    logger.info("已啟用 FP16 半精度加速")
+                except Exception as e:
+                    logger.warning(f"FP16 加速啟用失敗: {e}")
 
             # 取得類別名稱
             self.class_names = self.model.names
