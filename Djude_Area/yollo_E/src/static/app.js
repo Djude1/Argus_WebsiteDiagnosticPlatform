@@ -97,23 +97,28 @@ class YOLOWebApp {
 
         // 設定預設伺服器地址
         // 自動根據頁面協議選擇 ws:// 或 wss://
-        // 頁面是 HTTPS 時，後端也應該使用 HTTPS (啟動時加 --ssl 參數)
         const isDevTunnel = window.location.hostname.includes('devtunnels.ms') ||
                             window.location.hostname.includes('portmap.io') ||
                             window.location.hostname.includes('localtunnel') ||
-                            window.location.hostname.includes('trycloudflare.com');
+                            window.location.hostname.includes('trycloudflare.com') ||
+                            window.location.hostname.includes('ngrok');
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const defaultHost = window.location.hostname || 'localhost';
-        const defaultPort = window.location.port || (window.location.protocol === 'https:' ? '8443' : '8080');
-        this.serverUrlInput.value = `${protocol}//${defaultHost}:${defaultPort}`;
+
+        // 隧道服務或標準埠（port 為空）時不加埠號，由隧道服務自動代理
+        let serverUrl;
+        if (isDevTunnel || !window.location.port) {
+            serverUrl = `${protocol}//${defaultHost}`;
+        } else {
+            serverUrl = `${protocol}//${defaultHost}:${window.location.port}`;
+        }
+        this.serverUrlInput.value = serverUrl;
 
         // 顯示環境提示
         if (isDevTunnel) {
-            this.debugLog('檢測到隧道服務', 'info');
-            this.debugLog('請確保後端使用 --ssl 參數啟動', 'warning');
-            this.debugLog('例如: python -m src.web_server --ssl --port 8443', 'info');
-        } else if (window.location.protocol === 'https:') {
+            this.debugLog('檢測到隧道服務，使用同源連線', 'info');
+        } else if (window.location.protocol === 'https:' && window.location.port) {
             this.debugLog('HTTPS 模式', 'info');
             this.debugLog('請確保後端使用 --ssl 參數啟動', 'warning');
         }
@@ -404,12 +409,15 @@ class YOLOWebApp {
         const requestUrl = `${this.httpApiUrl}/api/detect/v2`;
 
         try {
-            // 顯示請求 URL (每 30 幀一次，避免日誌過多)
+            // 首次或每 30 幀顯示完整連線資訊
             if (!this._lastUrlLog || this.stats.framesSent - this._lastUrlLog >= 30) {
+                this.debugLog(`──── 連線資訊 ────`, 'info');
                 this.debugLog(`API URL: ${requestUrl}`, 'info');
+                this.debugLog(`httpApiUrl: ${this.httpApiUrl}`, 'info');
+                this.debugLog(`頁面來源: ${window.location.origin}`, 'info');
+                this.debugLog(`──────────────────`, 'info');
                 this._lastUrlLog = this.stats.framesSent;
             }
-            this.debugLog(`發送 HTTP 請求，資料大小: ${(payloadSize / 1024).toFixed(1)} KB`, 'info');
 
             const response = await fetch(requestUrl, {
                 method: 'POST',
@@ -523,47 +531,73 @@ class YOLOWebApp {
 
         if (!detections || detections.length === 0) return;
 
-        // 計算縮放比例
-        const scaleX = this.overlayCanvas.clientWidth / this.canvasWidth;
-        const scaleY = this.overlayCanvas.clientHeight / this.canvasHeight;
+        // 注意：canvas 與 video 均使用 object-fit: contain，
+        // 且 canvas 內部解析度已與影像一致，因此 bbox 座標直接繪製即可，無需縮放。
 
         detections.forEach((det, index) => {
             if (!det.bbox) return;
 
             const [x1, y1, x2, y2] = det.bbox;
+            const boxW = x2 - x1;
+            const boxH = y2 - y1;
 
-            // 縮放座標
-            const scaledX1 = x1 * scaleX;
-            const scaledY1 = y1 * scaleY;
-            const scaledWidth = (x2 - x1) * scaleX;
-            const scaledHeight = (y2 - y1) * scaleY;
-
-            // 顏色根據信心度
-            const hue = det.confidence * 120; // 0-120 (紅到綠)
+            // 顏色根據信心度 (0-120: 紅到綠)
+            const hue = det.confidence * 120;
             const color = `hsl(${hue}, 80%, 50%)`;
+            const colorTransparent = `hsla(${hue}, 80%, 50%, 0.15)`;
+
+            // 繪製半透明填充
+            this.ctx.fillStyle = colorTransparent;
+            this.ctx.fillRect(x1, y1, boxW, boxH);
 
             // 繪製邊界框
             this.ctx.strokeStyle = color;
             this.ctx.lineWidth = 3;
-            this.ctx.strokeRect(scaledX1, scaledY1, scaledWidth, scaledHeight);
+            this.ctx.strokeRect(x1, y1, boxW, boxH);
 
-            // 繪製標籤背景
+            // 繪製標籤
             const label = `${det.class_name_cn} ${Math.round(det.confidence * 100)}%`;
-            this.ctx.font = 'bold 14px Arial';
-            const textWidth = this.ctx.measureText(label).width;
+            const fontSize = Math.max(16, Math.round(this.canvasHeight / 40));
+            this.ctx.font = `bold ${fontSize}px "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", Arial, sans-serif`;
+            const textMetrics = this.ctx.measureText(label);
+            const textHeight = fontSize;
+            const padding = 6;
+            const labelW = textMetrics.width + padding * 2;
+            const labelH = textHeight + padding * 2;
 
+            // 標籤位置：優先放框上方，空間不足時放框內上方
+            const labelY = (y1 - labelH > 0) ? y1 - labelH : y1;
+
+            // 標籤背景（圓角效果）
             this.ctx.fillStyle = color;
-            this.ctx.fillRect(scaledX1, scaledY1 - 25, textWidth + 10, 25);
+            this.ctx.beginPath();
+            this._roundRect(x1, labelY, labelW, labelH, 4);
+            this.ctx.fill();
 
-            // 繪製標籤文字
+            // 標籤文字
             this.ctx.fillStyle = 'white';
-            this.ctx.fillText(label, scaledX1 + 5, scaledY1 - 7);
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(label, x1 + padding, labelY + labelH / 2);
 
             // 如果有分割遮罩，繪製遮罩
             if (det.mask && det.mask.length > 0) {
                 this.drawMask(det.mask, color);
             }
         });
+    }
+
+    _roundRect(x, y, w, h, r) {
+        // 繪製圓角矩形路徑
+        this.ctx.moveTo(x + r, y);
+        this.ctx.lineTo(x + w - r, y);
+        this.ctx.arcTo(x + w, y, x + w, y + r, r);
+        this.ctx.lineTo(x + w, y + h - r);
+        this.ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        this.ctx.lineTo(x + r, y + h);
+        this.ctx.arcTo(x, y + h, x, y + h - r, r);
+        this.ctx.lineTo(x, y + r);
+        this.ctx.arcTo(x, y, x + r, y, r);
+        this.ctx.closePath();
     }
 
     drawMask(mask, color) {

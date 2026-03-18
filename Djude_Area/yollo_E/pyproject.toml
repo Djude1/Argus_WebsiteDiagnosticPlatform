@@ -30,6 +30,9 @@ dependencies = [
     # 進度條
     "tqdm>=4.66.0",
 
+    # CLIP（YOLOE 開放詞彙功能必要依賴）
+    "clip @ git+https://github.com/ultralytics/CLIP.git",
+
     # 網頁伺服器
     "fastapi>=0.109.0",
     "uvicorn>=0.30.0",

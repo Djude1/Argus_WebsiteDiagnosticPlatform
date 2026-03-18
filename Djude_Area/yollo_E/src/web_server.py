@@ -225,10 +225,10 @@ class WebDetectionServer:
         # 註冊路由
         self._setup_routes()
 
-        # 新增請求日誌中介軟體
+        # 新增請求日誌與防快取中介軟體
         @self.app.middleware("http")
         async def log_requests(request: Request, call_next):
-            """記錄所有 HTTP 請求"""
+            """記錄所有 HTTP 請求，並為靜態檔案加上防快取 header"""
             start_time = time.time()
 
             # 記錄請求
@@ -240,9 +240,14 @@ class WebDetectionServer:
                 # 計算處理時間
                 process_time = (time.time() - start_time) * 1000
 
+                # 靜態檔案加上防快取 header（開發階段避免瀏覽器快取舊版）
+                if request.url.path.startswith("/static/"):
+                    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                    response.headers["Pragma"] = "no-cache"
+                    response.headers["Expires"] = "0"
+
                 # 記錄回應
-                status_color = "green" if response.status_code < 400 else "red"
-                logger.opt(colors=True).bind(status_color=status_color).log(
+                logger.opt(colors=True).log(
                     "INFO",
                     f"回應: {response.status_code} | {process_time:.0f}ms | {request.method} {request.url.path}"
                 )
