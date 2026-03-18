@@ -63,6 +63,10 @@ class YOLOWebApp {
         this.useHttpMode = false; // HTTP 後援模式
         this.httpApiUrl = ''; // HTTP API URL
 
+        // 幀發送控制
+        this._isProcessing = false;  // 是否正在等待伺服器回應
+        this._frameLoopActive = false;  // 自適應迴圈是否啟用
+
         // 統計
         this.stats = {
             framesSent: 0,
@@ -378,44 +382,55 @@ class YOLOWebApp {
     }
 
     startFrameSender(frameRate) {
-        const interval = 1000 / frameRate;
+        // HTTP 模式：使用自適應迴圈（送一幀→等回應→再送下一幀）
+        // WebSocket 模式：使用限速 interval 防止堆積
+        if (this.useHttpMode) {
+            this._frameLoopActive = true;
+            this._runAdaptiveLoop();
+        } else {
+            const interval = 1000 / frameRate;
+            this.frameInterval = setInterval(() => {
+                if (!this.isRunning) return;
+                if (!this.videoSocket || this.videoSocket.readyState !== WebSocket.OPEN) return;
+                // WebSocket 模式也加入節流：上一幀未處理完就跳過
+                if (this._isProcessing) return;
+                this.sendFrame();
+            }, interval);
+        }
+    }
 
-        this.frameInterval = setInterval(() => {
-            if (!this.isRunning) return;
-
-            // WebSocket 模式檢查
-            if (!this.useHttpMode) {
-                if (!this.videoSocket || this.videoSocket.readyState !== WebSocket.OPEN) {
-                    return;
-                }
+    async _runAdaptiveLoop() {
+        // 自適應迴圈：送出→等回應→立即送下一幀，自動匹配伺服器處理速度
+        while (this._frameLoopActive && this.isRunning) {
+            try {
+                await this.sendFrame();
+            } catch (e) {
+                // 錯誤時短暫等待再重試，避免瘋狂重試
+                await new Promise(r => setTimeout(r, 500));
             }
-
-            this.sendFrame();
-        }, interval);
+            // 極短間隔讓瀏覽器有時間更新 UI
+            await new Promise(r => setTimeout(r, 10));
+        }
     }
 
     async sendFrame() {
         if (!this.localVideo.videoWidth) return;
 
-        // 建立臨時畫布來擷取幀
+        // 擷取當前最新幀（每次都擷取最新畫面，不排隊舊幀）
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = this.canvasWidth;
         tempCanvas.height = this.canvasHeight;
         const tempCtx = tempCanvas.getContext('2d');
-
-        // 繪製當前幀
         tempCtx.drawImage(this.localVideo, 0, 0, this.canvasWidth, this.canvasHeight);
-
-        // 轉換為 base64
         const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
 
-        // 發送到伺服器
+        // 標記正在處理
+        this._isProcessing = true;
+
         try {
             if (this.useHttpMode) {
-                // HTTP 模式
                 await this._sendFrameHttp(dataUrl);
             } else {
-                // WebSocket 模式
                 this.videoSocket.send(dataUrl);
             }
 
@@ -423,12 +438,13 @@ class YOLOWebApp {
             this.stats.framesSent++;
             this.totalFrames.textContent = this.stats.framesSent;
 
-            // 每 30 幀記錄一次
             if (this.stats.framesSent % 30 === 1) {
                 this.debugLog(`已發送 ${this.stats.framesSent} 幀 (${this.useHttpMode ? 'HTTP' : 'WebSocket'})`, 'info');
             }
         } catch (e) {
             this.debugLog(`發送失敗: ${e.message}`, 'error');
+        } finally {
+            this._isProcessing = false;
         }
     }
 
@@ -710,6 +726,8 @@ class YOLOWebApp {
         this.isRunning = false;
 
         // 停止發送幀
+        this._frameLoopActive = false;  // 終止自適應迴圈
+        this._isProcessing = false;
         if (this.frameInterval) {
             clearInterval(this.frameInterval);
             this.frameInterval = null;
