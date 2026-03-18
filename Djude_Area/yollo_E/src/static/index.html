@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOLO 即時物件辨識</title>
-    <link rel="stylesheet" href="/static/style.css?v=2">
+    <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
     <div class="container">
@@ -53,6 +53,24 @@
                     <div class="empty-state">
                         <p>尚未開始偵測</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- 物品註冊面板 -->
+            <div class="register-section">
+                <h2>註冊新物品</h2>
+                <p class="register-hint">看到未被辨識的物品？在這裡新增讓系統學會偵測它</p>
+                <div class="register-form">
+                    <input type="text" id="newClassEn" placeholder="英文名稱（如 tissue box）" />
+                    <input type="text" id="newClassCn" placeholder="中文名稱（如 面紙盒，可選）" />
+                    <button id="addClassBtn" class="btn btn-primary btn-small">新增物品</button>
+                </div>
+                <div class="class-list-header">
+                    <span>目前偵測類別</span>
+                    <button id="refreshClassesBtn" class="btn-link">重新整理</button>
+                </div>
+                <div class="class-list" id="classList">
+                    <div class="empty-state"><p>載入中...</p></div>
                 </div>
             </div>
 
@@ -134,6 +152,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=2"></script>
+    <script src="/static/app.js?v=3"></script>
 </body>
 </html>

@@ -33,7 +33,8 @@ if str(_src_path) not in sys.path:
 
 from config import get_config, get_model_path, get_device
 from detection.yolo_detector import YOLODetector
-from detection.label_mapper import LabelMapper
+from detection.label_mapper import LabelMapper, EN_TO_CN_MAPPING, CN_TO_EN_MAPPING
+from detection.detection_logger import DetectionLogger
 
 
 # ============================================
@@ -193,6 +194,12 @@ class WebDetectionServer:
         self.detector: Optional[YOLODetector] = None
         self.label_mapper = LabelMapper()
 
+        # 偵測結果記錄器
+        self.detection_logger = DetectionLogger()
+
+        # 自訂類別檔案路徑
+        self._custom_classes_path = Path(__file__).parent.parent / "data" / "custom_classes.json"
+
         # 連接的客戶端
         self.video_clients: Set[WebSocket] = set()
         self.result_clients: Set[WebSocket] = set()
@@ -316,9 +323,17 @@ class WebDetectionServer:
 
         from pydantic import BaseModel
         from fastapi import Body
+        from typing import List as TypingList
 
         class DetectRequest(BaseModel):
             image: str
+
+        class AddClassRequest(BaseModel):
+            name_en: str
+            name_cn: str = ""
+
+        class RemoveClassRequest(BaseModel):
+            name_en: str
 
         @self.app.post("/api/detect/v2")
         async def detect_endpoint_v2(request: DetectRequest):
@@ -373,6 +388,183 @@ class WebDetectionServer:
                 import traceback
                 logger.error(traceback.format_exc())
                 return {"error": str(e)}
+
+        # ============================================
+        # 類別管理 API
+        # ============================================
+
+        @self.app.get("/api/classes")
+        async def get_classes():
+            """取得目前所有偵測類別（含 .env 預設 + 使用者自訂）"""
+            env_classes = self._get_env_classes()
+            custom = self._load_custom_classes()
+            custom_names = [c["name_en"] for c in custom]
+
+            # 合併列表，標記來源
+            all_classes = []
+            for name in env_classes:
+                cn = self.label_mapper.get_chinese_name_from_en(name)
+                all_classes.append({
+                    "name_en": name,
+                    "name_cn": cn,
+                    "source": "default",
+                })
+            for c in custom:
+                # 避免重複
+                if c["name_en"] not in env_classes:
+                    all_classes.append({
+                        "name_en": c["name_en"],
+                        "name_cn": c.get("name_cn", ""),
+                        "source": "custom",
+                    })
+
+            return {
+                "classes": all_classes,
+                "total": len(all_classes),
+                "default_count": len(env_classes),
+                "custom_count": len(custom),
+            }
+
+        @self.app.post("/api/classes")
+        async def add_class(request: AddClassRequest):
+            """註冊新的偵測類別"""
+            name_en = request.name_en.strip().lower()
+            name_cn = request.name_cn.strip()
+
+            if not name_en:
+                return {"error": "英文名稱不可為空"}
+
+            # 自動查找中文名稱
+            if not name_cn:
+                name_cn = self.label_mapper.get_chinese_name_from_en(name_en)
+                if name_cn == name_en:
+                    name_cn = ""  # 找不到對應就留空
+
+            # 載入現有自訂類別
+            custom = self._load_custom_classes()
+            existing_names = [c["name_en"] for c in custom]
+
+            # 檢查是否已存在
+            env_classes = self._get_env_classes()
+            if name_en in env_classes:
+                return {"error": f"'{name_en}' 已在預設類別中", "exists": True}
+            if name_en in existing_names:
+                return {"error": f"'{name_en}' 已在自訂類別中", "exists": True}
+
+            # 新增
+            custom.append({
+                "name_en": name_en,
+                "name_cn": name_cn,
+                "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+            self._save_custom_classes(custom)
+
+            # 動態更新偵測器類別
+            self._reload_detector_classes()
+
+            # 同步更新 label_mapper 的映射表
+            if name_cn:
+                EN_TO_CN_MAPPING[name_en] = name_cn
+                CN_TO_EN_MAPPING[name_cn] = name_en
+
+            logger.info(f"新增自訂偵測類別: {name_en} ({name_cn})")
+
+            return {
+                "success": True,
+                "class": {"name_en": name_en, "name_cn": name_cn},
+                "message": f"已新增 '{name_cn or name_en}'，偵測器已更新",
+            }
+
+        @self.app.delete("/api/classes")
+        async def remove_class(request: RemoveClassRequest):
+            """移除自訂偵測類別"""
+            name_en = request.name_en.strip().lower()
+
+            custom = self._load_custom_classes()
+            original_len = len(custom)
+            custom = [c for c in custom if c["name_en"] != name_en]
+
+            if len(custom) == original_len:
+                return {"error": f"找不到自訂類別 '{name_en}'"}
+
+            self._save_custom_classes(custom)
+            self._reload_detector_classes()
+
+            logger.info(f"移除自訂偵測類別: {name_en}")
+
+            return {
+                "success": True,
+                "message": f"已移除 '{name_en}'，偵測器已更新",
+            }
+
+        # ============================================
+        # 偵測記錄 API
+        # ============================================
+
+        @self.app.get("/api/logs/stats")
+        async def get_log_stats():
+            """取得今日偵測統計"""
+            return self.detection_logger.get_today_stats()
+
+        @self.app.get("/api/logs/history")
+        async def get_log_history():
+            """列出所有歷史記錄檔"""
+            return {"files": self.detection_logger.get_history_files()}
+
+    # ============================================
+    # 自訂類別管理
+    # ============================================
+
+    def _get_env_classes(self) -> list:
+        """從 .env 取得預設偵測類別"""
+        classes_str = self.config.model.detection_classes
+        if not classes_str:
+            return []
+        return [c.strip() for c in classes_str.split(",") if c.strip()]
+
+    def _load_custom_classes(self) -> list:
+        """讀取自訂類別檔案"""
+        try:
+            if self._custom_classes_path.exists():
+                with open(self._custom_classes_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return data.get("classes", [])
+        except Exception as e:
+            logger.error(f"讀取自訂類別失敗: {e}")
+        return []
+
+    def _save_custom_classes(self, classes: list):
+        """儲存自訂類別檔案"""
+        try:
+            self._custom_classes_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._custom_classes_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "description": "使用者自行註冊的偵測類別（透過網頁介面新增）",
+                    "classes": classes,
+                }, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"儲存自訂類別失敗: {e}")
+
+    def _get_all_classes(self) -> list:
+        """取得所有偵測類別（.env 預設 + 使用者自訂）"""
+        env_classes = self._get_env_classes()
+        custom = self._load_custom_classes()
+        custom_names = [c["name_en"] for c in custom]
+        # 合併，避免重複
+        all_classes = list(env_classes)
+        for name in custom_names:
+            if name not in all_classes:
+                all_classes.append(name)
+        return all_classes
+
+    def _reload_detector_classes(self):
+        """重新載入偵測器的偵測類別"""
+        if self.detector is None:
+            return
+        all_classes = self._get_all_classes()
+        if all_classes:
+            self.detector.update_classes(all_classes)
+            logger.info(f"偵測器類別已更新（共 {len(all_classes)} 個）")
 
     async def _handle_video_stream(self, websocket: WebSocket):
         """處理視頻串流"""
@@ -437,13 +629,10 @@ class WebDetectionServer:
 
         if self.detector is None:
             logger.info("初始化 YOLO 檢測器...")
-            # 延遲初始化檢測器
-            prompt_classes = None
-            if self.config.model.detection_classes:
-                prompt_classes = [
-                    c.strip() for c in self.config.model.detection_classes.split(",") if c.strip()
-                ]
-            logger.info(f"偵測類別: {prompt_classes or '使用模型內建類別'}")
+            # 合併 .env 預設類別 + 使用者自訂類別
+            all_classes = self._get_all_classes()
+            prompt_classes = all_classes if all_classes else None
+            logger.info(f"偵測類別（共 {len(all_classes)} 個）: {prompt_classes or '使用模型內建類別'}")
 
             self.detector = YOLODetector(
                 model_path=self.model_path,
@@ -503,6 +692,14 @@ class WebDetectionServer:
                 "confidence": round(det.confidence, 3),
                 "bbox": list(det.bbox.to_tuple()) if det.bbox is not None else None,
             })
+
+        # 記錄偵測結果至 JSON 檔
+        if detections:
+            self.detection_logger.log(
+                detections=detections,
+                fps=result.fps,
+                frame_count=self.frame_count,
+            )
 
         return {
             "detections": detections,

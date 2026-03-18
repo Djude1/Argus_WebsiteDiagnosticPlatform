@@ -47,6 +47,13 @@ class YOLOWebApp {
         this.resolutionSelect = document.getElementById('resolution');
         this.frameRateSelect = document.getElementById('frameRate');
 
+        // 物品註冊元素
+        this.newClassEnInput = document.getElementById('newClassEn');
+        this.newClassCnInput = document.getElementById('newClassCn');
+        this.addClassBtn = document.getElementById('addClassBtn');
+        this.refreshClassesBtn = document.getElementById('refreshClassesBtn');
+        this.classList = document.getElementById('classList');
+
         // 狀態
         this.isRunning = false;
         this.videoSocket = null;
@@ -141,6 +148,28 @@ class YOLOWebApp {
         this.debugLog(`WebSocket URL: ${this.serverUrlInput.value}`);
         this.debugLog(`User Agent: ${navigator.userAgent.substring(0, 50)}...`);
         this.debugLog(`HTTPS: ${window.location.protocol === 'https:'}`);
+
+        // 物品註冊事件
+        if (this.addClassBtn) {
+            this.addClassBtn.addEventListener('click', () => this.addClass());
+        }
+        if (this.refreshClassesBtn) {
+            this.refreshClassesBtn.addEventListener('click', () => this.loadClasses());
+        }
+        // Enter 鍵快速新增
+        if (this.newClassEnInput) {
+            this.newClassEnInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.addClass();
+            });
+        }
+        if (this.newClassCnInput) {
+            this.newClassCnInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.addClass();
+            });
+        }
+
+        // 初始載入偵測類別列表
+        this.loadClasses();
 
         this.showNotification('準備就緒，點擊「開始偵測」啟動', 'success');
     }
@@ -843,6 +872,131 @@ class YOLOWebApp {
         }
 
         document.body.removeChild(textarea);
+    }
+
+    // ============================================
+    // 物品註冊功能
+    // ============================================
+
+    _getApiBaseUrl() {
+        // 根據頁面位置推導 HTTP API 基底 URL
+        return window.location.origin;
+    }
+
+    async loadClasses() {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            this._renderClassList(data.classes || []);
+        } catch (e) {
+            if (this.classList) {
+                this.classList.innerHTML = `<div class="empty-state"><p>無法載入類別列表</p></div>`;
+            }
+            this.debugLog(`載入類別列表失敗: ${e.message}`, 'warning');
+        }
+    }
+
+    _renderClassList(classes) {
+        if (!this.classList) return;
+
+        if (!classes || classes.length === 0) {
+            this.classList.innerHTML = `<div class="empty-state"><p>尚無偵測類別</p></div>`;
+            return;
+        }
+
+        this.classList.innerHTML = classes.map(c => {
+            const displayName = c.name_cn || c.name_en;
+            const isCustom = c.source === 'custom';
+            const removeBtn = isCustom
+                ? `<button class="tag-remove" data-name="${c.name_en}" title="移除">&times;</button>`
+                : '';
+
+            return `<div class="class-tag ${c.source}">
+                <span class="tag-name-cn">${displayName}</span>
+                <span class="tag-name-en">${c.name_en}</span>
+                ${removeBtn}
+            </div>`;
+        }).join('');
+
+        // 綁定移除按鈕事件
+        this.classList.querySelectorAll('.tag-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const nameEn = e.target.dataset.name;
+                this.removeClass(nameEn);
+            });
+        });
+    }
+
+    async addClass() {
+        const nameEn = (this.newClassEnInput?.value || '').trim();
+        const nameCn = (this.newClassCnInput?.value || '').trim();
+
+        if (!nameEn) {
+            this.showNotification('請輸入英文名稱', 'warning');
+            this.newClassEnInput?.focus();
+            return;
+        }
+
+        try {
+            this.addClassBtn.disabled = true;
+            this.addClassBtn.textContent = '新增中...';
+
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name_en: nameEn, name_cn: nameCn }),
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                this.showNotification(data.error, 'warning');
+                return;
+            }
+
+            if (data.success) {
+                this.showNotification(data.message, 'success');
+                // 清空輸入
+                this.newClassEnInput.value = '';
+                this.newClassCnInput.value = '';
+                // 重新載入列表
+                await this.loadClasses();
+            }
+        } catch (e) {
+            this.showNotification(`新增失敗: ${e.message}`, 'error');
+            this.debugLog(`新增類別失敗: ${e.message}`, 'error');
+        } finally {
+            if (this.addClassBtn) {
+                this.addClassBtn.disabled = false;
+                this.addClassBtn.textContent = '新增物品';
+            }
+        }
+    }
+
+    async removeClass(nameEn) {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name_en: nameEn }),
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                this.showNotification(data.error, 'warning');
+                return;
+            }
+
+            if (data.success) {
+                this.showNotification(data.message, 'success');
+                await this.loadClasses();
+            }
+        } catch (e) {
+            this.showNotification(`移除失敗: ${e.message}`, 'error');
+        }
     }
 }
 

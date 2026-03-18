@@ -374,6 +374,34 @@ class YOLODetector:
         color = tuple(map(int, np.random.randint(0, 255, 3)))
         return color
 
+    def update_classes(self, new_classes: List[str]) -> bool:
+        """
+        動態更新開放詞彙偵測類別（YOLOE 專用）
+
+        參數:
+            new_classes: 新的偵測類別列表（英文名稱）
+
+        回傳:
+            是否更新成功
+        """
+        if not self._is_yoloe:
+            logger.warning("非 YOLOE 模型，無法動態更新偵測類別")
+            return False
+
+        if not new_classes:
+            logger.warning("偵測類別列表為空，跳過更新")
+            return False
+
+        try:
+            self.model.set_classes(new_classes)
+            self.prompt_classes = new_classes
+            self.class_names = self.model.names
+            logger.success(f"已更新偵測類別（共 {len(new_classes)} 個）: {new_classes}")
+            return True
+        except Exception as e:
+            logger.error(f"更新偵測類別失敗: {e}")
+            return False
+
     def get_class_names(self) -> Dict[int, str]:
         """取得所有類別名稱"""
         return self.class_names.copy()
