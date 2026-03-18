@@ -577,12 +577,20 @@ class YOLOWebApp {
 
     _drawServerFrame(base64Data) {
         // 將伺服器返回的處理後畫面繪製到 canvas 上
+        // 隱藏本地視頻預覽，讓 canvas 成為主要顯示
+        if (this.localVideo) {
+            this.localVideo.style.opacity = '0';
+        }
+
         const img = new Image();
         img.onload = () => {
             // 清除畫布
             this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-            // 繪製伺服器處理後的畫面
+            // 繪製伺服器處理後的畫面（包含偵測框）
             this.ctx.drawImage(img, 0, 0, this.canvasWidth, this.canvasHeight);
+        };
+        img.onerror = () => {
+            this.debugLog('無法載入伺服器畫面', 'error');
         };
         img.src = `data:image/jpeg;base64,${base64Data}`;
     }
@@ -773,6 +781,11 @@ class YOLOWebApp {
 
         // 清除畫布
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+        // 恢復本地視頻顯示
+        if (this.localVideo) {
+            this.localVideo.style.opacity = '1';
+        }
 
         // 更新 UI
         this.startBtn.disabled = false;
