@@ -189,6 +189,152 @@ ENHANCED_PROMPTS: Dict[str, str] = {
     "id card": "identification ID card",
     "easy card": "EasyCard transit card",
     "health insurance card": "health insurance IC card",
+
+    # ===== 便利商店 / 超市擴充 =====
+    # 飲料類
+    "sports drink": "sports drink bottle Pocari Sweat",
+    "coffee bottle": "bottled coffee drink",
+    "tea can": "canned tea drink",
+    "soda bottle": "plastic soda bottle Coca Cola",
+    "mineral water": "mineral water bottle clear",
+    "flavored milk": "flavored milk drink bottle",
+    "energy drink can": "energy drink can Red Bull",
+    "yogurt drink": "yogurt drink bottle",
+    "fruit juice": "fruit juice bottle drink",
+    "soy milk": "soy milk drink carton bottle",
+    "coconut water": "coconut water drink bottle",
+
+    # 冰品 / 冷凍
+    "ice cream bar": "ice cream bar popsicle stick",
+    "ice cream cup": "ice cream cup container",
+    "frozen dumplings": "frozen dumpling bag package",
+    "frozen vegetables": "frozen vegetable bag",
+    "frozen meat": "frozen meat package",
+
+    # 調理包 / 即食
+    "microwave meal": "microwave ready meal box",
+    "curry rice": "curry rice meal package",
+    "pasta sauce": "pasta sauce jar bottle",
+    "canned food": "canned food tin can",
+    "instant soup": "instant soup packet",
+
+    # 零食 / 餅乾擴充
+    "potato chips": "potato chips bag Lay's",
+    "tortilla chips": "tortilla chips bag nachos",
+    "pretzels": "pretzel snack bag",
+    "rice cracker": "rice cracker snack bag senbei",
+    "dried seaweed": "dried seaweed snack nori",
+    "beef jerky": "beef jerky dried meat snack",
+    "pork jerky": "pork jerky dried meat",
+    "fish snack": "dried fish snack package",
+    "cake slice": "cake slice pastry dessert",
+    "pastry": "pastry baked good",
+    "muffin": "muffin baked cake",
+    "brownie": "brownie chocolate cake",
+    "wafer": "wafer cookie snack",
+    "biscuit": "biscuit cookie snack",
+    "energy bar": "energy protein bar",
+
+    # 調味料 / 醬料
+    "soy sauce": "soy sauce bottle",
+    "ketchup": "ketchup tomato sauce bottle",
+    "mayonnaise": "mayonnaise sauce bottle jar",
+    "mustard": "mustard sauce bottle",
+    "hot sauce": "hot sauce chili bottle",
+    "salad dressing": "salad dressing bottle",
+    "cooking oil": "cooking oil bottle",
+    "vinegar": "vinegar bottle condiment",
+    "salt shaker": "salt shaker container",
+    "pepper shaker": "pepper shaker container",
+    "sugar packet": "sugar packet sweetener",
+
+    # 沖泡飲品
+    "instant coffee": "instant coffee packet jar",
+    "tea bag": "tea bag packet",
+    "hot chocolate": "hot chocolate powder packet",
+    "oatmeal": "oatmeal cereal packet",
+
+    # 生鮮擴充
+    "pork": "pork meat package tray",
+    "beef": "beef meat package tray",
+    "seafood": "seafood fish shrimp package",
+    "tofu package": "tofu package container",
+    "tempeh": "tempeh fermented soybean",
+    "green onion": "green onion scallion vegetable",
+    "ginger": "ginger root vegetable",
+    "cilantro": "cilantro herb vegetable",
+
+    # 水果擴充
+    "papaya": "papaya tropical fruit",
+    "guava": "guava tropical fruit",
+    "dragon fruit": "dragon fruit pitaya",
+    "kiwi": "kiwi fruit fuzzy",
+    "cherry": "cherry red fruit small",
+    "blueberry": "blueberry small fruit",
+    "avocado": "avocado green fruit",
+    "coconut": "coconut brown fruit",
+
+    # 乳製品
+    "milk bottle": "milk bottle dairy",
+    "cheese slice": "cheese slice dairy",
+    "butter package": "butter package dairy",
+    "cream cheese": "cream cheese package",
+
+    # 個人護理
+    "facial cleanser": "facial cleanser bottle tube",
+    "moisturizer": "moisturizer cream lotion bottle",
+    "lip balm": "lip balm tube chapstick",
+    "contact lens": "contact lens case solution",
+    "tissue pack": "tissue pack pocket size",
+    "wet wipes": "wet wipes package",
+    "cotton pad": "cotton pad package cosmetic",
+    "q tip": "cotton swab q tip package",
+    "feminine hygiene": "feminine hygiene pad product",
+    "razor": "razor shaving blade",
+    "shaving cream": "shaving cream can tube",
+
+    # 文具 / 雜貨
+    "stapler": "stapler office tool",
+    "paper clip": "paper clip metal fastener",
+    "highlighter": "highlighter marker pen",
+    "marker": "marker pen drawing",
+    "tape dispenser": "tape dispenser holder",
+    "post it": "post it sticky note",
+    "calculator": "calculator electronic device",
+    "scotch tape": "scotch tape roll adhesive",
+    "glue stick": "glue stick adhesive",
+    "correction tape": "correction tape white out",
+
+    # 家居用品
+    "light bulb": "light bulb lamp",
+    "battery pack": "battery pack AA AAA",
+    "extension cord": "extension cord power strip",
+    "trash bag roll": "trash bag roll plastic",
+    "sponge pack": "sponge pack cleaning",
+    "dish cloth": "dish cloth towel kitchen",
+    "air freshener": "air freshener spray",
+    "insect repellent": "insect repellent spray",
+
+    # 寵物用品
+    "pet food": "pet food bag cat dog",
+    "cat litter": "cat litter bag box",
+    "pet treat": "pet treat snack bag",
+    "dog toy": "dog toy chew ball",
+
+    # 嬰兒用品
+    "diaper": "diaper nappy package",
+    "baby wipes": "baby wipes package",
+    "baby bottle": "baby bottle milk",
+    "baby food": "baby food jar pouch",
+    "formula": "baby formula milk powder",
+
+    # 購物 / 結帳
+    "shopping basket": "shopping basket plastic",
+    "shopping cart": "shopping cart metal",
+    "price tag": "price tag label sticker",
+    "barcode": "barcode label sticker",
+    "cash register": "cash register machine POS",
+    "card reader": "card reader payment terminal",
 }
 
 
