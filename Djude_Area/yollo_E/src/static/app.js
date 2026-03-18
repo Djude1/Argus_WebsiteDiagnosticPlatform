@@ -77,6 +77,7 @@ class YOLOWebApp {
 
         // 當前檢測結果
         this.currentDetections = [];
+        this._lastDetectionTime = 0;  // 最後收到偵測結果的時間
 
         // 畫布尺寸
         this.canvasWidth = 1280;
@@ -174,6 +175,9 @@ class YOLOWebApp {
 
         // 初始載入偵測類別列表
         this.loadClasses();
+
+        // 點擊偵測框更正功能
+        this.overlayCanvas.addEventListener('click', (e) => this._handleCanvasClick(e));
 
         this.showNotification('準備就緒，點擊「開始偵測」啟動', 'success');
     }
@@ -453,6 +457,11 @@ class YOLOWebApp {
         const payloadSize = dataUrl.length;
         const requestUrl = `${this.httpApiUrl}/api/detect/v2`;
 
+        // 設定請求超時（30 秒）
+        const TIMEOUT_MS = 30000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
         try {
             // 首次或每 30 幀顯示完整連線資訊
             if (!this._lastUrlLog || this.stats.framesSent - this._lastUrlLog >= 30) {
@@ -469,7 +478,8 @@ class YOLOWebApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ image: dataUrl })
+                body: JSON.stringify({ image: dataUrl }),
+                signal: controller.signal
             });
 
             const requestTime = Date.now() - requestStart;
@@ -500,11 +510,21 @@ class YOLOWebApp {
             // 處理檢測結果
             this.handleDetectionResult(result);
         } catch (e) {
+            // 清除超時計時器
+            clearTimeout(timeoutId);
             // 分類錯誤類型
             let errorType = '未知錯誤';
             let errorDetail = e.message || '無法識別的錯誤';
 
-            if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
+            if (e.name === 'AbortError') {
+                errorType = '請求超時';
+                errorDetail = '請求超過 30 秒，已自動取消';
+                this.debugLog(`[${errorType}] ${errorDetail}`, 'warning');
+                // 超時後清除舊的偵測結果
+                this.currentDetections = [];
+                this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+                return;  // 不顯示錯誤通知，直接跳過這幀
+            } else if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
                 errorType = '網路連線失敗';
                 errorDetail += ` (URL: ${requestUrl})`;
                 // 首次錯誤時顯示完整診斷資訊
@@ -560,8 +580,9 @@ class YOLOWebApp {
         const avgFps = this.stats.fpsHistory.reduce((a, b) => a + b, 0) / this.stats.fpsHistory.length;
         this.avgFps.textContent = avgFps.toFixed(1);
 
-        // 儲存檢測結果
+        // 儲存檢測結果（帶時間戳）
         this.currentDetections = result.detections;
+        this._lastDetectionTime = Date.now();
 
         // 如果伺服器返回了處理後的畫面，直接顯示它（確保偵測框與畫面同步）
         if (result.annotated_frame) {
@@ -577,11 +598,7 @@ class YOLOWebApp {
 
     _drawServerFrame(base64Data) {
         // 將伺服器返回的處理後畫面繪製到 canvas 上
-        // 隱藏本地視頻預覽，讓 canvas 成為主要顯示
-        if (this.localVideo) {
-            this.localVideo.style.opacity = '0';
-        }
-
+        // 保持本地視頻可見，canvas 疊加在上面顯示偵測結果
         const img = new Image();
         img.onload = () => {
             // 清除畫布
@@ -920,6 +937,99 @@ class YOLOWebApp {
         }
 
         document.body.removeChild(textarea);
+    }
+
+    // ============================================
+    // 點擊偵測框更正功能
+    // ============================================
+
+    _handleCanvasClick(e) {
+        // 檢查是否有偵測結果
+        if (!this.currentDetections || this.currentDetections.length === 0) {
+            return;
+        }
+
+        // 取得點擊位置（相對於 canvas）
+        const rect = this.overlayCanvas.getBoundingClientRect();
+        const scaleX = this.canvasWidth / rect.width;
+        const scaleY = this.canvasHeight / rect.height;
+        const clickX = (e.clientX - rect.left) * scaleX;
+        const clickY = (e.clientY - rect.top) * scaleY;
+
+        // 檢查點擊是否在某個偵測框內
+        for (let i = this.currentDetections.length - 1; i >= 0; i--) {
+            const det = this.currentDetections[i];
+            if (!det.bbox) continue;
+
+            const [x1, y1, x2, y2] = det.bbox;
+            if (clickX >= x1 && clickX <= x2 && clickY >= y1 && clickY <= y2) {
+                // 找到被點擊的偵測框
+                this._showCorrectionDialog(det, i);
+                return;
+            }
+        }
+    }
+
+    _showCorrectionDialog(detection, index) {
+        // 顯示更正對話框
+        const currentName = detection.class_name_cn || detection.class_name;
+        const currentNameEn = detection.class_name;
+
+        const newNameCn = prompt(
+            `更正偵測結果\n\n` +
+            `目前辨識為: ${currentName} (${currentNameEn})\n\n` +
+            `請輸入正確的中文名稱（可選）:`,
+            currentName
+        );
+
+        if (newNameCn === null) {
+            // 使用者取消
+            return;
+        }
+
+        const newNameEn = prompt(
+            `更正偵測結果\n\n` +
+            `請輸入正確的英文名稱（必填）:\n` +
+            `（這會用於模型學習）`,
+            currentNameEn
+        );
+
+        if (newNameEn === null || !newNameEn.trim()) {
+            // 使用者取消或未輸入
+            return;
+        }
+
+        // 呼叫 API 新增/更正類別
+        this._submitCorrection(newNameEn.trim().toLowerCase(), newNameCn.trim(), detection);
+    }
+
+    async _submitCorrection(nameEn, nameCn, originalDetection) {
+        try {
+            this.debugLog(`提交更正: ${nameEn} (${nameCn})`, 'info');
+
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name_en: nameEn, name_cn: nameCn }),
+            });
+
+            const data = await res.json();
+
+            if (data.error && !data.exists) {
+                this.showNotification(`更正失敗: ${data.error}`, 'error');
+                return;
+            }
+
+            if (data.success || data.exists) {
+                this.showNotification(`已更正為「${nameCn || nameEn}」，模型將學習此更正`, 'success');
+
+                // 重新載入類別列表
+                await this.loadClasses();
+            }
+        } catch (e) {
+            this.showNotification(`更正失敗: ${e.message}`, 'error');
+            this.debugLog(`更正失敗: ${e.message}`, 'error');
+        }
     }
 
     // ============================================

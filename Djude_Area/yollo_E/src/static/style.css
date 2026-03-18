@@ -57,6 +57,13 @@ header h1 {
     font-size: 1.1rem;
 }
 
+.hint {
+    color: var(--primary-color);
+    font-size: 0.9rem;
+    margin-top: 8px;
+    opacity: 0.8;
+}
+
 /* Main Content */
 .main-content {
     display: grid;
@@ -73,6 +80,40 @@ header h1 {
 /* Video Section */
 .video-section {
     position: relative;
+}
+
+/* 雙畫面佈局 */
+.dual-view-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.video-box {
+    position: relative;
+}
+
+.video-label {
+    background: var(--primary-color);
+    color: var(--secondary-color);
+    padding: 8px 15px;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.video-box .video-container {
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    aspect-ratio: 4 / 3;
+    max-height: 50vh;
+}
+
+@media (max-width: 900px) {
+    .dual-view-section {
+        grid-template-columns: 1fr;
+    }
 }
 
 .video-container {
@@ -97,7 +138,8 @@ header h1 {
 
 #overlayCanvas {
     z-index: 2;
-    pointer-events: none;
+    pointer-events: auto;  /* 允許點擊事件以支援更正功能 */
+    cursor: pointer;
 }
 
 .video-overlay {

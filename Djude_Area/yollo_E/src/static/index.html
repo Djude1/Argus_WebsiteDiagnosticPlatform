@@ -4,28 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOLO 即時物件辨識</title>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>YOLO 即時物件辨識</h1>
             <p class="subtitle">開放詞彙偵測系統</p>
+            <p class="hint">💡 點擊偵測框可更正辨識結果</p>
         </header>
 
         <div class="main-content">
-            <!-- 視頻區域 -->
-            <div class="video-section">
-                <div class="video-container">
-                    <video id="localVideo" autoplay playsinline muted></video>
-                    <canvas id="overlayCanvas"></canvas>
-                    <div class="video-overlay">
-                        <div class="fps-display" id="fpsDisplay">FPS: --</div>
-                        <div class="object-count" id="objectCount">物件: 0</div>
+            <!-- 雙畫面區域 -->
+            <div class="dual-view-section">
+                <!-- 本地攝影機畫面 -->
+                <div class="video-box">
+                    <div class="video-label">📷 本地攝影機</div>
+                    <div class="video-container" id="localVideoContainer">
+                        <video id="localVideo" autoplay playsinline muted></video>
+                        <div class="no-camera" id="noCameraMessage">
+                            <div class="camera-icon">📷</div>
+                            <p>請允許攝影機權限</p>
+                        </div>
                     </div>
-                    <div class="no-camera" id="noCameraMessage">
-                        <div class="camera-icon">📷</div>
-                        <p>請允許攝影機權限</p>
+                </div>
+                <!-- YOLO 偵測結果畫面 -->
+                <div class="video-box">
+                    <div class="video-label">🔍 YOLO 偵測結果</div>
+                    <div class="video-container" id="yoloVideoContainer">
+                        <canvas id="overlayCanvas"></canvas>
+                        <div class="video-overlay">
+                            <div class="fps-display" id="fpsDisplay">FPS: --</div>
+                            <div class="object-count" id="objectCount">物件: 0</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -152,6 +163,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=7"></script>
 </body>
 </html>
