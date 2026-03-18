@@ -35,6 +35,9 @@ from config import get_config, get_model_path, get_device
 from detection.yolo_detector import YOLODetector
 from detection.label_mapper import LabelMapper, EN_TO_CN_MAPPING, CN_TO_EN_MAPPING
 from detection.detection_logger import DetectionLogger
+from detection.stabilizer import DetectionStabilizer, filter_false_positives
+from detection.feedback import FeedbackManager
+from detection.yolo_detector import FrameDetectionResult
 
 
 # ============================================
@@ -196,6 +199,20 @@ class WebDetectionServer:
 
         # 偵測結果記錄器
         self.detection_logger = DetectionLogger()
+
+        # 偵測穩定化
+        self.stabilizer = DetectionStabilizer(
+            window_size=self.config.model.stabilizer_window_size,
+            min_hits=self.config.model.stabilizer_min_hits,
+        )
+
+        # 用戶反饋管理器
+        self.feedback_manager = FeedbackManager(
+            default_threshold=self.confidence,
+        )
+
+        # 記錄信心度門檻
+        self.record_confidence = self.config.model.record_confidence_threshold
 
         # 自訂類別檔案路徑
         self._custom_classes_path = Path(__file__).parent.parent / "data" / "custom_classes.json"
@@ -498,6 +515,59 @@ class WebDetectionServer:
             }
 
         # ============================================
+        # 反饋 API
+        # ============================================
+
+        class FeedbackRequest(BaseModel):
+            type: str  # "confirm" | "correct" | "false_positive"
+            class_name: str
+            confidence: float = 0.0
+            bbox: Optional[TypingList[int]] = None
+            correct_class: Optional[str] = None
+            image: Optional[str] = None  # base64 截圖
+
+        @self.app.post("/api/feedback")
+        async def submit_feedback(request: FeedbackRequest):
+            """提交偵測反饋"""
+            if request.type not in ("confirm", "correct", "false_positive"):
+                return {"error": "無效的反饋類型"}
+
+            result = self.feedback_manager.record_feedback(
+                feedback_type=request.type,
+                class_name=request.class_name,
+                confidence=request.confidence,
+                bbox=request.bbox,
+                correct_class=request.correct_class,
+                image_base64=request.image,
+            )
+
+            # 如果是 correct 且正確類別是新的，同時新增類別
+            if request.type == "correct" and request.correct_class:
+                env_classes = self._get_env_classes()
+                custom = self._load_custom_classes()
+                existing = env_classes + [c["name_en"] for c in custom]
+                if request.correct_class.lower() not in existing:
+                    custom.append({
+                        "name_en": request.correct_class.lower(),
+                        "name_cn": "",
+                        "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    })
+                    self._save_custom_classes(custom)
+                    self._reload_detector_classes()
+
+            # 每 20 筆反饋重新計算門檻
+            stats = self.feedback_manager.get_stats()
+            if stats["total"] > 0 and stats["total"] % 20 == 0:
+                self.feedback_manager.recalculate_thresholds()
+
+            return result
+
+        @self.app.get("/api/feedback/stats")
+        async def get_feedback_stats():
+            """取得反饋統計"""
+            return self.feedback_manager.get_stats()
+
+        # ============================================
         # 偵測記錄 API
         # ============================================
 
@@ -637,9 +707,11 @@ class WebDetectionServer:
             self.detector = YOLODetector(
                 model_path=self.model_path,
                 confidence_threshold=self.confidence,
+                iou_threshold=self.config.model.iou_threshold,
                 device=get_device(),
                 prompt_classes=prompt_classes,
                 use_fp16=not self.config.model.force_cpu,  # CPU 模式不使用 FP16
+                imgsz=self.config.model.detection_imgsz,  # 新增
             )
             logger.success(f"YOLO 模型已載入: {self.model_path}")
             logger.info(f"運算裝置: {get_device()}")
@@ -658,7 +730,6 @@ class WebDetectionServer:
             logger.error(f"偵測過程發生錯誤: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            # 返回空結果
             return {
                 "detections": [],
                 "count": 0,
@@ -666,8 +737,14 @@ class WebDetectionServer:
                 "timestamp": time.time(),
             }
 
-        # 為每個 detection 設置中文標籤
-        for detection in result.detections:
+        # === 新增：假正例過濾 ===
+        filtered_detections = filter_false_positives(result.detections, frame.shape)
+
+        # === 新增：時序穩定化 ===
+        stable_detections = self.stabilizer.update(filtered_detections)
+
+        # 為每個 detection 設置中文標籤（改用 stable_detections）
+        for detection in stable_detections:
             if not detection.class_name_cn:
                 detection.class_name_cn = self.label_mapper.get_chinese_name_from_en(
                     detection.class_name
@@ -683,9 +760,9 @@ class WebDetectionServer:
         if self.frame_count % 30 == 1:
             logger.info(f"統計: 已處理 {self.frame_count} 幀 | FPS: {self.fps:.1f}")
 
-        # 構建結果
+        # 構建結果（改用 stable_detections）
         detections = []
-        for det in result.detections:
+        for det in stable_detections:
             detections.append({
                 "class_name": det.class_name,
                 "class_name_cn": det.class_name_cn or det.class_name,
@@ -693,16 +770,27 @@ class WebDetectionServer:
                 "bbox": list(det.bbox.to_tuple()) if det.bbox is not None else None,
             })
 
-        # 記錄偵測結果至 JSON 檔
+        # === 新增：雙路輸出 — 記錄門檻 ===
         if detections:
-            self.detection_logger.log(
-                detections=detections,
-                fps=result.fps,
-                frame_count=self.frame_count,
-            )
+            high_conf_detections = [
+                d for d in detections if d["confidence"] >= self.record_confidence
+            ]
+            if high_conf_detections:
+                self.detection_logger.log(
+                    detections=high_conf_detections,
+                    fps=result.fps,
+                    frame_count=self.frame_count,
+                )
 
-        # 在畫面上繪製偵測框（讓前端顯示伺服器處理後的畫面，確保同步）
-        annotated_frame = self.detector.draw_detections(frame, result)
+        # 建立穩定結果的 FrameDetectionResult 給繪製用
+        # （FrameDetectionResult 已在頂部 imports 匯入）
+        stable_result = FrameDetectionResult(
+            detections=stable_detections,
+            inference_time_ms=result.inference_time_ms,
+            fps=result.fps,
+            frame_shape=result.frame_shape,
+        )
+        annotated_frame = self.detector.draw_detections(frame, stable_result)
 
         # 將處理後的畫面編碼為 base64
         _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -713,7 +801,7 @@ class WebDetectionServer:
             "count": len(detections),
             "fps": round(result.fps, 1),
             "timestamp": time.time(),
-            "annotated_frame": annotated_base64,  # 伺服器處理後的帶框畫面
+            "annotated_frame": annotated_base64,
         }
 
     async def _broadcast_result(self, result: dict):
@@ -828,8 +916,8 @@ HTTPS 模式說明:
     parser.add_argument(
         "--confidence",
         type=float,
-        default=0.5,
-        help="信心度門檻 (0.0 - 1.0)",
+        default=None,  # 改為 None（原為 0.5），從 config 讀取
+        help="信心度門檻 (0.0 - 1.0)，預設使用 .env 設定",
     )
 
     parser.add_argument(
@@ -868,9 +956,10 @@ HTTPS 模式說明:
 
     args = parser.parse_args()
 
+    confidence = args.confidence if args.confidence is not None else get_config().model.confidence_threshold
     server = WebDetectionServer(
         model_path=args.model,
-        confidence=args.confidence,
+        confidence=confidence,
         host=args.host,
         port=args.port,
     )
