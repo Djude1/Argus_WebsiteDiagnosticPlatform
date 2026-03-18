@@ -26,6 +26,20 @@ class YOLOWebApp {
             this.copyDebugBtn.addEventListener('click', () => this.copyDebug());
         }
 
+        // 除錯面板收合
+        this.debugPanel = document.getElementById('debugPanel');
+        this.debugToggleBtn = document.getElementById('debugToggleBtn');
+        this.debugCollapseBtn = document.getElementById('debugCollapseBtn');
+
+        // 標註狀態面板
+        this.annotationPanel = document.getElementById('annotationPanel');
+        this.annotationContent = document.getElementById('annotationContent');
+        this.annotationFooter = document.getElementById('annotationFooter');
+        this.annotationToggleBtn = document.getElementById('annotationToggleBtn');
+
+        // 反饋狀態
+        this._feedbackStatsInterval = null;
+
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.captureBtn = document.getElementById('captureBtn');
@@ -100,6 +114,33 @@ class YOLOWebApp {
         this.closeSettings.addEventListener('click', () => {
             this.settingsPanel.classList.remove('open');
         });
+
+        // 除錯面板收合
+        if (this.debugToggleBtn) {
+            this.debugToggleBtn.addEventListener('click', () => {
+                this.debugPanel.classList.toggle('collapsed');
+            });
+        }
+        if (this.debugCollapseBtn) {
+            this.debugCollapseBtn.addEventListener('click', () => {
+                this.debugPanel.classList.add('collapsed');
+            });
+        }
+
+        // 標註面板收合
+        if (this.annotationToggleBtn) {
+            this.annotationToggleBtn.addEventListener('click', () => {
+                const content = this.annotationContent;
+                const footer = this.annotationFooter;
+                const isCollapsed = content.classList.toggle('collapsed');
+                footer.classList.toggle('collapsed', isCollapsed);
+                this.annotationToggleBtn.textContent = isCollapsed ? '+' : '−';
+            });
+        }
+
+        // 定時更新標註統計
+        this._feedbackStatsInterval = setInterval(() => this._updateAnnotationPanel(), 10000);
+        this._updateAnnotationPanel();
 
         // 複製 URL 按鈕
         this.copyUrlBtn = document.getElementById('copyUrlBtn');
@@ -971,64 +1012,182 @@ class YOLOWebApp {
     }
 
     _showCorrectionDialog(detection, index) {
-        // 顯示更正對話框
+        // 建立反饋 modal
+        const overlay = document.createElement('div');
+        overlay.className = 'feedback-modal-overlay';
+
         const currentName = detection.class_name_cn || detection.class_name;
         const currentNameEn = detection.class_name;
 
-        const newNameCn = prompt(
-            `更正偵測結果\n\n` +
-            `目前辨識為: ${currentName} (${currentNameEn})\n\n` +
-            `請輸入正確的中文名稱（可選）:`,
-            currentName
-        );
+        overlay.innerHTML = `
+            <div class="feedback-modal">
+                <h3>偵測反饋</h3>
+                <div class="detection-info">
+                    <div>偵測結果: <strong>${currentName}</strong> (${currentNameEn})</div>
+                    <div>信心度: ${(detection.confidence * 100).toFixed(1)}%</div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn-confirm" data-action="confirm">✅ 正確</button>
+                    <button class="btn-correct" data-action="correct">✏️ 這不是 ${currentName}</button>
+                    <div class="correction-input" id="correctionInput">
+                        <input type="text" id="correctionNameEn" placeholder="正確的英文名稱" />
+                        <button id="correctionSubmit">確認</button>
+                    </div>
+                    <button class="btn-false-positive" data-action="false_positive">❌ 誤報（不是物品）</button>
+                    <button class="btn-cancel" data-action="cancel">取消</button>
+                </div>
+            </div>
+        `;
 
-        if (newNameCn === null) {
-            // 使用者取消
-            return;
+        document.body.appendChild(overlay);
+
+        // 裁剪偵測區域截圖
+        let croppedImage = null;
+        try {
+            const [x1, y1, x2, y2] = detection.bbox;
+            const tempCanvas = document.createElement('canvas');
+            const cropW = x2 - x1;
+            const cropH = y2 - y1;
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // 從本地視頻裁剪
+            const videoW = this.localVideo.videoWidth;
+            const videoH = this.localVideo.videoHeight;
+            const scaleX = videoW / this.canvasWidth;
+            const scaleY = videoH / this.canvasHeight;
+            tempCtx.drawImage(
+                this.localVideo,
+                x1 * scaleX, y1 * scaleY, cropW * scaleX, cropH * scaleY,
+                0, 0, cropW, cropH
+            );
+            croppedImage = tempCanvas.toDataURL('image/jpeg', 0.85);
+        } catch (e) {
+            this.debugLog(`截圖裁剪失敗: ${e.message}`, 'warning');
         }
 
-        const newNameEn = prompt(
-            `更正偵測結果\n\n` +
-            `請輸入正確的英文名稱（必填）:\n` +
-            `（這會用於模型學習）`,
-            currentNameEn
-        );
+        // 事件處理
+        overlay.addEventListener('click', (e) => {
+            const action = e.target.dataset?.action;
+            if (!action) return;
 
-        if (newNameEn === null || !newNameEn.trim()) {
-            // 使用者取消或未輸入
-            return;
+            if (action === 'cancel') {
+                overlay.remove();
+                return;
+            }
+
+            if (action === 'correct') {
+                document.getElementById('correctionInput').classList.add('show');
+                return;
+            }
+
+            if (action === 'confirm' || action === 'false_positive') {
+                this._submitFeedback(action, detection, null, croppedImage);
+                overlay.remove();
+            }
+        });
+
+        // 更正提交
+        const submitBtn = overlay.querySelector('#correctionSubmit');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+                const nameEn = overlay.querySelector('#correctionNameEn').value.trim();
+                if (!nameEn) {
+                    this.showNotification('請輸入正確的英文名稱', 'warning');
+                    return;
+                }
+                this._submitFeedback('correct', detection, nameEn.toLowerCase(), croppedImage);
+                overlay.remove();
+            });
         }
 
-        // 呼叫 API 新增/更正類別
-        this._submitCorrection(newNameEn.trim().toLowerCase(), newNameCn.trim(), detection);
+        // 點擊背景關閉
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
     }
 
-    async _submitCorrection(nameEn, nameCn, originalDetection) {
+    async _submitFeedback(type, detection, correctClass, imageBase64) {
         try {
-            this.debugLog(`提交更正: ${nameEn} (${nameCn})`, 'info');
+            const body = {
+                type: type,
+                class_name: detection.class_name,
+                confidence: detection.confidence,
+                bbox: detection.bbox,
+                correct_class: correctClass || undefined,
+                image: imageBase64 || undefined,
+            };
 
-            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/feedback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name_en: nameEn, name_cn: nameCn }),
+                body: JSON.stringify(body),
             });
 
             const data = await res.json();
 
-            if (data.error && !data.exists) {
-                this.showNotification(`更正失敗: ${data.error}`, 'error');
+            if (data.success) {
+                const msgs = {
+                    confirm: `已確認「${detection.class_name_cn || detection.class_name}」正確`,
+                    correct: `已更正為「${correctClass}」`,
+                    false_positive: `已標記為誤報`,
+                };
+                this.showNotification(msgs[type] || '反饋已提交', 'success');
+                this._updateAnnotationPanel();
+
+                // 如果是更正，重新載入類別列表
+                if (type === 'correct') {
+                    await this.loadClasses();
+                }
+            } else {
+                this.showNotification(`反饋失敗: ${data.error || '未知錯誤'}`, 'error');
+            }
+        } catch (e) {
+            this.showNotification(`反饋失敗: ${e.message}`, 'error');
+            this.debugLog(`反饋失敗: ${e.message}`, 'error');
+        }
+    }
+
+    async _updateAnnotationPanel() {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/feedback/stats`);
+            const stats = await res.json();
+
+            if (!this.annotationContent) return;
+
+            if (stats.total === 0) {
+                this.annotationContent.innerHTML = '<div class="annotation-empty">尚無反饋資料</div>';
+                this.annotationFooter.textContent = '總反饋: 0 筆';
                 return;
             }
 
-            if (data.success || data.exists) {
-                this.showNotification(`已更正為「${nameCn || nameEn}」，模型將學習此更正`, 'success');
+            let html = '';
+            const byClass = stats.by_class || {};
+            for (const [cls, counts] of Object.entries(byClass)) {
+                const total = (counts.confirm || 0) + (counts.correct || 0) + (counts.false_positive || 0);
+                const fpRatio = (counts.false_positive || 0) / total;
 
-                // 重新載入類別列表
-                await this.loadClasses();
+                let statusClass = 'good';
+                let statusIcon = '✅';
+                if (total < 5) {
+                    statusClass = 'warning';
+                    statusIcon = '⚠️';
+                } else if (fpRatio > 0.5) {
+                    statusClass = 'bad';
+                    statusIcon = '❌';
+                }
+
+                html += `<div class="annotation-item">
+                    <span class="class-name">${cls}</span>
+                    <span class="count ${statusClass}">${statusIcon} ${total} 次</span>
+                </div>`;
             }
+
+            this.annotationContent.innerHTML = html;
+            this.annotationFooter.textContent = `總反饋: ${stats.total} 筆`;
         } catch (e) {
-            this.showNotification(`更正失敗: ${e.message}`, 'error');
-            this.debugLog(`更正失敗: ${e.message}`, 'error');
+            // 靜默失敗，不影響使用
         }
     }
 
