@@ -108,6 +108,7 @@ class YOLODetector:
         device: str = "auto",
         prompt_classes: Optional[List[str]] = None,  # YOLOE 開放詞彙：指定要偵測的類別
         use_fp16: bool = True,  # 使用 FP16 半精度加速推論
+        imgsz: int = 640,  # 新增：推論解析度
     ):
         """
         初始化 YOLO 偵測器
@@ -128,6 +129,7 @@ class YOLODetector:
         self.device = device
         self.prompt_classes = prompt_classes  # 開放詞彙偵測類別
         self.use_fp16 = use_fp16
+        self.imgsz = imgsz
 
         self.model = None
         self.class_names: Dict[int, str] = {}
@@ -284,7 +286,7 @@ class YOLODetector:
             conf=conf,
             iou=iou,
             classes=classes,
-            imgsz=640,  # 可調整為 1280 提升準確率（會降低速度）
+            imgsz=self.imgsz,  # 改為使用設定值
             augment=False,  # 設為 True 可提升準確率但會大幅降低速度
             verbose=False
         )
@@ -458,10 +460,31 @@ class YOLODetector:
         try:
             enhanced, mapping = self._prompt_enhancer.enhance_list(new_classes)
             self._enhanced_to_original = mapping
-            self.model.set_classes(enhanced)
+
+            # 注意：CLIP 的 get_text_pe() 需要 FP32 精度。
+            # 若模型已啟用 FP16，需暫時切回 FP32 執行嵌入生成，再切回 FP16。
+            was_fp16 = False
+            if self.use_fp16 and self._cuda_available:
+                try:
+                    self.model.model.float()  # 暫時切回 FP32
+                    was_fp16 = True
+                except Exception:
+                    pass
+
+            # 使用 get_text_pe() + set_classes() 兩步驟（與 _load_model 一致）
+            text_embeddings = self.model.get_text_pe(enhanced)
+            self.model.set_classes(enhanced, text_embeddings)
+
+            # 若之前是 FP16，切回
+            if was_fp16:
+                try:
+                    self.model.model.half()
+                except Exception:
+                    pass
+
             self.prompt_classes = new_classes
             self.class_names = self.model.names
-            logger.success(f"已更新偵測類別（共 {len(new_classes)} 個，已增強提示）")
+            logger.success(f"已更新偵測類別（共 {len(new_classes)} 個，已增強提示 + 文字嵌入）")
             return True
         except Exception as e:
             logger.error(f"更新偵測類別失敗: {e}")
