@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from loguru import logger
 import sys
+from PIL import Image, ImageDraw, ImageFont
 
 from detection.prompt_enhancer import PromptEnhancer
 
@@ -327,7 +328,7 @@ class YOLODetector:
         font_scale: float = 0.6,
     ) -> np.ndarray:
         """
-        在影像上繪製偵測結果
+        在影像上繪製偵測結果（支援中文顯示）
 
         參數:
             image: 輸入影像
@@ -342,6 +343,22 @@ class YOLODetector:
         """
         output = image.copy()
 
+        # 使用 PIL 繪製中文
+        pil_img = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_img)
+
+        # 嘗試載入中文字體
+        font_size = int(font_scale * 20)
+        try:
+            # Windows 系統字體
+            font = ImageFont.truetype("C:/Windows/Fonts/msyh.ttc", font_size)
+        except:
+            try:
+                # 備用字體
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except:
+                font = ImageFont.load_default()
+
         for detection in result.detections:
             # 取得邊界框座標
             x1, y1, x2, y2 = detection.bbox.to_tuple()
@@ -349,7 +366,7 @@ class YOLODetector:
             # 根據類別選擇顏色 (使用雜湊生成)
             color = self._get_color_for_class(detection.class_id)
 
-            # 繪製邊界框
+            # 繪製邊界框 (使用 cv2)
             cv2.rectangle(output, (x1, y1), (x2, y2), color, box_thickness)
 
             # 準備標籤文字
@@ -362,25 +379,35 @@ class YOLODetector:
                 label += f" {detection.confidence:.2f}"
 
             # 計算文字大小
-            (text_width, text_height), baseline = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1
-            )
+            bbox = draw.textbbox((0, 0), label, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
 
             # 繪製標籤背景
-            cv2.rectangle(output, (x1, y1 - text_height - 10), (x1 + text_width, y1), color, -1)
+            cv2.rectangle(output, (x1, y1 - text_height - 10), (x1 + text_width + 5, y1), color, -1)
 
-            # 繪製標籤文字
-            cv2.putText(
-                output,
-                label,
-                (x1, y1 - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (255, 255, 255),
-                1,
-            )
+        # 轉換回 PIL 繪製文字
+        pil_img = Image.fromarray(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_img)
 
-        # 繪製 FPS 資訊
+        for detection in result.detections:
+            x1, y1, x2, y2 = detection.bbox.to_tuple()
+
+            if show_label_cn and detection.class_name_cn:
+                label = detection.class_name_cn
+            else:
+                label = detection.class_name
+
+            if show_confidence:
+                label += f" {detection.confidence:.2f}"
+
+            # 繪製文字 (白色)
+            draw.text((x1 + 2, y1 - text_height - 7), label, font=font, fill=(255, 255, 255))
+
+        # 轉回 OpenCV 格式
+        output = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+        # 繪製 FPS 資訊 (英文，使用 cv2 即可)
         fps_text = f"FPS: {result.fps:.1f} | Objects: {result.count}"
         cv2.putText(output, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
