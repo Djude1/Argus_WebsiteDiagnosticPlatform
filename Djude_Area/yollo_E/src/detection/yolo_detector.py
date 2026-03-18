@@ -20,6 +20,8 @@ from pathlib import Path
 from loguru import logger
 import sys
 
+from detection.prompt_enhancer import PromptEnhancer
+
 # 設定 loguru
 logger.remove()
 logger.add(
@@ -133,6 +135,11 @@ class YOLODetector:
         self._is_yoloe = False  # 標記是否為 YOLOE 模型
         self._cuda_available = False
 
+        # 提示增強器：將簡短類別名轉為更精確的 CLIP 描述
+        self._prompt_enhancer = PromptEnhancer()
+        # 增強提示 → 原始類別名的映射（用於將偵測結果映射回簡短名稱）
+        self._enhanced_to_original: Dict[str, str] = {}
+
         self._load_model()
 
     def _load_model(self):
@@ -186,11 +193,17 @@ class YOLODetector:
                 except Exception as e:
                     logger.warning(f"FP16 加速啟用失敗: {e}")
 
-            # YOLOE 開放詞彙功能：設定要偵測的類別
+            # YOLOE 開放詞彙功能：設定要偵測的類別（使用增強提示）
             if self._is_yoloe and self.prompt_classes:
                 try:
-                    self.model.set_classes(self.prompt_classes)
-                    logger.info(f"設定開放詞彙偵測類別: {self.prompt_classes}")
+                    enhanced, mapping = self._prompt_enhancer.enhance_list(self.prompt_classes)
+                    self._enhanced_to_original = mapping
+                    self.model.set_classes(enhanced)
+                    logger.info(f"設定開放詞彙偵測類別（共 {len(enhanced)} 個，已增強提示）")
+                    for orig, enh in zip(self.prompt_classes[:5], enhanced[:5]):
+                        logger.debug(f"  {orig} → {enh}")
+                    if len(self.prompt_classes) > 5:
+                        logger.debug(f"  ... 及其他 {len(self.prompt_classes) - 5} 個類別")
                 except Exception as e:
                     logger.warning(f"設定偵測類別失敗 (使用內建類別): {e}")
 
@@ -280,6 +293,10 @@ class YOLODetector:
                     confidence = float(boxes.conf[i].cpu().numpy())
                     class_id = int(boxes.cls[i].cpu().numpy())
                     class_name = self.class_names.get(class_id, f"class_{class_id}")
+
+                    # 將增強提示映射回原始簡短類別名
+                    if self._enhanced_to_original and class_name in self._enhanced_to_original:
+                        class_name = self._enhanced_to_original[class_name]
 
                     detection = DetectionResult(
                         bbox=bbox, confidence=confidence, class_id=class_id, class_name=class_name
@@ -376,7 +393,7 @@ class YOLODetector:
 
     def update_classes(self, new_classes: List[str]) -> bool:
         """
-        動態更新開放詞彙偵測類別（YOLOE 專用）
+        動態更新開放詞彙偵測類別（YOLOE 專用，自動使用增強提示）
 
         參數:
             new_classes: 新的偵測類別列表（英文名稱）
@@ -393,10 +410,12 @@ class YOLODetector:
             return False
 
         try:
-            self.model.set_classes(new_classes)
+            enhanced, mapping = self._prompt_enhancer.enhance_list(new_classes)
+            self._enhanced_to_original = mapping
+            self.model.set_classes(enhanced)
             self.prompt_classes = new_classes
             self.class_names = self.model.names
-            logger.success(f"已更新偵測類別（共 {len(new_classes)} 個）: {new_classes}")
+            logger.success(f"已更新偵測類別（共 {len(new_classes)} 個，已增強提示）")
             return True
         except Exception as e:
             logger.error(f"更新偵測類別失敗: {e}")
