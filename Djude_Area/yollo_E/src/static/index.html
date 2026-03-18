@@ -148,17 +148,33 @@
         <!-- 通知區域 -->
         <div class="notification" id="notification"></div>
 
-        <!-- 除錯面板 -->
-        <div class="debug-panel" id="debugPanel">
+        <!-- 除錯面板（預設收合） -->
+        <button class="debug-toggle-btn" id="debugToggleBtn" title="除錯日誌">🔧</button>
+        <div class="debug-panel collapsed" id="debugPanel">
             <div class="debug-header">
                 <span>除錯日誌</span>
                 <div class="debug-header-buttons">
                     <button id="copyDebugBtn" class="debug-clear-btn" title="複製日誌">複製</button>
                     <button id="clearDebugBtn" class="debug-clear-btn">清除</button>
+                    <button id="debugCollapseBtn" class="debug-clear-btn">收合</button>
                 </div>
             </div>
             <div class="debug-content" id="debugContent">
                 <div class="debug-line debug-info">[系統] 頁面已載入，等待啟動...</div>
+            </div>
+        </div>
+
+        <!-- 標註狀態面板 -->
+        <div class="annotation-panel" id="annotationPanel">
+            <div class="annotation-header">
+                <span>📋 標註狀態</span>
+                <button class="annotation-toggle" id="annotationToggleBtn">−</button>
+            </div>
+            <div class="annotation-content" id="annotationContent">
+                <div class="annotation-empty">尚無反饋資料</div>
+            </div>
+            <div class="annotation-footer" id="annotationFooter">
+                總反饋: 0 筆
             </div>
         </div>
     </div>
