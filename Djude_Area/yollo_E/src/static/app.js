@@ -1030,8 +1030,13 @@ class YOLOWebApp {
                     <button class="btn-confirm" data-action="confirm">✅ 正確</button>
                     <button class="btn-correct" data-action="correct">✏️ 這不是 ${currentName}</button>
                     <div class="correction-input" id="correctionInput">
-                        <input type="text" id="correctionNameEn" placeholder="正確的英文名稱" />
-                        <button id="correctionSubmit">確認</button>
+                        <div class="correction-class-list" id="correctionClassList">
+                            <div style="color: var(--text-secondary); padding: 8px; text-align: center;">載入中...</div>
+                        </div>
+                        <div class="correction-manual">
+                            <input type="text" id="correctionNameInput" placeholder="或輸入名稱（中文/英文皆可）" />
+                            <button id="correctionSubmit">確認</button>
+                        </div>
                     </div>
                     <button class="btn-false-positive" data-action="false_positive">❌ 誤報（不是物品）</button>
                     <button class="btn-cancel" data-action="cancel">取消</button>
@@ -1078,7 +1083,10 @@ class YOLOWebApp {
             }
 
             if (action === 'correct') {
-                document.getElementById('correctionInput').classList.add('show');
+                const correctionDiv = document.getElementById('correctionInput');
+                correctionDiv.classList.add('show');
+                // 載入已註冊類別清單供選擇
+                this._loadCorrectionClassList(overlay, detection, croppedImage);
                 return;
             }
 
@@ -1088,16 +1096,17 @@ class YOLOWebApp {
             }
         });
 
-        // 更正提交
+        // 手動輸入更正提交（支援中文或英文）
         const submitBtn = overlay.querySelector('#correctionSubmit');
         if (submitBtn) {
             submitBtn.addEventListener('click', () => {
-                const nameEn = overlay.querySelector('#correctionNameEn').value.trim();
-                if (!nameEn) {
-                    this.showNotification('請輸入正確的英文名稱', 'warning');
+                const nameInput = overlay.querySelector('#correctionNameInput').value.trim();
+                if (!nameInput) {
+                    this.showNotification('請輸入正確的名稱（中文或英文皆可）', 'warning');
                     return;
                 }
-                this._submitFeedback('correct', detection, nameEn.toLowerCase(), croppedImage);
+                // 直接送出，後端會自動處理中文→英文轉換
+                this._submitFeedback('correct', detection, nameInput, croppedImage);
                 overlay.remove();
             });
         }
@@ -1188,6 +1197,39 @@ class YOLOWebApp {
             this.annotationFooter.textContent = `總反饋: ${stats.total} 筆`;
         } catch (e) {
             // 靜默失敗，不影響使用
+        }
+    }
+
+    async _loadCorrectionClassList(overlay, detection, croppedImage) {
+        // 載入已註冊類別清單，供使用者直接點選正確類別
+        const listDiv = overlay.querySelector('#correctionClassList');
+        if (!listDiv) return;
+
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`);
+            const data = await res.json();
+            const classes = (data.classes || []).filter(c => c.name_en !== detection.class_name);
+
+            if (classes.length === 0) {
+                listDiv.innerHTML = '<div style="color: var(--text-secondary); padding: 8px; text-align: center;">無其他類別</div>';
+                return;
+            }
+
+            listDiv.innerHTML = classes.map(c => {
+                const label = c.name_cn ? `${c.name_cn} (${c.name_en})` : c.name_en;
+                return `<button class="correction-class-btn" data-class-en="${c.name_en}">${label}</button>`;
+            }).join('');
+
+            // 點選類別按鈕直接提交
+            listDiv.querySelectorAll('.correction-class-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const classEn = btn.dataset.classEn;
+                    this._submitFeedback('correct', detection, classEn, croppedImage);
+                    overlay.remove();
+                });
+            });
+        } catch (e) {
+            listDiv.innerHTML = '<div style="color: var(--text-secondary); padding: 8px;">載入失敗，請手動輸入</div>';
         }
     }
 

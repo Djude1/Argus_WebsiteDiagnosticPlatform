@@ -543,13 +543,28 @@ class WebDetectionServer:
 
             # 如果是 correct 且正確類別是新的，同時新增類別
             if request.type == "correct" and request.correct_class:
+                correct_name = request.correct_class.strip()
+
+                # 自動偵測中文輸入，轉換為英文名稱
+                has_cjk = any('\u4e00' <= ch <= '\u9fff' for ch in correct_name)
+                if has_cjk:
+                    en_name = self.label_mapper.get_english_name_from_cn(correct_name)
+                    logger.info(f"中文類別名稱轉換: {correct_name} → {en_name}")
+                    correct_name = en_name
+
+                correct_name = correct_name.lower()
+
                 env_classes = self._get_env_classes()
                 custom = self._load_custom_classes()
                 existing = env_classes + [c["name_en"] for c in custom]
-                if request.correct_class.lower() not in existing:
+                if correct_name not in existing:
+                    # 自動查找中文名稱
+                    name_cn = self.label_mapper.get_chinese_name_from_en(correct_name)
+                    if name_cn == correct_name:
+                        name_cn = ""  # 找不到對應就留空
                     custom.append({
-                        "name_en": request.correct_class.lower(),
-                        "name_cn": "",
+                        "name_en": correct_name,
+                        "name_cn": name_cn,
                         "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                     })
                     self._save_custom_classes(custom)

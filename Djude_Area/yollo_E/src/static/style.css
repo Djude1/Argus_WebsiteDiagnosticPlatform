@@ -942,9 +942,36 @@ header h1 {
 }
 .feedback-modal .correction-input.show {
     display: flex;
+    flex-direction: column;
     gap: 8px;
 }
-.feedback-modal .correction-input input {
+.correction-class-list {
+    max-height: 150px;
+    overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+.correction-class-btn {
+    background: rgba(78, 204, 163, 0.15);
+    border: 1px solid var(--primary-color);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: var(--transition);
+}
+.correction-class-btn:hover {
+    background: var(--primary-color);
+    color: var(--secondary-color);
+}
+.correction-manual {
+    display: flex;
+    gap: 8px;
+}
+.correction-manual input {
     flex: 1;
     padding: 8px;
     background: var(--background-color);
@@ -952,7 +979,7 @@ header h1 {
     border-radius: 4px;
     color: var(--text-primary);
 }
-.feedback-modal .correction-input button {
+.correction-manual button {
     padding: 8px 12px;
     background: var(--primary-color);
     border: none;
