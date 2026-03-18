@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_oh-my-claudecode_t__state_list_active"
+    ]
+  }
+}

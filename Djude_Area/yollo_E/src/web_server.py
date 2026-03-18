@@ -701,11 +701,19 @@ class WebDetectionServer:
                 frame_count=self.frame_count,
             )
 
+        # 在畫面上繪製偵測框（讓前端顯示伺服器處理後的畫面，確保同步）
+        annotated_frame = self.detector.draw_detections(frame, result)
+
+        # 將處理後的畫面編碼為 base64
+        _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        annotated_base64 = base64.b64encode(buffer).decode('utf-8')
+
         return {
             "detections": detections,
             "count": len(detections),
             "fps": round(result.fps, 1),
             "timestamp": time.time(),
+            "annotated_frame": annotated_base64,  # 伺服器處理後的帶框畫面
         }
 
     async def _broadcast_result(self, result: dict):

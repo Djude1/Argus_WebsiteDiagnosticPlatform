@@ -1,0 +1,4 @@
+{"timestamp": "2026-03-18T15:41:01.214300", "epoch": 1773819661.2143056, "frame_count": 2, "fps": 3.0, "count": 1, "detections": [{"class_name": "bottle", "class_name_cn": "瓶子", "confidence": 0.527, "bbox": [778, 216, 1044, 717]}]}
+{"timestamp": "2026-03-18T15:41:02.275632", "epoch": 1773819662.2756355, "frame_count": 3, "fps": 3.2, "count": 1, "detections": [{"class_name": "bottle", "class_name_cn": "瓶子", "confidence": 0.647, "bbox": [910, 338, 1229, 718]}]}
+{"timestamp": "2026-03-18T15:41:04.265780", "epoch": 1773819664.2657835, "frame_count": 5, "fps": 3.3, "count": 1, "detections": [{"class_name": "cup", "class_name_cn": "杯子", "confidence": 0.554, "bbox": [657, 1, 1028, 630]}]}
+{"timestamp": "2026-03-18T15:41:05.427678", "epoch": 1773819665.4276822, "frame_count": 6, "fps": 3.4, "count": 1, "detections": [{"class_name": "bottle", "class_name_cn": "瓶子", "confidence": 0.639, "bbox": [747, 0, 956, 503]}]}

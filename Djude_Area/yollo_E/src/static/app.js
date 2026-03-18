@@ -563,11 +563,28 @@ class YOLOWebApp {
         // 儲存檢測結果
         this.currentDetections = result.detections;
 
-        // 繪製檢測框
-        this.drawDetections(result.detections);
+        // 如果伺服器返回了處理後的畫面，直接顯示它（確保偵測框與畫面同步）
+        if (result.annotated_frame) {
+            this._drawServerFrame(result.annotated_frame);
+        } else {
+            // 備援：本地繪製檢測框
+            this.drawDetections(result.detections);
+        }
 
         // 更新結果列表
         this.updateResultsList(result.detections);
+    }
+
+    _drawServerFrame(base64Data) {
+        // 將伺服器返回的處理後畫面繪製到 canvas 上
+        const img = new Image();
+        img.onload = () => {
+            // 清除畫布
+            this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+            // 繪製伺服器處理後的畫面
+            this.ctx.drawImage(img, 0, 0, this.canvasWidth, this.canvasHeight);
+        };
+        img.src = `data:image/jpeg;base64,${base64Data}`;
     }
 
     drawDetections(detections) {
