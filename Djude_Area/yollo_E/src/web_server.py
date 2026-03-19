@@ -221,6 +221,10 @@ class WebDetectionServer:
         self.video_clients: Set[WebSocket] = set()
         self.result_clients: Set[WebSocket] = set()
 
+        # 並發保護與會話管理
+        self._detection_lock = asyncio.Lock()  # 防止並發偵測
+        self._last_request_time = 0  # 上次請求時間（用於檢測新使用者）
+
         # 統計資訊
         self.frame_count = 0
         self.start_time = time.time()
@@ -709,7 +713,20 @@ class WebDetectionServer:
             logger.info(f"結果客戶端斷開，當前連接數: {len(self.result_clients)}")
 
     async def _detect_frame(self, frame: np.ndarray) -> dict:
-        """執行 YOLO 檢測"""
+        """執行 YOLO 檢測（帶並發保護與會話管理）"""
+        # 檢查是否為新使用者（超過 5 秒無請求 → 重置 stabilizer）
+        current_time = time.time()
+        if current_time - self._last_request_time > 5 and self._last_request_time > 0:
+            logger.info("檢測到新使用者連線，重置偵測穩定化狀態")
+            self.stabilizer.reset()
+        self._last_request_time = current_time
+
+        # 使用鎖防止並發偵測（GPU 資源有限，序列處理更穩定）
+        async with self._detection_lock:
+            return await self._do_detect(frame)
+
+    async def _do_detect(self, frame: np.ndarray) -> dict:
+        """實際執行 YOLO 檢測"""
         detect_start = time.time()
 
         if self.detector is None:
