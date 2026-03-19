@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-03-19 (第六次更新)
+
+### 任務摘要
+修正註冊新物品表單欄位順序顛倒問題，並優化網頁渲染效能解決卡頓。
+
+### 解決的問題
+
+1. **註冊表單欄位順序顛倒**
+   - 問題：英文輸入欄在前、中文在後，不符合中文使用者操作直覺
+   - 修正：中文名稱改為第一欄（必填），英文名稱改為第二欄（可選）
+   - 後端自動查找：若未填英文名稱，自動透過 `label_mapper` 從中文查找對應英文
+
+2. **網頁卡頓 / 畫面不流暢**
+   - 原因 1：`sendFrame()` 每幀都 `createElement('canvas')` 產生大量 GC 壓力
+   - 原因 2：`_drawServerFrame()` 每幀都 `new Image()` 加劇 GC
+   - 原因 3：`updateResultsList()` 每幀重寫 `innerHTML` 觸發不必要的 DOM 重繪
+   - 原因 4：`debugLog()` 每次請求都寫入 DOM 並觸發 `scrollTop` reflow
+   - 修正：
+     - 重用 `_tempCanvas` 和 `_serverImg` 物件
+     - 結果列表 HTML 快取比對，相同時跳過更新
+     - debug 日誌改為每 30 幀輸出一次
+     - 面板收合時跳過非錯誤日誌的 DOM 操作
+
+### 修改的檔案
+
+| 檔案 | 修改內容 |
+|------|----------|
+| `src/static/index.html` | 註冊表單欄位順序：中文在前、英文在後 |
+| `src/static/app.js` | 重用 canvas/Image、結果快取、日誌節流、面板收合跳過 |
+| `src/web_server.py` | `AddClassRequest` 改為 `name_cn` 必填、`name_en` 可選，自動 CN→EN 查找 |
+
+### Git 提交記錄
+
+```
+af7d854 - fix: swap registration form fields (CN first) and reduce frame rendering stutter
+```
+
+### 注意事項
+
+1. **中文名稱為必填**：註冊新物品時必須輸入中文名稱，英文可選（系統會自動查找）
+2. **CLIP 相容性**：若查無對應英文，會直接以中文名稱送入 CLIP 模型（CLIP 可處理部分中文）
+3. **效能提升**：減少每幀 3 次 DOM 操作，改為每 30 幀 1 次，大幅降低瀏覽器負擔
+
+---
+
 ## 2026-03-19 (第四次更新)
 
 ### 任務摘要
