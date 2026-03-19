@@ -601,6 +601,7 @@ class YOLOWebApp {
                 errorType = '請求超時';
                 errorDetail = `請求超過 ${TIMEOUT_MS/1000} 秒，已自動取消`;
                 this._consecutiveTimeouts++;
+                this._hadTimeoutSinceLastResult = true;  // 標記超時，下次收到結果時不計算 FPS
 
                 this.debugLog(`[${requestId}] ⚠️ ${errorType} (${errorTime}ms) 連續: ${this._consecutiveTimeouts}`, 'warning');
                 this.debugLog(`[${requestId}] 可能原因: Tunnel 斷線 / 網路不穩 / 伺服器過載`, 'warning');
@@ -657,7 +658,7 @@ class YOLOWebApp {
     handleDetectionResult(result) {
         // 計算真實端到端 FPS（基於收到結果的時間差）
         const now = Date.now();
-        if (this._lastResultTime) {
+        if (this._lastResultTime && !this._hadTimeoutSinceLastResult) {
             const timeDiff = now - this._lastResultTime;
             const realFps = timeDiff > 0 ? 1000 / timeDiff : 0;
 
@@ -670,12 +671,13 @@ class YOLOWebApp {
             // 使用真實 FPS 計算歷史
             this.stats.fpsHistory.push(realFps);
         } else {
-            // 首次收到結果，使用伺服器 FPS
+            // 首次收到結果或有超時，使用伺服器 FPS
             this.debugLog(`收到結果: ${result.count} 個物件, FPS: ${result.fps}`, 'success');
             this.fpsDisplay.textContent = `FPS: ${result.fps}`;
             this.stats.fpsHistory.push(result.fps);
         }
         this._lastResultTime = now;
+        this._hadTimeoutSinceLastResult = false;  // 重置超時標記
 
         // 更新物件計數
         this.objectCount.textContent = `物件: ${result.count}`;
