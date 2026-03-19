@@ -100,8 +100,8 @@ class YOLOWebApp {
         this._lastDetectionTime = 0;  // 最後收到偵測結果的時間
 
         // 畫布尺寸
-        this.canvasWidth = 1280;
-        this.canvasHeight = 720;
+        this.canvasWidth = 640;
+        this.canvasHeight = 480;
 
         // 初始化
         this.init();
