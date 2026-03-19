@@ -350,8 +350,8 @@ class WebDetectionServer:
             image: str
 
         class AddClassRequest(BaseModel):
-            name_en: str
-            name_cn: str = ""
+            name_cn: str
+            name_en: str = ""
 
         class RemoveClassRequest(BaseModel):
             name_en: str
@@ -449,17 +449,18 @@ class WebDetectionServer:
         @self.app.post("/api/classes")
         async def add_class(request: AddClassRequest):
             """註冊新的偵測類別"""
-            name_en = request.name_en.strip().lower()
             name_cn = request.name_cn.strip()
+            name_en = request.name_en.strip().lower()
 
-            if not name_en:
-                return {"error": "英文名稱不可為空"}
-
-            # 自動查找中文名稱
             if not name_cn:
-                name_cn = self.label_mapper.get_chinese_name_from_en(name_en)
-                if name_cn == name_en:
-                    name_cn = ""  # 找不到對應就留空
+                return {"error": "中文名稱不可為空"}
+
+            # 自動查找英文名稱（若使用者未提供）
+            if not name_en:
+                name_en = self.label_mapper.get_english_name_from_cn(name_cn)
+                if name_en == name_cn:
+                    # 找不到對應，使用中文名稱作為模型輸入（CLIP 可處理）
+                    name_en = name_cn
 
             # 載入現有自訂類別
             custom = self._load_custom_classes()

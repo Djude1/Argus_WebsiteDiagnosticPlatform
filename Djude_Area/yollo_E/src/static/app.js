@@ -81,6 +81,12 @@ class YOLOWebApp {
         this._isProcessing = false;  // 是否正在等待伺服器回應
         this._frameLoopActive = false;  // 自適應迴圈是否啟用
 
+        // 效能優化：重用 canvas 和 Image 物件，避免每幀都 GC
+        this._tempCanvas = document.createElement('canvas');
+        this._tempCtx = this._tempCanvas.getContext('2d');
+        this._serverImg = new Image();
+        this._lastResultsHtml = '';  // 結果列表快取，避免重複 DOM 操作
+
         // 統計
         this.stats = {
             framesSent: 0,
@@ -479,13 +485,13 @@ class YOLOWebApp {
     async sendFrame() {
         if (!this.localVideo.videoWidth) return;
 
-        // 擷取當前最新幀（每次都擷取最新畫面，不排隊舊幀）
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvasWidth;
-        tempCanvas.height = this.canvasHeight;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(this.localVideo, 0, 0, this.canvasWidth, this.canvasHeight);
-        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
+        // 擷取當前最新幀（重用 canvas 避免 GC 壓力）
+        if (this._tempCanvas.width !== this.canvasWidth || this._tempCanvas.height !== this.canvasHeight) {
+            this._tempCanvas.width = this.canvasWidth;
+            this._tempCanvas.height = this.canvasHeight;
+        }
+        this._tempCtx.drawImage(this.localVideo, 0, 0, this.canvasWidth, this.canvasHeight);
+        const dataUrl = this._tempCanvas.toDataURL('image/jpeg', 0.8);
 
         // 標記正在處理
         this._isProcessing = true;
@@ -524,9 +530,9 @@ class YOLOWebApp {
         // 連續超時計數器
         if (!this._consecutiveTimeouts) this._consecutiveTimeouts = 0;
 
-        // 詳細 debug：請求開始
+        // 每 30 幀才輸出詳細 debug，減少 DOM 操作
         const requestId = `req_${Date.now()}`;
-        this.debugLog(`[${requestId}] 發送請求 → ${payloadSize} bytes`, 'info');
+        const verboseLog = (this.stats.framesSent % 30 === 0);
 
         try {
             // 首次或每 30 幀顯示完整連線資訊
@@ -552,7 +558,7 @@ class YOLOWebApp {
             });
 
             const fetchTime = Date.now() - fetchStart;
-            this.debugLog(`[${requestId}] 收到回應 ← ${fetchTime}ms (HTTP ${response.status})`, 'info');
+            if (verboseLog) this.debugLog(`[${requestId}] 回應 ← ${fetchTime}ms (HTTP ${response.status})`, 'info');
 
             const requestTime = Date.now() - requestStart;
 
@@ -580,8 +586,8 @@ class YOLOWebApp {
                 throw new Error(result.error);
             }
 
-            // 詳細 debug：請求完成（含時間分解）
-            this.debugLog(`[${requestId}] 完成 ✓ 總 ${requestTime}ms (fetch:${fetchTime}ms, json:${jsonTime}ms)`, 'success');
+            // 每 30 幀才輸出完成日誌，減少 DOM 操作
+            if (verboseLog) this.debugLog(`[${requestId}] ✓ ${requestTime}ms (fetch:${fetchTime}ms, json:${jsonTime}ms)`, 'success');
 
             // 重置連續超時計數器
             this._consecutiveTimeouts = 0;
@@ -710,19 +716,15 @@ class YOLOWebApp {
     }
 
     _drawServerFrame(base64Data) {
-        // 將伺服器返回的處理後畫面繪製到 canvas 上
-        // 保持本地視頻可見，canvas 疊加在上面顯示偵測結果
-        const img = new Image();
-        img.onload = () => {
-            // 清除畫布
+        // 將伺服器返回的處理後畫面繪製到 canvas 上（重用 Image 物件避免 GC）
+        this._serverImg.onload = () => {
             this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-            // 繪製伺服器處理後的畫面（包含偵測框）
-            this.ctx.drawImage(img, 0, 0, this.canvasWidth, this.canvasHeight);
+            this.ctx.drawImage(this._serverImg, 0, 0, this.canvasWidth, this.canvasHeight);
         };
-        img.onerror = () => {
+        this._serverImg.onerror = () => {
             this.debugLog('無法載入伺服器畫面', 'error');
         };
-        img.src = `data:image/jpeg;base64,${base64Data}`;
+        this._serverImg.src = `data:image/jpeg;base64,${base64Data}`;
     }
 
     drawDetections(detections) {
@@ -864,7 +866,7 @@ class YOLOWebApp {
         // 只顯示前 10 個
         const topDetections = sorted.slice(0, 10);
 
-        this.resultsContainer.innerHTML = topDetections.map(det => `
+        const newHtml = topDetections.map(det => `
             <div class="detection-item">
                 <div class="name">
                     <span class="icon">${iconMap[det.class_name_cn] || iconMap['default']}</span>
@@ -873,6 +875,12 @@ class YOLOWebApp {
                 <span class="confidence">${Math.round(det.confidence * 100)}%</span>
             </div>
         `).join('');
+
+        // 內容相同時跳過 DOM 更新，避免不必要的重繪
+        if (newHtml !== this._lastResultsHtml) {
+            this.resultsContainer.innerHTML = newHtml;
+            this._lastResultsHtml = newHtml;
+        }
     }
 
     stop() {
@@ -971,6 +979,9 @@ class YOLOWebApp {
 
     debugLog(message, type = 'info') {
         if (!this.debugContent) return;
+
+        // 面板收合時跳過非錯誤日誌的 DOM 操作，避免無效 reflow
+        if (type !== 'error' && this.debugPanel?.classList.contains('collapsed')) return;
 
         const timestamp = new Date().toLocaleTimeString();
         const line = document.createElement('div');
@@ -1372,12 +1383,12 @@ class YOLOWebApp {
     }
 
     async addClass() {
-        const nameEn = (this.newClassEnInput?.value || '').trim();
         const nameCn = (this.newClassCnInput?.value || '').trim();
+        const nameEn = (this.newClassEnInput?.value || '').trim();
 
-        if (!nameEn) {
-            this.showNotification('請輸入英文名稱', 'warning');
-            this.newClassEnInput?.focus();
+        if (!nameCn) {
+            this.showNotification('請輸入中文名稱', 'warning');
+            this.newClassCnInput?.focus();
             return;
         }
 
@@ -1388,7 +1399,7 @@ class YOLOWebApp {
             const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name_en: nameEn, name_cn: nameCn }),
+                body: JSON.stringify({ name_cn: nameCn, name_en: nameEn }),
             });
 
             const data = await res.json();
