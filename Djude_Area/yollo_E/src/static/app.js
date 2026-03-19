@@ -655,11 +655,27 @@ class YOLOWebApp {
     }
 
     handleDetectionResult(result) {
-        // 記錄收到結果
-        this.debugLog(`收到結果: ${result.count} 個物件, FPS: ${result.fps}`, 'success');
+        // 計算真實端到端 FPS（基於收到結果的時間差）
+        const now = Date.now();
+        if (this._lastResultTime) {
+            const timeDiff = now - this._lastResultTime;
+            const realFps = timeDiff > 0 ? 1000 / timeDiff : 0;
 
-        // 更新 FPS
-        this.fpsDisplay.textContent = `FPS: ${result.fps}`;
+            // 記錄收到結果（顯示兩種 FPS）
+            this.debugLog(`收到結果: ${result.count} 個物件, 伺服器FPS: ${result.fps}, 真實FPS: ${realFps.toFixed(1)}`, 'success');
+
+            // 更新 FPS 顯示（使用真實 FPS）
+            this.fpsDisplay.textContent = `FPS: ${realFps.toFixed(1)}`;
+
+            // 使用真實 FPS 計算歷史
+            this.stats.fpsHistory.push(realFps);
+        } else {
+            // 首次收到結果，使用伺服器 FPS
+            this.debugLog(`收到結果: ${result.count} 個物件, FPS: ${result.fps}`, 'success');
+            this.fpsDisplay.textContent = `FPS: ${result.fps}`;
+            this.stats.fpsHistory.push(result.fps);
+        }
+        this._lastResultTime = now;
 
         // 更新物件計數
         this.objectCount.textContent = `物件: ${result.count}`;
@@ -668,8 +684,7 @@ class YOLOWebApp {
         this.stats.totalDetections += result.count;
         this.totalDetections.textContent = this.stats.totalDetections;
 
-        // FPS 歷史
-        this.stats.fpsHistory.push(result.fps);
+        // FPS 歷史（限制長度）
         if (this.stats.fpsHistory.length > 30) {
             this.stats.fpsHistory.shift();
         }
