@@ -524,6 +524,10 @@ class YOLOWebApp {
         // 連續超時計數器
         if (!this._consecutiveTimeouts) this._consecutiveTimeouts = 0;
 
+        // 詳細 debug：請求開始
+        const requestId = `req_${Date.now()}`;
+        this.debugLog(`[${requestId}] 發送請求 → ${payloadSize} bytes`, 'info');
+
         try {
             // 首次或每 30 幀顯示完整連線資訊
             if (!this._lastUrlLog || this.stats.framesSent - this._lastUrlLog >= 30) {
@@ -531,10 +535,13 @@ class YOLOWebApp {
                 this.debugLog(`API URL: ${requestUrl}`, 'info');
                 this.debugLog(`httpApiUrl: ${this.httpApiUrl}`, 'info');
                 this.debugLog(`頁面來源: ${window.location.origin}`, 'info');
+                this.debugLog(`Tunnel 偵測: ${window.location.hostname.includes('devtunnels.ms') ? '是' : '否'}`, 'info');
+                this.debugLog(`線上狀態: ${navigator.onLine ? '線上' : '離線'}`, 'info');
                 this.debugLog(`──────────────────`, 'info');
                 this._lastUrlLog = this.stats.framesSent;
             }
 
+            const fetchStart = Date.now();
             const response = await fetch(requestUrl, {
                 method: 'POST',
                 headers: {
@@ -543,6 +550,9 @@ class YOLOWebApp {
                 body: JSON.stringify({ image: dataUrl }),
                 signal: controller.signal
             });
+
+            const fetchTime = Date.now() - fetchStart;
+            this.debugLog(`[${requestId}] 收到回應 ← ${fetchTime}ms (HTTP ${response.status})`, 'info');
 
             const requestTime = Date.now() - requestStart;
 
@@ -557,17 +567,21 @@ class YOLOWebApp {
                 } catch (e) {
                     // 無法讀取錯誤詳情
                 }
-                this.debugLog(`HTTP 錯誤 (${requestTime}ms): ${errorDetail}`, 'error');
+                this.debugLog(`[${requestId}] HTTP 錯誤 (${requestTime}ms): ${errorDetail}`, 'error');
                 throw new Error(errorDetail);
             }
 
+            const jsonStart = Date.now();
             const result = await response.json();
+            const jsonTime = Date.now() - jsonStart;
+
             if (result.error) {
-                this.debugLog(`伺服器錯誤: ${result.error}`, 'error');
+                this.debugLog(`[${requestId}] 伺服器錯誤: ${result.error}`, 'error');
                 throw new Error(result.error);
             }
 
-            this.debugLog(`HTTP 請求成功 (${requestTime}ms)`, 'success');
+            // 詳細 debug：請求完成（含時間分解）
+            this.debugLog(`[${requestId}] 完成 ✓ 總 ${requestTime}ms (fetch:${fetchTime}ms, json:${jsonTime}ms)`, 'success');
 
             // 重置連續超時計數器
             this._consecutiveTimeouts = 0;
@@ -577,16 +591,19 @@ class YOLOWebApp {
         } catch (e) {
             // 清除超時計時器
             clearTimeout(timeoutId);
+            const errorTime = Date.now() - requestStart;
+
             // 分類錯誤類型
             let errorType = '未知錯誤';
             let errorDetail = e.message || '無法識別的錯誤';
 
             if (e.name === 'AbortError') {
                 errorType = '請求超時';
-                errorDetail = '請求超過 10 秒，已自動取消';
+                errorDetail = `請求超過 ${TIMEOUT_MS/1000} 秒，已自動取消`;
                 this._consecutiveTimeouts++;
 
-                this.debugLog(`[${errorType}] ${errorDetail} (連續超時: ${this._consecutiveTimeouts})`, 'warning');
+                this.debugLog(`[${requestId}] ⚠️ ${errorType} (${errorTime}ms) 連續: ${this._consecutiveTimeouts}`, 'warning');
+                this.debugLog(`[${requestId}] 可能原因: Tunnel 斷線 / 網路不穩 / 伺服器過載`, 'warning');
 
                 // 超時後清除舊的偵測結果
                 this.currentDetections = [];
@@ -594,7 +611,7 @@ class YOLOWebApp {
 
                 // 連續 3 次超時，嘗試重新建立連線
                 if (this._consecutiveTimeouts >= 3) {
-                    this.debugLog(`連續超時 ${this._consecutiveTimeouts} 次，嘗試重新連線...`, 'warning');
+                    this.debugLog(`[${requestId}] 連續超時 ${this._consecutiveTimeouts} 次，嘗試重新連線...`, 'warning');
                     this._consecutiveTimeouts = 0;
                     // 重新初始化 HTTP 連線
                     this._initHttpFallback();
@@ -602,14 +619,17 @@ class YOLOWebApp {
                 return;  // 不顯示錯誤通知，直接跳過這幀
             } else if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
                 errorType = '網路連線失敗';
-                errorDetail += ` (URL: ${requestUrl})`;
+                this.debugLog(`[${requestId}] ❌ ${errorType} (${errorTime}ms): ${errorDetail}`, 'error');
+                this.debugLog(`[${requestId}] URL: ${requestUrl}`, 'error');
+                this.debugLog(`[${requestId}] 線上狀態: ${navigator.onLine ? '線上' : '離線'}`, 'error');
                 // 首次錯誤時顯示完整診斷資訊
-                if (this._httpErrorCount === 1) {
-                    this.debugLog(`===== 連線診斷 =====`, 'warning');
-                    this.debugLog(`API URL: ${requestUrl}`, 'info');
-                    this.debugLog(`請確保伺服器在 ${this.httpApiUrl} 運行`, 'warning');
-                    this.debugLog(`可在設定中更改伺服器地址`, 'info');
-                    this.debugLog(`==================`, 'warning');
+                if (!this._httpErrorCount || this._httpErrorCount === 1) {
+                    this.debugLog(`[${requestId}] ===== 連線診斷 =====`, 'warning');
+                    this.debugLog(`[${requestId}] API URL: ${requestUrl}`, 'info');
+                    this.debugLog(`[${requestId}] httpApiUrl: ${this.httpApiUrl}`, 'info');
+                    this.debugLog(`[${requestId}] 頁面來源: ${window.location.origin}`, 'info');
+                    this.debugLog(`[${requestId}] 請確保伺服器正在運行`, 'warning');
+                    this.debugLog(`[${requestId}] ==================`, 'warning');
                 }
             } else if (errorDetail.includes('HTTP 413') || errorDetail.includes('413')) {
                 errorType = '請求太大';
