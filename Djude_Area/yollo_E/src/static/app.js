@@ -426,6 +426,24 @@ class YOLOWebApp {
         this.connectionStatus.className = 'connected';
     }
 
+    _initHttpFallback() {
+        // 重新初始化 HTTP 連線（用於連續超時後的恢復）
+        this.debugLog('重新初始化 HTTP 連線...', 'info');
+
+        // 重新取得當前頁面的 server URL
+        const currentUrl = window.location.href;
+        const serverUrl = currentUrl.replace(/^https?:\/\//, 'wss://');
+        const wsUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
+
+        // 重新設定 HTTP URL
+        const httpUrl = wsUrl.replace(/^wss?:\/\//, '');
+        const protocol = window.location.protocol === 'https:' ? 'https://' : 'http://';
+        this.httpApiUrl = `${protocol}${httpUrl}`;
+
+        this.debugLog(`HTTP URL 已重設為: ${this.httpApiUrl}`, 'success');
+        this.showNotification('已重新連線', 'success');
+    }
+
     startFrameSender(frameRate) {
         // HTTP 模式：使用自適應迴圈（送一幀→等回應→再送下一幀）
         // WebSocket 模式：使用限速 interval 防止堆積
@@ -498,10 +516,13 @@ class YOLOWebApp {
         const payloadSize = dataUrl.length;
         const requestUrl = `${this.httpApiUrl}/api/detect/v2`;
 
-        // 設定請求超時（30 秒）
-        const TIMEOUT_MS = 30000;
+        // 設定請求超時（10 秒，降低以更快偵測連線問題）
+        const TIMEOUT_MS = 10000;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+        // 連續超時計數器
+        if (!this._consecutiveTimeouts) this._consecutiveTimeouts = 0;
 
         try {
             // 首次或每 30 幀顯示完整連線資訊
@@ -548,6 +569,9 @@ class YOLOWebApp {
 
             this.debugLog(`HTTP 請求成功 (${requestTime}ms)`, 'success');
 
+            // 重置連續超時計數器
+            this._consecutiveTimeouts = 0;
+
             // 處理檢測結果
             this.handleDetectionResult(result);
         } catch (e) {
@@ -559,11 +583,22 @@ class YOLOWebApp {
 
             if (e.name === 'AbortError') {
                 errorType = '請求超時';
-                errorDetail = '請求超過 30 秒，已自動取消';
-                this.debugLog(`[${errorType}] ${errorDetail}`, 'warning');
+                errorDetail = '請求超過 10 秒，已自動取消';
+                this._consecutiveTimeouts++;
+
+                this.debugLog(`[${errorType}] ${errorDetail} (連續超時: ${this._consecutiveTimeouts})`, 'warning');
+
                 // 超時後清除舊的偵測結果
                 this.currentDetections = [];
                 this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+                // 連續 3 次超時，嘗試重新建立連線
+                if (this._consecutiveTimeouts >= 3) {
+                    this.debugLog(`連續超時 ${this._consecutiveTimeouts} 次，嘗試重新連線...`, 'warning');
+                    this._consecutiveTimeouts = 0;
+                    // 重新初始化 HTTP 連線
+                    this._initHttpFallback();
+                }
                 return;  // 不顯示錯誤通知，直接跳過這幀
             } else if (errorDetail === 'Failed to fetch' || errorDetail === 'NetworkError') {
                 errorType = '網路連線失敗';
