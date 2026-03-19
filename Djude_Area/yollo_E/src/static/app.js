@@ -1240,8 +1240,17 @@ class YOLOWebApp {
         const listDiv = overlay.querySelector('#correctionClassList');
         if (!listDiv) return;
 
+        // 設定 5 秒超時
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         try {
-            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`);
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             const classes = (data.classes || []).filter(c => c.name_en !== detection.class_name);
 
@@ -1264,7 +1273,9 @@ class YOLOWebApp {
                 });
             });
         } catch (e) {
-            listDiv.innerHTML = '<div style="color: var(--text-secondary); padding: 8px;">載入失敗，請手動輸入</div>';
+            clearTimeout(timeoutId);
+            const errorMsg = e.name === 'AbortError' ? '載入逾時，請手動輸入' : `載入失敗: ${e.message}`;
+            listDiv.innerHTML = `<div style="color: var(--text-secondary); padding: 8px;">${errorMsg}</div>`;
         }
     }
 
