@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background-color: #030712;
+    color: #f9fafb;
+  }
+}
+
+@layer components {
+  /* 玻璃擬態效果 */
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+
+  /* 發光邊框 */
+  .glow-border {
+    box-shadow: 0 0 20px rgba(30, 196, 247, 0.3);
+    @apply border border-brand-500/50;
+  }
+
+  /* 主要按鈕 */
+  .btn-primary {
+    @apply bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400
+           text-white font-semibold py-3 px-8 rounded-full transition-all duration-300
+           hover:shadow-lg hover:shadow-brand-500/30 active:scale-95;
+  }
+
+  /* 次要按鈕（外框式）*/
+  .btn-outline {
+    @apply border border-brand-500/70 text-brand-400 hover:bg-brand-500/10
+           font-semibold py-3 px-8 rounded-full transition-all duration-300
+           hover:border-brand-400 active:scale-95;
+  }
+
+  /* 段落標題 */
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-center mb-4;
+  }
+
+  /* 段落副標題 */
+  .section-subtitle {
+    @apply text-gray-400 text-center max-w-2xl mx-auto mb-12 text-lg;
+  }
+}
+
+/* 自訂滾動條 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #07a3d7;
+  border-radius: 3px;
+}
+
+/* 3D Canvas 容器 */
+.model-canvas-container {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.model-canvas-container:active {
+  cursor: grabbing;
+}
