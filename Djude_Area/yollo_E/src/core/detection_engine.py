@@ -54,7 +54,7 @@ class DetectionEngine:
         results = []
         for det in stable_detections:
             resolved_name = self._resolve_alias(det.class_name)
-            cn_name = self.label_mapper.get_cn_label(resolved_name)
+            cn_name = self.label_mapper.get_chinese_name_from_en(resolved_name)
             det.class_name = resolved_name
             det.class_name_cn = cn_name
             results.append(det)
