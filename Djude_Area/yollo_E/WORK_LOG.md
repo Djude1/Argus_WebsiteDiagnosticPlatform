@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-03-24 (第十一次更新)
+
+### 任務摘要
+在 DetectionEngine.detect() 加入精確計時日誌，找出效能瓶頸。
+
+### 修改的檔案
+- `src/core/detection_engine.py` — 新增 `import time`、每個步驟計時點（t0~t4）、`[PROFILE]` 日誌
+
+### 計時日誌格式
+```
+[PROFILE] detector.detect: X.XXms | filter_false_positives: X.XXms | stabilizer.update: X.XXms | label_mapping: X.XXms | total: X.XXms
+```
+
+### 重啟指令
+```bash
+cd Djude_Area/yollo_E
+uv run python src/main.py --source webcam
+# 或
+uv run python src/main.py --web
+```
+
+---
+
 ## 2026-03-24 (第十次更新)
 
 ### 任務摘要
