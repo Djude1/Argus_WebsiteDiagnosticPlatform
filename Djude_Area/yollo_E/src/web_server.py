@@ -356,6 +356,10 @@ class WebDetectionServer:
         class RemoveClassRequest(BaseModel):
             name_en: str
 
+        class ToggleClassRequest(BaseModel):
+            name_en: str
+            active: bool
+
         @self.app.post("/api/detect/v2")
         async def detect_endpoint_v2(request: DetectRequest):
             """HTTP 物件檢測 API v2 (使用 Pydantic)"""
@@ -416,32 +420,47 @@ class WebDetectionServer:
 
         @self.app.get("/api/classes")
         async def get_classes():
-            """取得目前所有偵測類別（含 .env 預設 + 使用者自訂）"""
+            """取得目前所有偵測類別（含 .env 預設 + 使用者自訂，含啟用狀態）"""
             env_classes = self._get_env_classes()
-            custom = self._load_custom_classes()
-            custom_names = [c["name_en"] for c in custom]
+            data = self._load_custom_classes_data()
+            custom = data.get("classes", [])
+            deactivated = data.get("deactivated_defaults", [])
+            last_detected = data.get("last_detected", {})
+            max_active = self.config.model.max_active_classes
 
-            # 合併列表，標記來源
+            # 合併列表，標記來源和狀態
             all_classes = []
+            active_count = 0
             for name in env_classes:
                 cn = self.label_mapper.get_chinese_name_from_en(name)
+                is_active = name not in deactivated
+                if is_active:
+                    active_count += 1
                 all_classes.append({
                     "name_en": name,
                     "name_cn": cn,
                     "source": "default",
+                    "active": is_active,
+                    "last_detected": last_detected.get(name),
                 })
             for c in custom:
-                # 避免重複
                 if c["name_en"] not in env_classes:
+                    is_active = c.get("active", True)
+                    if is_active:
+                        active_count += 1
                     all_classes.append({
                         "name_en": c["name_en"],
                         "name_cn": c.get("name_cn", ""),
                         "source": "custom",
+                        "active": is_active,
+                        "last_detected": last_detected.get(c["name_en"]),
                     })
 
             return {
                 "classes": all_classes,
                 "total": len(all_classes),
+                "active_count": active_count,
+                "max_active": max_active,
                 "default_count": len(env_classes),
                 "custom_count": len(custom),
             }
@@ -462,24 +481,88 @@ class WebDetectionServer:
                     # 找不到對應，使用中文名稱作為模型輸入（CLIP 可處理）
                     name_en = name_cn
 
-            # 載入現有自訂類別
-            custom = self._load_custom_classes()
+            # 載入完整資料
+            data = self._load_custom_classes_data()
+            custom = data.get("classes", [])
             existing_names = [c["name_en"] for c in custom]
 
-            # 檢查是否已存在
+            # 檢查是否已存在（可能是已停用的，重新啟用即可）
             env_classes = self._get_env_classes()
+            deactivated = data.get("deactivated_defaults", [])
+
             if name_en in env_classes:
+                # 如果是已停用的預設類別，重新啟用
+                if name_en in deactivated:
+                    max_active = self.config.model.max_active_classes
+                    active_count = self._get_active_count()
+                    if active_count >= max_active:
+                        lru = self._get_lru_suggestion()
+                        return {
+                            "error": "slots_full",
+                            "message": f"已達啟用上限（{active_count}/{max_active}），請先停用一個類別",
+                            "active_count": active_count,
+                            "max_active": max_active,
+                            "lru_suggestion": lru,
+                        }
+                    deactivated.remove(name_en)
+                    data["deactivated_defaults"] = deactivated
+                    self._save_custom_classes_data(data)
+                    self._reload_detector_classes()
+                    cn = self.label_mapper.get_chinese_name_from_en(name_en)
+                    return {
+                        "success": True,
+                        "class": {"name_en": name_en, "name_cn": cn},
+                        "message": f"已重新啟用 '{cn or name_en}'",
+                    }
                 return {"error": f"'{name_en}' 已在預設類別中", "exists": True}
+
             if name_en in existing_names:
+                # 如果是已停用的自訂類別，重新啟用
+                target = next((c for c in custom if c["name_en"] == name_en), None)
+                if target and not target.get("active", True):
+                    max_active = self.config.model.max_active_classes
+                    active_count = self._get_active_count()
+                    if active_count >= max_active:
+                        lru = self._get_lru_suggestion()
+                        return {
+                            "error": "slots_full",
+                            "message": f"已達啟用上限（{active_count}/{max_active}），請先停用一個類別",
+                            "active_count": active_count,
+                            "max_active": max_active,
+                            "lru_suggestion": lru,
+                        }
+                    target["active"] = True
+                    self._save_custom_classes_data(data)
+                    self._reload_detector_classes()
+                    return {
+                        "success": True,
+                        "class": {"name_en": name_en, "name_cn": target.get("name_cn", "")},
+                        "message": f"已重新啟用 '{target.get('name_cn', name_en)}'",
+                    }
                 return {"error": f"'{name_en}' 已在自訂類別中", "exists": True}
+
+            # 檢查槽位上限
+            max_active = self.config.model.max_active_classes
+            active_count = self._get_active_count()
+            if active_count >= max_active:
+                lru = self._get_lru_suggestion()
+                return {
+                    "error": "slots_full",
+                    "message": f"已達啟用上限（{active_count}/{max_active}），請先停用一個類別再新增",
+                    "active_count": active_count,
+                    "max_active": max_active,
+                    "lru_suggestion": lru,
+                }
 
             # 新增
             custom.append({
                 "name_en": name_en,
                 "name_cn": name_cn,
+                "active": True,
                 "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             })
-            self._save_custom_classes(custom)
+            data["classes"] = custom
+            self._save_custom_classes_data(data)
 
             # 動態更新偵測器類別
             self._reload_detector_classes()
@@ -495,6 +578,8 @@ class WebDetectionServer:
                 "success": True,
                 "class": {"name_en": name_en, "name_cn": name_cn},
                 "message": f"已新增 '{name_cn or name_en}'，偵測器已更新",
+                "active_count": active_count + 1,
+                "max_active": max_active,
             }
 
         @self.app.delete("/api/classes")
@@ -517,6 +602,66 @@ class WebDetectionServer:
             return {
                 "success": True,
                 "message": f"已移除 '{name_en}'，偵測器已更新",
+            }
+
+        @self.app.put("/api/classes/toggle")
+        async def toggle_class(request: ToggleClassRequest):
+            """啟用或停用偵測類別"""
+            name_en = request.name_en.strip().lower()
+            want_active = request.active
+
+            env_classes = self._get_env_classes()
+            data = self._load_custom_classes_data()
+            deactivated = data.get("deactivated_defaults", [])
+            custom = data.get("classes", [])
+
+            # 啟用時檢查槽位上限
+            if want_active:
+                max_active = self.config.model.max_active_classes
+                active_count = self._get_active_count()
+                if active_count >= max_active:
+                    lru = self._get_lru_suggestion()
+                    return {
+                        "error": "slots_full",
+                        "message": f"已達啟用上限（{active_count}/{max_active}），請先停用一個類別",
+                        "active_count": active_count,
+                        "max_active": max_active,
+                        "lru_suggestion": lru,
+                    }
+
+            found = False
+
+            # 處理預設類別
+            if name_en in env_classes:
+                found = True
+                if want_active and name_en in deactivated:
+                    deactivated.remove(name_en)
+                elif not want_active and name_en not in deactivated:
+                    deactivated.append(name_en)
+                data["deactivated_defaults"] = deactivated
+
+            # 處理自訂類別
+            for c in custom:
+                if c["name_en"] == name_en:
+                    found = True
+                    c["active"] = want_active
+                    break
+
+            if not found:
+                return {"error": f"找不到類別 '{name_en}'"}
+
+            self._save_custom_classes_data(data)
+            self._reload_detector_classes()
+
+            status = "啟用" if want_active else "停用"
+            cn = self.label_mapper.get_chinese_name_from_en(name_en)
+            logger.info(f"類別 {status}: {name_en} ({cn})")
+
+            return {
+                "success": True,
+                "message": f"已{status} '{cn or name_en}'",
+                "active_count": self._get_active_count(),
+                "max_active": self.config.model.max_active_classes,
             }
 
         # ============================================
@@ -560,9 +705,15 @@ class WebDetectionServer:
                 correct_name = correct_name.lower()
 
                 env_classes = self._get_env_classes()
-                custom = self._load_custom_classes()
+                data = self._load_custom_classes_data()
+                custom = data.get("classes", [])
                 existing = env_classes + [c["name_en"] for c in custom]
                 if correct_name not in existing:
+                    # 檢查槽位上限，超過則以停用狀態新增
+                    max_active = self.config.model.max_active_classes
+                    active_count = self._get_active_count()
+                    is_active = active_count < max_active
+
                     # 自動查找中文名稱
                     name_cn = self.label_mapper.get_chinese_name_from_en(correct_name)
                     if name_cn == correct_name:
@@ -570,10 +721,15 @@ class WebDetectionServer:
                     custom.append({
                         "name_en": correct_name,
                         "name_cn": name_cn,
+                        "active": is_active,
                         "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                     })
-                    self._save_custom_classes(custom)
-                    self._reload_detector_classes()
+                    data["classes"] = custom
+                    self._save_custom_classes_data(data)
+                    if is_active:
+                        self._reload_detector_classes()
+                    else:
+                        logger.warning(f"新類別 '{correct_name}' 因槽位已滿，以停用狀態註冊")
 
             # 每 20 筆反饋重新計算門檻
             stats = self.feedback_manager.get_stats()
@@ -612,39 +768,103 @@ class WebDetectionServer:
             return []
         return [c.strip() for c in classes_str.split(",") if c.strip()]
 
-    def _load_custom_classes(self) -> list:
-        """讀取自訂類別檔案"""
+    def _load_custom_classes_data(self) -> dict:
+        """讀取完整自訂類別資料（含 deactivated_defaults 和 last_detected）"""
         try:
             if self._custom_classes_path.exists():
                 with open(self._custom_classes_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return data.get("classes", [])
+                return data
         except Exception as e:
             logger.error(f"讀取自訂類別失敗: {e}")
-        return []
+        return {"classes": [], "deactivated_defaults": [], "last_detected": {}}
 
-    def _save_custom_classes(self, classes: list):
-        """儲存自訂類別檔案"""
+    def _load_custom_classes(self) -> list:
+        """讀取自訂類別列表（向後相容）"""
+        return self._load_custom_classes_data().get("classes", [])
+
+    def _save_custom_classes_data(self, data: dict):
+        """儲存完整自訂類別資料"""
         try:
             self._custom_classes_path.parent.mkdir(parents=True, exist_ok=True)
+            # 確保必要欄位存在
+            if "deactivated_defaults" not in data:
+                data["deactivated_defaults"] = []
+            if "last_detected" not in data:
+                data["last_detected"] = {}
+            data["description"] = "使用者自行註冊的偵測類別（透過網頁介面新增）"
             with open(self._custom_classes_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "description": "使用者自行註冊的偵測類別（透過網頁介面新增）",
-                    "classes": classes,
-                }, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"儲存自訂類別失敗: {e}")
 
-    def _get_all_classes(self) -> list:
-        """取得所有偵測類別（.env 預設 + 使用者自訂）"""
+    def _save_custom_classes(self, classes: list):
+        """儲存自訂類別列表（向後相容，保留其他欄位）"""
+        data = self._load_custom_classes_data()
+        data["classes"] = classes
+        self._save_custom_classes_data(data)
+
+    def _get_active_count(self) -> int:
+        """取得目前啟用中的類別數量"""
         env_classes = self._get_env_classes()
-        custom = self._load_custom_classes()
-        custom_names = [c["name_en"] for c in custom]
-        # 合併，避免重複
-        all_classes = list(env_classes)
-        for name in custom_names:
-            if name not in all_classes:
-                all_classes.append(name)
+        data = self._load_custom_classes_data()
+        deactivated = data.get("deactivated_defaults", [])
+        custom = data.get("classes", [])
+
+        # 啟用中的預設類別
+        active_defaults = [c for c in env_classes if c not in deactivated]
+        # 啟用中的自訂類別
+        active_custom = [c for c in custom if c.get("active", True) and c["name_en"] not in env_classes]
+
+        return len(active_defaults) + len(active_custom)
+
+    def _get_lru_suggestion(self) -> Optional[dict]:
+        """取得 LRU 建議替換的類別（最久未偵測到的啟用類別）"""
+        env_classes = self._get_env_classes()
+        data = self._load_custom_classes_data()
+        deactivated = data.get("deactivated_defaults", [])
+        last_detected = data.get("last_detected", {})
+        custom = data.get("classes", [])
+
+        # 收集所有啟用中的類別
+        active_classes = []
+        for c in env_classes:
+            if c not in deactivated:
+                active_classes.append({
+                    "name_en": c,
+                    "name_cn": self.label_mapper.get_chinese_name_from_en(c),
+                    "source": "default",
+                    "last_detected": last_detected.get(c),
+                })
+        for c in custom:
+            if c.get("active", True) and c["name_en"] not in env_classes:
+                active_classes.append({
+                    "name_en": c["name_en"],
+                    "name_cn": c.get("name_cn", ""),
+                    "source": "custom",
+                    "last_detected": last_detected.get(c["name_en"]),
+                })
+
+        if not active_classes:
+            return None
+
+        # 排序：無偵測紀錄的排最前，其次按時間戳由舊到新
+        active_classes.sort(key=lambda x: x["last_detected"] or "")
+        return active_classes[0]
+
+    def _get_all_classes(self) -> list:
+        """取得所有啟用中的偵測類別（.env 預設 + 使用者自訂，排除已停用的）"""
+        env_classes = self._get_env_classes()
+        data = self._load_custom_classes_data()
+        deactivated = data.get("deactivated_defaults", [])
+        custom = data.get("classes", [])
+
+        # 啟用中的預設類別
+        all_classes = [c for c in env_classes if c not in deactivated]
+        # 啟用中的自訂類別
+        for c in custom:
+            if c.get("active", True) and c["name_en"] not in all_classes:
+                all_classes.append(c["name_en"])
         return all_classes
 
     def _reload_detector_classes(self):
@@ -654,7 +874,19 @@ class WebDetectionServer:
         all_classes = self._get_all_classes()
         if all_classes:
             self.detector.update_classes(all_classes)
-            logger.info(f"偵測器類別已更新（共 {len(all_classes)} 個）")
+            logger.info(f"偵測器類別已更新（共 {len(all_classes)} 個啟用中）")
+
+    def _update_last_detected(self, class_names: list):
+        """更新類別的最後偵測時間戳"""
+        if not class_names:
+            return
+        data = self._load_custom_classes_data()
+        last_detected = data.get("last_detected", {})
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        for name in class_names:
+            last_detected[name] = now
+        data["last_detected"] = last_detected
+        self._save_custom_classes_data(data)
 
     async def _handle_video_stream(self, websocket: WebSocket):
         """處理視頻串流"""
@@ -789,9 +1021,13 @@ class WebDetectionServer:
         if elapsed > 0:
             self.fps = self.frame_count / elapsed
 
-        # 每 30 幀記錄一次統計
+        # 每 30 幀記錄一次統計 + 更新最後偵測時間
         if self.frame_count % 30 == 1:
             logger.info(f"統計: 已處理 {self.frame_count} 幀 | FPS: {self.fps:.1f}")
+            # 更新偵測到的類別的最後偵測時間（節流，避免頻繁寫入）
+            if stable_detections:
+                detected_names = list(set(d.class_name for d in stable_detections))
+                self._update_last_detected(detected_names)
 
         # 構建結果（改用 stable_detections）
         detections = []

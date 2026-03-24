@@ -488,6 +488,118 @@ header h1 {
     opacity: 1;
 }
 
+/* 啟用/停用切換按鈕 */
+.class-tag .tag-toggle {
+    background: none;
+    border: none;
+    font-size: 0.7rem;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.class-tag.active .tag-toggle {
+    color: var(--primary-color);
+}
+
+.class-tag.inactive .tag-toggle {
+    color: var(--text-secondary);
+}
+
+/* 停用狀態樣式 */
+.class-tag.inactive {
+    opacity: 0.45;
+    border-style: dashed;
+}
+
+.class-tag.inactive .tag-name-cn {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+/* 通用 Modal 覆蓋層 */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 槽位已滿對話框 */
+.slot-full-dialog {
+    background: var(--card-bg);
+    border: 1px solid var(--primary-color);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+}
+
+.slot-full-dialog h3 {
+    color: var(--warning-color, #f39c12);
+    margin-bottom: 12px;
+    font-size: 1rem;
+}
+
+.slot-full-dialog p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.lru-suggestion {
+    background: rgba(78, 204, 163, 0.1);
+    border: 1px solid rgba(78, 204, 163, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+}
+
+.lru-suggestion .lru-name {
+    display: block;
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.lru-suggestion .lru-info {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.slot-dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.slot-dialog-actions .btn-confirm {
+    background: var(--primary-color);
+    color: var(--secondary-color);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.slot-dialog-actions .btn-cancel {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--text-secondary);
+    border-radius: 8px;
+    padding: 8px 20px;
+    cursor: pointer;
+}
+
 /* Stats Section */
 .stats-section {
     display: grid;

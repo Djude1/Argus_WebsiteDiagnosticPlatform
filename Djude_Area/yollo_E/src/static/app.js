@@ -1342,7 +1342,7 @@ class YOLOWebApp {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            this._renderClassList(data.classes || []);
+            this._renderClassList(data.classes || [], data.active_count, data.max_active);
         } catch (e) {
             if (this.classList) {
                 this.classList.innerHTML = `<div class="empty-state"><p>無法載入類別列表</p></div>`;
@@ -1351,8 +1351,14 @@ class YOLOWebApp {
         }
     }
 
-    _renderClassList(classes) {
+    _renderClassList(classes, activeCount, maxActive) {
         if (!this.classList) return;
+
+        // 更新槽位計數器
+        const header = this.classList.closest('.card')?.querySelector('.class-list-header span');
+        if (header && activeCount !== undefined) {
+            header.textContent = `啟用中 ${activeCount}/${maxActive}`;
+        }
 
         if (!classes || classes.length === 0) {
             this.classList.innerHTML = `<div class="empty-state"><p>尚無偵測類別</p></div>`;
@@ -1362,16 +1368,33 @@ class YOLOWebApp {
         this.classList.innerHTML = classes.map(c => {
             const displayName = c.name_cn || c.name_en;
             const isCustom = c.source === 'custom';
+            const isActive = c.active !== false;
+            const activeClass = isActive ? 'active' : 'inactive';
+
+            // 啟用/停用切換按鈕
+            const toggleBtn = `<button class="tag-toggle" data-name="${c.name_en}" data-active="${isActive}" title="${isActive ? '停用' : '啟用'}">${isActive ? '●' : '○'}</button>`;
+
+            // 自訂類別才有移除按鈕
             const removeBtn = isCustom
                 ? `<button class="tag-remove" data-name="${c.name_en}" title="移除">&times;</button>`
                 : '';
 
-            return `<div class="class-tag ${c.source}">
+            return `<div class="class-tag ${c.source} ${activeClass}">
+                ${toggleBtn}
                 <span class="tag-name-cn">${displayName}</span>
                 <span class="tag-name-en">${c.name_en}</span>
                 ${removeBtn}
             </div>`;
         }).join('');
+
+        // 綁定切換按鈕事件
+        this.classList.querySelectorAll('.tag-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const nameEn = e.currentTarget.dataset.name;
+                const isActive = e.currentTarget.dataset.active === 'true';
+                this.toggleClass(nameEn, !isActive);
+            });
+        });
 
         // 綁定移除按鈕事件
         this.classList.querySelectorAll('.tag-remove').forEach(btn => {
@@ -1404,6 +1427,12 @@ class YOLOWebApp {
 
             const data = await res.json();
 
+            if (data.error === 'slots_full') {
+                // 槽位已滿，顯示替換建議
+                this._showSlotFullDialog(data, nameCn, nameEn);
+                return;
+            }
+
             if (data.error) {
                 this.showNotification(data.error, 'warning');
                 return;
@@ -1411,10 +1440,8 @@ class YOLOWebApp {
 
             if (data.success) {
                 this.showNotification(data.message, 'success');
-                // 清空輸入
                 this.newClassEnInput.value = '';
                 this.newClassCnInput.value = '';
-                // 重新載入列表
                 await this.loadClasses();
             }
         } catch (e) {
@@ -1425,6 +1452,85 @@ class YOLOWebApp {
                 this.addClassBtn.disabled = false;
                 this.addClassBtn.textContent = '新增物品';
             }
+        }
+    }
+
+    _showSlotFullDialog(data, pendingCn, pendingEn) {
+        /**
+         * 顯示槽位已滿的替換對話框
+         * 建議停用 LRU 類別，讓使用者確認後自動替換
+         */
+        const lru = data.lru_suggestion;
+        if (!lru) {
+            this.showNotification(data.message, 'warning');
+            return;
+        }
+
+        const lruLabel = lru.name_cn ? `${lru.name_cn}（${lru.name_en}）` : lru.name_en;
+        const lastInfo = lru.last_detected
+            ? `最後偵測：${lru.last_detected}`
+            : '從未偵測到';
+
+        // 建立覆蓋層
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="slot-full-dialog">
+                <h3>偵測槽位已滿（${data.active_count}/${data.max_active}）</h3>
+                <p>建議停用最久未使用的類別：</p>
+                <div class="lru-suggestion">
+                    <span class="lru-name">${lruLabel}</span>
+                    <span class="lru-info">${lastInfo}</span>
+                </div>
+                <p>停用後將自動新增「${pendingCn || pendingEn}」</p>
+                <div class="slot-dialog-actions">
+                    <button class="btn-confirm" id="slotConfirmBtn">確認替換</button>
+                    <button class="btn-cancel" id="slotCancelBtn">取消</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        // 確認：先停用 LRU 類別，再新增
+        overlay.querySelector('#slotConfirmBtn').addEventListener('click', async () => {
+            overlay.remove();
+            await this.toggleClass(lru.name_en, false);
+            // 重新嘗試新增
+            await this.addClass();
+        });
+
+        // 取消
+        overlay.querySelector('#slotCancelBtn').addEventListener('click', () => {
+            overlay.remove();
+        });
+    }
+
+    async toggleClass(nameEn, active) {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/classes/toggle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name_en: nameEn, active }),
+            });
+
+            const data = await res.json();
+
+            if (data.error === 'slots_full') {
+                this.showNotification(data.message, 'warning');
+                return;
+            }
+
+            if (data.error) {
+                this.showNotification(data.error, 'warning');
+                return;
+            }
+
+            if (data.success) {
+                this.showNotification(data.message, 'success');
+                await this.loadClasses();
+            }
+        } catch (e) {
+            this.showNotification(`切換失敗: ${e.message}`, 'error');
         }
     }
 

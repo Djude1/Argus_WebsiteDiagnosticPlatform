@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-03-24 (第七次更新)
+
+### 任務摘要
+實作類別槽位管理機制：限制同時啟用的偵測類別最多 10 個，支援啟用/停用切換，並以 LRU 策略建議替換。
+
+### 解決的問題
+
+1. **YOLOE 多類別準確度下降**
+   - 問題：YOLOE 使用 CLIP 嵌入做開放詞彙偵測，同時偵測太多類別會導致嵌入空間擁擠、類別混淆
+   - 方案：限制同時啟用的類別數量（預設上限 10 個），超出時建議替換最久未偵測到的類別
+
+2. **類別管理機制**
+   - 區分「已註冊」和「啟用中」兩種狀態
+   - 所有類別（預設 + 自訂）都可以啟用/停用
+   - 停用的類別不會被刪除，隨時可重新啟用
+   - LRU（最近最少使用）策略自動建議替換對象
+
+### 新增功能
+
+1. **後端 API**
+   - `PUT /api/classes/toggle` — 啟用/停用類別
+   - `GET /api/classes` — 新增 `active`、`last_detected`、`active_count`、`max_active` 欄位
+   - `POST /api/classes` — 槽位已滿時回傳 `slots_full` + LRU 建議
+   - 偵測時每 30 幀自動更新 `last_detected` 時間戳
+
+2. **前端 UI**
+   - 類別標籤顯示啟用/停用狀態（●/○ 切換按鈕）
+   - 停用類別以虛線框 + 刪除線 + 半透明顯示
+   - 槽位計數器「啟用中 N/10」
+   - 槽位已滿時彈出替換對話框，顯示 LRU 建議
+
+3. **設定**
+   - `.env` 新增 `MAX_ACTIVE_CLASSES=10`
+   - `config.py` 新增 `max_active_classes` 設定欄位
+
+### 修改的檔案
+- `src/web_server.py` — 類別管理 API 全面改造（toggle、LRU、槽位上限）
+- `src/static/app.js` — 前端類別列表、toggleClass()、槽位替換對話框
+- `src/static/style.css` — 停用狀態樣式、modal overlay、對話框樣式
+- `src/config.py` — 新增 max_active_classes 設定
+- `.env` — 新增 MAX_ACTIVE_CLASSES
+- `data/custom_classes.json` — 新增 active、deactivated_defaults、last_detected 欄位
+
+### 資料結構變更
+`custom_classes.json` 擴充：
+```json
+{
+  "classes": [{ "name_en": "...", "active": true, ... }],
+  "deactivated_defaults": [],
+  "last_detected": { "cup": "2026-03-24T10:30:00", ... }
+}
+```
+
+### 注意事項
+- 目前預設 10 個 .env 類別 + 2 個自訂類別 = 12 個已註冊，其中最多 10 個可同時啟用
+- 反饋更正自動新增的類別，若槽位已滿會以停用狀態註冊
+- `last_detected` 的寫入已節流（每 30 幀），不影響偵測效能
+- 未來計畫：類別別名系統（如 mug = cup 視為同一類別）
+
+### 重啟指令
+```bash
+cd Djude_Area/yollo_E
+uv run python src/main.py
+```
+
+---
+
 ## 2026-03-19 (第六次更新)
 
 ### 任務摘要

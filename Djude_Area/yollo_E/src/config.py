@@ -105,6 +105,10 @@ class ModelConfig:
     stabilizer_min_hits: int = field(
         default_factory=lambda: int(os.getenv("STABILIZER_MIN_HITS", "2"))
     )
+    # 最大同時啟用類別數（YOLOE 同時偵測太多類別會降低準確度）
+    max_active_classes: int = field(
+        default_factory=lambda: int(os.getenv("MAX_ACTIVE_CLASSES", "10"))
+    )
 
     @property
     def full_model_path(self) -> Path:
