@@ -4,6 +4,58 @@
 
 ---
 
+## 2026-03-24 (第九次更新)
+
+### 任務摘要
+完成 Webcam 版本 (main.py) 與 Web 版本 (web_server.py) 的功能比較分析，並建立詳細的版本整合計畫文件。
+
+### 分析結果
+
+**Web 版本已有但 Webcam 版本缺少的功能：**
+- DetectionStabilizer（時序穩定過濾）
+- FeedbackManager（用戶回饋系統）
+- 類別槽位管理（max 10 active + LRU 替換）
+- 別名系統（35+ 映射 + 自動合併）
+- CLIP 變體擴展（variant expansion）
+- PromptEnhancer（CLIP 提示優化）
+- DetectionLogger（每日 JSONL 日誌）
+
+**Webcam 版本獨有但 Web 版本缺少的功能：**
+- AnnotationManager（Tkinter 手動標註 + annotations.json）
+- DatabaseManager + ItemLogger（SQLite 自動記錄）
+
+**資料格式差異：**
+- annotations.json：bbox 為 `{x1,y1,x2,y2}` 物件，37 筆，2026-03-12~03-15
+- feedback.jsonl：bbox 為 `[x1,y1,x2,y2]` 陣列，20 筆，2026-03-19
+
+### 新建的檔案
+- `docs/INTEGRATION_PLAN.md` — 版本整合計畫，包含：
+  - 功能對照表與資料格式差異
+  - 共用偵測引擎 (DetectionEngine) 架構設計
+  - 統一資料格式 (unified_record.jsonl) 設計
+  - 五階段詳細整合流程
+  - 檔案變更清單與優先順序
+  - 資料遷移策略與去重規則
+  - 驗證清單
+
+### 注意事項
+- 整合工作尚未開始實作，僅完成計畫文件
+- 建議從 P0（建立共用 DetectionEngine）開始實作
+- 歷史資料遷移需先備份再執行
+
+### 重啟指令
+```bash
+# Webcam 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --source webcam
+
+# Web 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --web
+```
+
+---
+
 ## 2026-03-24 (第八次更新)
 
 ### 任務摘要
