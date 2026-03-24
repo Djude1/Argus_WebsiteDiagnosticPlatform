@@ -4,6 +4,36 @@
 
 ---
 
+## 2026-03-24 (第十次更新)
+
+### 任務摘要
+建立 DetectionEngine 類別，封裝 YOLODetector、DetectionStabilizer、PromptEnhancer、LabelMapper，提供 Webcam 和 Web 版本共用的偵測邏輯。
+
+### 新建的檔案
+- `src/core/detection_engine.py` — 完整偵測引擎，包含：
+  - DetectionConfig 資料類別（model_path, device, confidence, max_active_classes, custom_classes_path）
+  - DetectionEngine 類別（整合所有偵測元件）
+  - detect() 方法（完整偵測流程：raw detection → stabilizer → alias resolution → Chinese label mapping）
+  - _resolve_alias() 方法（使用 ALIAS_MAPPING 解析類別別名）
+  - _load_custom_classes() 方法（從 JSON 載入自訂類別）
+  - reset_session() 方法（重置偵測狀態）
+
+### 修改的檔案
+- `src/core/detection_engine.py`（新建）
+
+### 注意事項
+- DetectionEngine 目前參考的 LabelMapper.get_cn_label() 方法名稱需確認（可能應為 get_chinese_name_from_en）
+- 詳細請參閱 `docs/INTEGRATION_PLAN.md`
+
+### 重啟指令
+```bash
+# Webcam 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --source webcam
+```
+
+---
+
 ## 2026-03-24 (第九次更新)
 
 ### 任務摘要
