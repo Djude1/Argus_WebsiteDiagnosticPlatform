@@ -1,0 +1,19 @@
+{
+  "description": "使用者自行註冊的偵測類別（透過網頁介面新增）",
+  "classes": [
+    {
+      "name_en": "glasses",
+      "name_cn": "眼鏡",
+      "active": true,
+      "added_at": "2026-03-19T10:56:30"
+    },
+    {
+      "name_en": "wallet",
+      "name_cn": "錢包",
+      "active": true,
+      "added_at": "2026-03-19T12:20:16"
+    }
+  ],
+  "deactivated_defaults": [],
+  "last_detected": {}
+}
