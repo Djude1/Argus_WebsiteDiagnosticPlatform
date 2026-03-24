@@ -194,6 +194,9 @@ class WebDetectionServer:
         self.config = get_config()
         self.label_mapper = LabelMapper()
 
+        # 自訂類別檔案路徑（需要在 _load_and_apply_aliases 之前）
+        self._custom_classes_path = Path(__file__).parent.parent / "data" / "custom_classes.json"
+
         # 載入自訂別名
         self._load_and_apply_aliases()
 
@@ -202,9 +205,6 @@ class WebDetectionServer:
 
         # 記錄信心度門檻
         self.record_confidence = self.config.model.record_confidence_threshold
-
-        # 自訂類別檔案路徑
-        self._custom_classes_path = Path(__file__).parent.parent / "data" / "custom_classes.json"
 
         # 初始化 DetectionEngine 和 DataManager
         detection_config = DetectionConfig(
