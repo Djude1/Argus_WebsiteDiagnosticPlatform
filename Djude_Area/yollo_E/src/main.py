@@ -38,6 +38,8 @@ if __name__ == "__main__" and __package__ is None:
     from camera.webcam_fallback import WebcamReceiver
     from detection.yolo_detector import YOLODetector, FrameDetectionResult
     from detection.label_mapper import LabelMapper
+    from core.detection_engine import DetectionEngine, DetectionConfig
+    from core.data_manager import DataManager
     from database.db_manager import DatabaseManager
     from database.item_logger import ItemLogger, LoggerConfig
     from utils.visualization import (
@@ -58,6 +60,8 @@ else:
     from .camera.webcam_fallback import WebcamReceiver
     from .detection.yolo_detector import YOLODetector, FrameDetectionResult
     from .detection.label_mapper import LabelMapper
+    from .core.detection_engine import DetectionEngine, DetectionConfig
+    from .core.data_manager import DataManager
     from .database.db_manager import DatabaseManager
     from .database.item_logger import ItemLogger, LoggerConfig
     from .utils.visualization import (
@@ -118,7 +122,8 @@ class YOLODetectionSystem:
 
         # 初始化元件
         self.camera = None
-        self.detector = None
+        self.engine = None
+        self.data_manager = None
         self.label_mapper = LabelMapper()
         self.db_manager = None
         self.item_logger = None
@@ -166,23 +171,21 @@ class YOLODetectionSystem:
                 self.item_logger = ItemLogger(self.db_manager, logger_config)
                 logger.info("資料庫已初始化")
 
-            # 解析開放詞彙偵測類別 (YOLOE 模型專用)
-            prompt_classes = None
-            if self.config.model.detection_classes:
-                prompt_classes = [
-                    c.strip() for c in self.config.model.detection_classes.split(",") if c.strip()
-                ]
-                logger.info(f"開放詞彙偵測類別: {prompt_classes}")
-
-            # 初始化 YOLO 偵測器
-            self.detector = YOLODetector(
+            # 初始化 DetectionEngine（整合 YOLODetector、Stabilizer、PromptEnhancer、LabelMapper）
+            engine_config = DetectionConfig(
                 model_path=self.model_path,
-                confidence_threshold=self.confidence,
                 device=get_device(),
-                prompt_classes=prompt_classes,  # 傳遞開放詞彙類別
+                confidence=self.confidence,
+                max_active_classes=10,
+                custom_classes_path=str(data_dir / "custom_classes.json"),
             )
-            logger.info(f"YOLO 模型已載入: {self.model_path}")
+            self.engine = DetectionEngine(engine_config)
+            logger.info(f"DetectionEngine 已初始化")
             logger.info(f"運算裝置: {get_device()}")
+
+            # 初始化 DataManager（統一資料管理器）
+            self.data_manager = DataManager(data_dir)
+            logger.info("DataManager 已初始化")
 
             # 初始化攝影機
             if self.source == "esp32":
@@ -256,16 +259,15 @@ class YOLODetectionSystem:
 
                 current_time = time.time()
 
-                # 執行 YOLO 辨識
-                result = self.detector.detect(frame)
+                # 執行 YOLO 辨識（使用 DetectionEngine）
+                raw_detections = self.engine.detect(frame)
 
-                # 為每個 detection 設置中文標籤（從 LabelMapper 取得）
-                for detection in result.detections:
-                    if not detection.class_name_cn:
-                        # 使用 LabelMapper 取得中文名稱
-                        detection.class_name_cn = self.label_mapper.get_chinese_name_from_en(
-                            detection.class_name
-                        )
+                # 包裝為 FrameDetectionResult 以相容現有程式碼
+                from detection.yolo_detector import FrameDetectionResult
+                result = FrameDetectionResult(
+                    detections=raw_detections,
+                    fps=0.0,  # DetectionEngine 不直接提供 FPS，由顯示端計算
+                )
 
                 # 記錄到資料庫
                 if self.item_logger:

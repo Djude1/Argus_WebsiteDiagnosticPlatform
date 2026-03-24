@@ -490,6 +490,33 @@ class YOLODetector:
             logger.error(f"更新偵測類別失敗: {e}")
             return False
 
+    def update_variants(self, class_name: str, variants: list) -> bool:
+        """
+        更新類別的變體描述並重新生成 CLIP 嵌入
+
+        參數:
+            class_name: 類別名稱
+            variants: 變體描述列表
+
+        回傳:
+            是否更新成功
+        """
+        if not self._is_yoloe:
+            return False
+        self._prompt_enhancer.set_variants(class_name, variants)
+        # 重新生成所有嵌入（因為提示已改變）
+        if self.prompt_classes:
+            return self.update_classes(self.prompt_classes)
+        return True
+
+    def load_all_variants(self, variants_data: dict):
+        """批次載入變體資料到 PromptEnhancer"""
+        self._prompt_enhancer.load_all_variants(variants_data)
+
+    def get_prompt_enhancer(self):
+        """取得 PromptEnhancer 實例"""
+        return self._prompt_enhancer
+
     def get_class_names(self) -> Dict[int, str]:
         """取得所有類別名稱"""
         return self.class_names.copy()
