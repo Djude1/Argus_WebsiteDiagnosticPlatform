@@ -32,12 +32,10 @@ if str(_src_path) not in sys.path:
     sys.path.insert(0, str(_src_path))
 
 from config import get_config, get_model_path, get_device
-from detection.yolo_detector import YOLODetector
+from core import DetectionEngine, DataManager, DetectionConfig
 from detection.label_mapper import LabelMapper, EN_TO_CN_MAPPING, CN_TO_EN_MAPPING
 from detection.detection_logger import DetectionLogger
-from detection.stabilizer import DetectionStabilizer, filter_false_positives
-from detection.feedback import FeedbackManager
-from detection.yolo_detector import FrameDetectionResult
+from detection.yolo_detector import FrameDetectionResult, BoundingBox
 
 
 # ============================================
@@ -194,7 +192,6 @@ class WebDetectionServer:
         self.port = port
 
         self.config = get_config()
-        self.detector: Optional[YOLODetector] = None
         self.label_mapper = LabelMapper()
 
         # 載入自訂別名
@@ -203,22 +200,22 @@ class WebDetectionServer:
         # 偵測結果記錄器
         self.detection_logger = DetectionLogger()
 
-        # 偵測穩定化
-        self.stabilizer = DetectionStabilizer(
-            window_size=self.config.model.stabilizer_window_size,
-            min_hits=self.config.model.stabilizer_min_hits,
-        )
-
-        # 用戶反饋管理器
-        self.feedback_manager = FeedbackManager(
-            default_threshold=self.confidence,
-        )
-
         # 記錄信心度門檻
         self.record_confidence = self.config.model.record_confidence_threshold
 
         # 自訂類別檔案路徑
         self._custom_classes_path = Path(__file__).parent.parent / "data" / "custom_classes.json"
+
+        # 初始化 DetectionEngine 和 DataManager
+        detection_config = DetectionConfig(
+            model_path=self.model_path,
+            device=get_device(),
+            confidence=self.confidence,
+            max_active_classes=self.config.model.max_active_classes,
+            custom_classes_path=str(self._custom_classes_path),
+        )
+        self.engine = DetectionEngine(detection_config)
+        self.data_manager = DataManager(Path(__file__).parent.parent / "data")
 
         # 連接的客戶端
         self.video_clients: Set[WebSocket] = set()
@@ -872,13 +869,46 @@ class WebDetectionServer:
             if request.type not in ("confirm", "correct", "false_positive"):
                 return {"error": "無效的反饋類型"}
 
-            result = self.feedback_manager.record_feedback(
-                feedback_type=request.type,
+            # 建立偵測結果物件用於 DataManager
+            class MockDetection:
+                def __init__(self, class_name, confidence, bbox):
+                    self.class_name = class_name
+                    self.confidence = confidence
+                    self.bbox = bbox
+                    self.class_name_cn = ""
+
+            # 解碼圖片（如果有的話）
+            frame = None
+            if request.image:
+                try:
+                    if request.image.startswith("data:image"):
+                        _, base64_data = request.image.split(",", 1)
+                        image_data = base64.b64decode(base64_data)
+                    else:
+                        image_data = base64.b64decode(request.image)
+                    nparr = np.frombuffer(image_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                except Exception as e:
+                    logger.warning(f"無法解碼回饋圖片: {e}")
+
+            # 建立 MockDetection 物件
+            if request.bbox and len(request.bbox) == 4:
+                mock_bbox = BoundingBox(x1=request.bbox[0], y1=request.bbox[1], x2=request.bbox[2], y2=request.bbox[3])
+            else:
+                mock_bbox = BoundingBox(x1=0, y1=0, x2=0, y2=0)
+            detection = MockDetection(
                 class_name=request.class_name,
                 confidence=request.confidence,
-                bbox=request.bbox,
+                bbox=mock_bbox,
+            )
+
+            # 使用 DataManager 記錄
+            result = self.data_manager.record(
+                detection=detection,
+                frame=frame if frame is not None else np.zeros((1, 1, 3), dtype=np.uint8),
+                source="web",
+                feedback_type=request.type,
                 correct_class=request.correct_class,
-                image_base64=request.image,
             )
 
             # 如果是 correct 且正確類別是新的，同時新增類別
@@ -933,17 +963,12 @@ class WebDetectionServer:
                     else:
                         logger.warning(f"新類別 '{correct_name}' 因槽位已滿，以停用狀態註冊")
 
-            # 每 20 筆反饋重新計算門檻
-            stats = self.feedback_manager.get_stats()
-            if stats["total"] > 0 and stats["total"] % 20 == 0:
-                self.feedback_manager.recalculate_thresholds()
-
             return result
 
         @self.app.get("/api/feedback/stats")
         async def get_feedback_stats():
             """取得反饋統計"""
-            return self.feedback_manager.get_stats()
+            return self.data_manager.get_stats()
 
         # ============================================
         # 偵測記錄 API
@@ -1117,6 +1142,7 @@ class WebDetectionServer:
     async def _handle_video_stream(self, websocket: WebSocket):
         """處理視頻串流"""
         await websocket.accept()
+        self.engine.reset_session()  # 新連線重置偵測狀態
         self.video_clients.add(websocket)
         logger.info(f"視頻客戶端連接，當前連接數: {len(self.video_clients)}")
 
@@ -1177,7 +1203,7 @@ class WebDetectionServer:
         current_time = time.time()
         if current_time - self._last_request_time > 5 and self._last_request_time > 0:
             logger.info("檢測到新使用者連線，重置偵測穩定化狀態")
-            self.stabilizer.reset()
+            self.engine.reset_session()
         self._last_request_time = current_time
 
         # 使用鎖防止並發偵測（GPU 資源有限，序列處理更穩定）
@@ -1186,39 +1212,12 @@ class WebDetectionServer:
 
     async def _do_detect(self, frame: np.ndarray) -> dict:
         """實際執行 YOLO 檢測"""
-        detect_start = time.time()
-
-        if self.detector is None:
-            logger.info("初始化 YOLO 檢測器...")
-            # 合併 .env 預設類別 + 使用者自訂類別
-            all_classes = self._get_all_classes()
-            prompt_classes = all_classes if all_classes else None
-            logger.info(f"偵測類別（共 {len(all_classes)} 個）: {prompt_classes or '使用模型內建類別'}")
-
-            self.detector = YOLODetector(
-                model_path=self.model_path,
-                confidence_threshold=self.confidence,
-                iou_threshold=self.config.model.iou_threshold,
-                device=get_device(),
-                prompt_classes=prompt_classes,
-                use_fp16=not self.config.model.force_cpu,  # CPU 模式不使用 FP16
-                imgsz=self.config.model.detection_imgsz,  # 新增
-            )
-            logger.success(f"YOLO 模型已載入: {self.model_path}")
-            logger.info(f"運算裝置: {get_device()}")
-            # 載入使用者定義的變體描述
-            self._load_and_apply_variants()
-
         logger.debug(f"開始偵測，影像尺寸: {frame.shape}")
 
-        # 計時
-        start_time = time.time()
-
-        # 執行檢測
+        # 執行檢測（使用 DetectionEngine 的完整流程）
         try:
-            result = self.detector.detect(frame)
-            detect_time = (time.time() - start_time) * 1000
-            logger.debug(f"偵測完成: {result.count} 個物件 | {detect_time:.0f}ms")
+            detections = self.engine.detect(frame)
+            logger.debug(f"偵測完成: {len(detections)} 個物件")
         except Exception as e:
             logger.error(f"偵測過程發生錯誤: {e}")
             import traceback
@@ -1230,23 +1229,6 @@ class WebDetectionServer:
                 "timestamp": time.time(),
             }
 
-        # === 新增：假正例過濾 ===
-        filtered_detections = filter_false_positives(result.detections, frame.shape)
-
-        # === 新增：時序穩定化 ===
-        stable_detections = self.stabilizer.update(filtered_detections)
-
-        # 別名解析 + 設置中文標籤
-        for detection in stable_detections:
-            # 別名歸併：如 mug → cup
-            resolved = self.label_mapper.resolve_alias(detection.class_name)
-            if resolved != detection.class_name:
-                detection.class_name = resolved
-            if not detection.class_name_cn:
-                detection.class_name_cn = self.label_mapper.get_chinese_name_from_en(
-                    detection.class_name
-                )
-
         # 更新 FPS
         self.frame_count += 1
         elapsed = time.time() - self.start_time
@@ -1257,14 +1239,14 @@ class WebDetectionServer:
         if self.frame_count % 30 == 1:
             logger.info(f"統計: 已處理 {self.frame_count} 幀 | FPS: {self.fps:.1f}")
             # 更新偵測到的類別的最後偵測時間（節流，避免頻繁寫入）
-            if stable_detections:
-                detected_names = list(set(d.class_name for d in stable_detections))
+            if detections:
+                detected_names = list(set(d.class_name for d in detections))
                 self._update_last_detected(detected_names)
 
-        # 構建結果（改用 stable_detections）
-        detections = []
-        for det in stable_detections:
-            detections.append({
+        # 構建結果
+        detection_results = []
+        for det in detections:
+            detection_results.append({
                 "class_name": det.class_name,
                 "class_name_cn": det.class_name_cn or det.class_name,
                 "confidence": round(det.confidence, 3),
@@ -1272,35 +1254,34 @@ class WebDetectionServer:
             })
 
         # === 新增：雙路輸出 — 記錄門檻 ===
-        if detections:
+        if detection_results:
             high_conf_detections = [
-                d for d in detections if d["confidence"] >= self.record_confidence
+                d for d in detection_results if d["confidence"] >= self.record_confidence
             ]
             if high_conf_detections:
                 self.detection_logger.log(
                     detections=high_conf_detections,
-                    fps=result.fps,
+                    fps=self.fps,
                     frame_count=self.frame_count,
                 )
 
-        # 建立穩定結果的 FrameDetectionResult 給繪製用
-        # （FrameDetectionResult 已在頂部 imports 匯入）
+        # 建立 FrameDetectionResult 給繪製用
         stable_result = FrameDetectionResult(
-            detections=stable_detections,
-            inference_time_ms=result.inference_time_ms,
-            fps=result.fps,
-            frame_shape=result.frame_shape,
+            detections=detections,
+            inference_time_ms=0,  # DetectionEngine 內部處理
+            fps=self.fps,
+            frame_shape=frame.shape,
         )
-        annotated_frame = self.detector.draw_detections(frame, stable_result)
+        annotated_frame = self.engine.detector.draw_detections(frame, stable_result)
 
         # 將處理後的畫面編碼為 base64
         _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         annotated_base64 = base64.b64encode(buffer).decode('utf-8')
 
         return {
-            "detections": detections,
-            "count": len(detections),
-            "fps": round(result.fps, 1),
+            "detections": detection_results,
+            "count": len(detection_results),
+            "fps": round(self.fps, 1),
             "timestamp": time.time(),
             "annotated_frame": annotated_base64,
         }
