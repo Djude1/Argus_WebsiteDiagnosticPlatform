@@ -45,6 +45,9 @@ class DetectionEngine:
         self.max_active_classes = config.max_active_classes
         self._active_classes: OrderedDict = {}
         self._load_custom_classes(Path(config.custom_classes_path))
+        # 更新偵測器的類別（如果有自訂類別）
+        if self._active_classes:
+            self.update_classes(list(self._active_classes.keys()))
         logger.info("DetectionEngine 已初始化")
 
     def detect(self, frame: np.ndarray) -> List[DetectionResult]:
@@ -76,6 +79,12 @@ class DetectionEngine:
             if cls.get("active"):
                 self._active_classes[cls["name_en"]] = cls["name_cn"]
         logger.info(f"已載入 {len(self._active_classes)} 個自訂類別")
+
+    def update_classes(self, classes: List[str]) -> bool:
+        """更新偵測類別（動態更新 YOLOE 開放詞彙）"""
+        if not classes:
+            return False
+        return self.detector.update_classes(classes)
 
     def reset_session(self):
         """重置偵測狀態（新使用者連線時呼叫）"""
