@@ -10,6 +10,8 @@ import TeamMembers from './sections/TeamMembers'
 import Accounts from './sections/Accounts'
 import ActivityLogs from './sections/ActivityLogs'
 import AppDevice from './sections/AppDevice'
+import VoiceDetection from './sections/VoiceDetection'
+import Announcements from './sections/Announcements'
 import { getMe } from './api'
 
 // ── 保護路由：未登入導向 login ────────────────────────────────────
@@ -74,7 +76,9 @@ function AdminLayout() {
     'team':         { label: '成員管理',     component: <TeamMembers /> },
     'accounts':     { label: '帳號管理',     component: <Accounts currentUserRole={userRole} /> },
     'logs':         { label: '操作日誌',     component: <ActivityLogs /> },
-    'app-device':   { label: 'APP 裝置管理', component: <AppDevice /> },
+    'app-device':     { label: 'APP 裝置管理',   component: <AppDevice /> },
+    'voice':          { label: '語音偵測中控台', component: <VoiceDetection /> },
+    'announcements':  { label: 'APP 公告管理',  component: <Announcements /> },
   }
 
   const handleLogout = () => {
@@ -98,9 +102,16 @@ function AdminLayout() {
   const handleModeChange = (newMode) => {
     setMode(newMode)
     if (newMode === 'user') {
-      setActiveCategory('app-device')
+      // 保留目前的 user section，若不是 user section 才切換到預設
+      const userSections = ['app-device', 'voice', 'announcements']
+      if (!userSections.includes(activeCategory)) {
+        setActiveCategory('app-device')
+      }
     } else {
-      setActiveCategory('dashboard')
+      const websiteSections = ['dashboard', 'page-content', 'products', 'orders', 'team', 'accounts', 'logs']
+      if (!websiteSections.includes(activeCategory)) {
+        setActiveCategory('dashboard')
+      }
     }
   }
 

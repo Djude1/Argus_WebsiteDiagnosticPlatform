@@ -115,6 +115,14 @@ export const deviceCreateUser = (data)     => deviceClient.post('/api/users', da
 export const deviceUpdateUser = (id, data) => deviceClient.put(`/api/users/${id}`, data)
 export const deviceDeleteUser = (id)       => deviceClient.delete(`/api/users/${id}`)
 
+// APP 裝置設定（Admin）
+export const deviceGetSettings    = (uid)        => deviceClient.get(`/api/admin/users/${uid}/settings`)
+export const deviceUpdateSettings = (uid, data)  => deviceClient.put(`/api/admin/users/${uid}/settings`, data)
+
+// APP 撞擊記錄（Admin）
+export const deviceGetImpacts = (userId) =>
+  deviceClient.get('/api/impact_events', userId ? { params: { user_id: userId } } : {})
+
 // APP 連絡人管理（Admin，可操作任意用戶）
 export const deviceGetContacts   = (uid)        => deviceClient.get(`/api/admin/users/${uid}/contacts`)
 export const deviceAddContact    = (uid, data)  => deviceClient.post(`/api/admin/users/${uid}/contacts`, data)
@@ -122,3 +130,10 @@ export const deviceUpdateContact = (cid, uid, data) =>
   deviceClient.put(`/api/admin/contacts/${cid}`, data, { params: { user_id: uid } })
 export const deviceDeleteContact = (cid, uid)   =>
   deviceClient.delete(`/api/admin/contacts/${cid}`, { params: { user_id: uid } })
+
+
+// APP 公告管理
+export const getAnnouncements   = ()         => adminClient.get('/admin/announcements/')
+export const createAnnouncement = (data)     => adminClient.post('/admin/announcements/', data)
+export const updateAnnouncement = (id, data) => adminClient.patch(`/admin/announcements/${id}/`, data)
+export const deleteAnnouncement = (id)       => adminClient.delete(`/admin/announcements/${id}/`)

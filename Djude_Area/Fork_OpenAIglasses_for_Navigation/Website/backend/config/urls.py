@@ -20,6 +20,8 @@ from content.admin_views import (
     AdminContentSectionView,
     AdminDownloadFeatureListView, AdminDownloadFeatureDetailView,
     AdminDownloadStepListView, AdminDownloadStepDetailView,
+    AdminImpactFeedbackView,
+    AdminAnnouncementListView, AdminAnnouncementDetailView,
 )
 from analytics.admin_views import AdminTrafficView, AdminActivityLogView
 
@@ -50,6 +52,11 @@ admin_api = [
     # 分析儀表板
     path('analytics/traffic/',  AdminTrafficView.as_view(),      name='admin-traffic'),
     path('analytics/logs/',     AdminActivityLogView.as_view(),  name='admin-activity-logs'),
+    # 撞擊回饋記錄
+    path('impact-feedback/',    AdminImpactFeedbackView.as_view(), name='admin-impact-feedback'),
+    # APP 公告管理
+    path('announcements/',          AdminAnnouncementListView.as_view(),   name='admin-announcement-list'),
+    path('announcements/<int:pk>/', AdminAnnouncementDetailView.as_view(), name='admin-announcement-detail'),
 ]
 
 urlpatterns = [

@@ -1,0 +1,4346 @@
+[
+{
+  "model": "sessions.session",
+  "pk": "vsljkq3lrmk52pior078qe8cp6vkeh6u",
+  "fields": {
+    "session_data": ".eJxVjMsOwiAQRf-FtSHDY2hx6b7fQAYGpWogKe3K-O_apAvd3nPOfYlA21rC1vMSZhZnocTpd4uUHrnugO9Ub02mVtdljnJX5EG7nBrn5-Vw_w4K9fKt_aCJRiRtvHUGgLy-RkCENGgD6BksROOUMsTOMbBjRE7KuhQjmFG8P66WNr4:1vyy7J:L9e3psvh78ElCyKcFcvMn3U1wER7qQyb1CsCC4iXi8E",
+    "expire_date": "2026-03-21T20:19:17.890Z"
+  }
+},
+{
+  "model": "accounts.customuser",
+  "fields": {
+    "password": "pbkdf2_sha256$600000$INGwEdaWDdpJL4d4GAMOqB$6VMYXTW9DFGKIM3R3MGwTe4FnN396JE0+xCKejqgxPU=",
+    "last_login": "2026-03-07T20:19:17.887Z",
+    "is_superuser": true,
+    "username": "1124",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@example.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-03-07T20:12:13.156Z",
+    "role": "superadmin",
+    "permissions": [],
+    "avatar": "",
+    "bio": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.customuser",
+  "fields": {
+    "password": "pbkdf2_sha256$600000$3SXXm9EA5AoT6vB2H5DcGT$MrmhK/+1CVK2A0YOpYVYQC4Pil7C/pMRo+Ojf7h5O/E=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "777",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-03-18T06:46:47.251Z",
+    "role": "admin",
+    "permissions": [],
+    "avatar": "",
+    "bio": "",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "products.product",
+  "pk": 1,
+  "fields": {
+    "name": "AI 導航智慧眼鏡",
+    "short_description": "結合 AI 語音助理與 AR 導航的次世代智慧眼鏡",
+    "description": "OpenAI Glasses for Navigation 是一款革命性的 AI 智慧眼鏡，整合 OpenAI GPT 語音助理與即時 AR 導航功能。透過自然語言互動，讓您在行走時獲得即時路線指引、周遭環境資訊，以及 AI 驅動的生活輔助服務。\n\n主要應用場景包括城市導航、無障礙輔助、旅遊導覽，以及日常生活中的 AI 助理功能。本產品基於開源專案 OpenAIglasses_for_Navigation 開發，並由我們的團隊進行功能強化與使用者介面優化。",
+    "price": "12900.00",
+    "original_price": "15900.00",
+    "stock": 50,
+    "image": "",
+    "model_3d": "models/aiglass.glb",
+    "is_active": true,
+    "created_at": "2026-03-07T20:12:14.223Z",
+    "updated_at": "2026-03-07T20:52:09.322Z"
+  }
+},
+{
+  "model": "products.product",
+  "pk": 2,
+  "fields": {
+    "name": "6",
+    "short_description": "6",
+    "description": "6",
+    "price": "6.00",
+    "original_price": "6.00",
+    "stock": 5,
+    "image": "",
+    "model_3d": "",
+    "is_active": true,
+    "created_at": "2026-03-07T20:51:35.258Z",
+    "updated_at": "2026-03-07T20:51:35.258Z"
+  }
+},
+{
+  "model": "products.product",
+  "pk": 3,
+  "fields": {
+    "name": "AI 盲人輔助智慧眼鏡",
+    "short_description": "專為視障人士設計的 AI 智慧眼鏡，結合影像 AI 與語音互動，守護每一步行走",
+    "description": "AI 盲人輔助智慧眼鏡是一款專為視障人士設計的智慧穿戴裝置，整合 YOLO 即時影像辨識、Lucas-Kanade 光流導航演算法與大型語言模型，提供全方位的視障輔助功能。\n\n系統以 Seeed Studio XIAO ESP32S3 為核心硬體，透過 WebSocket 與 Python FastAPI 伺服器即時通訊。攝影機串流影像至後端進行 YOLO 推理，語音透過 Groq Whisper 辨識後由 Gemini 2.5 Flash 處理，TTS 合成語音回應再播放至使用者耳機。\n\n主要功能包括：盲道即時導航（YOLO 分割 + 光流偵測）、斑馬線過馬路輔助（等待紅綠燈）、障礙物偵測迴避、物品尋找模式（YOLOE 開放詞彙）與自然語音 AI 對話。本專案基於開源專案 OpenAIglasses_for_Navigation 開發，為學術研究用途，不進行商業販售。",
+    "price": "0.00",
+    "original_price": "0.00",
+    "stock": 50,
+    "image": "",
+    "model_3d": "models/aiglass.glb",
+    "is_active": true,
+    "created_at": "2026-03-18T01:50:47.852Z",
+    "updated_at": "2026-03-18T01:50:47.852Z"
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 1,
+  "fields": {
+    "product": 1,
+    "title": "AI 語音助理",
+    "description": "整合 OpenAI GPT，支援中英文自然語言對話，隨時回答您的問題",
+    "icon": "🤖",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 2,
+  "fields": {
+    "product": 1,
+    "title": "AR 即時導航",
+    "description": "擴增實境導航箭頭直接顯示於視野中，雙手完全解放",
+    "icon": "🗺️",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 3,
+  "fields": {
+    "product": 1,
+    "title": "輕量化設計",
+    "description": "僅 45g 超輕鏡框，長時間配戴舒適無負擔",
+    "icon": "⚡",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 4,
+  "fields": {
+    "product": 1,
+    "title": "全天候電池",
+    "description": "內建 500mAh 電池，正常使用可達 8 小時",
+    "icon": "🔋",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 5,
+  "fields": {
+    "product": 1,
+    "title": "無障礙輔助",
+    "description": "文字辨識朗讀、障礙物提醒，貼心照顧視障族群",
+    "icon": "♿",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 6,
+  "fields": {
+    "product": 1,
+    "title": "開源可擴充",
+    "description": "基於開源架構，支援自訂功能模組與第三方整合",
+    "icon": "🔧",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 7,
+  "fields": {
+    "product": 3,
+    "title": "🦯 盲道導航",
+    "description": "利用 YOLO 分割模型即時偵測盲道，透過 Lucas-Kanade 光流計算行走方向，語音引導使用者正確行走",
+    "icon": "🦯",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 8,
+  "fields": {
+    "product": 3,
+    "title": "🚦 斑馬線輔助",
+    "description": "自動辨識斑馬線與交通號誌，偵測紅綠燈狀態，等待綠燈後語音提示使用者安全過馬路",
+    "icon": "🚦",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 9,
+  "fields": {
+    "product": 3,
+    "title": "🔍 物品尋找",
+    "description": "使用者語音說出目標物品名稱，YOLOE 開放詞彙模型進行偵測，語音回報物品位置與距離",
+    "icon": "🔍",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 10,
+  "fields": {
+    "product": 3,
+    "title": "🎙️ 語音 AI",
+    "description": "Groq Whisper 語音辨識 + Gemini 2.5 Flash 自然語言處理，支援流暢中文語音對話互動",
+    "icon": "🎙️",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 11,
+  "fields": {
+    "product": 3,
+    "title": "📡 即時串流",
+    "description": "ESP32S3 透過 WebSocket 即時串流影像與音訊，Python FastAPI 後端毫秒級 AI 推理回應",
+    "icon": "📡",
+    "order": 0
+  }
+},
+{
+  "model": "products.productfeature",
+  "pk": 12,
+  "fields": {
+    "product": 3,
+    "title": "🛡️ 障礙物偵測",
+    "description": "YOLOE 多類別障礙物即時偵測，自動提醒前方障礙物類型與位置，防止碰撞意外",
+    "icon": "🛡️",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 1,
+  "fields": {
+    "product": 1,
+    "key": "重量",
+    "value": "45g",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 2,
+  "fields": {
+    "product": 1,
+    "key": "電池容量",
+    "value": "500mAh",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 3,
+  "fields": {
+    "product": 1,
+    "key": "續航時間",
+    "value": "約 8 小時",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 4,
+  "fields": {
+    "product": 1,
+    "key": "連線方式",
+    "value": "Wi-Fi / 藍牙 5.0",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 5,
+  "fields": {
+    "product": 1,
+    "key": "顯示技術",
+    "value": "AR 波導顯示",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 6,
+  "fields": {
+    "product": 1,
+    "key": "處理器",
+    "value": "Cortex-M33 @ 64MHz",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 7,
+  "fields": {
+    "product": 1,
+    "key": "相機",
+    "value": "1080p 前置攝影",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 8,
+  "fields": {
+    "product": 1,
+    "key": "麥克風",
+    "value": "雙麥克風降噪",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 9,
+  "fields": {
+    "product": 1,
+    "key": "揚聲器",
+    "value": "骨傳導揚聲器",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 10,
+  "fields": {
+    "product": 1,
+    "key": "充電方式",
+    "value": "USB-C 磁吸充電",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 11,
+  "fields": {
+    "product": 3,
+    "key": "主控晶片",
+    "value": "Seeed XIAO ESP32S3",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 12,
+  "fields": {
+    "product": 3,
+    "key": "攝影機",
+    "value": "OV2640 1080p DVP",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 13,
+  "fields": {
+    "product": 3,
+    "key": "麥克風",
+    "value": "PDM 數位麥克風",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 14,
+  "fields": {
+    "product": 3,
+    "key": "喇叭",
+    "value": "MAX98357A I2S 功放",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 15,
+  "fields": {
+    "product": 3,
+    "key": "IMU",
+    "value": "ICM42688 六軸感測器",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 16,
+  "fields": {
+    "product": 3,
+    "key": "連線方式",
+    "value": "Wi-Fi 802.11 b/g/n",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 17,
+  "fields": {
+    "product": 3,
+    "key": "後端框架",
+    "value": "Python FastAPI",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 18,
+  "fields": {
+    "product": 3,
+    "key": "AI 推理",
+    "value": "YOLOv8 / YOLOE 本地",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 19,
+  "fields": {
+    "product": 3,
+    "key": "語音辨識",
+    "value": "Groq Whisper Large v3",
+    "order": 0
+  }
+},
+{
+  "model": "products.productspec",
+  "pk": 20,
+  "fields": {
+    "product": 3,
+    "key": "語音合成",
+    "value": "Gemini TTS Flash",
+    "order": 0
+  }
+},
+{
+  "model": "orders.order",
+  "pk": 1,
+  "fields": {
+    "order_number": "ORD-279DBB23",
+    "user": null,
+    "customer_name": "gg",
+    "customer_email": "gg@gg.gg",
+    "customer_phone": "0978978478",
+    "shipping_address": "你媽",
+    "total_price": "6.00",
+    "status": "delivered",
+    "notes": "嘻嘻",
+    "created_at": "2026-03-08T10:15:10.002Z",
+    "updated_at": "2026-03-08T10:18:17.316Z"
+  }
+},
+{
+  "model": "orders.orderitem",
+  "pk": 1,
+  "fields": {
+    "order": 1,
+    "product": 2,
+    "quantity": 1,
+    "price": "6.00"
+  }
+},
+{
+  "model": "team.teammember",
+  "pk": 1,
+  "fields": {
+    "name": "AI-FanGe",
+    "member_type": "reference",
+    "role": "原專案作者",
+    "bio": "OpenAIglasses_for_Navigation 開源專案創作者，致力於將 AI 技術融入日常穿戴裝置。",
+    "avatar": "",
+    "github_url": "https://github.com/AI-FanGe",
+    "linkedin_url": "",
+    "email": "",
+    "order": 1,
+    "is_active": true
+  }
+},
+{
+  "model": "team.teammember",
+  "pk": 2,
+  "fields": {
+    "name": "成員一",
+    "member_type": "developer",
+    "role": "全端開發 / 專題負責人",
+    "bio": "請至後台管理介面修改此成員的個人介紹。",
+    "avatar": "",
+    "github_url": "",
+    "linkedin_url": "",
+    "email": "",
+    "order": 1,
+    "is_active": true
+  }
+},
+{
+  "model": "team.teammember",
+  "pk": 3,
+  "fields": {
+    "name": "成員二",
+    "member_type": "developer",
+    "role": "前端開發 / UI 設計",
+    "bio": "請至後台管理介面修改此成員的個人介紹。",
+    "avatar": "",
+    "github_url": "",
+    "linkedin_url": "",
+    "email": "",
+    "order": 2,
+    "is_active": true
+  }
+},
+{
+  "model": "team.teammember",
+  "pk": 4,
+  "fields": {
+    "name": "成員三",
+    "member_type": "developer",
+    "role": "後端開發 / 資料庫",
+    "bio": "請至後台管理介面修改此成員的個人介紹。",
+    "avatar": "",
+    "github_url": "",
+    "linkedin_url": "",
+    "email": "",
+    "order": 3,
+    "is_active": true
+  }
+},
+{
+  "model": "team.teammember",
+  "pk": 5,
+  "fields": {
+    "name": "成員四",
+    "member_type": "developer",
+    "role": "3D 建模 / 硬體整合",
+    "bio": "請至後台管理介面修改此成員的個人介紹。",
+    "avatar": "",
+    "github_url": "",
+    "linkedin_url": "",
+    "email": "",
+    "order": 4,
+    "is_active": true
+  }
+},
+{
+  "model": "content.sitesettings",
+  "pk": 1,
+  "fields": {
+    "brand_short": "AI",
+    "brand_name": "智慧眼鏡",
+    "brand_description": "結合 OpenAI GPT 語音助理與 AR 導航技術的次世代智慧穿戴裝置。基於開源專案 OpenAIglasses_for_Navigation 進行開發。",
+    "nav_home": "首頁",
+    "nav_product": "產品介紹",
+    "nav_download": "APP 下載",
+    "nav_purchase": "立即購買",
+    "nav_team": "關於團隊",
+    "nav_admin": "後台管理",
+    "footer_quick_links_title": "快速連結",
+    "footer_opensource_title": "開源資源",
+    "footer_opensource_text": "原始開源專案",
+    "footer_opensource_url": "https://github.com/AI-FanGe/OpenAIglasses_for_Navigation",
+    "footer_copyright": "2025 AI 導航智慧眼鏡專題。基於 OpenAIglasses_for_Navigation 開源專案。"
+  }
+},
+{
+  "model": "content.homecontent",
+  "pk": 1,
+  "fields": {
+    "hero_badge": "666\\",
+    "hero_title_1": "AI 導航",
+    "hero_title_2": "智慧眼鏡",
+    "hero_description": "將 OpenAI GPT 語音助理與 AR 擴增實境導航融合於一副輕巧眼鏡之中，讓您在行走間輕鬆獲取路線指引、AI 問答、環境資訊，開啟次世代穿戴體驗。",
+    "hero_btn_buy": "立即購買",
+    "hero_btn_detail": "查看產品詳情",
+    "model_hint": "拖曳旋轉 · 滾輪縮放",
+    "stat_1_value": "45g",
+    "stat_1_label": "超輕鏡框",
+    "stat_2_value": "8h",
+    "stat_2_label": "續航時間",
+    "stat_3_value": "GPT",
+    "stat_3_label": "AI 核心",
+    "features_title": "為什麼選擇 AI 智慧眼鏡？",
+    "features_subtitle": "整合最先進的 AI 技術，讓穿戴科技真正融入您的日常生活。",
+    "cta_title": "準備好體驗 AI 穿戴未來了嗎？",
+    "cta_description": "現在訂購享有早鳥優惠，限時特惠中。",
+    "cta_btn_buy": "立即訂購",
+    "cta_btn_more": "了解更多"
+  }
+},
+{
+  "model": "content.productpagecontent",
+  "pk": 1,
+  "fields": {
+    "back_link": "返回首頁",
+    "model_hint": "可互動 3D 預覽 · 拖曳旋轉 · 滾輪縮放",
+    "availability": "現貨供應中",
+    "btn_buy": "立即購買",
+    "tab_features": "功能特點",
+    "tab_specs": "技術規格",
+    "tab_description": "詳細說明",
+    "empty_features": "功能特點資料載入中...",
+    "empty_specs": "技術規格資料載入中..."
+  }
+},
+{
+  "model": "content.downloadpagecontent",
+  "pk": 1,
+  "fields": {
+    "hero_badge": "Android APP 現已開放下載",
+    "hero_title_1": "配套 APP",
+    "hero_title_2": "解鎖眼鏡完整功能",
+    "hero_description": "透過 AI Glasses 配套 APP，輕鬆完成設備配對、AI 設定與導航控制，讓您的智慧眼鏡發揮 100% 效能。",
+    "app_name": "AI Glasses 配套 APP",
+    "app_version": "1.0.0",
+    "app_requirement": "Android 8.0 以上",
+    "apk_url": "/media/downloads/aiglass.apk",
+    "btn_download": "下載 Android APK",
+    "badge_1": "安全驗證",
+    "badge_2": "免費下載",
+    "badge_3": "無廣告",
+    "hardware_note": "需搭配 AI 導航智慧眼鏡硬體使用。",
+    "hardware_link_text": "購買硬體",
+    "ios_note": "iOS 版本開發中，敬請期待。",
+    "features_title": "APP 核心功能",
+    "features_subtitle": "從設備配對到 AI 設定，一支 APP 完整管理您的智慧眼鏡。",
+    "steps_title": "四步驟快速上手",
+    "steps_subtitle": "從下載到開始使用，只需幾分鐘。",
+    "cta_title": "還沒有智慧眼鏡？",
+    "cta_description": "先購買硬體，再下載 APP，即可開始體驗 AI 穿戴未來。",
+    "cta_btn_buy": "立即購買眼鏡",
+    "cta_btn_specs": "查看產品規格"
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 1,
+  "fields": {
+    "icon_svg": "M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0",
+    "title": "Wi-Fi 藍牙配對",
+    "description": "快速連線智慧眼鏡，穩定傳輸語音與導航指令",
+    "order": 0
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 2,
+  "fields": {
+    "icon_svg": "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
+    "title": "即時導航控制",
+    "description": "在手機端設定目的地，即時同步至眼鏡 AR 顯示",
+    "order": 1
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 3,
+  "fields": {
+    "icon_svg": "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z",
+    "title": "AI 語音設定",
+    "description": "調整 OpenAI API 金鑰、語音喚醒詞與回應語言",
+    "order": 2
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 4,
+  "fields": {
+    "icon_svg": "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    "title": "使用數據儀表板",
+    "description": "查看電池電量、使用時長與 AI 互動紀錄",
+    "order": 3
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 5,
+  "fields": {
+    "icon_svg": "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+    "title": "韌體 OTA 更新",
+    "description": "一鍵更新眼鏡韌體，隨時保持最新功能",
+    "order": 4
+  }
+},
+{
+  "model": "content.downloadfeature",
+  "pk": 6,
+  "fields": {
+    "icon_svg": "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+    "title": "隱私安全管理",
+    "description": "本地化資料處理，麥克風與鏡頭權限完全透明",
+    "order": 5
+  }
+},
+{
+  "model": "content.downloadstep",
+  "pk": 1,
+  "fields": {
+    "step_number": "01",
+    "title": "下載並安裝 APK",
+    "description": "點擊下方按鈕下載 APK 檔案，在 Android 系統設定中允許「未知來源」後安裝。",
+    "order": 0
+  }
+},
+{
+  "model": "content.downloadstep",
+  "pk": 2,
+  "fields": {
+    "step_number": "02",
+    "title": "開啟 APP 並配對眼鏡",
+    "description": "確保眼鏡已開機並處於配對模式（長按電源鍵 3 秒），APP 將自動搜尋附近的裝置。",
+    "order": 1
+  }
+},
+{
+  "model": "content.downloadstep",
+  "pk": 3,
+  "fields": {
+    "step_number": "03",
+    "title": "輸入 OpenAI API 金鑰",
+    "description": "前往 APP 設定頁面，填入您的 OpenAI API 金鑰以啟用 AI 語音助理功能。",
+    "order": 2
+  }
+},
+{
+  "model": "content.downloadstep",
+  "pk": 4,
+  "fields": {
+    "step_number": "04",
+    "title": "開始使用",
+    "description": "說出喚醒詞「Hey AI」，即可開始使用導航與語音助理功能。",
+    "order": 3
+  }
+},
+{
+  "model": "content.purchasepagecontent",
+  "pk": 1,
+  "fields": {
+    "page_title": "立即購買",
+    "subtitle": "填寫以下資訊完成訂購，我們將在 1-2 個工作天內聯繫您確認出貨細節。",
+    "order_summary_title": "訂單摘要",
+    "product_emoji": "🥽",
+    "label_quantity": "數量",
+    "label_unit_price": "單價",
+    "label_discount": "優惠折扣",
+    "label_total": "總計",
+    "label_name": "姓名",
+    "label_email": "Email",
+    "label_phone": "電話",
+    "label_address": "收件地址",
+    "label_notes": "備註（選填）",
+    "placeholder_name": "請輸入您的姓名",
+    "placeholder_email": "example@mail.com",
+    "placeholder_phone": "09XX-XXX-XXX",
+    "placeholder_address": "請輸入完整收件地址（含縣市、鄉鎮、路名、門牌號碼）",
+    "placeholder_notes": "有任何特殊需求請填寫於此",
+    "btn_submit": "確認訂購",
+    "btn_submitting": "處理中...",
+    "success_icon": "✅",
+    "success_title": "訂單建立成功！",
+    "success_label_order": "訂單編號",
+    "success_label_buyer": "購買人",
+    "success_label_amount": "總金額",
+    "success_email_hint": "確認信將寄至 {email}，我們將儘快與您聯繫。",
+    "btn_reorder": "再次訂購"
+  }
+},
+{
+  "model": "content.teampagecontent",
+  "pk": 1,
+  "fields": {
+    "page_title": "關於團隊",
+    "subtitle": "本專案結合開源社群的創意與我們開發團隊的技術，共同打造 AI 智慧眼鏡的未來。",
+    "reference_title": "原專案參考者",
+    "reference_description": "感謝以下開源貢獻者的創作，本專案基於",
+    "reference_link_text": "OpenAIglasses_for_Navigation",
+    "reference_link_url": "https://github.com/AI-FanGe/OpenAIglasses_for_Navigation",
+    "developer_title": "我們的開發團隊",
+    "empty_message": "團隊成員資料載入中，或請至後台管理介面新增成員。"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 1,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://127.0.0.1/",
+    "timestamp": "2026-03-08T09:18:30.874Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 2,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://127.0.0.1/",
+    "timestamp": "2026-03-08T09:18:30.882Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 3,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://127.0.0.1/",
+    "timestamp": "2026-03-08T09:53:02.801Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 4,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://127.0.0.1/",
+    "timestamp": "2026-03-08T09:53:02.827Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 5,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:53:04.415Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 6,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:53:04.414Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 7,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:53:09.242Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 8,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:53:09.249Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 9,
+  "fields": {
+    "path": "/",
+    "ip_address": "2a03:2880:31ff:9::",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQMMjU2MjgxMDQwNTU4AAEeev97aqSQkZVYk_fo9eWRi8QMN2zS7-UnffqEfjdSTSvfKg149hhdthWXi-M_aem_AI65lYbdyd9_YhGCjQ_1Ow",
+    "timestamp": "2026-03-08T09:56:00.818Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 10,
+  "fields": {
+    "path": "/",
+    "ip_address": "2a03:2880:31ff:9::",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/?fbclid=IwZXh0bgNhZW0CMTEAc3J0YwZhcHBfaWQMMjU2MjgxMDQwNTU4AAEeev97aqSQkZVYk_fo9eWRi8QMN2zS7-UnffqEfjdSTSvfKg149hhdthWXi-M_aem_AI65lYbdyd9_YhGCjQ_1Ow",
+    "timestamp": "2026-03-08T09:56:00.863Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 11,
+  "fields": {
+    "path": "/",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/?fbclid=IwY2xjawQaJxxleHRuA2FlbQIxMQBzcnRjBmFwcF9pZAwzNTA2ODU1MzE3MjgAAR5tKrjjkZS6iV44mA1O3XfXpJP9AABWVMJAwDdIhqYk7fbI8AipGuFm0S8C5A_aem_ADV2AQRxkkDiPK17RECaiw",
+    "timestamp": "2026-03-08T09:56:31.231Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 12,
+  "fields": {
+    "path": "/",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/?fbclid=IwY2xjawQaJxxleHRuA2FlbQIxMQBzcnRjBmFwcF9pZAwzNTA2ODU1MzE3MjgAAR5tKrjjkZS6iV44mA1O3XfXpJP9AABWVMJAwDdIhqYk7fbI8AipGuFm0S8C5A_aem_ADV2AQRxkkDiPK17RECaiw",
+    "timestamp": "2026-03-08T09:56:31.236Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 13,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T09:56:49.061Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 14,
+  "fields": {
+    "path": "/download",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/download",
+    "timestamp": "2026-03-08T09:56:51.373Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 15,
+  "fields": {
+    "path": "/product",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T09:56:53.117Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 16,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product/1",
+    "timestamp": "2026-03-08T09:56:54.513Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 17,
+  "fields": {
+    "path": "/product",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T09:57:01.286Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 18,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase",
+    "timestamp": "2026-03-08T09:57:03.185Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 19,
+  "fields": {
+    "path": "/team",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/team",
+    "timestamp": "2026-03-08T09:57:05.038Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 20,
+  "fields": {
+    "path": "/",
+    "ip_address": "2401:e180:8810:65fb:3363:7ebb:fc75:6d97",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:57:12.021Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 21,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:57:14.649Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 22,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:57:14.649Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 23,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:58:08.719Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 24,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T09:58:08.742Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 25,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T09:58:15.546Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 26,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "111.71.50.252",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T09:59:00.791Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 27,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "111.71.50.252",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T09:59:00.798Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 28,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:05:17.979Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 29,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:05:17.981Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 30,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:09:20.648Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 31,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:09:20.707Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 32,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:13:23.146Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 33,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:13:23.178Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 34,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:13:32.451Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 35,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:13:32.457Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 36,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:13:38.947Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 37,
+  "fields": {
+    "path": "/download",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/download",
+    "timestamp": "2026-03-08T10:13:39.684Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 38,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase",
+    "timestamp": "2026-03-08T10:13:40.580Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 39,
+  "fields": {
+    "path": "/download",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/download",
+    "timestamp": "2026-03-08T10:13:41.259Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 40,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "111.71.50.252",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:13:49.652Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 41,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "111.71.50.252",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:13:49.675Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 42,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:14:00.054Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 43,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:14:26.847Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 44,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:14:26.848Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 45,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:14:35.039Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 46,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:14:35.046Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 47,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:14:36.765Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 48,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:14:38.362Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 49,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:14:38.362Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 50,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:14:41.351Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 51,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:14:43.621Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 52,
+  "fields": {
+    "path": "/",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:15:17.777Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 53,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:15:22.426Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 54,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "2001:b400:e243:272c:f429:d2ff:fec1:ed48",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:15:22.441Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 55,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:15:41.638Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 56,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:17:26.713Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 57,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=1",
+    "timestamp": "2026-03-08T10:17:26.716Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 58,
+  "fields": {
+    "path": "/team",
+    "ip_address": "61.230.81.53",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/team",
+    "timestamp": "2026-03-08T10:18:03.558Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 59,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:20:31.836Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 60,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:20:31.867Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 61,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product/1",
+    "timestamp": "2026-03-08T10:25:27.260Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 62,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:26:14.960Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 63,
+  "fields": {
+    "path": "/",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/",
+    "timestamp": "2026-03-08T10:26:15.978Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 64,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase",
+    "timestamp": "2026-03-08T10:26:31.648Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 65,
+  "fields": {
+    "path": "/product",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product",
+    "timestamp": "2026-03-08T10:26:34.536Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 66,
+  "fields": {
+    "path": "/product/2",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/product/2",
+    "timestamp": "2026-03-08T10:26:35.602Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 67,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "61.228.100.66",
+    "referer": "https://tasks-won-product-offset.trycloudflare.com/purchase?product=2",
+    "timestamp": "2026-03-08T10:26:37.705Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 68,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:39:16.777Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 69,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:39:16.812Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 70,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:41:01.095Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 71,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:41:01.125Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 72,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-09T04:41:28.250Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 73,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-09T04:41:30.203Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 74,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-09T04:41:35.395Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 75,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-09T04:41:38.168Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 76,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-09T04:41:41.009Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 77,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:42:27.995Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 78,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-09T04:43:23.248Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 79,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-09T04:43:25.315Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 80,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T07:14:08.724Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 81,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T07:14:08.749Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 82,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:01:43.424Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 83,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:01:43.444Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 84,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:06:13.158Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 85,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:06:13.173Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 86,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:11:31.033Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 87,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:11:31.044Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 88,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:16:02.265Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 89,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:16:02.280Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 90,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:24.848Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 91,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:24.861Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 92,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:26.925Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 93,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:26.942Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 94,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:30.933Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 95,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:30.937Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 96,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:18:31.608Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 97,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-17T11:18:32.633Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 98,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-17T11:18:33.218Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 99,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-17T11:18:33.960Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 100,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:35.303Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 101,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:36.845Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 102,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:36.847Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 103,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:58.759Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 104,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:18:58.764Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 105,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:11.990Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 106,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:11.995Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 107,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-17T11:19:26.861Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 108,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:31.905Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 109,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:35.456Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 110,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:35.477Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 111,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:59.926Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 112,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:19:59.934Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 113,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:00.795Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 114,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:00.796Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 115,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:01.450Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 116,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:01.452Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 117,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:02.100Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 118,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:02.103Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 119,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:02.843Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 120,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:02.843Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 121,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:03.488Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 122,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:03.490Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 123,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:04.212Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 124,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:04.229Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 125,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:05.006Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 126,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:20:05.020Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 127,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-17T11:23:54.356Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 128,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:23:56.065Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 129,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-17T11:23:56.742Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 130,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:24:08.151Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 131,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:24:09.678Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 132,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-17T11:24:17.067Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 133,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:24:29.622Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 134,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:24:32.919Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 135,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-17T11:24:33.653Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 136,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:24:42.346Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 137,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:11.002Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 138,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:11.017Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 139,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:25:20.049Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 140,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:20.663Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 141,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:21.931Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 142,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:21.933Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 143,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:25:29.015Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 144,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-17T11:25:29.797Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 145,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:31.588Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 146,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:25:34.075Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 147,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-17T11:25:34.822Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 148,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:44.834Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 149,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:25:47.921Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 150,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-17T11:25:48.621Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 151,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:25:52.441Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 152,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:28:06.837Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 153,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:28:06.856Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 185,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:29:57.926Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 186,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:29:59.319Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 187,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:30:00.911Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 188,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:01.429Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 189,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-17T11:30:02.747Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 190,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:03.127Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 191,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:37.932Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 192,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:37.948Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 193,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:39.237Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 194,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:39.244Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 195,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:40.248Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 196,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:40.251Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 197,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:41.535Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 198,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:30:41.537Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 199,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:39:12.343Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 200,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:39:12.364Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 201,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:40:16.436Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 202,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:40:16.458Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 203,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:40:59.556Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 204,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:41:02.551Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 205,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:58:31.055Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 206,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T11:58:31.087Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 207,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:03:02.186Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 208,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:03:02.199Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 209,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:23:31.091Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 210,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:23:31.120Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 211,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:28:01.949Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 212,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T12:28:01.962Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 213,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:09:31.189Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 214,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:09:31.220Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 215,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:14:02.171Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 216,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:14:02.194Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 217,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:41:31.084Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 218,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:41:31.114Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 219,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:46:02.093Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 220,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:46:02.107Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 221,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:51:31.029Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 222,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:51:31.041Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 223,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:56:02.110Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 224,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T13:56:02.123Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 225,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:01:31.096Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 226,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:01:31.108Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 227,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:06:02.143Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 228,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:06:02.154Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 229,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:39:31.095Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 230,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:39:31.108Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 231,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:44:02.125Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 232,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T14:44:02.141Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 233,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T15:00:31.071Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 234,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T15:00:31.094Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 235,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T15:05:02.079Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 236,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-17T15:05:02.100Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 237,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:50:57.444Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 238,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:50:57.461Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 239,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:51:01.132Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 240,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:51:01.150Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 241,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T01:51:02.985Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 242,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:51:03.619Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 243,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:51:17.962Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 244,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:51:17.983Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 245,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:56:33.737Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 246,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T01:56:33.770Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 247,
+  "fields": {
+    "path": "/project",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/project",
+    "timestamp": "2026-03-18T01:57:55.935Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 248,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:43:31.450Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 249,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:43:31.466Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 250,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:44:35.019Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 251,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:44:35.032Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 252,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:48:42.023Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 253,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T06:48:44.511Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 254,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:48:52.352Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 255,
+  "fields": {
+    "path": "/project",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/project",
+    "timestamp": "2026-03-18T06:48:52.785Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 256,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-18T06:48:53.337Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 257,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-18T06:48:57.579Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 258,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:49:01.830Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 259,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T06:49:03.683Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 260,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase?product=1",
+    "timestamp": "2026-03-18T06:49:04.901Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 261,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:49:05.742Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 262,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T06:49:05.755Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 263,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:49:07.432Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 264,
+  "fields": {
+    "path": "/product/2",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/2",
+    "timestamp": "2026-03-18T06:49:09.052Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 265,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase?product=2",
+    "timestamp": "2026-03-18T06:49:10.297Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 266,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:49:55.427Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 267,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T06:49:56.250Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 268,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase?product=1",
+    "timestamp": "2026-03-18T06:49:58.426Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 269,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T06:50:00.269Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 270,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T06:50:00.935Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 271,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:01:33.748Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 272,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:01:33.761Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 273,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:05:36.613Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 274,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:05:36.615Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 275,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:10:18.221Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 276,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:10:18.281Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 277,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:17:31.685Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 278,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:17:31.704Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 279,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:17:33.627Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 280,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:17:33.647Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 281,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:22:04.682Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 282,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T07:22:04.695Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 283,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:22:32.874Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 284,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T07:22:32.894Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 285,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-18T08:01:48.455Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 286,
+  "fields": {
+    "path": "/project",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/project",
+    "timestamp": "2026-03-18T08:01:48.967Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 287,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-18T08:01:49.475Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 288,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:01:52.572Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 289,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:03:05.189Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 290,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T08:03:28.353Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 291,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-18T08:03:28.359Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 292,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:03:45.516Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 293,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T08:03:46.522Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 294,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:05:03.770Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 295,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:05:04.739Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 296,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:05:04.765Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 297,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T08:05:06.077Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 298,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:05:07.224Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 299,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-18T08:05:10.820Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 300,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:05:12.250Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 301,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:06:30.241Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 302,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:06:30.338Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 303,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:06:31.433Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 304,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:06:31.725Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 305,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:12:20.209Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 306,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:12:20.213Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 307,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:12:33.199Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 308,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:12:33.199Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 309,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:12:33.200Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 310,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-18T08:12:33.220Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 311,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:17:33.729Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 312,
+  "fields": {
+    "path": "/product/3",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/3",
+    "timestamp": "2026-03-18T08:17:33.782Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 313,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T03:21:48.256Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 314,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T03:21:48.276Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 315,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T03:25:45.128Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 316,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T03:25:45.141Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 317,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:07:43.747Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 318,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:07:43.789Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 319,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:28:44.751Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 320,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:28:44.770Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 321,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:54:01.171Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 322,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T05:54:01.202Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 323,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:22:14.115Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 324,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:22:14.145Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 325,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:39.437Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 326,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:39.475Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 327,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:41.454Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 328,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:41.473Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 329,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:42.380Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 330,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:42.396Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 331,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:42.781Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 332,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:25:42.783Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 333,
+  "fields": {
+    "path": "/product/1",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product/1",
+    "timestamp": "2026-03-19T06:25:48.983Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 334,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-19T06:25:51.379Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 335,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-19T06:25:56.407Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 336,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-19T06:25:59.052Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 337,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T06:26:05.735Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 338,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:01:14.187Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 339,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:01:14.213Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 340,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:05:45.209Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 341,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:05:45.248Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 342,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:46:14.185Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 343,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:46:14.208Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 344,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:50:45.100Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 345,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-19T07:50:45.114Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 346,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T04:45:45.238Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 347,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T04:45:45.422Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 348,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-23T04:47:00.003Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 349,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T04:47:00.665Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 350,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T04:50:13.706Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 351,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T04:50:13.728Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 352,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:09:39.963Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 353,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:09:40.000Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 354,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:14:10.893Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 355,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:14:10.978Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 356,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:23:21.551Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 357,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-23T05:23:21.584Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 358,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T07:54:26.226Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 359,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T07:54:26.246Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 360,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-24T07:54:41.797Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 361,
+  "fields": {
+    "path": "/project",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/project",
+    "timestamp": "2026-03-24T07:54:42.815Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 362,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-24T07:54:43.406Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 363,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-24T07:54:43.898Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 364,
+  "fields": {
+    "path": "/team",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/team",
+    "timestamp": "2026-03-24T07:54:46.483Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 365,
+  "fields": {
+    "path": "/download",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/download",
+    "timestamp": "2026-03-24T07:54:47.290Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 366,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-24T07:54:47.631Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 367,
+  "fields": {
+    "path": "/project",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/project",
+    "timestamp": "2026-03-24T07:54:53.321Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 368,
+  "fields": {
+    "path": "/purchase",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/purchase",
+    "timestamp": "2026-03-24T07:54:56.284Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 369,
+  "fields": {
+    "path": "/product",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/product",
+    "timestamp": "2026-03-24T07:54:57.640Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 370,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T07:56:52.212Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 371,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T07:57:09.538Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 372,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T07:57:09.549Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 373,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:02:10.183Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 374,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:02:10.205Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 375,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:20:13.899Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 376,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:20:13.937Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 377,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:24:44.455Z"
+  }
+},
+{
+  "model": "analytics.pageview",
+  "pk": 378,
+  "fields": {
+    "path": "/",
+    "ip_address": "172.18.0.1",
+    "referer": "http://localhost/",
+    "timestamp": "2026-03-24T08:24:44.455Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 1,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "create",
+    "resource_type": "商品",
+    "resource_id": 2,
+    "resource_name": "6",
+    "timestamp": "2026-03-07T20:51:35.262Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 2,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "update",
+    "resource_type": "商品",
+    "resource_id": 1,
+    "resource_name": "AI 導航智慧眼鏡",
+    "timestamp": "2026-03-07T20:51:58.175Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 3,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "update",
+    "resource_type": "商品",
+    "resource_id": 1,
+    "resource_name": "AI 導航智慧眼鏡",
+    "timestamp": "2026-03-07T20:51:59.262Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 4,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "update",
+    "resource_type": "商品",
+    "resource_id": 1,
+    "resource_name": "AI 導航智慧眼鏡",
+    "timestamp": "2026-03-07T20:52:09.326Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 5,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "update",
+    "resource_type": "訂單",
+    "resource_id": 1,
+    "resource_name": "ORD-279DBB23 (pending→delivered)",
+    "timestamp": "2026-03-08T10:18:17.320Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 6,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "create",
+    "resource_type": "帳號",
+    "resource_id": 2,
+    "resource_name": "777",
+    "timestamp": "2026-03-18T06:46:47.372Z"
+  }
+},
+{
+  "model": "analytics.adminactivity",
+  "pk": 7,
+  "fields": {
+    "user": [
+      "1124"
+    ],
+    "action": "update",
+    "resource_type": "頁面內容",
+    "resource_id": 1,
+    "resource_name": "首頁",
+    "timestamp": "2026-03-24T07:57:06.207Z"
+  }
+}
+]

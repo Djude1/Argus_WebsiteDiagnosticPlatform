@@ -3,6 +3,8 @@ import {
   deviceLogin,
   deviceGetUsers, deviceCreateUser, deviceUpdateUser, deviceDeleteUser,
   deviceGetContacts, deviceAddContact, deviceUpdateContact, deviceDeleteContact,
+  deviceGetImpacts,
+  deviceGetSettings, deviceUpdateSettings,
 } from '../api'
 
 // ── 角色設定 ───────────────────────────────────────────────────────────────
@@ -55,22 +57,46 @@ function ConnectErrorScreen({ onRetry }) {
 
 // ── 使用者管理 Tab ──────────────────────────────────────────────────────────
 function UsersTab() {
-  const [users, setUsers]     = useState([])
-  const [selected, setSel]    = useState(null)
-  const [editForm, setEdit]   = useState({})
-  const [saving, setSaving]   = useState(false)
-  const [saved, setSaved]     = useState(false)
-  const [showNew, setShowNew] = useState(false)
-  const [newForm, setNew]     = useState({ username: '', password: '', role: 'user' })
+  const [users, setUsers]       = useState([])
+  const [selected, setSel]      = useState(null)
+  const [editForm, setEdit]     = useState({})
+  const [saving, setSaving]     = useState(false)
+  const [saved, setSaved]       = useState(false)
+  const [showNew, setShowNew]   = useState(false)
+  const [newForm, setNew]       = useState({ username: '', password: '', role: 'user' })
   const [creating, setCreating] = useState(false)
+
+  // ── 感測器設定 ──
+  const [sensor, setSensor]         = useState({ impact_threshold: 30.0, cooldown_seconds: 30 })
+  const [savingSensor, setSavingSens] = useState(false)
+  const [savedSensor, setSavedSens]   = useState(false)
+  const setSens = (f, v) => { setSensor(p => ({ ...p, [f]: v })); setSavedSens(false) }
 
   const load = useCallback(() =>
     deviceGetUsers().then(r => setUsers(r.data)).catch(() => {}), [])
 
   useEffect(() => { load() }, [load])
 
-  const selectUser = (u) => { setSel(u); setEdit({ ...u, password: '' }); setSaved(false) }
+  const selectUser = (u) => {
+    setSel(u); setEdit({ ...u, password: '' }); setSaved(false); setSavedSens(false)
+    // 載入該使用者的感測器設定
+    deviceGetSettings(u.id)
+      .then(r => setSensor(r.data))
+      .catch(() => setSensor({ impact_threshold: 30.0, cooldown_seconds: 30 }))
+  }
   const set = (f, v) => { setEdit(p => ({ ...p, [f]: v })); setSaved(false) }
+
+  const handleSaveSensor = async () => {
+    setSavingSens(true)
+    try {
+      await deviceUpdateSettings(selected.id, sensor)
+      setSavedSens(true)
+    } catch (e) { alert('儲存失敗：' + JSON.stringify(e.response?.data)) }
+    finally { setSavingSens(false) }
+  }
+
+  // G 值換算（顯示用）
+  const gVal = (ms2) => (ms2 / 9.8).toFixed(1)
 
   const handleSave = async () => {
     setSaving(true)
@@ -184,6 +210,63 @@ function UsersTab() {
               </button>
               {saved && <span className="text-green-500 text-sm">✓ 已儲存</span>}
             </div>
+
+            {/* ── 感測器設定 ── */}
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                📡 撞擊感測器設定
+              </h3>
+
+              {/* 觸發閾值 */}
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">觸發閾值</label>
+                  <span className="text-sm font-bold text-gray-800">
+                    {gVal(sensor.impact_threshold)} G
+                    <span className="text-xs text-gray-400 font-normal ml-1">
+                      ({parseFloat(sensor.impact_threshold).toFixed(1)} m/s²)
+                    </span>
+                  </span>
+                </div>
+                <input type="range" min="9.8" max="98" step="0.5"
+                  value={sensor.impact_threshold}
+                  onChange={e => setSens('impact_threshold', parseFloat(e.target.value))}
+                  className="w-full accent-green-600" />
+                <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                  <span>1.0 G（極敏感）</span><span>3.0 G（預設）</span><span>10.0 G（極遲鈍）</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  數值越低越敏感，輕碰也觸發；越高則只有劇烈撞擊才觸發。
+                </p>
+              </div>
+
+              {/* 冷卻時間 */}
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">觸發後冷卻時間</label>
+                  <span className="text-sm font-bold text-gray-800">{sensor.cooldown_seconds} 秒</span>
+                </div>
+                <input type="range" min="10" max="120" step="5"
+                  value={sensor.cooldown_seconds}
+                  onChange={e => setSens('cooldown_seconds', parseInt(e.target.value))}
+                  className="w-full accent-green-600" />
+                <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                  <span>10 秒</span><span>30 秒（預設）</span><span>120 秒</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  觸發後等待時間，防止連續誤觸；撥電話期間不會再次觸發。
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button onClick={handleSaveSensor} disabled={savingSensor}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
+                  {savingSensor ? '套用中…' : '套用感測器設定'}
+                </button>
+                {savedSensor && <span className="text-blue-500 text-sm">✓ 已套用（下次 APP 連線後生效）</span>}
+              </div>
+            </div>
+
           </div>
         )}
       </div>
@@ -375,6 +458,92 @@ function ContactsTab({ users }) {
   )
 }
 
+// ── 撞擊記錄 Tab ────────────────────────────────────────────────────────────
+function ImpactsTab({ users }) {
+  const [impacts, setImpacts]     = useState([])
+  const [filterUser, setFilter]   = useState('')
+  const [loading, setLoading]     = useState(false)
+
+  const OUTCOME = {
+    auto_dialed: { cls: 'bg-red-100 text-red-700',      label: '已自動撥打' },
+    cancelled:   { cls: 'bg-yellow-100 text-yellow-700', label: '使用者取消' },
+    no_contacts: { cls: 'bg-gray-100 text-gray-500',    label: '無緊急連絡人' },
+    triggered:   { cls: 'bg-blue-100 text-blue-700',    label: '觸發中' },
+  }
+
+  const fmtTime = (ts) => new Date(ts * 1000).toLocaleString('zh-TW')
+  const fmtG    = (m)  => (m / 9.8).toFixed(2) + ' G'
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const uid = filterUser ? parseInt(filterUser) : null
+      const r = await deviceGetImpacts(uid)
+      setImpacts(r.data)
+    } catch {}
+    setLoading(false)
+  }, [filterUser])
+
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div className="p-6 h-full overflow-y-auto">
+      {/* 篩選列 */}
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-sm text-gray-600">篩選使用者：</label>
+        <select value={filterUser} onChange={e => setFilter(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:border-blue-400">
+          <option value="">全部</option>
+          {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+        </select>
+        <button onClick={load}
+          className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500">
+          重新整理
+        </button>
+        <span className="text-xs text-gray-400 ml-auto">共 {impacts.length} 筆</span>
+      </div>
+
+      {loading ? (
+        <div className="text-center text-gray-400 py-12">載入中…</div>
+      ) : impacts.length === 0 ? (
+        <div className="text-center text-gray-400 py-12">尚無撞擊記錄</div>
+      ) : (
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-slate-50 text-left">
+              <th className="px-3 py-2 font-semibold text-gray-600">時間</th>
+              <th className="px-3 py-2 font-semibold text-gray-600">使用者</th>
+              <th className="px-3 py-2 font-semibold text-gray-600">強度</th>
+              <th className="px-3 py-2 font-semibold text-gray-600">處置結果</th>
+            </tr>
+          </thead>
+          <tbody>
+            {impacts.map(e => {
+              const o = OUTCOME[e.outcome] ?? { cls: 'bg-gray-100 text-gray-500', label: e.outcome }
+              return (
+                <tr key={e.id} className="border-t border-gray-100 hover:bg-slate-50">
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtTime(e.timestamp)}</td>
+                  <td className="px-3 py-2 text-gray-700">{e.username}</td>
+                  <td className="px-3 py-2 text-gray-600">{fmtG(e.magnitude)}</td>
+                  <td className="px-3 py-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.cls}`}>{o.label}</span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      <p className="text-xs text-gray-400 mt-4">
+        ※ 強度以 G 值顯示（1 G ≈ 9.8 m/s²，目前觸發閾值約 3 G）。
+        若某使用者頻繁「使用者取消」，表示可能過於敏感，可調高 <code>_impactThreshold</code>（imu_service.dart）。
+        若「無緊急連絡人」出現，請提醒該使用者在 APP 設定頁面新增連絡人。
+      </p>
+    </div>
+  )
+}
+
 // ── 主元件 ──────────────────────────────────────────────────────────────────
 export default function AppDevice() {
   const [status, setStatus] = useState('connecting') // connecting | ok | error
@@ -395,7 +564,7 @@ export default function AppDevice() {
         loadUsers()
         return
       }
-      const res = await deviceLogin('admin', '1124')
+      const res = await deviceLogin('1124', '1124')
       localStorage.setItem('device_access', res.data.token)
       setStatus('ok')
       loadUsers()
@@ -403,7 +572,7 @@ export default function AppDevice() {
       // token 失效時重新登入
       localStorage.removeItem('device_access')
       try {
-        const res = await deviceLogin('admin', '1124')
+        const res = await deviceLogin('1124', '1124')
         localStorage.setItem('device_access', res.data.token)
         setStatus('ok')
         loadUsers()
@@ -425,6 +594,7 @@ export default function AppDevice() {
         {[
           { id: 'users',    label: '👤 APP 使用者' },
           { id: 'contacts', label: '📞 緊急連絡人' },
+          { id: 'impacts',  label: '⚠️ 撞擊記錄' },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -446,6 +616,7 @@ export default function AppDevice() {
       <div className="flex-1 overflow-hidden">
         {tab === 'users'    && <UsersTab />}
         {tab === 'contacts' && <ContactsTab users={users} />}
+        {tab === 'impacts'  && <ImpactsTab  users={users} />}
       </div>
     </div>
   )

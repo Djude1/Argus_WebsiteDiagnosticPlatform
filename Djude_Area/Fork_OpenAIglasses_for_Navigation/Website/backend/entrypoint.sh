@@ -200,6 +200,13 @@ else:
     print('團隊成員已存在，跳過')
 "
 
+echo "=== 載入 Fixtures 初始資料（若存在）==="
+if [ -f fixtures/initial_data.json ]; then
+    python manage.py loaddata fixtures/initial_data.json 2>/dev/null && echo "Fixtures 載入成功" || echo "Fixtures 載入失敗或資料已存在，跳過"
+else
+    echo "未找到 fixtures/initial_data.json，跳過"
+fi
+
 echo "=== 啟動 Gunicorn 伺服器 ==="
 exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \

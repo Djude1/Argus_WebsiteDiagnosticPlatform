@@ -1,16 +1,20 @@
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from django.db.models import Q
+from django.utils import timezone
 from .models import (
     SiteSettings, HomeContent, ProductPageContent,
     DownloadPageContent, PurchasePageContent, TeamPageContent,
-    AppServerConfig,
+    AppServerConfig, ImpactFeedback, AppAnnouncement,
 )
 from .serializers import (
     SiteSettingsSerializer, HomeContentSerializer,
     ProductPageContentSerializer, DownloadPageContentSerializer,
     PurchasePageContentSerializer, TeamPageContentSerializer,
-    AppServerConfigSerializer,
+    AppServerConfigSerializer, ImpactFeedbackSerializer,
+    AppAnnouncementSerializer,
 )
 
 
@@ -40,3 +44,30 @@ class AppConfigView(APIView):
             'note':       config.note,
             'updated_at': config.updated_at,
         })
+
+
+class AppAnnouncementsView(APIView):
+    """APP 啟動時讀取有效公告（公開，不需認證）"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        now = timezone.now()
+        qs = AppAnnouncement.objects.filter(
+            is_active=True
+        ).filter(
+            Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=now)
+        )
+        serializer = AppAnnouncementSerializer(qs, many=True)
+        return Response({'announcements': serializer.data})
+
+
+class ImpactFeedbackCreateView(APIView):
+    """APP 回報撞擊偵測結果（是否誤判），公開端點不需認證"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ImpactFeedbackSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'ok': True}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

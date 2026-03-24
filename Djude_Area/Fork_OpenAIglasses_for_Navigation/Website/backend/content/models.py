@@ -288,6 +288,55 @@ class AppServerConfig(SingletonModel):
         return 'APP 伺服器設定'
 
 
+class AppAnnouncement(models.Model):
+    """管理員發送給 APP 視障使用者的公告（版本更新、維護、新功能等）"""
+    TYPE_CHOICES = [
+        ('version_update', '版本更新'),
+        ('maintenance',    '系統維護'),
+        ('new_feature',    '新功能'),
+        ('general',        '一般通知'),
+    ]
+
+    title        = models.CharField('標題', max_length=100)
+    body         = models.TextField('內容')
+    type         = models.CharField('類型', max_length=20,
+                                    choices=TYPE_CHOICES, default='general')
+    is_active    = models.BooleanField('啟用', default=True)
+    scheduled_at = models.DateTimeField(
+        '排程時間', null=True, blank=True,
+        help_text='留空表示立即生效；設定後到達該時間才對 APP 可見',
+    )
+    created_at   = models.DateTimeField('建立時間', auto_now_add=True)
+    updated_at   = models.DateTimeField('更新時間', auto_now=True)
+
+    class Meta:
+        ordering        = ['-created_at']
+        verbose_name    = 'APP 公告'
+        verbose_name_plural = 'APP 公告列表'
+
+    def __str__(self):
+        return f'[{self.get_type_display()}] {self.title}'
+
+
+class ImpactFeedback(models.Model):
+    """APP 摔倒偵測回饋記錄，用於調整撞擊偵測靈敏度"""
+    magnitude        = models.FloatField('加速度合力 (m/s²)')
+    outcome          = models.CharField('結果', max_length=20,
+                                        help_text='auto_dialed / cancelled')
+    is_false_positive = models.BooleanField('是否誤判', default=False)
+    note             = models.TextField('備註', blank=True, default='')
+    created_at       = models.DateTimeField('記錄時間', auto_now_add=True)
+
+    class Meta:
+        ordering        = ['-created_at']
+        verbose_name    = '撞擊回饋'
+        verbose_name_plural = '撞擊回饋記錄'
+
+    def __str__(self):
+        label = '誤判' if self.is_false_positive else '真實'
+        return f'{self.created_at:%Y-%m-%d %H:%M} | {self.magnitude:.1f} m/s² | {label}'
+
+
 class TeamPageContent(SingletonModel):
     """團隊頁所有可編輯內容"""
 

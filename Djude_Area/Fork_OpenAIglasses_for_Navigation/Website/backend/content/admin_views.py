@@ -10,13 +10,15 @@ from .models import (
     SiteSettings, HomeContent, ProductPageContent,
     DownloadPageContent, DownloadFeature, DownloadStep,
     PurchasePageContent, TeamPageContent, AppServerConfig,
+    ImpactFeedback, AppAnnouncement,
 )
 from .serializers import (
     SiteSettingsSerializer, HomeContentSerializer,
     ProductPageContentSerializer, DownloadPageContentSerializer,
     DownloadFeatureSerializer, DownloadStepSerializer,
     PurchasePageContentSerializer, TeamPageContentSerializer,
-    AppServerConfigSerializer,
+    AppServerConfigSerializer, ImpactFeedbackSerializer,
+    AppAnnouncementSerializer,
 )
 
 # 對應 section 名稱 → (模型類別, 序列化器, 顯示名稱)
@@ -104,3 +106,55 @@ class AdminDownloadStepDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         log_activity(self.request, 'delete', '安裝步驟', instance.id, instance.title)
         instance.delete()
+
+
+class AdminAnnouncementListView(generics.ListCreateAPIView):
+    """APP 公告列表 + 新增"""
+    permission_classes = [IsStaff]
+    serializer_class   = AppAnnouncementSerializer
+    queryset           = AppAnnouncement.objects.all()
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        log_activity(self.request, 'create', 'APP 公告',
+                     serializer.instance.id, serializer.instance.title)
+
+
+class AdminAnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """APP 公告單筆讀取 + 更新 + 刪除"""
+    permission_classes = [IsStaff]
+    serializer_class   = AppAnnouncementSerializer
+    queryset           = AppAnnouncement.objects.all()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        log_activity(self.request, 'update', 'APP 公告',
+                     serializer.instance.id, serializer.instance.title)
+
+    def perform_destroy(self, instance):
+        log_activity(self.request, 'delete', 'APP 公告', instance.id, instance.title)
+        instance.delete()
+
+
+class AdminImpactFeedbackView(generics.ListAPIView):
+    """管理員查詢撞擊回饋記錄（最新在前）"""
+    permission_classes = [IsStaff]
+    serializer_class   = ImpactFeedbackSerializer
+
+    def get_queryset(self):
+        qs = ImpactFeedback.objects.all()
+        # 支援 ?false_only=1 只看誤判
+        if self.request.query_params.get('false_only'):
+            qs = qs.filter(is_false_positive=True)
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        qs       = self.get_queryset()
+        total    = qs.count()
+        false_ct = qs.filter(is_false_positive=True).count()
+        serializer = self.get_serializer(qs[:100], many=True)
+        return Response({
+            'total':          total,
+            'false_positive': false_ct,
+            'records':        serializer.data,
+        })
