@@ -805,8 +805,8 @@ class WebDetectionServer:
             self._save_custom_classes_data(data)
 
             # 套用到偵測器並重新生成 CLIP 嵌入
-            if self.detector:
-                self.detector.update_variants(class_name, new_variants)
+            if self.engine.detector:
+                self.engine.detector.update_variants(class_name, new_variants)
 
             cn = self.label_mapper.get_chinese_name_from_en(class_name)
             count = len(new_variants)
@@ -839,8 +839,8 @@ class WebDetectionServer:
             self._save_custom_classes_data(data)
 
             # 套用到偵測器
-            if self.detector:
-                self.detector.update_variants(class_name, existing)
+            if self.engine.detector:
+                self.engine.detector.update_variants(class_name, existing)
 
             cn = self.label_mapper.get_chinese_name_from_en(class_name)
             logger.info(f"新增變體: {class_name}({cn}) += {new_variants}")
@@ -1096,13 +1096,13 @@ class WebDetectionServer:
 
     def _reload_detector_classes(self):
         """重新載入偵測器的偵測類別（含變體）"""
-        if self.detector is None:
+        if self.engine.detector is None:
             return
         # 先載入變體資料到 PromptEnhancer
         self._load_and_apply_variants()
         all_classes = self._get_all_classes()
         if all_classes:
-            self.detector.update_classes(all_classes)
+            self.engine.detector.update_classes(all_classes)
             logger.info(f"偵測器類別已更新（共 {len(all_classes)} 個啟用中）")
 
     def _update_last_detected(self, class_names: list):
@@ -1129,8 +1129,8 @@ class WebDetectionServer:
         """從 custom_classes.json 載入變體資料並套用到偵測器"""
         data = self._load_custom_classes_data()
         variants = data.get("variants", {})
-        if variants and self.detector:
-            self.detector.load_all_variants(variants)
+        if variants and self.engine.detector:
+            self.engine.detector.load_all_variants(variants)
             logger.info(f"已載入 {len(variants)} 個類別的變體描述")
 
     def _save_aliases(self, aliases: dict):

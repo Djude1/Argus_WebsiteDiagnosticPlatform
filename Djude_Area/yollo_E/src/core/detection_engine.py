@@ -7,9 +7,10 @@
 提供統一的偵測介面給 Webcam 和 Web 版本使用
 """
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, OrderedDict
+from typing import List, Optional
 import numpy as np
 from loguru import logger
 
