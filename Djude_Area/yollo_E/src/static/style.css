@@ -600,6 +600,109 @@ header h1 {
     cursor: pointer;
 }
 
+/* 變體擴展按鈕 */
+.class-tag .tag-variant {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0 2px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.class-tag .tag-variant:hover {
+    opacity: 1;
+}
+
+/* 變體管理對話框 */
+.variant-dialog {
+    background: var(--card-bg);
+    border: 1px solid var(--primary-color);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+}
+
+.variant-dialog h3 {
+    color: var(--primary-color);
+    margin-bottom: 8px;
+    font-size: 1rem;
+}
+
+.variant-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.variant-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.variant-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(78, 204, 163, 0.1);
+    border-radius: 6px;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.variant-item .variant-remove {
+    background: none;
+    border: none;
+    color: var(--error-color);
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.6;
+}
+
+.variant-item .variant-remove:hover {
+    opacity: 1;
+}
+
+.variant-empty {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 12px;
+    font-size: 0.85rem;
+}
+
+.variant-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.variant-add input {
+    flex: 1;
+    padding: 8px;
+    background: var(--surface-color);
+    border: 1px solid rgba(78, 204, 163, 0.3);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.variant-add button {
+    padding: 8px 14px;
+    background: var(--primary-color);
+    color: var(--secondary-color);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
 /* Stats Section */
 .stats-section {
     display: grid;

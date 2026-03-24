@@ -352,6 +352,9 @@ class PromptEnhancer:
         if custom_prompts:
             self._prompts.update(custom_prompts)
 
+        # 使用者定義的變體描述（類別名 → 變體列表）
+        self._variants: Dict[str, List[str]] = {}
+
         # 建立反向映射：增強提示 → 原始類別名
         self._reverse_map: Dict[str, str] = {}
         for original, enhanced in self._prompts.items():
@@ -359,18 +362,56 @@ class PromptEnhancer:
 
         logger.info(f"提示增強器已初始化，共 {len(self._prompts)} 個增強提示")
 
+    def add_variants(self, class_name: str, variants: List[str]):
+        """
+        為類別新增使用者定義的變體描述，擴展 CLIP 提示覆蓋範圍
+
+        參數:
+            class_name: 類別名稱（如 "mouse"）
+            variants: 變體描述列表（如 ["gaming mouse", "wireless mouse"]）
+        """
+        key = class_name.lower().strip()
+        if key not in self._variants:
+            self._variants[key] = []
+        for v in variants:
+            v_clean = v.strip()
+            if v_clean and v_clean not in self._variants[key]:
+                self._variants[key].append(v_clean)
+
+    def set_variants(self, class_name: str, variants: List[str]):
+        """設定類別的變體列表（覆蓋現有）"""
+        key = class_name.lower().strip()
+        self._variants[key] = [v.strip() for v in variants if v.strip()]
+
+    def get_variants(self, class_name: str) -> List[str]:
+        """取得類別的變體列表"""
+        return self._variants.get(class_name.lower().strip(), [])
+
+    def load_all_variants(self, variants_data: Dict[str, List[str]]):
+        """批次載入所有變體資料"""
+        for class_name, variants in variants_data.items():
+            self._variants[class_name.lower().strip()] = [v.strip() for v in variants if v.strip()]
+
     def enhance(self, class_name: str) -> str:
         """
-        將類別名轉為增強提示
+        將類別名轉為增強提示（含使用者變體）
 
         參數:
             class_name: 原始類別名（如 "mouse"）
 
         回傳:
             增強後的提示（如 "computer mouse device"），
-            若無對應則返回原始名稱
+            若有使用者變體則附加（如 "computer mouse device, gaming mouse, wireless mouse"）
         """
-        return self._prompts.get(class_name.lower().strip(), class_name)
+        key = class_name.lower().strip()
+        base = self._prompts.get(key, class_name)
+        variants = self._variants.get(key, [])
+
+        if not variants:
+            return base
+
+        # 將變體附加到基礎提示（用逗號分隔，CLIP 可處理）
+        return f"{base}, {', '.join(variants)}"
 
     def enhance_list(self, class_names: List[str]) -> Tuple[List[str], Dict[str, str]]:
         """

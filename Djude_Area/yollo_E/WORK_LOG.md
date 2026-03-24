@@ -4,6 +4,60 @@
 
 ---
 
+## 2026-03-24 (第八次更新)
+
+### 任務摘要
+實作類別別名系統 + CLIP 提示變體擴展機制，讓使用者能擴展物品辨識範圍。
+
+### 新增功能
+
+1. **類別別名系統**
+   - 預設 35+ 組常見別名（如 mug → cup、smartphone → cell phone）
+   - 偵測結果自動歸併：偵測到 "mug" 時顯示為 "cup"
+   - 新增類別時檢查別名衝突，提示合併而非重複新增
+   - API：`GET/POST/DELETE /api/aliases`、`GET /api/aliases/check`
+
+2. **CLIP 提示變體擴展**
+   - 使用者可為任何類別新增變體描述（如 mouse → gaming mouse、wireless mouse）
+   - 變體會附加到 CLIP 提示，擴展嵌入涵蓋範圍
+   - 更新變體後自動重新生成 CLIP 嵌入
+   - API：`GET /api/variants`、`PUT /api/variants`、`POST /api/variants/add`
+
+3. **前端 UI**
+   - 類別標籤新增 ⊕ 變體按鈕，點擊打開變體管理對話框
+   - 新增類別發現別名時，彈出「發現類似物品」對話框，可選擇合併為變體
+   - 變體管理對話框支援新增/移除變體描述
+
+### 技術原理
+- YOLOE 使用 CLIP 文字嵌入做開放詞彙偵測
+- 增加變體描述（如 "computer mouse device, gaming mouse, wireless mouse"）讓嵌入涵蓋更多視覺變體
+- 別名歸併減少 CLIP 嵌入空間中的類別競爭
+
+### 修改的檔案
+- `src/detection/prompt_enhancer.py` — 新增 `_variants` 支援、`add_variants()`、`set_variants()`、`load_all_variants()`
+- `src/detection/label_mapper.py` — 新增 `DEFAULT_ALIASES`、`resolve_alias()`、`is_alias()`、`get_aliases_for()` 等方法
+- `src/detection/yolo_detector.py` — 新增 `update_variants()`、`load_all_variants()`
+- `src/web_server.py` — 別名 API、變體 API、偵測結果別名歸併、新增類別別名檢查
+- `src/static/app.js` — 變體對話框、別名提示對話框、⊕ 按鈕
+- `src/static/style.css` — 變體對話框樣式
+
+### 資料結構變更
+`custom_classes.json` 新增欄位：
+```json
+{
+  "aliases": { "mug": "cup", "smartphone": "cell phone" },
+  "variants": { "mouse": ["gaming mouse", "wireless mouse"] }
+}
+```
+
+### 重啟指令
+```bash
+cd Djude_Area/yollo_E
+uv run python src/main.py
+```
+
+---
+
 ## 2026-03-24 (第七次更新)
 
 ### 任務摘要

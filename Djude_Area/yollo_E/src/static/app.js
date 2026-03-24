@@ -1374,6 +1374,9 @@ class YOLOWebApp {
             // 啟用/停用切換按鈕
             const toggleBtn = `<button class="tag-toggle" data-name="${c.name_en}" data-active="${isActive}" title="${isActive ? '停用' : '啟用'}">${isActive ? '●' : '○'}</button>`;
 
+            // 變體擴展按鈕（所有類別都有）
+            const variantBtn = `<button class="tag-variant" data-name="${c.name_en}" data-cn="${displayName}" title="管理變體描述">⊕</button>`;
+
             // 自訂類別才有移除按鈕
             const removeBtn = isCustom
                 ? `<button class="tag-remove" data-name="${c.name_en}" title="移除">&times;</button>`
@@ -1383,6 +1386,7 @@ class YOLOWebApp {
                 ${toggleBtn}
                 <span class="tag-name-cn">${displayName}</span>
                 <span class="tag-name-en">${c.name_en}</span>
+                ${variantBtn}
                 ${removeBtn}
             </div>`;
         }).join('');
@@ -1393,6 +1397,15 @@ class YOLOWebApp {
                 const nameEn = e.currentTarget.dataset.name;
                 const isActive = e.currentTarget.dataset.active === 'true';
                 this.toggleClass(nameEn, !isActive);
+            });
+        });
+
+        // 綁定變體按鈕事件
+        this.classList.querySelectorAll('.tag-variant').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const nameEn = e.currentTarget.dataset.name;
+                const nameCn = e.currentTarget.dataset.cn;
+                this._showVariantDialog(nameEn, nameCn);
             });
         });
 
@@ -1433,6 +1446,12 @@ class YOLOWebApp {
                 return;
             }
 
+            if (data.error === 'is_alias') {
+                // 發現是現有類別的變體，提示合併
+                this._showAliasDialog(data);
+                return;
+            }
+
             if (data.error) {
                 this.showNotification(data.error, 'warning');
                 return;
@@ -1452,6 +1471,148 @@ class YOLOWebApp {
                 this.addClassBtn.disabled = false;
                 this.addClassBtn.textContent = '新增物品';
             }
+        }
+    }
+
+    _showAliasDialog(data) {
+        /**
+         * 發現類似物品時的合併提示
+         * 使用者可選擇：加為變體（擴展 CLIP）或忽略
+         */
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="slot-full-dialog">
+                <h3>發現類似物品</h3>
+                <p>${data.message}</p>
+                <div class="lru-suggestion">
+                    <span class="lru-name">${data.canonical_cn}（${data.canonical}）</span>
+                    <span class="lru-info">目前已是偵測類別</span>
+                </div>
+                <p>要將「${data.alias}」加為「${data.canonical_cn}」的變體描述嗎？<br>
+                <small>這會擴展 CLIP 辨識範圍，讓系統能辨識更多樣式</small></p>
+                <div class="slot-dialog-actions">
+                    <button class="btn-confirm" id="aliasConfirmBtn">加為變體</button>
+                    <button class="btn-cancel" id="aliasCancelBtn">取消</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        overlay.querySelector('#aliasConfirmBtn').addEventListener('click', async () => {
+            overlay.remove();
+            // 將別名加為變體描述
+            await this._addVariant(data.canonical, data.alias);
+        });
+
+        overlay.querySelector('#aliasCancelBtn').addEventListener('click', () => {
+            overlay.remove();
+        });
+    }
+
+    async _showVariantDialog(nameEn, nameCn) {
+        /**
+         * 顯示變體管理對話框
+         * 使用者可新增/檢視/移除變體描述，直接擴展 CLIP 辨識範圍
+         */
+        // 先取得現有變體
+        let existing = [];
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/variants`);
+            const data = await res.json();
+            const cls = (data.classes || []).find(c => c.name_en === nameEn);
+            if (cls) existing = cls.variants;
+        } catch (e) { /* 忽略 */ }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="variant-dialog">
+                <h3>管理「${nameCn}」的變體</h3>
+                <p class="variant-hint">新增不同樣式的描述，擴展 CLIP 辨識範圍。<br>
+                例如：滑鼠 → 電競滑鼠、無線滑鼠、軌跡球</p>
+                <div class="variant-list" id="variantList">
+                    ${existing.map(v => `
+                        <div class="variant-item">
+                            <span>${v}</span>
+                            <button class="variant-remove" data-v="${v}">&times;</button>
+                        </div>
+                    `).join('') || '<div class="variant-empty">尚無變體描述</div>'}
+                </div>
+                <div class="variant-add">
+                    <input type="text" id="variantInput" placeholder="輸入變體描述（如：gaming mouse）" />
+                    <button id="variantAddBtn">新增</button>
+                </div>
+                <div class="slot-dialog-actions">
+                    <button class="btn-cancel" id="variantCloseBtn">關閉</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        // 新增變體
+        const addFn = async () => {
+            const input = overlay.querySelector('#variantInput');
+            const val = input.value.trim();
+            if (!val) return;
+            input.value = '';
+            await this._addVariant(nameEn, val);
+            overlay.remove();
+            this._showVariantDialog(nameEn, nameCn); // 重新打開以刷新列表
+        };
+
+        overlay.querySelector('#variantAddBtn').addEventListener('click', addFn);
+        overlay.querySelector('#variantInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addFn();
+        });
+
+        // 移除變體
+        overlay.querySelectorAll('.variant-remove').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const toRemove = btn.dataset.v;
+                const updated = existing.filter(v => v !== toRemove);
+                await this._updateVariants(nameEn, updated);
+                overlay.remove();
+                this._showVariantDialog(nameEn, nameCn);
+            });
+        });
+
+        overlay.querySelector('#variantCloseBtn').addEventListener('click', () => {
+            overlay.remove();
+        });
+    }
+
+    async _addVariant(classNameEn, variant) {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/variants/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_name: classNameEn, variants: [variant] }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification(data.message, 'success');
+            } else {
+                this.showNotification(data.error || '新增失敗', 'warning');
+            }
+        } catch (e) {
+            this.showNotification(`新增變體失敗: ${e.message}`, 'error');
+        }
+    }
+
+    async _updateVariants(classNameEn, variants) {
+        try {
+            const res = await fetch(`${this._getApiBaseUrl()}/api/variants`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_name: classNameEn, variants }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification(data.message, 'success');
+            }
+        } catch (e) {
+            this.showNotification(`更新變體失敗: ${e.message}`, 'error');
         }
     }
 

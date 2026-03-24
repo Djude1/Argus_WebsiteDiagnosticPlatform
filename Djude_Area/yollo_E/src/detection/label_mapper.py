@@ -760,6 +760,51 @@ CATEGORY_GROUPS: Dict[str, List[int]] = {
 }
 
 
+# ============================================
+# 類別別名對照表（預設）
+# 格式：別名 → 正規名稱
+# 偵測到別名時自動歸併為正規名稱，減少 CLIP 嵌入空間競爭
+# ============================================
+
+DEFAULT_ALIASES: Dict[str, str] = {
+    # 杯子相關
+    "mug": "cup",
+    "coffee cup": "cup",
+    "tea cup": "cup",
+    "tumbler": "cup",
+    "goblet": "cup",
+    # 瓶子相關
+    "water bottle": "bottle",
+    "plastic bottle": "bottle",
+    "drink bottle": "bottle",
+    # 手機相關
+    "mobile phone": "cell phone",
+    "smartphone": "cell phone",
+    "iphone": "cell phone",
+    "android phone": "cell phone",
+    # 筆電相關
+    "notebook computer": "laptop",
+    "macbook": "laptop",
+    # 滑鼠相關
+    "computer mouse": "mouse",
+    # 鍵盤相關
+    "computer keyboard": "keyboard",
+    # 遙控器相關
+    "tv remote": "remote",
+    "remote control": "remote",
+    # 背包相關
+    "bag": "backpack",
+    "school bag": "backpack",
+    "rucksack": "backpack",
+    # 書相關
+    "textbook": "book",
+    "notebook": "book",
+    # 鑰匙相關
+    "key": "keys",
+    "keychain": "keys",
+}
+
+
 class LabelMapper:
     """類別名稱對應器"""
 
@@ -771,6 +816,8 @@ class LabelMapper:
             include_custom: 是否包含自定義類別
         """
         self.labels_cn = COCO_LABELS_CN.copy()
+        # 別名表：別名 → 正規名稱
+        self._aliases: Dict[str, str] = DEFAULT_ALIASES.copy()
 
         if include_custom:
             self.labels_cn.update(CUSTOM_CLASSES)
@@ -860,6 +907,52 @@ class LabelMapper:
                 )
 
         return results
+
+    # ============================================
+    # 別名管理
+    # ============================================
+
+    def resolve_alias(self, class_name: str) -> str:
+        """
+        解析別名，回傳正規名稱
+
+        參數:
+            class_name: 偵測到的類別名稱（可能是別名）
+
+        回傳:
+            正規名稱（如果有別名映射），否則回傳原名稱
+        """
+        return self._aliases.get(class_name.lower().strip(), class_name)
+
+    def is_alias(self, class_name: str) -> bool:
+        """檢查名稱是否為某個類別的別名"""
+        return class_name.lower().strip() in self._aliases
+
+    def get_canonical_name(self, class_name: str) -> str:
+        """取得正規名稱（如果是別名則解析，否則回傳自身）"""
+        return self._aliases.get(class_name.lower().strip(), class_name)
+
+    def get_aliases_for(self, canonical_name: str) -> List[str]:
+        """取得某個正規名稱的所有別名"""
+        canonical = canonical_name.lower().strip()
+        return [alias for alias, target in self._aliases.items() if target == canonical]
+
+    def add_alias(self, alias: str, canonical_name: str):
+        """新增別名映射"""
+        self._aliases[alias.lower().strip()] = canonical_name.lower().strip()
+
+    def remove_alias(self, alias: str):
+        """移除別名映射"""
+        self._aliases.pop(alias.lower().strip(), None)
+
+    def get_all_aliases(self) -> Dict[str, str]:
+        """取得所有別名映射"""
+        return self._aliases.copy()
+
+    def load_custom_aliases(self, aliases: Dict[str, str]):
+        """載入自訂別名（合併到現有別名表）"""
+        for alias, canonical in aliases.items():
+            self._aliases[alias.lower().strip()] = canonical.lower().strip()
 
 
 # ============================================

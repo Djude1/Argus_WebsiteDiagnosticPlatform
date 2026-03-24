@@ -197,6 +197,9 @@ class WebDetectionServer:
         self.detector: Optional[YOLODetector] = None
         self.label_mapper = LabelMapper()
 
+        # 載入自訂別名
+        self._load_and_apply_aliases()
+
         # 偵測結果記錄器
         self.detection_logger = DetectionLogger()
 
@@ -476,10 +479,22 @@ class WebDetectionServer:
 
             # 自動查找英文名稱（若使用者未提供）
             if not name_en:
+                # 先嘗試中文轉英文
                 name_en = self.label_mapper.get_english_name_from_cn(name_cn)
                 if name_en == name_cn:
-                    # 找不到對應，使用中文名稱作為模型輸入（CLIP 可處理）
                     name_en = name_cn
+
+            # 檢查是否為已存在類別的別名（防止重複）
+            if self.label_mapper.is_alias(name_en):
+                canonical = self.label_mapper.resolve_alias(name_en)
+                canonical_cn = self.label_mapper.get_chinese_name_from_en(canonical)
+                return {
+                    "error": "is_alias",
+                    "message": f"「{name_cn or name_en}」是「{canonical_cn}」的變體，建議合併",
+                    "alias": name_en,
+                    "canonical": canonical,
+                    "canonical_cn": canonical_cn,
+                }
 
             # 載入完整資料
             data = self._load_custom_classes_data()
@@ -665,6 +680,181 @@ class WebDetectionServer:
             }
 
         # ============================================
+        # 別名管理 API
+        # ============================================
+
+        @self.app.get("/api/aliases")
+        async def get_aliases():
+            """取得所有別名映射"""
+            aliases = self.label_mapper.get_all_aliases()
+            # 按正規名稱分組
+            grouped = {}
+            for alias, canonical in aliases.items():
+                if canonical not in grouped:
+                    cn = self.label_mapper.get_chinese_name_from_en(canonical)
+                    grouped[canonical] = {"name_en": canonical, "name_cn": cn, "aliases": []}
+                alias_cn = self.label_mapper.get_chinese_name_from_en(alias)
+                grouped[canonical]["aliases"].append({"name_en": alias, "name_cn": alias_cn})
+            return {
+                "groups": list(grouped.values()),
+                "total": len(aliases),
+            }
+
+        class AliasRequest(BaseModel):
+            alias: str
+            canonical: str
+
+        @self.app.post("/api/aliases")
+        async def add_alias(request: AliasRequest):
+            """新增別名映射"""
+            alias = request.alias.strip().lower()
+            canonical = request.canonical.strip().lower()
+
+            if not alias or not canonical:
+                return {"error": "別名和正規名稱不可為空"}
+            if alias == canonical:
+                return {"error": "別名不可與正規名稱相同"}
+
+            # 新增別名
+            self.label_mapper.add_alias(alias, canonical)
+
+            # 持久化到 custom_classes.json
+            data = self._load_custom_classes_data()
+            custom_aliases = data.get("aliases", {})
+            custom_aliases[alias] = canonical
+            data["aliases"] = custom_aliases
+            self._save_custom_classes_data(data)
+
+            alias_cn = self.label_mapper.get_chinese_name_from_en(alias)
+            canonical_cn = self.label_mapper.get_chinese_name_from_en(canonical)
+            logger.info(f"新增別名: {alias}({alias_cn}) → {canonical}({canonical_cn})")
+
+            return {
+                "success": True,
+                "message": f"已將「{alias_cn or alias}」設為「{canonical_cn or canonical}」的別名",
+            }
+
+        @self.app.delete("/api/aliases")
+        async def remove_alias(request: AliasRequest):
+            """移除別名映射"""
+            alias = request.alias.strip().lower()
+            self.label_mapper.remove_alias(alias)
+
+            # 持久化
+            data = self._load_custom_classes_data()
+            custom_aliases = data.get("aliases", {})
+            custom_aliases.pop(alias, None)
+            data["aliases"] = custom_aliases
+            self._save_custom_classes_data(data)
+
+            return {"success": True, "message": f"已移除別名 '{alias}'"}
+
+        @self.app.get("/api/aliases/check")
+        async def check_alias(name: str):
+            """檢查名稱是否為現有類別的別名或相似物品"""
+            name_lower = name.strip().lower()
+
+            # 檢查是否直接是別名
+            if self.label_mapper.is_alias(name_lower):
+                canonical = self.label_mapper.resolve_alias(name_lower)
+                canonical_cn = self.label_mapper.get_chinese_name_from_en(canonical)
+                return {
+                    "is_alias": True,
+                    "canonical": canonical,
+                    "canonical_cn": canonical_cn,
+                    "message": f"「{name}」是「{canonical_cn or canonical}」的變體",
+                }
+
+            return {"is_alias": False}
+
+        # ============================================
+        # 變體管理 API（CLIP 提示擴展）
+        # ============================================
+
+        class VariantRequest(BaseModel):
+            class_name: str
+            variants: TypingList[str]
+
+        @self.app.get("/api/variants")
+        async def get_variants():
+            """取得所有類別的變體描述"""
+            data = self._load_custom_classes_data()
+            variants = data.get("variants", {})
+            # 附加中文名稱
+            result = []
+            for class_name, var_list in variants.items():
+                cn = self.label_mapper.get_chinese_name_from_en(class_name)
+                result.append({
+                    "name_en": class_name,
+                    "name_cn": cn,
+                    "variants": var_list,
+                })
+            return {"classes": result, "total": len(result)}
+
+        @self.app.put("/api/variants")
+        async def update_variants(request: VariantRequest):
+            """更新類別的變體描述（擴展 CLIP 提示）"""
+            class_name = request.class_name.strip().lower()
+            new_variants = [v.strip() for v in request.variants if v.strip()]
+
+            # 儲存到 custom_classes.json
+            data = self._load_custom_classes_data()
+            variants = data.get("variants", {})
+            if new_variants:
+                variants[class_name] = new_variants
+            else:
+                variants.pop(class_name, None)
+            data["variants"] = variants
+            self._save_custom_classes_data(data)
+
+            # 套用到偵測器並重新生成 CLIP 嵌入
+            if self.detector:
+                self.detector.update_variants(class_name, new_variants)
+
+            cn = self.label_mapper.get_chinese_name_from_en(class_name)
+            count = len(new_variants)
+            logger.info(f"更新類別變體: {class_name}({cn}) — {count} 個變體")
+
+            return {
+                "success": True,
+                "message": f"已更新「{cn or class_name}」的變體描述（{count} 個），CLIP 嵌入已重新生成",
+                "variants": new_variants,
+            }
+
+        @self.app.post("/api/variants/add")
+        async def add_variant(request: VariantRequest):
+            """為類別新增變體描述"""
+            class_name = request.class_name.strip().lower()
+            new_variants = [v.strip() for v in request.variants if v.strip()]
+
+            if not new_variants:
+                return {"error": "請提供至少一個變體描述"}
+
+            data = self._load_custom_classes_data()
+            variants = data.get("variants", {})
+            existing = variants.get(class_name, [])
+            # 合併去重
+            for v in new_variants:
+                if v not in existing:
+                    existing.append(v)
+            variants[class_name] = existing
+            data["variants"] = variants
+            self._save_custom_classes_data(data)
+
+            # 套用到偵測器
+            if self.detector:
+                self.detector.update_variants(class_name, existing)
+
+            cn = self.label_mapper.get_chinese_name_from_en(class_name)
+            logger.info(f"新增變體: {class_name}({cn}) += {new_variants}")
+
+            return {
+                "success": True,
+                "message": f"已為「{cn or class_name}」新增 {len(new_variants)} 個變體，CLIP 嵌入已更新",
+                "variants": existing,
+            }
+
+        # ============================================
         # 反饋 API
         # ============================================
 
@@ -703,6 +893,18 @@ class WebDetectionServer:
                     correct_name = en_name
 
                 correct_name = correct_name.lower()
+
+                # 檢查是否為已有類別的別名，自動歸併
+                if self.label_mapper.is_alias(correct_name):
+                    canonical = self.label_mapper.resolve_alias(correct_name)
+                    logger.info(f"更正別名自動歸併: {correct_name} → {canonical}")
+                    canonical_cn = self.label_mapper.get_chinese_name_from_en(canonical)
+                    result["alias_resolved"] = {
+                        "original": correct_name,
+                        "canonical": canonical,
+                        "canonical_cn": canonical_cn,
+                    }
+                    correct_name = canonical
 
                 env_classes = self._get_env_classes()
                 data = self._load_custom_classes_data()
@@ -868,9 +1070,11 @@ class WebDetectionServer:
         return all_classes
 
     def _reload_detector_classes(self):
-        """重新載入偵測器的偵測類別"""
+        """重新載入偵測器的偵測類別（含變體）"""
         if self.detector is None:
             return
+        # 先載入變體資料到 PromptEnhancer
+        self._load_and_apply_variants()
         all_classes = self._get_all_classes()
         if all_classes:
             self.detector.update_classes(all_classes)
@@ -886,6 +1090,28 @@ class WebDetectionServer:
         for name in class_names:
             last_detected[name] = now
         data["last_detected"] = last_detected
+        self._save_custom_classes_data(data)
+
+    def _load_and_apply_aliases(self):
+        """從 custom_classes.json 載入自訂別名並套用到 label_mapper"""
+        data = self._load_custom_classes_data()
+        custom_aliases = data.get("aliases", {})
+        if custom_aliases:
+            self.label_mapper.load_custom_aliases(custom_aliases)
+            logger.info(f"已載入 {len(custom_aliases)} 個自訂別名")
+
+    def _load_and_apply_variants(self):
+        """從 custom_classes.json 載入變體資料並套用到偵測器"""
+        data = self._load_custom_classes_data()
+        variants = data.get("variants", {})
+        if variants and self.detector:
+            self.detector.load_all_variants(variants)
+            logger.info(f"已載入 {len(variants)} 個類別的變體描述")
+
+    def _save_aliases(self, aliases: dict):
+        """儲存自訂別名到 custom_classes.json"""
+        data = self._load_custom_classes_data()
+        data["aliases"] = aliases
         self._save_custom_classes_data(data)
 
     async def _handle_video_stream(self, websocket: WebSocket):
@@ -980,6 +1206,8 @@ class WebDetectionServer:
             )
             logger.success(f"YOLO 模型已載入: {self.model_path}")
             logger.info(f"運算裝置: {get_device()}")
+            # 載入使用者定義的變體描述
+            self._load_and_apply_variants()
 
         logger.debug(f"開始偵測，影像尺寸: {frame.shape}")
 
@@ -1008,8 +1236,12 @@ class WebDetectionServer:
         # === 新增：時序穩定化 ===
         stable_detections = self.stabilizer.update(filtered_detections)
 
-        # 為每個 detection 設置中文標籤（改用 stable_detections）
+        # 別名解析 + 設置中文標籤
         for detection in stable_detections:
+            # 別名歸併：如 mug → cup
+            resolved = self.label_mapper.resolve_alias(detection.class_name)
+            if resolved != detection.class_name:
+                detection.class_name = resolved
             if not detection.class_name_cn:
                 detection.class_name_cn = self.label_mapper.get_chinese_name_from_en(
                     detection.class_name
