@@ -85,12 +85,18 @@ cd D:\GitHub_Project\yollo_E
 # 建立虛擬環境
 uv venv
 
-# 啟動虛擬環境
-.\.venv\Scripts\activate
-
-# 安裝套件
+# 安裝套件（自動安裝 CUDA 版 PyTorch，無需額外設定）
 uv sync
 ```
+
+> **GPU 加速說明：** `pyproject.toml` 已設定 PyTorch CUDA 12.8 官方 index，`uv sync` 會自動安裝 `torch 2.11.0+cu128`，RTX 系列 GPU 開箱即用。
+>
+> 若已有舊版虛擬環境（CPU 版 torch），請重建：
+> ```powershell
+> # 刪除舊環境並重建
+> Remove-Item -Recurse -Force .venv
+> uv sync
+> ```
 
 #### Step 2: 設定環境變數
 
@@ -288,11 +294,22 @@ stats = db.get_statistics()
 2. 降低 JPEG 品質
 3. 確保 WiFi 訊號良好
 
-### Q4: YOLO 辨識速度慢
+### Q4: YOLO 辨識速度慢（CPU 模式）
+
+**確認是否為 CPU 版 PyTorch：**
+```powershell
+uv run python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_available())"
+# 正確結果：2.11.0+cu128 / CUDA: True
+# 若顯示 CPU: False，請重建虛擬環境
+```
 
 **解決方案：**
-1. 確認使用 GPU (CUDA)
-2. 確認 NVIDIA 驅動程式為最新版本
+1. 重建虛擬環境以安裝 CUDA 版 torch：
+   ```powershell
+   Remove-Item -Recurse -Force .venv
+   uv sync
+   ```
+2. 確認 NVIDIA 驅動程式為最新版本（支援 CUDA 12.8+）
 3. 降低影像解析度
 
 ### Q5: 無法辨識特定物品
