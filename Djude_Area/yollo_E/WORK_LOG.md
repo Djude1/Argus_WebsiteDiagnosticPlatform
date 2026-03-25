@@ -4,6 +4,58 @@
 
 ---
 
+## 2026-03-25 (第十二次更新)
+
+### 任務摘要
+版本同步：回朔至 `b37a72b` 還原 DetectionEngine 整合，修復多個 CRITICAL/HIGH 問題，確保 webcam 與 web 版本均能正常偵測。
+
+### 執行操作
+1. `git reset --hard origin/main` 更新至遠端最新版本
+2. `git checkout b37a72b -- 4 files` 還原 DetectionEngine 整合
+3. 並行程式碼審查（webcam + web 兩條線同時）
+
+### 修復的問題（共 10 項）
+
+| 嚴重度 | 檔案 | 問題 |
+|--------|------|------|
+| CRITICAL | `detection_engine.py` | import 無 sys.path 防護，加入 `_src_path` 防護 |
+| CRITICAL | `web_server.py:1275` | `draw_detections()` 前缺 None check |
+| HIGH | `detection_engine.py` | `YOLODetector()` 位置引數錯誤（device 被當 confidence），改用具名參數 |
+| HIGH | `detection_engine.py` | 未載入 `.env` 的 `DETECTION_CLASSES`，新增 `detection_classes` 欄位 |
+| HIGH | `main.py:266` | 主迴圈內重複 import FrameDetectionResult，已移除 |
+| HIGH | `main.py:267` | `FrameDetectionResult` 缺 `frame_shape=frame.shape` |
+| HIGH | `main.py:288` | `result.count` 為 int，改為 `str(result.count)` |
+| HIGH | `yolo_detector.py` | `draw_detections()` 空 detections 時 `text_height` NameError |
+| MEDIUM | `data_manager.py` | `detection.class_name` 無 None 防護 |
+| LOW | `web_server.py:101` | 移除未使用的 `ExtensionOID` import |
+
+### 修改的檔案
+- `src/core/detection_engine.py` — sys.path 防護、正確 YOLODetector 參數、DETECTION_CLASSES 載入
+- `src/main.py` — 移除迴圈 import、加 frame_shape、修正 count 型別
+- `src/web_server.py` — draw_detections None check、bbox warning、移除 ExtensionOID
+- `src/detection/yolo_detector.py` — text_height 預設值防 NameError
+- `src/core/data_manager.py` — class_name None 防護
+
+### 提交記錄
+- `ddd0550` revert: restore DetectionEngine integration from b37a72b
+- `8c1b733` fix: detection_engine.py sys.path + OrderedDict
+- `09f107d` fix: yolo_detector text_height + data_manager None guard
+- `fd15fe9` fix: web_server None check + bbox warning + ExtensionOID
+- `e548cc3` fix: main.py loop import + frame_shape + count type
+
+### 重啟指令
+```bash
+# Webcam 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --source webcam
+
+# Web 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --web
+```
+
+---
+
 ## 2026-03-24 (第十一次更新)
 
 ### 任務摘要
