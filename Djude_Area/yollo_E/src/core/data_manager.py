@@ -82,13 +82,14 @@ class DataManager:
             json.dump(self._annotations, f, indent=2, ensure_ascii=False)
 
     def get_stats(self) -> dict:
-        """取得統計資訊"""
+        """取得統計資訊（格式相容前端 _updateAnnotationPanel）"""
         records = self._annotations.get("records", [])
         return {
             "total": len(records),
             "by_source": self._count_by_field(records, "source"),
             "by_type": self._count_by_field(records, "type"),
-            "by_class": self._count_by_field(records, "class_name"),
+            # by_class: {"cup": {"confirm": 3, "correct": 1, "false_positive": 0}, ...}
+            "by_class": self._count_by_class_and_type(records),
         }
 
     def _count_by_field(self, records: List[dict], field: str) -> Dict[str, int]:
@@ -97,3 +98,15 @@ class DataManager:
             key = r.get(field, "unknown")
             counts[key] = counts.get(key, 0) + 1
         return counts
+
+    def _count_by_class_and_type(self, records: List[dict]) -> Dict[str, Dict[str, int]]:
+        """依類別統計各回饋類型數量，格式符合前端期望"""
+        result: Dict[str, Dict[str, int]] = {}
+        for r in records:
+            cls = r.get("class_name", "unknown")
+            rtype = r.get("type", "annotation")
+            if cls not in result:
+                result[cls] = {"confirm": 0, "correct": 0, "false_positive": 0}
+            if rtype in result[cls]:
+                result[cls][rtype] += 1
+        return result

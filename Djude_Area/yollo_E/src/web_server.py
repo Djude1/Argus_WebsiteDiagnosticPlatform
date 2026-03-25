@@ -1188,9 +1188,18 @@ class WebDetectionServer:
         logger.info(f"結果客戶端連接，當前連接數: {len(self.result_clients)}")
 
         try:
-            # 保持連接，等待伺服器推送結果
+            # 保持連接，每 20 秒發送 heartbeat 防止 Cloudflare Tunnel idle 斷線
+            heartbeat_interval = 20
+            elapsed = 0
             while True:
                 await asyncio.sleep(1)
+                elapsed += 1
+                if elapsed >= heartbeat_interval:
+                    elapsed = 0
+                    try:
+                        await websocket.send_json({"type": "heartbeat"})
+                    except Exception:
+                        break
 
         except WebSocketDisconnect:
             logger.info("結果客戶端斷線")

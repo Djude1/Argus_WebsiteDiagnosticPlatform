@@ -351,6 +351,8 @@ class YOLOWebApp {
                     console.log('[DEBUG] 收到檢測結果:', event.data);
                     try {
                         const result = JSON.parse(event.data);
+                        // 忽略伺服器 heartbeat 訊息（防 Tunnel idle 斷線用）
+                        if (result.type === 'heartbeat') return;
                         this.handleDetectionResult(result);
                     } catch (e) {
                         console.error('[DEBUG] 解析結果失敗:', e, event.data);
