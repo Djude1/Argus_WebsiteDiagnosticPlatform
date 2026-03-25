@@ -964,7 +964,7 @@ class WebDetectionServer:
                     else:
                         logger.warning(f"新類別 '{correct_name}' 因槽位已滿，以停用狀態註冊")
 
-            return result
+            return {"success": True, **result}
 
         @self.app.get("/api/feedback/stats")
         async def get_feedback_stats():
@@ -1188,21 +1188,18 @@ class WebDetectionServer:
         logger.info(f"結果客戶端連接，當前連接數: {len(self.result_clients)}")
 
         try:
-            # 保持連接，每 20 秒發送 heartbeat 防止 Cloudflare Tunnel idle 斷線
-            heartbeat_interval = 20
-            elapsed = 0
             while True:
-                await asyncio.sleep(1)
-                elapsed += 1
-                if elapsed >= heartbeat_interval:
-                    elapsed = 0
-                    try:
-                        await websocket.send_json({"type": "heartbeat"})
-                    except Exception:
-                        break
-
+                try:
+                    # 等待客戶端訊息（正常不會收到），20 秒超時後發 heartbeat
+                    # 使用 receive_text 而非 sleep，可立即偵測客戶端斷線
+                    await asyncio.wait_for(websocket.receive_text(), timeout=20.0)
+                except asyncio.TimeoutError:
+                    # 20 秒無訊息 → 發 heartbeat 防止 Cloudflare Tunnel idle 斷線
+                    await websocket.send_json({"type": "heartbeat"})
         except WebSocketDisconnect:
             logger.info("結果客戶端斷線")
+        except Exception as e:
+            logger.warning(f"結果串流錯誤: {e}")
         finally:
             self.result_clients.discard(websocket)
             logger.info(f"結果客戶端斷開，當前連接數: {len(self.result_clients)}")
