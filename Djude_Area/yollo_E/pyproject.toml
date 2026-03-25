@@ -52,10 +52,12 @@ training = [
     "roboflow>=1.1.0",
 ]
 
-# CUDA 支援（需手動安裝，見下方說明）
-# 無法直接在 pyproject.toml 中指定 extra-index-url
-# 請使用以下指令安裝 CUDA 版 PyTorch：
-# uv pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu128
+# ============================================
+# uv 自動使用 CUDA 版 PyTorch（RTX 3050, CUDA 12.8）
+# 新建虛擬環境後執行 uv sync 即自動取得 GPU 版本
+# ============================================
+[tool.uv]
+extra-index-url = ["https://download.pytorch.org/whl/cu128"]
 
 [build-system]
 requires = ["hatchling"]
