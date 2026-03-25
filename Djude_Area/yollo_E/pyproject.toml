@@ -7,6 +7,11 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 
 dependencies = [
+    # PyTorch GPU 版本（CUDA 12.8，RTX 3050）
+    # 配合 [tool.uv] extra-index-url 自動從 PyTorch 官方 CUDA index 安裝
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+
     # YOLO 物件偵測
     "ultralytics>=8.3.0",
     
@@ -58,6 +63,8 @@ training = [
 # ============================================
 [tool.uv]
 extra-index-url = ["https://download.pytorch.org/whl/cu128"]
+# 允許跨 index 選最佳版本（PyPI vs PyTorch CUDA index）
+index-strategy = "unsafe-best-match"
 
 [build-system]
 requires = ["hatchling"]

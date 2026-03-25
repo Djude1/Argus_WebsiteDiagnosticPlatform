@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-03-25 (第十三次更新)
+
+### 任務摘要
+永久修復 PyTorch GPU 問題：透過 `pyproject.toml` 設定 `[tool.uv]` 讓所有未來的虛擬環境自動安裝 CUDA 版 PyTorch，並重新生成 `uv.lock` 確保鎖定版本為 CUDA build。
+
+### 問題根因
+`uv run` 強制遵守 `uv.lock`，而舊版 lockfile 中 torch 指向 PyPI（CPU 版）。
+即使手動 `uv pip install` 安裝了 CUDA 版，下次 `uv run` 仍會回退到 CPU 版。
+初次 `uv lock` 失敗原因：預設 index-strategy 只用第一個含有該套件的 index（PyPI 有 CPU torch → CUDA index 被忽略）。
+
+### 修改的檔案
+- `pyproject.toml` — 新增 `torch>=2.0.0`、`torchvision>=0.15.0` 至 dependencies；`[tool.uv]` 新增 `index-strategy = "unsafe-best-match"`
+- `uv.lock` — 重新生成：torch `2.10.0` (CPU) → `2.11.0+cu128`，torchvision `0.25.0` → `0.26.0+cu128`
+
+### 驗證結果
+```
+PyTorch: 2.11.0+cu128
+CUDA available: True
+Device: NVIDIA GeForce RTX 3050 Laptop GPU
+```
+
+### 重啟指令
+```bash
+# Webcam 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --source webcam
+
+# Web 版本
+cd Djude_Area/yollo_E
+uv run python src/main.py --web
+```
+
+---
+
 ## 2026-03-25 (第十二次更新)
 
 ### 任務摘要
