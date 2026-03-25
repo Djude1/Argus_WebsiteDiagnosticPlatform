@@ -100,13 +100,32 @@ class DataManager:
         return counts
 
     def _count_by_class_and_type(self, records: List[dict]) -> Dict[str, Dict[str, int]]:
-        """依類別統計各回饋類型數量，格式符合前端期望"""
+        """依類別統計各回饋類型數量，格式符合前端期望
+
+        「更正」語意：
+        - 原偵測類別 (class_name) 是誤報 → false_positive +1
+        - 正確類別 (correct_class) 才是真正存在的物件 → confirm +1
+        """
         result: Dict[str, Dict[str, int]] = {}
+
+        def _ensure(cls: str):
+            if cls not in result:
+                result[cls] = {"confirm": 0, "correct": 0, "false_positive": 0}
+
         for r in records:
             cls = r.get("class_name", "unknown")
             rtype = r.get("type", "annotation")
-            if cls not in result:
-                result[cls] = {"confirm": 0, "correct": 0, "false_positive": 0}
-            if rtype in result[cls]:
-                result[cls][rtype] += 1
+            correct_cls = r.get("correct_class")
+
+            if rtype == "correct" and correct_cls:
+                # 原偵測是誤報；正確類別獲得確認
+                _ensure(cls)
+                result[cls]["false_positive"] += 1
+                _ensure(correct_cls)
+                result[correct_cls]["confirm"] += 1
+            else:
+                _ensure(cls)
+                if rtype in result[cls]:
+                    result[cls][rtype] += 1
+
         return result
