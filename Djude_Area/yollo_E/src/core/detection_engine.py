@@ -2,10 +2,17 @@
 # 偵測引擎封裝
 # ============================================
 
-from collections import OrderedDict
-from dataclasses import dataclass
+import sys
 from pathlib import Path
-from typing import List
+
+# 確保 src/ 在 sys.path 中，避免相對 import 失敗
+_src_path = Path(__file__).resolve().parent.parent  # core/ 的上一層是 src/
+if str(_src_path) not in sys.path:
+    sys.path.insert(0, str(_src_path))
+
+import os
+from dataclasses import dataclass, field
+from typing import List, Optional
 import time
 import numpy as np
 from loguru import logger
@@ -22,19 +29,46 @@ class DetectionConfig:
     confidence: float = 0.25
     max_active_classes: int = 10
     custom_classes_path: str = "data/custom_classes.json"
+    # 預設偵測類別（從 .env DETECTION_CLASSES 讀取）
+    detection_classes: str = field(
+        default_factory=lambda: os.getenv("DETECTION_CLASSES", "")
+    )
 
 
 class DetectionEngine:
     def __init__(self, config: DetectionConfig):
         self.config = config
-        self.detector = YOLODetector(config.model_path, config.device)
+
+        # 解析預設偵測類別
+        prompt_classes = None
+        if config.detection_classes:
+            prompt_classes = [
+                c.strip() for c in config.detection_classes.split(",") if c.strip()
+            ]
+            logger.info(f"預設偵測類別: {prompt_classes}")
+
+        # 正確傳遞具名參數給 YOLODetector
+        self.detector = YOLODetector(
+            model_path=config.model_path,
+            confidence_threshold=config.confidence,
+            device=config.device,
+            prompt_classes=prompt_classes,
+        )
         self.stabilizer = DetectionStabilizer(window_size=3, min_hits=2)
         self.label_mapper = LabelMapper()
         self.max_active_classes = config.max_active_classes
         self._active_classes = {}
         self._load_custom_classes(Path(config.custom_classes_path))
-        if self._active_classes:
-            self.update_classes(list(self._active_classes.keys()))
+
+        # 合併預設類別 + 自訂類別，一次性更新
+        all_classes = list(prompt_classes) if prompt_classes else []
+        for cls_name in self._active_classes:
+            if cls_name not in all_classes:
+                all_classes.append(cls_name)
+        if all_classes:
+            self.update_classes(all_classes)
+            logger.info(f"已設定 {len(all_classes)} 個偵測類別: {all_classes}")
+
         logger.info("DetectionEngine 已初始化")
 
     def detect(self, frame):
