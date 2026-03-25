@@ -98,7 +98,7 @@ def generate_self_signed_cert(cert_dir: Path) -> Tuple[Path, Path]:
 
     # 創建自簽名證書
     from cryptography import x509
-    from cryptography.x509.oid import NameOID, ExtensionOID
+    from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives import serialization
@@ -895,6 +895,7 @@ class WebDetectionServer:
             if request.bbox and len(request.bbox) == 4:
                 mock_bbox = BoundingBox(x1=request.bbox[0], y1=request.bbox[1], x2=request.bbox[2], y2=request.bbox[3])
             else:
+                logger.warning(f"bbox 格式無效（長度={len(request.bbox) if request.bbox else 0}），使用全零 bbox")
                 mock_bbox = BoundingBox(x1=0, y1=0, x2=0, y2=0)
             detection = MockDetection(
                 class_name=request.class_name,
@@ -1272,7 +1273,10 @@ class WebDetectionServer:
             fps=self.fps,
             frame_shape=frame.shape,
         )
-        annotated_frame = self.engine.detector.draw_detections(frame, stable_result)
+        if self.engine.detector is not None:
+            annotated_frame = self.engine.detector.draw_detections(frame, stable_result)
+        else:
+            annotated_frame = frame
 
         # 將處理後的畫面編碼為 base64
         _, buffer = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
