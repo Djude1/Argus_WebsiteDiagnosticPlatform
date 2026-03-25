@@ -263,10 +263,10 @@ class YOLODetectionSystem:
                 raw_detections = self.engine.detect(frame)
 
                 # 包裝為 FrameDetectionResult 以相容現有程式碼
-                from detection.yolo_detector import FrameDetectionResult
                 result = FrameDetectionResult(
                     detections=raw_detections,
                     fps=0.0,  # DetectionEngine 不直接提供 FPS，由顯示端計算
+                    frame_shape=frame.shape,
                 )
 
                 # 記錄到資料庫
@@ -285,7 +285,7 @@ class YOLODetectionSystem:
                     # 顯示資訊面板
                     info = {
                         "FPS": f"{result.fps:.1f}",
-                        "Objects": result.count,
+                        "Objects": str(result.count),
                         "Source": self.source,
                     }
                     output = draw_info_panel(output, info, position=(10, 30))
