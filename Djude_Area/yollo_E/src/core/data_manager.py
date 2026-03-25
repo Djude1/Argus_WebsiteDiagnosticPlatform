@@ -49,7 +49,8 @@ class DataManager:
         """統一記錄偵測/回饋資料"""
         with self._lock:
             timestamp = datetime.now()
-            record_id = f"{timestamp.strftime('%Y%m%d_%H%M%S_%f')}_{detection.class_name.replace(' ', '_')}"
+            class_name_safe = (detection.class_name or "unknown").replace(' ', '_')
+            record_id = f"{timestamp.strftime('%Y%m%d_%H%M%S_%f')}_{class_name_safe}"
             image_filename = f"{record_id}.jpg"
             image_path = self._images_dir / image_filename
             self._images_dir.mkdir(parents=True, exist_ok=True)

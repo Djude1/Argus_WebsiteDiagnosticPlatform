@@ -378,6 +378,7 @@ class YOLODetector:
             except:
                 font = ImageFont.load_default()
 
+        text_height = 0  # 預設值，防止空 detections 時 NameError
         for detection in result.detections:
             # 取得邊界框座標
             x1, y1, x2, y2 = detection.bbox.to_tuple()
