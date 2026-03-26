@@ -187,10 +187,12 @@ export default function Announcements() {
         getAnnouncements(),
         getAnnouncementTags(),
       ])
-      setAnnouncements(annRes.data)
-      setTags(tagRes.data)
-    } catch {
-      // 靜默失敗
+      setAnnouncements(Array.isArray(annRes?.data) ? annRes.data : [])
+      setTags(Array.isArray(tagRes?.data) ? tagRes.data : [])
+    } catch (err) {
+      console.error('載入公告失敗:', err)
+      setAnnouncements([])
+      setTags([])
     }
     setLoading(false)
   }, [])
@@ -199,22 +201,34 @@ export default function Announcements() {
 
   // ── 標籤操作 ──────────────────────────────────────────────────────────────
   const handleCreateTag = async (data) => {
-    await createAnnouncementTag(data)
-    const res = await getAnnouncementTags()
-    setTags(res.data)
+    try {
+      await createAnnouncementTag(data)
+      const res = await getAnnouncementTags()
+      setTags(Array.isArray(res?.data) ? res.data : [])
+    } catch (err) {
+      console.error('建立標籤失敗:', err)
+    }
   }
 
   const handleUpdateTag = async (id, data) => {
-    await updateAnnouncementTag(id, data)
-    const res = await getAnnouncementTags()
-    setTags(res.data)
+    try {
+      await updateAnnouncementTag(id, data)
+      const res = await getAnnouncementTags()
+      setTags(Array.isArray(res?.data) ? res.data : [])
+    } catch (err) {
+      console.error('更新標籤失敗:', err)
+    }
   }
 
   const handleDeleteTag = async (id) => {
     if (!window.confirm('確定要刪除此標籤？')) return
-    await deleteAnnouncementTag(id)
-    const res = await getAnnouncementTags()
-    setTags(res.data)
+    try {
+      await deleteAnnouncementTag(id)
+      const res = await getAnnouncementTags()
+      setTags(Array.isArray(res?.data) ? res.data : [])
+    } catch (err) {
+      console.error('刪除標籤失敗:', err)
+    }
   }
 
   // ── 切換啟用狀態 ──────────────────────────────────────────────────────────
@@ -223,8 +237,8 @@ export default function Announcements() {
     try {
       await updateAnnouncement(item.id, { is_active: !item.is_active })
       await load()
-    } catch {
-      // 靜默失敗
+    } catch (err) {
+      console.error('切換狀態失敗:', err)
     }
     setToggling(null)
   }
@@ -235,8 +249,8 @@ export default function Announcements() {
     try {
       await updateAnnouncement(item.id, { show_on_website: !item.show_on_website })
       await load()
-    } catch {
-      // 靜默失敗
+    } catch (err) {
+      console.error('切換前台顯示失敗:', err)
     }
     setToggling(null)
   }
@@ -248,8 +262,8 @@ export default function Announcements() {
     try {
       await deleteAnnouncement(item.id)
       await load()
-    } catch {
-      // 靜默失敗
+    } catch (err) {
+      console.error('刪除失敗:', err)
     }
     setDeleting(null)
   }
@@ -274,8 +288,8 @@ export default function Announcements() {
         is_active: true, show_on_website: false, tags: [],
       })
       await load()
-    } catch {
-      // 靜默失敗
+    } catch (err) {
+      console.error('新增失敗:', err)
     }
     setSaving(false)
   }
