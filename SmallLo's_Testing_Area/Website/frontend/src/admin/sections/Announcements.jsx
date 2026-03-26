@@ -292,7 +292,7 @@ export default function Announcements() {
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex-1 flex overflow-hidden">
       {/* ── 左欄：公告列表 ───────────────────────────────────────────── */}
       <div className="w-96 bg-white border-r border-gray-100 flex flex-col flex-shrink-0">
         {/* 標頭 */}
