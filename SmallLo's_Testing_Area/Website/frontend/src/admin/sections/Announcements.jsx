@@ -85,7 +85,7 @@ function TagManagerModal({ tags, onClose, onCreate, onUpdate, onDelete }) {
               placeholder="標籤名稱"
               value={newTag.name}
               onChange={(e) => setNewTag(f => ({ ...f, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <input
               type="color"
@@ -118,7 +118,7 @@ function TagManagerModal({ tags, onClose, onCreate, onUpdate, onDelete }) {
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                      className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800"
                     />
                     <input
                       type="color"
@@ -187,8 +187,8 @@ export default function Announcements() {
         getAnnouncements(),
         getAnnouncementTags(),
       ])
-      setAnnouncements(Array.isArray(annRes?.data) ? annRes.data : [])
-      setTags(Array.isArray(tagRes?.data) ? tagRes.data : [])
+      setAnnouncements(Array.isArray(annRes?.data?.results) ? annRes.data.results : (Array.isArray(annRes?.data) ? annRes.data : []))
+      setTags(Array.isArray(tagRes?.data?.results) ? tagRes.data.results : (Array.isArray(tagRes?.data) ? tagRes.data : []))
     } catch (err) {
       console.error('載入公告失敗:', err)
       setAnnouncements([])
@@ -470,7 +470,7 @@ export default function Announcements() {
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Object.entries(TYPE_LABELS).map(([v, l]) => (
                   <option key={v} value={v}>{TYPE_ICON[v]} {l}</option>
@@ -488,7 +488,7 @@ export default function Announcements() {
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 placeholder="例如：APP 版本更新通知"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -502,7 +502,7 @@ export default function Announcements() {
                 onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                 rows={4}
                 placeholder="輸入公告內容…"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
@@ -547,7 +547,7 @@ export default function Announcements() {
                 type="datetime-local"
                 value={form.scheduled_at}
                 onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
