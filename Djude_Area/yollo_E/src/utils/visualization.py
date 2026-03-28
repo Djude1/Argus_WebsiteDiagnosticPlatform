@@ -25,11 +25,13 @@ except ImportError:
 
 
 # ============================================
-# 中文字體設定
+# 中文字體設定（效能優化版）
 # ============================================
 
+# 全域字體快取 - 避免每次繪製都重新載入字體
+_FONT_CACHE: Dict[int, ImageFont.FreeTypeFont] = {}
 
-# 嘗試找到系統中可用的中文字體
+
 def _get_chinese_font_path() -> Optional[str]:
     """取得系統中可用的中文字體路徑"""
     system = platform.system()
@@ -63,6 +65,32 @@ def _get_chinese_font_path() -> Optional[str]:
 
 # 預設中文字體路徑
 _DEFAULT_CHINESE_FONT_PATH = _get_chinese_font_path()
+
+
+def _get_cached_font(font_size: int, font_path: Optional[str] = None) -> ImageFont.FreeTypeFont:
+    """
+    取得快取的字體物件（避免重複載入）
+
+    參數:
+        font_size: 字體大小
+        font_path: 字體路徑（可選）
+
+    回傳:
+        字體物件
+    """
+    # 使用路徑和大小作為快取鍵
+    cache_key = hash((font_path, font_size))
+
+    if cache_key not in _FONT_CACHE:
+        if font_path and os.path.exists(font_path):
+            try:
+                _FONT_CACHE[cache_key] = ImageFont.truetype(font_path, font_size)
+            except Exception:
+                _FONT_CACHE[cache_key] = ImageFont.load_default()
+        else:
+            _FONT_CACHE[cache_key] = ImageFont.load_default()
+
+    return _FONT_CACHE[cache_key]
 
 
 def _contains_chinese(text: str) -> bool:
@@ -101,14 +129,8 @@ def _draw_text_with_pil(
 
     draw = ImageDraw.Draw(pil_image)
 
-    # 設定字體
-    if font_path and os.path.exists(font_path):
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-        except Exception:
-            font = ImageFont.load_default()
-    else:
-        font = ImageFont.load_default()
+    # 使用快取的字體（避免重複載入）
+    font = _get_cached_font(font_size, font_path)
 
     # PIL 使用 RGB，所以需要反轉 BGR 到 RGB
     rgb_color = (color[2], color[1], color[0])
@@ -138,13 +160,8 @@ def _get_text_size_with_pil(
     回傳:
         (寬度, 高度)
     """
-    if font_path and os.path.exists(font_path):
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-        except Exception:
-            font = ImageFont.load_default()
-    else:
-        font = ImageFont.load_default()
+    # 使用快取的字體（避免重複載入）
+    font = _get_cached_font(font_size, font_path)
 
     # 創建臨時影像來計算文字大小
     dummy_image = PILImage.new("RGB", (1, 1))
@@ -154,6 +171,52 @@ def _get_text_size_with_pil(
     height = int(bbox[3] - bbox[1])
 
     return width, height
+
+
+# ============================================
+# 批次中文文字繪製（效能優化）
+# ============================================
+
+
+def _draw_chinese_texts_batch(
+    image: np.ndarray,
+    texts: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]],
+    font_size: int = 20,
+    font_path: Optional[str] = None,
+) -> np.ndarray:
+    """
+    批次繪製中文文字（只做一次 BGR↔RGB 轉換）
+
+    參數:
+        image: OpenCV 影像 (BGR)
+        texts: 文字列表 [(文字, 位置, 顏色), ...]
+        font_size: 字體大小
+        font_path: 字體檔案路徑
+
+    回傳:
+        繪製後的影像 (BGR)
+    """
+    if not texts:
+        return image
+
+    # 只做一次 BGR→RGB 轉換
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    pil_image = PILImage.fromarray(image_rgb)
+    draw = ImageDraw.Draw(pil_image)
+
+    # 使用快取的字體
+    font = _get_cached_font(font_size, font_path)
+
+    # 批次繪製所有文字
+    for text, position, color in texts:
+        # BGR → RGB
+        rgb_color = (color[2], color[1], color[0])
+        draw.text(position, text, font=font, fill=rgb_color)
+
+    # 只做一次 RGB→BGR 轉換
+    result = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+    return result
 
 
 # 顏色定義
@@ -188,7 +251,7 @@ def draw_detections(
     chinese_font_size: int = 20,
 ) -> np.ndarray:
     """
-    在影像上繪製偵測結果
+    在影像上繪製偵測結果（效能優化版：批次繪製中文）
 
     參數:
         image: 輸入影像
@@ -206,6 +269,10 @@ def draw_detections(
     """
     output = image.copy()
 
+    # 收集需要用 PIL 繪製的中文文字（批次處理）
+    chinese_texts: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = []
+
+    # 第一階段：用 OpenCV 繪製所有邊界框、標籤背景和英文文字
     for detection in result.detections:
         # 取得邊界框座標
         x1, y1, x2, y2 = detection.bbox.to_tuple()
@@ -231,7 +298,7 @@ def draw_detections(
         has_chinese = _contains_chinese(label)
 
         if has_chinese and _DEFAULT_CHINESE_FONT_PATH:
-            # 使用 PIL 繪製中文文字
+            # 使用 PIL 繪製中文文字 - 先計算大小並繪製背景
             text_width, text_height = _get_text_size_with_pil(
                 label, chinese_font_size, _DEFAULT_CHINESE_FONT_PATH
             )
@@ -239,15 +306,8 @@ def draw_detections(
             # 繪製標籤背景
             cv2.rectangle(output, (x1, y1 - text_height - 10), (x1 + text_width + 5, y1), color, -1)
 
-            # 使用 PIL 繪製文字
-            output = _draw_text_with_pil(
-                output,
-                label,
-                (x1 + 2, y1 - text_height - 7),
-                font_size=chinese_font_size,
-                color=COLORS["white"],
-                font_path=_DEFAULT_CHINESE_FONT_PATH,
-            )
+            # 收集中文文字，稍後批次繪製
+            chinese_texts.append((label, (x1 + 2, y1 - text_height - 7), COLORS["white"]))
         else:
             # 使用 OpenCV 繪製英文文字
             (text_width, text_height), baseline = cv2.getTextSize(
@@ -267,6 +327,15 @@ def draw_detections(
                 COLORS["white"],
                 font_thickness,
             )
+
+    # 第二階段：批次繪製所有中文文字（只做一次 BGR↔RGB 轉換）
+    if chinese_texts:
+        output = _draw_chinese_texts_batch(
+            output,
+            chinese_texts,
+            font_size=chinese_font_size,
+            font_path=_DEFAULT_CHINESE_FONT_PATH,
+        )
 
     return output
 
