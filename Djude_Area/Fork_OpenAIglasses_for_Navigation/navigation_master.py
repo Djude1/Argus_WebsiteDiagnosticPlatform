@@ -12,6 +12,14 @@ from collections import deque
 from workflow_blindpath import BlindPathNavigator, ProcessingResult as BlindResult
 from workflow_crossstreet import CrossStreetNavigator, CrossStreetResult as CrossResult
 
+def _log_nav(event: str, detail: str = ""):
+    """安全記錄導航事件到後台系統日誌"""
+    try:
+        from auth import log_navigation_event
+        log_navigation_event(event, detail)
+    except Exception:
+        pass
+
 # ========== 状态常量 ==========
 IDLE = "IDLE"                          # 空闲/未启用
 CHAT = "CHAT"                          # 对话模式（不进行导航，只返回原始画面）
@@ -271,6 +279,10 @@ class NavigationMaster:
         self.tl_major = MajorityFilter(size=8)
         self.tl_last_color = "unknown"
 
+        # 三層並行導航：盲道模式中嵌入紅綠燈偵測（GPU 加速，每幀偵測）
+        self._tl_last_announced = ""        # 上次播報的燈色（避免重複播報）
+        self._tl_announce_ts = 0.0          # 上次紅綠燈播報時間
+
         # 参数（可按现场再调）
         self.FRAMES_CROSS_SEEN = 8
         self.FRAMES_ALIGN_READY = 12
@@ -281,7 +293,7 @@ class NavigationMaster:
         self.ANGLE_ALIGN_THR_DEG = 12.0
         self.OFFSET_ALIGN_THR = 0.15
 
-        self.COOLDOWN_SEC = 0.6
+        self.COOLDOWN_SEC = 0.2
         
         # 找物品状态管理
         self.prev_nav_state_before_search = None  # 找物品前的导航状态，用于恢复
@@ -291,30 +303,34 @@ class NavigationMaster:
         return self.state
     
     def start_blind_path_navigation(self):
-        """启动盲道导航模式"""
+        """啟動避障導航模式"""
         self.state = BLINDPATH_NAV
         self.cooldown_until = time.time() + self.COOLDOWN_SEC
         if self.blind:
             self.blind.reset()
-    
+        _log_nav("nav_start", "避障導航啟動")
+
     def stop_navigation(self):
-        """停止导航，回到对话模式"""
+        """停止導航，回到對話模式"""
         self.state = CHAT
         self.cooldown_until = time.time() + self.COOLDOWN_SEC
         if self.blind:
             self.blind.reset()
-    
+        _log_nav("nav_stop", "導航停止")
+
     def start_crossing(self):
-        """启动过马路模式"""
+        """啟動過馬路模式"""
         self.state = CROSSING
         self.cooldown_until = time.time() + self.COOLDOWN_SEC
         if self.cross:
             self.cross.reset()
-    
+        _log_nav("nav_crossing", "過馬路模式啟動")
+
     def start_traffic_light_detection(self):
-        """启动红绿灯检测模式"""
+        """啟動紅綠燈偵測模式"""
         self.state = TRAFFIC_LIGHT_DETECTION
         self.cooldown_until = time.time() + self.COOLDOWN_SEC
+        _log_nav("nav_traffic_light", "紅綠燈偵測啟動")
     
     def is_in_navigation_mode(self):
         """检查是否在导航模式（非对话模式）"""
@@ -331,6 +347,7 @@ class NavigationMaster:
         
         self.state = ITEM_SEARCH
         self.cooldown_until = time.time() + self.COOLDOWN_SEC
+        _log_nav("nav_item_search", "物品搜尋啟動")
     
     def stop_item_search(self, restore_nav: bool = True):
         """停止找物品模式"""
@@ -376,6 +393,9 @@ class NavigationMaster:
         self.tl_last_color = "unknown"
         self.prev_target_state = BLINDPATH_NAV
         self._last_wait_light_announce = 0  # 重置等待绿灯播报时间
+        # 三層並行導航計數器重置
+        self._tl_last_announced = ""
+        self._tl_announce_ts = 0.0
         try:
             self.blind.reset()
         except Exception:
@@ -465,9 +485,8 @@ class NavigationMaster:
                 self.state = RECOVERY
                 self.cnt_lost += 5
                 ann_err = bgr.copy()
-                # 【移除】所有可视化干扰
-                # _draw_badge(ann_err, "NAV ERROR", (10, 28), fg="white", bg="red")
-                # _put_text(ann_err, str(e), (10, 56), color=(255,255,255), scale=0.55)
+                _draw_badge(ann_err, "NAV ERROR", (10, 28), fg="white", bg="red")
+                _put_text(ann_err, str(e)[:80], (10, 56), color=(255,255,255), scale=0.55)
                 return OrchestratorResult(ann_err, self._say(now, ""), self.state, {"error": str(e)})
 
             ann = bres.annotated_image if bres.annotated_image is not None else bgr.copy()
@@ -492,15 +511,42 @@ class NavigationMaster:
                     self.cooldown_until = now + self.COOLDOWN_SEC
                     say = "正在接近斑马线，为您对准方向。"
 
-                # 【移除】所有可视化干扰
-                # _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="blue")
-                # _draw_state_panel(ann, {
-                #     "盲道状态": blind_state,
-                #     "斑马线阶段": cross_stage,
-                #     "靠近计数": self.cnt_crosswalk_seen,
-                # }, pos=(10, 60))
-                # _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_crosswalk_seen / max(1, self.FRAMES_CROSS_SEEN))), pos=(10, 120), size=(180, 10), color="cyan")
-                # _draw_frame_border(ann, color=_color_bgr("blue"), thickness=3)
+                # ── 第二層：紅綠燈偵測（並行，優先級 80，GPU 每幀偵測） ──
+                try:
+                    tl_color, _tl_meta = self.tld.detect(bgr)
+                    self.tl_major.push(tl_color)
+                    tl_major = self.tl_major.majority()
+                    self.tl_last_color = tl_major
+
+                    # 燈色改變時立即播報；同燈色至少間隔 5 秒才重播
+                    tl_voice_map = {
+                        "red":    "红灯，请停止。",
+                        "green":  "绿灯，可以通行。",
+                        "yellow": "黄灯，请注意。",
+                    }
+                    tl_voice = tl_voice_map.get(tl_major, "")
+                    if tl_voice:
+                        color_changed = (tl_major != self._tl_last_announced)
+                        enough_interval = (now - self._tl_announce_ts) >= 5.0
+                        # 障礙物語音優先（priority=100），不覆蓋
+                        # 障礙物關鍵字：前方有、左侧有、右侧有、停一下、注意避让
+                        _OBS_KWS = ('前方有', '左侧有', '右侧有', '停一下', '注意避让')
+                        has_obstacle = any(kw in say for kw in _OBS_KWS)
+                        if (color_changed or enough_interval) and not has_obstacle:
+                            say = tl_voice
+                            self._tl_last_announced = tl_major
+                            self._tl_announce_ts = now
+                except Exception:
+                    pass  # 紅綠燈偵測失敗不影響主流程
+
+                # 狀態面板（DEBUG 用）
+                _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="blue")
+                _draw_state_panel(ann, {
+                    "盲道状态": blind_state,
+                    "斑马线阶段": cross_stage,
+                    "靠近计数": self.cnt_crosswalk_seen,
+                }, pos=(10, 60))
+                _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_crosswalk_seen / max(1, self.FRAMES_CROSS_SEEN))), pos=(10, 120), size=(180, 10), color="cyan")
 
             # —— 对准阶段：同时利用 blind 内部 crosswalk_tracker 的角度与偏移（若提供）
             elif self.state == SEEKING_CROSSWALK:
@@ -515,19 +561,18 @@ class NavigationMaster:
                     self.cooldown_until = now + self.COOLDOWN_SEC
                     say = "已到达斑马线，请等待红绿灯。"
 
-                # 【移除】所有可视化干扰
-                # _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="orange")
-                # panel = {
-                #     "阶段": cross_stage,
-                #     "对准计数": self.cnt_align_ready,
-                # }
-                # if "last_angle" in state_info:
-                #     panel["角度(°)"] = f"{angle:.1f}"
-                # if "last_center_x_ratio" in state_info:
-                #     panel["偏移"] = f"{(center_x_ratio-0.5):+.2f}"
-                # _draw_state_panel(ann, panel, pos=(10, 60))
-                # _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_align_ready / max(1, self.FRAMES_ALIGN_READY))), pos=(10, 120), size=(220, 10), color="yellow")
-                # _draw_frame_border(ann, color=_color_bgr("orange"), thickness=3)
+                # 狀態面板（DEBUG 用）
+                _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="orange")
+                panel = {
+                    "阶段": cross_stage,
+                    "对准计数": self.cnt_align_ready,
+                }
+                if "last_angle" in state_info:
+                    panel["角度(°)"] = f"{angle:.1f}"
+                if "last_center_x_ratio" in state_info:
+                    panel["偏移"] = f"{(center_x_ratio-0.5):+.2f}"
+                _draw_state_panel(ann, panel, pos=(10, 60))
+                _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_align_ready / max(1, self.FRAMES_ALIGN_READY))), pos=(10, 120), size=(220, 10), color="yellow")
 
             # —— 过马路后寻找下一段盲道（上盲道流程）
             elif self.state == SEEKING_NEXT_BLINDPATH:
@@ -540,14 +585,13 @@ class NavigationMaster:
                     self.cooldown_until = now + self.COOLDOWN_SEC
                     say = "方向正确，请继续前进。"
 
-                # 【移除】所有可视化干扰
-                # _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="green")
-                # _draw_state_panel(ann, {
-                #     "盲道状态": blind_state,
-                #     "回归计数": self.cnt_cross_end
-                # }, pos=(10, 60))
-                # _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_cross_end / max(1, self.FRAMES_NEXT_BLIND_OK))), pos=(10, 120), size=(200, 10), color="green")
-                # _draw_frame_border(ann, color=_color_bgr("green"), thickness=3)
+                # 狀態面板（DEBUG 用）
+                _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="green")
+                _draw_state_panel(ann, {
+                    "盲道状态": blind_state,
+                    "回归计数": self.cnt_cross_end
+                }, pos=(10, 60))
+                _draw_progress_bar(ann, max(0.0, min(1.0, self.cnt_cross_end / max(1, self.FRAMES_NEXT_BLIND_OK))), pos=(10, 120), size=(200, 10), color="green")
 
             # —— 恢复态：一旦盲道恢复可用则回盲道
             elif self.state == RECOVERY:
@@ -557,13 +601,12 @@ class NavigationMaster:
                     say = ""
                 else:
                     say = ""
-                # 【移除】所有可视化干扰
-                # _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="red")
-                # _draw_state_panel(ann, {
-                #     "提示": "请缓慢环顾/抬头/降低手机角度",
-                #     "丢失计数": self.cnt_lost
-                # }, pos=(10, 60))
-                # _draw_frame_border(ann, color=_color_bgr("red"), thickness=3)
+                # 狀態面板（DEBUG 用）
+                _draw_badge(ann, f"STATE: {self.state}", (10, 28), fg="white", bg="red")
+                _draw_state_panel(ann, {
+                    "提示": "请缓慢环顾/抬头/降低手机角度",
+                    "丢失计数": self.cnt_lost
+                }, pos=(10, 60))
 
             # 丢失计数（兜底）
             if blind_state == "UNKNOWN" and cross_stage == "not_detected":
@@ -576,11 +619,11 @@ class NavigationMaster:
                 self.cooldown_until = now + self.COOLDOWN_SEC
                 say = "环境复杂，进入恢复模式。"
 
-            # 【移除】冷却进度条
-            # if in_cooldown:
-            #     remain = max(0.0, self.cooldown_until - now)
-            #     ratio = 1.0 - min(1.0, remain / self.COOLDOWN_SEC)
-            #     _draw_progress_bar(ann, ratio, pos=(10, 140), size=(160, 8), color="gray")
+            # 冷卻進度條（DEBUG 用）
+            if in_cooldown:
+                remain = max(0.0, self.cooldown_until - now)
+                ratio = 1.0 - min(1.0, remain / self.COOLDOWN_SEC)
+                _draw_progress_bar(ann, ratio, pos=(10, 140), size=(160, 8), color="gray")
 
             return OrchestratorResult(ann, self._say(now, say), self.state, {"source": "blind", "cross_stage": cross_stage, "blind_state": blind_state})
 

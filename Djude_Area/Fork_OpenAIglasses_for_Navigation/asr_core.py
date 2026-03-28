@@ -37,6 +37,32 @@ def _calc_rms(pcm_data: bytes) -> float:
     samples = struct.unpack(f'<{num_samples}h', pcm_data[:num_samples * 2])
     return (sum(s * s for s in samples) / num_samples) ** 0.5
 
+# ── Google SpeechClient 快取（避免每次建立 ASR 都重新初始化 gRPC）──────────────
+_cached_speech_client = None
+_cached_speech_client_lock = threading.Lock()
+
+def _get_or_create_speech_client(credentials_path: str):
+    """取得或建立共用的 SpeechClient，首次呼叫會建立 gRPC 連線（較慢），後續直接複用。"""
+    global _cached_speech_client
+    if _cached_speech_client is not None:
+        return _cached_speech_client
+    with _cached_speech_client_lock:
+        if _cached_speech_client is not None:
+            return _cached_speech_client
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+        from google.cloud import speech as _speech
+        t0 = time.monotonic()
+        _cached_speech_client = _speech.SpeechClient()
+        elapsed = time.monotonic() - t0
+        print(f"[GoogleASR] SpeechClient 已建立（耗時 {elapsed:.1f}s）", flush=True)
+        return _cached_speech_client
+
+def preload_speech_client(credentials_path: str):
+    """伺服器啟動時呼叫，背景預載 SpeechClient，縮短首次語音辨識等待時間。"""
+    def _worker():
+        _get_or_create_speech_client(credentials_path)
+    threading.Thread(target=_worker, daemon=True, name="PreloadSpeechClient").start()
+
 def _normalize_cn(s: str) -> str:
     try:
         import unicodedata
@@ -508,14 +534,10 @@ class GroqASR:
             # 完整喚醒詞比對
             matched = any(w and _normalize_cn(w) in norm for w in WAKE_WORDS)
 
-            # 寬鬆比對：只要辨識到「哈囉/哈喽」+ 「曼波/漫播/漫波/曼播」任意組合也觸發
-            # 因為 Groq 常將後半段音節誤轉或截斷
+            # 寬鬆比對：只要辨識到「哈囉」即可觸發喚醒
             if not matched:
                 HELLO_VARIANTS = ("哈囉", "哈喽", "哈啰")
-                MABO_VARIANTS  = ("曼波", "漫播", "漫波", "曼播", "慢波", "慢播", "曼", "漫")
-                has_hello = any(v in norm for v in HELLO_VARIANTS)
-                has_mabo  = any(v in norm for v in MABO_VARIANTS)
-                matched = has_hello and has_mabo
+                matched = any(v in norm for v in HELLO_VARIANTS)
 
             if matched:
                 print(f"[GroqASR] 喚醒詞偵測: '{text}'", flush=True)
@@ -578,14 +600,15 @@ class GoogleASR:
     # 說話人驗證用的近期音訊緩衝（滑動視窗保留最近 N 秒音訊）
     _RECENT_BUF_SEC:    float = 5.0    # 保留最近 5 秒供聲紋比對
 
-    # 喚醒詞寬鬆比對關鍵字
+    # 喚醒詞寬鬆比對關鍵字（只要「哈囉」即可觸發，不需要「曼波」）
     _HELLO_VARIANTS = ("哈囉", "哈喽", "哈啰")
-    _MABO_VARIANTS  = ("曼波", "漫播", "漫波", "曼播", "慢波", "慢播", "曼", "漫")
 
-    def __init__(self, credentials_path: str, sample_rate: int, callback: "ASRCallback"):
+    def __init__(self, credentials_path: str, sample_rate: int, callback: "ASRCallback",
+                 bypass_wake: bool = False):
         self._credentials_path = credentials_path
         self._sample_rate      = sample_rate
         self._callback         = callback
+        self._bypass_wake      = bypass_wake   # 實例級旁路模式（APP 連線時啟用）
         self._running          = False
         self._audio_queue: queue.Queue = queue.Queue()
         self._mode             = "standby"
@@ -610,7 +633,10 @@ class GoogleASR:
             target=self._stream_loop, daemon=True, name="GoogleASR"
         )
         self._stream_thread.start()
-        print("[GoogleASR] started（待機中，等待喚醒詞）", flush=True)
+        if self._bypass_wake:
+            print("[GoogleASR] started（旁路模式，跳過喚醒詞）", flush=True)
+        else:
+            print("[GoogleASR] started（待機中，等待喚醒詞）", flush=True)
 
     def stop(self):
         self._running = False
@@ -692,8 +718,8 @@ class GoogleASR:
                 self._callback.on_recording_end()  # 播放「結束收音」音效
 
     def _check_wake_word(self, text: str):
-        # 旁路模式：跳過喚醒詞，STT 結果直接派發給 AI
-        if _bypass_wake:
+        # 旁路模式（全域或實例級）：跳過喚醒詞，STT 結果直接派發給 AI
+        if _bypass_wake or self._bypass_wake:
             print(f"[ASR-旁路] STT → '{text}'", flush=True)
             event = {"output": {"sentence": {"text": text, "sentence_end": True}}}
             self._callback.on_event(event)
@@ -702,9 +728,8 @@ class GoogleASR:
         norm = _normalize_cn(text)
         matched = any(w and _normalize_cn(w) in norm for w in WAKE_WORDS)
         if not matched:
-            has_hello = any(v in norm for v in self._HELLO_VARIANTS)
-            has_mabo  = any(v in norm for v in self._MABO_VARIANTS)
-            matched = has_hello and has_mabo
+            # 只要辨識到「哈囉」即可觸發喚醒
+            matched = any(v in norm for v in self._HELLO_VARIANTS)
 
         if not matched:
             print(f"[GoogleASR] 待機中收到: '{text}'（無喚醒詞，忽略）", flush=True)
@@ -738,8 +763,7 @@ class GoogleASR:
 
     def _stream_loop(self):
         """主串流執行緒：含自動重啟邏輯"""
-        import os as _os
-        _os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self._credentials_path
+
         from google.cloud import speech as _speech
 
         config = _speech.RecognitionConfig(
@@ -761,10 +785,12 @@ class GoogleASR:
             interim_results=True,
         )
 
+        # 複用快取的 SpeechClient（伺服器啟動時已預載）
+        client = _get_or_create_speech_client(self._credentials_path)
+
         while self._running:
             stop_event = threading.Event()
             try:
-                client    = _speech.SpeechClient()
                 responses = client.streaming_recognize(
                     streaming_config,
                     self._audio_generator(stop_event),
@@ -783,3 +809,26 @@ class GoogleASR:
                     time.sleep(2)
             finally:
                 stop_event.set()
+
+
+# ── 動態參數調整（Dashboard 用，不重啟生效）────────────────────────────────────
+
+def set_standby_rms_thresh(value: float):
+    """設定待機靜音門檻（低於此 RMS 不送 ASR）"""
+    global STANDBY_RMS_THRESH
+    STANDBY_RMS_THRESH = float(value)
+
+def set_pcm_gain(value: float):
+    """設定麥克風增益倍數"""
+    global PCM_GAIN
+    PCM_GAIN = float(value)
+
+def set_silence_sec(value: float):
+    """設定主動模式靜音判斷秒數"""
+    GroqASR.SILENCE_SEC   = float(value)
+    GoogleASR.SILENCE_SEC = float(value)
+
+def set_silence_rms_thresh(value: float):
+    """設定主動模式靜音 RMS 門檻"""
+    GroqASR.SILENCE_RMS_THRESH   = float(value)
+    GoogleASR.SILENCE_RMS_THRESH = float(value)

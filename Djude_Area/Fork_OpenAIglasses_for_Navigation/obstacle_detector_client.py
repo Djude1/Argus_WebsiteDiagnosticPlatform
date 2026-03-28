@@ -58,10 +58,27 @@ class ObstacleDetectorClient:
         self.model = None
         self.whitelist_embeddings = None
         self.WHITELIST_CLASSES = [
-            'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'animal', 'scooter', 'stroller', 'dog',
-            'pole', 'post', 'column', 'pillar', 'stanchion', 'bollard', 'utility pole',
-            'telegraph pole', 'light pole', 'street pole', 'signpost', 'support post',
-            'vertical post', 'bench', 'chair', 'potted plant', 'hydrant', 'cone', 'stone', 'box'
+            # 人（視障者最需要閃避）
+            'person',
+            # 交通工具與動物
+            'bicycle', 'car', 'motorcycle', 'bus', 'truck',
+            'animal', 'scooter', 'stroller', 'dog',
+            # 柱狀障礙物（精簡同義詞，保留高頻詞）
+            'pole', 'post', 'bollard', 'utility pole', 'light pole', 'signpost',
+            # 路邊常見固定物
+            'bench', 'chair', 'potted plant', 'hydrant', 'cone', 'stone', 'box',
+            'trash can', 'barrel', 'cart',
+            # 阻隔物
+            'fence', 'barrier', 'wall', 'gate', 'door',
+            # 地面障礙
+            'rock', 'tree', 'branch', 'curb',
+            'stairs', 'step', 'ramp', 'hole',
+            # 行李
+            'bag', 'suitcase', 'backpack',
+            # 其他
+            'table', 'ladder',
+            # 通用（捕捉未知障礙物）
+            'object', 'obstacle',
         ]
         try:
             logger.info("正在加载 YOLOE 障碍物模型...")
@@ -152,8 +169,8 @@ class ObstacleDetectorClient:
             # 空间过滤：如果提供了 path_mask，则只保留路径上的障碍物
             if path_mask is not None:
                 intersection_area = np.sum(cv2.bitwise_and(mask, path_mask) > 0)
-                # 必须与路径有足够的重叠
-                if intersection_area < 100 or (intersection_area / area) < 0.01:
+                # 與路徑有任何重疊即保留（降低門檻：從 100px 改為 30px）
+                if intersection_area < 30:
                     continue
 
             cls_id = int(results[0].boxes.cls[i])

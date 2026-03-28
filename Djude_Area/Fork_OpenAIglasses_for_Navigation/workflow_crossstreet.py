@@ -1184,20 +1184,32 @@ class CrossStreetNavigator:
                     y_offset += 25
         return image
 
-    def _speech_for_obstacle(self, name: str) -> str:
-        """生成障碍物语音提示"""
+    def _speech_for_obstacle(self, name: str,
+                              center_x: float = 0.0, center_y: float = 0.0,
+                              img_w: int = 640, img_h: int = 480) -> str:
+        """生成障礙物語音提示，方向依 APP 設定的 position_mode 播報"""
+        # 計算方向（時鐘 / 前後左右）
+        try:
+            from app_main import _position_mode
+        except Exception:
+            _position_mode = "cardinal"
+        from position_reporter import get_position_label
+        direction = get_position_label(center_x, center_y, img_w, img_h, _position_mode)
+
         k = (name or '').strip().lower()
-        if k == 'person': return "前方有人，注意避让。"
-        if k == 'car': return "前方有车，注意避让。"
-        if k == 'bicycle': return "前方有自行车，停一下。"
-        if k == 'motorcycle': return "前方有摩托车，停一下。"
-        if k == 'bus': return "前方有公交车，停一下。"
-        if k == 'truck': return "前方有卡车，停一下。"
-        if k == 'scooter': return "前方有电瓶车，停一下。"
-        if k == 'stroller': return "前方有婴儿车，停一下。"
-        if k == 'dog': return "前方有狗，停一下。"
-        if k == 'animal': return "前方有动物，停一下。"
-        return "前方有障碍物，注意避让。"
+        # 需要「停一下」的動態障礙物
+        stop_classes = {'bicycle', 'motorcycle', 'bus', 'truck', 'scooter', 'stroller', 'dog', 'animal'}
+        if k == 'person':   return f"{direction}有人，注意避讓。"
+        if k == 'car':      return f"{direction}有車，注意避讓。"
+        if k in stop_classes:
+            cn_map = {
+                'bicycle': '自行車', 'motorcycle': '摩托車', 'bus': '公車',
+                'truck': '卡車', 'scooter': '電動車', 'stroller': '嬰兒車',
+                'dog': '狗', 'animal': '動物',
+            }
+            cn = cn_map.get(k, name)
+            return f"{direction}有{cn}，停一下。"
+        return f"{direction}有障礙物，注意避讓。"
 
     def process_frame(self, bgr_image: np.ndarray) -> CrossStreetResult:
         """处理单帧图像（每帧分割；若失败，用光流追踪上一帧掩码保持可视化与导航）"""
@@ -1671,8 +1683,14 @@ class CrossStreetNavigator:
                         NEAR_AREA = 0.1
                         near_list = [o for o in detected_obstacles if (o.get('bottom_y_ratio', 0) > NEAR_Y or o.get('area_ratio', 0) > NEAR_AREA)]
                         if near_list:
-                            name = (near_list[0].get('name') or '障碍物')
-                            obstacle_override = self._speech_for_obstacle(name)
+                            obs0 = near_list[0]
+                            name = (obs0.get('name') or '障碍物')
+                            obstacle_override = self._speech_for_obstacle(
+                                name,
+                                center_x=float(obs0.get('center_x', w / 2)),
+                                center_y=float(obs0.get('center_y', h / 2)),
+                                img_w=w, img_h=h,
+                            )
 
                     # 【移除左上角调试信息，改为右上角数据面板】
                     # 更新右上角数据面板（合并到已有的面板数据中）

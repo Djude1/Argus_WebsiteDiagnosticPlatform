@@ -400,8 +400,45 @@ def play_voice_text(text: str):
         _last_voice_time = current_time
         return
 
-    # 未匹配则输出日志（便于调试）
-    print(f"[AUDIO] 未找到匹配语音: {text}")
+    # 未命中預錄 WAV → 使用 Gemini TTS 動態合成（背景執行緒，不阻塞）
+    print(f"[AUDIO] 未找到匹配語音，啟動 Gemini TTS: {text}")
+    _last_voice_text = text
+    _last_voice_time = current_time
+    _play_tts_fallback(text)
+
+def _play_tts_fallback(text: str) -> None:
+    """
+    在背景執行緒中呼叫 Gemini TTS，將結果重採樣後放入播放佇列。
+    - Gemini TTS 回傳 PCM16 24kHz → audioop 重採樣至 8kHz
+    - 整個過程在 daemon thread 中執行，不阻塞呼叫者
+    """
+    def _worker():
+        try:
+            import audioop
+            from omni_client import _call_tts
+
+            pcm24k: bytes | None = _call_tts(text, voice="Leda")
+            if not pcm24k:
+                print(f"[AUDIO TTS] Gemini TTS 回傳空音訊: {text}", flush=True)
+                return
+
+            # 24kHz 單聲道 → 8kHz（與預錄 WAV 相同格式）
+            pcm8k, _ = audioop.ratecv(pcm24k, 2, 1, 24000, 8000, None)
+
+            # 放入播放佇列（與 play_audio_threadsafe 相同機制）
+            global _audio_priority
+            _audio_priority += 1
+            try:
+                _audio_queue.put_nowait((_audio_priority, pcm8k))
+                print(f"[AUDIO TTS] 動態語音已加入佇列: {text}", flush=True)
+            except queue.Full:
+                print(f"[AUDIO TTS] 佇列已滿，丟棄: {text}", flush=True)
+
+        except Exception as e:
+            print(f"[AUDIO TTS] fallback 失敗: {e}", flush=True)
+
+    threading.Thread(target=_worker, daemon=True, name="TTS-Fallback").start()
+
 
 # 兼容旧接口
 play_audio_on_esp32 = play_audio_threadsafe

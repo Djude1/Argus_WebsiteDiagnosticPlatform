@@ -40,6 +40,9 @@ GEMINI_API_KEY_7: str = os.environ.get("GEMINI_API_KEY_7", "")
 GEMINI_API_KEY_8: str = os.environ.get("GEMINI_API_KEY_8", "")
 GEMINI_API_KEY_9: str = os.environ.get("GEMINI_API_KEY_9", "")
 GEMINI_API_KEY_10: str = os.environ.get("GEMINI_API_KEY_10", "")
+GEMINI_API_KEY_11: str = os.environ.get("GEMINI_API_KEY_11", "")
+GEMINI_API_KEY_12: str = os.environ.get("GEMINI_API_KEY_12", "")
+GEMINI_API_KEY_13: str = os.environ.get("GEMINI_API_KEY_13", "")
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 
 # Google Speech-to-Text 服務帳戶憑證 JSON 路徑
@@ -97,6 +100,8 @@ SAMPLE_RATE: int = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
 CHUNK_MS: int = int(os.getenv("AUDIO_CHUNK_MS", "20"))
 # ASR 上傳格式
 AUDIO_FORMAT: str = os.getenv("AUDIO_FORMAT", "pcm")
+# 音訊下行串流採樣率（TTS 播放，ESP32 喇叭）
+STREAM_SR: int = int(os.getenv("STREAM_SR", "8000"))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TTS / 語音播報

@@ -22,6 +22,7 @@ import sys
 import cv2
 import pyaudio
 import websockets
+from config import STREAM_SR  # 從集中設定檔讀取下行音訊取樣率（與 audio_stream.py 一致）
 
 # ── 設定 ────────────────────────────────────────────────────────────────────
 SERVER_HOST    = os.getenv("SERVER_HOST_SIM", "127.0.0.1")
@@ -31,7 +32,6 @@ JPEG_QUALITY   = int(os.getenv("LOCAL_CAM_QUALITY", "70"))
 CAM_FPS        = int(os.getenv("LOCAL_CAM_FPS", "10"))
 SAMPLE_RATE    = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
 CHUNK_MS       = int(os.getenv("AUDIO_CHUNK_MS", "20"))
-STREAM_SR      = 8000   # 下行音訊取樣率（與 audio_stream.py 一致）
 
 WS_CAMERA = f"ws://{SERVER_HOST}:{SERVER_PORT}/ws/camera"
 WS_AUDIO  = f"ws://{SERVER_HOST}:{SERVER_PORT}/ws_audio"

@@ -11,16 +11,22 @@ try:
 except Exception:
     from ultralytics import YOLO as _MODEL
 
+import torch
+
 # 從 config.py 讀取模型路徑（路徑由 .env 的 YOLOE_MODEL_PATH 提供）
 from config import YOLOE_MODEL_PATH as DEFAULT_MODEL_PATH
 
 TRACKER_CFG = os.getenv("YOLO_TRACKER_YAML", "bytetrack.yaml")
 
+# 統一 device 選擇：優先 GPU，無 CUDA 時回退 CPU
+_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 class YoloEBackend:
     def __init__(self, model_path: Optional[str] = None, device: Optional[Union[str, int]] = None):
+        self.device = device or _DEVICE
         self.model = _MODEL(model_path or DEFAULT_MODEL_PATH)
-        self.model.to("cuda")
-        self.device = device
+        self.model.to(self.device)
+        print(f"[YoloEBackend] 模型已載入，device={self.device}")
 
     def set_text_classes(self, names: List[str]):
         # YOLOE 文本提示：与你模板一致

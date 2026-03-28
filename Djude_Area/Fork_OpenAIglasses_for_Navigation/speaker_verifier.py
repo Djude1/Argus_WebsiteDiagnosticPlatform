@@ -33,6 +33,11 @@ EMBED_PATH = os.getenv("SPEAKER_EMBED_PATH", "model/speaker_embed.pkl")
 THRESHOLD  = float(os.getenv("SPEAKER_THRESHOLD", "0.82"))
 BACKEND    = os.getenv("SPEAKER_BACKEND", "auto")  # auto / resemblyzer / numpy
 
+def set_threshold(value: float):
+    """動態設定聲紋相似度門檻（0~1，越高越嚴格，不需重啟）"""
+    global THRESHOLD
+    THRESHOLD = max(0.0, min(1.0, float(value)))
+
 
 # ── Mel 濾波器組 ─────────────────────────────────────────────────────────────
 
@@ -58,13 +63,26 @@ def _mel_filterbank(sample_rate: int, n_fft: int, n_filters: int) -> np.ndarray:
     return fbank
 
 
-# ── MFCC 幀提取 ──────────────────────────────────────────────────────────────
+# ── MFCC 幀提取（含 delta 動態特徵）─────────────────────────────────────────
+
+def _compute_delta(mfcc: np.ndarray, N: int = 2) -> np.ndarray:
+    """計算一階差分（delta）係數，反映聲音的動態變化"""
+    T, D = mfcc.shape
+    delta  = np.zeros_like(mfcc)
+    denom  = 2.0 * sum(n * n for n in range(1, N + 1))
+    for t in range(T):
+        for n in range(1, N + 1):
+            delta[t] += n * (mfcc[min(t + n, T - 1)] - mfcc[max(t - n, 0)])
+    return delta / (denom + 1e-10)
+
 
 def _extract_mfcc_frames(pcm_data: bytes, sample_rate: int = 16000,
-                         n_mfcc: int = 20, n_filters: int = 40) -> np.ndarray:
+                         n_mfcc: int = 20, n_filters: int = 40,
+                         with_delta: bool = True) -> np.ndarray:
     """
-    提取 MFCC 幀序列，回傳 (T, n_mfcc) 陣列。
+    提取 MFCC 幀序列，回傳 (T, n_mfcc) 或 (T, n_mfcc*2) 陣列。
     使用 25ms 幀長 / 10ms 步長 + pre-emphasis + CMN。
+    with_delta=True 時加入 delta 特徵，維度加倍（靜態 + 動態）。
     """
     wav = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
 
@@ -102,30 +120,38 @@ def _extract_mfcc_frames(pcm_data: bytes, sample_rate: int = 16000,
     # Cepstral Mean Normalization（消除麥克風通道差異）
     mfcc -= mfcc.mean(axis=0, keepdims=True)
 
+    if with_delta:
+        delta = _compute_delta(mfcc)
+        mfcc  = np.concatenate([mfcc, delta], axis=1)  # (T, n_mfcc*2)
+
     return mfcc
 
+
+# 最少需要多少比例的「有聲幀」才認為音訊含有效語音（0~1）
+_MIN_VOICED_RATIO = 0.25
 
 def _frame_similarity(enrolled_frames: np.ndarray,
                       test_frames: np.ndarray) -> float:
     """
-    幀級別對稱最近鄰相似度。
+    幀級別對稱 Top-K 最近鄰相似度。
 
-    原理：
-      - 對每個測試幀，找最相似的錄製幀 → 取平均
-      - 對每個錄製幀，找最相似的測試幀 → 取平均
-      - 兩者平均作為最終分數
-
-    比全局均值更能區分不同說話人：
-      - 相同說話人：大多數幀都能找到高相似的對應幀（≈ 0.90）
-      - 不同說話人：幀與幀之間找不到高相似配對（≈ 0.65~0.75）
+    改進點（相較於 top-1）：
+      - 靜音幀過濾更嚴格：保留能量前 60%（過濾掉低能量 40%）
+      - 若有聲幀比例低於 _MIN_VOICED_RATIO，視為無語音回傳 0
+      - 使用 Top-K（K=3）最近鄰平均，抑制偶發噪音造成的高分異常
+      - 相同說話人有聲幀 ≈ 0.90+，環境音 / 無語音 → 被過濾後分數 < 0.70
     """
-    # 過濾靜音幀（能量低於 25 百分位的幀）
-    e_energy = np.linalg.norm(enrolled_frames, axis=1)
-    t_energy = np.linalg.norm(test_frames, axis=1)
-    e = enrolled_frames[e_energy > np.percentile(e_energy, 25)]
-    t = test_frames[t_energy > np.percentile(t_energy, 25)]
+    TOP_K = 3
 
-    if len(e) == 0 or len(t) == 0:
+    # 過濾靜音幀（保留能量較高的 60%）
+    e_energy = np.linalg.norm(enrolled_frames, axis=1)
+    t_energy = np.linalg.norm(test_frames,     axis=1)
+    e = enrolled_frames[e_energy >= np.percentile(e_energy, 40)]
+    t = test_frames[    t_energy >= np.percentile(t_energy, 40)]
+
+    # 若測試片段有聲幀不足，判斷為無語音輸入
+    voiced_ratio = len(t) / max(len(test_frames), 1)
+    if len(e) == 0 or len(t) == 0 or voiced_ratio < _MIN_VOICED_RATIO:
         return 0.0
 
     # L2 正規化
@@ -133,11 +159,14 @@ def _frame_similarity(enrolled_frames: np.ndarray,
     t_norm = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-10)
 
     # 餘弦相似度矩陣 (T_test, T_enroll)
-    sim = t_norm @ e_norm.T
+    sim = t_norm @ e_norm.T   # (|t|, |e|)
 
-    # 對稱最近鄰平均
-    score = (sim.max(axis=1).mean() + sim.max(axis=0).mean()) / 2
-    return float(score)
+    # 對稱 Top-K 最近鄰平均（K=3 比 top-1 更穩定）
+    k_te = min(TOP_K, sim.shape[1])
+    k_et = min(TOP_K, sim.shape[0])
+    score_te = np.partition(sim,  -k_te, axis=1)[:, -k_te:].mean()
+    score_et = np.partition(sim.T, -k_et, axis=1)[:, -k_et:].mean()
+    return float((score_te + score_et) / 2)
 
 
 # ── 主類別 ──────────────────────────────────────────────────────────────────
@@ -195,8 +224,9 @@ class SpeakerVerifier:
                 self._enrolled_embed  = embed
                 self._enrolled_frames = None
             else:
-                frames = _extract_mfcc_frames(pcm_data, sample_rate)
-                payload = {"frames": frames, "backend": "numpy_frames"}
+                # v2：靜態 MFCC + delta，維度 40（更準確）
+                frames = _extract_mfcc_frames(pcm_data, sample_rate, with_delta=True)
+                payload = {"frames": frames, "backend": "numpy_frames", "version": 2}
                 self._enrolled_frames = frames
                 self._enrolled_embed  = None
 
@@ -205,9 +235,9 @@ class SpeakerVerifier:
                 pickle.dump(payload, f)
 
             self._enabled = True
-            backend_name  = "resemblyzer" if self._use_resemblyzer else "numpy 幀匹配"
-            n_info = (f"幀數={frames.shape[0]}" if not self._use_resemblyzer
-                      else f"維度={embed.shape}")
+            backend_name  = "resemblyzer" if self._use_resemblyzer else "numpy 幀匹配 v2"
+            n_info = (f"幀數={frames.shape[0]}, 維度={frames.shape[1]}"
+                      if not self._use_resemblyzer else f"維度={embed.shape}")
             print(
                 f"[SpeakerVerifier] ✓ 聲紋已建立（backend={backend_name}，"
                 f"{n_info}，儲存至 {EMBED_PATH}）",
@@ -237,8 +267,16 @@ class SpeakerVerifier:
                 embed      = self._resemblyzer_embed(pcm_data, sample_rate)
                 similarity = float(np.dot(embed, self._enrolled_embed))
             else:
-                test_frames = _extract_mfcc_frames(pcm_data, sample_rate)
-                similarity  = _frame_similarity(self._enrolled_frames, test_frames)
+                # 偵測 enrolled 格式版本，決定是否加 delta
+                enr = self._enrolled_frames
+                use_delta = (enr is not None and enr.ndim == 2 and enr.shape[1] > 20)
+                test_frames = _extract_mfcc_frames(pcm_data, sample_rate,
+                                                   with_delta=use_delta)
+                # 若維度不符（舊格式），降回無 delta 模式
+                if enr is not None and test_frames.shape[1] != enr.shape[1]:
+                    test_frames = _extract_mfcc_frames(pcm_data, sample_rate,
+                                                       with_delta=False)
+                similarity  = _frame_similarity(enr, test_frames)
 
             passed = similarity >= THRESHOLD
             status = "✓ 通過" if passed else "✗ 拒絕"
@@ -263,10 +301,14 @@ class SpeakerVerifier:
 
     def status_dict(self) -> dict:
         try:
-            from asr_core import STANDBY_RMS_THRESH
-            rms_thr = STANDBY_RMS_THRESH
+            import asr_core
+            rms_thr     = asr_core.STANDBY_RMS_THRESH
+            pcm_gain    = asr_core.PCM_GAIN
+            from asr_core import GoogleASR, GroqASR
+            silence_sec = GoogleASR.SILENCE_SEC
+            silence_rms = GoogleASR.SILENCE_RMS_THRESH
         except Exception:
-            rms_thr = None
+            rms_thr = pcm_gain = silence_sec = silence_rms = None
         return {
             "enabled":        self._enabled,
             "enrolled":       self._has_enrollment(),
@@ -274,6 +316,9 @@ class SpeakerVerifier:
             "backend":        "resemblyzer" if self._use_resemblyzer else "numpy",
             "threshold":      THRESHOLD,
             "rms_threshold":  rms_thr,
+            "pcm_gain":       pcm_gain,
+            "silence_sec":    silence_sec,
+            "silence_rms":    silence_rms,
             "embed_path":     EMBED_PATH,
         }
 
@@ -328,9 +373,12 @@ class SpeakerVerifier:
             backend = data.get("backend", "")
             if backend == "numpy_frames" and "frames" in data:
                 self._enrolled_frames = data["frames"]
+                ver   = data.get("version", 1)
+                dim   = self._enrolled_frames.shape[1]
+                hint  = "" if ver >= 2 else "  ⚠ 舊格式(v1)，建議重新錄製以啟用 delta 特徵"
                 print(
-                    f"[SpeakerVerifier] 已載入聲紋（numpy 幀匹配，"
-                    f"幀數={self._enrolled_frames.shape[0]}）",
+                    f"[SpeakerVerifier] 已載入聲紋（numpy 幀匹配 v{ver}，"
+                    f"幀數={self._enrolled_frames.shape[0]}，維度={dim}）{hint}",
                     flush=True,
                 )
             elif "embed" in data:

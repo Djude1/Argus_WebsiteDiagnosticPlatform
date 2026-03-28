@@ -7,7 +7,7 @@ from fastapi import Request
 from fastapi.responses import StreamingResponse
 
 # ===== 下行 WAV 流基础参数 =====
-STREAM_SR = 8000  # 改为8kHz，ESP32支持
+from config import STREAM_SR  # 從集中設定檔讀取下行串流採樣率
 STREAM_CH = 1
 STREAM_SW = 2
 BYTES_PER_20MS_16K = STREAM_SR * STREAM_SW * 20 // 1000  # 320B (8kHz)
@@ -58,19 +58,26 @@ def _wav_header_unknown_size(sr=16000, ch=1, sw=2) -> bytes:
 
 async def hard_reset_audio(reason: str = ""):
     """
-    **一键清场**：丢弃所有播放器连接（abort_event置位）+ 取消当前AI任务。
-    这样旧的音频不会再有任何去处，也没有任何任务继续产出。
+    **一键清场**：取消当前AI任务 + 清空所有串流佇列中的舊音訊。
+    保持 /stream.wav 連線不斷，避免 APP 重連延遲導致後續音訊丟失。
     """
-    # 1) 断开所有正在播放的 HTTP 连接
-    for sc in list(stream_clients):
-        try:
-            sc.abort_event.set()
-        except Exception:
-            pass
-    stream_clients.clear()
-
-    # 2) 取消当前AI任务
+    # 1) 取消当前AI任务
     await cancel_current_ai()
+
+    # 2) 清空所有客戶端佇列中的殘留音訊（不斷開連線）
+    dead: list = []
+    for sc in list(stream_clients):
+        if sc.abort_event.is_set():
+            dead.append(sc)
+            continue
+        # 清空佇列中的舊資料
+        while not sc.q.empty():
+            try:
+                sc.q.get_nowait()
+            except Exception:
+                break
+    for sc in dead:
+        stream_clients.discard(sc)
 
     # 3) 日志
     if reason:
@@ -99,6 +106,9 @@ async def broadcast_pcm16_realtime(pcm16: bytes):
             local_device.play_pcm_locally(pcm16)
     except Exception:
         pass
+
+    if not stream_clients:
+        print(f"[STREAM] ⚠ broadcast 但無串流客戶端連線（音訊將丟失）", flush=True)
 
     loop = asyncio.get_event_loop()
     next_tick = loop.time()
@@ -135,7 +145,8 @@ async def broadcast_pcm16_realtime(pcm16: bytes):
 def register_stream_route(app):
     @app.get("/stream.wav")
     async def stream_wav(_: Request):
-        # —— 强制单连接（或少数连接），先拉闸所有旧连接 ——
+        # —— 强制单连接，先拉闸所有旧连接 ——
+        old_count = len(stream_clients)
         for sc in list(stream_clients):
             try: sc.abort_event.set()
             except Exception: pass
@@ -145,6 +156,9 @@ def register_stream_route(app):
         abort_event = asyncio.Event()
         sc = StreamClient(q=q, abort_event=abort_event)
         stream_clients.add(sc)
+        print(f"[STREAM] 新 /stream.wav 連線（清理 {old_count} 個舊連線，目前 {len(stream_clients)} 個）", flush=True)
+
+        _SILENCE_FRAME = b"\x00" * BYTES_PER_20MS_16K
 
         async def gen():
             yield _wav_header_unknown_size(STREAM_SR, STREAM_CH, STREAM_SW)
@@ -153,8 +167,12 @@ def register_stream_route(app):
                     if abort_event.is_set():
                         break
                     try:
-                        chunk = await asyncio.wait_for(q.get(), timeout=0.5)
+                        # 以 20ms 為一個節拍輪詢，保持音訊串流速率
+                        # 有資料時播放，無資料時送靜音幀（維持 8kHz 即時速率，防止 Android 斷線）
+                        chunk = await asyncio.wait_for(q.get(), timeout=0.020)
                     except asyncio.TimeoutError:
+                        if not abort_event.is_set():
+                            yield _SILENCE_FRAME
                         continue
                     if abort_event.is_set():
                         break

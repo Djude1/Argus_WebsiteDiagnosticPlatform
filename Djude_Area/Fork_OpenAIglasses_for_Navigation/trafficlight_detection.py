@@ -10,6 +10,7 @@ import time
 import threading
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 import bridge_io
 from audio_player import play_voice_text  # 使用统一的语音播放接口
@@ -193,7 +194,11 @@ def main(headless: bool = True, stop_event=None):
     print("[TRAFFIC] 加载 YOLO 红绿灯检测模型...")
     try:
         model = YOLO(YOLO_MODEL_PATH)
-        print(f"[TRAFFIC] 模型加载成功: {YOLO_MODEL_PATH}")
+        if torch.cuda.is_available():
+            model.to("cuda")
+            print(f"[TRAFFIC] 模型加载成功（GPU）: {YOLO_MODEL_PATH}")
+        else:
+            print(f"[TRAFFIC] 模型加载成功（CPU，CUDA 不可用）: {YOLO_MODEL_PATH}")
     except Exception as e:
         print(f"[TRAFFIC] 模型加载失败: {e}")
         return
@@ -484,7 +489,11 @@ def init_model():
     try:
         print("[TRAFFIC] 加载 YOLO 红绿灯检测模型...")
         _model = YOLO(YOLO_MODEL_PATH)
-        print(f"[TRAFFIC] 模型加载成功: {YOLO_MODEL_PATH}")
+        if torch.cuda.is_available():
+            _model.to("cuda")
+            print(f"[TRAFFIC] 模型加载成功（GPU）: {YOLO_MODEL_PATH}")
+        else:
+            print(f"[TRAFFIC] 模型加载成功（CPU，CUDA 不可用）: {YOLO_MODEL_PATH}")
         class_names = _model.names if hasattr(_model, 'names') else {}
         print(f"[TRAFFIC] 模型类别: {class_names}")
         return True

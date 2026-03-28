@@ -12,6 +12,7 @@ import threading
 import cv2
 import numpy as np
 import bridge_io
+from config import STREAM_SR  # 從集中設定檔讀取，與 audio_stream.py 保持一致
 
 # ── 設定讀取 ────────────────────────────────────────────────────────────────
 LOCAL_MODE      = os.getenv("LOCAL_MODE", "false").lower() == "true"
@@ -19,7 +20,6 @@ SAMPLE_RATE     = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
 CHUNK_MS        = int(os.getenv("AUDIO_CHUNK_MS", "20"))
 CAM_INDEX       = int(os.getenv("CAM_INDEX", "0"))
 JPEG_QUALITY    = int(os.getenv("LOCAL_CAM_QUALITY", "70"))
-STREAM_SR       = 8000  # 與 audio_stream.py STREAM_SR 一致
 
 _stop_event = threading.Event()
 

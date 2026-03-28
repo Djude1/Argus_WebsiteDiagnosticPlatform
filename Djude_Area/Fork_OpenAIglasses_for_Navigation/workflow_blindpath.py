@@ -16,6 +16,7 @@ import torch  # 添加这行
 from obstacle_detector_client import ObstacleDetectorClient
 from audio_player import play_voice_text  # 新增
 from crosswalk_awareness import CrosswalkAwarenessMonitor, split_combined_voice  # 斑马线感知
+from gemini_scene_describer import GeminiSceneDescriber  # Gemini 場景補充描述
 # 尝试导入 Pillow，用于中文显示
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -53,22 +54,60 @@ VIS_COLORS = {
     "pulse_effect": (100, 100, 255)  # 淡红色
 }
 
-# 障碍物名称映射
+# 障碍物名称映射（中文標籤，用於 AR 顯示與語音播報）
 _OBSTACLE_NAME_CN = {
-    'person': '人',
-    'bicycle': '自行车',
-    'car': '车',
-    'motorcycle': '摩托车',
-    'bus': '公交车',
-    'truck': '卡车',
-    'animal': '动物',
-    'scooter': '电瓶车',
-    'stroller': '婴儿车',
-    'dog': '狗',
+    # 動態物體（需報名稱）
+    'person': '人', 'bicycle': '自行車', 'car': '車',
+    'motorcycle': '摩托車', 'bus': '公車', 'truck': '卡車',
+    'animal': '動物', 'scooter': '電動車', 'stroller': '嬰兒車', 'dog': '狗',
+    # 柱狀
+    'pole': '柱子', 'post': '柱子', 'bollard': '護柱',
+    'utility pole': '電線桿', 'light pole': '路燈', 'signpost': '路牌',
+    # 路邊固定物
+    'bench': '長椅', 'chair': '椅子', 'potted plant': '盆栽',
+    'hydrant': '消防栓', 'cone': '三角錐', 'stone': '石頭', 'box': '箱子',
+    'trash can': '垃圾桶', 'barrel': '桶', 'cart': '推車',
+    # 阻隔物
+    'fence': '圍欄', 'barrier': '路障', 'wall': '牆',
+    'gate': '門', 'door': '門',
+    # 地面
+    'rock': '石頭', 'tree': '樹', 'branch': '樹枝', 'curb': '路緣',
+    'stairs': '樓梯', 'step': '台階', 'ramp': '斜坡', 'hole': '坑洞',
+    # 行李
+    'bag': '袋子', 'suitcase': '行李箱', 'backpack': '背包',
+    # 其他
+    'table': '桌子', 'ladder': '梯子',
+    # 通用
+    'object': '障礙物', 'obstacle': '障礙物',
 }
 
-# 动态类别名称列表
-DYNAMIC_CLASS_NAMES = {'person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'animal', 'dog'}
+# 動態類別名稱列表（會移動的物體，需要報名稱提醒視障者）
+DYNAMIC_CLASS_NAMES = {'person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'animal', 'dog', 'scooter'}
+
+def _obstacle_size_label(area_ratio: float) -> str:
+    """根據障礙物佔畫面比例回傳大小描述（大/中/小）"""
+    if area_ratio >= 0.15:
+        return "大型"
+    elif area_ratio >= 0.04:
+        return "中型"
+    return "小型"
+
+def _obstacle_urgency(bottom_y_ratio: float, area_ratio: float):
+    """根據障礙物距離回傳緊迫等級與對應語尾
+
+    Returns: (level: int, suffix: str)
+        level 0 = 遠（僅提示）
+        level 1 = 中（注意）
+        level 2 = 近（小心）
+        level 3 = 極近（快閃開）
+    """
+    if bottom_y_ratio > 0.85 or area_ratio > 0.25:
+        return 3, "快閃開！"
+    elif bottom_y_ratio > 0.70 or area_ratio > 0.12:
+        return 2, "小心！"
+    elif bottom_y_ratio > 0.55 or area_ratio > 0.05:
+        return 1, "注意避讓。"
+    return 0, "注意。"
 
 @dataclass
 class ProcessingResult:
@@ -199,6 +238,9 @@ class BlindPathNavigator:
         
         # 障碍物语音待播报
         self.pending_obstacle_voice = None
+
+        # Gemini 背景場景補充描述（每 10 秒、YOLO 無事件時播報）
+        self._scene_describer = GeminiSceneDescriber()
         
         # 红绿灯检测
         self.traffic_light_detector = None
@@ -231,13 +273,15 @@ class BlindPathNavigator:
         
         # 障碍物检测间隔
         # 障碍物检测优化参数 - 从环境变量读取，支持性能调优
-        self.OBSTACLE_DETECTION_INTERVAL = int(os.getenv("AIGLASS_OBS_INTERVAL", "15"))  # 默认每5帧检测一次
-        self.OBSTACLE_CACHE_DURATION_FRAMES = int(os.getenv("AIGLASS_OBS_CACHE_FRAMES", "10"))  # 缓存10帧
-        
-        # 障碍物播报管理
+        self.OBSTACLE_DETECTION_INTERVAL = int(os.getenv("AIGLASS_OBS_INTERVAL", "8"))   # FPS=20 下每 0.4 秒偵測一次
+        self.OBSTACLE_CACHE_DURATION_FRAMES = int(os.getenv("AIGLASS_OBS_CACHE_FRAMES", "6"))   # 快取 6 幀
+
+        # 障礙物播報管理
         self.last_obstacle_speech = ""
         self.last_obstacle_speech_time = 0
-        self.obstacle_speech_cooldown = 5.0  # 相同障碍物3秒内不重复播报
+        self.obstacle_speech_cooldown = 2.0  # 同一障礙物 2 秒內不重複播報
+        self.last_obstacle_area_ratio = 0.0  # 上次播報時的面積比，用於距離縮短重新提醒
+        self.obstacle_approach_threshold = 0.03  # 面積增加超過此值視為「正在靠近」
         
         # 掩码稳定化参数（已禁用光流外推，这些参数不再使用）
         self.MASK_STAB_MIN_AREA = int(os.getenv("AIGLASS_MASK_MIN_AREA", "1500"))
@@ -259,6 +303,12 @@ class BlindPathNavigator:
         self.crosswalk_monitor = CrosswalkAwarenessMonitor()
         logger.info("[BlindPath] 斑马线感知监控器已初始化")
         logger.info(f"[BlindPath] 盲道检测间隔: 每{self.BLINDPATH_DETECTION_INTERVAL}帧")
+
+        # ── 無盲道追蹤（遞增式降溫）──────────────────────────────────────────
+        # 判定「此地確認無盲道」後切換到純避障模式，等待重新偵測到盲道再恢復
+        self._no_path_start_time: float = 0.0   # 開始連續沒有盲道的時間點
+        self._no_path_warn_count: int   = 0     # 已發出的警告次數（最多 2 次）
+        self._no_path_confirmed:  bool  = False # 是否已確認此地無盲道（避障模式中）
     
     def init_traffic_light_detector(self):
         """初始化红绿灯检测器"""
@@ -405,7 +455,10 @@ class BlindPathNavigator:
         :return: 处理结果
         """
         self.frame_counter += 1
-        
+
+        # Gemini 場景補充：每幀 tick，觸發背景非同步分析
+        self._scene_describer.tick(image, navigation_active=True)
+
         # 更新冷却期
         if self.turn_cooldown_frames > 0:
             self.turn_cooldown_frames -= 1
@@ -612,20 +665,64 @@ class BlindPathNavigator:
             #     self.crosswalk_tracker['position_announced'] = True
             
             if blind_path_mask is None:
-                guidance_text = ""
-                # 【移除左上角文字，改为右上角数据面板】
+                now = time.time()
+
+                # 首次失去盲道：記錄時間點，重置警告計數
+                if self._no_path_start_time == 0.0:
+                    self._no_path_start_time = now
+                    self._no_path_warn_count  = 0
+
+                elapsed = now - self._no_path_start_time
+
+                if self._no_path_confirmed:
+                    # ── 已確認無盲道 → 純避障模式，不再重複提示 ──────────────
+                    guidance_text = ""
+                    frame_visualizations.append({
+                        "type": "data_panel",
+                        "data": {"状态": "避障模式（無盲道）"},
+                        "position": (image_width - 210, 20)
+                    })
+
+                elif self._no_path_warn_count == 0 and elapsed >= 2.0:
+                    # ── 第 1 次警告（2 秒後）────────────────────────────────
+                    guidance_text = "找不到盲道"
+                    self._no_path_warn_count = 1
+
+                elif self._no_path_warn_count == 1 and elapsed >= 10.0:
+                    # ── 第 2 次警告（10 秒後）───────────────────────────────
+                    guidance_text = "找不到盲道，請左右移動尋找"
+                    self._no_path_warn_count = 2
+
+                elif self._no_path_warn_count == 2 and elapsed >= 25.0:
+                    # ── 確認無盲道（25 秒後）→ 切換避障模式 ─────────────────
+                    guidance_text = "此地已確認沒有盲道，目前只作避障處理"
+                    self._no_path_confirmed = True
+
+                else:
+                    guidance_text = ""
+
                 frame_visualizations.append({
                     "type": "data_panel",
-                    "data": {
-                        "状态": "等待盲道识别"
-                    },
+                    "data": {"状态": "等待盲道识别"},
                     "position": (image_width - 180, 20)
                 })
+
             else:
-                guidance_text = self._execute_state_machine(
-                    blind_path_mask, image, frame_visualizations,
-                    image_height, image_width, curr_gray
-                )
+                # ── 偵測到盲道 ──────────────────────────────────────────────
+                if self._no_path_confirmed:
+                    # 從避障模式恢復 → 提示使用者，本幀不執行狀態機（下幀再導航）
+                    guidance_text = "重新找到盲道，恢復導航"
+                    self._no_path_confirmed  = False
+                    self._no_path_start_time = 0.0
+                    self._no_path_warn_count = 0
+                else:
+                    # 正常流程：重置計時器，繼續導航
+                    self._no_path_start_time = 0.0
+                    self._no_path_warn_count = 0
+                    guidance_text = self._execute_state_machine(
+                        blind_path_mask, image, frame_visualizations,
+                        image_height, image_width, curr_gray
+                    )
         
         # 6. 更新缓存
         self.prev_gray = curr_gray
@@ -755,7 +852,12 @@ class BlindPathNavigator:
                     logger.error(f"[语音播报] 播放失败: {e}")
         else:
             final_guidance_text = ""
-        
+            # YOLO 無事件時，嘗試播報 Gemini 補充描述（優先級最低）
+            scene_extra = self._scene_describer.get_pending()
+            if scene_extra:
+                play_voice_text(scene_extra)
+                guidance_text = scene_extra  # 讓上層廣播至 APP WebSocket
+
         # 7. 生成标注图像
         annotated_image = None
 
@@ -799,7 +901,13 @@ class BlindPathNavigator:
         
         try:
             min_conf = min(self.CLASS_CONF_THRESHOLDS.values())
-            results = self.yolo_model.predict(image, verbose=False, conf=min_conf, classes=[0, 1])
+            # imgsz=320：比預設 640 快約 3-4 倍，盲道為地面大面積特徵，精度仍足夠
+            # half=True：FP16 半精度推理（GPU 限定），再加速 ~1.5 倍
+            _use_half = torch.cuda.is_available()
+            results = self.yolo_model.predict(
+                image, verbose=False, conf=min_conf, classes=[0, 1],
+                imgsz=320, half=_use_half
+            )
             
             if (results and results[0] and results[0].masks is not None and 
                 results[0].boxes is not None and len(results[0].masks.data) > 0):
@@ -1299,9 +1407,9 @@ class BlindPathNavigator:
         for obs in self.last_detected_obstacles:
             self._add_obstacle_visualization(obs, frame_visualizations)
         
-        # 优先检查近距离障碍物（提高阈值，只有非常近才报警）
-        NEAR_DISTANCE_Y_THRESHOLD = 0.75  # 提高到0.75
-        NEAR_DISTANCE_AREA_THRESHOLD = 0.12  # 提高到0.12
+        # 篩選近距離障礙物（提早預警，讓視障者有足夠反應時間）
+        NEAR_DISTANCE_Y_THRESHOLD = 0.55  # 底部在畫面 55% 以下即警報
+        NEAR_DISTANCE_AREA_THRESHOLD = 0.05  # 佔畫面 5% 以上即警報
         near_obstacles = [
             obs for obs in self.last_detected_obstacles
             if (obs.get('bottom_y_ratio', 0) > NEAR_DISTANCE_Y_THRESHOLD or
@@ -2011,46 +2119,85 @@ class BlindPathNavigator:
             traceback.print_exc()
             return []
     
+    @staticmethod
+    def _obstacle_direction(center_x: float, image_width: float, center_y: float = 0, image_height: float = 480) -> str:
+        """根據障礙物在畫面中的水平位置判斷方向，支援 clock/cardinal 兩種模式"""
+        try:
+            from app_main import _position_mode
+        except ImportError:
+            _position_mode = "cardinal"
+
+        if _position_mode == "clock":
+            # 時鐘方向：複用 position_reporter 的邏輯
+            from position_reporter import bbox_center_to_clock
+            return bbox_center_to_clock(center_x, center_y, int(image_width), int(image_height))
+        else:
+            # cardinal 模式：左側/右側/前方
+            ratio = center_x / image_width if image_width > 0 else 0.5
+            if ratio < 0.35:
+                return "左側"
+            elif ratio > 0.65:
+                return "右側"
+            return "前方"
+
     def _check_and_set_obstacle_voice(self, obstacles):
-        """检查障碍物并设置待播报的语音"""
+        """检查障碍物并设置待播报的语音（含方向）"""
         if not obstacles:
             self.last_obstacle_speech = ""
             self.pending_obstacle_voice = None
             return
-        
-        # 筛选近距离障碍物（提高阈值，只有非常近才报警）
-        NEAR_DISTANCE_Y_THRESHOLD = 0.75  # 提高到0.75，障碍物底部必须在画面下方75%以下
-        NEAR_DISTANCE_AREA_THRESHOLD = 0.12  # 提高到0.12，障碍物必须占画面12%以上
-        
+
+        # 篩選近距離障礙物（降低門檻，讓更多障礙物觸發提醒）
+        NEAR_DISTANCE_Y_THRESHOLD = 0.55  # 障礙物底部在畫面下方55%以下即觸發
+        NEAR_DISTANCE_AREA_THRESHOLD = 0.05  # 障礙物佔畫面5%以上即觸發
+
         near_obstacles = []
         for obs in obstacles:
             if (obs.get('bottom_y_ratio', 0) > NEAR_DISTANCE_Y_THRESHOLD or
                 obs.get('area_ratio', 0) > NEAR_DISTANCE_AREA_THRESHOLD):
                 near_obstacles.append(obs)
-        
+
         if near_obstacles:
             # 获取最主要的障碍物（面积最大）
             main_obstacle = max(near_obstacles, key=lambda x: x.get('area_ratio', 0))
             obstacle_name = main_obstacle.get('name', '')
+            # 取得畫面尺寸以計算方向
+            center_x = main_obstacle.get('center_x', 0)
+            center_y = main_obstacle.get('center_y', 0)
+            mask = main_obstacle.get('mask')
+            img_w = mask.shape[1] if mask is not None and len(mask.shape) >= 2 else 640
+            img_h = mask.shape[0] if mask is not None and len(mask.shape) >= 2 else 480
+            direction = self._obstacle_direction(center_x, img_w, center_y, img_h)
+
             current_time = time.time()
-            
-            # 检查是否需要播报
+
+            area_ratio = main_obstacle.get('area_ratio', 0)
+            bottom_y_ratio = main_obstacle.get('bottom_y_ratio', 0)
+
+            # 用「名稱+方向」作為去重 key
+            speech_key = f"{obstacle_name}_{direction}"
             should_announce = False
-            if obstacle_name != self.last_obstacle_speech:
-                # 不同障碍物，立即播报
+
+            if speech_key != self.last_obstacle_speech:
+                # 新障礙物 → 立即播報
                 should_announce = True
-                self.last_obstacle_speech = obstacle_name
-                self.last_obstacle_speech_time = current_time
+            elif area_ratio - self.last_obstacle_area_ratio > self.obstacle_approach_threshold:
+                # 同一障礙物但明顯靠近（面積增大）→ 重新播報
+                should_announce = True
             elif current_time - self.last_obstacle_speech_time > self.obstacle_speech_cooldown:
-                # 同一障碍物但超过冷却时间，再次播报
+                # cooldown 過期 → 允許重播
                 should_announce = True
-                self.last_obstacle_speech_time = current_time
-            
+
             if should_announce:
-                self.pending_obstacle_voice = self._speech_for_obstacle(obstacle_name)
+                self.last_obstacle_speech = speech_key
+                self.last_obstacle_speech_time = current_time
+                self.last_obstacle_area_ratio = area_ratio
+                self.pending_obstacle_voice = self._speech_for_obstacle_dir(
+                    obstacle_name, direction, area_ratio, bottom_y_ratio)
         else:
-            # 没有近距离障碍物
+            # 沒有近距離障礙物 → 重置所有追蹤狀態
             self.last_obstacle_speech = ""
+            self.last_obstacle_area_ratio = 0.0
             self.pending_obstacle_voice = None
 
     def _check_obstacles(self, image, mask, frame_visualizations):
@@ -2080,10 +2227,10 @@ class BlindPathNavigator:
         for obs in final_obstacles:
             self._add_obstacle_visualization(obs, frame_visualizations)
         
-        # 筛选近距离障碍物（提高阈值，只有非常近才报警）
-        NEAR_DISTANCE_Y_THRESHOLD = 0.75  # 提高到0.75，障碍物底部必须在画面下方75%以下
-        NEAR_DISTANCE_AREA_THRESHOLD = 0.12  # 提高到0.12，障碍物必须占画面12%以上
-        
+        # 篩選近距離障礙物（提早預警，讓視障者有足夠反應時間）
+        NEAR_DISTANCE_Y_THRESHOLD = 0.55  # 底部在畫面 55% 以下即警報
+        NEAR_DISTANCE_AREA_THRESHOLD = 0.05  # 佔畫面 5% 以上即警報
+
         near_obstacles = [
             obs for obs in final_obstacles
             if (obs.get('bottom_y_ratio', 0) > NEAR_DISTANCE_Y_THRESHOLD or
@@ -2208,40 +2355,86 @@ class BlindPathNavigator:
         return guidance_text
     
     def _add_obstacle_visualization(self, obstacle, visualizations, pulse_effect=False):
-        """添加障碍物可视化（简化版：仅边框，近红远黄）"""
+        """添加障碍物可视化（边框 + 名称标签，近红远黄）"""
         try:
             # 计算障碍物危险等级
             bottom_y_ratio = obstacle.get('bottom_y_ratio', 0)
             area_ratio = obstacle.get('area_ratio', 0)
-            
+
             # 判断是否为近距离障碍物
-            is_near = bottom_y_ratio > 0.7 or area_ratio > 0.1  # 近距离障碍物
-            
+            is_near = bottom_y_ratio > 0.7 or area_ratio > 0.1
+
+            # 根据距离选择颜色
+            if is_near:
+                outline_color = "rgba(255, 0, 0, 1.0)"    # 紅色
+                label_color   = "rgba(255, 80, 80, 1.0)"
+                thickness = 3
+            else:
+                outline_color = "rgba(255, 255, 0, 0.8)"  # 黃色
+                label_color   = "rgba(255, 255, 100, 1.0)"
+                thickness = 2
+
+            # AR 標籤：動態物體顯示名稱，靜態物體顯示大小
+            raw_name = obstacle.get('name', '')
+            k = (raw_name or '').strip().lower()
+            if k in DYNAMIC_CLASS_NAMES:
+                label_cn = _OBSTACLE_NAME_CN.get(k, raw_name)
+            else:
+                size = _obstacle_size_label(area_ratio)
+                label_cn = f"{size}障礙物"
+            # 附加距離提示
+            if label_cn and is_near:
+                label_cn = f"{label_cn}(近)"
+
             # 添加 mask 边框可视化（如果有）
             if 'mask' in obstacle and obstacle['mask'] is not None:
                 mask = obstacle['mask']
                 contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                
+
                 if contours:
-                    # 找到最大的轮廓
                     max_contour = max(contours, key=cv2.contourArea)
                     points = max_contour.squeeze(1)[::5].tolist()
-                    
-                    # 根据距离选择边框颜色：近距离红色，远距离黄色
-                    if is_near:
-                        outline_color = "rgba(255, 0, 0, 1.0)"  # 红色
-                        thickness = 3
-                    else:
-                        outline_color = "rgba(255, 255, 0, 0.8)"  # 黄色
-                        thickness = 2
-                    
-                    # 只添加边框，不添加填充和文字
+
+                    # 边框
                     visualizations.append({
                         "type": "outline",
                         "points": points,
                         "color": outline_color,
                         "thickness": thickness
                     })
+
+                    # 名称标签（显示在轮廓最上方）
+                    if label_cn:
+                        x, y, w, h = cv2.boundingRect(max_contour)
+                        label_x = x + w // 2 - 20
+                        label_y = max(y - 8, 16)  # 在轮廓上方，至少距顶 16px
+                        visualizations.append({
+                            "type": "text_with_bg",
+                            "text": label_cn,
+                            "position": [label_x, label_y],
+                            "font_scale": 0.7,
+                            "color": label_color,
+                        })
+
+            # 若无 mask 但有 bbox，用矩形 + 标签
+            elif 'bbox' in obstacle:
+                bx1, by1, bx2, by2 = [int(v) for v in obstacle['bbox']]
+                visualizations.append({
+                    "type": "rectangle",
+                    "top_left": [bx1, by1],
+                    "bottom_right": [bx2, by2],
+                    "color": outline_color,
+                    "filled": False,
+                })
+                if label_cn:
+                    visualizations.append({
+                        "type": "text_with_bg",
+                        "text": label_cn,
+                        "position": [bx1, max(by1 - 8, 16)],
+                        "font_scale": 0.7,
+                        "color": label_color,
+                    })
+
         except Exception as e:
             logger.error(f"[_add_obstacle_visualization] 添加障碍物可视化失败: {e}")
 
@@ -2539,19 +2732,26 @@ class BlindPathNavigator:
         except:
             return '障碍物'
 
-    def _speech_for_obstacle(self, name: str) -> str:
+    def _speech_for_obstacle(self, name: str, area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
+        """障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
+        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
         k = (name or '').strip().lower()
-        if k == 'person': return "前方有人，注意避让。"
-        if k == 'car': return "前方有车，注意避让。"
-        if k == 'bicycle': return "前方有自行车，停一下。"
-        if k == 'motorcycle': return "前方有摩托车，停一下。"
-        if k == 'bus': return "前方有公交车，停一下。"
-        if k == 'truck': return "前方有卡车，停一下。"
-        if k == 'scooter': return "前方有电瓶车，停一下。"
-        if k == 'stroller': return "前方有婴儿车，停一下。"
-        if k == 'dog': return "前方有狗，停一下。"
-        if k == 'animal': return "前方有动物，停一下。"
-        return "前方有障碍物，注意避让。"
+        if k in DYNAMIC_CLASS_NAMES:
+            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
+            return f"前方有{cn}，{suffix}"
+        size = _obstacle_size_label(area_ratio)
+        return f"前方有{size}障礙物，{suffix}"
+
+    def _speech_for_obstacle_dir(self, name: str, direction: str = "前方",
+                                  area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
+        """帶方向的障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
+        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
+        k = (name or '').strip().lower()
+        if k in DYNAMIC_CLASS_NAMES:
+            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
+            return f"{direction}有{cn}，{suffix}"
+        size = _obstacle_size_label(area_ratio)
+        return f"{direction}有{size}障礙物，{suffix}"
 
     def _draw_command_button(self, image, text):
         """绘制底部中央的指令按钮（与斑马线模式统一）"""
@@ -3226,19 +3426,26 @@ class BlindPathNavigator:
         
         return stabilized
   
-    def _speech_for_obstacle(self, name: str) -> str:
+    def _speech_for_obstacle(self, name: str, area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
+        """障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
+        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
         k = (name or '').strip().lower()
-        if k == 'person': return "前方有人，注意避让。"
-        if k == 'car': return "前方有车，注意避让。"
-        if k == 'bicycle': return "前方有自行车，停一下。"
-        if k == 'motorcycle': return "前方有摩托车，停一下。"
-        if k == 'bus': return "前方有公交车，停一下。"
-        if k == 'truck': return "前方有卡车，停一下。"
-        if k == 'scooter': return "前方有电瓶车，停一下。"
-        if k == 'stroller': return "前方有婴儿车，停一下。"
-        if k == 'dog': return "前方有狗，停一下。"
-        if k == 'animal': return "前方有动物，停一下。"
-        return "前方有障碍物，注意避让。"
+        if k in DYNAMIC_CLASS_NAMES:
+            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
+            return f"前方有{cn}，{suffix}"
+        size = _obstacle_size_label(area_ratio)
+        return f"前方有{size}障礙物，{suffix}"
+
+    def _speech_for_obstacle_dir(self, name: str, direction: str = "前方",
+                                  area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
+        """帶方向的障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
+        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
+        k = (name or '').strip().lower()
+        if k in DYNAMIC_CLASS_NAMES:
+            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
+            return f"{direction}有{cn}，{suffix}"
+        size = _obstacle_size_label(area_ratio)
+        return f"{direction}有{size}障礙物，{suffix}"
 
     def _update_obstacle_properties(self, obs, H, W):
         """更新障碍物的派生属性"""
