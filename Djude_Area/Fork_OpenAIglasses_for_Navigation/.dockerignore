@@ -1,0 +1,40 @@
+# 虛擬環境（最大宗，幾乎全部）
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 模型檔（volume 掛載，不需 build 進去）
+model/
+*.pt
+*.pth
+*.onnx
+*.task
+
+# 開發工具
+.git/
+.gitignore
+.env
+*.env
+.claude/
+
+# 測試 / 暫存
+recordings/
+*.log
+*.tmp
+
+# Website（與 aiglass 無關）
+Website/
+Android/
+
+# Node / Python 快取
+node_modules/
+*.egg-info/
+dist/
+build/
+
+# 文件
+*.md
+docs/

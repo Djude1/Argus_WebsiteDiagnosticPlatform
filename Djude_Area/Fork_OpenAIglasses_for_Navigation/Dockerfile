@@ -13,11 +13,15 @@ ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖
+# 安装系统依赖（含 Python 3.11，專案要求 >=3.11）
 RUN apt-get update && apt-get install -y \
-    python3.10 \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
     python3-pip \
-    python3-dev \
     portaudio19-dev \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -31,15 +35,19 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 升级 pip
-RUN python3 -m pip install --upgrade pip
+# 將 python3 / python 指向 3.11
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1
+
+# 升级 pip（使用 3.11）
+RUN python3.11 -m ensurepip --upgrade && python3.11 -m pip install --upgrade pip
 
 # 复制 requirements.txt
 COPY requirements.txt .
 
 # 安装 Python 依赖
-RUN pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY . .
@@ -55,5 +63,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8081/api/health || exit 1
 
 # 启动命令
-CMD ["python3", "app_main.py"]
+CMD ["python3.11", "app_main.py"]
 
