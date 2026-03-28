@@ -1,10 +1,15 @@
 // lib/screens/contacts_screen.dart
-// 緊急連絡人管理（本機儲存，不需登入）
+// 緊急連絡人設定（視障友善版）
+// • 固定兩大色塊：主要聯絡人、次要聯絡人
+// • 點擊 → 進入編輯介面（設定頁只負責設定，不撥打）
+// • 最多 2 位，沒設定的顯示「點擊新增」
+// • 向右滑動返回
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
-import '../core/theme.dart';
+import 'contact_form_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -14,89 +19,50 @@ class ContactsScreen extends StatefulWidget {
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
+  static const _colors = [Color(0xFF0D47A1), Color(0xFFE65100)];
+  static const _labels = ['主要聯絡人', '次要聯絡人'];
+
   @override
   void initState() {
     super.initState();
     context.read<AppProvider>().loadContacts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app = context.read<AppProvider>();
+      final n = app.contacts.length;
+      if (n == 0) {
+        app.speak('緊急連絡人設定。目前沒有聯絡人，點擊色塊可新增。最多設定兩位。向右滑動返回。');
+      } else {
+        final names = app.contacts.map((c) => c['name']).join('和');
+        app.speak('緊急連絡人設定。已設定$names。點擊可修改。向右滑動返回。');
+      }
+    });
   }
 
-  Future<void> _showDialog({Map<String, dynamic>? existing}) async {
-    final nameCtrl  = TextEditingController(text: existing?['name']  ?? '');
-    final phoneCtrl = TextEditingController(text: existing?['phone'] ?? '');
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: Text(existing == null ? '新增連絡人' : '編輯連絡人',
-            style: const TextStyle(fontSize: 20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              autofocus:  true,
-              decoration: const InputDecoration(
-                labelText:  '姓名（語音呼叫時說「打給＋姓名」）',
-                hintText:   '例如：媽媽',
-                prefixIcon: Icon(Icons.person),
-              ),
-              style: const TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller:   phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText:  '電話號碼',
-                hintText:   '例如：0912345678',
-                prefixIcon: Icon(Icons.phone),
-              ),
-              style: const TextStyle(fontSize: 18),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('儲存')),
-        ],
-      ),
-    );
-    if (saved != true || !mounted) return;
-
-    final name  = nameCtrl.text.trim();
-    final phone = phoneCtrl.text.trim();
-    if (name.isEmpty || phone.isEmpty) return;
-
+  Future<void> _editSlot(int slot) async {
+    HapticFeedback.heavyImpact();
     final app = context.read<AppProvider>();
-    if (existing == null) {
-      await app.addContact(name, phone);
-    } else {
-      await app.updateContact(existing['id'] as int, name, phone);
-    }
-  }
+    final contacts = app.contacts;
+    final existing = slot < contacts.length ? contacts[slot] : null;
 
-  Future<void> _delete(int id, String name) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('刪除「$name」？'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.colorStop),
-            child: const Text('刪除'),
-          ),
-        ],
+    if (existing != null) {
+      app.speak('修改${_labels[slot]}${existing['name']}');
+    } else {
+      app.speak('新增${_labels[slot]}');
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactFormScreen(
+          slot: slot,
+          existing: existing,
+        ),
       ),
     );
-    if (confirm == true && mounted) {
-      await context.read<AppProvider>().deleteContact(id);
+    // 返回後重新載入
+    if (mounted) {
+      context.read<AppProvider>().loadContacts();
     }
   }
 
@@ -104,90 +70,128 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Widget build(BuildContext context) {
     final contacts = context.watch<AppProvider>().contacts;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('緊急連絡人')),
-      body: contacts.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.contacts,
-                      size: 64, color: Colors.white38),
-                  const SizedBox(height: 12),
-                  const Text('尚無連絡人',
+    return GestureDetector(
+      onHorizontalDragEnd: (d) {
+        if ((d.primaryVelocity ?? 0) > 300) Navigator.pop(context);
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── 頂部標題 ──────────────────────────────────────────────
+              Container(
+                color: const Color(0xFF0D0D0D),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 10, horizontal: 20),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '緊急連絡人設定',
                       style: TextStyle(
-                          color: Colors.white54, fontSize: 18)),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '新增後說「打給媽媽」可自動撥號\n（姓名需完全相符）',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Colors.white38, fontSize: 14),
-                  ),
-                ],
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '點擊可修改，最多兩位。向右滑動返回。',
+                      style: TextStyle(fontSize: 13, color: Colors.white38),
+                    ),
+                  ],
+                ),
               ),
-            )
-          : ListView.builder(
-              padding:     const EdgeInsets.all(12),
-              itemCount:   contacts.length,
-              itemBuilder: (_, i) {
-                final c = contacts[i];
-                return Card(
-                  color:  AppTheme.surface,
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    leading: Semantics(
-                      label:  '撥打給${c['name']}',
-                      button: true,
-                      child: IconButton(
-                        icon: const Icon(Icons.phone,
-                            color: Colors.greenAccent, size: 32),
-                        onPressed: () => context
-                            .read<AppProvider>()
-                            .callContact(
-                              c['name']  as String,
-                              c['phone'] as String,
-                            ),
+
+              // ── 固定兩大色塊 ──────────────────────────────────────────
+              for (int i = 0; i < 2; i++) ...[
+                Expanded(
+                  child: _buildSlot(i, contacts),
+                ),
+                if (i == 0) const SizedBox(height: 4),
+              ],
+
+              // 底部間距
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlot(int index, List<Map<String, dynamic>> contacts) {
+    final hasContact = index < contacts.length;
+    final contact = hasContact ? contacts[index] : null;
+    final name = contact?['name'] as String? ?? '';
+    final phone = contact?['phone'] as String? ?? '';
+
+    return Semantics(
+      label: hasContact
+          ? '${_labels[index]}，$name，$phone。點擊修改。'
+          : '${_labels[index]}，尚未設定。點擊新增。',
+      button: true,
+      child: GestureDetector(
+        onTap: () => _editSlot(index),
+        child: Container(
+          color: hasContact ? _colors[index] : const Color(0xFF2A2A2A),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 28),
+          child: Row(
+            children: [
+              // 左側圖示
+              Icon(
+                hasContact ? Icons.edit : Icons.person_add_alt_1,
+                size: 40,
+                color: hasContact ? Colors.white70 : Colors.white24,
+              ),
+              const SizedBox(width: 20),
+              // 右側資訊
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _labels[index],
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: hasContact ? Colors.white70 : Colors.white38,
                       ),
                     ),
-                    title: Text(c['name'] as String,
-                        style: const TextStyle(
-                            fontSize:   20,
-                            fontWeight: FontWeight.bold)),
-                    subtitle: Text(c['phone'] as String,
-                        style: const TextStyle(
-                            fontSize: 16, color: Colors.white70)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit,
-                              color: Colors.white54),
-                          onPressed: () => _showDialog(existing: c),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete,
-                              color: Colors.redAccent),
-                          onPressed: () => _delete(
-                              c['id'] as int, c['name'] as String),
-                        ),
-                      ],
+                    const SizedBox(height: 6),
+                    Text(
+                      hasContact ? name : '點擊新增',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: hasContact ? Colors.white : Colors.white30,
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: Semantics(
-        label:  '新增緊急連絡人',
-        button: true,
-        child: FloatingActionButton.extended(
-          onPressed:       () => _showDialog(),
-          icon:            const Icon(Icons.add),
-          label:           const Text('新增連絡人',
-              style: TextStyle(fontSize: 16)),
-          backgroundColor: AppTheme.primary,
+                    if (hasContact) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        phone,
+                        style: const TextStyle(
+                            fontSize: 20, color: Colors.white60),
+                      ),
+                    ],
+                    if (!hasContact)
+                      const Text(
+                        '尚未設定',
+                        style: TextStyle(fontSize: 14, color: Colors.white24),
+                      ),
+                  ],
+                ),
+              ),
+              // 右側箭頭
+              Icon(
+                Icons.chevron_right,
+                size: 32,
+                color: hasContact ? Colors.white38 : Colors.white12,
+              ),
+            ],
+          ),
         ),
       ),
     );

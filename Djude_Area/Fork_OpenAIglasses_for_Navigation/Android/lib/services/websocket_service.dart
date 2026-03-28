@@ -61,9 +61,11 @@ class WebSocketService {
   WebSocketChannel?   _audioWs;
   StreamSubscription? _audioWsSub;
   bool _audioWsActive = false;
+  bool _bypassWake    = true;   // 預設繞過喚醒詞
 
-  void connectAudio() {
+  void connectAudio({bool bypassWake = true}) {
     _audioWsActive = true;
+    _bypassWake    = bypassWake;
     _doConnectAudio();
   }
 
@@ -74,8 +76,20 @@ class WebSocketService {
     _audioWs = WebSocketChannel.connect(
       Uri.parse(AppConstants.wsAudio(host, port, secure: secure, baseUrl: baseUrl)),
     );
+    // 根據使用者設定決定是否繞過喚醒詞
+    final startCmd = _bypassWake ? 'START:BYPASS' : 'START';
+    _audioWs!.sink.add(startCmd);
     _audioWsSub = _audioWs!.stream.listen(
-      (_) {},
+      (data) {
+        // 處理伺服器回傳的文字指令
+        if (data is String) {
+          if (data == 'RESTART') {
+            // ASR 出錯或逾時，伺服器要求重新啟動，保持相同模式
+            try { _audioWs?.sink.add(startCmd); } catch (_) {}
+          }
+          // OK:STARTED / OK:STOPPED 等確認訊息，目前靜默處理
+        }
+      },
       onError: (_) => _scheduleReconnect(_doConnectAudio),
       onDone:  ()  => _scheduleReconnect(_doConnectAudio),
     );

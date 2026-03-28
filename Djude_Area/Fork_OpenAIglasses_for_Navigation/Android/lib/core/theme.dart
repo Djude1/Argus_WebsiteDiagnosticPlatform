@@ -18,7 +18,6 @@ class AppTheme {
   static const Color colorTrafficLight = Color(0xFFF57C00); // 橘
   static const Color colorItemSearch   = Color(0xFF7B1FA2); // 紫
   static const Color colorStop         = Color(0xFFD32F2F); // 紅
-  static const Color colorAdmin        = Color(0xFF455A64); // 深灰藍
 
   // ── 主題建構 ─────────────────────────────────────────────────────────────
   static ThemeData get dark => ThemeData(

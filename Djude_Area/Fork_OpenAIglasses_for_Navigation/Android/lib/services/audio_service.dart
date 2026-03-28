@@ -5,7 +5,7 @@
 //   3. 前台服務背景監聽（喚醒詞偵測）
 
 import 'dart:async';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -19,6 +19,11 @@ class AudioService {
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription? _recordSub;
   bool _recording = false;
+
+  // ── TTS 串流重連狀態 ─────────────────────────────────────────────────────
+  bool _shouldPlayStream = false;   // 是否應維持串流播放
+  String? _streamUrl;               // 串流 URL（用於重連）
+  StreamSubscription<PlayerState>? _playerStateSub; // 播放狀態監聽
 
   /// 開始錄音並以 PCM16 Chunk 回呼
   Future<void> startMicrophone({required PcmChunkCallback onChunk}) async {
@@ -48,12 +53,65 @@ class AudioService {
   // ── TTS 下行播放 ─────────────────────────────────────────────────────────
   final AudioPlayer _player = AudioPlayer();
 
-  Future<void> playStreamWav(String host, int port) async {
-    final url = AppConstants.streamWav(host, port);
-    await _player.play(UrlSource(url));
+  Future<void> playStreamWav(String host, int port,
+      {bool secure = false, String? baseUrl}) async {
+    final url = AppConstants.streamWav(host, port,
+        secure: secure, baseUrl: baseUrl);
+    _streamUrl = url;
+    _shouldPlayStream = true;
+
+    // 設定音量為最大
+    await _player.setVolume(1.0);
+
+    // 取消舊的狀態監聽，重新設置
+    await _playerStateSub?.cancel();
+    _playerStateSub = _player.onPlayerStateChanged.listen((state) {
+      debugPrint('[AudioService] 播放狀態變更: $state');
+      // 播放完成或非預期停止時，自動重連伺服器串流
+      if (_shouldPlayStream &&
+          (state == PlayerState.completed || state == PlayerState.stopped)) {
+        debugPrint('[AudioService] 串流中斷，準備重連...');
+        _scheduleReconnect();
+      }
+    });
+
+    // 監聽播放器錯誤
+    _player.onLog.listen((msg) {
+      debugPrint('[AudioService] 播放器日誌: $msg');
+    });
+
+    debugPrint('[AudioService] 連線 /stream.wav: $url');
+    try {
+      await _player.play(UrlSource(url));
+      debugPrint('[AudioService] 播放已啟動');
+    } catch (e) {
+      debugPrint('[AudioService] 播放失敗: $e');
+      _scheduleReconnect();
+    }
+  }
+
+  /// 延遲後重新連線 /stream.wav（伺服器可能因重置而切斷連線）
+  void _scheduleReconnect() {
+    if (!_shouldPlayStream || _streamUrl == null) return;
+    Future.delayed(const Duration(milliseconds: 800), () async {
+      if (!_shouldPlayStream || _streamUrl == null) return;
+      debugPrint('[AudioService] 重連 /stream.wav...');
+      try {
+        await _player.play(UrlSource(_streamUrl!));
+        debugPrint('[AudioService] 重連成功');
+      } catch (e) {
+        debugPrint('[AudioService] 重連失敗: $e');
+        // 連線失敗，1 秒後再試
+        Future.delayed(const Duration(seconds: 1), _scheduleReconnect);
+      }
+    });
   }
 
   Future<void> stopPlayback() async {
+    _shouldPlayStream = false;
+    _streamUrl = null;
+    await _playerStateSub?.cancel();
+    _playerStateSub = null;
     await _player.stop();
   }
 
@@ -79,6 +137,10 @@ class AudioService {
   bool get isForegroundRunning => _foregroundRunning;
 
   Future<void> dispose() async {
+    _shouldPlayStream = false;
+    _streamUrl = null;
+    await _playerStateSub?.cancel();
+    _playerStateSub = null;
     await stopMicrophone();
     await _player.dispose();
   }

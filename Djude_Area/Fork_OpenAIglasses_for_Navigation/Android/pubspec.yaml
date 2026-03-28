@@ -29,7 +29,6 @@ dependencies:
   sensors_plus: ^5.0.1
 
   # ── 儲存 ──────────────────────────────────────────────
-  flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.3.2
 
   # ── 狀態管理 ──────────────────────────────────────────
@@ -44,14 +43,23 @@ dependencies:
   # ── 撥打電話 ──────────────────────────────────────────
   url_launcher: ^6.3.1
 
-  # ── 本地資料庫（連絡人快取）──────────────────────────
+  # ── GPS 定位 ────────────────────────────────────────
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+
+  # ── 本地資料庫（連絡人快取、儲存地點）──────────────────
   sqflite: ^2.4.2
   path: ^1.9.0
+  android_intent_plus: ^6.0.0
+
+  # ── 本地通知（背景撞擊全螢幕警示）────────────────────
+  flutter_local_notifications: ^17.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
 
 # ── 版本衝突修正 ──────────────────────────────────────────────────────────────
 # record_web 1.1.9 實作的 hasPermission 少了 {bool request} 具名參數，
@@ -66,3 +74,13 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
+
+flutter_launcher_icons:
+  android: true
+  ios:     false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#121212"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"

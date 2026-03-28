@@ -44,14 +44,6 @@ class AppConstants {
     return '${httpScheme(secure)}://$host:$port';
   }
 
-  static String apiLogin(String host, int port, {bool secure = false, String? baseUrl}) =>
-      '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/api/login';
-  static String apiMe(String host, int port, {bool secure = false, String? baseUrl}) =>
-      '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/api/me';
-  static String apiUsers(String host, int port, {bool secure = false, String? baseUrl}) =>
-      '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/api/users';
-  static String apiContacts(String host, int port, {bool secure = false, String? baseUrl}) =>
-      '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/api/contacts';
   static String apiNavState(String host, int port, {bool secure = false, String? baseUrl}) =>
       '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/api/nav/state';
   static String apiNavBlindpath(String host, int port, {bool secure = false, String? baseUrl}) =>
@@ -91,16 +83,12 @@ class AppConstants {
       '${httpBase(host, port, secure: secure, baseUrl: baseUrl)}/stream.wav';
 
   // ── SharedPreferences Keys ───────────────────────────────────────────────
-  static const String keySecure = 'server_secure';
-  static const String keyHost = 'server_host';
-  static const String keyPort = 'server_port';
-  static const String keyBaseUrl = 'server_base_url';
-
-  // ── SecureStorage Keys ───────────────────────────────────────────────────
-  static const String keyToken    = 'jwt_token';
-  static const String keyUsername = 'username';
-  static const String keyRole     = 'role';
-  static const String keyUserId   = 'user_id';
+  static const String keySecure      = 'server_secure';
+  static const String keyHost        = 'server_host';
+  static const String keyPort        = 'server_port';
+  static const String keyBaseUrl     = 'server_base_url';
+  // 配置來源網站 URL（Django Website，用於遠端讀取 AI 伺服器位址）
+  static const String keyWebsiteUrl  = 'config_website_url';
 
   // ── 導航狀態顯示名稱對照 ─────────────────────────────────────────────────
   static const Map<String, String> navStateLabels = {

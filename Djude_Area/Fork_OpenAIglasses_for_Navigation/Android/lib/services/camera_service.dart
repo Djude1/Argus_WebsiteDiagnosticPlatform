@@ -30,6 +30,8 @@ class CameraService {
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
     await _controller!.initialize();
+    // 明確關閉閃光燈，避免部分裝置在連續拍照時自動開啟輔助燈
+    await _controller!.setFlashMode(FlashMode.off);
   }
 
   /// 開始以 fps 速率送幀

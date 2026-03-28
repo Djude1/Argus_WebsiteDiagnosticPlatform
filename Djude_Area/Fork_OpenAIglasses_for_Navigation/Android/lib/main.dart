@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'app.dart';
+import 'services/emergency_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,14 @@ void main() async {
 
   // 初始化前台服務設定（flutter_foreground_task 8.x API）
   _initForegroundTask();
+
+  // 初始化背景摔倒偵測通知服務（初始化失敗不阻擋 APP 啟動）
+  try {
+    await EmergencyNotificationService().initialize();
+  } catch (e) {
+    // 通知服務初始化失敗（部分裝置權限未授予），繼續啟動
+    debugPrint('EmergencyNotificationService init failed: $e');
+  }
 
   runApp(const AiGlassesApp());
 }
