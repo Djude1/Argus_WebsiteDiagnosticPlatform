@@ -63,7 +63,7 @@ services:
       - media_files:/media:ro
       - static_files:/static:ro
       - ./aiglass.glb:/media/models/aiglass.glb:ro
-    # 讓容器能透過 host.docker.internal 存取宿主機（Access FastAPI at port 8081）
+    # 讓容器能透過 host.docker.internal 存取宿主機（FastAPI port 8081）
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -159,9 +159,336 @@
     .app{grid-template-columns:1fr; height:auto}
     .chat{height:60vh}
   }
+
+  /* ── APP後台切換按鈕 ───────────────────────────────────────────────────────── */
+  .mode-toggle-wrap{
+    position:fixed; top:14px; left:14px; z-index:9999;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    user-select:none; cursor:pointer;
+  }
+  .toggle-label-text{
+    font-size:10px; font-weight:700; color:rgba(255,255,255,.7);
+    letter-spacing:.5px; text-align:center; line-height:1.2;
+  }
+  /* 外框 */
+  .toggle-track{
+    width:80px; height:38px; border-radius:999px;
+    background:#c0392b;
+    box-shadow:
+      0 0 0 3px rgba(255,255,255,.15),
+      0 4px 12px rgba(0,0,0,.5),
+      inset 0 2px 4px rgba(0,0,0,.35),
+      inset 0 -1px 2px rgba(255,255,255,.1);
+    position:relative; transition: background .35s;
+    display:flex; align-items:center;
+  }
+  .toggle-track.on{ background:#27ae60; }
+  /* 滑球 */
+  .toggle-thumb{
+    width:32px; height:32px; border-radius:50%;
+    background:radial-gradient(circle at 38% 35%, #fff 0%, #c8d4e0 55%, #8fa5bb 100%);
+    box-shadow:
+      0 2px 6px rgba(0,0,0,.4),
+      inset 0 1px 2px rgba(255,255,255,.8),
+      inset 0 -1px 2px rgba(0,0,0,.15);
+    position:absolute; left:3px;
+    transition: left .35s cubic-bezier(.4,0,.2,1);
+    z-index:2;
+  }
+  .toggle-track.on .toggle-thumb{ left:calc(100% - 35px); }
+  /* ON / OFF 文字 */
+  .toggle-text{
+    position:absolute; top:50%; transform:translateY(-50%);
+    font-size:11px; font-weight:900; letter-spacing:.5px; z-index:1;
+    transition: opacity .25s;
+  }
+  .toggle-off-txt{ right:8px; color:rgba(255,255,255,.9); }
+  .toggle-on-txt { left:8px;  color:rgba(255,255,255,.9); opacity:0; }
+  .toggle-track.on .toggle-off-txt{ opacity:0; }
+  .toggle-track.on .toggle-on-txt { opacity:1; }
+
+  /* ── APP後台面板 ──────────────────────────────────────────────────────────── */
+  #appPanel{
+    display:none;
+    position:fixed; inset:0; z-index:9000;
+    background:linear-gradient(180deg,#0b0f14,#0e1621);
+    overflow:auto; padding:60px 24px 24px;
+  }
+  #appPanel.visible{ display:block; }
+
+  /* 登入表單 */
+  .app-login{
+    max-width:360px; margin:60px auto 0;
+    background:#121821; border:1px solid #1f2937;
+    border-radius:16px; padding:32px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .app-login h2{ margin:0 0 24px; font-size:20px; text-align:center; }
+  .app-login input{
+    width:100%; padding:10px 14px; border-radius:8px;
+    background:#0b0f14; border:1px solid #304057; color:#e6edf3;
+    font-size:14px; margin-bottom:12px; outline:none;
+  }
+  .app-login input:focus{ border-color:#2f86ff; }
+  .app-login button{
+    width:100%; padding:11px; border-radius:8px;
+    background:#1f6feb; border:none; color:#fff;
+    font-size:15px; font-weight:700; cursor:pointer;
+    margin-top:4px;
+  }
+  .app-login button:hover{ background:#388bfd; }
+  .login-err{ color:#ff8080; font-size:13px; margin-top:8px; text-align:center; }
+
+  /* APP後台主介面 */
+  #appMain{ display:none; }
+  #appMain.visible{ display:block; }
+
+  .app-topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:20px;
+  }
+  .app-topbar h1{ margin:0; font-size:20px; }
+  .app-topbar .logout-btn{
+    background:transparent; border:1px solid #304057;
+    color:#9fb0c3; border-radius:8px; padding:7px 14px;
+    font-size:13px; cursor:pointer;
+  }
+  .app-topbar .logout-btn:hover{ border-color:#ff8080; color:#ff8080; }
+
+  /* 分頁標籤 */
+  .tab-bar{ display:flex; gap:8px; margin-bottom:18px; }
+  .tab-btn{
+    padding:8px 18px; border-radius:8px; border:1px solid #304057;
+    background:transparent; color:#9fb0c3; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all .2s;
+  }
+  .tab-btn.active{ background:#1f6feb; border-color:#1f6feb; color:#fff; }
+
+  /* 管理表格 */
+  .mgr-card{
+    background:#121821; border:1px solid #1f2937;
+    border-radius:12px; padding:20px; margin-bottom:20px;
+  }
+  .mgr-card h3{ margin:0 0 14px; font-size:15px; color:#ffd769; }
+  .stats-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr));
+    gap:12px;
+  }
+  .stat-item{
+    background:#0b0f14; border:1px solid #1f2937; border-radius:10px;
+    padding:14px; text-align:center;
+  }
+  .stat-label{ display:block; font-size:12px; color:#8b949e; margin-bottom:6px; }
+  .stat-value{ display:block; font-size:20px; font-weight:700; color:#58a6ff; }
+  .add-row{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .add-row input, .add-row select{
+    flex:1; min-width:120px; padding:8px 12px; border-radius:8px;
+    background:#0b0f14; border:1px solid #304057; color:#e6edf3;
+    font-size:13px; outline:none;
+  }
+  .add-row input:focus, .add-row select:focus{ border-color:#2f86ff; }
+  .add-row button{ flex:none; }
+
+  table.mgr-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.mgr-table th{
+    text-align:left; padding:8px 10px; border-bottom:1px solid #1f2937;
+    color:#9fb0c3; font-weight:600;
+  }
+  table.mgr-table td{ padding:8px 10px; border-bottom:1px solid #0e1621; }
+  table.mgr-table tr:last-child td{ border-bottom:none; }
+  .tbl-btn{
+    padding:4px 10px; border-radius:6px; font-size:12px;
+    font-weight:600; cursor:pointer; border:none; margin-right:4px;
+  }
+  .tbl-del{ background:#3a1a1a; color:#ff8080; }
+  .tbl-del:hover{ background:#5a1a1a; }
+  .tbl-edit{ background:#1a2a3a; color:#7eb3ff; }
+  .tbl-edit:hover{ background:#1f3a5a; }
+  .tbl-contacts{ background:#1a2a1a; color:#7ee787; }
+  .tbl-contacts:hover{ background:#2a3a2a; }
+
+  /* 聯絡人子面板 */
+  #contactsSection{ display:none; margin-top:8px; }
+  #contactsSection.visible{ display:block; }
+  .contact-back{
+    background:transparent; border:1px solid #304057; color:#9fb0c3;
+    border-radius:7px; padding:5px 12px; font-size:12px;
+    cursor:pointer; margin-bottom:12px;
+  }
+
+  /* ── Debug 狀態面板 ───────────────────────────────────────────────────────── */
+  .debug-panel{
+    border-top:1px solid var(--line);
+    background:#0c121a;
+    font-size:12px;
+    flex-shrink:0;
+  }
+  .debug-toggle{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 14px; cursor:pointer; user-select:none;
+    color:var(--muted); font-weight:600;
+    transition:background .2s;
+  }
+  .debug-toggle:hover{ background:rgba(255,255,255,.04); }
+  .debug-toggle .arrow{
+    transition:transform .25s;
+    font-size:10px;
+  }
+  .debug-toggle .arrow.open{ transform:rotate(180deg); }
+  .debug-body{
+    display:none; padding:10px 14px;
+    max-height:45vh; overflow-y:auto;
+  }
+  .debug-body.open{ display:block; }
+  .debug-section{ margin-bottom:10px; }
+  .debug-section-title{
+    font-size:11px; font-weight:700; color:#ffd769;
+    margin-bottom:4px; padding-bottom:3px;
+    border-bottom:1px dashed rgba(255,255,255,.1);
+  }
+  .debug-row{
+    display:flex; justify-content:space-between;
+    padding:2px 0; color:var(--muted);
+  }
+  .debug-row .label{ color:#8899aa; }
+  .debug-row .value{ font-family:'Cascadia Code',monospace; color:var(--text); }
+  .debug-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    margin-right:4px; vertical-align:middle;
+  }
+  .debug-dot.on{ background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .debug-dot.off{ background:var(--err); box-shadow:0 0 6px var(--err); }
+  .debug-dot.warn{ background:#ffd769; box-shadow:0 0 6px #ffd769; }
+  .debug-body::-webkit-scrollbar{ width:6px; }
+  .debug-body::-webkit-scrollbar-thumb{ background:#2a6df4; border-radius:3px; }
+  .debug-body::-webkit-scrollbar-track{ background:#111a2e; border-radius:3px; }
+  .debug-fetch-err{ color:var(--err); font-size:11px; padding:4px 0; }
 </style>
 </head>
 <body>
+
+<!-- ── APP後台切換按鈕（固定於左上角）──────────────────────────────────────── -->
+<div class="mode-toggle-wrap" id="modeToggleWrap" title="切換 APP後台">
+  <div class="toggle-track" id="toggleTrack" onclick="toggleAppMode()">
+    <div class="toggle-thumb"></div>
+    <span class="toggle-text toggle-on-txt">ON</span>
+    <span class="toggle-text toggle-off-txt">OFF</span>
+  </div>
+  <div class="toggle-label-text">APP<br>後台</div>
+</div>
+
+<!-- ── APP後台全螢幕面板 ──────────────────────────────────────────────────── -->
+<div id="appPanel">
+  <!-- 登入表單 -->
+  <div class="app-login" id="appLoginForm">
+    <h2>🔐 APP 後台登入</h2>
+    <input type="text" id="loginUser" placeholder="帳號" />
+    <input type="password" id="loginPass" placeholder="密碼" />
+    <button onclick="doLogin()">登入</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+
+  <!-- 登入後主介面 -->
+  <div id="appMain">
+    <div class="app-topbar">
+      <h1>APP 後台管理</h1>
+      <button class="logout-btn" onclick="doLogout()">登出</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('users')">👤 使用者管理</button>
+      <button class="tab-btn" onclick="switchTab('contacts')">📞 聯絡人管理</button>
+      <button class="tab-btn" onclick="switchTab('stats')">📊 系統統計</button>
+    </div>
+
+    <!-- 使用者管理 -->
+    <div id="tabUsers">
+      <div class="mgr-card">
+        <h3>新增使用者</h3>
+        <div class="add-row">
+          <input type="text" id="newUsername" placeholder="帳號" />
+          <input type="password" id="newPassword" placeholder="密碼" />
+          <select id="newRole">
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+          <button onclick="createUser()">新增</button>
+        </div>
+      </div>
+      <div class="mgr-card">
+        <h3>使用者列表</h3>
+        <table class="mgr-table">
+          <thead><tr><th>ID</th><th>帳號</th><th>角色</th><th>狀態</th><th>操作</th></tr></thead>
+          <tbody id="usersTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 聯絡人管理 -->
+    <div id="tabContacts" style="display:none">
+      <!-- 選擇用戶 -->
+      <div class="mgr-card">
+        <h3>選擇使用者</h3>
+        <div class="add-row">
+          <select id="contactUserSel"></select>
+          <button onclick="loadContactsForUser()">載入聯絡人</button>
+        </div>
+      </div>
+      <!-- 聯絡人列表 -->
+      <div class="mgr-card" id="contactsSection">
+        <h3>聯絡人列表</h3>
+        <div class="add-row">
+          <input type="text" id="newContactName" placeholder="姓名" />
+          <input type="text" id="newContactPhone" placeholder="電話" />
+          <button onclick="addContact()">新增</button>
+        </div>
+        <table class="mgr-table">
+          <thead><tr><th>ID</th><th>姓名</th><th>電話</th><th>操作</th></tr></thead>
+          <tbody id="contactsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 系統統計 -->
+    <div id="tabStats" style="display:none">
+      <div class="mgr-card">
+        <h3>系統資源</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">CPU</span>
+            <span class="stat-value" id="statCpu">--%</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">記憶體</span>
+            <span class="stat-value" id="statMem">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">磁碟</span>
+            <span class="stat-value" id="statDisk">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">GPU</span>
+            <span class="stat-value" id="statGpu">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">使用者數</span>
+            <span class="stat-value" id="statUsers">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">聯絡人數</span>
+            <span class="stat-value" id="statContacts">--</span>
+          </div>
+        </div>
+      </div>
+      <div class="mgr-card">
+        <h3>最近操作紀錄</h3>
+        <table class="mgr-table">
+          <thead><tr><th>時間</th><th>事件</th><th>詳情</th></tr></thead>
+          <tbody id="statsLogBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="app">
   <!-- 左侧主舞台 -->
@@ -197,6 +524,7 @@
         <button class="ghost" id="btnClear">清空 Final</button>
         <button id="btnReconnect">重连</button>
         <a href="/speaker" style="background:#1a2a3a;border:1px solid #304057;color:#9fb0c3;border-radius:10px;padding:8px 12px;font-weight:600;font-size:14px;text-decoration:none;display:inline-flex;align-items:center;gap:5px">🎙 聲紋</a>
+        <button id="btnDebugRec" onclick="toggleDebugRec()" style="background:#1a2a1a;border:1px solid #2d4a2d;color:#7fc97f">▶ 錄音 Debug</button>
       </div>
     </div>
     <div class="chat-list">
@@ -209,6 +537,68 @@
         <ul id="finalList"></ul>
       </div>
     </div>
+
+    <!-- Debug 狀態面板 -->
+    <div class="debug-panel">
+      <div class="debug-toggle" onclick="toggleDebugPanel()">
+        <span>Debug 狀態面板</span>
+        <span class="arrow" id="debugArrow">▼</span>
+      </div>
+      <div class="debug-body" id="debugBody">
+        <div id="debugFetchErr" class="debug-fetch-err" style="display:none"></div>
+
+        <!-- 連線狀態 -->
+        <div class="debug-section">
+          <div class="debug-section-title">連線狀態</div>
+          <div class="debug-row"><span class="label">ESP32 攝影機</span><span class="value" id="d_cam">--</span></div>
+          <div class="debug-row"><span class="label">ESP32 音訊 (ASR)</span><span class="value" id="d_audio">--</span></div>
+          <div class="debug-row"><span class="label">UI 客戶端</span><span class="value" id="d_ui">--</span></div>
+          <div class="debug-row"><span class="label">攝影機觀看者</span><span class="value" id="d_viewers">--</span></div>
+          <div class="debug-row"><span class="label">IMU 客戶端</span><span class="value" id="d_imu">--</span></div>
+        </div>
+
+        <!-- 導航狀態 -->
+        <div class="debug-section">
+          <div class="debug-section-title">導航狀態</div>
+          <div class="debug-row"><span class="label">狀態機</span><span class="value" id="d_orch">--</span></div>
+          <div class="debug-row"><span class="label">盲道導航</span><span class="value" id="d_nav">--</span></div>
+          <div class="debug-row"><span class="label">過馬路</span><span class="value" id="d_cross">--</span></div>
+        </div>
+
+        <!-- 模型狀態 -->
+        <div class="debug-section">
+          <div class="debug-section-title">模型狀態</div>
+          <div class="debug-row"><span class="label">YOLO 分割</span><span class="value" id="d_yolo">--</span></div>
+          <div class="debug-row"><span class="label">障礙物偵測</span><span class="value" id="d_obstacle">--</span></div>
+          <div class="debug-row"><span class="label">GPU</span><span class="value" id="d_gpu">--</span></div>
+        </div>
+
+        <!-- ASR 狀態 -->
+        <div class="debug-section">
+          <div class="debug-section-title">ASR 語音辨識</div>
+          <div class="debug-row"><span class="label">Partial 文字</span><span class="value" id="d_partial">--</span></div>
+          <div class="debug-row"><span class="label">Final 紀錄數</span><span class="value" id="d_finals">--</span></div>
+          <div class="debug-row"><span class="label">最新辨識</span><span class="value" id="d_last_final" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">--</span></div>
+        </div>
+
+        <!-- 音訊狀態 -->
+        <div class="debug-section">
+          <div class="debug-section-title">音訊狀態</div>
+          <div class="debug-row"><span class="label">Debug 錄音</span><span class="value" id="d_rec">--</span></div>
+          <div class="debug-row"><span class="label">錄音緩衝區</span><span class="value" id="d_rec_buf">--</span></div>
+          <div class="debug-row"><span class="label">聲紋錄製</span><span class="value" id="d_enroll">--</span></div>
+          <div class="debug-row"><span class="label">聲紋持續監測</span><span class="value" id="d_verify">--</span></div>
+          <div class="debug-row"><span class="label">取樣率</span><span class="value" id="d_sr">--</span></div>
+        </div>
+
+        <!-- 系統資訊 -->
+        <div class="debug-section">
+          <div class="debug-section-title">系統資訊</div>
+          <div class="debug-row"><span class="label">伺服器運行</span><span class="value" id="d_uptime">--</span></div>
+        </div>
+      </div>
+    </div>
+
   </aside>
 </div>
 
@@ -234,12 +624,369 @@
   <input id="az_sl" type="range"><span id="az_val"></span>
 </div>
 
-<!-- three.js importmap -->
+<!-- three.js importmap（使用本地檔案，避免每次連外部 CDN）-->
 <script type="importmap">{
-  "imports": { "three": "https://unpkg.com/three@0.155.0/build/three.module.js" }
+  "imports": { "three": "/static/three/three.module.js" }
 }</script>
 
-<!-- 主脚本 -->
-<script type="module" src="/static/main.js"></script>
+<!-- 主脚本（defer：讓頁面先渲染完 HTML，再執行 JS）-->
+<script type="module" src="static/main.js" defer></script>
+
+<!-- APP後台切換邏輯 -->
+<script>
+/* ── 狀態 ─────────────────────────────────────────────────────────────────── */
+let _appMode = false;   // 目前是否在 APP後台
+let _token   = null;    // JWT token
+let _curContactUid = null; // 目前查看聯絡人的使用者 ID
+
+/* ── 切換按鈕 ───────────────────────────────────────────────────────────────── */
+function toggleAppMode(){
+  _appMode = !_appMode;
+  document.getElementById('toggleTrack').classList.toggle('on', _appMode);
+  document.getElementById('appPanel').classList.toggle('visible', _appMode);
+
+  if(_appMode){
+    // 進入 APP後台：若已有 token 直接顯示主介面
+    if(_token){ showAppMain(); }
+    else       { showLoginForm(); }
+  }
+}
+
+/* ── 登入 / 登出 ──────────────────────────────────────────────────────────── */
+async function doLogin(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  document.getElementById('loginErr').textContent = '';
+  try{
+    const res = await fetch('/api/login', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username: user, password: pass})
+    });
+    if(!res.ok){
+      const err = await res.json();
+      document.getElementById('loginErr').textContent = err.detail || '登入失敗';
+      return;
+    }
+    const data = await res.json();
+    _token = data.access_token;
+    showAppMain();
+  } catch(e){
+    document.getElementById('loginErr').textContent = '連線錯誤：' + e.message;
+  }
+}
+
+function doLogout(){
+  _token = null;
+  document.getElementById('appMain').classList.remove('visible');
+  showLoginForm();
+}
+
+function showLoginForm(){
+  document.getElementById('appLoginForm').style.display = 'block';
+  document.getElementById('appMain').classList.remove('visible');
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('loginPass').value = '';
+}
+
+async function showAppMain(){
+  document.getElementById('appLoginForm').style.display = 'none';
+  document.getElementById('appMain').classList.add('visible');
+  await loadUsers();
+}
+
+/* ── 分頁切換 ─────────────────────────────────────────────────────────────── */
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tabUsers').style.display    = tab==='users'    ? '' : 'none';
+  document.getElementById('tabContacts').style.display = tab==='contacts' ? '' : 'none';
+  document.getElementById('tabStats').style.display    = tab==='stats'    ? '' : 'none';
+  if(tab==='contacts') populateContactUserSel();
+  if(tab==='stats') loadStats();
+}
+
+/* ── 使用者管理 ──────────────────────────────────────────────────────────── */
+let _users = [];
+
+async function loadUsers(){
+  try{
+    const res = await apiFetch('/api/users');
+    _users = await res.json();
+    renderUsers();
+  } catch(e){ console.error('載入使用者失敗', e); }
+}
+
+function renderUsers(){
+  const tb = document.getElementById('usersTableBody');
+  tb.innerHTML = '';
+  _users.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.id}</td>
+      <td><strong>${escHtml(u.username)}</strong></td>
+      <td><span style="color:${u.role==='admin'?'#ffd769':'#9fb0c3'}">${u.role}</span></td>
+      <td><span style="color:${u.enabled?'#7ee787':'#ff8080'}">${u.enabled?'啟用':'停用'}</span></td>
+      <td>
+        <button class="tbl-btn tbl-edit" onclick="toggleUserEnabled(${u.id},${u.enabled})">${u.enabled?'停用':'啟用'}</button>
+        <button class="tbl-btn tbl-del"  onclick="deleteUser(${u.id},'${escHtml(u.username)}')">刪除</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function createUser(){
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  const role     = document.getElementById('newRole').value;
+  if(!username || !password){ alert('請填寫帳號與密碼'); return; }
+  try{
+    const res = await apiFetch('/api/users', 'POST', {username, password, role});
+    if(!res.ok){ const e=await res.json(); alert(e.detail||'新增失敗'); return; }
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
+    await loadUsers();
+  } catch(e){ alert('連線錯誤'); }
+}
+
+async function toggleUserEnabled(uid, cur){
+  try{
+    await apiFetch(`/api/users/${uid}`, 'PUT', {enabled: !cur});
+    await loadUsers();
+  } catch(e){ alert('操作失敗'); }
+}
+
+async function deleteUser(uid, uname){
+  if(!confirm(`確定刪除使用者「${uname}」？`)) return;
+  try{
+    await apiFetch(`/api/users/${uid}`, 'DELETE');
+    await loadUsers();
+  } catch(e){ alert('刪除失敗'); }
+}
+
+/* ── 聯絡人管理 ──────────────────────────────────────────────────────────── */
+function populateContactUserSel(){
+  const sel = document.getElementById('contactUserSel');
+  sel.innerHTML = '';
+  _users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = `${u.username}（ID:${u.id}）`;
+    sel.appendChild(opt);
+  });
+  document.getElementById('contactsSection').style.display = 'none';
+}
+
+async function loadContactsForUser(){
+  const uid = document.getElementById('contactUserSel').value;
+  _curContactUid = uid;
+  try{
+    const res = await apiFetch(`/api/admin/users/${uid}/contacts`);
+    const contacts = await res.json();
+    renderContacts(contacts);
+    document.getElementById('contactsSection').style.display = 'block';
+  } catch(e){ alert('載入聯絡人失敗'); }
+}
+
+function renderContacts(contacts){
+  const tb = document.getElementById('contactsTableBody');
+  tb.innerHTML = '';
+  contacts.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.id}</td>
+      <td>${escHtml(c.name)}</td>
+      <td>${escHtml(c.phone)}</td>
+      <td>
+        <button class="tbl-btn tbl-del" onclick="deleteContact(${c.id})">刪除</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function addContact(){
+  if(!_curContactUid){ alert('請先選擇使用者'); return; }
+  const name  = document.getElementById('newContactName').value.trim();
+  const phone = document.getElementById('newContactPhone').value.trim();
+  if(!name || !phone){ alert('請填寫姓名與電話'); return; }
+  try{
+    const res = await apiFetch(`/api/admin/users/${_curContactUid}/contacts`, 'POST', {name, phone});
+    if(!res.ok){ const e=await res.json(); alert(e.detail||'新增失敗'); return; }
+    document.getElementById('newContactName').value  = '';
+    document.getElementById('newContactPhone').value = '';
+    await loadContactsForUser();
+  } catch(e){ alert('連線錯誤'); }
+}
+
+async function deleteContact(cid){
+  if(!confirm('確定刪除此聯絡人？')) return;
+  try{
+    await apiFetch(`/api/admin/contacts/${cid}`, 'DELETE');
+    await loadContactsForUser();
+  } catch(e){ alert('刪除失敗'); }
+}
+
+/* ── 工具函式 ─────────────────────────────────────────────────────────────── */
+function apiFetch(url, method='GET', body=null){
+  const opts = {
+    method,
+    headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${_token}` }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  return fetch(url, opts);
+}
+
+function escHtml(str){
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── 系統統計 ──────────────────────────────────────────────────────────── */
+async function loadStats(){
+  try{
+    const res = await apiFetch('/api/admin/stats');
+    if(!res.ok) return;
+    const d = await res.json();
+    const s = d.system || {};
+    document.getElementById('statCpu').textContent     = s.cpu_percent + '%';
+    document.getElementById('statMem').textContent      = s.memory_used_gb + '/' + s.memory_total_gb + ' GB (' + s.memory_percent + '%)';
+    document.getElementById('statDisk').textContent     = s.disk_used_gb + '/' + s.disk_total_gb + ' GB';
+    document.getElementById('statUsers').textContent    = d.users;
+    document.getElementById('statContacts').textContent = d.contacts;
+    if(d.gpu){
+      document.getElementById('statGpu').textContent = d.gpu.name + ' ' + d.gpu.memory_used_mb + '/' + d.gpu.memory_total_mb + ' MB';
+    } else {
+      document.getElementById('statGpu').textContent = '無 GPU';
+    }
+    // 操作紀錄
+    const tb = document.getElementById('statsLogBody');
+    tb.innerHTML = '';
+    (d.recent_logs || []).forEach(log => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escHtml(log.created_at||'') + '</td><td>' + escHtml(log.event||'') + '</td><td>' + escHtml(log.detail||'') + '</td>';
+      tb.appendChild(tr);
+    });
+  } catch(e){ console.error('載入統計失敗', e); }
+}
+
+/* Enter 鍵登入 */
+document.getElementById('loginPass').addEventListener('keydown', e => {
+  if(e.key === 'Enter') doLogin();
+});
+document.getElementById('loginUser').addEventListener('keydown', e => {
+  if(e.key === 'Enter') document.getElementById('loginPass').focus();
+});
+
+/* ── Debug 錄音 ─────────────────────────────────────────────────────────── */
+let _debugRecActive = false;
+
+async function toggleDebugRec(){
+  const btn = document.getElementById('btnDebugRec');
+  if(!_debugRecActive){
+    // 開始錄音
+    try{
+      const res = await fetch('/api/debug_record/start', {method:'POST'});
+      const data = await res.json();
+      if(data.status === 'recording'){
+        _debugRecActive = true;
+        btn.textContent = '⏹ 停止錄音';
+        btn.style.background = '#3a1a1a';
+        btn.style.borderColor = '#8b3030';
+        btn.style.color = '#ff8080';
+      }
+    } catch(e){ alert('無法開始錄音：' + e.message); }
+  } else {
+    // 停止錄音並儲存
+    try{
+      const res = await fetch('/api/debug_record/stop', {method:'POST'});
+      const data = await res.json();
+      _debugRecActive = false;
+      btn.textContent = '▶ 錄音 Debug';
+      btn.style.background = '#1a2a1a';
+      btn.style.borderColor = '#2d4a2d';
+      btn.style.color = '#7fc97f';
+      if(data.status === 'saved'){
+        alert(`錄音已儲存：\n${data.file}\n時長：${data.duration_sec} 秒`);
+      } else {
+        alert('錄音失敗：' + (data.msg || '未知錯誤'));
+      }
+    } catch(e){ alert('無法停止錄音：' + e.message); }
+  }
+}
+
+/* ── Debug 狀態面板 ─────────────────────────────────────────────────────── */
+let _debugPanelOpen = false;
+let _debugTimer = null;
+
+function toggleDebugPanel(){
+  _debugPanelOpen = !_debugPanelOpen;
+  const body  = document.getElementById('debugBody');
+  const arrow = document.getElementById('debugArrow');
+  body.classList.toggle('open', _debugPanelOpen);
+  arrow.classList.toggle('open', _debugPanelOpen);
+
+  if(_debugPanelOpen){
+    fetchDebugStatus();
+    _debugTimer = setInterval(fetchDebugStatus, 2000);
+  } else {
+    if(_debugTimer){ clearInterval(_debugTimer); _debugTimer = null; }
+  }
+}
+
+function _dot(ok, onTxt, offTxt){
+  const cls = ok ? 'on' : 'off';
+  return `<span class="debug-dot ${cls}"></span>${ok ? (onTxt||'啟用') : (offTxt||'停用')}`;
+}
+
+async function fetchDebugStatus(){
+  const errEl = document.getElementById('debugFetchErr');
+  try{
+    const res = await fetch('/api/debug_status');
+    if(!res.ok){ errEl.textContent = `API 錯誤 ${res.status}`; errEl.style.display=''; return; }
+    errEl.style.display = 'none';
+    const d = await res.json();
+
+    // 連線狀態
+    document.getElementById('d_cam').innerHTML   = _dot(d.esp32_camera_connected, '已連線','未連線');
+    document.getElementById('d_audio').innerHTML = _dot(d.esp32_audio_connected, '已連線 (ASR 可用)','未連線 (無音訊來源)');
+    document.getElementById('d_ui').textContent      = d.ui_client_count;
+    document.getElementById('d_viewers').textContent  = d.camera_viewer_count;
+    document.getElementById('d_imu').textContent      = d.imu_ws_client_count;
+
+    // 導航狀態
+    document.getElementById('d_orch').textContent = d.orchestrator_state;
+    document.getElementById('d_nav').innerHTML    = _dot(d.navigation_active, '啟用中','未啟用');
+    document.getElementById('d_cross').innerHTML  = _dot(d.cross_street_active, '啟用中','未啟用');
+
+    // 模型狀態
+    document.getElementById('d_yolo').innerHTML     = _dot(d.yolo_seg_loaded, '已載入','未載入');
+    document.getElementById('d_obstacle').innerHTML = _dot(d.obstacle_detector_loaded, '已載入','未載入');
+    const gpuHtml = d.gpu_available
+      ? `<span class="debug-dot on"></span>${d.gpu_name}`
+      : `<span class="debug-dot off"></span>不可用 (CPU)`;
+    document.getElementById('d_gpu').innerHTML = gpuHtml;
+
+    // ASR 狀態
+    document.getElementById('d_partial').textContent = d.current_partial_len + ' 字';
+    document.getElementById('d_finals').textContent  = d.recent_finals_count + ' 筆';
+    document.getElementById('d_last_final').textContent = d.last_final || '(無)';
+    document.getElementById('d_last_final').title       = d.last_final || '';
+
+    // 音訊狀態
+    document.getElementById('d_rec').innerHTML    = _dot(d.debug_rec_active, '錄音中','閒置');
+    const bufKB = (d.debug_rec_bytes / 1024).toFixed(1);
+    document.getElementById('d_rec_buf').textContent = d.debug_rec_active ? `${bufKB} KB` : '--';
+    document.getElementById('d_enroll').innerHTML = _dot(d.enroll_active, '錄製中','閒置');
+    document.getElementById('d_verify').innerHTML = _dot(d.verify_continuous, '監測中','關閉');
+    document.getElementById('d_sr').textContent   = d.sample_rate + ' Hz';
+
+    // 系統資訊
+    document.getElementById('d_uptime').textContent = d.uptime;
+
+  } catch(e){
+    errEl.textContent = '連線失敗：' + e.message;
+    errEl.style.display = '';
+  }
+}
+</script>
 </body>
 </html>

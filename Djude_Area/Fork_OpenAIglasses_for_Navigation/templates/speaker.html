@@ -241,6 +241,49 @@
   }
   .conn-dot.connected { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
 
+  /* ── 參數調整滑桿 ── */
+  .param-row {
+    padding: 10px 0; border-bottom: 1px solid var(--line);
+  }
+  .param-row:last-child { border-bottom: none; }
+  .param-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .param-name  { font-size: 13px; font-weight: 600; }
+  .param-val   { font-size: 14px; font-weight: 700; color: var(--blue); font-family: monospace; }
+  .param-num-input {
+    width: 72px; background: #080e18; border: 1px solid #304057;
+    border-radius: 6px; color: var(--blue); font-family: monospace;
+    font-size: 13px; font-weight: 700; text-align: right;
+    padding: 2px 6px; outline: none;
+  }
+  .param-num-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(47,134,255,.2); }
+  .param-desc  { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  input[type=range] {
+    width: 100%; height: 4px; accent-color: var(--blue); cursor: pointer;
+    background: #1f2937; border-radius: 999px; outline: none; border: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    background: var(--blue); border-radius: 50%; cursor: pointer;
+    box-shadow: 0 0 6px rgba(47,134,255,.5);
+  }
+  .range-minmax {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: #3a4556; margin-top: 3px;
+  }
+
+  /* ── ASR 辨識文字顯示 ── */
+  .asr-live-box {
+    margin-top: 10px; padding: 10px 14px;
+    background: #080e18; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 13px; min-height: 38px; color: var(--muted);
+  }
+  .asr-live-box .final { color: var(--text); font-weight: 600; }
+  .asr-live-box .partial { color: var(--warn); font-style: italic; }
+
   @media (max-width: 900px) {
     .grid { grid-template-columns: 1fr; }
   }
@@ -250,7 +293,7 @@
 
 <!-- 頂部導航 -->
 <nav>
-  <a href="/">← 返回主頁</a>
+  <a id="homeLink" href="/GlassesBackstage/">← 返回主頁</a>
   <span class="sep">|</span>
   <span class="title">聲紋管理 Dashboard</span>
   <span class="spacer"></span>
@@ -359,6 +402,83 @@
       </div>
     </div>
 
+    <!-- 參數調整卡 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--blue);box-shadow:0 0 8px var(--blue)"></span>參數調整</div>
+
+      <!-- 聲紋相似度門檻 -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">聲紋相似度門檻</span>
+          <input type="number" class="param-num-input" id="valThreshold"
+                 min="0.00" max="1.00" step="0.01" value="0.82" title="直接輸入精確數值（Enter 確認）">
+        </div>
+        <div class="param-desc">越高越嚴格；低於此分數視為非授權聲紋（可輸入 1.00 = 最嚴格）</div>
+        <input type="range" id="sldThreshold" min="0.0" max="1.0" step="0.01" value="0.82">
+        <div class="range-minmax"><span>0.00 (完全寬鬆)</span><span>1.00 (完全嚴格)</span></div>
+      </div>
+
+      <!-- 靜音偵測 RMS 門檻 -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">待機靜音 RMS 門檻</span>
+          <input type="number" class="param-num-input" id="valStandbyRms"
+                 min="0" max="2000" step="10" value="150" title="直接輸入精確數值（Enter 確認）">
+        </div>
+        <div class="param-desc">低於此音量不送 ASR（節省 API）</div>
+        <input type="range" id="sldStandbyRms" min="0" max="600" step="10" value="150">
+        <div class="range-minmax"><span>0 (送所有音)</span><span>600 (嚴格靜音)</span></div>
+      </div>
+
+      <!-- 麥克風增益 -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">麥克風增益</span>
+          <input type="number" class="param-num-input" id="valPcmGain"
+                 min="0.5" max="50" step="0.5" value="5.0" title="直接輸入精確數值（Enter 確認）">
+        </div>
+        <div class="param-desc">放大 ESP32 麥克風音量（過高會截波）</div>
+        <input type="range" id="sldPcmGain" min="1.0" max="20.0" step="0.5" value="5.0">
+        <div class="range-minmax"><span>1× (原始)</span><span>20× (最大)</span></div>
+      </div>
+
+      <!-- 主動錄音靜音秒數 -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">主動錄音靜音判斷</span>
+          <input type="number" class="param-num-input" id="valSilenceSec"
+                 min="0.1" max="30" step="0.1" value="2.5" title="直接輸入精確數值（Enter 確認）">
+        </div>
+        <div class="param-desc">說完話後等待幾秒靜音才結束錄音</div>
+        <input type="range" id="sldSilenceSec" min="0.5" max="5.0" step="0.1" value="2.5">
+        <div class="range-minmax"><span>0.5s (快速)</span><span>5.0s (等待長句)</span></div>
+      </div>
+
+      <!-- 主動模式靜音 RMS -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">主動模式靜音 RMS</span>
+          <input type="number" class="param-num-input" id="valSilenceRms"
+                 min="0" max="2000" step="10" value="150" title="直接輸入精確數值（Enter 確認）">
+        </div>
+        <div class="param-desc">主動錄音時判定「沒在說話」的音量門檻</div>
+        <input type="range" id="sldSilenceRms" min="0" max="600" step="10" value="150">
+        <div class="range-minmax"><span>0 (全收)</span><span>600 (噪音過濾)</span></div>
+      </div>
+
+      <!-- 短句過濾門檻 -->
+      <div class="param-row">
+        <div class="param-header">
+          <span class="param-name">短句過濾門檻（字數）</span>
+          <input type="number" class="param-num-input" id="valIdleFilter"
+                 min="0" max="20" step="1" value="4" title="直接輸入（Enter 確認）">
+        </div>
+        <div class="param-desc">辨識文字低於此字數時不送 AI（0 = 全部送出，課堂轉錄建議設 1）</div>
+        <input type="range" id="sldIdleFilter" min="0" max="20" step="1" value="4">
+        <div class="range-minmax"><span>0 (不過濾)</span><span>20 (嚴格過濾)</span></div>
+      </div>
+    </div>
+
     <!-- 單次測試卡 -->
     <div class="card">
       <div class="card-title"><span class="dot" style="background:var(--warn);box-shadow:0 0 8px var(--warn)"></span>聲紋驗證測試</div>
@@ -424,6 +544,12 @@
       </div>
     </div>
 
+    <!-- ASR 即時辨識 -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--purple);box-shadow:0 0 8px var(--purple)"></span>ASR 即時辨識文字</div>
+      <div class="asr-live-box" id="asrLiveBox">等待語音…</div>
+    </div>
+
     <!-- 持續監測歷史 -->
     <div class="card" style="flex:1">
       <div class="card-title">
@@ -439,7 +565,7 @@
               <th>類型</th>
               <th>相似度</th>
               <th>RMS</th>
-              <th>結果</th>
+              <th>結果 / 文字</th>
             </tr>
           </thead>
           <tbody id="historyBody">
@@ -465,6 +591,9 @@
 </div><!-- /grid -->
 
 <script>
+// ── 路徑前綴（反向代理相容）────────────────────────────────────────────────
+const BASE = location.pathname.startsWith('/GlassesBackstage') ? '/GlassesBackstage' : '';
+
 // ==============================
 // 工具函式
 // ==============================
@@ -521,7 +650,7 @@ function log(msg, cls = '') {
   while (div.children.length > 500) div.removeChild(div.firstChild);
 }
 
-function addHistory(type, sim, rms, passed) {
+function addHistory(type, sim, rms, passed, text) {
   const tbody = $('historyBody');
   // 移除「等待」佔位列
   if (tbody.rows.length === 1 && tbody.rows[0].cells.length === 1) tbody.innerHTML = '';
@@ -530,7 +659,7 @@ function addHistory(type, sim, rms, passed) {
   let typeLabel, rowClass, resultLabel;
 
   if (type === 'verify') {
-    typeLabel = '驗證';
+    typeLabel = '聲紋驗證';
     rowClass = passed ? 'pass-row' : 'fail-row';
     resultLabel = passed
       ? `<span style="color:var(--ok);font-weight:700">✅ 通過</span>`
@@ -539,10 +668,14 @@ function addHistory(type, sim, rms, passed) {
     typeLabel = '靜音';
     rowClass = 'skip-row';
     resultLabel = `<span style="color:var(--warn)">— 跳過</span>`;
+  } else if (type === 'asr_final') {
+    typeLabel = '🎙 辨識';
+    rowClass = '';
+    resultLabel = `<span style="color:var(--text)">${text || '—'}</span>`;
   } else {
     typeLabel = type;
     rowClass = '';
-    resultLabel = '—';
+    resultLabel = text ? `<span style="color:var(--muted)">${text}</span>` : '—';
   }
 
   const simTxt = (sim !== null && sim !== undefined) ? sim.toFixed(4) : '—';
@@ -562,7 +695,7 @@ function addHistory(type, sim, rms, passed) {
 // ==============================
 async function fetchStatus() {
   try {
-    const r = await fetch('/api/enroll_status');
+    const r = await fetch(BASE+'/api/enroll_status');
     const d = await r.json();
     const sv = d.speaker_verifier || {};
 
@@ -603,6 +736,16 @@ async function fetchStatus() {
       $('simThresholdLine').style.left = (thr * 100) + '%';
     }
 
+    // 同步滑桿初始值（僅首次或數值不同時更新，避免拖動時跳回）
+    if (!window._paramSynced) {
+      window._paramSynced = true;
+      if (thr !== undefined)              syncSlider('sldThreshold',  'valThreshold',  thr);
+      if (sv.rms_threshold !== undefined) syncSlider('sldStandbyRms', 'valStandbyRms', sv.rms_threshold);
+      if (sv.pcm_gain !== undefined)      syncSlider('sldPcmGain',    'valPcmGain',    sv.pcm_gain);
+      if (sv.silence_sec !== undefined)   syncSlider('sldSilenceSec', 'valSilenceSec', sv.silence_sec);
+      if (sv.silence_rms !== undefined)   syncSlider('sldSilenceRms', 'valSilenceRms', sv.silence_rms);
+    }
+
     // 錄製倒數更新
     if (d.enrolling) {
       const rem = d.remaining_sec;
@@ -626,7 +769,7 @@ let sseSource = null;
 
 function connectSSE() {
   if (sseSource) sseSource.close();
-  sseSource = new EventSource('/api/speaker_events');
+  sseSource = new EventSource(BASE+'/api/speaker_events');
 
   sseSource.onopen = () => {
     $('connDot').classList.add('connected');
@@ -686,6 +829,18 @@ function handleEvent(data) {
     showEnrollResult(data.ok, data.message);
     $('enrollWaveform').style.display = 'none';
     fetchStatus();  // 重新整理狀態
+
+  } else if (type === 'asr_partial') {
+    // 即時辨識中（顯示在 ASR 框但不加入歷史）
+    const box = $('asrLiveBox');
+    box.innerHTML = `<span class="partial">辨識中… ${data.text}</span>`;
+
+  } else if (type === 'asr_final') {
+    // 最終辨識結果 → 更新框 + 加入歷史
+    const box = $('asrLiveBox');
+    box.innerHTML = `<span class="final">🎙 ${data.text}</span>`;
+    log(`🎙 ASR 辨識：${data.text}`, 'log-info');
+    addHistory('asr_final', null, null, null, data.text);
   }
 }
 
@@ -763,7 +918,7 @@ $('btnEnroll').addEventListener('click', async () => {
   $('btnEnroll').disabled = true;
 
   try {
-    const r = await fetch('/api/enroll_speaker', { method: 'POST' });
+    const r = await fetch(BASE+'/api/enroll_speaker', { method: 'POST' });
     const d = await r.json();
     log(`開始錄製聲紋：${d.message}`, 'log-info');
 
@@ -795,7 +950,7 @@ $('btnEnroll').addEventListener('click', async () => {
 $('btnDelete').addEventListener('click', async () => {
   if (!confirm('確定要刪除已儲存的聲紋嗎？')) return;
   try {
-    const r = await fetch('/api/delete_speaker', { method: 'POST' });
+    const r = await fetch(BASE+'/api/delete_speaker', { method: 'POST' });
     const d = await r.json();
     log('聲紋已刪除：' + JSON.stringify(d), 'log-warn');
     $('enrollResult').style.display = 'none';
@@ -811,7 +966,7 @@ $('btnDelete').addEventListener('click', async () => {
 $('togVerify').addEventListener('change', async e => {
   const enabled = e.target.checked;
   try {
-    const r = await fetch(`/api/speaker_verify_toggle?enabled=${enabled}`, { method: 'POST' });
+    const r = await fetch(`${BASE}/api/speaker_verify_toggle?enabled=${enabled}`, { method: 'POST' });
     const d = await r.json();
     log(`說話人驗證已${enabled ? '開啟' : '關閉'}`, enabled ? 'log-ok' : 'log-warn');
     fetchStatus();
@@ -830,7 +985,7 @@ $('togContinuous').addEventListener('change', async e => {
   continuousState = enabled;
   const el = $('statusContinuous');
   try {
-    const r = await fetch(`/api/verify_continuous?enabled=${enabled}`, { method: 'POST' });
+    const r = await fetch(`${BASE}/api/verify_continuous?enabled=${enabled}`, { method: 'POST' });
     const d = await r.json();
     el.textContent  = enabled ? '開啟' : '關閉';
     el.className    = 'badge ' + (enabled ? 'badge-ok' : 'badge-warn');
@@ -847,7 +1002,7 @@ $('togContinuous').addEventListener('change', async e => {
 $('togBypass').addEventListener('change', async e => {
   const enabled = e.target.checked;
   try {
-    await fetch(`/api/bypass_wake?enabled=${enabled}`, { method: 'POST' });
+    await fetch(`${BASE}/api/bypass_wake?enabled=${enabled}`, { method: 'POST' });
     log(`旁路喚醒詞已${enabled ? '開啟' : '關閉'}`, enabled ? 'log-warn' : 'log-info');
   } catch (err) {
     log('切換失敗：' + err, 'log-err');
@@ -869,7 +1024,7 @@ $('btnTest').addEventListener('click', async () => {
   $('btnTest').disabled = true;
 
   try {
-    const r = await fetch('/api/test_speaker_verify', { method: 'POST' });
+    const r = await fetch(BASE+'/api/test_speaker_verify', { method: 'POST' });
     const d = await r.json();
     log(`開始驗證測試：${d.message}`, 'log-info');
 
@@ -887,7 +1042,7 @@ $('btnTest').addEventListener('click', async () => {
         $('btnTest').disabled = false;
         // 查詢結果
         try {
-          const rr = await fetch('/api/verify_result');
+          const rr = await fetch(BASE+'/api/verify_result');
           const dd = await rr.json();
           showTestResult(dd);
           if (dd.status === 'done') {
@@ -914,6 +1069,96 @@ $('btnClearLog').addEventListener('click', () => { $('debugLog').innerHTML = '';
 $('btnClearHistory').addEventListener('click', () => {
   $('historyBody').innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">等待監測事件…</td></tr>';
 });
+
+// ==============================
+// 參數調整滑桿
+// ==============================
+
+function syncSlider(sliderId, valId, value, fmt) {
+  const sld = $(sliderId);
+  const inp = $(valId);
+  if (sld) sld.value = value;
+  if (inp) inp.value = fmt ? fmt(parseFloat(value)) : value;
+}
+
+// 套用後閃爍輸入框邊框（給使用者明確回饋）
+function flashInput(inp, ok) {
+  const color = ok ? 'var(--ok)' : 'var(--err)';
+  inp.style.borderColor  = color;
+  inp.style.boxShadow    = `0 0 0 2px ${ok ? 'rgba(63,185,80,.3)' : 'rgba(248,81,73,.3)'}`;
+  setTimeout(() => {
+    inp.style.borderColor = '';
+    inp.style.boxShadow   = '';
+  }, 1500);
+}
+
+async function applyParam(paramName, value, inp) {
+  try {
+    const r = await fetch(`${BASE}/api/set_param?name=${paramName}&value=${value}`, { method: 'POST' });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      log(`✔ ${d.message}`, 'log-ok');
+      if (inp) flashInput(inp, true);
+      if (paramName === 'threshold') {
+        $('simThresholdLine').style.left = (value * 100) + '%';
+        $('simThresholdVal').textContent  = parseFloat(value).toFixed(2);
+        $('statusThreshold').textContent  = parseFloat(value).toFixed(2);
+      }
+    } else {
+      log(`✖ 設定失敗：${d.detail}`, 'log-err');
+      if (inp) flashInput(inp, false);
+    }
+  } catch (e) {
+    log(`✖ 請求失敗：${e}`, 'log-err');
+    if (inp) flashInput(inp, false);
+  }
+}
+
+// 設定單一滑桿（含數字輸入框雙向同步）
+// - 用 input 事件（比 change 更可靠）+ debounce 送 API
+// - 套用成功時數字框閃綠邊框，失敗閃紅
+function setupSlider(sliderId, valId, paramName, debounceMs = 500) {
+  const sld = $(sliderId);
+  const inp = $(valId);
+  if (!sld || !inp) return;
+
+  let timer = null;
+  function scheduleApply(v) {
+    clearTimeout(timer);
+    timer = setTimeout(() => applyParam(paramName, v, inp), debounceMs);
+  }
+
+  // 拖動滑桿 → 即時更新數字框 + debounce 送 API
+  sld.addEventListener('input', () => {
+    const v = parseFloat(sld.value);
+    inp.value = sld.value;
+    scheduleApply(v);
+  });
+
+  // 數字框輸入 → 同步滑桿範圍，Enter/失焦立即送
+  inp.addEventListener('input', () => {
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) {
+      const min = parseFloat(sld.min), max = parseFloat(sld.max);
+      sld.value = Math.max(min, Math.min(max, v));
+      scheduleApply(v);
+    }
+  });
+  function commitInput() {
+    clearTimeout(timer);
+    const v = parseFloat(inp.value);
+    if (!isNaN(v)) applyParam(paramName, v, inp);  // 立即送，不 debounce
+  }
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitInput(); } });
+  inp.addEventListener('blur', commitInput);
+}
+
+setupSlider('sldThreshold',  'valThreshold',  'threshold');
+setupSlider('sldStandbyRms', 'valStandbyRms', 'standby_rms');
+setupSlider('sldPcmGain',    'valPcmGain',    'pcm_gain');
+setupSlider('sldSilenceSec', 'valSilenceSec', 'silence_sec');
+setupSlider('sldSilenceRms', 'valSilenceRms', 'silence_rms');
+setupSlider('sldIdleFilter', 'valIdleFilter', 'idle_filter_min_chars');
 
 // ==============================
 // 初始化
