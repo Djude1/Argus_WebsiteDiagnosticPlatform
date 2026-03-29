@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  aiglass:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiglass
+    restart: unless-stopped
+    
+    # 端口映射
+    ports:
+      - "8081:8081"      # Web 服务
+      - "12345:12345/udp" # IMU UDP
+    
+    # 环境变量（从 .env 文件读取）
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - BLIND_PATH_MODEL=${BLIND_PATH_MODEL:-model/yolo-seg.pt}
+      - OBSTACLE_MODEL=${OBSTACLE_MODEL:-model/yoloe-11l-seg.pt}
+      - YOLOE_MODEL_PATH=${YOLOE_MODEL_PATH:-model/yoloe-11l-seg.pt}
+      - ENABLE_TTS=${ENABLE_TTS:-true}
+      - TTS_INTERVAL_SEC=${TTS_INTERVAL_SEC:-1.0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    # 卷挂载
+    volumes:
+      - ./model:/app/model:ro              # 模型文件（只读）
+      - ./recordings:/app/recordings       # 录制文件
+      - ./music:/app/music:ro              # 音频文件（只读）
+      - ./voice:/app/voice:ro              # 语音文件（只读）
+      - ./static:/app/static:ro            # 静态文件（只读）
+      - ./templates:/app/templates:ro      # 模板文件（只读）
+    
+    # GPU 支持（需要 nvidia-docker）
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # 依赖服务（可选，如需添加数据库等）
+    # depends_on:
+    #   - redis
+    
+    # 网络模式
+    network_mode: bridge
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 可选：添加 Redis 用于缓存
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: aiglass-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+
+# 可选：数据卷
+# volumes:
+#   redis-data:
+
+# 可选：自定义网络
+# networks:
+#   aiglass-network:
+#     driver: bridge
+
