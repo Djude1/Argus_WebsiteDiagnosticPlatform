@@ -24,12 +24,13 @@ class AdminOrderSerializer(drf_serializers.ModelSerializer):
         fields = (
             'id', 'order_number', 'customer_name', 'customer_email',
             'customer_phone', 'shipping_address', 'total_price',
-            'status', 'status_display', 'notes', 'items',
-            'created_at', 'updated_at',
+            'status', 'status_display', 'payment_status', 'ecpay_trade_no',
+            'paid_at', 'notes', 'items', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'order_number', 'customer_name', 'customer_email',
             'customer_phone', 'shipping_address', 'total_price',
+            'payment_status', 'ecpay_trade_no', 'paid_at',
             'items', 'created_at', 'updated_at',
         )
 
