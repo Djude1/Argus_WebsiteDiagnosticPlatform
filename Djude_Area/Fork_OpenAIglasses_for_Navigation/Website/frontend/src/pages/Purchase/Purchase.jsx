@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchProducts, createOrder } from '../../api/client'
+import { fetchProducts, createOrder, getPaymentParams } from '../../api/client'
 import { useContent } from '../../context/ContentContext'
 import { useCart } from '../../context/CartContext'
 
@@ -19,7 +19,6 @@ export default function Purchase() {
   const [contact, setContact] = useState(initialContact)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
-  const [orderResult, setOrderResult] = useState(null)
   const { purchase: c } = useContent()
   const { items: cartItems, setQty: setCartQty, clearCart } = useCart()
 
@@ -92,15 +91,35 @@ export default function Purchase() {
 
     setSubmitting(true)
     try {
-      const res = await createOrder({
+      // Step 1：建立訂單
+      const orderRes = await createOrder({
         ...contact,
         items: selectedItems.map(({ product, qty }) => ({
           product_id: product.id,
           quantity: qty,
         })),
       })
-      setOrderResult(res.data)
-      clearCart()  // 訂單成功後清空購物車
+      const orderId = orderRes.data.order.id
+
+      // Step 2：取得綠界付款表單參數
+      const payRes = await getPaymentParams(orderId)
+      const { payment_url, params } = payRes.data
+
+      // Step 3：自動提交表單至綠界（POST redirect）
+      // 動態建立隱藏表單並送出
+      const form = document.createElement('form')
+      form.method = 'POST'
+      form.action = payment_url
+      Object.entries(params).forEach(([key, value]) => {
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = key
+        input.value = value
+        form.appendChild(input)
+      })
+      document.body.appendChild(form)
+      clearCart()   // 頁面即將跳轉至綠界，確認後才清空購物車
+      form.submit()
     } catch (err) {
       const data = err.response?.data
       if (data && typeof data === 'object') {
@@ -112,57 +131,8 @@ export default function Purchase() {
       } else {
         setErrors({ general: '訂單送出失敗，請稍後再試。' })
       }
-    } finally {
       setSubmitting(false)
     }
-  }
-
-  // ── 訂單成功頁面 ────────────────────────────────────────────────
-  if (orderResult) {
-    const emailHint = (c.success_email_hint || '確認信將寄至 {email}，我們將儘快與您聯繫。')
-      .replace('{email}', orderResult.order.customer_email)
-
-    return (
-      <div className="min-h-screen pt-24 flex items-center justify-center px-4">
-        <div className="max-w-lg w-full glass rounded-3xl p-10 text-center glow-border">
-          <div className="text-6xl mb-6">{c.success_icon || '✅'}</div>
-          <h2 className="text-2xl font-bold text-white mb-2">{c.success_title || '訂單建立成功！'}</h2>
-          <p className="text-gray-400 mb-6">{orderResult.message}</p>
-          <div className="bg-white/5 rounded-2xl p-6 text-left mb-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">{c.success_label_order || '訂單編號'}</span>
-              <span className="text-brand-400 font-mono">{orderResult.order.order_number}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">{c.success_label_buyer || '購買人'}</span>
-              <span className="text-white">{orderResult.order.customer_name}</span>
-            </div>
-            {/* 訂購明細 */}
-            {orderResult.order.items?.length > 0 && (
-              <div className="pt-2 border-t border-white/10 space-y-1">
-                {orderResult.order.items.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span className="text-gray-400">{item.product_name} × {item.quantity}</span>
-                    <span className="text-white">NT${(Number(item.price) * item.quantity).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-between text-base font-semibold pt-2 border-t border-white/10">
-              <span className="text-white">{c.success_label_amount || '總金額'}</span>
-              <span className="text-brand-400">NT${Number(orderResult.order.total_price).toLocaleString()}</span>
-            </div>
-          </div>
-          <p className="text-gray-500 text-sm mb-6">{emailHint}</p>
-          <button
-            onClick={() => { setOrderResult(null); setContact(initialContact); setQuantities({}); clearCart() }}
-            className="btn-outline w-full"
-          >
-            {c.btn_reorder || '再次訂購'}
-          </button>
-        </div>
-      </div>
-    )
   }
 
   const contactFields = [
@@ -339,12 +309,12 @@ export default function Purchase() {
                 {submitting ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {c.btn_submitting || '處理中...'}
+                    正在跳轉至付款頁面…
                   </span>
                 ) : (
                   selectedItems.length > 0
-                    ? `${c.btn_submit || '確認訂購'} NT$${totalPrice.toLocaleString()}`
-                    : c.btn_submit || '確認訂購'
+                    ? `${c.btn_submit || '前往付款'} NT$${totalPrice.toLocaleString()}`
+                    : c.btn_submit || '前往付款'
                 )}
               </button>
             </form>
