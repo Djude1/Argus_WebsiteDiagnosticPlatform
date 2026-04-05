@@ -206,9 +206,12 @@ class AppProvider extends ChangeNotifier {
         receiveTimeout: const Duration(seconds: 8),
       ));
       final resp = await client.get(endpoint);
-      final list = ((resp.data as Map<String, dynamic>)['announcements']
-                      as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
+      final raw  = resp.data;
+      final list = ((raw is Map<String, dynamic>
+                      ? raw['announcements'] as List<dynamic>?
+                      : null) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
       _announcements = list;
       notifyListeners();
       return list;
@@ -660,7 +663,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> stopObstacleAvoidance() async {
     try {
       await _api.navStop();
-      _navState = _gpsNavActive ? 'IDLE' : 'IDLE';
+      _navState = 'IDLE';
       notifyListeners();
       if (!_isTalkBackOn) _tts.speak('已停止避障');
     } catch (e) { _addMessage('[錯誤] $e'); }

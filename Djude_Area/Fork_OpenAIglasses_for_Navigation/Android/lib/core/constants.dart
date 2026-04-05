@@ -60,7 +60,11 @@ class AppConstants {
   // ── WebSocket ────────────────────────────────────────────────────────────
   static String _wsBase(String host, int port, bool secure, String? baseUrl, String path) {
     if (baseUrl != null && baseUrl.isNotEmpty && isFullUrl(baseUrl)) {
-      return '${baseUrl.replaceAll(RegExp(r'/+$'), '').replaceFirst(RegExp(r'^https?'), secure ? 'wss' : 'ws')}$path';
+      final cleanBase = baseUrl.replaceAll(RegExp(r'/+$'), '');
+      // 根據 baseUrl 本身的 scheme 自動決定 WS scheme
+      // 避免 https:// baseUrl 被 secure=false 誤判為 ws://（Cloudflare Tunnel 只接受 wss://）
+      final wsSchemeToUse = cleanBase.startsWith('https://') ? 'wss' : 'ws';
+      return cleanBase.replaceFirst(RegExp(r'^https?://'), '$wsSchemeToUse://') + path;
     }
     return '${wsScheme(secure)}://$host:$port$path';
   }

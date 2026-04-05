@@ -22,6 +22,7 @@ class AudioService {
 
   // ── TTS 串流重連狀態 ─────────────────────────────────────────────────────
   bool _shouldPlayStream = false;   // 是否應維持串流播放
+  bool _isReconnecting   = false;   // 防止多個重連同時觸發
   String? _streamUrl;               // 串流 URL（用於重連）
   StreamSubscription<PlayerState>? _playerStateSub; // 播放狀態監聽
 
@@ -67,9 +68,8 @@ class AudioService {
     await _playerStateSub?.cancel();
     _playerStateSub = _player.onPlayerStateChanged.listen((state) {
       debugPrint('[AudioService] 播放狀態變更: $state');
-      // 播放完成或非預期停止時，自動重連伺服器串流
-      if (_shouldPlayStream &&
-          (state == PlayerState.completed || state == PlayerState.stopped)) {
+      // 只在 completed 時重連（stopped 是 play() 內部切換時觸發，不重連以避免循環）
+      if (_shouldPlayStream && state == PlayerState.completed) {
         debugPrint('[AudioService] 串流中斷，準備重連...');
         _scheduleReconnect();
       }
@@ -92,23 +92,35 @@ class AudioService {
 
   /// 延遲後重新連線 /stream.wav（伺服器可能因重置而切斷連線）
   void _scheduleReconnect() {
-    if (!_shouldPlayStream || _streamUrl == null) return;
+    // 防止多個重連同時觸發（racing condition 保護）
+    if (!_shouldPlayStream || _streamUrl == null || _isReconnecting) return;
+    _isReconnecting = true;
     Future.delayed(const Duration(milliseconds: 800), () async {
-      if (!_shouldPlayStream || _streamUrl == null) return;
+      if (!_shouldPlayStream || _streamUrl == null) {
+        _isReconnecting = false;
+        return;
+      }
       debugPrint('[AudioService] 重連 /stream.wav...');
       try {
+        // 先確保播放器處於乾淨狀態再設定新來源
+        await _player.stop();
+        await Future.delayed(const Duration(milliseconds: 100));
         await _player.play(UrlSource(_streamUrl!));
         debugPrint('[AudioService] 重連成功');
       } catch (e) {
         debugPrint('[AudioService] 重連失敗: $e');
-        // 連線失敗，1 秒後再試
-        Future.delayed(const Duration(seconds: 1), _scheduleReconnect);
+        _isReconnecting = false;
+        // 連線失敗，2 秒後再試（加長間隔避免短時間狂打 server）
+        Future.delayed(const Duration(seconds: 2), _scheduleReconnect);
+        return;
       }
+      _isReconnecting = false;
     });
   }
 
   Future<void> stopPlayback() async {
     _shouldPlayStream = false;
+    _isReconnecting   = false;
     _streamUrl = null;
     await _playerStateSub?.cancel();
     _playerStateSub = null;
@@ -138,6 +150,7 @@ class AudioService {
 
   Future<void> dispose() async {
     _shouldPlayStream = false;
+    _isReconnecting   = false;
     _streamUrl = null;
     await _playerStateSub?.cancel();
     _playerStateSub = null;

@@ -717,30 +717,35 @@ class _NavBlock extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         color: color,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(
           children: [
             Icon(icon,
-                size:  38,
+                size:  36,
                 color: onTap != null ? Colors.white : Colors.white24),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize:   24,
+                      fontSize:   22,
                       fontWeight: FontWeight.bold,
                       color:      onTap != null ? Colors.white : Colors.white24,
                     ),
                   ),
                   Text(
                     sublabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       color:    onTap != null
                           ? (isActive ? Colors.white : Colors.white60)
                           : Colors.white24,

@@ -33,7 +33,8 @@ class ApiService {
       data: {'image_b64': imageBase64},
       options: Options(receiveTimeout: const Duration(seconds: 90)),
     );
-    return resp.data as Map<String, dynamic>;
+    final data = resp.data;
+    return data is Map<String, dynamic> ? data : {};
   }
 
   /// 傳入文件全文 + 問題，回傳 { answer }
@@ -43,13 +44,15 @@ class ApiService {
       data: {'text': text, 'question': question},
       options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
-    return resp.data as Map<String, dynamic>;
+    final data = resp.data;
+    return data is Map<String, dynamic> ? data : {};
   }
 
   // ── 導航控制 ─────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> navState() async {
     final resp = await _dio.get('/api/nav/state');
-    return resp.data as Map<String, dynamic>;
+    final data = resp.data;
+    return data is Map<String, dynamic> ? data : {};
   }
 
   Future<void> navBlindpath()    => _dio.post('/api/nav/blindpath');
@@ -69,7 +72,8 @@ class ApiService {
   // ── 伺服器 Debug 狀態 ─────────────────────────────────────────────────────
   Future<Map<String, dynamic>> debugStatus() async {
     final resp = await _dio.get('/api/debug_status');
-    return resp.data as Map<String, dynamic>;
+    final data = resp.data;
+    return data is Map<String, dynamic> ? data : {};
   }
 
 }
