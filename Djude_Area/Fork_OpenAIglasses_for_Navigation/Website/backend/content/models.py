@@ -288,6 +288,23 @@ class AppServerConfig(SingletonModel):
         return 'APP 伺服器設定'
 
 
+class AnnouncementTag(models.Model):
+    """公告標籤（支援前台篩選）"""
+    name = models.CharField('標籤名稱', max_length=50, unique=True)
+    slug = models.SlugField('URL Slug', max_length=50, unique=True)
+    color = models.CharField('顏色', max_length=20, default='#6366f1',
+                             help_text='標籤顯示顏色（Hex 色碼）')
+    created_at = models.DateTimeField('建立時間', auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = '公告標籤'
+        verbose_name_plural = '公告標籤'
+
+    def __str__(self):
+        return self.name
+
+
 class AppAnnouncement(models.Model):
     """管理員發送給 APP 視障使用者的公告（版本更新、維護、新功能等）"""
     TYPE_CHOICES = [
@@ -305,6 +322,18 @@ class AppAnnouncement(models.Model):
     scheduled_at = models.DateTimeField(
         '排程時間', null=True, blank=True,
         help_text='留空表示立即生效；設定後到達該時間才對 APP 可見',
+    )
+    # 標籤系統與網站顯示
+    tags = models.ManyToManyField(
+        AnnouncementTag,
+        verbose_name='標籤',
+        blank=True,
+        related_name='announcements'
+    )
+    show_on_website = models.BooleanField(
+        '顯示於網站',
+        default=False,
+        help_text='勾選後，前台公告頁會顯示此公告'
     )
     created_at   = models.DateTimeField('建立時間', auto_now_add=True)
     updated_at   = models.DateTimeField('更新時間', auto_now=True)

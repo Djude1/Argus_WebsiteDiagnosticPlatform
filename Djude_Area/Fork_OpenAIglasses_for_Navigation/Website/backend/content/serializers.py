@@ -3,7 +3,7 @@ from .models import (
     SiteSettings, HomeContent, ProductPageContent,
     DownloadPageContent, DownloadFeature, DownloadStep,
     PurchasePageContent, TeamPageContent, AppServerConfig,
-    ImpactFeedback, AppAnnouncement,
+    ImpactFeedback, AppAnnouncement, AnnouncementTag,
 )
 
 
@@ -76,10 +76,27 @@ class ImpactFeedbackSerializer(serializers.ModelSerializer):
         fields = ('id', 'magnitude', 'outcome', 'is_false_positive', 'note', 'created_at')
 
 
+class AnnouncementTagSerializer(serializers.ModelSerializer):
+    """公告標籤序列化器"""
+    class Meta:
+        model = AnnouncementTag
+        fields = ('id', 'name', 'slug', 'color', 'created_at')
+
+
 class AppAnnouncementSerializer(serializers.ModelSerializer):
+    """公告序列化器（支援標籤關聯）"""
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    # 可寫入的標籤欄位（接收 ID 陣列）
+    tags = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=AnnouncementTag.objects.all(),
+        required=False
+    )
+    # 讀取時回傳完整標籤資料
+    tags_detail = AnnouncementTagSerializer(source='tags', many=True, read_only=True)
 
     class Meta:
         model  = AppAnnouncement
         fields = ('id', 'title', 'body', 'type', 'type_display',
-                  'is_active', 'scheduled_at', 'created_at', 'updated_at')
+                  'is_active', 'scheduled_at', 'tags', 'tags_detail',
+                  'show_on_website', 'created_at', 'updated_at')
