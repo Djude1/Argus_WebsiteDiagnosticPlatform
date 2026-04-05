@@ -12,6 +12,8 @@ import ActivityLogs from './sections/ActivityLogs'
 import AppDevice from './sections/AppDevice'
 import VoiceDetection from './sections/VoiceDetection'
 import Announcements from './sections/Announcements'
+import DeviceMonitor from './sections/DeviceMonitor'
+import ServerConfig from './sections/ServerConfig'
 import { getMe } from './api'
 
 // ── 保護路由：未登入導向 login ────────────────────────────────────
@@ -76,6 +78,8 @@ function AdminLayout() {
     'team':         { label: '成員管理',     component: <TeamMembers /> },
     'accounts':     { label: '帳號管理',     component: <Accounts currentUserRole={userRole} /> },
     'logs':         { label: '操作日誌',     component: <ActivityLogs /> },
+    'devices':      { label: '裝置監控',     component: <DeviceMonitor /> },
+    'server-config': { label: 'APP 伺服器設定', component: <ServerConfig /> },
     'app-device':     { label: 'APP 裝置管理',   component: <AppDevice /> },
     'voice':          { label: '語音偵測中控台', component: <VoiceDetection /> },
     'announcements':  { label: 'APP 公告管理',  component: <Announcements /> },
@@ -108,7 +112,7 @@ function AdminLayout() {
         setActiveCategory('app-device')
       }
     } else {
-      const websiteSections = ['dashboard', 'page-content', 'products', 'orders', 'team', 'accounts', 'logs']
+      const websiteSections = ['dashboard', 'page-content', 'products', 'orders', 'team', 'accounts', 'logs', 'devices', 'server-config']
       if (!websiteSections.includes(activeCategory)) {
         setActiveCategory('dashboard')
       }

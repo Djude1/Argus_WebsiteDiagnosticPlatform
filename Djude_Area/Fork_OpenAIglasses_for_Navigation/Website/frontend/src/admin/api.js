@@ -86,6 +86,13 @@ export const createDlStep = (data)    => adminClient.post('/admin/content-steps/
 export const updateDlStep = (id, data)=> adminClient.patch(`/admin/content-steps/${id}/`, data)
 export const deleteDlStep = (id)      => adminClient.delete(`/admin/content-steps/${id}/`)
 
+// ── APK 上傳 ─────────────────────────────────────────────────────
+export const uploadApk = (formData) =>
+  adminClient.post('/admin/upload-apk/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  })
+
 // ── 儀表板與日誌 ─────────────────────────────────────────────────
 export const getTraffic      = ()       => adminClient.get('/admin/analytics/traffic/')
 export const getActivityLogs = (action) => adminClient.get('/admin/analytics/logs/', {
@@ -137,3 +144,9 @@ export const getAnnouncements   = ()         => adminClient.get('/admin/announce
 export const createAnnouncement = (data)     => adminClient.post('/admin/announcements/', data)
 export const updateAnnouncement = (id, data) => adminClient.patch(`/admin/announcements/${id}/`, data)
 export const deleteAnnouncement = (id)       => adminClient.delete(`/admin/announcements/${id}/`)
+
+// 公告標籤管理
+export const getAnnouncementTags   = ()         => adminClient.get('/admin/announcement-tags/')
+export const createAnnouncementTag = (data)     => adminClient.post('/admin/announcement-tags/', data)
+export const updateAnnouncementTag = (id, data) => adminClient.patch(`/admin/announcement-tags/${id}/`, data)
+export const deleteAnnouncementTag = (id)       => adminClient.delete(`/admin/announcement-tags/${id}/`)
