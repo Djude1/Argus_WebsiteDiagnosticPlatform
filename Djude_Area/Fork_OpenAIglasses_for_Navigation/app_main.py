@@ -1099,6 +1099,8 @@ def api_debug_status():
         "sample_rate":          SAMPLE_RATE,
         # ── 系統資訊 ──
         "uptime":               f"{h:02d}:{m:02d}:{s:02d}",
+        "server_port":          SERVER_PORT,
+        "device_id":            os.environ.get("DEVICE_ID", "glasses_01"),
     }
 
 # 注册 /stream.wav
@@ -1982,14 +1984,31 @@ def _init_navigators():
 
 
 @app.on_event("startup")
-async def on_startup_local_mode():
-    """LOCAL_MODE=true 時，以電腦攝影機、麥克風、喇叭取代 ESP32。"""
-    import local_device
-    if not local_device.LOCAL_MODE:
-        return
+async def on_startup_init():
+    """伺服器啟動時：初始化導航器（不需等待攝影機連線），LOCAL_MODE 時另啟本機裝置。"""
+    # 無論哪種模式，都在背景等待模型載入後初始化 orchestrator
+    asyncio.create_task(_startup_init_navigators())
 
-    # 丟到背景 Task 執行，讓 uvicorn 正常啟動完成，任何例外只印出不崩潰
-    asyncio.create_task(_local_mode_init())
+    import local_device
+    if local_device.LOCAL_MODE:
+        asyncio.create_task(_local_mode_init())
+
+
+async def _startup_init_navigators():
+    """啟動時初始化導航器（背景執行，等待 YOLO 模型載入，最多 120 秒）。
+
+    不需要等待攝影機 WebSocket 連線，讓導航 API 在手機剛連上時就能使用。
+    """
+    for _ in range(240):          # 最多等 120 秒（每 0.5 秒檢查一次）
+        if yolo_seg_model is not None:
+            break
+        await asyncio.sleep(0.5)
+
+    _init_navigators()
+    if orchestrator:
+        print("[NAV MASTER] 啟動時初始化完成，狀態機就緒", flush=True)
+    else:
+        print("[NAV MASTER] 啟動初始化失敗：模型未載入或路徑錯誤", flush=True)
 
 
 async def _local_mode_init():
