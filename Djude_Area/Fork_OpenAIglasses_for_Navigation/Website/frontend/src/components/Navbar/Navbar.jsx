@@ -13,6 +13,7 @@ export default function Navbar() {
     { to: '/product', label: site.nav_product || '產品介紹' },
     { to: '/project', label: site.nav_project || '專案介紹' },
     { to: '/download', label: site.nav_download || 'APP 下載' },
+    { to: '/announcements', label: '公告中心' },
     { to: '/purchase', label: site.nav_purchase || '立即購買' },
     { to: '/team', label: site.nav_team || '關於團隊' },
   ]

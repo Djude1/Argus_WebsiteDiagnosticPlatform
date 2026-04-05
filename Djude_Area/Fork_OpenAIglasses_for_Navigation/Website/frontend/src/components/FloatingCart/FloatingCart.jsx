@@ -89,7 +89,8 @@ export default function FloatingCart() {
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => setQty(product.id, qty - 1)}
-                        className="w-6 h-6 rounded-md border border-white/10 text-gray-400 hover:border-brand-500/50 hover:text-brand-400 transition-all flex items-center justify-center text-sm"
+                        disabled={qty <= 1}
+                        className="w-6 h-6 rounded-md border border-white/10 text-gray-400 hover:border-brand-500/50 hover:text-brand-400 disabled:opacity-30 transition-all flex items-center justify-center text-sm"
                       >
                         −
                       </button>
