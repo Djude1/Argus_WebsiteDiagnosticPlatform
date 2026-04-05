@@ -1,0 +1,24 @@
+# 強制 shell script 永遠使用 LF（避免 Windows CRLF 導致 Linux 容器無法執行）
+*.sh text eol=lf
+
+# 其他文字檔案自動處理
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.conf text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+# 二進位檔案不做換行轉換
+*.png binary
+*.jpg binary
+*.glb binary
+*.pt binary
+*.pth binary
+*.wav binary
