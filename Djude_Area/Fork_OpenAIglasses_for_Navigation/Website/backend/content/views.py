@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -71,3 +71,26 @@ class ImpactFeedbackCreateView(APIView):
             serializer.save()
             return Response({'ok': True}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WebsiteAnnouncementsView(generics.ListAPIView):
+    """
+    前台網站公告列表 API
+    - 僅顯示 is_active=True 且 show_on_website=True 的公告
+    - 支援標籤篩選：?tag=<slug>
+    """
+    serializer_class = AppAnnouncementSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        now = timezone.now()
+        qs = AppAnnouncement.objects.filter(
+            is_active=True,
+            show_on_website=True
+        ).filter(
+            Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=now)
+        )
+        tag_slug = self.request.query_params.get('tag')
+        if tag_slug:
+            qs = qs.filter(tags__slug=tag_slug)
+        return qs.prefetch_related('tags').order_by('-created_at').distinct()
