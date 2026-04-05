@@ -3,6 +3,7 @@
 """
 from rest_framework import serializers
 from django.db import transaction
+from django.db.models import F
 from .models import Order, OrderItem
 from products.models import Product
 
@@ -54,8 +55,13 @@ class OrderCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         total_price = 0
         item_rows = []
+        # select_for_update() 鎖定商品列，防止並發下單的庫存競爭條件
         for item in validated_data['items']:
-            product = Product.objects.get(pk=item['product_id'])
+            product = Product.objects.select_for_update().get(pk=item['product_id'])
+            if product.stock < item['quantity']:
+                raise serializers.ValidationError(
+                    {'items': [f'「{product.name}」庫存不足，目前庫存為 {product.stock} 件']}
+                )
             total_price += product.price * item['quantity']
             item_rows.append((product, item['quantity']))
 
@@ -75,19 +81,20 @@ class OrderCreateSerializer(serializers.Serializer):
                 quantity=quantity,
                 price=product.price
             )
-            product.stock -= quantity
-            product.save(update_fields=['stock'])
+            # 使用 F() 表達式進行資料庫層級原子扣庫，避免讀寫競爭
+            Product.objects.filter(pk=product.pk).update(stock=F('stock') - quantity)
 
         return order
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
+    items          = OrderItemSerializer(many=True, read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = Order
         fields = (
             'id', 'order_number', 'customer_name', 'customer_email',
             'customer_phone', 'shipping_address', 'total_price',
-            'status', 'notes', 'items', 'created_at'
+            'status', 'status_display', 'payment_status', 'notes', 'items', 'created_at'
         )

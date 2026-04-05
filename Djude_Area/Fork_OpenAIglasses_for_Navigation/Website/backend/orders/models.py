@@ -48,6 +48,22 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='下單時間')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新時間')
 
+    # ── 付款資訊 ──────────────────────────────────────────────────────────
+    PAYMENT_STATUS_CHOICES = [
+        ('unpaid',   '未付款'),
+        ('paid',     '已付款'),
+        ('failed',   '付款失敗'),
+        ('refunded', '已退款'),
+    ]
+    payment_status  = models.CharField(
+        max_length=20, choices=PAYMENT_STATUS_CHOICES,
+        default='unpaid', verbose_name='付款狀態'
+    )
+    ecpay_trade_no  = models.CharField(
+        max_length=50, blank=True, verbose_name='綠界交易編號'
+    )
+    paid_at         = models.DateTimeField(null=True, blank=True, verbose_name='付款時間')
+
     class Meta:
         verbose_name = '訂單'
         verbose_name_plural = '訂單'
