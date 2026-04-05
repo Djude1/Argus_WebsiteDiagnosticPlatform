@@ -43,6 +43,9 @@ GEMINI_API_KEY_10: str = os.environ.get("GEMINI_API_KEY_10", "")
 GEMINI_API_KEY_11: str = os.environ.get("GEMINI_API_KEY_11", "")
 GEMINI_API_KEY_12: str = os.environ.get("GEMINI_API_KEY_12", "")
 GEMINI_API_KEY_13: str = os.environ.get("GEMINI_API_KEY_13", "")
+GEMINI_API_KEY_14: str = os.environ.get("GEMINI_API_KEY_14", "")
+GEMINI_API_KEY_15: str = os.environ.get("GEMINI_API_KEY_15", "")
+GEMINI_API_KEY_16: str = os.environ.get("GEMINI_API_KEY_16", "")
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 
 # Google Speech-to-Text 服務帳戶憑證 JSON 路徑
