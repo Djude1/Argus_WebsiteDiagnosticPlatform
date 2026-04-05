@@ -18,6 +18,17 @@ const STATUS_COLORS = {
   cancelled: 'bg-gray-100 text-gray-500',
 }
 
+const PAYMENT_COLORS = {
+  unpaid:   'bg-orange-100 text-orange-700',
+  paid:     'bg-green-100 text-green-700',
+  failed:   'bg-red-100 text-red-700',
+  refunded: 'bg-gray-100 text-gray-500',
+}
+
+const PAYMENT_LABELS = {
+  unpaid: '未付款', paid: '已付款', failed: '付款失敗', refunded: '已退款',
+}
+
 export default function Orders() {
   const [orders, setOrders]       = useState([])
   const [selected, setSelected]   = useState(null)
@@ -99,6 +110,19 @@ export default function Orders() {
                 {selected.status_display}
               </span>
             </div>
+
+            {/* 付款狀態 */}
+            {selected.payment_status && (
+              <div className="flex items-center gap-2 mb-5">
+                <span className="text-xs text-gray-500">付款狀態：</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_COLORS[selected.payment_status] || ''}`}>
+                  {PAYMENT_LABELS[selected.payment_status] || selected.payment_status}
+                </span>
+                {selected.ecpay_trade_no && (
+                  <span className="text-xs text-gray-400 font-mono ml-1">#{selected.ecpay_trade_no}</span>
+                )}
+              </div>
+            )}
 
             {/* 顧客資訊 */}
             <div className="bg-gray-50 rounded-xl p-5 mb-5 space-y-2">
