@@ -20,6 +20,12 @@ export const fetchProduct = (id) => apiClient.get(`/products/${id}/`)
 // 建立訂單
 export const createOrder = (orderData) => apiClient.post('/orders/', orderData)
 
+// 取得綠界付款表單參數
+export const getPaymentParams = (orderId) => apiClient.get(`/orders/${orderId}/payment/`)
+
+// 查詢訂單付款狀態
+export const getPaymentStatus = (orderId) => apiClient.get(`/orders/${orderId}/payment-status/`)
+
 // 取得所有團隊成員
 export const fetchTeamMembers = (type) => {
   const params = type ? { type } : {}

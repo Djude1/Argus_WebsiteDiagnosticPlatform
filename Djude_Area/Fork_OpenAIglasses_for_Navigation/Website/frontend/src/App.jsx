@@ -8,9 +8,11 @@ import FloatingCart from './components/FloatingCart/FloatingCart'
 import Home from './pages/Home/Home'
 import Product from './pages/Product/Product'
 import Purchase from './pages/Purchase/Purchase'
+import PurchaseResult from './pages/Purchase/PurchaseResult'
 import Team from './pages/Team/Team'
 import Download from './pages/Download/Download'
 import Project from './pages/Project/Project'
+import Announcements from './pages/Announcements/Announcements'
 import ScrollToTop from './components/ScrollToTop'
 import AdminApp from './admin/AdminApp'
 
@@ -48,9 +50,11 @@ export default function App() {
                     <Route path="/product" element={<Product />} />
                     <Route path="/product/:id" element={<Product />} />
                     <Route path="/purchase" element={<Purchase />} />
+                    <Route path="/purchase/result" element={<PurchaseResult />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/download" element={<Download />} />
                     <Route path="/project" element={<Project />} />
+                    <Route path="/announcements" element={<Announcements />} />
                   </Routes>
                 </main>
                 <Footer />
