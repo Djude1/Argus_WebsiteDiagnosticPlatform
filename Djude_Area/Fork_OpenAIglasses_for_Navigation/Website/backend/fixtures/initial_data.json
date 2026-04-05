@@ -53,51 +53,51 @@
   "model": "products.product",
   "pk": 1,
   "fields": {
-    "name": "AI 導航智慧眼鏡",
-    "short_description": "結合 AI 語音助理與 AR 導航的次世代智慧眼鏡",
-    "description": "OpenAI Glasses for Navigation 是一款革命性的 AI 智慧眼鏡，整合 OpenAI GPT 語音助理與即時 AR 導航功能。透過自然語言互動，讓您在行走時獲得即時路線指引、周遭環境資訊，以及 AI 驅動的生活輔助服務。\n\n主要應用場景包括城市導航、無障礙輔助、旅遊導覽，以及日常生活中的 AI 助理功能。本產品基於開源專案 OpenAIglasses_for_Navigation 開發，並由我們的團隊進行功能強化與使用者介面優化。",
-    "price": "12900.00",
-    "original_price": "15900.00",
+    "name": "AI 視障輔助智慧眼鏡",
+    "short_description": "專為視障人士設計，結合 YOLO 影像 AI、GPS 導航與語音互動，守護每一步行走",
+    "description": "AI 視障輔助智慧眼鏡是一款專為視障人士設計的智慧穿戴裝置，整合 YOLO 即時影像辨識、Lucas-Kanade 光流導航演算法與多模態大型語言模型，提供全方位的視障輔助功能。\n\n系統以 Seeed Studio XIAO ESP32S3 為核心硬體，透過 WebSocket 與 Python FastAPI 伺服器即時通訊。攝影機串流影像至後端進行 YOLO 推理，語音透過 Google Speech-to-Text 即時辨識後由 Gemini 2.5 Flash 處理，TTS 合成語音回應再播放至使用者耳機。\n\n主要功能包括：盲道即時導航（YOLO 分割 + 光流偵測）、GPS 路線規劃與語音導引、斑馬線過馬路輔助（等待紅綠燈）、障礙物方向偵測與迴避建議、物品尋找模式（YOLOE 開放詞彙）、跌倒偵測自動通報、與自然語音 AI 對話。本專案基於開源專案 OpenAIglasses_for_Navigation 開發，為學術研究用途。",
+    "price": "15800.00",
+    "original_price": "19800.00",
     "stock": 50,
     "image": "",
     "model_3d": "models/aiglass.glb",
     "is_active": true,
     "created_at": "2026-03-07T20:12:14.223Z",
-    "updated_at": "2026-03-07T20:52:09.322Z"
+    "updated_at": "2026-03-29T00:00:00.000Z"
   }
 },
 {
   "model": "products.product",
   "pk": 2,
   "fields": {
-    "name": "6",
-    "short_description": "6",
-    "description": "6",
-    "price": "6.00",
-    "original_price": "6.00",
-    "stock": 5,
+    "name": "測試商品",
+    "short_description": "測試",
+    "description": "測試",
+    "price": "0.00",
+    "original_price": "0.00",
+    "stock": 0,
     "image": "",
     "model_3d": "",
-    "is_active": true,
+    "is_active": false,
     "created_at": "2026-03-07T20:51:35.258Z",
-    "updated_at": "2026-03-07T20:51:35.258Z"
+    "updated_at": "2026-03-29T00:00:00.000Z"
   }
 },
 {
   "model": "products.product",
   "pk": 3,
   "fields": {
-    "name": "AI 盲人輔助智慧眼鏡",
+    "name": "AI 視障輔助智慧眼鏡（詳細版）",
     "short_description": "專為視障人士設計的 AI 智慧眼鏡，結合影像 AI 與語音互動，守護每一步行走",
-    "description": "AI 盲人輔助智慧眼鏡是一款專為視障人士設計的智慧穿戴裝置，整合 YOLO 即時影像辨識、Lucas-Kanade 光流導航演算法與大型語言模型，提供全方位的視障輔助功能。\n\n系統以 Seeed Studio XIAO ESP32S3 為核心硬體，透過 WebSocket 與 Python FastAPI 伺服器即時通訊。攝影機串流影像至後端進行 YOLO 推理，語音透過 Groq Whisper 辨識後由 Gemini 2.5 Flash 處理，TTS 合成語音回應再播放至使用者耳機。\n\n主要功能包括：盲道即時導航（YOLO 分割 + 光流偵測）、斑馬線過馬路輔助（等待紅綠燈）、障礙物偵測迴避、物品尋找模式（YOLOE 開放詞彙）與自然語音 AI 對話。本專案基於開源專案 OpenAIglasses_for_Navigation 開發，為學術研究用途，不進行商業販售。",
+    "description": "AI 視障輔助智慧眼鏡是一款專為視障人士設計的智慧穿戴裝置，整合 YOLO 即時影像辨識、Lucas-Kanade 光流導航演算法與大型語言模型，提供全方位的視障輔助功能。\n\n系統以 Seeed Studio XIAO ESP32S3 為核心硬體，透過 WebSocket 與 Python FastAPI 伺服器即時通訊。攝影機串流影像至後端進行 YOLO 推理，語音透過 Google Speech-to-Text 即時串流辨識，由 Gemini 2.5 Flash 進行自然語言處理，TTS 合成語音回應再播放至使用者耳機。\n\n主要功能包括：盲道即時導航（YOLO 分割 + 光流偵測）、GPS 路線規劃與語音導引、斑馬線過馬路輔助、障礙物偵測與方向迴避建議、物品尋找模式（YOLOE 開放詞彙）、跌倒偵測自動通報緊急聯絡人，以及自然語音 AI 對話。本專案基於開源專案 OpenAIglasses_for_Navigation 開發，為學術研究用途，不進行商業販售。",
     "price": "0.00",
     "original_price": "0.00",
-    "stock": 50,
+    "stock": 1,
     "image": "",
     "model_3d": "models/aiglass.glb",
-    "is_active": true,
+    "is_active": false,
     "created_at": "2026-03-18T01:50:47.852Z",
-    "updated_at": "2026-03-18T01:50:47.852Z"
+    "updated_at": "2026-03-29T00:00:00.000Z"
   }
 },
 {
@@ -106,7 +106,7 @@
   "fields": {
     "product": 1,
     "title": "AI 語音助理",
-    "description": "整合 OpenAI GPT，支援中英文自然語言對話，隨時回答您的問題",
+    "description": "整合 Gemini 2.5 Flash，支援流暢中文自然語言對話，隨時回答環境與導航相關問題",
     "icon": "🤖",
     "order": 0
   }
@@ -116,10 +116,10 @@
   "pk": 2,
   "fields": {
     "product": 1,
-    "title": "AR 即時導航",
-    "description": "擴增實境導航箭頭直接顯示於視野中，雙手完全解放",
+    "title": "GPS 導航",
+    "description": "語音輸入目的地，整合 Google Maps 路線規劃，全程語音導引，無需看螢幕",
     "icon": "🗺️",
-    "order": 0
+    "order": 1
   }
 },
 {
@@ -127,10 +127,10 @@
   "pk": 3,
   "fields": {
     "product": 1,
-    "title": "輕量化設計",
-    "description": "僅 45g 超輕鏡框，長時間配戴舒適無負擔",
-    "icon": "⚡",
-    "order": 0
+    "title": "盲道即時導航",
+    "description": "YOLO 分割模型偵測盲道，結合 Lucas-Kanade 光流計算行走方向，語音引導使用者沿盲道前進",
+    "icon": "🦯",
+    "order": 2
   }
 },
 {
@@ -138,10 +138,10 @@
   "pk": 4,
   "fields": {
     "product": 1,
-    "title": "全天候電池",
-    "description": "內建 500mAh 電池，正常使用可達 8 小時",
-    "icon": "🔋",
-    "order": 0
+    "title": "障礙物迴避",
+    "description": "即時偵測前方、左側、右側障礙物，語音告知方向並建議往哪側迴避，有效防止碰撞",
+    "icon": "🛡️",
+    "order": 3
   }
 },
 {
@@ -149,10 +149,10 @@
   "pk": 5,
   "fields": {
     "product": 1,
-    "title": "無障礙輔助",
-    "description": "文字辨識朗讀、障礙物提醒，貼心照顧視障族群",
-    "icon": "♿",
-    "order": 0
+    "title": "跌倒偵測通報",
+    "description": "IMU 感測器偵測異常衝擊，自動通報緊急聯絡人，保障獨自外出的視障者安全",
+    "icon": "🆘",
+    "order": 4
   }
 },
 {
@@ -160,10 +160,10 @@
   "pk": 6,
   "fields": {
     "product": 1,
-    "title": "開源可擴充",
-    "description": "基於開源架構，支援自訂功能模組與第三方整合",
-    "icon": "🔧",
-    "order": 0
+    "title": "斑馬線過馬路",
+    "description": "自動辨識斑馬線與紅綠燈，等待綠燈後語音提示安全過馬路，完整守護行人安全",
+    "icon": "🚦",
+    "order": 5
   }
 },
 {
@@ -205,7 +205,7 @@
   "fields": {
     "product": 3,
     "title": "🎙️ 語音 AI",
-    "description": "Groq Whisper 語音辨識 + Gemini 2.5 Flash 自然語言處理，支援流暢中文語音對話互動",
+    "description": "Google Speech-to-Text 即時串流辨識 + Gemini 2.5 Flash 自然語言處理，支援流暢中文語音對話互動",
     "icon": "🎙️",
     "order": 0
   }
@@ -418,7 +418,7 @@
   "fields": {
     "product": 3,
     "key": "語音辨識",
-    "value": "Groq Whisper Large v3",
+    "value": "Google Speech-to-Text 串流",
     "order": 0
   }
 },
@@ -545,7 +545,7 @@
   "fields": {
     "brand_short": "AI",
     "brand_name": "智慧眼鏡",
-    "brand_description": "結合 OpenAI GPT 語音助理與 AR 導航技術的次世代智慧穿戴裝置。基於開源專案 OpenAIglasses_for_Navigation 進行開發。",
+    "brand_description": "專為視障人士設計的 AI 智慧眼鏡，結合 YOLO 影像辨識、Gemini AI 與 GPS 導航技術。基於開源專案 OpenAIglasses_for_Navigation 進行開發。",
     "nav_home": "首頁",
     "nav_product": "產品介紹",
     "nav_download": "APP 下載",
@@ -556,32 +556,32 @@
     "footer_opensource_title": "開源資源",
     "footer_opensource_text": "原始開源專案",
     "footer_opensource_url": "https://github.com/AI-FanGe/OpenAIglasses_for_Navigation",
-    "footer_copyright": "2025 AI 導航智慧眼鏡專題。基於 OpenAIglasses_for_Navigation 開源專案。"
+    "footer_copyright": "2026 AI 視障輔助智慧眼鏡專題。基於 OpenAIglasses_for_Navigation 開源專案。"
   }
 },
 {
   "model": "content.homecontent",
   "pk": 1,
   "fields": {
-    "hero_badge": "666\\",
-    "hero_title_1": "AI 導航",
+    "hero_badge": "基於開源專案 OpenAIglasses_for_Navigation",
+    "hero_title_1": "AI 視障輔助",
     "hero_title_2": "智慧眼鏡",
-    "hero_description": "將 OpenAI GPT 語音助理與 AR 擴增實境導航融合於一副輕巧眼鏡之中，讓您在行走間輕鬆獲取路線指引、AI 問答、環境資訊，開啟次世代穿戴體驗。",
-    "hero_btn_buy": "立即購買",
+    "hero_description": "整合 YOLO 即時影像辨識、Google Speech-to-Text 語音辨識與 Gemini AI，為視障人士提供盲道導航、GPS 路線規劃、障礙物迴避與跌倒通報等全方位輔助功能。",
+    "hero_btn_buy": "了解更多",
     "hero_btn_detail": "查看產品詳情",
     "model_hint": "拖曳旋轉 · 滾輪縮放",
-    "stat_1_value": "45g",
-    "stat_1_label": "超輕鏡框",
-    "stat_2_value": "8h",
-    "stat_2_label": "續航時間",
-    "stat_3_value": "GPT",
+    "stat_1_value": "YOLO",
+    "stat_1_label": "影像偵測",
+    "stat_2_value": "即時",
+    "stat_2_label": "語音導引",
+    "stat_3_value": "Gemini",
     "stat_3_label": "AI 核心",
-    "features_title": "為什麼選擇 AI 智慧眼鏡？",
-    "features_subtitle": "整合最先進的 AI 技術，讓穿戴科技真正融入您的日常生活。",
-    "cta_title": "準備好體驗 AI 穿戴未來了嗎？",
-    "cta_description": "現在訂購享有早鳥優惠，限時特惠中。",
-    "cta_btn_buy": "立即訂購",
-    "cta_btn_more": "了解更多"
+    "features_title": "為什麼選擇 AI 視障輔助眼鏡？",
+    "features_subtitle": "整合最先進的影像 AI 與語音技術，讓視障者也能自信地獨立出行。",
+    "cta_title": "想了解更多或參與測試？",
+    "cta_description": "本專案為學術研究用途，歡迎聯繫我們的開發團隊。",
+    "cta_btn_buy": "聯絡我們",
+    "cta_btn_more": "查看產品詳情"
   }
 },
 {
@@ -606,7 +606,7 @@
     "hero_badge": "Android APP 現已開放下載",
     "hero_title_1": "配套 APP",
     "hero_title_2": "解鎖眼鏡完整功能",
-    "hero_description": "透過 AI Glasses 配套 APP，輕鬆完成設備配對、AI 設定與導航控制，讓您的智慧眼鏡發揮 100% 效能。",
+    "hero_description": "透過 AI Glasses 配套 APP，輕鬆設定伺服器連線、管理緊急聯絡人、控制導航模式，讓視障輔助眼鏡發揮完整效能。",
     "app_name": "AI Glasses 配套 APP",
     "app_version": "1.0.0",
     "app_requirement": "Android 8.0 以上",
@@ -619,7 +619,7 @@
     "hardware_link_text": "購買硬體",
     "ios_note": "iOS 版本開發中，敬請期待。",
     "features_title": "APP 核心功能",
-    "features_subtitle": "從設備配對到 AI 設定，一支 APP 完整管理您的智慧眼鏡。",
+    "features_subtitle": "從伺服器連線到緊急聯絡人管理，一支 APP 完整控制您的 AI 視障輔助眼鏡。",
     "steps_title": "四步驟快速上手",
     "steps_subtitle": "從下載到開始使用，只需幾分鐘。",
     "cta_title": "還沒有智慧眼鏡？",
@@ -633,8 +633,8 @@
   "pk": 1,
   "fields": {
     "icon_svg": "M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0",
-    "title": "Wi-Fi 藍牙配對",
-    "description": "快速連線智慧眼鏡，穩定傳輸語音與導航指令",
+    "title": "伺服器連線設定",
+    "description": "輸入 AI 眼鏡伺服器的 IP 位址，一鍵連線，支援掃描 QR Code 快速匯入設定",
     "order": 0
   }
 },
@@ -643,8 +643,8 @@
   "pk": 2,
   "fields": {
     "icon_svg": "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
-    "title": "即時導航控制",
-    "description": "在手機端設定目的地，即時同步至眼鏡 AR 顯示",
+    "title": "GPS 導航控制",
+    "description": "在 APP 輸入目的地，眼鏡即時收到語音路線指引，全程免看手機",
     "order": 1
   }
 },
@@ -653,8 +653,8 @@
   "pk": 3,
   "fields": {
     "icon_svg": "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z",
-    "title": "AI 語音設定",
-    "description": "調整 OpenAI API 金鑰、語音喚醒詞與回應語言",
+    "title": "語音與 TTS 設定",
+    "description": "調整語音合成速率、音量與喚醒詞偵測靈敏度，個人化語音體驗",
     "order": 2
   }
 },
@@ -663,8 +663,8 @@
   "pk": 4,
   "fields": {
     "icon_svg": "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-    "title": "使用數據儀表板",
-    "description": "查看電池電量、使用時長與 AI 互動紀錄",
+    "title": "緊急聯絡人管理",
+    "description": "設定緊急求救聯絡清單，跌倒偵測或手動求救時自動撥打，守護獨自外出的安全",
     "order": 3
   }
 },
@@ -673,8 +673,8 @@
   "pk": 5,
   "fields": {
     "icon_svg": "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
-    "title": "韌體 OTA 更新",
-    "description": "一鍵更新眼鏡韌體，隨時保持最新功能",
+    "title": "系統公告接收",
+    "description": "即時接收開發團隊推播的維護通知與版本更新資訊，掌握最新功能動態",
     "order": 4
   }
 },
@@ -703,8 +703,8 @@
   "pk": 2,
   "fields": {
     "step_number": "02",
-    "title": "開啟 APP 並配對眼鏡",
-    "description": "確保眼鏡已開機並處於配對模式（長按電源鍵 3 秒），APP 將自動搜尋附近的裝置。",
+    "title": "輸入伺服器位址",
+    "description": "開啟 APP 後前往設定頁面，填入 AI 眼鏡伺服器的 IP 位址與連接埠，點擊連線即可。",
     "order": 1
   }
 },
@@ -713,8 +713,8 @@
   "pk": 3,
   "fields": {
     "step_number": "03",
-    "title": "輸入 OpenAI API 金鑰",
-    "description": "前往 APP 設定頁面，填入您的 OpenAI API 金鑰以啟用 AI 語音助理功能。",
+    "title": "設定緊急聯絡人",
+    "description": "在聯絡人頁面新增緊急求救聯絡人，跌倒偵測觸發時 APP 將自動撥打通報。",
     "order": 2
   }
 },
@@ -724,7 +724,7 @@
   "fields": {
     "step_number": "04",
     "title": "開始使用",
-    "description": "說出喚醒詞「Hey AI」，即可開始使用導航與語音助理功能。",
+    "description": "確認眼鏡已開機並連上同一 Wi-Fi，在 APP 首頁選擇功能模式（GPS 導航、避障、過馬路等），即可開始使用。",
     "order": 3
   }
 },
