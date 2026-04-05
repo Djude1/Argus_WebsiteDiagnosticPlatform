@@ -3,6 +3,7 @@ import {
   getContentSection, updateContentSection,
   getDlFeatures, createDlFeature, updateDlFeature, deleteDlFeature,
   getDlSteps,    createDlStep,    updateDlStep,    deleteDlStep,
+  uploadApk,
 } from '../api'
 import Modal from '../components/Modal'
 
@@ -205,6 +206,54 @@ const SECTIONS = {
   },
 }
 
+// ── APK 上傳區塊（僅 download 頁使用）────────────────────────────
+function ApkUploader({ currentUrl, onUploaded }) {
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress]  = useState(null) // null | 'uploading' | 'done' | 'error'
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploading(true)
+    setProgress('uploading')
+    try {
+      const fd = new FormData()
+      fd.append('apk', file)
+      const res = await uploadApk(fd)
+      onUploaded(res.data.apk_url)
+      setProgress('done')
+    } catch {
+      setProgress('error')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  return (
+    <div className="mb-6">
+      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-gray-100">
+        上傳 APK 檔案
+      </h4>
+      <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+        <div className="flex-1">
+          <p className="text-xs text-slate-500 mb-1">目前連結：<span className="font-mono text-slate-700">{currentUrl || '（未設定）'}</span></p>
+          <input
+            type="file"
+            accept=".apk"
+            disabled={uploading}
+            onChange={handleFile}
+            className="text-sm text-gray-600 w-full file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-500 disabled:opacity-50"
+          />
+        </div>
+        {progress === 'uploading' && <span className="text-xs text-blue-600 shrink-0">上傳中...</span>}
+        {progress === 'done'      && <span className="text-xs text-green-600 shrink-0">✓ 上傳成功</span>}
+        {progress === 'error'     && <span className="text-xs text-red-500 shrink-0">✗ 上傳失敗</span>}
+      </div>
+    </div>
+  )
+}
+
 // ── Singleton 頁面表單 ────────────────────────────────────────────
 function SectionForm({ sectionKey }) {
   const [data, setData]   = useState({})
@@ -239,6 +288,12 @@ function SectionForm({ sectionKey }) {
 
   return (
     <div>
+      {sectionKey === 'download' && (
+        <ApkUploader
+          currentUrl={data.apk_url}
+          onUploaded={(url) => set('apk_url', url)}
+        />
+      )}
       {config.groups.map((group) => (
         <div key={group.title} className="mb-6">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-gray-100">
@@ -287,7 +342,7 @@ function FeaturesList() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此功能特色？')) return
+    if (!window.confirm('確定刪除此功能特色？')) return
     await deleteDlFeature(id); load()
   }
 
@@ -352,7 +407,7 @@ function StepsList() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('確定刪除此步驟？')) return
+    if (!window.confirm('確定刪除此步驟？')) return
     await deleteDlStep(id); load()
   }
 
