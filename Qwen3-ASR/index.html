@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>靈犀 · 即時語音辨識</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+            background: radial-gradient(circle at 20% 30%, #1a2a3a, #0b1219);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            color: #eef4ff;
+        }
+        .glass-panel {
+            width: 100%;
+            max-width: 900px;
+            background: rgba(20, 30, 45, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -8px rgba(0,0,0,0.6), 0 0 0 1px rgba(120,180,255,0.1);
+            padding: 28px 24px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.2s ease;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .title-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(145deg, #3a7bd5, #00d2ff);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 8px 16px -4px rgba(0,150,255,0.3);
+        }
+        h1 {
+            font-weight: 500;
+            font-size: 1.9rem;
+            letter-spacing: -0.01em;
+            background: linear-gradient(to right, #fff, #cbd5ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 16px;
+            border-radius: 40px;
+            border: 0.5px solid rgba(255,255,255,0.15);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 10px;
+            margin-right: 8px;
+            background: #44dd88;
+            box-shadow: 0 0 8px #2ecc71;
+        }
+        .dot.warning { background: #f1c40f; box-shadow: 0 0 8px #f39c12; }
+        .dot.error { background: #e74c3c; box-shadow: 0 0 8px #c0392b; }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .lang-select {
+            background: rgba(10,20,30,0.6);
+            border: 1px solid #2a4055;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 32px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            backdrop-filter: blur(8px);
+            cursor: pointer;
+            outline: none;
+        }
+        .icon-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ccddf9;
+            width: 40px;
+            height: 40px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.15s;
+            font-size: 18px;
+        }
+        .icon-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border-color: #3a7bd5;
+        }
+        .live-bar {
+            margin: 16px 0 12px;
+            padding: 12px 20px;
+            background: rgba(0,20,40,0.5);
+            border-radius: 60px;
+            border-left: 4px solid #3a7bd5;
+            display: flex;
+            align-items: center;
+            font-size: 1.1rem;
+            min-height: 64px;
+        }
+        .live-text {
+            flex: 1;
+            color: #e0edff;
+            word-break: break-word;
+        }
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            margin-left: 12px;
+            color: #ff6b6b;
+            font-weight: 600;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        .history-container {
+            background: rgba(0,0,0,0.2);
+            border-radius: 32px;
+            padding: 20px 16px;
+            min-height: 320px;
+            max-height: 450px;
+            overflow-y: auto;
+            margin: 16px 0;
+            border: 1px solid rgba(255,255,255,0.05);
+            scroll-behavior: smooth;
+        }
+        .message-bubble {
+            display: flex;
+            margin-bottom: 16px;
+            animation: fadeInUp 0.3s ease;
+        }
+        .bubble {
+            max-width: 85%;
+            background: #1e3347;
+            padding: 14px 20px;
+            border-radius: 24px 24px 24px 8px;
+            color: #f0f6ff;
+            font-size: 1.1rem;
+            line-height: 1.45;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid #2e4b66;
+            word-break: break-word;
+        }
+        .time-tag {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            margin-top: 6px;
+            text-align: right;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .action-area {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0 5px;
+        }
+        .record-btn {
+            background: linear-gradient(145deg, #2c3e50, #1a2632);
+            border: none;
+            color: white;
+            font-size: 22px;
+            font-weight: 500;
+            padding: 20px 50px;
+            border-radius: 80px;
+            cursor: pointer;
+            box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.08);
+            border: 1px solid #3a556e;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: 0.3px;
+        }
+        .record-btn.recording {
+            background: linear-gradient(145deg, #c44536, #a12b1f);
+            border-color: #ff8a7a;
+            box-shadow: 0 0 30px rgba(220, 60, 60, 0.5);
+        }
+        .record-btn:active { transform: scale(0.98); }
+        .footer-note {
+            text-align: center;
+            margin-top: 16px;
+            opacity: 0.5;
+            font-size: 0.8rem;
+        }
+        .error-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0b1219;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+<div class="glass-panel" id="app" style="display: none;">
+    <div class="header">
+        <div class="title-section">
+            <div class="logo">🎧</div>
+            <h1>靈犀 ASR</h1>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <div class="status-badge" id="connectionStatus" title="雙擊手動重新連線">
+                <span class="dot" id="connDot"></span>
+                <span id="connText">連線中…</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <select id="langSelect" class="lang-select">
+            <option value="auto" selected>🌐 中英文</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="en">🇬🇧 English</option>
+        </select>
+        <div style="flex:1"></div>
+        <div class="icon-btn" id="clearHistoryBtn" title="清空歷史記錄">🗑️</div>
+        <div class="icon-btn" id="resetSessionBtn" title="重設辨識會話">🔄</div>
+    </div>
+
+    <div class="live-bar">
+        <div class="live-text" id="liveText">準備就緒，點擊按鈕開始</div>
+        <div class="recording-indicator" id="recIndicator" style="display: none;">● REC</div>
+    </div>
+
+    <div class="history-container" id="historyContainer">
+        <div style="color: #7f95b0; text-align: center; padding: 20px;">辨識結果將顯示在這裡</div>
+    </div>
+
+    <div class="action-area">
+        <button id="recordBtn" class="record-btn">
+            <span>🎙️</span> 開始錄音
+        </button>
+    </div>
+    <!-- <div class="footer-note">靜音 0.8 秒自動斷句 · 雙擊狀態區重連</div> -->
+</div>
+
+<script>
+    (function(){
+        "use strict";
+
+        // ---------- 安全驗證：從 URL 參數獲取 token ----------
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        if (!token) {
+            document.body.innerHTML = `
+                <div class="error-screen">
+                    <h1 style="font-size:2.5rem; margin-bottom:20px;">🔒 存取受限</h1>
+                    <p style="font-size:1.2rem; opacity:0.8; max-width:600px; text-align:center;">
+                        需要有效的 token 參數才能使用語音辨識服務。<br>
+                        請使用正確的連結存取，例如：<br>
+                        <code style="background:#1e2a3a; padding:6px 12px; border-radius:20px; margin-top:16px; display:inline-block;">
+                            https://asr.clouda.dpdns.org/?token=您的金鑰
+                        </code>
+                    </p>
+                </div>
+            `;
+            throw new Error('Missing token');
+        }
+
+        // 顯示主介面
+        document.getElementById('app').style.display = 'block';
+
+        // ---------- 可調參數 ----------
+        const WS_URL = `wss://asr.clouda.dpdns.org/asr?token=${encodeURIComponent(token)}`;
+        const TARGET_SAMPLE_RATE = 16000;           // 目標取樣率
+        const CHUNK_DURATION = 0.25;                 // 音訊發送間隔（秒）
+        const MAX_RECONNECT_ATTEMPTS = 3;             // 最大自動重連次數
+
+        // DOM 元素
+        const recordBtn = document.getElementById('recordBtn');
+        const liveText = document.getElementById('liveText');
+        const historyContainer = document.getElementById('historyContainer');
+        const connDot = document.getElementById('connDot');
+        const connText = document.getElementById('connText');
+        const recIndicator = document.getElementById('recIndicator');
+        const langSelect = document.getElementById('langSelect');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const resetSessionBtn = document.getElementById('resetSessionBtn');
+
+        // 狀態變數
+        let ws = null;
+        let audioContext = null;
+        let mediaStream = null;
+        let sourceNode = null;
+        let processorNode = null;
+        let isRecording = false;
+        let pcmBuffer = [];
+        let sendInterval = null;
+
+        // 重連控制
+        let reconnectAttempts = 0;
+        let reconnectTimer = null;
+
+        let historyMessages = [];
+
+        // ---------- 連線狀態顯示 ----------
+        function updateConnectionStatus(status, text) {
+            connText.textContent = text;
+            connDot.className = 'dot';
+            if (status === 'connected') {
+                connDot.style.background = '#44dd88';
+            } else if (status === 'connecting') {
+                connDot.style.background = '#f1c40f';
+                connDot.classList.add('warning');
+            } else {
+                connDot.style.background = '#e74c3c';
+                connDot.classList.add('error');
+            }
+        }
+
+        function clearReconnectTimer() {
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+        }
+
+        function scheduleReconnect(delay) {
+            clearReconnectTimer();
+            reconnectTimer = setTimeout(() => connectWebSocket(), delay);
+        }
+
+        function stopReconnect() {
+            clearReconnectTimer();
+            reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
+            updateConnectionStatus('disconnected', '連線失敗，請手動重試');
+        }
+
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                console.log('已達最大重連次數，停止自動重連');
+                return;
+            }
+
+            updateConnectionStatus('connecting', `連線中 (${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket 已連線');
+                updateConnectionStatus('connected', '已連線');
+                reconnectAttempts = 0;
+                sendCommand(`LANG:${langSelect.value}`);
+            };
+
+            ws.onmessage = (event) => {
+                const text = event.data;
+                if (!text) return;
+                appendFinalResult(text);
+            };
+
+            ws.onclose = (event) => {
+                console.log('WebSocket 斷開', event.code, event.reason);
+                let reason = '斷開';
+                let fatal = false;
+
+                if (event.code === 1008) {
+                    reason = '認證失敗，token無效';
+                    fatal = true;
+                } else if (event.code === 1013) {
+                    reason = '連線過多，請稍後';
+                    fatal = true;
+                } else if (event.code === 1006) {
+                    reason = '連線異常關閉';
+                }
+
+                updateConnectionStatus('disconnected', reason);
+
+                if (fatal) {
+                    stopReconnect();
+                    return;
+                }
+
+                if (!isRecording) {
+                    reconnectAttempts++;
+                    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                        let delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 5000);
+                        scheduleReconnect(delay);
+                    } else {
+                        stopReconnect();
+                        updateConnectionStatus('disconnected', '重試次數已用完，請手動重新連線');
+                    }
+                }
+            };
+
+            ws.onerror = (err) => console.error('WebSocket 錯誤', err);
+        }
+
+        function manualReconnect() {
+            reconnectAttempts = 0;
+            clearReconnectTimer();
+            if (ws) ws.close();
+            connectWebSocket();
+            liveText.textContent = '🔄 手動重新連線中...';
+        }
+
+        function sendCommand(cmd) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(`CMD:${cmd}`);
+            }
+        }
+
+        function sendPcmChunk() {
+            if (!isRecording || pcmBuffer.length === 0) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            let totalLen = pcmBuffer.reduce((sum, arr) => sum + arr.length, 0);
+            let combined = new Float32Array(totalLen);
+            let offset = 0;
+            for (let arr of pcmBuffer) {
+                combined.set(arr, offset);
+                offset += arr.length;
+            }
+            pcmBuffer = [];
+
+            const bytes = combined.buffer;
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+            ws.send(base64);
+        }
+
+        function appendFinalResult(sentence) {
+            if (!sentence || sentence.trim() === '') return;
+
+            liveText.textContent = `✅ ${sentence}`;
+            historyMessages.push({ text: sentence, time: new Date() });
+            renderHistory();
+
+            setTimeout(() => {
+                if (!isRecording) liveText.textContent = '⏸️ 錄音已停止';
+                else liveText.textContent = '🎤 正在聆聽...';
+            }, 2000);
+        }
+
+        function renderHistory() {
+            if (historyMessages.length === 0) {
+                historyContainer.innerHTML = '<div style="color: #7f95b0; text-align: center; padding: 20px;">辨識結果將顯示在這裡</div>';
+                return;
+            }
+            let html = '';
+            historyMessages.slice(-30).forEach(item => {
+                const timeStr = item.time.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit' });
+                html += `
+                    <div class="message-bubble">
+                        <div class="bubble">
+                            ${escapeHtml(item.text)}
+                            <div class="time-tag">${timeStr}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            historyContainer.innerHTML = html;
+            historyContainer.scrollTop = historyContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function clearHistory() {
+            historyMessages = [];
+            renderHistory();
+            liveText.textContent = '✨ 歷史已清空';
+            setTimeout(() => { if (!isRecording) liveText.textContent = '準備就緒'; }, 1500);
+        }
+
+        // ---------- 音訊初始化（含降噪優化）----------
+        async function initAudio() {
+            if (audioContext) return true;
+            try {
+                // 啟用瀏覽器內建降噪、回音消除、自動增益控制
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: TARGET_SAMPLE_RATE,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                mediaStream = stream;
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+                processorNode.onaudioprocess = (event) => {
+                    if (!isRecording) return;
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    pcmBuffer.push(new Float32Array(inputData));
+                };
+
+                sourceNode.connect(processorNode);
+                processorNode.connect(audioContext.destination);
+                await audioContext.resume();
+                console.log('音訊取樣率:', audioContext.sampleRate);
+                return true;
+            } catch (err) {
+                console.error('麥克風失敗', err);
+                liveText.textContent = '❌ 無法存取麥克風，請檢查權限';
+                return false;
+            }
+        }
+
+        function closeAudio() {
+            if (processorNode) { processorNode.disconnect(); processorNode = null; }
+            if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+            if (audioContext) { audioContext.close(); audioContext = null; }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+        }
+
+        // ---------- 錄音控制 ----------
+        async function startRecording() {
+            if (isRecording) return;
+            const ok = await initAudio();
+            if (!ok) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                liveText.textContent = '⚠️ WebSocket 未連線，請手動重新連線';
+                return;
+            }
+
+            isRecording = true;
+            recordBtn.classList.add('recording');
+            recordBtn.innerHTML = '<span>⏹️</span> 停止錄音';
+            recIndicator.style.display = 'flex';
+            liveText.textContent = '🎤 正在聆聽...';
+            pcmBuffer = [];
+
+            sendInterval = setInterval(() => sendPcmChunk(), CHUNK_DURATION * 1000);
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            if (sendInterval) clearInterval(sendInterval);
+            sendPcmChunk();
+            sendCommand('END');
+
+            recordBtn.classList.remove('recording');
+            recordBtn.innerHTML = '<span>🎙️</span> 開始錄音';
+            recIndicator.style.display = 'none';
+            liveText.textContent = '⏸️ 錄音已停止';
+        }
+
+        function toggleRecording() {
+            isRecording ? stopRecording() : startRecording();
+        }
+
+        function resetSession() {
+            sendCommand('RESET');
+            liveText.textContent = '🔄 會話已重設';
+            setTimeout(() => { if (!isRecording) liveText.textContent = '準備就緒'; }, 1200);
+        }
+
+        // ---------- 事件綁定 ----------
+        recordBtn.addEventListener('click', toggleRecording);
+        clearHistoryBtn.addEventListener('click', clearHistory);
+        resetSessionBtn.addEventListener('click', resetSession);
+
+        langSelect.addEventListener('change', (e) => {
+            sendCommand(`LANG:${e.target.value}`);
+        });
+
+        const statusBadge = document.getElementById('connectionStatus');
+        statusBadge.addEventListener('dblclick', () => manualReconnect());
+
+        window.addEventListener('beforeunload', () => {
+            if (ws) ws.close();
+            closeAudio();
+            clearReconnectTimer();
+        });
+
+        // 啟動首次連線
+        connectWebSocket();
+        console.log('提示：雙擊右上角連線狀態可手動重新連線');
+    })();
+</script>
+</body>
+</html>
