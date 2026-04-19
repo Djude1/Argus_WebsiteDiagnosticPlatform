@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react'
 import { fetchTeamMembers } from '../../api/client'
 import { useContent } from '../../context/ContentContext'
+import ScrollReveal from '../../components/ScrollReveal'
+import { motion } from 'framer-motion'
+import { MemberCardSkeleton } from '../../components/Skeleton'
 
 function MemberCard({ member }) {
   return (
-    <div className="glass rounded-2xl p-6 hover:glow-border transition-all duration-300 group">
+    <motion.div
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.2 }}
+      className="glass gradient-top-border rounded-2xl p-6 hover:glow-border transition-all duration-300 group"
+    >
       {/* 頭像 */}
       <div className="mb-4">
         {member.avatar ? (
@@ -14,7 +21,7 @@ function MemberCard({ member }) {
             className="w-20 h-20 rounded-2xl object-cover mx-auto"
           />
         ) : (
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center text-3xl font-bold text-brand-300 mx-auto">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-warm-600 to-warm-800 dark:from-brand-700 dark:to-brand-900 flex items-center justify-center text-3xl font-bold text-warm-200 dark:text-brand-300 mx-auto">
             {member.name.charAt(0)}
           </div>
         )}
@@ -22,12 +29,12 @@ function MemberCard({ member }) {
 
       {/* 資訊 */}
       <div className="text-center">
-        <h3 className="font-semibold text-white text-lg group-hover:text-brand-400 transition-colors">
+        <h3 className="font-semibold text-gray-900 dark:text-white text-lg group-hover:text-warm-600 dark:group-hover:text-brand-400 transition-colors">
           {member.name}
         </h3>
-        <p className="text-brand-400 text-sm mt-1 mb-3">{member.role}</p>
+        <p className="text-warm-600 dark:text-brand-400 text-sm mt-1 mb-3">{member.role}</p>
         {member.bio && (
-          <p className="text-gray-400 text-xs leading-relaxed line-clamp-3">{member.bio}</p>
+          <p className="text-gray-700 dark:text-gray-400 text-xs leading-relaxed line-clamp-3">{member.bio}</p>
         )}
       </div>
 
@@ -38,7 +45,7 @@ function MemberCard({ member }) {
             href={member.github_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-500 hover:text-white transition-colors"
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             title="GitHub"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -51,7 +58,7 @@ function MemberCard({ member }) {
             href={member.linkedin_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-500 hover:text-blue-400 transition-colors"
+            className="text-gray-600 dark:text-gray-400 hover:text-blue-400 transition-colors"
             title="LinkedIn"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -62,7 +69,7 @@ function MemberCard({ member }) {
         {member.email && (
           <a
             href={`mailto:${member.email}`}
-            className="text-gray-500 hover:text-brand-400 transition-colors"
+            className="text-gray-600 dark:text-gray-400 hover:text-warm-600 dark:hover:text-brand-400 transition-colors"
             title="Email"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +78,7 @@ function MemberCard({ member }) {
           </a>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -95,8 +102,16 @@ export default function Team() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="pt-24 pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-10 w-48 mx-auto mb-4" />
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-5 w-96 max-w-full mx-auto" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[0, 1, 2, 3].map(i => <MemberCardSkeleton key={i} />)}
+          </div>
+        </div>
       </div>
     )
   }
@@ -104,35 +119,41 @@ export default function Team() {
   return (
     <div className="pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="section-title">{c.page_title || '關於團隊'}</h1>
-        <p className="section-subtitle">
-          {c.subtitle || '本專案結合開源社群的創意與我們開發團隊的技術，共同打造 AI 智慧眼鏡的未來。'}
-        </p>
+        <ScrollReveal>
+          <h1 className="section-title">{c.page_title || '關於團隊'}</h1>
+          <p className="section-subtitle">
+            {c.subtitle || '本專案結合開源社群的創意與我們開發團隊的技術，共同打造 AI 智慧眼鏡的未來。'}
+          </p>
+        </ScrollReveal>
 
         {/* 原專案參考者 */}
         {referenceMembers.length > 0 && (
           <section className="mb-16">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-brand-500/50 to-transparent" />
-              <h2 className="text-xl font-semibold text-brand-400 whitespace-nowrap px-4">
-                {c.reference_title || '原專案參考者'}
-              </h2>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-brand-500/50 to-transparent" />
-            </div>
-            <p className="text-center text-gray-500 text-sm mb-8">
-              {c.reference_description || '感謝以下開源貢獻者的創作，本專案基於'}{' '}
-              <a
-                href={c.reference_link_url || 'https://github.com/AI-FanGe/OpenAIglasses_for_Navigation'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-400 hover:underline"
-              >
-                {c.reference_link_text || 'OpenAIglasses_for_Navigation'}
-              </a>
-            </p>
+            <ScrollReveal>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-warm-500/50 dark:via-brand-500/50 to-transparent opacity-70" />
+                <h2 className="text-xl font-semibold text-warm-600 dark:text-brand-400 whitespace-nowrap px-4">
+                  {c.reference_title || '原專案參考者'}
+                </h2>
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-warm-500/50 dark:via-brand-500/50 to-transparent opacity-70" />
+              </div>
+              <p className="text-center text-gray-700 text-sm mb-8">
+                {c.reference_description || '感謝以下開源貢獻者的創作，本專案基於'}{' '}
+                <a
+                  href={c.reference_link_url || 'https://github.com/AI-FanGe/OpenAIglasses_for_Navigation'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-warm-600 dark:text-brand-400 hover:underline"
+                >
+                  {c.reference_link_text || 'OpenAIglasses_for_Navigation'}
+                </a>
+              </p>
+            </ScrollReveal>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-3xl mx-auto">
-              {referenceMembers.map((member) => (
-                <MemberCard key={member.id} member={member} />
+              {referenceMembers.map((member, i) => (
+                <ScrollReveal key={member.id} delay={i * 0.1}>
+                  <MemberCard member={member} />
+                </ScrollReveal>
               ))}
             </div>
           </section>
@@ -141,23 +162,27 @@ export default function Team() {
         {/* 開發團隊 */}
         {developerMembers.length > 0 && (
           <section>
-            <div className="flex items-center gap-4 mb-8">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-              <h2 className="text-xl font-semibold text-white whitespace-nowrap px-4">
-                {c.developer_title || '我們的開發團隊'}
-              </h2>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-            </div>
+            <ScrollReveal>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-400/50 dark:via-white/20 to-transparent opacity-70" />
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap px-4">
+                  {c.developer_title || '我們的開發團隊'}
+                </h2>
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-400/50 dark:via-white/20 to-transparent opacity-70" />
+              </div>
+            </ScrollReveal>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {developerMembers.map((member) => (
-                <MemberCard key={member.id} member={member} />
+              {developerMembers.map((member, i) => (
+                <ScrollReveal key={member.id} delay={i * 0.08}>
+                  <MemberCard member={member} />
+                </ScrollReveal>
               ))}
             </div>
           </section>
         )}
 
         {members.length === 0 && (
-          <div className="text-center text-gray-500 py-20">
+          <div className="text-center text-gray-700 dark:text-gray-400 py-20">
             {c.empty_message || '團隊成員資料載入中，或請至後台管理介面新增成員。'}
           </div>
         )}

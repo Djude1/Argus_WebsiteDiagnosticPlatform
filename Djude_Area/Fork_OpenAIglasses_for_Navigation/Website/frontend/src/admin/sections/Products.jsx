@@ -21,11 +21,12 @@ function Field({ label, value, onChange, multiline, type = 'text' }) {
   )
 }
 
-const emptyProduct = { name: '', short_description: '', description: '', price: '', original_price: '', stock: 0, is_active: true }
+const emptyProduct = { name: '', short_description: '', description: '', price: '', original_price: '', stock: 0, is_active: true, camera_height: 0.5 }
 
 export default function Products() {
   const [products, setProducts]         = useState([])
   const [selected, setSelected]         = useState(null)
+  const [searchTerm, setSearchTerm]     = useState('')
   const [activeTab, setActiveTab]       = useState('info')
   const [editForm, setEditForm]         = useState({})
   const [saving, setSaving]             = useState(false)
@@ -37,6 +38,24 @@ export default function Products() {
   const [modalSaving, setModalSaving]   = useState(false)
   const [editingItem, setEditingItem]   = useState(null)
   const [uploading, setUploading]       = useState(false)
+  const [sortField, setSortField] = useState('')
+  const [sortDir, setSortDir]     = useState('asc')
+
+  // 排序切換函式
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  // 排序圖示元件
+  function SortIcon({ field }) {
+    if (sortField !== field) return <span className="text-gray-400 ml-1">↕</span>
+    return sortDir === 'asc' ? <span className="text-blue-500 ml-1">↑</span> : <span className="text-blue-500 ml-1">↓</span>
+  }
 
   const loadProducts = useCallback(() =>
     getProducts().then(r => setProducts(r.data.results || r.data)), [])
@@ -137,6 +156,22 @@ export default function Products() {
     finally { setModalSaving(false) }
   }
 
+  // 搜尋篩選：依商品名稱
+  const filteredProducts = products.filter(p => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return p.name && p.name.toLowerCase().includes(term)
+  })
+
+  // 排序後的商品列表
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (!sortField) return 0
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal), 'zh-TW')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
   const TABS = ['info', 'features', 'specs']
   const TAB_LABELS = { info: '基本資料', features: `功能特點 (${features.length})`, specs: `技術規格 (${specs.length})` }
 
@@ -144,13 +179,49 @@ export default function Products() {
     <div className="flex h-full">
       {/* 中欄：商品清單 */}
       <div className="w-64 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
+        {/* 搜尋 */}
+        <div className="px-4 py-2 border-b border-gray-100">
+          <input
+            type="text"
+            placeholder="搜尋商品名稱..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400"
+          />
+        </div>
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">商品列表</h3>
           <button onClick={() => { setModalForm(emptyProduct); setModalType('new-product') }}
             className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-500">+ 新增</button>
         </div>
+        {/* 排序欄位標題 */}
+        <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-1">
+          <button onClick={() => toggleSort('name')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            名稱<SortIcon field="name" />
+          </button>
+          <span className="text-gray-300 text-xs">|</span>
+          <button onClick={() => toggleSort('price')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            價格<SortIcon field="price" />
+          </button>
+          <span className="text-gray-300 text-xs">|</span>
+          <button onClick={() => toggleSort('created_at')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            建立日期<SortIcon field="created_at" />
+          </button>
+        </div>
         <div className="overflow-y-auto flex-1">
-          {products.map(p => (
+          {filteredProducts.length === 0 && products.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有商品</p>
+            </div>
+          )}
+          {filteredProducts.length === 0 && products.length > 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的商品</p>
+            </div>
+          )}
+          {sortedProducts.map(p => (
             <button key={p.id} onClick={() => selectProduct(p)}
               className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors ${
                 selected?.id === p.id ? 'bg-blue-50 border-r-2 border-blue-600' : 'hover:bg-gray-50'
@@ -207,6 +278,7 @@ export default function Products() {
                   <Field label="售價" value={editForm.price} onChange={v => setEditForm(p => ({...p, price: v}))} type="number" />
                   <Field label="原價" value={editForm.original_price} onChange={v => setEditForm(p => ({...p, original_price: v}))} type="number" />
                 </div>
+                <Field label="攝影機高度（Y 軸，預設 0.5）" value={editForm.camera_height ?? 0.5} onChange={v => setEditForm(p => ({...p, camera_height: Number(v)}))} type="number" />
                 <Field label="簡短描述" value={editForm.short_description} onChange={v => setEditForm(p => ({...p, short_description: v}))} />
                 <Field label="詳細描述" value={editForm.description} onChange={v => setEditForm(p => ({...p, description: v}))} multiline />
                 <div className="mb-4 flex items-center gap-2">

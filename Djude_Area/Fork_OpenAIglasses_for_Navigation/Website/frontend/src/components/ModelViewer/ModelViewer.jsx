@@ -65,14 +65,15 @@ function LoadingPlaceholder() {
 /**
  * 3D 模型檢視元件
  * @param {string} modelUrl - GLB 模型的 URL
+ * @param {number} [cameraHeight=0.5] - 攝影機高度（Y 軸），預設 0.5
  * @param {string} className - 容器的 CSS class
  */
-export default function ModelViewer({ modelUrl, className = '' }) {
+export default function ModelViewer({ modelUrl, cameraHeight = 0.5, className = '' }) {
   return (
     <CanvasErrorBoundary>
     <div className={`model-canvas-container ${className}`}>
       <Canvas
-        camera={{ position: [0, 0.5, 14], fov: 35 }}
+        camera={{ position: [0, cameraHeight, 14], fov: 35 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}

@@ -165,6 +165,12 @@ function TagManagerModal({ tags, onClose, onCreate, onUpdate, onDelete }) {
   )
 }
 
+/** 排序圖示元件 */
+function SortIcon({ field, sortField, sortDir }) {
+  if (sortField !== field) return <span className="text-gray-300 ml-0.5">↕</span>
+  return sortDir === 'asc' ? <span className="text-blue-500 ml-0.5">↑</span> : <span className="text-blue-500 ml-0.5">↓</span>
+}
+
 // ── 主元件 ──────────────────────────────────────────────────────────────────
 export default function Announcements() {
   const [announcements, setAnnouncements] = useState([])
@@ -174,6 +180,9 @@ export default function Announcements() {
   const [toggling, setToggling] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [showTagManager, setShowTagManager] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortField, setSortField] = useState('created_at')  // 排序欄位
+  const [sortDir, setSortDir] = useState('desc')            // 預設最新在前
   const [form, setForm] = useState({
     type: 'general', title: '', body: '', scheduled_at: '',
     is_active: true, show_on_website: false, tags: [],
@@ -198,6 +207,41 @@ export default function Announcements() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // ── 搜尋篩選 ──────────────────────────────────────────────────────────────
+  const filteredAnnouncements = announcements.filter(item => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      (item.title && item.title.toLowerCase().includes(term)) ||
+      (item.body && item.body.toLowerCase().includes(term)) ||
+      (item.type_display && item.type_display.toLowerCase().includes(term))
+    )
+  })
+
+  // ── 排序 ──────────────────────────────────────────────────────────────────
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedAnnouncements = [...filteredAnnouncements].sort((a, b) => {
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    let cmp
+    if (sortField === 'created_at' || sortField === 'scheduled_at') {
+      cmp = new Date(aVal) - new Date(bVal)
+    } else if (typeof aVal === 'boolean') {
+      cmp = (aVal === bVal ? 0 : aVal ? -1 : 1)
+    } else {
+      cmp = String(aVal).localeCompare(String(bVal), 'zh-TW')
+    }
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   // ── 標籤操作 ──────────────────────────────────────────────────────────────
   const handleCreateTag = async (data) => {
@@ -313,7 +357,7 @@ export default function Announcements() {
               d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
           </svg>
           <span className="text-sm font-semibold text-gray-700">公告列表</span>
-          <span className="ml-auto text-xs text-gray-400">{announcements.length} 筆</span>
+          <span className="ml-auto text-xs text-gray-400">{filteredAnnouncements.length} 筆</span>
           {/* 查看前台按鈕 */}
           <a
             href="/announcements"
@@ -331,18 +375,47 @@ export default function Announcements() {
 
         {/* 列表 */}
         <div className="flex-1 overflow-y-auto">
+          {/* 搜尋欄 + 排序控制 */}
+          <div className="px-4 py-2 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder="搜尋公告標題、內容..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400 mb-2"
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400">排序：</span>
+              {[
+                { field: 'created_at', label: '建立日期' },
+                { field: 'title', label: '標題' },
+                { field: 'is_active', label: '啟用狀態' },
+                { field: 'type', label: '類型' },
+              ].map(({ field, label }) => (
+                <button key={field} onClick={() => toggleSort(field)}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center">
+                  {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+                </button>
+              ))}
+            </div>
+          </div>
           {loading ? (
-            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">載入中…</div>
-          ) : announcements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+              <div className="w-7 h-7 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+              <span className="text-sm">載入中…</span>
+            </div>
+          ) : filteredAnnouncements.length === 0 && announcements.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-              <svg className="w-10 h-10 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-              </svg>
+              <div className="text-3xl">📭</div>
               <span className="text-xs">尚無公告</span>
             </div>
+          ) : filteredAnnouncements.length === 0 && announcements.length > 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+              <div className="text-3xl">🔍</div>
+              <span className="text-xs">沒有符合的公告</span>
+            </div>
           ) : (
-            announcements.map(item => (
+            sortedAnnouncements.map(item => (
               <div
                 key={item.id}
                 className={`px-4 py-3 border-b border-gray-50 transition-colors ${item.is_active ? '' : 'opacity-50'}`}

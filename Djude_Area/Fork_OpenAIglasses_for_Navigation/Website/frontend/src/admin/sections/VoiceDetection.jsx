@@ -362,35 +362,38 @@ export default function VoiceDetection() {
           <h1 className="text-xl font-bold text-gray-900">🎙 語音偵測中控台</h1>
           <p className="text-xs text-gray-400 mt-0.5">即時監控 ASR 辨識、音量、聲紋驗證事件</p>
         </div>
-        {/* 連線狀態 */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
-            <span className={sseConnected ? 'text-green-600 font-medium' : 'text-red-500'}>
-              {sseConnected ? 'SSE 已連線' : 'SSE 未連線'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            {serverOnline === null ? (
-              <span className="text-gray-400">伺服器檢查中…</span>
-            ) : (
-              <>
-                <span className={`w-2 h-2 rounded-full ${serverOnline ? 'bg-green-500' : 'bg-red-400'}`} />
-                <span className={serverOnline ? 'text-green-600' : 'text-red-500'}>
-                  {serverOnline ? 'FastAPI 正常' : 'FastAPI 離線'}
-                </span>
-              </>
+          {/* 連線狀態 */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-xs">
+              {serverOnline === null ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse" />
+                  <span className="text-gray-400">伺服器檢查中…</span>
+                </>
+              ) : (
+                <>
+                  <span className={`w-2 h-2 rounded-full ${serverOnline ? 'bg-green-500' : 'bg-red-400'}`} />
+                  <span className={serverOnline ? 'text-green-600' : 'text-red-500'}>
+                    {serverOnline ? 'FastAPI 正常' : 'FastAPI 離線'}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
+              <span className={sseConnected ? 'text-green-600 font-medium' : 'text-red-500'}>
+                {sseConnected ? 'SSE 已連線' : 'SSE 未連線'}
+              </span>
+            </div>
+            {!sseConnected && serverOnline !== null && (
+              <button
+                onClick={connect}
+                className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg font-medium transition-colors"
+              >
+                重新連線
+              </button>
             )}
           </div>
-          {!sseConnected && (
-            <button
-              onClick={connect}
-              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg font-medium transition-colors"
-            >
-              重新連線
-            </button>
-          )}
-        </div>
       </div>
 
       {/* ── 可捲動主體 ──────────────────────────────────────────────────── */}
@@ -451,7 +454,15 @@ export default function VoiceDetection() {
 
             {/* 即時 ASR 辨識 */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">即時語音辨識（ASR）</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700">即時語音辨識（ASR）</h2>
+                {!sseConnected && (
+                  <span className="text-xs text-amber-500 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    SSE 未連線
+                  </span>
+                )}
+              </div>
 
               {/* 即時顯示區 */}
               <div className="bg-slate-900 rounded-xl p-4 min-h-[80px] flex flex-col gap-2">
@@ -468,12 +479,16 @@ export default function VoiceDetection() {
                   </p>
                 )}
                 {!asrPartial && !asrFinal && (
-                  <p className="text-slate-600 text-sm italic text-center pt-4">等待語音輸入…</p>
+                  <div className="text-center pt-4">
+                    <div className="text-2xl mb-1">🎤</div>
+                    <p className="text-slate-600 text-sm italic">等待語音輸入…</p>
+                    <p className="text-slate-700 text-xs mt-1">請對著裝置說話或啟用「跳過喚醒詞」</p>
+                  </div>
                 )}
               </div>
 
               {/* 指令歷史 */}
-              {cmdHistory.length > 0 && (
+              {cmdHistory.length > 0 ? (
                 <div className="mt-4">
                   <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">近期指令</h3>
                   <div className="space-y-1 max-h-[140px] overflow-y-auto">
@@ -484,6 +499,11 @@ export default function VoiceDetection() {
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="mt-4 text-center text-gray-300 text-xs py-4">
+                  <div className="text-lg mb-1">💬</div>
+                  <p>尚無辨識指令</p>
                 </div>
               )}
             </div>
@@ -569,7 +589,11 @@ export default function VoiceDetection() {
           </div>
           <div className="max-h-[220px] overflow-y-auto">
             {eventLog.length === 0 ? (
-              <p className="text-gray-300 text-sm text-center py-8">尚無事件…</p>
+              <div className="text-center text-gray-400 py-8">
+                <div className="text-2xl mb-2">📋</div>
+                <p className="text-sm">尚無事件</p>
+                <p className="text-xs text-gray-300 mt-1">SSE 事件將即時顯示於此</p>
+              </div>
             ) : (
               <>
                 {eventLog.map((entry, i) => <LogRow key={i} entry={entry} />)}

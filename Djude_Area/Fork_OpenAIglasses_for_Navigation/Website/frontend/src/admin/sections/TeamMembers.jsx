@@ -19,15 +19,24 @@ function Field({ label, value, onChange, multiline, type = 'text' }) {
 
 const emptyMember = { name: '', member_type: 'developer', role: '', bio: '', github_url: '', linkedin_url: '', email: '', order: 0 }
 
+/** 排序圖示元件 */
+function SortIcon({ field, sortField, sortDir }) {
+  if (sortField !== field) return <span className="text-gray-300 ml-0.5">↕</span>
+  return sortDir === 'asc' ? <span className="text-blue-500 ml-0.5">↑</span> : <span className="text-blue-500 ml-0.5">↓</span>
+}
+
 export default function TeamMembers() {
   const [members, setMembers]     = useState([])
   const [selected, setSelected]   = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const [editForm, setEditForm]   = useState({})
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [modal, setModal]         = useState(false)
   const [newForm, setNewForm]     = useState(emptyMember)
   const [newSaving, setNewSaving] = useState(false)
+  const [sortField, setSortField] = useState('name')   // 排序欄位
+  const [sortDir, setSortDir]     = useState('asc')    // asc 或 desc
 
   const load = useCallback(() =>
     getTeamMembers().then(r => setMembers(r.data.results || r.data)), [])
@@ -67,29 +76,96 @@ export default function TeamMembers() {
 
   const set = (f, v) => { setEditForm(p => ({...p, [f]: v})); setSaved(false) }
 
-  const refMembers = members.filter(m => m.member_type === 'reference')
-  const devMembers = members.filter(m => m.member_type === 'developer')
+  // 排序切換函式
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  // 搜尋篩選：依成員姓名
+  const filteredMembers = members.filter(m => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return m.name && m.name.toLowerCase().includes(term)
+  })
+
+  // 排序後的成員
+  const sortedRefMembers = [...filteredMembers.filter(m => m.member_type === 'reference')].sort((a, b) => {
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal), 'zh-TW')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+  const sortedDevMembers = [...filteredMembers.filter(m => m.member_type === 'developer')].sort((a, b) => {
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal), 'zh-TW')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const refMembers = filteredMembers.filter(m => m.member_type === 'reference')
+  const devMembers = filteredMembers.filter(m => m.member_type === 'developer')
 
   return (
     <div className="flex h-full">
       {/* 中欄：成員清單 */}
       <div className="w-64 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
+        {/* 搜尋 */}
+        <div className="px-4 py-2 border-b border-gray-100">
+          <input
+            type="text"
+            placeholder="搜尋成員姓名..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400"
+          />
+        </div>
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">成員管理</h3>
           <button onClick={() => setModal(true)}
             className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-500">+ 新增</button>
         </div>
+        {/* 排序控制 */}
+        <div className="px-4 py-1.5 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">排序：</span>
+          {[
+            { field: 'name', label: '姓名' },
+            { field: 'order', label: '排序' },
+            { field: 'member_type', label: '類型' },
+          ].map(({ field, label }) => (
+            <button key={field} onClick={() => toggleSort(field)}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center">
+              {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+            </button>
+          ))}
+        </div>
         <div className="overflow-y-auto flex-1">
-          {refMembers.length > 0 && (
-            <div>
-              <div className="px-4 py-2 text-xs font-semibold text-blue-500 uppercase tracking-wider bg-blue-50">原專案參考者</div>
-              {refMembers.map(m => <MemberRow key={m.id} m={m} selected={selected} onClick={selectMember} />)}
+          {filteredMembers.length === 0 && members.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有成員</p>
             </div>
           )}
-          {devMembers.length > 0 && (
+          {filteredMembers.length === 0 && members.length > 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的成員</p>
+            </div>
+          )}
+          {sortedRefMembers.length > 0 && (
+            <div>
+              <div className="px-4 py-2 text-xs font-semibold text-blue-500 uppercase tracking-wider bg-blue-50">原專案參考者</div>
+              {sortedRefMembers.map(m => <MemberRow key={m.id} m={m} selected={selected} onClick={selectMember} />)}
+            </div>
+          )}
+          {sortedDevMembers.length > 0 && (
             <div>
               <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">開發團隊</div>
-              {devMembers.map(m => <MemberRow key={m.id} m={m} selected={selected} onClick={selectMember} />)}
+              {sortedDevMembers.map(m => <MemberRow key={m.id} m={m} selected={selected} onClick={selectMember} />)}
             </div>
           )}
         </div>

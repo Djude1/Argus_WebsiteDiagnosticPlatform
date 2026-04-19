@@ -65,6 +65,7 @@ function UsersTab() {
   const [showNew, setShowNew]   = useState(false)
   const [newForm, setNew]       = useState({ username: '', password: '', role: 'user' })
   const [creating, setCreating] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   // ── 感測器設定 ──
   const [sensor, setSensor]         = useState({ impact_threshold: 30.0, cooldown_seconds: 30 })
@@ -127,6 +128,11 @@ function UsersTab() {
     finally { setCreating(false) }
   }
 
+  // 搜尋過濾後的使用者清單
+  const filteredUsers = users.filter(u =>
+    u.username.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
     <div className="flex h-full">
       {/* 左欄：使用者清單 */}
@@ -136,8 +142,38 @@ function UsersTab() {
           <button onClick={() => setShowNew(true)}
             className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-500">+ 新增</button>
         </div>
+        {/* 搜尋框 */}
+        <div className="px-3 py-2 border-b border-gray-100">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="搜尋使用者…"
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-slate-50"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            )}
+          </div>
+        </div>
         <div className="overflow-y-auto flex-1">
-          {users.map(u => (
+          {filteredUsers.length === 0 && users.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有使用者</p>
+              <p className="text-xs text-gray-300 mt-1">點擊「+ 新增」建立帳號</p>
+            </div>
+          )}
+          {filteredUsers.length === 0 && users.length > 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合「{searchTerm}」的使用者</p>
+            </div>
+          )}
+          {filteredUsers.map(u => (
             <button key={u.id} onClick={() => selectUser(u)}
               className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-50 transition-colors text-left ${
                 selected?.id === u.id ? 'bg-green-50 border-r-2 border-green-600' : 'hover:bg-gray-50'
@@ -312,6 +348,8 @@ function ContactsTab({ users }) {
   const [showNew, setShowNew]         = useState(false)
   const [newForm, setNew]             = useState({ name: '', phone: '' })
   const [creating, setCreating]       = useState(false)
+  const [userSearch, setUserSearch]   = useState('')
+  const [contactSearch, setContactSearch] = useState('')
 
   const loadContacts = useCallback((uid) => {
     if (!uid) return
@@ -352,6 +390,15 @@ function ContactsTab({ users }) {
 
   const selectedUser = users.find(u => u.id === selectedUid)
 
+  // 搜尋過濾
+  const filteredUsers = users.filter(u =>
+    u.username.toLowerCase().includes(userSearch.toLowerCase())
+  )
+  const filteredContacts = contacts.filter(c =>
+    c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    c.phone.includes(contactSearch)
+  )
+
   return (
     <div className="flex h-full">
       {/* 左欄：使用者選擇 */}
@@ -359,8 +406,37 @@ function ContactsTab({ users }) {
         <div className="px-4 py-3 border-b border-gray-100">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">選擇使用者</h3>
         </div>
+        {/* 使用者搜尋框 */}
+        <div className="px-3 py-2 border-b border-gray-100">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+            <input
+              type="text"
+              value={userSearch}
+              onChange={e => setUserSearch(e.target.value)}
+              placeholder="搜尋使用者…"
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-slate-50"
+            />
+            {userSearch && (
+              <button onClick={() => setUserSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            )}
+          </div>
+        </div>
         <div className="overflow-y-auto flex-1">
-          {users.map(u => (
+          {filteredUsers.length === 0 && users.length === 0 && (
+            <div className="text-center text-gray-400 text-xs py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有使用者</p>
+            </div>
+          )}
+          {filteredUsers.length === 0 && users.length > 0 && (
+            <div className="text-center text-gray-400 text-xs py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的使用者</p>
+            </div>
+          )}
+          {filteredUsers.map(u => (
             <button key={u.id} onClick={() => pickUser(u.id)}
               className={`w-full flex items-center gap-2.5 px-4 py-3 border-b border-gray-50 text-left transition-colors ${
                 selectedUid === u.id ? 'bg-green-50 border-r-2 border-green-600' : 'hover:bg-gray-50'
@@ -386,12 +462,43 @@ function ContactsTab({ users }) {
               className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-500">+ 新增</button>
           )}
         </div>
+        {/* 連絡人搜尋框 */}
+        {selectedUid && (
+          <div className="px-3 py-2 border-b border-gray-100">
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+              <input
+                type="text"
+                value={contactSearch}
+                onChange={e => setContactSearch(e.target.value)}
+                placeholder="搜尋連絡人…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-slate-50"
+              />
+              {contactSearch && (
+                <button onClick={() => setContactSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="overflow-y-auto flex-1">
           {!selectedUid ? (
-            <div className="text-xs text-gray-400 text-center py-8">請先選擇使用者</div>
-          ) : contacts.length === 0 ? (
-            <div className="text-xs text-gray-400 text-center py-8">無連絡人</div>
-          ) : contacts.map(c => (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">👤</div>
+              <p>請先選擇使用者</p>
+            </div>
+          ) : filteredContacts.length === 0 && contacts.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有連絡人</p>
+              <p className="text-xs text-gray-300 mt-1">點擊「+ 新增」建立連絡人</p>
+            </div>
+          ) : filteredContacts.length === 0 && contacts.length > 0 ? (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的連絡人</p>
+            </div>
+          ) : filteredContacts.map(c => (
             <button key={c.id} onClick={() => pickContact(c)}
               className={`w-full flex items-center gap-2.5 px-4 py-3 border-b border-gray-50 text-left transition-colors ${
                 selectedC?.id === c.id ? 'bg-green-50 border-r-2 border-green-600' : 'hover:bg-gray-50'
@@ -504,9 +611,16 @@ function ImpactsTab({ users }) {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-12">載入中…</div>
+        <div className="text-center text-gray-400 py-12">
+          <div className="text-3xl mb-2 animate-pulse">⏳</div>
+          <p className="text-sm">載入中…</p>
+        </div>
       ) : impacts.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">尚無撞擊記錄</div>
+        <div className="text-center text-gray-400 py-12">
+          <div className="text-2xl mb-2">📭</div>
+          <p>尚無撞擊記錄</p>
+          <p className="text-xs text-gray-300 mt-1">當裝置發生撞擊事件時，記錄將顯示於此</p>
+        </div>
       ) : (
         <table className="w-full text-sm border-collapse">
           <thead>

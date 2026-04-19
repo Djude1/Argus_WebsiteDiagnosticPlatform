@@ -45,7 +45,14 @@ function SaveBar({ onSave, saving, saved }) {
       >
         {saving ? '儲存中...' : '儲存變更'}
       </button>
-      {saved && <span className="text-green-500 text-sm">✓ 已儲存</span>}
+      {saved && (
+        <span className="inline-flex items-center gap-1 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-lg">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          已儲存
+        </span>
+      )}
     </div>
   )
 }
@@ -256,15 +263,25 @@ function ApkUploader({ currentUrl, onUploaded }) {
 
 // ── Singleton 頁面表單 ────────────────────────────────────────────
 function SectionForm({ sectionKey }) {
-  const [data, setData]   = useState({})
+  const [data, setData]     = useState({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved]   = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]   = useState(null)
   const config = SECTIONS[sectionKey]
 
   useEffect(() => {
     setData({})
     setSaved(false)
-    getContentSection(sectionKey).then(r => setData(r.data)).catch(console.error)
+    setError(null)
+    setLoading(true)
+    getContentSection(sectionKey)
+      .then(r => setData(r.data))
+      .catch(err => {
+        console.error('載入頁面設定失敗:', err)
+        setError('載入設定失敗，請稍後再試')
+      })
+      .finally(() => setLoading(false))
   }, [sectionKey])
 
   const set = (field, value) => {
@@ -285,6 +302,37 @@ function SectionForm({ sectionKey }) {
   }
 
   if (!config) return null
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+        <span className="text-sm">載入設定中...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="text-3xl mb-2">⚠️</div>
+        <p className="text-sm text-gray-500 mb-3">{error}</p>
+        <button
+          onClick={() => {
+            setError(null)
+            setLoading(true)
+            getContentSection(sectionKey)
+              .then(r => { setData(r.data); setError(null) })
+              .catch(() => setError('載入設定失敗，請稍後再試'))
+              .finally(() => setLoading(false))
+          }}
+          className="text-xs px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
+        >
+          重新載入
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div>

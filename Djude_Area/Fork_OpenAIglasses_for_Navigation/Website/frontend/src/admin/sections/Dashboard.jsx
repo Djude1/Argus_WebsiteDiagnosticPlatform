@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { getTraffic } from '../api'
 
 // ── 常數 ──────────────────────────────────────────────────────────
@@ -290,7 +291,8 @@ export default function Dashboard() {
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-400">
           <div className="text-4xl mb-2">📡</div>
-          <p className="text-sm">無法載入流量資料</p>
+          <p className="text-sm font-medium">無法載入流量資料</p>
+          <p className="text-xs mt-1 text-gray-300">請檢查網路連線後再試一次</p>
           <button onClick={load} className="mt-3 text-xs text-indigo-500 hover:underline">重試</button>
         </div>
       </div>
@@ -330,20 +332,34 @@ export default function Dashboard() {
           onClick={load}
           className="flex items-center gap-1.5 text-xs text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <motion.svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"
+            animate={{ rotate: loading ? 360 : 0 }}
+            transition={{ duration: 1, repeat: loading ? Infinity : 0, ease: 'linear' }}
+          >
             <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" />
-          </svg>
+          </motion.svg>
           重新整理
         </button>
       </div>
 
       <div className="p-6 space-y-6">
         {/* 摘要卡片 */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <motion.div
+          className="grid grid-cols-2 xl:grid-cols-4 gap-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ staggerChildren: 0.1 }}
+        >
           {cards.map(card => (
-            <StatCard key={card.label} {...card} />
+            <motion.div key={card.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <StatCard {...card} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {/* 趨勢圖 */}
         <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -371,7 +387,7 @@ export default function Dashboard() {
           <div className="xl:col-span-3 bg-white rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-gray-700 mb-4">熱門頁面 Top {top_pages.length}</h3>
             {top_pages.length === 0
-              ? <p className="text-gray-400 text-sm text-center py-6">尚無資料</p>
+              ? <div className="text-center py-10"><div className="text-2xl mb-2">📊</div><p className="text-gray-400 text-sm">尚無頁面瀏覽資料</p></div>
               : <TopPagesBar data={top_pages} />
             }
           </div>
@@ -401,7 +417,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-gray-700 mb-4">各商品購買次數</h3>
           {product_sales.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">尚無訂單資料</p>
+            <div className="text-center py-10"><div className="text-2xl mb-2">🛒</div><p className="text-gray-400 text-sm">尚無訂單資料</p></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

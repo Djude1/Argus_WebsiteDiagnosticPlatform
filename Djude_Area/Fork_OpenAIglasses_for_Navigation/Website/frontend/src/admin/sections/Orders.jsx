@@ -33,13 +33,50 @@ export default function Orders() {
   const [orders, setOrders]       = useState([])
   const [selected, setSelected]   = useState(null)
   const [statusFilter, setFilter] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [newStatus, setNewStatus] = useState('')
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
+  const [sortField, setSortField] = useState('')
+  const [sortDir, setSortDir]     = useState('asc')
+
+  // 排序切換函式
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  // 排序圖示元件
+  function SortIcon({ field }) {
+    if (sortField !== field) return <span className="text-gray-400 ml-1">↕</span>
+    return sortDir === 'asc' ? <span className="text-blue-500 ml-1">↑</span> : <span className="text-blue-500 ml-1">↓</span>
+  }
 
   const load = (s) => getOrders(s).then(r => setOrders(r.data.results || r.data))
 
   useEffect(() => { load(statusFilter) }, [statusFilter])
+
+  const filteredOrders = orders.filter(o => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      (o.order_number && o.order_number.toLowerCase().includes(term)) ||
+      (o.customer_name && o.customer_name.toLowerCase().includes(term))
+    )
+  })
+
+  // 排序後的訂單列表
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    if (!sortField) return 0
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal), 'zh-TW')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   const selectOrder = (o) => { setSelected(o); setNewStatus(o.status); setSaved(false) }
 
@@ -58,6 +95,16 @@ export default function Orders() {
     <div className="flex h-full">
       {/* 中欄：訂單清單 */}
       <div className="w-72 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
+        {/* 搜尋 */}
+        <div className="px-4 py-2 border-b border-gray-100">
+          <input
+            type="text"
+            placeholder="搜尋訂單編號或客戶名稱..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400"
+          />
+        </div>
         {/* 狀態篩選 */}
         <div className="px-4 py-3 border-b border-gray-100">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">訂單管理</h3>
@@ -67,11 +114,39 @@ export default function Orders() {
           </select>
         </div>
 
+        {/* 排序欄位標題 */}
+        <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-1 flex-wrap">
+          <button onClick={() => toggleSort('order_number')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            訂單編號<SortIcon field="order_number" />
+          </button>
+          <span className="text-gray-300 text-xs">|</span>
+          <button onClick={() => toggleSort('customer_name')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            客戶<SortIcon field="customer_name" />
+          </button>
+          <span className="text-gray-300 text-xs">|</span>
+          <button onClick={() => toggleSort('total_price')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            金額<SortIcon field="total_price" />
+          </button>
+          <span className="text-gray-300 text-xs">|</span>
+          <button onClick={() => toggleSort('created_at')} className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1">
+            日期<SortIcon field="created_at" />
+          </button>
+        </div>
+
         <div className="overflow-y-auto flex-1">
-          {orders.length === 0 && (
-            <div className="text-center text-gray-400 text-sm py-8">沒有訂單</div>
+          {sortedOrders.length === 0 && orders.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有訂單</p>
+            </div>
           )}
-          {orders.map(o => (
+          {sortedOrders.length === 0 && orders.length > 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的訂單</p>
+            </div>
+          )}
+          {sortedOrders.map(o => (
             <button key={o.id} onClick={() => selectOrder(o)}
               className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors ${
                 selected?.id === o.id ? 'bg-blue-50 border-r-2 border-blue-600' : 'hover:bg-gray-50'

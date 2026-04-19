@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     './index.html',
     './src/**/*.{js,jsx,ts,tsx}',
@@ -10,7 +11,7 @@ export default {
         sans: ['Noto Sans TC', 'sans-serif'],
       },
       colors: {
-        // 品牌色系：深色科技風格
+        // 品牌色系：深色科技風格（暗色模式使用）
         brand: {
           50:  '#edfcff',
           100: '#d6f7ff',
@@ -23,6 +24,20 @@ export default {
           800: '#0f698f',
           900: '#135778',
           950: '#0a3750',
+        },
+        // 暖色品牌色系：亮色模式使用
+        warm: {
+          50:  '#fef9ee',
+          100: '#fef0cd',
+          200: '#fde6b6',
+          300: '#fbd07b',
+          400: '#fbab6a',
+          500: '#f59e0b',
+          600: '#f97d16',
+          700: '#ef8108',
+          800: '#d97704',
+          900: '#c26604',
+          950: '#92400b',
         },
       },
       animation: {

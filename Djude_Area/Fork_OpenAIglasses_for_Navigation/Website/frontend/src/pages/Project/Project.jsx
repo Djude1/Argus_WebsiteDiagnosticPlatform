@@ -1,5 +1,6 @@
 // AI 盲人輔助智慧眼鏡 — 專案介紹靜態頁面
 // 說明：本頁面不需要 API 呼叫，所有內容均為靜態資料
+import ScrollReveal from '../../components/ScrollReveal'
 
 export default function Project() {
   // ── 核心功能資料 ──────────────────────────────────────────────────
@@ -11,8 +12,8 @@ export default function Project() {
       description:
         '利用 YOLO 分割模型即時偵測地面盲道輪廓，透過 Lucas-Kanade 光流演算法計算使用者偏移方向，以自然語音引導左右調整，確保視障者安全沿著盲道行走。',
       tags: ['YOLO-Seg', 'Lucas-Kanade', 'TTS 語音'],
-      color: 'from-amber-500/20 to-amber-600/5',
-      border: 'border-amber-500/20',
+      color: 'from-warm-500/20 to-warm-600/5',
+      border: 'border-warm-500/20',
     },
     {
       icon: '🚦',
@@ -41,8 +42,8 @@ export default function Project() {
       description:
         '整合 Groq Whisper Large v3 Turbo 進行即時中文語音辨識，由 Gemini 2.5 Flash 處理自然語言理解與回應，再透過 Gemini TTS 合成語音回放，支援流暢中文語音對話互動。',
       tags: ['Groq Whisper', 'Gemini 2.5 Flash', 'Gemini TTS'],
-      color: 'from-brand-500/20 to-brand-600/5',
-      border: 'border-brand-500/20',
+      color: 'from-warm-500/20 to-warm-600/5 dark:from-brand-500/20 dark:to-brand-600/5',
+      border: 'border-warm-500/20 dark:border-brand-500/20',
     },
   ]
 
@@ -97,35 +98,46 @@ export default function Project() {
           Hero 區塊
       ════════════════════════════════════════════════════════════ */}
       <section className="relative min-h-[70vh] flex items-center overflow-hidden">
-        {/* 背景裝飾光暈 */}
+        {/* 網狀漸層底層 */}
+        <div className="absolute inset-0 pointer-events-none mesh-gradient" />
+
+        {/* 動態光球裝飾 */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-brand-500/8 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 right-1/3 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl" />
+          <div className="absolute top-1/4 left-[10%] w-[400px] h-[400px] bg-warm-400/5 dark:bg-brand-600/10 rounded-full blur-[100px] animate-float" />
+          <div className="absolute bottom-1/3 right-[15%] w-72 h-72 bg-warm-500/4 dark:bg-brand-500/8 rounded-full blur-[80px] animate-float-delayed" />
+          <div className="absolute top-[55%] right-[35%] w-48 h-48 bg-cyan-400/3 dark:bg-brand-400/5 rounded-full blur-[60px] animate-float" />
+        </div>
+
+        {/* 幾何裝飾元素 */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="geo-diamond absolute top-[12%] right-[12%] opacity-60" />
+          <div className="geo-ring absolute bottom-[15%] left-[8%] opacity-40" />
+          <div className="geo-diamond absolute top-[45%] left-[3%] w-6 h-6 opacity-25" style={{ animationDelay: '-8s' }} />
+          <div className="geo-ring absolute top-[20%] left-[40%] w-10 h-10 opacity-20" style={{ animationDelay: '-3s' }} />
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
           {/* 專案標籤 */}
-          <div className="inline-flex items-center gap-2 glass rounded-full px-4 py-2 text-sm text-brand-400 mb-8">
-            <span className="w-2 h-2 bg-brand-400 rounded-full animate-pulse" />
+            <div className="inline-flex items-center gap-2 glass rounded-full px-4 py-2 text-sm text-warm-600 dark:text-brand-400 mb-8">
+            <span className="w-2 h-2 bg-warm-400 dark:bg-brand-400 rounded-full" />
             開源研究型專案 · 非商業販售
           </div>
 
           {/* 主標題 */}
           <h1 className="text-5xl md:text-7xl font-bold leading-tight mb-6">
-            <span className="text-white">AI 盲人輔助</span>
+            <span className="text-gray-900 dark:text-white">AI 盲人輔助</span>
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-brand-600">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-warm-400 to-warm-600 dark:from-brand-400 dark:to-brand-600">
               智慧眼鏡
             </span>
           </h1>
 
           {/* 副標題 */}
-          <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xl md:text-2xl text-gray-700 dark:text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
             讓科技成為視障者的眼睛
           </p>
 
-          <p className="text-gray-500 max-w-3xl mx-auto leading-relaxed mb-12">
+          <p className="text-gray-700 dark:text-gray-400 max-w-3xl mx-auto leading-relaxed mb-12">
             結合 YOLO 影像辨識、光流導航演算法與大型語言模型，
             為視障人士打造即時語音引導系統。
             從盲道行走、安全過馬路到日常物品尋找，全程陪伴守護每一步。
@@ -140,8 +152,8 @@ export default function Project() {
               { num: '開源', label: '基於 OpenAIglasses' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-3xl font-bold text-brand-400 mb-1">{stat.num}</div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
+                <div className="text-3xl font-bold text-warm-600 dark:text-brand-400 mb-1">{stat.num}</div>
+                <div className="text-sm text-gray-700 dark:text-gray-400">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -151,52 +163,62 @@ export default function Project() {
       {/* ════════════════════════════════════════════════════════════
           專案概述卡片區（3 欄）
       ════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-gray-900/50">
+      <section className="py-20 bg-white dark:bg-gray-900/50 relative">
+        {/* 區段頂部漸層分隔線 */}
+        <div className="section-divider absolute top-0 left-0 right-0" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="section-title">專案概述</h2>
-          <p className="section-subtitle">
-            從系統架構到解決問題，了解這個視障輔助系統的完整全貌
-          </p>
+          <ScrollReveal>
+            <h2 className="section-title">專案概述</h2>
+            <p className="section-subtitle">
+              從系統架構到解決問題，了解這個視障輔助系統的完整全貌
+            </p>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* 系統架構 */}
-            <div className="glass rounded-2xl p-8 hover:glow-border transition-all duration-300">
-              <div className="w-12 h-12 rounded-xl bg-brand-500/20 flex items-center justify-center text-2xl mb-5">
+            <ScrollReveal delay={0 * 0.1}>
+              <div className="glass gradient-top-border rounded-2xl p-8 hover:glow-border transition-all duration-300">
+              <div className="w-12 h-12 rounded-xl bg-warm-500/20 dark:bg-brand-500/20 flex items-center justify-center text-2xl mb-5">
                 🏗️
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">系統架構</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">系統架構</h3>
+              <p className="text-gray-700 dark:text-gray-400 text-sm leading-relaxed">
                 以 Python FastAPI 為核心伺服器，透過 WebSocket 與 ESP32S3 穿戴裝置即時通訊。
                 影像幀由裝置攝影機串流至伺服器進行 YOLO 推理，語音透過 ASR 辨識後由 LLM 處理，
                 TTS 合成回應再播放至耳機。
               </p>
-            </div>
+              </div>
+            </ScrollReveal>
 
             {/* 解決問題 */}
-            <div className="glass rounded-2xl p-8 hover:glow-border transition-all duration-300">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-2xl mb-5">
+            <ScrollReveal delay={1 * 0.1}>
+              <div className="glass gradient-top-border rounded-2xl p-8 hover:glow-border transition-all duration-300">
+              <div className="w-12 h-12 rounded-xl bg-warm-500/20 dark:bg-brand-500/20 flex items-center justify-center text-2xl mb-5">
                 🎯
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">解決問題</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">解決問題</h3>
+              <p className="text-gray-700 dark:text-gray-400 text-sm leading-relaxed">
                 台灣視障者在行走時面臨盲道辨識困難、過馬路危險判斷、物品尋找困難等挑戰。
                 本系統透過即時 AI 影像分析與語音引導，提供低成本、高可靠的輔助方案，
                 讓視障者能更自信地獨立出行。
               </p>
-            </div>
+              </div>
+            </ScrollReveal>
 
             {/* 技術創新 */}
-            <div className="glass rounded-2xl p-8 hover:glow-border transition-all duration-300">
+            <ScrollReveal delay={2 * 0.1}>
+              <div className="glass gradient-top-border rounded-2xl p-8 hover:glow-border transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-2xl mb-5">
                 💡
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">技術創新</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">技術創新</h3>
+              <p className="text-gray-700 dark:text-gray-400 text-sm leading-relaxed">
                 結合 YOLO 分割模型與 Lucas-Kanade 光流演算法實現精準盲道方向估計，
                 搭配 YOLOE 開放詞彙偵測支援任意物品尋找，整合多個 AI 雲端服務實現
                 毫秒級語音響應。
               </p>
-            </div>
+              </div>
+            </ScrollReveal>
           </div>
         </div>
       </section>
@@ -206,41 +228,44 @@ export default function Project() {
       ════════════════════════════════════════════════════════════ */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="section-title">核心功能</h2>
-          <p className="section-subtitle">
-            四大核心功能模組，全方位守護視障者的每一步行走
-          </p>
+          <ScrollReveal>
+            <h2 className="section-title">核心功能</h2>
+            <p className="section-subtitle">
+              四大核心功能模組，全方位守護視障者的每一步行走
+            </p>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {coreFunctions.map((func) => (
+            {coreFunctions.map((func, i) => (
+              <ScrollReveal key={func.title} delay={i * 0.1}>
               <div
-                key={func.title}
                 className={`glass rounded-2xl p-8 hover:glow-border transition-all duration-300 bg-gradient-to-br ${func.color} border ${func.border}`}
               >
                 {/* 功能標題列 */}
                 <div className="flex items-start gap-4 mb-5">
                   <div className="text-5xl flex-shrink-0">{func.icon}</div>
                   <div>
-                    <h3 className="text-2xl font-bold text-white mb-1">{func.title}</h3>
-                    <p className="text-sm text-brand-400 font-medium">{func.subtitle}</p>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{func.title}</h3>
+                    <p className="text-sm text-warm-600 dark:text-brand-400 font-medium">{func.subtitle}</p>
                   </div>
                 </div>
 
                 {/* 功能說明 */}
-                <p className="text-gray-400 leading-relaxed mb-5">{func.description}</p>
+                <p className="text-gray-700 dark:text-gray-400 leading-relaxed mb-5">{func.description}</p>
 
                 {/* 技術標籤 */}
                 <div className="flex flex-wrap gap-2">
                   {func.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-300"
+                      className="text-xs px-3 py-1 rounded-full bg-gray-100 border border-gray-200 dark:bg-white/5 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:scale-105 transition-transform duration-200"
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
               </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -249,43 +274,48 @@ export default function Project() {
       {/* ════════════════════════════════════════════════════════════
           技術架構區（兩欄）
       ════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-gray-900/50">
+      <section className="py-20 bg-white dark:bg-gray-900/50 relative">
+        {/* 區段頂部漸層分隔線 */}
+        <div className="section-divider absolute top-0 left-0 right-0" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="section-title">技術架構</h2>
-          <p className="section-subtitle">
-            從硬體裝置到雲端 AI，完整的技術鏈路
-          </p>
+          <ScrollReveal>
+            <h2 className="section-title">技術架構</h2>
+            <p className="section-subtitle">
+              從硬體裝置到雲端 AI，完整的技術鏈路
+            </p>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
             {/* 左欄：系統架構圖（文字版） */}
+            <ScrollReveal>
             <div className="glass rounded-2xl p-8">
-              <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                <span className="w-2 h-6 bg-brand-400 rounded-full inline-block" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <span className="w-2 h-6 bg-warm-600 dark:bg-brand-400 rounded-full inline-block" />
                 系統資料流向
               </h3>
 
               {/* 架構流程圖 */}
               <div className="space-y-2">
                 {/* ESP32S3 */}
-                <div className="glass rounded-xl px-5 py-3 border border-brand-500/30">
-                  <div className="text-brand-400 font-semibold text-sm mb-1">ESP32S3 裝置</div>
-                  <div className="text-xs text-gray-500">攝影機 · 麥克風 · IMU · 喇叭</div>
+                <div className="glass rounded-xl px-5 py-3 border border-warm-500/30 dark:border-brand-500/30">
+                  <div className="text-warm-600 dark:text-brand-400 font-semibold text-sm mb-1">ESP32S3 裝置</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400">攝影機 · 麥克風 · IMU · 喇叭</div>
                 </div>
 
-                {/* 箭頭 */}
+                {/* 箭頭 — 流動連接線 */}
                 <div className="flex justify-center">
                   <div className="flex flex-col items-center gap-1">
-                    <div className="w-px h-4 bg-brand-500/50" />
-                    <div className="text-xs text-gray-600">WebSocket / UDP</div>
-                    <div className="w-px h-4 bg-brand-500/50" />
-                    <div className="text-brand-500">▼</div>
+                    <div className="w-px h-4 flow-connector" />
+                    <div className="text-xs text-gray-700 dark:text-gray-400">WebSocket / UDP</div>
+                    <div className="w-px h-4 flow-connector" />
+                    <div className="text-warm-500 dark:text-brand-500">▼</div>
                   </div>
                 </div>
 
                 {/* FastAPI */}
                 <div className="glass rounded-xl px-5 py-3 border border-purple-500/30">
                   <div className="text-purple-400 font-semibold text-sm mb-1">Python FastAPI 伺服器</div>
-                  <div className="text-xs text-gray-500">NavigationMaster 狀態機 · WebSocket 路由</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400">NavigationMaster 狀態機 · WebSocket 路由</div>
                 </div>
 
                 {/* 第二層分支 */}
@@ -296,8 +326,8 @@ export default function Project() {
                       <div className="text-amber-500/60 text-sm">▼</div>
                     </div>
                     <div className="glass rounded-xl px-4 py-3 border border-amber-500/20">
-                      <div className="text-amber-400 font-semibold text-xs mb-1">YOLO 推理</div>
-                      <div className="text-xs text-gray-600">盲道 / 斑馬線<br />障礙物 / 物品</div>
+                      <div className="text-amber-600 dark:text-amber-400 font-semibold text-xs mb-1">YOLO 推理</div>
+                      <div className="text-xs text-gray-700 dark:text-gray-400">盲道 / 斑馬線<br />障礙物 / 物品</div>
                     </div>
                   </div>
 
@@ -308,7 +338,7 @@ export default function Project() {
                     </div>
                     <div className="glass rounded-xl px-4 py-3 border border-green-500/20">
                       <div className="text-green-400 font-semibold text-xs mb-1">ASR / LLM</div>
-                      <div className="text-xs text-gray-600">Groq Whisper<br />Gemini 2.5 Flash</div>
+                      <div className="text-xs text-gray-700 dark:text-gray-400">Groq Whisper<br />Gemini 2.5 Flash</div>
                     </div>
                   </div>
                 </div>
@@ -316,23 +346,25 @@ export default function Project() {
                 {/* 箭頭 */}
                 <div className="flex justify-center">
                   <div className="flex flex-col items-center gap-1">
-                    <div className="text-brand-500">▼</div>
-                    <div className="text-xs text-gray-600">Gemini TTS 合成</div>
+                    <div className="text-warm-500 dark:text-brand-500">▼</div>
+                    <div className="text-xs text-gray-700 dark:text-gray-400">Gemini TTS 合成</div>
                   </div>
                 </div>
 
                 {/* 輸出 */}
-                <div className="glass rounded-xl px-5 py-3 border border-brand-500/30">
-                  <div className="text-brand-400 font-semibold text-sm mb-1">語音回放</div>
-                  <div className="text-xs text-gray-500">WAV 串流 → ESP32S3 喇叭 → 使用者聆聽</div>
+                <div className="glass rounded-xl px-5 py-3 border border-warm-500/30 dark:border-brand-500/30">
+                  <div className="text-warm-600 dark:text-brand-400 font-semibold text-sm mb-1">語音回放</div>
+                  <div className="text-xs text-gray-700 dark:text-gray-400">WAV 串流 → ESP32S3 喇叭 → 使用者聆聽</div>
                 </div>
               </div>
             </div>
+            </ScrollReveal>
 
             {/* 右欄：技術堆疊標籤 */}
+            <ScrollReveal delay={0.2}>
             <div className="glass rounded-2xl p-8">
-              <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                <span className="w-2 h-6 bg-brand-400 rounded-full inline-block" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <span className="w-2 h-6 bg-warm-600 dark:bg-brand-400 rounded-full inline-block" />
                 技術堆疊
               </h3>
 
@@ -342,12 +374,12 @@ export default function Project() {
                 if (items.length === 0) return null
                 return (
                   <div key={cat} className="mb-4">
-                    <div className="text-xs text-gray-600 uppercase tracking-widest mb-2">{cat}</div>
+                    <div className="text-xs text-gray-700 dark:text-gray-400 uppercase tracking-widest mb-2">{cat}</div>
                     <div className="flex flex-wrap gap-2">
                       {items.map((t) => (
                         <span
-                          key={t.label}
-                          className="text-sm px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 font-medium hover:bg-brand-500/20 transition-colors"
+                           key={t.label}
+                          className="text-sm px-3 py-1.5 rounded-lg bg-warm-500/10 dark:bg-brand-500/10 border border-warm-500/20 dark:border-brand-500/20 text-warm-700 dark:text-brand-300 font-medium hover:bg-warm-500/20 dark:hover:bg-brand-500/20 hover:scale-105 transition-all duration-200 cursor-default"
                         >
                           {t.label}
                         </span>
@@ -357,6 +389,7 @@ export default function Project() {
                 )
               })}
             </div>
+            </ScrollReveal>
           </div>
         </div>
       </section>
@@ -366,23 +399,26 @@ export default function Project() {
       ════════════════════════════════════════════════════════════ */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="section-title">硬體規格</h2>
-          <p className="section-subtitle">
-            以 Seeed Studio XIAO ESP32S3 為核心，整合攝影機、麥克風、喇叭與 IMU
-          </p>
+          <ScrollReveal>
+            <h2 className="section-title">硬體規格</h2>
+            <p className="section-subtitle">
+              以 Seeed Studio XIAO ESP32S3 為核心，整合攝影機、麥克風、喇叭與 IMU
+            </p>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
-            {hardwareSpecs.map((hw) => (
+            {hardwareSpecs.map((hw, i) => (
+              <ScrollReveal key={hw.name} delay={i * 0.08}>
               <div
-                key={hw.name}
-                className="glass rounded-2xl p-6 hover:glow-border transition-all duration-300 group text-center"
+                className="glass gradient-top-border rounded-2xl p-6 hover:glow-border transition-all duration-300 group text-center"
               >
                 <div className="text-4xl mb-4">{hw.icon}</div>
-                <h3 className="font-semibold text-white text-sm mb-2 group-hover:text-brand-400 transition-colors">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-2 group-hover:text-warm-600 dark:group-hover:text-brand-400 transition-colors">
                   {hw.name}
                 </h3>
-                <p className="text-gray-500 text-xs leading-relaxed">{hw.desc}</p>
+                <p className="text-gray-700 dark:text-gray-400 text-xs leading-relaxed">{hw.desc}</p>
               </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -391,13 +427,18 @@ export default function Project() {
       {/* ════════════════════════════════════════════════════════════
           開源說明區
       ════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-gray-900/50">
+      <section className="py-20 bg-white dark:bg-gray-900/50 relative">
+        {/* 區段頂部漸層分隔線 */}
+        <div className="section-divider absolute top-0 left-0 right-0" />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="glass rounded-3xl p-12 glow-border">
+          <ScrollReveal direction="up" delay={0.2}>
+          <div className="glass rounded-3xl p-12 glow-border relative overflow-hidden">
+            {/* 內部漸層裝飾 */}
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-warm-500/5 via-transparent to-purple-500/5 dark:from-brand-500/5 dark:via-transparent dark:to-purple-500/5" />
             {/* GitHub 圖示 */}
-            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-white/5 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gray-100/5 dark:bg-white/5 flex items-center justify-center relative z-10">
               <svg
-                className="w-8 h-8 text-white"
+                className="w-8 h-8 text-gray-900 dark:text-white"
                 fill="currentColor"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
@@ -418,25 +459,25 @@ export default function Project() {
               </svg>
             </div>
 
-            <h2 className="text-3xl font-bold text-white mb-4">開源專案</h2>
-            <p className="text-gray-400 text-lg leading-relaxed mb-3">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 relative z-10">開源專案</h2>
+            <p className="text-gray-700 dark:text-gray-400 text-lg leading-relaxed mb-3 relative z-10">
               本專案基於{' '}
               <a
                 href="https://github.com/AI-FanGe/OpenAIglasses_for_Navigation"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-400 hover:text-brand-300 underline underline-offset-4 transition-colors"
+                className="text-warm-600 dark:text-brand-400 hover:text-warm-700 dark:hover:text-brand-300 underline underline-offset-4 transition-colors"
               >
                 OpenAIglasses_for_Navigation
               </a>{' '}
               開源專案進行二次開發與功能強化。
             </p>
-            <p className="text-gray-500 mb-8">
+            <p className="text-gray-700 dark:text-gray-400 mb-8 relative z-10">
               感謝原作者 AI-FanGe 的開源貢獻，讓我們得以在此基礎上為視障族群打造更完善的輔助系統。
               本專案為學術研究用途，不進行商業販售。
             </p>
 
-            <div className="flex flex-wrap gap-4 justify-center">
+            <div className="flex flex-wrap gap-4 justify-center relative z-10">
               <a
                 href="https://github.com/AI-FanGe/OpenAIglasses_for_Navigation"
                 target="_blank"
@@ -470,6 +511,7 @@ export default function Project() {
               </a>
             </div>
           </div>
+          </ScrollReveal>
         </div>
       </section>
     </div>

@@ -16,6 +16,17 @@ import DeviceMonitor from './sections/DeviceMonitor'
 import ServerConfig from './sections/ServerConfig'
 import { getMe } from './api'
 
+// ── 區塊切換淡入動畫 ────────────────────────────────────────────
+const SECTION_TRANSITION_STYLE = `
+@keyframes admin-section-fadein {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.admin-section-enter {
+  animation: admin-section-fadein 0.3s ease-out forwards;
+}
+`
+
 // ── 保護路由：未登入導向 login ────────────────────────────────────
 function RequireAuth({ children }) {
   const token = localStorage.getItem('admin_access')
@@ -107,12 +118,12 @@ function AdminLayout() {
     setMode(newMode)
     if (newMode === 'user') {
       // 保留目前的 user section，若不是 user section 才切換到預設
-      const userSections = ['app-device', 'voice', 'announcements']
+      const userSections = ['app-device', 'devices', 'voice', 'announcements', 'logs']
       if (!userSections.includes(activeCategory)) {
         setActiveCategory('app-device')
       }
     } else {
-      const websiteSections = ['dashboard', 'page-content', 'products', 'orders', 'team', 'accounts', 'logs', 'devices', 'server-config']
+      const websiteSections = ['dashboard', 'page-content', 'products', 'orders', 'team', 'accounts', 'server-config', 'announcements']
       if (!websiteSections.includes(activeCategory)) {
         setActiveCategory('dashboard')
       }
@@ -122,7 +133,10 @@ function AdminLayout() {
   const isSuperAdmin = userRole === 'superadmin'
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/30 overflow-hidden font-sans">
+      {/* 注入區塊切換動畫樣式 */}
+      <style>{SECTION_TRANSITION_STYLE}</style>
+
       {/* 左欄：側欄導覽 */}
       <Sidebar
         active={activeCategory}
@@ -135,8 +149,8 @@ function AdminLayout() {
 
       {/* 主內容區 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 頂部列 */}
-        <header className="bg-white border-b border-gray-100 px-6 py-0 flex items-center flex-shrink-0 h-14">
+        {/* 頂部列 — 加入微陰影與漸層提升層次感 */}
+        <header className="bg-gradient-to-r from-white via-white to-slate-50/80 border-b border-gray-100 px-6 py-0 flex items-center flex-shrink-0 h-14 shadow-sm shadow-slate-200/50">
           {/* 麵包屑 */}
           <div className="flex items-center gap-2 min-w-0">
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,8 +190,8 @@ function AdminLayout() {
           </div>
         </header>
 
-        {/* 內容主體 */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 內容主體 — key 觸發淡入動畫 */}
+        <div key={activeCategory} className="flex-1 flex flex-col overflow-hidden admin-section-enter">
           {SECTION_MAP[activeCategory]?.component}
         </div>
       </div>

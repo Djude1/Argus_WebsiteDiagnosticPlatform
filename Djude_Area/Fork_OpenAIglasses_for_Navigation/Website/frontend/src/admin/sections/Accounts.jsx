@@ -68,16 +68,25 @@ const emptyUser = {
   role: 'admin', permissions: [], password: '', is_active: true,
 }
 
+/** 排序圖示元件 */
+function SortIcon({ field, sortField, sortDir }) {
+  if (sortField !== field) return <span className="text-gray-300 ml-0.5">↕</span>
+  return sortDir === 'asc' ? <span className="text-blue-500 ml-0.5">↑</span> : <span className="text-blue-500 ml-0.5">↓</span>
+}
+
 // ── 主元件 ───────────────────────────────────────────────────────
 export default function Accounts({ currentUserRole }) {
   const [users, setUsers]         = useState([])
   const [selected, setSelected]   = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const [editForm, setEditForm]   = useState({})
   const [saving, setSaving]       = useState(false)
   const [saved, setSaved]         = useState(false)
   const [modal, setModal]         = useState(false)
   const [newForm, setNewForm]     = useState(emptyUser)
   const [newSaving, setNewSaving] = useState(false)
+  const [sortField, setSortField] = useState('username')  // 排序欄位
+  const [sortDir, setSortDir]     = useState('asc')       // asc 或 desc
 
   const isSuperAdmin = currentUserRole === 'superadmin'
 
@@ -126,6 +135,34 @@ export default function Accounts({ currentUserRole }) {
   // 修改編輯表單欄位
   const set = (f, v) => { setEditForm(p => ({ ...p, [f]: v })); setSaved(false) }
 
+  // 搜尋篩選：依帳號名稱或 Email
+  const filteredUsers = users.filter(u => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      (u.username && u.username.toLowerCase().includes(term)) ||
+      (u.email && u.email.toLowerCase().includes(term))
+    )
+  })
+
+  // 排序切換函式
+  function toggleSort(field) {
+    if (sortField === field) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  // 排序後的帳號列表
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    const aVal = a[sortField] ?? ''
+    const bVal = b[sortField] ?? ''
+    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal), 'zh-TW')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
   // 切換功能權限開關
   const togglePermission = (id, isEdit) => {
     if (isEdit) {
@@ -148,6 +185,16 @@ export default function Accounts({ currentUserRole }) {
     <div className="flex h-full">
       {/* 左欄：帳號列表 */}
       <div className="w-64 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
+        {/* 搜尋 */}
+        <div className="px-4 py-2 border-b border-gray-100">
+          <input
+            type="text"
+            placeholder="搜尋帳號或 Email..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-400"
+          />
+        </div>
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">帳號管理</h3>
           {isSuperAdmin && (
@@ -159,8 +206,35 @@ export default function Accounts({ currentUserRole }) {
             </button>
           )}
         </div>
+        {/* 排序控制 */}
+        <div className="px-4 py-1.5 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">排序：</span>
+          {[
+            { field: 'username', label: '帳號' },
+            { field: 'email', label: 'Email' },
+            { field: 'role', label: '角色' },
+            { field: 'date_joined', label: '建立日期' },
+          ].map(({ field, label }) => (
+            <button key={field} onClick={() => toggleSort(field)}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center">
+              {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+            </button>
+          ))}
+        </div>
         <div className="overflow-y-auto flex-1">
-          {users.map(u => (
+          {filteredUsers.length === 0 && users.length === 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">📭</div>
+              <p>沒有帳號</p>
+            </div>
+          )}
+          {filteredUsers.length === 0 && users.length > 0 && (
+            <div className="text-center text-gray-400 text-sm py-8">
+              <div className="text-2xl mb-2">🔍</div>
+              <p>沒有符合的帳號</p>
+            </div>
+          )}
+          {sortedUsers.map(u => (
             <button key={u.id} onClick={() => selectUser(u)}
               className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-50 transition-colors text-left ${
                 selected?.id === u.id ? 'bg-blue-50 border-r-2 border-blue-600' : 'hover:bg-gray-50'

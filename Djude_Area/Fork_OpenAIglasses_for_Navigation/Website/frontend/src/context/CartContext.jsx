@@ -39,7 +39,9 @@ export function CartProvider({ children }) {
     })
   }, [])
 
-  /** 直接設定某商品數量（qty <= 0 時自動移除）*/
+  /** 直接設定某商品數量（qty <= 0 時自動移除）
+   *  注意：商品必須已透過 addItem 加入購物車，否則 setQty 會忽略（沒有 product 資料無法計價）
+   */
   const setQty = useCallback((productId, qty) => {
     if (qty <= 0) {
       setItems(prev => {
@@ -48,10 +50,15 @@ export function CartProvider({ children }) {
         return next
       })
     } else {
-      setItems(prev => ({
-        ...prev,
-        [productId]: { ...prev[productId], qty: Math.min(qty, 99) },
-      }))
+      setItems(prev => {
+        const existing = prev[productId]
+        // 商品不在購物車中 → 忽略，需先透過 addItem 加入
+        if (!existing) return prev
+        return {
+          ...prev,
+          [productId]: { ...existing, qty: Math.min(qty, 99) },
+        }
+      })
     }
   }, [])
 
@@ -67,12 +74,14 @@ export function CartProvider({ children }) {
   /** 清空購物車 */
   const clearCart = useCallback(() => setItems({}), [])
 
-  /** 購物車商品總件數 */
-  const totalItems = Object.values(items).reduce((sum, { qty }) => sum + qty, 0)
+  /** 購物車商品總件數（防禦性檢查） */
+  const totalItems = Object.values(items).reduce(
+    (sum, entry) => sum + (entry?.qty || 0), 0
+  )
 
-  /** 購物車總金額 */
+  /** 購物車總金額（防禦性檢查） */
   const totalPrice = Object.values(items).reduce(
-    (sum, { product, qty }) => sum + Number(product.price) * qty,
+    (sum, entry) => sum + ((Number(entry?.product?.price) || 0) * (entry?.qty || 0)),
     0
   )
 

@@ -9,45 +9,92 @@
 
   body {
     font-family: 'Noto Sans TC', sans-serif;
-    background-color: #030712;
-    color: #f9fafb;
+    @apply text-slate-900 dark:bg-[#030712] dark:text-[#f9fafb];
+    /* 日間模式：柔和漸層 + 科技感網格背景 */
+    background:
+      linear-gradient(135deg, #f1f5f9 0%, #e8f4fd 50%, #f1f5f9 100%),
+      linear-gradient(rgba(14, 165, 233, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(14, 165, 233, 0.04) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px, 48px 48px;
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 平滑的頁面選取效果 */
+  ::selection {
+    @apply bg-sky-500/20 dark:bg-brand-500/30;
+  }
+
+  /* 鍵盤焦點狀態 — 無障礙設計 */
+  *:focus-visible {
+    outline: 3px solid #0ea5e9;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .dark *:focus-visible {
+    outline-color: #48ddff;
   }
 }
 
 @layer components {
-  /* 玻璃擬態效果 */
+  /* 玻璃擬態效果 — 增強邊緣對比 */
   .glass {
-    @apply bg-white/5 backdrop-blur-md border border-white/10;
+    @apply bg-white/95 backdrop-blur-xl border border-gray-300 shadow-md
+           dark:bg-white/5 dark:border-white/10 dark:shadow-none;
+    background-image: linear-gradient(135deg, rgba(14, 165, 233, 0.03) 0%, transparent 50%);
+  }
+  .dark .glass {
+    background-image: linear-gradient(135deg, rgba(72, 221, 255, 0.03) 0%, transparent 50%);
   }
 
-  /* 發光邊框 */
+  /* 發光邊框 — 靜態效果（不閃爍） */
   .glow-border {
-    box-shadow: 0 0 20px rgba(30, 196, 247, 0.3);
-    @apply border border-brand-500/50;
+    box-shadow: 0 0 16px rgba(14, 165, 233, 0.15);
+    @apply border border-warm-500/50 dark:border-brand-500/50;
+  }
+  .dark .glow-border {
+    box-shadow: 0 0 16px rgba(72, 221, 255, 0.15);
   }
 
   /* 主要按鈕 */
   .btn-primary {
-    @apply bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400
+    @apply bg-gradient-to-r from-warm-600 to-warm-500 hover:from-warm-500 hover:to-warm-400
+           dark:from-brand-600 dark:to-brand-500 dark:hover:from-brand-500 dark:hover:to-brand-400
            text-white font-semibold py-3 px-8 rounded-full transition-all duration-300
-           hover:shadow-lg hover:shadow-brand-500/30 active:scale-95;
+           hover:shadow-lg hover:shadow-warm-500/25 dark:hover:shadow-brand-500/30
+           active:scale-95;
   }
 
   /* 次要按鈕（外框式）*/
   .btn-outline {
-    @apply border border-brand-500/70 text-brand-400 hover:bg-brand-500/10
+    @apply border border-warm-500/60 text-warm-700 hover:bg-warm-500/10
+           dark:border-brand-500/70 dark:text-brand-400 dark:hover:bg-brand-500/10
            font-semibold py-3 px-8 rounded-full transition-all duration-300
-           hover:border-brand-400 active:scale-95;
+           hover:border-warm-400 dark:hover:border-brand-400 active:scale-95;
   }
 
   /* 段落標題 */
   .section-title {
-    @apply text-3xl md:text-4xl font-bold text-center mb-4;
+    @apply text-3xl md:text-4xl font-bold text-center mb-4
+           text-gray-900 dark:text-white;
   }
 
   /* 段落副標題 */
   .section-subtitle {
-    @apply text-gray-400 text-center max-w-2xl mx-auto mb-12 text-lg;
+    @apply text-gray-700 dark:text-gray-400 text-center max-w-2xl mx-auto mb-12 text-lg;
+  }
+
+  /* 卡片懸浮效果 */
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+  .card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(14, 165, 233, 0.08);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -57,11 +104,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #111827;
+  @apply bg-slate-100 dark:bg-[#111827];
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #07a3d7;
+  @apply bg-sky-400 dark:bg-brand-600;
   border-radius: 3px;
 }
 
@@ -70,8 +117,250 @@
   width: 100%;
   height: 100%;
   cursor: grab;
+  position: relative;
+  border-radius: inherit;
 }
 
 .model-canvas-container:active {
   cursor: grabbing;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   動畫關鍵影格 — Retro-Futuristic 科技感動效
+   ═══════════════════════════════════════════════════════════ */
+
+/* 緩慢浮動 — 用於裝飾元素 */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-12px) rotate(1deg); }
+  66% { transform: translateY(6px) rotate(-0.5deg); }
+}
+
+/* [已移除] pulse-glow — 使用者要求移除所有閃爍效果 */
+/* [已移除] gradient-shift — 無引用，已清理 */
+/* [已移除] shimmer — 無引用，已清理 */
+
+/* 旋轉裝飾 — 幾何圖案慢速旋轉 */
+@keyframes slow-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 邊框發光 — 靜態版本（不閃爍） */
+
+/* [已移除] number-pulse — 使用者要求移除所有閃爍效果 */
+
+/* [已移除] flow-line — 使用者要求移除所有閃爍效果 */
+
+/* ═══════════════════════════════════════════════════════════
+   動畫工具類別
+   ═══════════════════════════════════════════════════════════ */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 8s ease-in-out 2s infinite;
+}
+
+/* [已移除] animate-gradient-shift — 無引用，已清理 */
+
+/* [已移除] animate-pulse-glow — 閃爍效果已移除 */
+
+.animate-slow-spin {
+  animation: slow-spin 20s linear infinite;
+}
+
+/* [已移除] animate-border-glow — 閃爍效果已移除 */
+
+/* [已移除] animate-number-pulse — 閃爍效果已移除 */
+
+/* ═══════════════════════════════════════════════════════════
+   視覺效果工具類別
+   ═══════════════════════════════════════════════════════════ */
+
+/* 漸層文字 */
+.text-gradient {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .text-gradient {
+  background: linear-gradient(135deg, #48ddff, #1ec4f7, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 網狀漸層背景（Hero 用）— 日間模式降低強度 */
+.mesh-gradient {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(14, 165, 233, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 40% 80%, rgba(56, 189, 248, 0.04) 0%, transparent 50%),
+    linear-gradient(135deg, transparent 0%, rgba(14, 165, 233, 0.02) 100%);
+}
+.dark .mesh-gradient {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(72, 221, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(30, 196, 247, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 40% 80%, rgba(6, 182, 212, 0.04) 0%, transparent 50%),
+    linear-gradient(135deg, transparent 0%, rgba(72, 221, 255, 0.02) 100%);
+}
+
+/* 發光強調線（靜態） */
+.glow-accent {
+  position: relative;
+  overflow: hidden;
+}
+.glow-accent::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #0ea5e9, #38bdf8, #0ea5e9, transparent);
+}
+.dark .glow-accent::after {
+  background: linear-gradient(90deg, transparent, #48ddff, #1ec4f7, #48ddff, transparent);
+}
+
+/* 漸層頂邊框卡片裝飾 */
+.gradient-top-border {
+  position: relative;
+  overflow: hidden;
+}
+.gradient-top-border::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0ea5e9, #06b6d4, #8b5cf6);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.gradient-top-border:hover::before {
+  opacity: 1;
+}
+.dark .gradient-top-border::before {
+  background: linear-gradient(90deg, #48ddff, #1ec4f7, #a78bfa);
+}
+
+/* Shimmer 微光效果（靜態版 — 不閃爍） */
+.glass-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.glass-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.15), transparent);
+  pointer-events: none;
+}
+
+/* 幾何裝飾 — 旋轉方塊 */
+.geo-diamond {
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid rgba(14, 165, 233, 0.15);
+  transform: rotate(45deg);
+  animation: slow-spin 20s linear infinite;
+}
+.dark .geo-diamond {
+  border-color: rgba(72, 221, 255, 0.15);
+}
+
+/* 幾何裝飾 — 圓環 */
+.geo-ring {
+  width: 60px;
+  height: 60px;
+  border: 1.5px solid rgba(14, 165, 233, 0.12);
+  border-radius: 50%;
+  animation: float 8s ease-in-out infinite;
+}
+.dark .geo-ring {
+  border-color: rgba(72, 221, 255, 0.12);
+}
+
+/* 連接線（靜態虛線） */
+.flow-connector {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(14, 165, 233, 0.3) 0px,
+    rgba(14, 165, 233, 0.3) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+.dark .flow-connector {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(72, 221, 255, 0.3) 0px,
+    rgba(72, 221, 255, 0.3) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+/* 步驟漸層左邊線 */
+.step-accent-line {
+  position: relative;
+}
+.step-accent-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, #0ea5e9, #06b6d4, #8b5cf6);
+}
+.dark .step-accent-line::before {
+  background: linear-gradient(to bottom, #48ddff, #1ec4f7, #a78bfa);
+}
+
+/* 漸層左邊指示線（公告卡片用） */
+.accent-left-line {
+  position: relative;
+}
+.accent-left-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, #0ea5e9, #38bdf8);
+}
+.accent-left-line[data-type="version_update"]::before { background: linear-gradient(to bottom, #3b82f6, #60a5fa); }
+.accent-left-line[data-type="maintenance"]::before { background: linear-gradient(to bottom, #eab308, #facc15); }
+.accent-left-line[data-type="new_feature"]::before { background: linear-gradient(to bottom, #22c55e, #4ade80); }
+.accent-left-line[data-type="general"]::before { background: linear-gradient(to bottom, #6b7280, #9ca3af); }
+
+/* 段落分隔線（靜態漸層） */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.2), rgba(6, 182, 212, 0.3), rgba(14, 165, 233, 0.2), transparent);
+}
+.dark .section-divider {
+  background: linear-gradient(90deg, transparent, rgba(72, 221, 255, 0.15), rgba(30, 196, 247, 0.25), rgba(72, 221, 255, 0.15), transparent);
+}
+
+/* 減少動態效果偏好 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
