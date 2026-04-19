@@ -2,7 +2,8 @@
 // 管理伺服器連線、導航狀態、ASR 訊息、緊急連絡人（本機儲存）
 
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,8 @@ import '../services/contacts_service.dart';
 import '../services/places_service.dart';
 import '../services/gps_navigation_service.dart';
 import '../services/emergency_notification_service.dart';
+import '../services/voice_cache_service.dart';
+import '../services/local_voice_service.dart';
 
 class AppProvider extends ChangeNotifier {
   // ── 伺服器設定 ──────────────────────────────────────────────────────────
@@ -124,14 +127,18 @@ class AppProvider extends ChangeNotifier {
 
   /// 公開語音播報方法（視障者模式 BlindScreen 使用）
   /// TalkBack 開啟時透過 SemanticsService 播報（避免音訊衝突）
-  /// TalkBack 關閉時使用 flutter_tts 直接播報
+  /// TalkBack 關閉時優先播放預載快取，未命中才用 flutter_tts
   Future<void> speak(String text) async {
     if (_isTalkBackOn) {
       SemanticsService.announce(text, TextDirection.ltr);
     } else {
       if (!_ttsEnabled) return;   // 使用者關閉 APP 語音時靜音
-      await _tts.stop();
-      await _tts.speak(text);
+      // 優先嘗試快取音檔（延遲更低）
+      final hit = await VoiceCacheService.instance.speak(text);
+      if (!hit) {
+        await _tts.stop();
+        await _tts.speak(text);
+      }
     }
   }
 
@@ -172,6 +179,10 @@ class AppProvider extends ChangeNotifier {
 
     await _tts.setLanguage('zh-TW');
     await _tts.setSpeechRate(_ttsSpeechRate);
+
+    // 背景預載固定語音快取（不阻塞啟動流程）
+    VoiceCacheService.instance.init(_tts);
+    LocalVoiceService.instance.init(); // 載入 assets/voice_map.json
 
     await loadContacts();
     await loadPlaces();
@@ -241,6 +252,20 @@ class AppProvider extends ChangeNotifier {
 
   /// 更新伺服器設定（支援完整 URL 或 host+port）
   Future<void> updateServerSettings(String host, int port, {bool? secure, String? baseUrl}) async {
+    final wasConnected = _connected;
+
+    // 切換裝置前先停止所有串流，避免相機 callback 繼續把影格送往舊裝置
+    if (wasConnected) {
+      _watchdogTimer?.cancel();
+      _watchdogTimer = null;
+      _camera.stopStreaming();
+      await _audio.stopMicrophone();
+      _imu.stop();
+      _ws.disconnectAll();
+      stopPollingNavState();
+      _connected = false;
+    }
+
     _host    = host;
     _port    = port;
     _secure  = secure ?? _secure;
@@ -251,6 +276,12 @@ class AppProvider extends ChangeNotifier {
     await prefs.setBool(AppConstants.keySecure,    _secure);
     await prefs.setString(AppConstants.keyBaseUrl, _baseUrl);
     _rebuildServices();
+
+    // 若原本已連線，切換完成後重新啟動所有服務（camera callback 正確綁定新裝置）
+    if (wasConnected) {
+      await startAllServices();
+    }
+
     notifyListeners();
   }
 
@@ -487,8 +518,38 @@ class AppProvider extends ChangeNotifier {
       }
       return;
     }
+    // 伺服器每 30 秒發送的保活訊號，不顯示在訊息記錄中
+    if (msg == 'PING') return;
+
+    // SPEAK: 本地語音播放（伺服器命中預錄 WAV 時推送）
+    // 格式：SPEAK:{"text":"請向左平移","duration_ms":1640}
+    if (msg.startsWith('SPEAK:')) {
+      _handleSpeakMessage(msg.substring(6));
+      return;
+    }
+
     _addMessage(msg);
     _checkEmergencyCall(msg);
+  }
+
+  void _handleSpeakMessage(String jsonStr) {
+    try {
+      final data       = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final text       = data['text']        as String? ?? '';
+      final durationMs = (data['duration_ms'] as num?)?.toInt() ?? 2000;
+      if (text.isEmpty) return;
+
+      // 非同步：本地 WAV 優先，stream 靜音；未命中則放行 stream
+      LocalVoiceService.instance.speak(text).then((playedMs) {
+        if (playedMs != null) {
+          // 命中本地 WAV：靜音 /stream.wav 避免重播
+          _audio.suppressStreamFor(durationMs);
+        }
+        // 未命中：/stream.wav 繼續正常播放（伺服器已發出音訊）
+      });
+    } catch (e) {
+      debugPrint('[AppProvider] SPEAK 解析失敗: $e');
+    }
   }
 
   void _addMessage(String msg) {
@@ -496,6 +557,9 @@ class AppProvider extends ChangeNotifier {
     if (_messages.length > 100) _messages.removeAt(0);
     notifyListeners();
   }
+
+  /// 公開方法：讓各畫面寫入 DEBUG 訊息記錄
+  void addDebugMessage(String msg) => _addMessage(msg);
 
   // ── 緊急連絡人（本機）─────────────────────────────────────────────────────
   Future<void> loadContacts() async {

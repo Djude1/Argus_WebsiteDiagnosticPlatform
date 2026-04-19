@@ -99,17 +99,22 @@ class _ReadScreenState extends State<ReadScreen> {
 
     setState(() => _state = _ReadState.processing);
     _announce('辨識中，請稍候…');
+    app.addDebugMessage('[文件閱讀] 拍照完成，開始 OCR 辨識…');
     try {
       final bytes  = await photo.readAsBytes();
       final b64    = base64Encode(bytes);
+      app.addDebugMessage('[文件閱讀] 圖片大小：${(bytes.length / 1024).toStringAsFixed(0)} KB');
       final result = await app.readDocument(b64);
       final text   = (result['text'] as String? ?? '').trim();
 
       if (text.isEmpty || text.contains('【圖片中未發現文字】')) {
+        app.addDebugMessage('[文件閱讀] 未偵測到文字');
         _announce('未偵測到文字，請確認文件清晰可見後重新拍照。');
         setState(() => _state = _ReadState.cameraReady);
         return;
       }
+
+      app.addDebugMessage('[文件閱讀] OCR 成功（${text.length} 字）：${text.length > 100 ? '${text.substring(0, 100)}…' : text}');
 
       setState(() {
         _extractedText = text;
@@ -126,7 +131,9 @@ class _ReadScreenState extends State<ReadScreen> {
         _announce('文件閱讀完畢。需要我說明這份文件的內容嗎？');
       }
     } catch (e) {
-      _announce('辨識失敗，請確認伺服器連線後再試。');
+      debugPrint('[DOC-READ] 辨識失敗: $e');
+      app.addDebugMessage('[文件閱讀] 辨識失敗：$e');
+      _announce('辨識失敗：$e');
       setState(() => _state = _ReadState.cameraReady);
     }
   }
@@ -149,19 +156,22 @@ class _ReadScreenState extends State<ReadScreen> {
   }
 
   Future<void> _doAsk(String question) async {
+    final app = context.read<AppProvider>();
+    app.addDebugMessage('[文件閱讀] 追問：$question');
     try {
-      final result = await context
-          .read<AppProvider>()
-          .explainDocument(_extractedText, question);
+      final result = await app.explainDocument(_extractedText, question);
       final answer = (result['answer'] as String? ?? '').trim();
+      app.addDebugMessage('[文件閱讀] 回答：${answer.length > 100 ? '${answer.substring(0, 100)}…' : answer}');
       setState(() {
         _qa.add({'q': question, 'a': answer});
         _state = _ReadState.qa;
       });
       _announce(answer);
       _scrollToBottom();
-    } catch (_) {
-      _announce('查詢失敗，請稍後再試。');
+    } catch (e) {
+      debugPrint('[DOC-READ] 查詢失敗: $e');
+      app.addDebugMessage('[文件閱讀] 查詢失敗：$e');
+      _announce('查詢失敗：$e');
       setState(() => _state = _ReadState.qa);
     }
   }

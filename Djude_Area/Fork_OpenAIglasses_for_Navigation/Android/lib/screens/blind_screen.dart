@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../widgets/debug_panel.dart';
 import 'contacts_screen.dart';
 import 'emergency_select_screen.dart';
 import 'emergency_countdown_screen.dart';
@@ -36,6 +37,10 @@ class _BlindScreenState extends State<BlindScreen>
   bool?  _prevConnected;
   int    _prevImpactVersion = 0;   // 上一次消化的撞擊版本號，避免重複彈出
 
+  // DEBUG 懸浮球（僅開發人員模式顯示）
+  OverlayEntry? _debugEntry;
+  bool _isDevMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,11 +54,29 @@ class _BlindScreenState extends State<BlindScreen>
       _announce(app.connected
           ? 'AI智慧眼鏡已連線。向左滑動可進入設定頁面。'
           : '正在連線伺服器，請稍候。');
+      _checkDevModeForDebug();
     });
+  }
+
+  /// 檢查手機開發人員模式，有則插入 DEBUG 懸浮球
+  Future<void> _checkDevModeForDebug() async {
+    try {
+      const channel = MethodChannel('com.aiglasses/app_control');
+      final result = await channel.invokeMethod<bool>('isDeveloperMode');
+      _isDevMode = result ?? false;
+      if (_isDevMode && mounted && _debugEntry == null) {
+        _debugEntry = OverlayEntry(
+          builder: (_) => const DebugFloatingPanel(),
+        );
+        Overlay.of(context).insert(_debugEntry!);
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _debugEntry?.remove();
+    _debugEntry = null;
     WidgetsBinding.instance.removeObserver(this);
     context.read<AppProvider>().removeListener(_onAppChanged);
     _pageController.dispose();

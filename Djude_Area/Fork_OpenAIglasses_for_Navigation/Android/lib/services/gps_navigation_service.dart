@@ -11,7 +11,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// GPS 導航狀態
 enum GpsNavState {
@@ -97,46 +96,18 @@ class GpsNavigationService {
     return true;
   }
 
-  /// 背景啟動 Google Maps 並自動切回 APP
+  /// 背景啟動 Google Maps 導航，APP 保持前景不跳走。
+  /// 透過原生端 Intent 啟動 Maps 並立即切回 APP。
   Future<void> _launchGoogleMapsBackground(
     double lat, double lng, String name,
   ) async {
-    final gmapsUrl = Uri.parse(
-      'google.navigation:q=$lat,$lng&mode=w',
-    );
+    final uri = 'google.navigation:q=$lat,$lng&mode=w';
     try {
-      final launched = await launchUrl(
-        gmapsUrl,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        debugPrint('[GPS] Google Maps 未安裝，跳過背景語音導航');
-        return;
-      }
-      debugPrint('[GPS] Google Maps 步行導航已啟動: $name ($lat, $lng)');
-
-      // 延遲 1.5 秒後切回我們的 APP
-      // Google Maps 會在背景繼續語音導航
-      await Future.delayed(const Duration(milliseconds: 1500));
-      await _bringAppToForeground();
+      const channel = MethodChannel('com.aiglasses/app_control');
+      await channel.invokeMethod('launchMapsBackground', {'uri': uri});
+      debugPrint('[GPS] Google Maps 背景導航已啟動: $name ($lat, $lng)');
     } catch (e) {
       debugPrint('[GPS] 啟動 Google Maps 失敗: $e');
-    }
-  }
-
-  /// 將我們的 APP 切回前景
-  /// 使用 Android 的 moveTaskToFront 或簡單地用 SystemNavigator
-  Future<void> _bringAppToForeground() async {
-    try {
-      // 使用 Android Intent 把自己拉回前景
-      // 透過 MethodChannel 呼叫原生 Android 端
-      const channel = MethodChannel('com.aiglasses/app_control');
-      await channel.invokeMethod('bringToForeground');
-      debugPrint('[GPS] 已切回 APP 前景');
-    } catch (e) {
-      debugPrint('[GPS] 切回前景失敗（可能需要原生端支援）: $e');
-      // 備用方案：不做任何事，使用者可以手動切回
-      // 至少 Google Maps 已在背景運行語音導航
     }
   }
 
@@ -177,7 +148,7 @@ class GpsNavigationService {
     }
   }
 
-  /// 停止 GPS 導航
+  /// 停止 GPS 導航，同時關閉背景的 Google Maps
   void stopNavigation() {
     _positionSub?.cancel();
     _positionSub = null;
@@ -185,7 +156,20 @@ class GpsNavigationService {
     _timeoutTimer = null;
     _state = GpsNavState.idle;
     _lastDistance = double.infinity;
+    // 關閉背景 Google Maps
+    _stopGoogleMaps();
     debugPrint('[GPS] GPS 導航已停止');
+  }
+
+  /// 關閉背景 Google Maps 導航
+  Future<void> _stopGoogleMaps() async {
+    try {
+      const channel = MethodChannel('com.aiglasses/app_control');
+      await channel.invokeMethod('stopMapsNavigation');
+      debugPrint('[GPS] Google Maps 已關閉');
+    } catch (e) {
+      debugPrint('[GPS] 關閉 Google Maps 失敗: $e');
+    }
   }
 
   /// 取得目前位置（單次）

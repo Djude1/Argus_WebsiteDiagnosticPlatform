@@ -127,6 +127,16 @@ class AudioService {
     await _player.stop();
   }
 
+  /// 本地語音播放時，將 /stream.wav 靜音 [durationMs] 毫秒以避免重疊
+  /// 本地播完後自動恢復音量
+  Future<void> suppressStreamFor(int durationMs) async {
+    await _player.setVolume(0.0);
+    await Future.delayed(Duration(milliseconds: durationMs + 200)); // 多200ms緩衝
+    if (_shouldPlayStream) {
+      await _player.setVolume(1.0);
+    }
+  }
+
   // ── 前台服務（背景監聽）─────────────────────────────────────────────────
   bool _foregroundRunning = false;
 

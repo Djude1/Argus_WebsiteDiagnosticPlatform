@@ -1,0 +1,350 @@
+{
+  "保持直行": {
+    "file": "1389c0fff08fe9bc.wav",
+    "duration_ms": 1520
+  },
+  "向右平移": {
+    "file": "0f04fe58bd095da3.wav",
+    "duration_ms": 1600
+  },
+  "向左平移": {
+    "file": "c3c198298703524d.wav",
+    "duration_ms": 1600
+  },
+  "前方有人可往右移": {
+    "file": "eb3eab31e17192dc.wav",
+    "duration_ms": 2440
+  },
+  "前方有人可往左移": {
+    "file": "7385d4f441ab97ac.wav",
+    "duration_ms": 1920
+  },
+  "前方有車請稍等": {
+    "file": "b03557f00fdbf811.wav",
+    "duration_ms": 2600
+  },
+  "前方有機車請稍等": {
+    "file": "3fa50c3bee36af3a.wav",
+    "duration_ms": 2800
+  },
+  "前方有公車請稍等": {
+    "file": "4d899a5c98c2c353.wav",
+    "duration_ms": 2720
+  },
+  "前方有動物請小心": {
+    "file": "c2395e4d749979f6.wav",
+    "duration_ms": 2280
+  },
+  "前方有障礙物請往右繞行": {
+    "file": "cd6ab2e36c78eeef.wav",
+    "duration_ms": 3720
+  },
+  "左側有人請向右避開": {
+    "file": "ede6bf2898d659fc.wav",
+    "duration_ms": 2920
+  },
+  "左側有車請向右避開": {
+    "file": "2b83c389b2a34447.wav",
+    "duration_ms": 3040
+  },
+  "左側有障礙請向右避開": {
+    "file": "8858ea3af4235e0c.wav",
+    "duration_ms": 3640
+  },
+  "右側有人請向左避開": {
+    "file": "95b9ea40f20c4a3a.wav",
+    "duration_ms": 2760
+  },
+  "右側有車請向左避開": {
+    "file": "ea1e3e93aea18a95.wav",
+    "duration_ms": 2880
+  },
+  "右側有障礙請向左避開": {
+    "file": "9b291fd07b718771.wav",
+    "duration_ms": 2920
+  },
+  "红灯": {
+    "file": "b7ee4544c13f61c0.wav",
+    "duration_ms": 400
+  },
+  "绿灯": {
+    "file": "a796107713fcc22f.wav",
+    "duration_ms": 400
+  },
+  "黄灯": {
+    "file": "e71abd7a9bc88d39.wav",
+    "duration_ms": 400
+  },
+  "远处发现斑马线": {
+    "file": "2e53d71f191f1886.wav",
+    "duration_ms": 1600
+  },
+  "正在靠近斑马线": {
+    "file": "8d4b1a3e12923ce5.wav",
+    "duration_ms": 1600
+  },
+  "接近斑马线": {
+    "file": "b94a2088ed178b47.wav",
+    "duration_ms": 1200
+  },
+  "斑马线到了可以过马路": {
+    "file": "96321d9569d1f5b3.wav",
+    "duration_ms": 2000
+  },
+  "在画面左侧": {
+    "file": "5ed5b05a62880107.wav",
+    "duration_ms": 1200
+  },
+  "在画面中间": {
+    "file": "21e2b1ab3ce5eeb1.wav",
+    "duration_ms": 1200
+  },
+  "在画面右侧": {
+    "file": "b1a500f9062d8cc5.wav",
+    "duration_ms": 1200
+  },
+  "盲道導航已開始": {
+    "file": "a268d5c7f58c69ff.wav",
+    "duration_ms": 1960
+  },
+  "過馬路模式已啟動": {
+    "file": "c533e2ee5a8ae1b1.wav",
+    "duration_ms": 2480
+  },
+  "已停止導航": {
+    "file": "6d59306395fe238b.wav",
+    "duration_ms": 1680
+  },
+  "啟動過馬路模式失敗，請稍後重試": {
+    "file": "c59c2c37455c6ab9.wav",
+    "duration_ms": 4360
+  },
+  "此地已確認沒有盲道，目前只作避障處理": {
+    "file": "1f923ef64cc1930f.wav",
+    "duration_ms": 4520
+  },
+  "已回到盲道": {
+    "file": "b1ad5576b6d51fbb.wav",
+    "duration_ms": 1560
+  },
+  "避讓完成，已回到盲道": {
+    "file": "37b35e15d53e9006.wav",
+    "duration_ms": 2880
+  },
+  "丟失路徑，重新搜索": {
+    "file": "6f813c46e7fdc485.wav",
+    "duration_ms": 2840
+  },
+  "保持直行，靠近盲道": {
+    "file": "cd61760b9c1ea7a3.wav",
+    "duration_ms": 2920
+  },
+  "切換到盲道導航": {
+    "file": "712e4f2c8880e9eb.wav",
+    "duration_ms": 2200
+  },
+  "到達轉彎處，向右平移": {
+    "file": "ef513acd72d94442.wav",
+    "duration_ms": 3160
+  },
+  "到達轉彎處，向左平移": {
+    "file": "07ae44c7a8e45af6.wav",
+    "duration_ms": 3040
+  },
+  "遠處有盲道，繼續前行": {
+    "file": "35fddec3ba17ebd5.wav",
+    "duration_ms": 3760
+  },
+  "盲道已接近，開始對準盲道": {
+    "file": "91e187f785f6772d.wav",
+    "duration_ms": 3600
+  },
+  "方向正確，請直行": {
+    "file": "3eb97a1b62693291.wav",
+    "duration_ms": 2840
+  },
+  "方向正確，請繼續前進": {
+    "file": "1de30c7fd4948a41.wav",
+    "duration_ms": 3360
+  },
+  "請向右平移": {
+    "file": "a186d3b32c61242d.wav",
+    "duration_ms": 1560
+  },
+  "請向左平移": {
+    "file": "7993d5bf31f3cf92.wav",
+    "duration_ms": 1640
+  },
+  "請向右微調，對準盲道": {
+    "file": "b1e5fee53fd791e2.wav",
+    "duration_ms": 3040
+  },
+  "請向左微調，對準盲道": {
+    "file": "6782d8ec31dbd984.wav",
+    "duration_ms": 3320
+  },
+  "稍微向右調整，繼續前進": {
+    "file": "873a5ff2581c0a97.wav",
+    "duration_ms": 3360
+  },
+  "稍微向左調整，繼續前進": {
+    "file": "16f33e2cccfa8212.wav",
+    "duration_ms": 3560
+  },
+  "前方有右轉彎，繼續直行": {
+    "file": "512280a846c87724.wav",
+    "duration_ms": 3800
+  },
+  "前方有左轉彎，繼續直行": {
+    "file": "46779fabf086b1ef.wav",
+    "duration_ms": 3160
+  },
+  "遠處發現斑馬線，繼續直行": {
+    "file": "49df0562cbf5a7d7.wav",
+    "duration_ms": 3560
+  },
+  "發現斑馬線，對準方向": {
+    "file": "df6b1365bf285623.wav",
+    "duration_ms": 3560
+  },
+  "斑馬線已對準，繼續前行": {
+    "file": "31ddba5a02fa079f.wav",
+    "duration_ms": 3200
+  },
+  "正在接近斑馬線，為您對準方向": {
+    "file": "5e5efb7675f4c801.wav",
+    "duration_ms": 3880
+  },
+  "正在等待綠燈": {
+    "file": "9e9da4a043a8014c.wav",
+    "duration_ms": 1800
+  },
+  "綠燈穩定，開始通行": {
+    "file": "40513cbb9ada03f9.wav",
+    "duration_ms": 2600
+  },
+  "綠燈快沒了": {
+    "file": "280acec9ad139dda.wav",
+    "duration_ms": 1560
+  },
+  "過馬路結束，準備上人行道": {
+    "file": "be6b4f57abade258.wav",
+    "duration_ms": 3120
+  },
+  "路徑被擋住，請向右側平移": {
+    "file": "8ad22d06a712d941.wav",
+    "duration_ms": 3680
+  },
+  "路徑被擋住，請向左側平移": {
+    "file": "d947262a711fb65a.wav",
+    "duration_ms": 3520
+  },
+  "尋物任務完成": {
+    "file": "14d7f802d9069907.wav",
+    "duration_ms": 2000
+  },
+  "導航已被取消": {
+    "file": "96b65237baa6d40a.wav",
+    "duration_ms": 2000
+  },
+  "歡迎使用AI智慧眼鏡": {
+    "file": "b1b722bde51b8506.wav",
+    "duration_ms": 2960
+  },
+  "開始對話": {
+    "file": "75a588b037ed06a3.wav",
+    "duration_ms": 1800
+  },
+  "結束收音": {
+    "file": "61729b45ac7d466b.wav",
+    "duration_ms": 1240
+  },
+  "找不到盲道": {
+    "file": "2ab60be1ed6a3094.wav",
+    "duration_ms": 1800
+  },
+  "找不到盲道，請左右移動尋找": {
+    "file": "efdbe6871599c521.wav",
+    "duration_ms": 3720
+  },
+  "重新找到盲道，恢復導航": {
+    "file": "fdddf316faf60408.wav",
+    "duration_ms": 3360
+  },
+  "前方有台階請小心": {
+    "file": "05f984ac9ccc6781.wav",
+    "duration_ms": 2503
+  },
+  "向左轉": {
+    "file": "96d05f945e69b7a5.wav",
+    "duration_ms": 1200
+  },
+  "向右轉": {
+    "file": "e37ac64a528fc70b.wav",
+    "duration_ms": 1720
+  },
+  "向左移": {
+    "file": "c1b0041bcc349c1a.wav",
+    "duration_ms": 1720
+  },
+  "向右移": {
+    "file": "6c6d7ee6350ca64e.wav",
+    "duration_ms": 1640
+  },
+  "方向已對正，現在校準位置": {
+    "file": "b7ad9b3d6a994ecd.wav",
+    "duration_ms": 4520
+  },
+  "請向左轉動": {
+    "file": "742b25b1fe812c5f.wav",
+    "duration_ms": 1640
+  },
+  "請向右轉動": {
+    "file": "55dcef691606cad8.wav",
+    "duration_ms": 1640
+  },
+  "校準完成，您已在盲道上，開始前行": {
+    "file": "af8cce7131c72df7.wav",
+    "duration_ms": 4360
+  },
+  "請向前移動，讓盲道更清晰": {
+    "file": "4f1558731b45ce11.wav",
+    "duration_ms": 3520
+  },
+  "檢測到已移動，開始對準新方向": {
+    "file": "e6038eb9e8cca323.wav",
+    "duration_ms": 4640
+  },
+  "請繼續向左平移": {
+    "file": "1aa0acb042ea24f5.wav",
+    "duration_ms": 2000
+  },
+  "請繼續向右平移": {
+    "file": "e9a70bf564cab27a.wav",
+    "duration_ms": 2280
+  },
+  "沒看到盲道，請向右側小幅移動": {
+    "file": "88790ec10c8f53c8.wav",
+    "duration_ms": 4360
+  },
+  "沒看到盲道，請向左側小幅移動": {
+    "file": "623c0eb40804ecff.wav",
+    "duration_ms": 3760
+  },
+  "請停下側移": {
+    "file": "b24403d209a40d35.wav",
+    "duration_ms": 1760
+  },
+  "向前直行幾步越過障礙物": {
+    "file": "afc5136505def158.wav",
+    "duration_ms": 3480
+  },
+  "已對準，準備切換過馬路模式": {
+    "file": "cb087fb6b2bfb7b4.wav",
+    "duration_ms": 3440
+  },
+  "前方路緣，可踏上斑馬線": {
+    "file": "e38dfc2ca212ad36.wav",
+    "duration_ms": 3080
+  }
+}

@@ -1,8 +1,8 @@
 // lib/widgets/debug_panel.dart
-// 開發者 DEBUG 浮動面板
-//   • 平時：右側邊緣顯示一條小 tab（半透明）
-//   • 向左滑 tab / 點擊 tab → 面板從右滑入展開
-//   • 向右滑面板 → 收起
+// 開發者 DEBUG 懸浮球（iOS AssistiveTouch 風格）
+//   • 平時：半透明圓球，可自由拖曳到螢幕任意位置
+//   • 點擊圓球 → 面板從右滑入展開
+//   • 點擊關閉 / 向右滑 → 收起面板，圓球自動吸附至最近邊緣
 //   • 透過 OverlayEntry 插入，跨所有子頁面持續顯示
 
 import 'package:flutter/material.dart';
@@ -23,6 +23,12 @@ class _DebugFloatingPanelState extends State<DebugFloatingPanel>
   late AnimationController _animCtrl;
   late Animation<Offset>   _slideAnim;
   final _scrollCtrl = ScrollController();
+
+  // ── 拖曳位置 ───────────────────────────────────────────────────────────
+  static const _ballSize = 44.0;
+  double _dx = -1;   // 初始化標記（-1 表示尚未初始化）
+  double _dy = -1;
+  bool _dragging = false;
 
   @override
   void initState() {
@@ -47,6 +53,22 @@ class _DebugFloatingPanelState extends State<DebugFloatingPanel>
   void _open_()  { setState(() => _open = true);  _animCtrl.forward(); }
   void _close_() { setState(() => _open = false); _animCtrl.reverse(); }
 
+  /// 圓球吸附到最近的左/右邊緣
+  void _snapToEdge(Size screenSize) {
+    final centerX = _dx + _ballSize / 2;
+    final margin = 4.0;
+    setState(() {
+      _dx = centerX < screenSize.width / 2
+          ? margin
+          : screenSize.width - _ballSize - margin;
+      // 上下邊界限制
+      _dy = _dy.clamp(
+        MediaQuery.of(context).padding.top + margin,
+        screenSize.height - _ballSize - margin,
+      );
+    });
+  }
+
   // 自動捲到最新訊息
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,12 +84,19 @@ class _DebugFloatingPanelState extends State<DebugFloatingPanel>
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+
+    // 首次初始化位置：右邊緣中間偏上
+    if (_dx < 0) {
+      _dx = screenSize.width - _ballSize - 4;
+      _dy = screenSize.height * 0.30;
+    }
+
     return Consumer<AppProvider>(
       builder: (_, app, __) {
-        // 訊息更新時捲到底
         if (_open) _scrollToBottom();
 
-        final panelW = MediaQuery.of(context).size.width * 0.78;
+        final panelW = screenSize.width * 0.78;
 
         return Stack(
           children: [
@@ -82,49 +111,43 @@ class _DebugFloatingPanelState extends State<DebugFloatingPanel>
                 ),
               ),
 
-            // ── 收合時的 tab 把手 ─────────────────────────────────────
-            if (!_open || _animCtrl.isAnimating)
+            // ── 懸浮圓球（可拖曳，收合時顯示）───────────────────────
+            if (!_open)
               Positioned(
-                right:  0,
-                top:    MediaQuery.of(context).size.height * 0.30,
+                left: _dx,
+                top:  _dy,
                 child: GestureDetector(
                   onTap: _open_,
-                  // 向左滑動（負速度）展開
-                  onHorizontalDragEnd: (d) {
-                    if ((d.primaryVelocity ?? 0) < -150) _open_();
+                  onPanStart: (_) => _dragging = true,
+                  onPanUpdate: (d) {
+                    setState(() {
+                      _dx += d.delta.dx;
+                      _dy += d.delta.dy;
+                    });
                   },
-                  child: AnimatedContainer(
+                  onPanEnd: (_) {
+                    _dragging = false;
+                    _snapToEdge(screenSize);
+                  },
+                  child: AnimatedOpacity(
+                    opacity: _dragging ? 1.0 : 0.65,
                     duration: const Duration(milliseconds: 200),
-                    width:  28,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFB300).withAlpha(210),
-                      borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(10)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(80),
-                          blurRadius: 6,
-                          offset: const Offset(-2, 0),
-                        ),
-                      ],
-                    ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.bug_report,
-                            size: 18, color: Colors.black87),
-                        SizedBox(height: 4),
-                        RotatedBox(
-                          quarterTurns: 1,
-                          child: Text('DEBUG',
-                              style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                  letterSpacing: 0.5)),
-                        ),
-                      ],
+                    child: Container(
+                      width:  _ballSize,
+                      height: _ballSize,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB300),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(100),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.bug_report,
+                          size: 22, color: Colors.black87),
                     ),
                   ),
                 ),

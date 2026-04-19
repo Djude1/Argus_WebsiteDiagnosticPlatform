@@ -29,12 +29,11 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _init() async {
     final app = context.read<AppProvider>();
 
-    // 啟動語音提示
+    // 啟動語音提示（不等待播完，與初始化並行）
     final tts = FlutterTts();
-    await tts.setLanguage('zh-TW');
-    await tts.setSpeechRate(0.5);
-    await tts.speak('正在開啟AI智慧眼鏡APP');
-    Future.delayed(const Duration(seconds: 3), () => tts.stop());
+    tts.setLanguage('zh-TW');
+    tts.setSpeechRate(0.5);
+    tts.speak('正在開啟AI智慧眼鏡APP');
 
     await app.init();
 
@@ -78,7 +77,28 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     }
 
-    // ── 自動發現伺服器 IP ─────────────────────────────────────────────
+    // ── 連線伺服器 ─────────────────────────────────────────────────────
+    // 已有儲存的 baseUrl（公網部署）→ 直接連線，跳過 UDP 區網發現
+    if (app.baseUrl.isNotEmpty) {
+      _setStatus('連線至 ${app.baseUrl}…');
+      final ok = await _tryConnect(app);
+      if (mounted) {
+        if (ok) {
+          await _routeByMode();
+        } else {
+          // 儲存的公網地址連不上，嘗試區網發現
+          _setStatus('公網連線失敗，搜尋區網伺服器…');
+          await _discoverAndConnect(app);
+        }
+      }
+    } else {
+      // 沒有 baseUrl → 走區網 UDP 發現
+      await _discoverAndConnect(app);
+    }
+  }
+
+  /// 區網 UDP 發現 → 連線，失敗則導向設定頁
+  Future<void> _discoverAndConnect(AppProvider app) async {
     _setStatus('搜尋伺服器中…');
     final result = await DiscoveryService.discover(
       timeout:  const Duration(seconds: 6),
