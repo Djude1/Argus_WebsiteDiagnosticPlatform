@@ -9,7 +9,7 @@ import threading
 import queue
 import time
 from audio_stream import broadcast_pcm16_realtime
-from audio_compressor import compressed_audio_cache, AudioCompressor
+from audio_compressor import compressed_audio_cache
 
 # 导入录制器（避免循环导入，在需要时动态导入）
 _recorder_imported = False
@@ -29,7 +29,7 @@ def _get_recorder():
     return _sync_recorder
 
 # 音訊目錄從 config.py 讀取（路徑由 .env 的 AUDIO_BASE_DIR / VOICE_DIR 提供）
-from config import AUDIO_BASE_DIR, VOICE_DIR
+from config import AUDIO_BASE_DIR, VOICE_DIR, GOOGLE_CREDENTIALS_PATH
 VOICE_MAP_FILE = os.path.join(VOICE_DIR, "map.zh-CN.json")
 
 # 音频文件映射（将合并 voice 映射）
@@ -130,8 +130,12 @@ def load_wav_file(filepath):
         print(f"[AUDIO] 加载音频文件失败 {filepath}: {e}")
         return None
 
+# text → duration_ms（從 map.zh-CN.json 載入，供 APP 本地播音計算靜音時長）
+_voice_duration_map: dict = {}
+
 def _merge_voice_map():
     """读取 voice/map.zh-CN.json 并合并到 AUDIO_MAP"""
+    global _voice_duration_map
     try:
         if not os.path.exists(VOICE_MAP_FILE):
             print(f"[AUDIO] 未找到映射文件: {VOICE_MAP_FILE}")
@@ -147,6 +151,7 @@ def _merge_voice_map():
             fpath = os.path.join(VOICE_DIR, fname)
             if os.path.exists(fpath):
                 AUDIO_MAP[text] = fpath
+                _voice_duration_map[text] = (info or {}).get("duration_ms", 2000)
                 added += 1
             else:
                 print(f"[AUDIO] 映射文件缺失: {fpath}")
@@ -265,7 +270,7 @@ def initialize_audio_system():
     # 显示压缩统计
     if os.getenv("AIGLASS_COMPRESS_AUDIO", "1") == "1":
         stats = compressed_audio_cache.get_compression_stats()
-        print(f"[AUDIO] 音频压缩统计:")
+        print("[AUDIO] 音频压缩统计:")
         print(f"  - 文件数: {stats['files_cached']}")
         print(f"  - 原始大小: {stats['total_original_size'] / 1024:.1f} KB")
         print(f"  - 压缩后: {stats['total_compressed_size'] / 1024:.1f} KB")
@@ -330,6 +335,28 @@ _last_voice_time = 0
 _last_voice_text = ""
 _voice_cooldown = 1.0  # 相同语音至少间隔1秒
 
+# ── APP 本地語音推播鉤子 ──────────────────────────────────────────────────────
+# app_main.py 在啟動時呼叫 register_speak_push() 注入廣播函式
+# 每次成功命中預錄 WAV 時，額外推送 SPEAK:JSON 給 /ws_ui 客戶端
+# 讓 APP 能用本地 WAV 播放，不依賴 /stream.wav 傳輸音訊
+_speak_push_fn = None  # Callable[[str, int], None] | None
+
+def register_speak_push(fn) -> None:
+    """注入 push 函式：fn(text: str, duration_ms: int)"""
+    global _speak_push_fn
+    _speak_push_fn = fn
+
+
+def _notify_speak(key: str) -> None:
+    """成功命中 WAV 後，推送文字給 APP 做本地語音播放"""
+    if _speak_push_fn is None:
+        return
+    try:
+        duration_ms = _voice_duration_map.get(key, 2000)
+        _speak_push_fn(key, duration_ms)
+    except Exception:
+        pass
+
 # 语音优先级定义
 VOICE_PRIORITY = {
     'obstacle': 100,     # 障碍物 - 最高优先级
@@ -339,20 +366,160 @@ VOICE_PRIORITY = {
 }
 
 # 新增：根据中文提示文案直接播放（会做轻度规范化与降级）
+import re as _re
+
+# ── 紅綠燈自然語句 → 短格式 WAV key ──────────────────────────────────────────
+_TRAFFIC_LIGHT_MAP = {
+    "红灯": "红灯", "紅燈": "红灯",
+    "绿灯": "绿灯", "綠燈": "绿灯",
+    "黄灯": "黄灯", "黃燈": "黄灯",
+}
+
+def _normalize_traffic_light(text: str):
+    """若文字包含紅/綠/黃燈關鍵字，回傳對應短格式 key，否則回傳 None。"""
+    for kw, key in _TRAFFIC_LIGHT_MAP.items():
+        if kw in text:
+            return key
+    return None
+
+# ── 時鐘方向 → 前方/左側/右側 ─────────────────────────────────────────────────
+_CLOCK_FRONT  = {10, 11, 12, 1, 2}
+_CLOCK_RIGHT  = {2, 3, 4, 5}
+_CLOCK_LEFT   = {7, 8, 9, 10}
+
+def _normalize_clock_direction(text: str):
+    """
+    偵測「N點鐘方向有X，urgency」模式，轉換為可匹配預錄 WAV 的方向式描述。
+    例：「4點鐘方向有人，小心！」→「右側有人請向左避開」
+    """
+    m = _re.search(r'(\d{1,2})點鐘方向有(\S+?)(?:[，,。！]|$)', text)
+    if not m:
+        return None
+    hour = int(m.group(1))
+    obj  = m.group(2)
+
+    # 決定方向
+    if hour in _CLOCK_FRONT:
+        direction = "前方"
+    elif hour in _CLOCK_RIGHT:
+        direction = "右側"
+    elif hour in _CLOCK_LEFT:
+        direction = "左側"
+    else:
+        return None  # 後方暫不處理
+
+    # 決定物件類型
+    obj_l = obj.lower()
+    if "人" in obj_l:
+        obj_key = "person"
+    elif "公車" in obj_l or "巴士" in obj_l:
+        obj_key = "bus"
+    elif "機車" in obj_l or "摩托車" in obj_l or "摩托" in obj_l:
+        obj_key = "motorcycle"
+    elif "自行車" in obj_l or "腳踏車" in obj_l:
+        obj_key = "bicycle"
+    elif "車" in obj_l:
+        obj_key = "car"
+    elif "動物" in obj_l or "狗" in obj_l:
+        obj_key = "dog"
+    else:
+        obj_key = "other"
+
+    # 組合方向式語音（對應 _speech_for_obstacle_dir 邏輯）
+    if direction == "前方":
+        map_table = {
+            "person":     "前方有人可往右移",
+            "car":        "前方有車請稍等",
+            "motorcycle": "前方有機車請稍等",
+            "bicycle":    "前方有機車請稍等",
+            "bus":        "前方有公車請稍等",
+            "dog":        "前方有動物請小心",
+        }
+        return map_table.get(obj_key, "前方有障礙物請往右繞行")
+    elif direction == "右側":
+        map_table = {
+            "person": "右側有人請向左避開",
+            "car":    "右側有車請向左避開",
+        }
+        return map_table.get(obj_key, "右側有障礙請向左避開")
+    else:  # 左側
+        map_table = {
+            "person": "左側有人請向右避開",
+            "car":    "左側有車請向右避開",
+        }
+        return map_table.get(obj_key, "左側有障礙請向右避開")
+
+# ── 應過濾不播報的除錯訊息 ──────────────────────────────────────────────────────
+_SKIP_PHRASES = {
+    "路径特征提取失败", "路徑特征提取失敗", "路径特征提取",
+}
+
+# ── 缺失語音記錄（供日後預錄，存到 voice_missing_log/）──────────────────────────
+_MISSING_LOG_DIR = os.path.join(os.path.dirname(__file__), "voice_missing_log")
+_missing_voice_set: set[str] = set()   # 當次執行期去重，避免同文字重複寫入
+
+def _log_missing_voice(text: str) -> None:
+    """將未命中預錄 WAV 的語音文字記錄到 voice_missing_log/YYYY-MM-DD.txt。
+    部署機執行時自動累積，push 到 GitHub 後由本地 Claude Code 處理並預錄。
+    """
+    import datetime
+    t = text.strip()
+    if not t or t in _missing_voice_set:
+        return
+    _missing_voice_set.add(t)
+    try:
+        os.makedirs(_MISSING_LOG_DIR, exist_ok=True)
+        today = datetime.date.today().isoformat()
+        log_path = os.path.join(_MISSING_LOG_DIR, f"{today}.txt")
+        # 若檔案已有該行則不重複寫入
+        existing: set[str] = set()
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                existing = {l.strip() for l in f if l.strip()}
+        if t not in existing:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(t + "\n")
+    except Exception:
+        pass  # 記錄失敗不影響主流程
+
 def play_voice_text(text: str):
     """
     传入中文提示，自动匹配 voice 映射并播放。
+    - 正規化：紅綠燈短格式、時鐘方向→方向式、過濾除錯訊息
     - 尝试原文
     - 尝试补全/去除句末标点（。.!！?？）
-    - 若包含“前方有…注意避让”但未命中，降级到“前方有障碍物，注意避让。”
+    - 若包含"前方有…注意避让"但未命中，降级到"前方有障碍物，注意避让。"
     """
     global _last_voice_time, _last_voice_text
-    
+
     if not text:
         return
     if not _initialized:
         initialize_audio_system()
-    
+
+    # ── 過濾除錯訊息，不播報 ──────────────────────────────────────────────────
+    t_stripped = text.strip()
+    if t_stripped in _SKIP_PHRASES:
+        return
+
+    # ── 正規化：紅綠燈自然語句 → 短格式 WAV key ──────────────────────────────
+    tl_key = _normalize_traffic_light(t_stripped)
+    if tl_key and tl_key in AUDIO_MAP:
+        play_audio_threadsafe(tl_key)
+        _notify_speak(tl_key)
+        _last_voice_text = text
+        _last_voice_time = time.time()
+        return
+
+    # ── 正規化：時鐘方向 → 方向式語音（對應現有預錄 WAV）─────────────────────
+    clock_key = _normalize_clock_direction(t_stripped)
+    if clock_key and clock_key in AUDIO_MAP:
+        play_audio_threadsafe(clock_key)
+        _notify_speak(clock_key)
+        _last_voice_text = text
+        _last_voice_time = time.time()
+        return
+
     # 全局节流：相同文本短时间内不重复播放
     current_time = time.time()
     if text == _last_voice_text and current_time - _last_voice_time < _voice_cooldown:
@@ -374,28 +541,55 @@ def play_voice_text(text: str):
     for ck in candidates:
         if ck in AUDIO_MAP:
             play_audio_threadsafe(ck)
+            _notify_speak(ck)
             _last_voice_text = text
             _last_voice_time = current_time
             return
 
-    # 针对“前方有…注意避让”降级
+    # 繁體避障語音降級：未精確命中時，依方向降級到通用版本
+    if "\u6709" in t and ("\u907f\u958b" in t or "\u8acb\u7a0d\u7b49" in t or "\u8acb\u5c0f\u5fc3" in t or "\u7e5e\u884c" in t or "\u53ef\u5f80" in t):
+        # 左側/右側 → 降級到「有障礙請向X避開」
+        for side, opp in [("左側", "右"), ("右側", "左")]:
+            if t.startswith(side):
+                fallback = f"{side}有障礙請向{opp}避開"
+                if fallback in AUDIO_MAP:
+                    play_audio_threadsafe(fallback)
+                    _notify_speak(fallback)
+                    _last_voice_text = text
+                    _last_voice_time = current_time
+                    return
+                break
+        # 前方 → 降級到「前方有障礙物請往右繞行」
+        if t.startswith("前方"):
+            fallback = "前方有障礙物請往右繞行"
+            if fallback in AUDIO_MAP:
+                play_audio_threadsafe(fallback)
+                _notify_speak(fallback)
+                _last_voice_text = text
+                _last_voice_time = current_time
+                return
+
+    # 簡體避障語音降級（相容舊版語音檔）
     if ("前方有" in t) and ("注意避让" in t):
         fallback = "前方有障碍物，注意避让。"
         if fallback in AUDIO_MAP:
             play_audio_threadsafe(fallback)
+            _notify_speak(fallback)
             _last_voice_text = text
             _last_voice_time = current_time
             return
 
-    # 针对“请向…平移/微调/转动”类词条，常见变体尝试
+    # 针对"请向…平移/微调/转动"类词条，常见变体尝试
     base = t.rstrip("。.!！?？")
     if base in AUDIO_MAP:
         play_audio_threadsafe(base)
+        _notify_speak(base)
         _last_voice_text = text
         _last_voice_time = current_time
         return
     if base + "。" in AUDIO_MAP:
         play_audio_threadsafe(base + "。")
+        _notify_speak(base + "。")
         _last_voice_text = text
         _last_voice_time = current_time
         return
@@ -404,22 +598,66 @@ def play_voice_text(text: str):
     print(f"[AUDIO] 未找到匹配語音，啟動 Gemini TTS: {text}")
     _last_voice_text = text
     _last_voice_time = current_time
+    _log_missing_voice(text)   # 記錄缺失語音供日後預錄
     _play_tts_fallback(text)
+
+def _wavenet_tts(text: str) -> bytes | None:
+    """
+    呼叫 Google Cloud TTS WaveNet（cmn-TW-Wavenet-A），回傳 PCM16 24kHz bytes。
+    使用服務帳號憑證，消耗 Google Cloud 試用金。
+    """
+    try:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDENTIALS_PATH
+        from google.cloud import texttospeech
+        client = texttospeech.TextToSpeechClient()
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code="cmn-TW",
+                name="cmn-TW-Wavenet-A",
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                sample_rate_hertz=24000,
+            ),
+        )
+        # response.audio_content 為含 WAV header 的 bytes，跳過 44-byte header 取 PCM
+        return response.audio_content[44:]
+    except Exception as e:
+        print(f"[AUDIO TTS] WaveNet TTS 失敗: {e}", flush=True)
+        return None
+
+
+_tts_semaphore = threading.Semaphore(2)   # 最多 2 條 TTS 執行緒並發
+_tts_last_time  = 0.0                      # 上次 TTS 開始時間
+_TTS_MIN_INTERVAL = 2.0                    # 兩次 TTS 至少間隔 2 秒
+_tts_rate_lock  = threading.Lock()
 
 def _play_tts_fallback(text: str) -> None:
     """
-    在背景執行緒中呼叫 Gemini TTS，將結果重採樣後放入播放佇列。
-    - Gemini TTS 回傳 PCM16 24kHz → audioop 重採樣至 8kHz
-    - 整個過程在 daemon thread 中執行，不阻塞呼叫者
+    在背景執行緒中呼叫 Google Cloud TTS WaveNet，將結果重採樣後放入播放佇列。
+    - WaveNet 回傳 PCM16 24kHz → audioop 重採樣至 8kHz
+    - 最多 2 個並發 TTS 執行緒，且每 2 秒只允許 1 次 TTS，避免積壓
     """
+    global _tts_last_time
+
+    # 速率限制：2 秒內已有 TTS → 丟棄
+    with _tts_rate_lock:
+        now = time.time()
+        if now - _tts_last_time < _TTS_MIN_INTERVAL:
+            print(f"[AUDIO TTS] 速率限制，丟棄: {text}", flush=True)
+            return
+        _tts_last_time = now
+
     def _worker():
+        if not _tts_semaphore.acquire(blocking=False):
+            print(f"[AUDIO TTS] 並發上限，丟棄: {text}", flush=True)
+            return
         try:
             import audioop
-            from omni_client import _call_tts
-
-            pcm24k: bytes | None = _call_tts(text, voice="Leda")
+            pcm24k: bytes | None = _wavenet_tts(text)
             if not pcm24k:
-                print(f"[AUDIO TTS] Gemini TTS 回傳空音訊: {text}", flush=True)
+                print(f"[AUDIO TTS] WaveNet TTS 回傳空音訊: {text}", flush=True)
                 return
 
             # 24kHz 單聲道 → 8kHz（與預錄 WAV 相同格式）
@@ -430,12 +668,13 @@ def _play_tts_fallback(text: str) -> None:
             _audio_priority += 1
             try:
                 _audio_queue.put_nowait((_audio_priority, pcm8k))
-                print(f"[AUDIO TTS] 動態語音已加入佇列: {text}", flush=True)
+                print(f"[AUDIO TTS] WaveNet 語音已加入佇列: {text}", flush=True)
             except queue.Full:
                 print(f"[AUDIO TTS] 佇列已滿，丟棄: {text}", flush=True)
-
         except Exception as e:
             print(f"[AUDIO TTS] fallback 失敗: {e}", flush=True)
+        finally:
+            _tts_semaphore.release()
 
     threading.Thread(target=_worker, daemon=True, name="TTS-Fallback").start()
 

@@ -13,7 +13,6 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 import bridge_io
-from audio_player import play_voice_text  # 使用统一的语音播放接口
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,35 +49,46 @@ FRONTEND_COLORS = {
     "muted": (159, 176, 195),  # 灰色
 }
 
-# 红绿灯状态到颜色的映射
+# 紅綠燈狀態到顏色的映射
 LIGHT_COLORS = {
-    "stop": FRONTEND_COLORS["red"],
-    "countdown_go": FRONTEND_COLORS["yellow"],
-    "go": FRONTEND_COLORS["green"],
+    "stop":           FRONTEND_COLORS["red"],
+    "countdown_go":   FRONTEND_COLORS["yellow"],
+    "go":             FRONTEND_COLORS["green"],
+    "countdown_stop": FRONTEND_COLORS["red"],
 }
 
-# 【修正】红绿灯状态到中文的映射
-# 只包含真正的红绿灯类别，排除斑马线(crossing)和空白
+# 紅綠燈狀態到繁體中文的映射（畫面顯示用）
 LIGHT_NAMES = {
-    "stop": "红灯",              # 机动车红灯
-    "go": "绿灯",                # 机动车绿灯
-    "countdown_go": "黄灯",      # 绿灯倒计时（用黄灯提示）
-    "countdown_stop": "红灯",    # 红灯倒计时
+    "stop":           "紅燈",
+    "go":             "綠燈",
+    "countdown_go":   "黃燈",      # 綠燈倒數（黃燈提示）
+    "countdown_stop": "紅燈倒數",
 }
 
-# 红绿灯状态到语音文件的映射
+# 紅綠燈狀態到語音檔的映射
 LIGHT_VOICE_MAP = {
-    "stop": "红灯",              # → voice/红灯.WAV
-    "go": "绿灯",                # → voice/绿灯.WAV
-    "countdown_go": "黄灯",      # → voice/黄灯.WAV（绿灯倒计时用黄灯提示）
-    "countdown_stop": "红灯",    # → voice/红灯.WAV
+    "stop":           "紅燈",      # → voice/紅燈.wav
+    "go":             "綠燈",      # → voice/綠燈.wav
+    "countdown_go":   "黃燈",      # → voice/黃燈.wav
+    "countdown_stop": "紅燈",      # → voice/紅燈.wav
 }
 
-# 需要过滤的类别（不检测、不显示）
+# ALL.pt 類別名稱重映射 → 對應 LIGHT_NAMES 的 key
+CLASS_REMAP = {
+    "crossing_green_light": "go",
+    "crossing_red_light":   "stop",
+}
+
+# 需要過濾的類別（不偵測、不顯示）
+# 包含 ALL.pt 中的非紅綠燈類別
 FILTERED_CLASSES = {
-    "crossing",          # 斑马线（不需要）
-    "blank",            # 空白
-    "countdown_blank"   # 倒计时空白
+    "crossing",            # 舊模型斑馬線
+    "blank",
+    "countdown_blank",
+    # ALL.pt 非紅綠燈類別
+    "crossing_crosswalk", "guide_bricks", "green_sidewalk", "sidewalk",
+    "person", "bicycle", "car", "motorcycle", "bus",
+    "obstacle", "curb", "stairs",
 }
 
 # UI文本管理
@@ -111,7 +121,6 @@ _FONT_PATH = None
 def _init_font():
     global _PIL_OK, _FONT_PATH
     try:
-        from PIL import ImageFont
         _PIL_OK = True
     except Exception:
         _PIL_OK = False
@@ -196,16 +205,16 @@ def main(headless: bool = True, stop_event=None):
         model = YOLO(YOLO_MODEL_PATH)
         if torch.cuda.is_available():
             model.to("cuda")
-            print(f"[TRAFFIC] 模型加载成功（GPU）: {YOLO_MODEL_PATH}")
+            print(f"[TRAFFIC] 模型載入成功（GPU）: {YOLO_MODEL_PATH}")
         else:
-            print(f"[TRAFFIC] 模型加载成功（CPU，CUDA 不可用）: {YOLO_MODEL_PATH}")
+            print(f"[TRAFFIC] 模型載入成功（CPU）: {YOLO_MODEL_PATH}")
     except Exception as e:
-        print(f"[TRAFFIC] 模型加载失败: {e}")
+        print(f"[TRAFFIC] 模型載入失敗: {e}")
         return
 
-    # 获取类别名称
+    # 取得類別名稱
     class_names = model.names if hasattr(model, 'names') else {}
-    print(f"[TRAFFIC] 模型类别: {class_names}")
+    print(f"[TRAFFIC] 模型類別: {class_names}")
 
     # 状态跟踪
     last_tts_ts = 0.0
@@ -280,12 +289,12 @@ def main(headless: bool = True, stop_event=None):
                         cls_id = int(box.cls[0])
                         conf = float(box.conf[0])
                         class_name = class_names.get(cls_id, f"class_{cls_id}")
-                        class_name_lower = class_name.lower()
-                        
+                        class_name_lower = CLASS_REMAP.get(class_name.lower(), class_name.lower())
+
                         # 跳过不需要的类别
                         if class_name_lower in FILTERED_CLASSES:
                             continue
-                        
+
                         if conf > max_conf:
                             max_conf = conf
                             detected_light = class_name_lower
@@ -295,8 +304,8 @@ def main(headless: bool = True, stop_event=None):
                         cls_id = int(box.cls[0])
                         conf = float(box.conf[0])
                         class_name = class_names.get(cls_id, f"class_{cls_id}")
-                        class_name_lower = class_name.lower()
-                        
+                        class_name_lower = CLASS_REMAP.get(class_name.lower(), class_name.lower())
+
                         # 跳过不需要的类别
                         if class_name_lower in FILTERED_CLASSES:
                             continue
@@ -348,7 +357,7 @@ def main(headless: bool = True, stop_event=None):
                                 
                                 # 转换回OpenCV格式
                                 vis[:] = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
-                            except Exception as e:
+                            except Exception:
                                 # 【删除】PIL失败时的文本标签
                                 pass
                         else:
@@ -491,11 +500,11 @@ def init_model():
         _model = YOLO(YOLO_MODEL_PATH)
         if torch.cuda.is_available():
             _model.to("cuda")
-            print(f"[TRAFFIC] 模型加载成功（GPU）: {YOLO_MODEL_PATH}")
+            print(f"[TRAFFIC] 模型載入成功（GPU）: {YOLO_MODEL_PATH}")
         else:
-            print(f"[TRAFFIC] 模型加载成功（CPU，CUDA 不可用）: {YOLO_MODEL_PATH}")
-        class_names = _model.names if hasattr(_model, 'names') else {}
-        print(f"[TRAFFIC] 模型类别: {class_names}")
+            print(f"[TRAFFIC] 模型載入成功（CPU）: {YOLO_MODEL_PATH}")
+        class_names = _model.names
+        print(f"[TRAFFIC] 模型類別: {class_names}")
         return True
     except Exception as e:
         print(f"[TRAFFIC] 模型加载失败: {e}")
@@ -535,23 +544,23 @@ def process_single_frame(image: np.ndarray, ui_broadcast_callback=None) -> dict:
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
                 class_name = class_names.get(cls_id, f"class_{cls_id}")
-                class_name_lower = class_name.lower()
-                
+                class_name_lower = CLASS_REMAP.get(class_name.lower(), class_name.lower())
+
                 # 【过滤】跳过不需要的类别（斑马线、空白等）
                 if class_name_lower in FILTERED_CLASSES:
                     continue
-                
+
                 if conf > max_conf:
                     max_conf = conf
                     detected_light = class_name_lower
-            
+
             # 绘制检测框（只绘制红绿灯，不绘制斑马线）
             for box in r.boxes:
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
                 class_name = class_names.get(cls_id, f"class_{cls_id}")
-                class_name_lower = class_name.lower()
-                
+                class_name_lower = CLASS_REMAP.get(class_name.lower(), class_name.lower())
+
                 # 【过滤】跳过不需要的类别
                 if class_name_lower in FILTERED_CLASSES:
                     continue

@@ -304,7 +304,7 @@ class SpeakerVerifier:
             import asr_core
             rms_thr     = asr_core.STANDBY_RMS_THRESH
             pcm_gain    = asr_core.PCM_GAIN
-            from asr_core import GoogleASR, GroqASR
+            from asr_core import GoogleASR
             silence_sec = GoogleASR.SILENCE_SEC
             silence_rms = GoogleASR.SILENCE_RMS_THRESH
         except Exception:

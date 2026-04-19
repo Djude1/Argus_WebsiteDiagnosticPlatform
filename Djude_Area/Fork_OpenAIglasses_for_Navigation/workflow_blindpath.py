@@ -13,7 +13,6 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from collections import deque
 import torch  # 添加这行
-from obstacle_detector_client import ObstacleDetectorClient
 from audio_player import play_voice_text  # 新增
 from crosswalk_awareness import CrosswalkAwarenessMonitor, split_combined_voice  # 斑马线感知
 from gemini_scene_describer import GeminiSceneDescriber  # Gemini 場景補充描述
@@ -251,8 +250,8 @@ class BlindPathNavigator:
         
         # 阈值设置
         self.CLASS_CONF_THRESHOLDS = {
-            1: 0.20,  # blind_path
-            0: 0.30   # crosswalk
+            8: 0.20,  # guide_bricks（ALL.pt）→ 盲道
+            9: 0.30,  # crossing_crosswalk（ALL.pt）→ 斑馬線
         }
         
         # 导航阈值
@@ -430,19 +429,21 @@ class BlindPathNavigator:
             return 0
         
         # 障碍物播报 - 最高优先级
-        obstacle_keywords = ['前方有', '左侧有', '右侧有', '停一下', '注意避让', '障碍物']
+        obstacle_keywords = ['前方有', '左側有', '右側有', '左侧有', '右侧有',
+                             '避開', '請稍等', '請小心', '繞行', '可往',
+                             '停一下', '注意避让', '障碍物', '障礙物']
         for keyword in obstacle_keywords:
             if keyword in guidance_text:
                 return 100
         
         # 转向和平移 - 中等优先级  
-        direction_keywords = ['左转', '右转', '左移', '右移', '向左', '向右', '平移', '微调']
+        direction_keywords = ['左轉', '右轉', '左移', '右移', '向左', '向右', '平移', '微調', '轉動']
         for keyword in direction_keywords:
             if keyword in guidance_text:
                 return 50
-        
+
         # 保持直行 - 最低优先级
-        if '保持直行' in guidance_text or '继续前进' in guidance_text or '方向正确' in guidance_text:
+        if '保持直行' in guidance_text or '繼續前進' in guidance_text or '方向正確' in guidance_text:
             return 10
         
         # 其他指令 - 默认中等优先级
@@ -535,10 +536,10 @@ class BlindPathNavigator:
             if cross_pixels > 0:
                 logger.info(f"[斑马线] 传入monitor: pixels={cross_pixels}, area={cross_pixels/crosswalk_mask.size*100:.2f}%")
             else:
-                logger.info(f"[斑马线] crosswalk_mask全为0，无斑马线")
+                logger.info("[斑马线] crosswalk_mask全为0，无斑马线")
         else:
             if self.frame_counter % 30 == 0:
-                logger.info(f"[斑马线] crosswalk_mask为None")
+                logger.info("[斑马线] crosswalk_mask为None")
         
         crosswalk_guidance = self.crosswalk_monitor.process_frame(crosswalk_mask, blind_path_mask)
         if crosswalk_guidance:
@@ -625,16 +626,16 @@ class BlindPathNavigator:
             
             # 决定语音播报
             if not self.crosswalk_ready_announced:
-                guidance_text = "已对准, 准备切换过马路模式。"
+                guidance_text = "已對準，準備切換過馬路模式"
                 self.crosswalk_ready_announced = True
                 self.crosswalk_ready_time = current_time
             elif stable_color == "green" and not self.green_light_announced:
-                guidance_text = "绿灯稳定，开始通行。"
+                guidance_text = "綠燈穩定，開始通行"
                 self.green_light_announced = True
             elif stable_color == "red":
                 # 红灯时定期提醒
                 if current_time - self.crosswalk_ready_time > 5.0:
-                    guidance_text = "正在等待绿灯…"
+                    guidance_text = "正在等待綠燈"
                     self.crosswalk_ready_time = current_time
                 else:
                     guidance_text = ""
@@ -800,7 +801,7 @@ class BlindPathNavigator:
             elif final_guidance_text and selected_voice['source'] != 'obstacle':
                 # 【修改】非直行、非障碍物指令 - 支持方向指令持续播报
                 # 判断是否是方向指令
-                direction_keywords = ["左转", "右转", "左移", "右移", "向左", "向右", "平移", "微调"]
+                direction_keywords = ["左轉", "右轉", "左移", "右移", "向左", "向右", "平移", "微調", "轉動"]
                 is_direction = any(keyword in final_guidance_text for keyword in direction_keywords)
                 
                 if is_direction:
@@ -905,7 +906,7 @@ class BlindPathNavigator:
             # half=True：FP16 半精度推理（GPU 限定），再加速 ~1.5 倍
             _use_half = torch.cuda.is_available()
             results = self.yolo_model.predict(
-                image, verbose=False, conf=min_conf, classes=[0, 1],
+                image, verbose=False, conf=min_conf, classes=[8, 9],
                 imgsz=320, half=_use_half
             )
             
@@ -922,12 +923,12 @@ class BlindPathNavigator:
                     if confidence >= threshold:
                         current_mask = self._tensor_to_mask(mask_tensor, image.shape[1], image.shape[0])
                         
-                        if class_id == 1:  # 盲道
+                        if class_id == 8:  # guide_bricks → 盲道
                             if blind_path_mask is None:
                                 blind_path_mask = current_mask
                             else:
                                 blind_path_mask = cv2.bitwise_or(blind_path_mask, current_mask)
-                        elif class_id == 0:  # 斑马线
+                        elif class_id == 9:  # crossing_crosswalk → 斑馬線
                             if crosswalk_mask is None:
                                 crosswalk_mask = current_mask
                             else:
@@ -1440,7 +1441,7 @@ class BlindPathNavigator:
         
         # 对准逻辑
         if self.crosswalk_tracker['alignment_status'] == 'not_aligned':
-            guidance_text = "正在接近斑马线，为您对准方向。"
+            guidance_text = "正在接近斑馬線，為您對準方向"
             self.crosswalk_tracker['alignment_status'] = 'aligning'
         else:
             angle = self.crosswalk_tracker['last_angle']
@@ -1450,12 +1451,12 @@ class BlindPathNavigator:
             POSITION_ALIGN_THRESHOLD = 0.25
             
             if abs(angle) > ANGLE_ALIGN_THRESHOLD:
-                guidance_text = "右转" if angle < 0 else "左转"
+                guidance_text = "向右轉" if angle < 0 else "向左轉"
             elif abs(center_x_ratio - 0.5) > (POSITION_ALIGN_THRESHOLD / 2):
-                guidance_text = "右移" if center_x_ratio < 0.5 else "左移"
+                guidance_text = "向右移" if center_x_ratio < 0.5 else "向左移"
             else:
                 self.crosswalk_tracker['alignment_status'] = 'aligned'
-                guidance_text = "斑马线已对准，继续前行。"
+                guidance_text = "斑馬線已對準，繼續前行"
         
         # 添加数据面板
         data_for_panel = {
@@ -1503,10 +1504,10 @@ class BlindPathNavigator:
             
             if self.onboarding_step == ONBOARDING_STEP_ROTATION:
                 if abs(VP[0] - image_center_x) < (image_width * self.ONBOARDING_ALIGN_THRESHOLD_RATIO):
-                    guidance_text = "方向已对正！现在校准位置。"
+                    guidance_text = "方向已對正，現在校準位置"
                     self.onboarding_step = ONBOARDING_STEP_TRANSLATION
                 else:
-                    guidance_text = "请向左转动。" if VP[0] < image_center_x else "请向右转动。"
+                    guidance_text = "請向左轉動" if VP[0] < image_center_x else "請向右轉動"
                 
                 angle_error_px = VP[0] - image_center_x
                 self._add_data_panel(frame_visualizations, {
@@ -1524,10 +1525,10 @@ class BlindPathNavigator:
                     center_offset_ratio = abs(center_offset_pixels) / image_width
                     
                     if center_offset_ratio < self.ONBOARDING_CENTER_OFFSET_THRESHOLD_RATIO:
-                        guidance_text = "校准完成！您已在盲道上，开始前行。"
+                        guidance_text = "校準完成，您已在盲道上，開始前行"
                         self.current_state = STATE_NAVIGATING
                     else:
-                        guidance_text = "请向左平移。" if L_center_bottom_x < image_center_x else "请向右平移。"
+                        guidance_text = "請向左平移" if L_center_bottom_x < image_center_x else "請向右平移"
                     
                     self._add_data_panel(frame_visualizations, {
                         "状态": "上盲道 (位置)",
@@ -1536,7 +1537,7 @@ class BlindPathNavigator:
                         "偏移": f"{center_offset_ratio * 100:.1f}%"
                     }, (25, image_height - 75))
                 else:
-                    guidance_text = "请向前移动，让盲道更清晰。"
+                    guidance_text = "請向前移動，讓盲道更清晰"
         else:
             # 使用像素域方法
             pixel_features = self._get_pixel_domain_features(mask, image.shape)
@@ -1557,7 +1558,7 @@ class BlindPathNavigator:
         # 提取路径特征
         features = self._get_pixel_domain_features(mask, image.shape)
         if not features:
-            return "路径特征提取失败"
+            return "找不到盲道"
         self._add_navigation_info_visualization(features, image_height, image_width, frame_visualizations)
         
         # 转弯检测
@@ -1624,11 +1625,11 @@ class BlindPathNavigator:
         """处理转弯状态"""
         features = self._get_pixel_domain_features(mask, image.shape)
         if not features:
-            return "丢失路径，重新搜索。"
+            return "丟失路徑，重新搜索"
         self._add_navigation_info_visualization(features, image_height, image_width, frame_visualizations)
         if self.maneuver_step == MANEUVER_STEP_1_ISSUE_COMMAND:
             direction_text = '右' if self.maneuver_target_info['direction'] == 'right' else '左'
-            guidance_text = f"请向{direction_text}平移。"
+            guidance_text = f"請向{direction_text}平移"
             
             poly_func = features['poly_func']
             y_check = image_height * 0.7
@@ -1660,11 +1661,11 @@ class BlindPathNavigator:
             width_at_check_y = self._get_width_at_y(centerline_data, y_check)
             
             if shift_distance > (width_at_check_y * 0.5):
-                guidance_text = "检测到已移动，开始对准新方向。"
+                guidance_text = "檢測到已移動，開始對準新方向"
                 self.maneuver_step = MANEUVER_STEP_3_ALIGN_ON_NEW_PATH
             else:
                 direction_text = '右' if self.maneuver_target_info['direction'] == 'right' else '左'
-                guidance_text = f"请继续向{direction_text}平移。"
+                guidance_text = f"請繼續向{direction_text}平移"
             
             self._add_data_panel(frame_visualizations, {
                 "状态": "处理转弯",
@@ -1684,13 +1685,13 @@ class BlindPathNavigator:
             center_offset_ratio = abs(pixel_error) / image_width
             
             if center_offset_ratio < self.NAV_CENTER_OFFSET_THRESHOLD_RATIO:
-                guidance_text = "已对准新路径，请向前直行。"
+                guidance_text = "方向正確，請直行"
                 self.current_state = STATE_NAVIGATING
                 self.maneuver_target_info = None
                 self.turn_cooldown_frames = self.TURN_COOLDOWN_DURATION
             else:
                 move_direction = "右" if pixel_error > 0 else "左"
-                guidance_text = f"请向{move_direction}微调，对准盲道。"
+                guidance_text = f"請向{move_direction}微調，對準盲道"
             
             self._add_data_panel(frame_visualizations, {
                 "状态": "处理转弯",
@@ -1727,7 +1728,7 @@ class BlindPathNavigator:
         if not self.avoidance_plan or self.avoidance_step_index >= len(self.avoidance_plan):
             self.current_state = STATE_NAVIGATING
             self.avoidance_plan = None
-            return "避让完成，已回到盲道。"
+            return "避讓完成，已回到盲道"
         
         step = self.avoidance_plan[self.avoidance_step_index]
         
@@ -1740,9 +1741,9 @@ class BlindPathNavigator:
                 final_obstacles = []
             
             if final_obstacles:
-                guidance_text = f"路径被挡住，请向{'右' if direction == 'right' else '左'}侧平移。"
+                guidance_text = f"路徑被擋住，請向{'右' if direction == 'right' else '左'}側平移"
             else:
-                guidance_text = "好的，请停下侧移。"
+                guidance_text = "請停下側移"
                 self.avoidance_step_index += 1
             
             self._add_data_panel(frame_visualizations, {
@@ -1757,14 +1758,14 @@ class BlindPathNavigator:
         elif step['type'] == 'forward_pass':
             # 简化处理，直接进入下一步
             self.avoidance_step_index += 1
-            return "向前直行几步越过障碍物。然后说‘好了’。"
+            return "向前直行幾步越過障礙物"
             
         elif step['type'] == 'sidestep_return':
             direction = step['direction']
             features = self._get_pixel_domain_features(mask, image.shape)
             
             if not features:
-                return f"没看到盲道，请向{'右' if direction == 'right' else '左'}侧小幅移动。"
+                return f"沒看到盲道，請向{'右' if direction == 'right' else '左'}側小幅移動"
             
             poly_func = features['poly_func']
             y_target = image_height * 0.5
@@ -1777,7 +1778,7 @@ class BlindPathNavigator:
                 guidance_text = "已回到盲道。"
                 self.avoidance_step_index += 1
             else:
-                guidance_text = "向右平移，对准盲道" if center_offset_pixels > 0 else "向左平移，对准盲道"
+                guidance_text = "向右平移" if center_offset_pixels > 0 else "向左平移"
             
             self._add_data_panel(frame_visualizations, {
                 "状态": "避障中",
@@ -2121,24 +2122,17 @@ class BlindPathNavigator:
     
     @staticmethod
     def _obstacle_direction(center_x: float, image_width: float, center_y: float = 0, image_height: float = 480) -> str:
-        """根據障礙物在畫面中的水平位置判斷方向，支援 clock/cardinal 兩種模式"""
-        try:
-            from app_main import _position_mode
-        except ImportError:
-            _position_mode = "cardinal"
+        """根據障礙物在畫面中的水平位置判斷方向
 
-        if _position_mode == "clock":
-            # 時鐘方向：複用 position_reporter 的邏輯
-            from position_reporter import bbox_center_to_clock
-            return bbox_center_to_clock(center_x, center_y, int(image_width), int(image_height))
-        else:
-            # cardinal 模式：左側/右側/前方
-            ratio = center_x / image_width if image_width > 0 else 0.5
-            if ratio < 0.35:
-                return "左側"
-            elif ratio > 0.65:
-                return "右側"
-            return "前方"
+        避障語音一律使用「前方/左側/右側」三分法，以匹配預錄音檔。
+        時鐘報位法保留給場景描述與尋物功能使用。
+        """
+        ratio = center_x / image_width if image_width > 0 else 0.5
+        if ratio < 0.35:
+            return "左側"
+        elif ratio > 0.65:
+            return "右側"
+        return "前方"
 
     def _check_and_set_obstacle_voice(self, obstacles):
         """检查障碍物并设置待播报的语音（含方向）"""
@@ -2192,8 +2186,10 @@ class BlindPathNavigator:
                 self.last_obstacle_speech = speech_key
                 self.last_obstacle_speech_time = current_time
                 self.last_obstacle_area_ratio = area_ratio
+                cx_ratio = center_x / img_w if img_w > 0 else 0.5
                 self.pending_obstacle_voice = self._speech_for_obstacle_dir(
-                    obstacle_name, direction, area_ratio, bottom_y_ratio)
+                    obstacle_name, direction, area_ratio, bottom_y_ratio,
+                    center_x_ratio=cx_ratio)
         else:
             # 沒有近距離障礙物 → 重置所有追蹤狀態
             self.last_obstacle_speech = ""
@@ -2288,14 +2284,14 @@ class BlindPathNavigator:
         center_offset_ratio = abs(center_offset_pixels) / image_width
         orientation_error_rad = features['tangent_angle_rad']
         
-        # 先检查是否需要转向（左转/右转）
+        # 先检查是否需要转向（左轉/右轉）
         if orientation_error_rad > self.NAV_ORIENTATION_THRESHOLD_RAD:
-            guidance_text = "左转"
+            guidance_text = "向左轉"
         elif orientation_error_rad < -self.NAV_ORIENTATION_THRESHOLD_RAD:
-            guidance_text = "右转"
+            guidance_text = "向右轉"
         # 再检查是否需要平移（左移/右移）
         elif center_offset_ratio > self.NAV_CENTER_OFFSET_THRESHOLD_RATIO:
-            guidance_text = "右移" if center_offset_pixels > 0 else "左移"
+            guidance_text = "向右移" if center_offset_pixels > 0 else "向左移"
         # 最后才是直行
         else:
             guidance_text = "保持直行"
@@ -2323,10 +2319,10 @@ class BlindPathNavigator:
         
         if self.onboarding_step == ONBOARDING_STEP_ROTATION:
             if abs(orientation_error_rad) < self.ONBOARDING_ORIENTATION_THRESHOLD_RAD:
-                guidance_text = "方向已对正！现在校准位置。"
+                guidance_text = "方向已對正，現在校準位置"
                 self.onboarding_step = ONBOARDING_STEP_TRANSLATION
             else:
-                guidance_text = "请向左转动。" if orientation_error_rad > 0.1 else "请向右转动。"
+                guidance_text = "請向左轉動" if orientation_error_rad > 0.1 else "請向右轉動"
             
             self._add_data_panel(frame_visualizations, {
                 "状态": "上盲道 (方向)",
@@ -2340,10 +2336,10 @@ class BlindPathNavigator:
             
         elif self.onboarding_step == ONBOARDING_STEP_TRANSLATION:
             if center_offset_ratio < self.ONBOARDING_CENTER_OFFSET_THRESHOLD_RATIO:
-                guidance_text = "校准完成！您已在盲道上，开始前行。"
+                guidance_text = "校準完成，您已在盲道上，開始前行"
                 self.current_state = STATE_NAVIGATING
             else:
-                guidance_text = "请向右平移。" if center_offset_pixels > 0 else "请向左平移。"
+                guidance_text = "請向右平移" if center_offset_pixels > 0 else "請向左平移"
             
             self._add_data_panel(frame_visualizations, {
                 "状态": "上盲道 (位置)",
@@ -2702,7 +2698,7 @@ class BlindPathNavigator:
                 "type": "circle",
                 "center": [x, pos_y],
                 "radius": 18,
-                "color": f"rgba(100, 100, 100, 1.0)",
+                "color": "rgba(100, 100, 100, 1.0)",
                 "thickness": 2
             })
             # 内圈（灯的颜色）
@@ -2733,25 +2729,45 @@ class BlindPathNavigator:
             return '障碍物'
 
     def _speech_for_obstacle(self, name: str, area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
-        """障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
-        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
-        k = (name or '').strip().lower()
-        if k in DYNAMIC_CLASS_NAMES:
-            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
-            return f"前方有{cn}，{suffix}"
-        size = _obstacle_size_label(area_ratio)
-        return f"前方有{size}障礙物，{suffix}"
+        """障礙物語音（前方固定），產生可匹配預錄音檔的文字"""
+        return self._speech_for_obstacle_dir(name, "前方", area_ratio, bottom_y_ratio)
 
     def _speech_for_obstacle_dir(self, name: str, direction: str = "前方",
-                                  area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
-        """帶方向的障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
-        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
+                                  area_ratio: float = 0, bottom_y_ratio: float = 0,
+                                  center_x_ratio: float = 0.5) -> str:
+        """帶方向的障礙物語音，產生可匹配預錄音檔的繁體中文提示
+
+        語音設計：告訴使用者「哪裡有什麼」＋「該怎麼做」，而非只說「注意」。
+        center_x_ratio：障礙物在畫面中的水平位置（0=最左, 1=最右），
+                        用於「前方有人」時建議往空曠側移動。
+        """
         k = (name or '').strip().lower()
-        if k in DYNAMIC_CLASS_NAMES:
-            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
-            return f"{direction}有{cn}，{suffix}"
-        size = _obstacle_size_label(area_ratio)
-        return f"{direction}有{size}障礙物，{suffix}"
+        if direction in ("左側", "右側"):
+            opposite = "右" if direction == "左側" else "左"
+            if k == 'person':
+                return f"{direction}有人請向{opposite}避開"
+            elif k in ('car', 'truck'):
+                return f"{direction}有車請向{opposite}避開"
+            else:
+                return f"{direction}有障礙請向{opposite}避開"
+        else:  # 前方
+            if k == 'person':
+                # 人偏左 → 建議往右移；人偏右 → 建議往左移
+                return "前方有人可往右移" if center_x_ratio < 0.5 else "前方有人可往左移"
+            elif k in ('car', 'truck'):
+                return "前方有車請稍等"
+            elif k in ('motorcycle', 'scooter', 'bicycle'):
+                return "前方有機車請稍等"
+            elif k == 'bus':
+                return "前方有公車請稍等"
+            elif k in ('animal', 'dog'):
+                return "前方有動物請小心"
+            elif k == 'stairs':
+                return "前方有台階請小心"
+            elif k == 'curb':
+                return "前方路緣，可踏上斑馬線"
+            else:
+                return "前方有障礙物請往右繞行"
 
     def _draw_command_button(self, image, text):
         """绘制底部中央的指令按钮（与斑马线模式统一）"""
@@ -3427,25 +3443,45 @@ class BlindPathNavigator:
         return stabilized
   
     def _speech_for_obstacle(self, name: str, area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
-        """障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
-        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
-        k = (name or '').strip().lower()
-        if k in DYNAMIC_CLASS_NAMES:
-            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
-            return f"前方有{cn}，{suffix}"
-        size = _obstacle_size_label(area_ratio)
-        return f"前方有{size}障礙物，{suffix}"
+        """障礙物語音（前方固定），產生可匹配預錄音檔的文字"""
+        return self._speech_for_obstacle_dir(name, "前方", area_ratio, bottom_y_ratio)
 
     def _speech_for_obstacle_dir(self, name: str, direction: str = "前方",
-                                  area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
-        """帶方向的障礙物語音：動態物體報名稱，靜態物體報大小，語尾隨距離變化"""
-        _level, suffix = _obstacle_urgency(bottom_y_ratio, area_ratio)
+                                  area_ratio: float = 0, bottom_y_ratio: float = 0,
+                                  center_x_ratio: float = 0.5) -> str:
+        """帶方向的障礙物語音，產生可匹配預錄音檔的繁體中文提示
+
+        語音設計：告訴使用者「哪裡有什麼」＋「該怎麼做」，而非只說「注意」。
+        center_x_ratio：障礙物在畫面中的水平位置（0=最左, 1=最右），
+                        用於「前方有人」時建議往空曠側移動。
+        """
         k = (name or '').strip().lower()
-        if k in DYNAMIC_CLASS_NAMES:
-            cn = _OBSTACLE_NAME_CN.get(k, '移動物體')
-            return f"{direction}有{cn}，{suffix}"
-        size = _obstacle_size_label(area_ratio)
-        return f"{direction}有{size}障礙物，{suffix}"
+        if direction in ("左側", "右側"):
+            opposite = "右" if direction == "左側" else "左"
+            if k == 'person':
+                return f"{direction}有人請向{opposite}避開"
+            elif k in ('car', 'truck'):
+                return f"{direction}有車請向{opposite}避開"
+            else:
+                return f"{direction}有障礙請向{opposite}避開"
+        else:  # 前方
+            if k == 'person':
+                # 人偏左 → 建議往右移；人偏右 → 建議往左移
+                return "前方有人可往右移" if center_x_ratio < 0.5 else "前方有人可往左移"
+            elif k in ('car', 'truck'):
+                return "前方有車請稍等"
+            elif k in ('motorcycle', 'scooter', 'bicycle'):
+                return "前方有機車請稍等"
+            elif k == 'bus':
+                return "前方有公車請稍等"
+            elif k in ('animal', 'dog'):
+                return "前方有動物請小心"
+            elif k == 'stairs':
+                return "前方有台階請小心"
+            elif k == 'curb':
+                return "前方路緣，可踏上斑馬線"
+            else:
+                return "前方有障礙物請往右繞行"
 
     def _update_obstacle_properties(self, obs, H, W):
         """更新障碍物的派生属性"""

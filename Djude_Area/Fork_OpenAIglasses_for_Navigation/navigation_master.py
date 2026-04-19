@@ -13,12 +13,15 @@ from workflow_blindpath import BlindPathNavigator, ProcessingResult as BlindResu
 from workflow_crossstreet import CrossStreetNavigator, CrossStreetResult as CrossResult
 
 def _log_nav(event: str, detail: str = ""):
-    """安全記錄導航事件到後台系統日誌"""
-    try:
-        from auth import log_navigation_event
-        log_navigation_event(event, detail)
-    except Exception:
-        pass
+    """安全記錄導航事件到後台系統日誌（背景執行緒，不阻塞事件循環）"""
+    import threading
+    def _write():
+        try:
+            from auth import log_navigation_event
+            log_navigation_event(event, detail)
+        except Exception:
+            pass
+    threading.Thread(target=_write, daemon=True).start()
 
 # ========== 状态常量 ==========
 IDLE = "IDLE"                          # 空闲/未启用
@@ -529,8 +532,10 @@ class NavigationMaster:
                         color_changed = (tl_major != self._tl_last_announced)
                         enough_interval = (now - self._tl_announce_ts) >= 5.0
                         # 障礙物語音優先（priority=100），不覆蓋
-                        # 障礙物關鍵字：前方有、左侧有、右侧有、停一下、注意避让
-                        _OBS_KWS = ('前方有', '左侧有', '右侧有', '停一下', '注意避让')
+                        # 障礙物關鍵字（繁體+簡體相容）
+                        _OBS_KWS = ('前方有', '左側有', '右側有', '左侧有', '右侧有',
+                                    '避開', '請稍等', '請小心', '繞行', '可往',
+                                    '停一下', '注意避让')
                         has_obstacle = any(kw in say for kw in _OBS_KWS)
                         if (color_changed or enough_interval) and not has_obstacle:
                             say = tl_voice

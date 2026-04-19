@@ -1,12 +1,11 @@
 # asr_core.py
 # -*- coding: utf-8 -*-
 """
-ASR 核心模組：使用 Groq Whisper Large v3 Turbo 進行語音辨識。
+ASR 核心模組：使用 Google Speech-to-Text 串流 API 進行即時語音辨識。
 
 架構說明：
-- GroqASR 緩衝 PCM16 音訊，每 BUFFER_SEC 秒批次送出一次請求
-- 無 partial 中途結果，只有 final（與 DashScope 介面相容）
-- ASRCallback 邏輯不變，熱詞觸發與 LLM 驅動流程維持原設計
+- GoogleASR 以串流方式即時辨識，有待機/主動雙模式與喚醒詞偵測
+- ASRCallback 處理熱詞觸發與 LLM 驅動流程
 """
 
 import os, json, asyncio, io, wave, struct, time, threading, queue, urllib.request, urllib.error
@@ -83,7 +82,7 @@ STANDBY_RMS_THRESH = float(os.getenv("ASR_STANDBY_RMS_THRESH", "150.0"))
 
 def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000,
                 channels: int = 1, sampwidth: int = 2) -> bytes:
-    """將原始 PCM16 資料包裝為 WAV 格式（Groq API 需要），並套用增益補償"""
+    """將原始 PCM16 資料包裝為 WAV 格式，並套用增益補償"""
     if PCM_GAIN != 1.0:
         n = len(pcm_data) // 2
         samples = struct.unpack(f'<{n}h', pcm_data[:n * 2])
@@ -98,45 +97,6 @@ def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000,
         wf.setframerate(sample_rate)
         wf.writeframes(pcm_data)
     return buf.getvalue()
-
-async def _groq_transcribe(wav_data: bytes, api_key: str) -> Optional[str]:
-    """呼叫 Groq Whisper Large v3 Turbo API 轉錄音訊（在執行緒中執行以避免阻塞）"""
-
-    def _do_request() -> Optional[str]:
-        boundary = "GASRBoundary7MA4YWxk"
-        body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n'
-            f"Content-Type: audio/wav\r\n\r\n"
-        ).encode() + wav_data + (
-            f"\r\n--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="model"\r\n\r\n'
-            f"whisper-large-v3-turbo\r\n"
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="language"\r\n\r\n'
-            f"zh\r\n"
-            f"--{boundary}--\r\n"
-        ).encode()
-
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/audio/transcriptions",
-            data=body,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "User-Agent": "groq-asr/1.0",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=15) as r:
-                return json.loads(r.read()).get("text", "")
-        except urllib.error.HTTPError as e:
-            body_err = e.read().decode(errors="replace")
-            print(f"[GroqASR] HTTP {e.code}: {body_err}", flush=True)
-            return None
-
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _do_request)
 
 # ── 熱詞設定 ─────────────────────────────────────────────────────────────────
 
@@ -186,14 +146,14 @@ async def stop_current_recognition():
         except Exception:
             pass
 
-# ── ASRCallback（邏輯不變，相容新的 GroqASR）────────────────────────────────
+# ── ASRCallback ──────────────────────────────────────────────────────────────
 
 class ASRCallback:
     """
     設計目標：
     1) 「停下 / 別說了 …」等熱詞一出現 → 立刻全清零重置。
     2) AI 正在播報時，用戶語音只做展示，不觸發新一輪。
-    3) 只有 final sentence 用於驅動 AI（Groq 每次結果均為 final）。
+    3) 只有 final sentence 用於驅動 AI。
     """
 
     def __init__(
@@ -220,7 +180,7 @@ class ASRCallback:
         self._interrupt_lock = interrupt_lock
         self._hot_interrupted: bool = False
         self._ai_dispatched:   bool = False           # 是否已派發 AI 處理（用於避免重複播 結束收音）
-        self._rec_end_played:  bool = False           # 結束收音是否已由 GroqASR 提前播放
+        self._rec_end_played:  bool = False           # 結束收音音效是否已提前播放
         self._on_wake          = on_wake_fn           # 喚醒詞觸發（播放「開始對話」）
         self._on_end           = on_end_fn            # 結束詞「謝謝曼波」觸發（播放「結束對話」）
         self._on_recording_end = on_recording_end_fn  # 主動錄音自然結束（播放「結束收音」）
@@ -246,7 +206,7 @@ class ASRCallback:
                 pass
 
     def play_recording_end_sound(self):
-        """立即播放結束收音音效（供 GroqASR 在 Groq 轉錄前呼叫，讓音效即時播出）"""
+        """立即播放結束收音音效（轉錄前呼叫，讓音效即時播出）"""
         self._rec_end_played = True
         if self._on_recording_end:
             try:
@@ -289,7 +249,7 @@ class ASRCallback:
         return False
 
     def _handle(self, event: Any):
-        # 解析事件（相容 GroqASR 產生的 dict 格式）
+        # 解析事件
         if isinstance(event, dict):
             d = event
         else:
@@ -325,14 +285,14 @@ class ASRCallback:
                 pass
             return
 
-        # ② 展示給 UI（Groq 無 partial，直接顯示 final 文字）
+        # ② 展示給 UI
         try:
             print(f"[ASR PARTIAL] '{_shorten(text)}'", flush=True)
             self._post(self._ui_partial(text))
         except Exception:
             pass
 
-        # ③ final 驅動 LLM（Groq 每次結果均為 final）
+        # ③ final 驅動 LLM
         if is_end is True:
             final_text = text
             try:
@@ -349,7 +309,7 @@ class ASRCallback:
                     # 同時播放結束收音音效 + 啟動 AI，兩者並行互不等待
                     async def _play_sound():
                         if self._rec_end_played:
-                            # GroqASR 已在轉錄前播過，不重複播
+                            # 已提前播過，不重複播
                             self._rec_end_played = False
                             return
                         if on_rec_end:
@@ -371,222 +331,12 @@ class ASRCallback:
 
             self._hot_interrupted = False
 
-# ── GroqASR：替代 DashScope Recognition ─────────────────────────────────────
-
-class GroqASR:
-    """
-    使用 Groq Whisper Large v3 Turbo 的批次 ASR。
-    介面與 DashScope Recognition 相容：start() / stop() / send_audio_frame()
-
-    運作模式：
-    - 待機模式（standby）：每 STANDBY_BUFFER_SEC 秒批次送 Groq，僅偵測喚醒詞「哈囉 曼波」
-    - 主動模式（active）：收到喚醒詞後啟動，使用 RMS 靜音偵測判斷句尾；
-      靜音超過 SILENCE_SEC 或達到 ACTIVE_MAX_SEC 上限時結束並送 Groq 轉錄
-    """
-
-    STANDBY_BUFFER_SEC: float = 4.0    # 待機模式每次批次的秒數
-    ACTIVE_MAX_SEC:     float = 8.0    # 主動模式最長錄音時間（防止漏偵測）
-    SILENCE_SEC:        float = 1.2    # 靜音持續此秒數即視為說完
-    SILENCE_RMS_THRESH: float = 150.0  # RMS 低於此值視為靜音（已調低提升靈敏度）
-    CHECK_INTERVAL:     float = 0.1    # 主迴圈檢查間隔（秒）
-
-    def __init__(self, api_key: str, sample_rate: int, callback: "ASRCallback"):
-        self._api_key      = api_key
-        self._sample_rate  = sample_rate
-        self._callback     = callback
-        self._buffer       = bytearray()
-        self._running      = False
-        self._flush_task: Optional[asyncio.Task] = None
-        # 最短有效音訊長度（避免送出純靜音）：0.8 秒
-        self._min_bytes    = int(sample_rate * 2 * 0.8)
-
-        # 模式控制
-        self._mode             = "standby"   # "standby" | "active"
-        self._standby_elapsed  = 0.0
-        self._active_start     = 0.0
-        self._last_voice_ts    = 0.0
-
-    def start(self):
-        """啟動緩衝與主排程任務"""
-        self._running = True
-        self._buffer.clear()
-        self._mode = "standby"
-        self._standby_elapsed = 0.0
-        loop = asyncio.get_event_loop()
-        self._flush_task = loop.create_task(self._flush_loop())
-        print("[GroqASR] started（待機中，等待喚醒詞）", flush=True)
-
-    def stop(self):
-        """停止並刷出主動模式剩餘緩衝"""
-        self._running = False
-        if self._flush_task and not self._flush_task.done():
-            self._flush_task.cancel()
-        remaining = bytes(self._buffer)
-        self._buffer.clear()
-        if self._mode == "active" and len(remaining) >= self._min_bytes:
-            try:
-                loop = asyncio.get_event_loop()
-                loop.create_task(self._transcribe_and_dispatch(remaining))
-            except Exception:
-                pass
-        print("[GroqASR] stopped", flush=True)
-
-    def enter_active_mode(self):
-        """切換至主動錄音模式（由喚醒詞觸發）"""
-        self._mode = "active"
-        self._buffer.clear()
-        now = time.monotonic()
-        self._active_start  = now
-        self._last_voice_ts = now
-        print("[GroqASR] 進入主動錄音模式，等待指令…", flush=True)
-
-    def send_audio_frame(self, data: bytes):
-        """接收音訊幀並累積至緩衝區；主動模式同時追蹤語音活動"""
-        if not self._running:
-            return
-        self._buffer.extend(data)
-        if self._mode == "active":
-            # 有聲音就更新最後語音時間戳
-            if _calc_rms(data) > self.SILENCE_RMS_THRESH:
-                self._last_voice_ts = time.monotonic()
-
-    async def _flush_loop(self):
-        """主排程迴圈：每 CHECK_INTERVAL 秒檢查一次，依模式決定動作"""
-        try:
-            while self._running:
-                await asyncio.sleep(self.CHECK_INTERVAL)
-                if not self._running:
-                    break
-
-                if self._mode == "standby":
-                    self._standby_elapsed += self.CHECK_INTERVAL
-                    if self._standby_elapsed >= self.STANDBY_BUFFER_SEC:
-                        self._standby_elapsed = 0.0
-                        data = bytes(self._buffer)
-                        self._buffer.clear()
-                        rms = _calc_rms(data)
-                        # 套用增益後的 RMS（用於與門檻比較，反映實際音量）
-                        effective_rms = rms * PCM_GAIN
-                        print(
-                            f"[GroqASR] 待機批次：緩衝 {len(data)} bytes，"
-                            f"原始 RMS={rms:.0f}，增益後={effective_rms:.0f}，"
-                            f"門檻={STANDBY_RMS_THRESH}",
-                            flush=True,
-                        )
-                        if len(data) >= self._min_bytes and effective_rms >= STANDBY_RMS_THRESH:
-                            await self._check_wake_word(data)
-                        elif len(data) < self._min_bytes:
-                            print("[GroqASR] 緩衝不足，跳過（麥克風可能未收到音訊）", flush=True)
-                        else:
-                            print(
-                                f"[GroqASR] 音量過低（增益後 RMS={effective_rms:.0f} < {STANDBY_RMS_THRESH}），跳過",
-                                flush=True,
-                            )
-
-                else:  # active
-                    self._standby_elapsed = 0.0  # 重置待機計時
-                    now         = time.monotonic()
-                    silence_dur = now - self._last_voice_ts
-                    active_dur  = now - self._active_start
-
-                    if silence_dur >= self.SILENCE_SEC or active_dur >= self.ACTIVE_MAX_SEC:
-                        reason = "靜音偵測" if silence_dur >= self.SILENCE_SEC else "錄音逾時"
-                        print(f"[GroqASR] 主動錄音結束（{reason}）", flush=True)
-                        data = bytes(self._buffer)
-                        self._buffer.clear()
-                        self._mode = "standby"
-                        self._standby_elapsed = 0.0
-                        if len(data) >= self._min_bytes:
-                            # 立即播放結束收音音效，不等 Groq 轉錄完成（1~3 秒）
-                            self._callback.play_recording_end_sound()
-                            await self._transcribe_and_dispatch(data)
-
-        except asyncio.CancelledError:
-            pass
-
-    async def _check_wake_word(self, pcm_data: bytes):
-        """待機模式：送 Groq 轉錄，偵測喚醒詞「哈囉 曼波」"""
-        try:
-            # ── 說話人驗證（啟用後才過濾，省 API 費用）──────────────────────
-            sv = _get_speaker_verifier()
-            if sv and sv.is_enabled():
-                if not sv.verify(pcm_data, self._sample_rate):
-                    print("[GroqASR] 說話人不符，略過此批次", flush=True)
-                    return
-
-            wav_data = _pcm_to_wav(pcm_data, self._sample_rate)
-            text = await _groq_transcribe(wav_data, self._api_key)
-            # 無論結果為何都印出，方便確認 Groq 實際回傳內容
-            print(f"[GroqASR] 待機辨識結果: '{text}'", flush=True)
-            if not text or not text.strip():
-                return
-            text = text.strip()
-
-            # 旁路模式：跳過喚醒詞，STT 結果直接派發給 AI
-            if _bypass_wake:
-                print(f"[ASR-旁路] STT → '{text}'", flush=True)
-                event = {"output": {"sentence": {"text": text, "sentence_end": True}}}
-                self._callback.on_event(event)
-                return
-
-            norm = _normalize_cn(text)
-
-            # 完整喚醒詞比對
-            matched = any(w and _normalize_cn(w) in norm for w in WAKE_WORDS)
-
-            # 寬鬆比對：只要辨識到「哈囉」即可觸發喚醒
-            if not matched:
-                HELLO_VARIANTS = ("哈囉", "哈喽", "哈啰")
-                matched = any(v in norm for v in HELLO_VARIANTS)
-
-            if matched:
-                print(f"[GroqASR] 喚醒詞偵測: '{text}'", flush=True)
-                self.enter_active_mode()       # 切換模式
-                self._callback.on_wake()       # 播放開始對話音效
-                return
-
-            print(f"[GroqASR] 待機中收到: '{text}'（無喚醒詞，忽略）", flush=True)
-
-        except Exception as e:
-            print(f"[GroqASR] 喚醒詞檢查錯誤: {e}", flush=True)
-
-    async def _transcribe_and_dispatch(self, pcm_data: bytes):
-        """主動模式：送 Groq 轉錄，偵測結束詞「謝謝 曼波」或派發指令"""
-        try:
-            wav_data = _pcm_to_wav(pcm_data, self._sample_rate)
-            text = await _groq_transcribe(wav_data, self._api_key)
-            if not text or not text.strip():
-                return
-            text = text.strip()
-            norm = _normalize_cn(text)
-            print(f"[GroqASR] 主動錄音結果: '{_shorten(text)}'", flush=True)
-
-            # 偵測結束詞
-            for w in END_WORDS:
-                if w and _normalize_cn(w) in norm:
-                    print(f"[GroqASR] 結束詞偵測: '{text}'", flush=True)
-                    self._callback.on_end_word()   # 播放結束對話音效
-                    return
-
-            # 一般指令派發至 ASRCallback
-            event = {
-                "output": {
-                    "sentence": {"text": text, "sentence_end": True}
-                }
-            }
-            self._callback.on_event(event)
-
-        except Exception as e:
-            print(f"[GroqASR] error: {e}", flush=True)
-            self._callback.on_error(str(e))
-
-
 # ── GoogleASR：使用 Google Speech-to-Text 串流 API ───────────────────────────
 
 class GoogleASR:
     """
     使用 Google Speech-to-Text 串流 API 的即時 ASR。
-    介面與 GroqASR 相容：start() / stop() / send_audio_frame()
+    介面：start() / stop() / send_audio_frame()
 
     運作模式：
     - 待機模式（standby）：持續串流，偵測喚醒詞「哈囉曼波」
@@ -769,7 +519,7 @@ class GoogleASR:
         config = _speech.RecognitionConfig(
             encoding=_speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=self._sample_rate,
-            language_code="zh-TW",
+            language_code="cmn-Hant-TW",
             alternative_language_codes=["zh-CN"],
             enable_automatic_punctuation=True,
             # 熱詞：提高「曼波」相關詞的辨識權重
@@ -825,10 +575,8 @@ def set_pcm_gain(value: float):
 
 def set_silence_sec(value: float):
     """設定主動模式靜音判斷秒數"""
-    GroqASR.SILENCE_SEC   = float(value)
     GoogleASR.SILENCE_SEC = float(value)
 
 def set_silence_rms_thresh(value: float):
     """設定主動模式靜音 RMS 門檻"""
-    GroqASR.SILENCE_RMS_THRESH   = float(value)
     GoogleASR.SILENCE_RMS_THRESH = float(value)

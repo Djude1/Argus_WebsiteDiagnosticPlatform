@@ -27,14 +27,19 @@ router = APIRouter()
 
 # ── SQLite 工具 ──────────────────────────────────────────────────────────
 
+_db_initialized: bool = False  # 建表只跑一次，避免每次 get_db() 都重跑 DDL
+
 @contextmanager
 def get_db():
     """取得資料庫連線（自動建表、自動關閉）"""
+    global _db_initialized
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
-    _ensure_tables(conn)
+    if not _db_initialized:
+        _ensure_tables(conn)
+        _db_initialized = True
     try:
         yield conn
         conn.commit()

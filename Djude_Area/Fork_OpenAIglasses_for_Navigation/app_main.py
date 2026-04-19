@@ -1,18 +1,23 @@
 # app_main.py
 # -*- coding: utf-8 -*-
-import os, sys, time, json, asyncio, base64, audioop
-from typing import Any, Dict, Optional, Tuple, List, Callable, Set, Deque
+import os
+import sys
+import time
+import json
+import asyncio
+import base64
+import audioop
+from typing import Any, Dict, Optional, Tuple, List, Set, Deque
 from collections import deque
 import re
 from qwen_extractor import extract_english_label
-from navigation_master import NavigationMaster, OrchestratorResult
+from navigation_master import NavigationMaster
 from workflow_blindpath import BlindPathNavigator
 from workflow_crossstreet import CrossStreetNavigator
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketState
 import uvicorn
 import cv2
@@ -31,11 +36,8 @@ if sys.platform.startswith("win"):
 
 # ── 從 config.py 讀取所有設定（.env 已在 config.py 中載入）──────────────────
 from config import (
-    GROQ_API_KEY,
     GOOGLE_CREDENTIALS_PATH,
     SAMPLE_RATE,
-    CHUNK_MS,
-    AUDIO_FORMAT as AUDIO_FMT,
     UDP_IP,
     UDP_PORT,
     SERVER_HOST,
@@ -47,21 +49,18 @@ from audio_stream import (
     register_stream_route,         # 挂 /stream.wav
     broadcast_pcm16_realtime,      # 实时向连接分发 16k PCM
     hard_reset_audio,              # 音频+AI 播放总闸
-    BYTES_PER_20MS_16K,
     is_playing_now,
-    current_ai_task,
 )
-from omni_client import stream_chat, OmniStreamPiece, generate_text_async
+from omni_client import stream_chat, generate_text_async
 from asr_core import (
     ASRCallback,
-    GroqASR,    # 保留備用
     GoogleASR,
     set_current_recognition,
     stop_current_recognition,
     STANDBY_RMS_THRESH,
     preload_speech_client,
 )
-from audio_player import initialize_audio_system, play_voice_text, play_audio_threadsafe
+from audio_player import initialize_audio_system, play_voice_text, play_audio_threadsafe, register_speak_push
 
 # ---- 同步录制器 ----
 import sync_recorder
@@ -88,7 +87,6 @@ app.include_router(auth_router)
 
 # ── 靜態檔案（加入 Cache-Control，讓瀏覽器快取避免每次重載）──────────────────
 from starlette.staticfiles import StaticFiles as _StaticFiles
-from starlette.responses import Response as _Response
 
 class _CachedStaticFiles(_StaticFiles):
     """根據副檔名設定不同快取時間：
@@ -170,13 +168,24 @@ def load_navigation_models():
     """加载盲道导航所需的模型"""
     global yolo_seg_model, obstacle_detector
 
+    # ── 共用模型伺服器模式（MODEL_SERVER_PORT 有設定時）──────────────────────
+    if os.getenv("MODEL_SERVER_PORT"):
+        try:
+            from model_client import RemoteYOLO, RemoteObstacleDetector
+            yolo_seg_model   = RemoteYOLO("yolo-seg")
+            obstacle_detector = RemoteObstacleDetector()
+            print(f"[NAVIGATION] 共用模型伺服器模式：localhost:{os.getenv('MODEL_SERVER_PORT')}", flush=True)
+        except Exception as e:
+            print(f"[NAVIGATION] 無法連接模型伺服器，回退到本機模式: {e}", flush=True)
+        return
+
     try:
         from config import BLIND_PATH_MODEL
         seg_model_path = BLIND_PATH_MODEL
         #print(f"[NAVIGATION] 尝试加载模型: {seg_model_path}")
 
         if os.path.exists(seg_model_path):
-            print(f"[NAVIGATION] 模型文件存在，开始加载...")
+            print("[NAVIGATION] 模型文件存在，开始加载...")
             yolo_seg_model = YOLO(seg_model_path)
 
             # 强制放到 GPU
@@ -202,7 +211,7 @@ def load_navigation_models():
         else:
             print(f"[NAVIGATION] 错误：找不到模型文件: {seg_model_path}")
             print(f"[NAVIGATION] 当前工作目录: {os.getcwd()}")
-            print(f"[NAVIGATION] 请检查文件路径是否正确")
+            print("[NAVIGATION] 请检查文件路径是否正确")
             
         # 【修改开始】使用 ObstacleDetectorClient 替代直接的 YOLO
         from config import OBSTACLE_MODEL
@@ -210,35 +219,35 @@ def load_navigation_models():
         print(f"[NAVIGATION] 尝试加载障碍物检测模型: {obstacle_model_path}")
         
         if os.path.exists(obstacle_model_path):
-            print(f"[NAVIGATION] 障碍物检测模型文件存在，开始加载...")
+            print("[NAVIGATION] 障碍物检测模型文件存在，开始加载...")
             try:
                 # 使用 ObstacleDetectorClient 封装的 YOLO-E
                 obstacle_detector = ObstacleDetectorClient(model_path=obstacle_model_path)
-                print(f"[NAVIGATION] ========== YOLO-E 障碍物检测器加载成功 ==========")
+                print("[NAVIGATION] ========== YOLO-E 障碍物检测器加载成功 ==========")
                 
                 # 检查模型是否成功加载
                 if hasattr(obstacle_detector, 'model') and obstacle_detector.model is not None:
-                    print(f"[NAVIGATION] YOLO-E 模型已初始化")
+                    print("[NAVIGATION] YOLO-E 模型已初始化")
                     print(f"[NAVIGATION] 模型设备: {next(obstacle_detector.model.parameters()).device}")
                 else:
-                    print(f"[NAVIGATION] 警告：YOLO-E 模型初始化异常")
+                    print("[NAVIGATION] 警告：YOLO-E 模型初始化异常")
                 
                 # 检查白名单是否成功加载
                 if hasattr(obstacle_detector, 'WHITELIST_CLASSES'):
                     print(f"[NAVIGATION] 白名单类别数: {len(obstacle_detector.WHITELIST_CLASSES)}")
                     print(f"[NAVIGATION] 白名单前10个类别: {', '.join(obstacle_detector.WHITELIST_CLASSES[:10])}")
                 else:
-                    print(f"[NAVIGATION] 警告：白名单类别未定义")
+                    print("[NAVIGATION] 警告：白名单类别未定义")
                 
                 # 检查文本特征是否成功预计算
                 if hasattr(obstacle_detector, 'whitelist_embeddings') and obstacle_detector.whitelist_embeddings is not None:
-                    print(f"[NAVIGATION] YOLO-E 文本特征已预计算")
+                    print("[NAVIGATION] YOLO-E 文本特征已预计算")
                     print(f"[NAVIGATION] 文本特征张量形状: {obstacle_detector.whitelist_embeddings.shape if hasattr(obstacle_detector.whitelist_embeddings, 'shape') else '未知'}")
                 else:
-                    print(f"[NAVIGATION] 警告：YOLO-E 文本特征未预计算")
+                    print("[NAVIGATION] 警告：YOLO-E 文本特征未预计算")
                 
                 # 测试障碍物检测功能
-                print(f"[NAVIGATION] 开始测试 YOLO-E 检测功能...")
+                print("[NAVIGATION] 开始测试 YOLO-E 检测功能...")
                 try:
                     test_img = np.zeros((640, 640, 3), dtype=np.uint8)
                     # 在测试图像中画一个白色矩形，模拟一个物体
@@ -246,11 +255,11 @@ def load_navigation_models():
                     
                     # 测试检测（不提供 path_mask）
                     test_results = obstacle_detector.detect(test_img)
-                    print(f"[NAVIGATION] YOLO-E 检测测试成功!")
+                    print("[NAVIGATION] YOLO-E 检测测试成功!")
                     print(f"[NAVIGATION] 测试检测结果数: {len(test_results)}")
                     
                     if len(test_results) > 0:
-                        print(f"[NAVIGATION] 测试检测到的物体:")
+                        print("[NAVIGATION] 测试检测到的物体:")
                         for i, obj in enumerate(test_results):
                             print(f"  - 物体 {i+1}: {obj.get('name', 'unknown')}, "
                                   f"面积比例: {obj.get('area_ratio', 0):.3f}, "
@@ -260,7 +269,7 @@ def load_navigation_models():
                     import traceback
                     traceback.print_exc()
                 
-                print(f"[NAVIGATION] ========== YOLO-E 障碍物检测器加载完成 ==========")
+                print("[NAVIGATION] ========== YOLO-E 障碍物检测器加载完成 ==========")
                 
             except Exception as e:
                 print(f"[NAVIGATION] 障碍物检测器加载失败: {e}")
@@ -503,12 +512,12 @@ async def start_ai_with_text_custom(user_text: str):
             orchestrator.start_crossing()
             print(f"[CROSS_STREET] 过马路模式已启动，状态: {orchestrator.get_state()}")
             # 播放启动语音并广播到UI
-            play_voice_text("过马路模式已启动。")
+            play_voice_text("過馬路模式已啟動")
             await ui_broadcast_final("[系统] 过马路模式已启动")
             await ui_broadcast_raw(f"NAV_STATE:{orchestrator.get_state()}")
         else:
             print("[CROSS_STREET] 警告：导航统领器未初始化！")
-            play_voice_text("启动过马路模式失败，请稍后重试。")
+            play_voice_text("啟動過馬路模式失敗，請稍後重試")
             await ui_broadcast_final("[系统] 导航系统未就绪")
         return
 
@@ -518,7 +527,7 @@ async def start_ai_with_text_custom(user_text: str):
             orchestrator.stop_navigation()
             print(f"[CROSS_STREET] 导航已停止，状态: {orchestrator.get_state()}")
             # 播放停止语音并广播到UI
-            play_voice_text("已停止导航。")
+            play_voice_text("已停止導航")
             await ui_broadcast_final("[系统] 过马路模式已停止")
             await ui_broadcast_raw(f"NAV_STATE:{orchestrator.get_state()}")
         # else: orchestrator 未初始化，靜默返回
@@ -577,7 +586,7 @@ async def start_ai_with_text_custom(user_text: str):
             orchestrator.start_blind_path_navigation()
             print(f"[NAVIGATION] 盲道导航已启动，状态: {orchestrator.get_state()}")
             # 播放啟動語音並廣播到 UI
-            play_voice_text("盲道導航已開始。")
+            play_voice_text("盲道導航已開始")
             await ui_broadcast_final("[系统] 盲道导航已启动")
             await ui_broadcast_raw(f"NAV_STATE:{orchestrator.get_state()}")
         else:
@@ -780,7 +789,7 @@ async def start_ai_with_text(user_text: str):
                 print(f"[OMNI] 对话结束，恢复到{omni_previous_nav_state}模式")
                 omni_previous_nav_state = None
             else:
-                print(f"[OMNI] 对话结束（无需恢复导航状态）")
+                print("[OMNI] 对话结束（无需恢复导航状态）")
             
             # 不斷開串流連線，讓 APP 保持長連線，避免重連延遲丟失音訊
 
@@ -793,7 +802,6 @@ async def start_ai_with_text(user_text: str):
     # 真正启动前先硬重置，保证**绝无**旧音频残留
     await hard_reset_audio("start_ai_with_text")
     loop = asyncio.get_running_loop()
-    from audio_stream import current_ai_task as _task_holder  # 读写模块内全局
     from audio_stream import __dict__ as _as_dict
     # 设置模块内的 current_ai_task
     task = loop.create_task(_runner())
@@ -1030,7 +1038,8 @@ async def debug_record_stop():
     if not _debug_rec_buffer:
         return {"status": "error", "msg": "無收音資料"}
 
-    import wave, os
+    import wave
+    import os
     from datetime import datetime
 
     os.makedirs(_DEBUG_REC_DIR, exist_ok=True)
@@ -1115,7 +1124,11 @@ async def ws_ui(ws: WebSocket):
         init = {"partial": current_partial, "finals": recent_finals[-10:]}
         await ws.send_text("INIT:" + json.dumps(init, ensure_ascii=False))
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
+            try:
+                await ws.send_text("PING")
+            except Exception:
+                break
     except WebSocketDisconnect:
         pass
     finally:
@@ -1128,6 +1141,9 @@ _audio_bypass_mode = False
 @app.websocket("/ws_audio")
 async def ws_audio(ws: WebSocket):
     global esp32_audio_ws, _audio_bypass_mode
+    if esp32_audio_ws is not None:
+        await ws.close(code=1013)
+        return
     esp32_audio_ws = ws
     await ws.accept()
     print("\n[AUDIO] client connected")
@@ -1266,7 +1282,8 @@ async def ws_audio(ws: WebSocket):
                         del _verify_continuous_buf[:needed]
                         try:
                             # RMS 音量門檻：靜音時不做聲紋比對，避免偽陽性
-                            import struct, math
+                            import struct
+                            import math
                             shorts = struct.unpack(f"<{len(pcm_snap)//2}h", pcm_snap)
                             rms = math.sqrt(sum(s*s for s in shorts) / len(shorts)) if shorts else 0
                             # 推送 RMS 數值到 SSE 客戶端（音量儀表用）
@@ -1630,14 +1647,18 @@ async def ws_viewer(ws: WebSocket):
     print(f"[VIEWER] Browser connected. Total viewers: {len(camera_viewers)}", flush=True)
     try:
         while True:
-            # 保持连接活跃
-            await asyncio.sleep(60)
+            # 保持连接活跃，每 30 秒送一次 PING 防止 Cloudflare idle timeout（100s）
+            await asyncio.sleep(30)
+            try:
+                await ws.send_text("PING")
+            except Exception:
+                break
     except WebSocketDisconnect:
         print("[VIEWER] Browser disconnected", flush=True)
     finally:
-        try: 
+        try:
             camera_viewers.remove(ws)
-        except Exception: 
+        except Exception:
             pass
         print(f"[VIEWER] Removed. Total viewers: {len(camera_viewers)}", flush=True)
 
@@ -1648,7 +1669,11 @@ async def ws_imu(ws: WebSocket):
     imu_ws_clients.add(ws)
     try:
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
+            try:
+                await ws.send_text("PING")
+            except Exception:
+                break
     except WebSocketDisconnect:
         pass
     finally:
@@ -1809,7 +1834,7 @@ async def on_startup_udp_broadcast():
             "service": "ai_glasses",
             "port":    SERVER_PORT,
         }).encode()
-        print(f"[DISCOVERY] UDP 廣播已啟動（port 47777，每 2 秒）", flush=True)
+        print("[DISCOVERY] UDP 廣播已啟動（port 47777，每 2 秒）", flush=True)
         while True:
             try:
                 sock.sendto(msg, ('<broadcast>', 47777))
@@ -1846,7 +1871,7 @@ async def on_startup_register_bridge_sender():
                 for ws in list(camera_viewers):
                     try:
                         await ws.send_bytes(jpeg_bytes)
-                    except Exception as e:
+                    except Exception:
                         dead.append(ws)
                 for ws in dead:
                     try:
@@ -1886,6 +1911,17 @@ async def on_startup():
         await loop.create_datagram_endpoint(lambda: UDPProto(), local_addr=(UDP_IP, UDP_PORT))
     except OSError as e:
         print(f"[UDP] port {UDP_PORT} 無法綁定（{e}），IMU 資料將不可用，但服務繼續啟動", flush=True)
+
+    # 注入語音推播 callback：每次命中預錄 WAV，同步推 SPEAK: 到 /ws_ui
+    # APP 收到後用本地 WAV 播放，不依賴 /stream.wav
+    # 注意：play_voice_text 可能從非同步 thread 呼叫，必須用 run_coroutine_threadsafe
+    _main_loop = asyncio.get_running_loop()
+
+    def _speak_push(text: str, duration_ms: int) -> None:
+        msg = json.dumps({"type": "speak", "text": text, "duration_ms": duration_ms}, ensure_ascii=False)
+        asyncio.run_coroutine_threadsafe(ui_broadcast_raw(f"SPEAK:{msg}"), _main_loop)
+
+    register_speak_push(_speak_push)
 
 _disc_stop = threading.Event()
 
@@ -2105,7 +2141,7 @@ class ExplainDocumentRequest(BaseModel):
 
 def _compress_image_b64(image_b64: str, max_width: int = 1280, quality: int = 80) -> str:
     """壓縮 base64 圖片：縮小到 max_width 並以 JPEG 重新編碼，大幅減少 API 傳輸量。"""
-    import base64, io
+    import base64
     try:
         raw = base64.b64decode(image_b64)
         img_array = np.frombuffer(raw, np.uint8)

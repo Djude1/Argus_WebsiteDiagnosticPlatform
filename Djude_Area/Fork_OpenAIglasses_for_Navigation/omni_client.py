@@ -14,7 +14,7 @@ Gemini 2.5 Flash 串流 + Gemini TTS 並行合成。
 介面與原 omni_client.py 完全相容，app_main.py 無需修改使用邏輯。
 """
 
-import json, base64, re, asyncio, threading, urllib.request, urllib.error
+import json, base64, re, asyncio, threading, urllib.request, urllib.error, os
 from typing import AsyncGenerator, List, Dict, Any, Optional
 
 from config import (
@@ -23,7 +23,75 @@ from config import (
     GEMINI_API_KEY_8, GEMINI_API_KEY_9, GEMINI_API_KEY_10,
     GEMINI_API_KEY_11, GEMINI_API_KEY_12, GEMINI_API_KEY_13,
     GEMINI_API_KEY_14, GEMINI_API_KEY_15, GEMINI_API_KEY_16,
+    GOOGLE_CREDENTIALS_PATH, GCP_PROJECT_ID, GCP_LOCATION, USE_VERTEX_AI,
 )
+
+# ── Vertex AI 狀態管理 ───────────────────────────────────────────────────────
+_VERTEX_EXHAUSTED = False          # 試用金耗盡後設為 True，自動切回 AI Studio
+_vertex_client = None              # lazy 初始化，避免啟動時即占用 gRPC 連線
+_vertex_client_lock = threading.Lock()
+
+def _use_vertex() -> bool:
+    """判斷目前是否應使用 Vertex AI（試用金耗盡後回傳 False）"""
+    return (
+        USE_VERTEX_AI
+        and bool(GCP_PROJECT_ID)
+        and bool(GCP_LOCATION)
+        and not _VERTEX_EXHAUSTED
+    )
+
+def _mark_vertex_exhausted() -> None:
+    global _VERTEX_EXHAUSTED
+    _VERTEX_EXHAUSTED = True
+    print("[Gemini] [!] Vertex AI 試用金耗盡，自動切換回 AI Studio（16-Key 輪換）", flush=True)
+
+def _get_vertex_client():
+    """取得（或建立）Vertex AI genai.Client，執行緒安全的 lazy init。"""
+    global _vertex_client
+    if _vertex_client is not None:
+        return _vertex_client
+    with _vertex_client_lock:
+        if _vertex_client is not None:
+            return _vertex_client
+        try:
+            import google.genai as _genai
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDENTIALS_PATH
+            _vertex_client = _genai.Client(
+                vertexai=True,
+                project=GCP_PROJECT_ID,
+                location=GCP_LOCATION,
+            )
+            print(
+                f"[Gemini] Vertex AI 客戶端已初始化"
+                f"（project={GCP_PROJECT_ID}, location={GCP_LOCATION}）",
+                flush=True,
+            )
+        except Exception as e:
+            print(f"[Gemini] Vertex AI 初始化失敗: {e}，將使用 AI Studio", flush=True)
+            _mark_vertex_exhausted()
+        return _vertex_client
+
+def _is_vertex_quota_error(exc: Exception) -> bool:
+    """判斷是否為 Vertex AI 配額 / 試用金耗盡錯誤"""
+    msg = str(exc).lower()
+    return any(kw in msg for kw in (
+        "resource_exhausted", "quota", "billing", "resourceexhausted",
+        "429", "exhausted", "budget", "credit",
+    ))
+
+def _to_sdk_parts(parts: List[Dict]) -> list:
+    """將內部 dict parts 格式轉換為 google.genai types.Part 物件清單"""
+    from google.genai import types as _gtypes
+    sdk_parts = []
+    for p in parts:
+        if "text" in p:
+            sdk_parts.append(_gtypes.Part.from_text(text=p["text"]))
+        elif "inline_data" in p:
+            sdk_parts.append(_gtypes.Part.from_bytes(
+                data=base64.b64decode(p["inline_data"]["data"]),
+                mime_type=p["inline_data"]["mime_type"],
+            ))
+    return sdk_parts
 
 # ── API Key 輪換池（自動過濾空值）────────────────────────────────────────────
 _GEMINI_KEYS = [k for k in [
@@ -149,8 +217,8 @@ def _gemini_request(endpoint: str, payload: bytes, timeout: int) -> dict:
     raise RuntimeError(f"所有 {len(_GEMINI_KEYS)} 組 Gemini API Key 配額均已用盡")
 
 
-def _call_flash(parts: List[Dict], system_prompt: str) -> str:
-    """呼叫 Gemini 2.5 Flash，回傳文字回應（阻塞式，作為串流失敗時的備援）。"""
+def _call_flash_aistudio(parts: List[Dict], system_prompt: str) -> str:
+    """AI Studio 版 Flash 呼叫（含 16-Key 輪換），作為 Vertex AI 的備援。"""
     payload = json.dumps({
         "contents": [{"parts": parts}],
         "systemInstruction": {"parts": [{"text": system_prompt}]},
@@ -160,8 +228,8 @@ def _call_flash(parts: List[Dict], system_prompt: str) -> str:
     return result["candidates"][0]["content"]["parts"][0].get("text", "").strip()
 
 
-def _call_flash_long(parts: List[Dict], system_prompt: str, max_tokens: int) -> str:
-    """長文字版 Gemini 呼叫（OCR / 文件問答），支援更大 token 上限。"""
+def _call_flash_long_aistudio(parts: List[Dict], system_prompt: str, max_tokens: int) -> str:
+    """AI Studio 版長文字 Flash 呼叫（含 16-Key 輪換），作為 Vertex AI 的備援。"""
     payload_obj: Dict[str, Any] = {
         "contents": [{"parts": parts}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.1},
@@ -174,6 +242,78 @@ def _call_flash_long(parts: List[Dict], system_prompt: str, max_tokens: int) -> 
         return result["candidates"][0]["content"]["parts"][0].get("text", "").strip()
     except (KeyError, IndexError):
         return ""
+
+
+def _call_flash_vertex(parts: List[Dict], system_prompt: str) -> str:
+    """Vertex AI 版 Flash 呼叫（服務帳號，消耗試用金）。"""
+    from google.genai import types as _gtypes
+    client = _get_vertex_client()
+    sdk_parts = _to_sdk_parts(parts)
+    config = _gtypes.GenerateContentConfig(
+        max_output_tokens=300,
+        system_instruction=system_prompt if system_prompt else None,
+    )
+    resp = client.models.generate_content(
+        model=_FLASH_MODEL,
+        contents=[_gtypes.Content(parts=sdk_parts, role="user")],
+        config=config,
+    )
+    return (resp.text or "").strip()
+
+
+def _call_flash_long_vertex(parts: List[Dict], system_prompt: str, max_tokens: int) -> str:
+    """Vertex AI 版長文字 Flash 呼叫（服務帳號，消耗試用金）。"""
+    from google.genai import types as _gtypes
+    client = _get_vertex_client()
+    sdk_parts = _to_sdk_parts(parts)
+    config = _gtypes.GenerateContentConfig(
+        max_output_tokens=max_tokens,
+        temperature=0.1,
+        system_instruction=system_prompt if system_prompt else None,
+    )
+    resp = client.models.generate_content(
+        model=_FLASH_MODEL,
+        contents=[_gtypes.Content(parts=sdk_parts, role="user")],
+        config=config,
+    )
+    try:
+        return (resp.text or "").strip()
+    except Exception:
+        return ""
+
+
+# ── 公開介面：Vertex AI 優先，試用金耗盡後自動切回 AI Studio ──────────────────
+
+def _call_flash(parts: List[Dict], system_prompt: str) -> str:
+    """
+    呼叫 Gemini 2.5 Flash，回傳文字回應（阻塞式）。
+    策略：Vertex AI 優先 → 試用金耗盡後自動切回 AI Studio 16-Key 輪換。
+    """
+    if _use_vertex():
+        try:
+            return _call_flash_vertex(parts, system_prompt)
+        except Exception as e:
+            if _is_vertex_quota_error(e):
+                _mark_vertex_exhausted()
+            else:
+                print(f"[GeminiVertex] _call_flash 失敗: {e}，切換 AI Studio", flush=True)
+    return _call_flash_aistudio(parts, system_prompt)
+
+
+def _call_flash_long(parts: List[Dict], system_prompt: str, max_tokens: int) -> str:
+    """
+    長文字版 Gemini 呼叫（OCR / 文件問答），支援更大 token 上限。
+    策略：Vertex AI 優先 → 試用金耗盡後自動切回 AI Studio。
+    """
+    if _use_vertex():
+        try:
+            return _call_flash_long_vertex(parts, system_prompt, max_tokens)
+        except Exception as e:
+            if _is_vertex_quota_error(e):
+                _mark_vertex_exhausted()
+            else:
+                print(f"[GeminiVertex] _call_flash_long 失敗: {e}，切換 AI Studio", flush=True)
+    return _call_flash_long_aistudio(parts, system_prompt, max_tokens)
 
 
 async def generate_text_async(content_list: List[Dict[str, Any]],
@@ -218,9 +358,9 @@ def _call_tts(text: str, voice: str) -> Optional[bytes]:
 
 # ── Flash SSE 串流實作 ─────────────────────────────────────────────────────────
 
-def _stream_flash_sync(parts: List[Dict], system_prompt: str):
+def _stream_flash_aistudio_sync(parts: List[Dict], system_prompt: str):
     """
-    同步生成器：透過 streamGenerateContent SSE 逐塊 yield 文字片段。
+    AI Studio 版同步串流生成器：透過 streamGenerateContent SSE 逐塊 yield 文字片段。
     遇 429 自動輪換 Key 後重試；其他錯誤直接 raise。
     """
     payload = json.dumps({
@@ -275,6 +415,40 @@ def _stream_flash_sync(parts: List[Dict], system_prompt: str):
             raise
 
     raise RuntimeError(f"所有 {len(_GEMINI_KEYS)} 組 Gemini API Key 配額均已用盡")
+
+
+def _stream_flash_vertex_sync(parts: List[Dict], system_prompt: str):
+    """Vertex AI 版同步串流生成器，直接透過 SDK 逐塊 yield 文字片段。"""
+    from google.genai import types as _gtypes
+    client = _get_vertex_client()
+    sdk_parts = _to_sdk_parts(parts)
+    config = _gtypes.GenerateContentConfig(
+        max_output_tokens=300,
+        system_instruction=system_prompt if system_prompt else None,
+    )
+    for chunk in client.models.generate_content_stream(
+        model=_FLASH_MODEL,
+        contents=[_gtypes.Content(parts=sdk_parts, role="user")],
+        config=config,
+    ):
+        if chunk.text:
+            yield chunk.text
+
+
+def _stream_flash_sync(parts: List[Dict], system_prompt: str):
+    """
+    公開串流生成器：Vertex AI 優先 → 試用金耗盡後自動切回 AI Studio 16-Key 輪換。
+    """
+    if _use_vertex():
+        try:
+            yield from _stream_flash_vertex_sync(parts, system_prompt)
+            return
+        except Exception as e:
+            if _is_vertex_quota_error(e):
+                _mark_vertex_exhausted()
+            else:
+                print(f"[GeminiVertex] 串流失敗: {e}，切換 AI Studio", flush=True)
+    yield from _stream_flash_aistudio_sync(parts, system_prompt)
 
 
 async def _async_stream_flash(parts: List[Dict], system_prompt: str) -> AsyncGenerator[str, None]:

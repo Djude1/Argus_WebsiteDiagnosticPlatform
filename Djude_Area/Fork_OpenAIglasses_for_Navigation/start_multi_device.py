@@ -18,6 +18,8 @@ import signal
 import subprocess
 import argparse
 import time
+import socket
+import urllib.request
 
 # 專案根目錄（此腳本所在位置）
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -37,14 +39,32 @@ def main():
         "--base-udp-port", type=int, default=12345,
         help="起始 UDP port（IMU 接收，預設 12345，依序遞增）",
     )
+    parser.add_argument(
+        "--model-server", action="store_true", default=True,
+        help="啟動共用模型伺服器（預設開啟，可用 --no-model-server 關閉）",
+    )
+    parser.add_argument(
+        "--no-model-server", dest="model_server", action="store_false",
+        help="不使用共用模型伺服器（每台各自載入模型，需要更多 VRAM）",
+    )
+    parser.add_argument(
+        "--model-server-port", type=int, default=9099,
+        help="共用模型伺服器 port（預設 9099）",
+    )
     args = parser.parse_args()
 
-    count = args.count
-    base_port = args.base_port
-    base_udp = args.base_udp_port
+    count            = args.count
+    base_port        = args.base_port
+    base_udp         = args.base_udp_port
+    use_model_server = args.model_server
+    ms_port          = args.model_server_port
 
     print("=" * 56)
     print(f"  AI 智慧眼鏡 — 多裝置啟動器（{count} 台）")
+    if use_model_server:
+        print(f"  模式：共用模型伺服器（port {ms_port}）")
+    else:
+        print(f"  模式：各自載入模型（需要較多 VRAM）")
     print("=" * 56)
 
     # 已停止的假 process 佔位符（冷卻期間使用，避免立即重啟）
@@ -56,20 +76,57 @@ def main():
         def kill(self): pass
 
     processes: list[subprocess.Popen] = []
-    last_restart: list[float] = []  # 各裝置上次重啟時間，防止無限重啟
-    RESTART_COOLDOWN = 10.0  # 重啟冷卻時間（秒），10 秒內不重複重啟
+    last_restart: list[float] = []
+    RESTART_COOLDOWN = 10.0
 
+    # ── 啟動共用模型伺服器 ──────────────────────────────────────────────────────
+    ms_proc = None
+    if use_model_server:
+        print(f"\n[ModelServer] 啟動共用模型伺服器...")
+        ms_env = os.environ.copy()
+        ms_env["MODEL_SERVER_PORT"] = str(ms_port)
+        ms_proc = subprocess.Popen(
+            [sys.executable, "model_server.py"],
+            cwd=_PROJECT_ROOT,
+            env=ms_env,
+        )
+        print(f"[ModelServer] PID={ms_proc.pid}，等待模型載入就緒（最多 180 秒）...")
+
+        # 輪詢 TCP port，直到 model_server 開始監聽
+        deadline = time.time() + 180
+        ready = False
+        while time.time() < deadline:
+            if ms_proc.poll() is not None:
+                print("[ModelServer] 意外退出，改用本機模式")
+                use_model_server = False
+                break
+            try:
+                s = socket.create_connection(("127.0.0.1", ms_port), timeout=1)
+                s.close()
+                ready = True
+                break
+            except OSError:
+                pass
+            time.sleep(2)
+
+        if ready:
+            print(f"[ModelServer] 就緒！所有裝置將共用 port {ms_port} 的模型推論")
+        elif use_model_server:
+            print(f"[ModelServer] 180 秒內未就緒，改用本機模式（各自載入模型）")
+            use_model_server = False
+
+    # ── 啟動各裝置 FastAPI instance ───────────────────────────────────────────
     for i in range(count):
         device_num = i + 1
-        port = base_port + i
-        udp_port = base_udp + i
+        port       = base_port + i
+        udp_port   = base_udp + i
 
-        # 複製當前環境變數，覆寫 port
         env = os.environ.copy()
         env["SERVER_PORT"] = str(port)
-        env["UDP_PORT"] = str(udp_port)
-        # 加入裝置編號標識（供未來 debug_status 回傳使用）
-        env["DEVICE_ID"] = f"glasses_{device_num:02d}"
+        env["UDP_PORT"]    = str(udp_port)
+        env["DEVICE_ID"]   = f"glasses_{device_num:02d}"
+        if use_model_server:
+            env["MODEL_SERVER_PORT"] = str(ms_port)
 
         print(f"\n[裝置 {device_num}] 啟動中... port={port}, udp={udp_port}")
 
@@ -77,17 +134,36 @@ def main():
             [sys.executable, "app_main.py"],
             cwd=_PROJECT_ROOT,
             env=env,
-            # 不捕獲 stdout/stderr，讓各裝置的 log 直接輸出到終端
-            # 可用 DEVICE_ID 環境變數區分哪台裝置的 log
         )
         processes.append(proc)
         last_restart.append(time.time())
         print(f"[裝置 {device_num}] PID={proc.pid}, http://localhost:{port}")
 
-        # 間隔 2 秒再啟動下一台，避免 GPU 同時初始化搶 VRAM
-        if i < count - 1:
-            print(f"  等待 2 秒後啟動下一台...")
-            time.sleep(2)
+        # 共用模型伺服器模式：不需等待 VRAM 釋放，但稍微錯開啟動避免同時連線 model_server
+        if use_model_server:
+            if i < count - 1:
+                time.sleep(2)
+        else:
+            # 本機模式：等健康檢查通過，確保 GPU 模型完全載入再啟動下一台
+            if i < count - 1:
+                print(f"  等待裝置 {device_num} 健康檢查通過（最多 120 秒）...")
+                deadline = time.time() + 120
+                ready = False
+                while time.time() < deadline:
+                    try:
+                        with urllib.request.urlopen(
+                            f"http://localhost:{port}/api/health", timeout=3
+                        ) as resp:
+                            if resp.status == 200:
+                                ready = True
+                                break
+                    except Exception:
+                        pass
+                    time.sleep(3)
+                if ready:
+                    print(f"  裝置 {device_num} 就緒，啟動下一台...")
+                else:
+                    print(f"  裝置 {device_num} 120 秒未就緒，仍繼續...")
 
     print("\n" + "=" * 56)
     print(f"  全部 {count} 台裝置已啟動")
@@ -102,6 +178,9 @@ def main():
             if proc.poll() is None:  # 仍在運行
                 print(f"  關閉裝置 {i + 1} (PID={proc.pid})...")
                 proc.terminate()
+        if ms_proc is not None and ms_proc.poll() is None:
+            print(f"  關閉模型伺服器 (PID={ms_proc.pid})...")
+            ms_proc.terminate()
         # 等待最多 5 秒讓 process 優雅退出
         deadline = time.time() + 5
         for proc in processes:
