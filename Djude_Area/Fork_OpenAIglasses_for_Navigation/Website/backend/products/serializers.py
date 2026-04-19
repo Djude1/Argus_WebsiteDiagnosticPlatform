@@ -1,6 +1,7 @@
 """
 產品序列化器
 """
+
 from rest_framework import serializers
 from .models import Product, ProductFeature, ProductSpec
 
@@ -8,13 +9,13 @@ from .models import Product, ProductFeature, ProductSpec
 class ProductFeatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductFeature
-        fields = ('id', 'title', 'description', 'icon', 'order')
+        fields = ("id", "title", "description", "icon", "order")
 
 
 class ProductSpecSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSpec
-        fields = ('id', 'key', 'value', 'order')
+        fields = ("id", "key", "value", "order")
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -25,11 +26,22 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = (
-            'id', 'name', 'short_description', 'description',
-            'price', 'original_price', 'discount_percentage',
-            'stock', 'image', 'model_3d',
-            'is_active', 'features', 'specs',
-            'created_at', 'updated_at'
+            "id",
+            "name",
+            "short_description",
+            "description",
+            "price",
+            "original_price",
+            "discount_percentage",
+            "stock",
+            "image",
+            "model_3d",
+            "camera_height",
+            "is_active",
+            "features",
+            "specs",
+            "created_at",
+            "updated_at",
         )
 
     def get_discount_percentage(self, obj):
@@ -42,12 +54,22 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class ProductListSerializer(serializers.ModelSerializer):
     """列表用精簡版序列化器"""
+
     discount_percentage = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
-        fields = ('id', 'name', 'short_description', 'price', 'original_price',
-                  'discount_percentage', 'stock', 'image', 'is_active')
+        fields = (
+            "id",
+            "name",
+            "short_description",
+            "price",
+            "original_price",
+            "discount_percentage",
+            "stock",
+            "image",
+            "is_active",
+        )
 
     def get_discount_percentage(self, obj):
         if obj.original_price and obj.original_price > obj.price:
