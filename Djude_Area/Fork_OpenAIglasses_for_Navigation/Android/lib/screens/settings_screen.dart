@@ -55,9 +55,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // 自動補 scheme：純 IP / 域名沒帶 http:// 的情況
+    // 自動補 scheme：IP/localhost → http，域名 → https（Cloudflare 等公網 301 重導 https，
+    // Dart HttpClient 遇到 301 會將 POST 降為 GET，導致伺服器回 405）
     if (!input.startsWith('http://') && !input.startsWith('https://')) {
-      input = 'http://$input';
+      final host = input.split('/').first.split(':').first;
+      final isLocal = RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(host) ||
+                      host == 'localhost' || host == '10.0.2.2';
+      input = isLocal ? 'http://$input' : 'https://$input';
       _urlCtrl.text = input;
     }
 
@@ -402,13 +406,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: Colors.white38)),
         const SizedBox(height: 10),
 
-        // 公網
-        _QuickButton(
-          icon: Icons.public_rounded,
-          label: '公網伺服器',
-          url: 'https://aiglasses.qzz.io/GlassesBackstage/',
-          isSelected: _urlCtrl.text == 'https://aiglasses.qzz.io/GlassesBackstage/',
-          onTap: () => _quickFill('https://aiglasses.qzz.io/GlassesBackstage/'),
+        // 公網（點擊展開裝置選單）
+        _PublicServerRow(
+          selectedUrl: _urlCtrl.text,
+          onSelected: _quickFill,
         ),
         const SizedBox(height: 8),
 
@@ -503,6 +504,147 @@ class _ConnDotState extends State<_ConnDot>
                 )
               ]
             : null,
+      ),
+    );
+  }
+}
+
+/// 公網伺服器列——點擊彈出 bottom sheet 選 device/1~4
+class _PublicServerRow extends StatelessWidget {
+  static const _devices = [
+    (label: '裝置 1', url: 'https://aiglasses.qzz.io/device/1/'),
+    (label: '裝置 2', url: 'https://aiglasses.qzz.io/device/2/'),
+    (label: '裝置 3', url: 'https://aiglasses.qzz.io/device/3/'),
+    (label: '裝置 4', url: 'https://aiglasses.qzz.io/device/4/'),
+  ];
+
+  final String selectedUrl;
+  final void Function(String) onSelected;
+
+  const _PublicServerRow({required this.selectedUrl, required this.onSelected});
+
+  bool get _anySelected => _devices.any((d) => d.url == selectedUrl);
+
+  void _showPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '選擇公網伺服器',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 4),
+            for (final device in _devices)
+              ListTile(
+                leading: Icon(
+                  Icons.dns_rounded,
+                  size: 20,
+                  color: selectedUrl == device.url
+                      ? Colors.blueAccent
+                      : Colors.white38,
+                ),
+                title: Text(
+                  device.label,
+                  style: TextStyle(
+                    color: selectedUrl == device.url
+                        ? Colors.white
+                        : Colors.white70,
+                    fontWeight: selectedUrl == device.url
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Text(
+                  device.url,
+                  style: const TextStyle(color: Colors.white30, fontSize: 11),
+                ),
+                trailing: selectedUrl == device.url
+                    ? const Icon(Icons.check_circle_rounded,
+                        size: 18, color: Colors.blueAccent)
+                    : null,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onSelected(device.url);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _anySelected
+          ? Colors.blueAccent.withAlpha(25)
+          : Colors.white.withAlpha(8),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () => _showPicker(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.public_rounded,
+                  size: 20,
+                  color: _anySelected ? Colors.blueAccent : Colors.white38),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '公網伺服器',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _anySelected ? Colors.white : Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _anySelected ? selectedUrl : '點擊選擇裝置 1–4',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _anySelected ? Colors.blueAccent : Colors.white30,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: _anySelected ? Colors.blueAccent : Colors.white24,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

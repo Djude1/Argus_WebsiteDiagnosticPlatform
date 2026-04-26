@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ONNX 模型檔（體積大，由開發者自行下載放置）
+assets/models/*.onnx

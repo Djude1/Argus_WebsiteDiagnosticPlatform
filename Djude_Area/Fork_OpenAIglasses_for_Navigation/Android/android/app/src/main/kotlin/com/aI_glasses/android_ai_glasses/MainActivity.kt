@@ -11,12 +11,18 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aiglasses/app_control"
 
     // Maps 啟動前的原始媒體音量，用於導航結束後還原
     private var _savedMusicVolume: Int = -1
+
+    // CPU 採樣狀態（讀 /proc/self/stat，APP 自身 CPU 時間，SELinux 允許）
+    private var _lastCpuTicks: Long = 0L
+    private var _lastCpuTimeMs: Long = 0L
+    private var _lastCpuPercent: Int = 0
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -39,6 +45,9 @@ class MainActivity : FlutterActivity() {
                     }
                     "isDeveloperMode" -> {
                         result.success(isDeveloperModeEnabled())
+                    }
+                    "getCpuPercent" -> {
+                        result.success(readAppCpuPercent())
                     }
                     else -> result.notImplemented()
                 }
@@ -117,6 +126,37 @@ class MainActivity : FlutterActivity() {
                 }
             }
         } catch (_: Exception) {}
+    }
+
+    /**
+     * 讀取 APP 自身 CPU 使用率（%）。
+     * 使用 /proc/self/stat（APP 自己的 process stat，SELinux 允許），
+     * 兩次快照差分計算 utime+stime 的消耗速率，除以 CPU 核心數得到 %。
+     */
+    private fun readAppCpuPercent(): Int {
+        return try {
+            val parts = File("/proc/self/stat").readText().trim().split(" ")
+            val utime = parts[13].toLong()
+            val stime = parts[14].toLong()
+            val totalTicks = utime + stime
+            val nowMs = System.currentTimeMillis()
+
+            val elapsedMs   = nowMs - _lastCpuTimeMs
+            val tickDiff    = totalTicks - _lastCpuTicks
+            _lastCpuTicks   = totalTicks
+            _lastCpuTimeMs  = nowMs
+
+            if (elapsedMs <= 0 || _lastCpuTimeMs == nowMs) return _lastCpuPercent
+
+            // Android 時鐘頻率通常為 100 ticks/s
+            val hz       = 100L
+            val cores    = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+            val pct = (tickDiff * 1000L / hz / elapsedMs * 100L / cores).toInt()
+            _lastCpuPercent = pct.coerceIn(0, 100)
+            _lastCpuPercent
+        } catch (_: Exception) {
+            _lastCpuPercent
+        }
     }
 
     /** 檢查手機是否開啟開發人員選項 */

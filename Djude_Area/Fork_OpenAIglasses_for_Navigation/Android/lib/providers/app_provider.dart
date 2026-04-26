@@ -25,17 +25,19 @@ import '../services/local_voice_service.dart';
 
 class AppProvider extends ChangeNotifier {
   // ── 伺服器設定 ──────────────────────────────────────────────────────────
-  String _host       = AppConstants.defaultHost;
-  int    _port       = AppConstants.defaultPort;
-  bool   _secure     = AppConstants.defaultSecure;
-  String _baseUrl    = AppConstants.defaultBaseUrl;
-  String _websiteUrl = '';   // 配置來源網站 URL（Django）
+  String _host         = AppConstants.defaultHost;
+  int    _port         = AppConstants.defaultPort;
+  bool   _secure       = AppConstants.defaultSecure;
+  String _baseUrl      = AppConstants.defaultBaseUrl;
+  String _websiteUrl   = '';   // 配置來源網站 URL（Django）
+  String _supportPhone = '';   // 客服電話（從 website app-config 讀取）
 
-  String get host       => _host;
-  int    get port       => _port;
-  bool   get secure     => _secure;
-  String get baseUrl    => _baseUrl;
-  String get websiteUrl => _websiteUrl;
+  String get host         => _host;
+  int    get port         => _port;
+  bool   get secure       => _secure;
+  String get baseUrl      => _baseUrl;
+  String get websiteUrl   => _websiteUrl;
+  String get supportPhone => _supportPhone;
 
   // ── 服務層 ──────────────────────────────────────────────────────────────
   late ApiService       _api;
@@ -231,7 +233,7 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// 從網站後台讀取 AI 伺服器 URL，成功時回傳 server_url 字串，失敗回傳 null
+  /// 從網站後台讀取 AI 伺服器 URL 與客服電話，成功時回傳 server_url 字串，失敗回傳 null
   Future<String?> fetchServerConfigFromWebsite() async {
     if (_websiteUrl.isEmpty) return null;
     try {
@@ -242,8 +244,11 @@ class AppProvider extends ChangeNotifier {
         receiveTimeout: const Duration(seconds: 8),
       ));
       final resp = await client.get(endpoint);
-      final serverUrl =
-          (resp.data as Map<String, dynamic>)['server_url'] as String? ?? '';
+      final data = resp.data as Map<String, dynamic>;
+      final serverUrl = data['server_url'] as String? ?? '';
+      // 同步讀取客服電話（後台未設定時為空字串）
+      _supportPhone = data['support_phone'] as String? ?? '';
+      notifyListeners();
       return serverUrl.isNotEmpty ? serverUrl : null;
     } catch (_) {
       return null;

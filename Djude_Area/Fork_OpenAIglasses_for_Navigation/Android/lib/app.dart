@@ -13,6 +13,8 @@ import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/read_screen.dart';
 import 'screens/nav_destination_screen.dart';
+import 'screens/yoloe_ar_test_screen.dart';
+import 'screens/customer_service_screen.dart';
 
 class AiGlassesApp extends StatelessWidget {
   const AiGlassesApp({super.key});
@@ -36,6 +38,8 @@ class AiGlassesApp extends StatelessWidget {
           '/settings':    (_) => const SettingsScreen(),
           '/read':        (_) => const ReadScreen(),
           '/nav_dest':    (_) => const NavDestinationScreen(),
+          '/yoloe_ar_test': (_) => const YoloeArTestScreen(),
+          '/support':       (_) => const CustomerServiceScreen(),
         },
       ),
     );

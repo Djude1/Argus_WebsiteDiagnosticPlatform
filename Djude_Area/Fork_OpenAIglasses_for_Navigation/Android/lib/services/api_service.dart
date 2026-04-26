@@ -13,6 +13,9 @@ class ApiService {
 
   ApiService({required this.host, required this.port, this.secure = false, this.baseUrl}) {
     _dio = Dio(BaseOptions(
+      // Dio v5 URL 合併規則：baseUrl 結尾補 /，request path 開頭的 / 被 strip，
+      // 再直接字串拼接。baseUrl 若已含 /device/1，Dio 會自動拼成 /device/1/api/xxx，
+      // 不需要額外的 _pathPrefix 補綴（補了反而會變成 /device/1/device/1/api/xxx）。
       baseUrl:        AppConstants.httpBase(host, port, secure: secure, baseUrl: baseUrl),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
@@ -26,7 +29,6 @@ class ApiService {
   }
 
   // ── 文件閱讀 ─────────────────────────────────────────────────────────────
-  /// 傳入 base64 圖片，回傳 { text, char_count }
   Future<Map<String, dynamic>> readDocument(String imageBase64) async {
     final resp = await _dio.post(
       '/api/read_document',
@@ -37,7 +39,6 @@ class ApiService {
     return data is Map<String, dynamic> ? data : {};
   }
 
-  /// 傳入文件全文 + 問題，回傳 { answer }
   Future<Map<String, dynamic>> explainDocument(String text, String question) async {
     final resp = await _dio.post(
       '/api/explain_document',

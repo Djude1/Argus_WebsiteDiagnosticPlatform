@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import '../core/constants.dart';
 import '../providers/app_provider.dart';
 import '../services/discovery_service.dart';
@@ -97,7 +99,23 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
-  /// 區網 UDP 發現 → 連線，失敗則導向設定頁
+  /// 取得儲存的使用者角色
+  Future<String> _getUserMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('user_mode') ?? 'blind';
+  }
+
+  /// 檢查 Android 開發人員模式是否開啟
+  Future<bool> _isAndroidDevMode() async {
+    try {
+      const channel = MethodChannel('com.aiglasses/app_control');
+      return await channel.invokeMethod<bool>('isDeveloperMode') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 區網 UDP 發現 → 連線，失敗則依角色導向（管理員→設定，視障者→客服）
   Future<void> _discoverAndConnect(AppProvider app) async {
     _setStatus('搜尋伺服器中…');
     final result = await DiscoveryService.discover(
@@ -118,7 +136,7 @@ class _SplashScreenState extends State<SplashScreen> {
         if (ok) {
           await _routeByMode();
         } else {
-          Navigator.pushReplacementNamed(context, '/settings');
+          await _routeOnFailure();
         }
       }
     }
@@ -133,9 +151,27 @@ class _SplashScreenState extends State<SplashScreen> {
     ].request();
   }
 
+  /// 連線成功後依角色路由：開發者→首頁，視障者→盲用畫面
   Future<void> _routeByMode() async {
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/blind');
+    final mode = await _getUserMode();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(
+      context,
+      mode == 'developer' ? '/home' : '/blind',
+    );
+  }
+
+  /// 連線失敗後依角色路由
+  /// 手機有開 Android 開發人員模式 → 管理員伺服器設定，否則 → 客服聯絡
+  Future<void> _routeOnFailure() async {
+    if (!mounted) return;
+    final isDevMode = await _isAndroidDevMode();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(
+      context,
+      isDevMode ? '/settings' : '/support',
+    );
   }
 
   Future<bool> _tryConnect(AppProvider app) async {

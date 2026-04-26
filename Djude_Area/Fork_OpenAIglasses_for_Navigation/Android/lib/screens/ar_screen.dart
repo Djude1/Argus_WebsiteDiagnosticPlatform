@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../utils/hardware_monitor.dart';
 
 class ArScreen extends StatefulWidget {
   final String title;
@@ -23,11 +24,15 @@ class _ArScreenState extends State<ArScreen> {
   int _fps          = 0;
   DateTime _lastFpsTime = DateTime.now();
 
+  // 效能監控（僅 debug/admin 畫面顯示）
+  final HardwareMonitor _hw = HardwareMonitor();
+
   @override
   void initState() {
     super.initState();
     final app = context.read<AppProvider>();
     app.startViewer();
+    _hw.start(() { if (mounted) setState(() {}); });
 
     // 獨立監聽 viewer stream 計算 FPS（不干擾 StreamBuilder 的 build）
     _fpsSub = app.viewerStream.listen((_) {
@@ -46,9 +51,46 @@ class _ArScreenState extends State<ArScreen> {
 
   @override
   void dispose() {
+    _hw.stop();
     _fpsSub?.cancel();
     context.read<AppProvider>().stopViewer();
     super.dispose();
+  }
+
+  Color _cpuColor(int pct) {
+    if (pct >= 80) return Colors.redAccent;
+    if (pct >= 50) return Colors.orangeAccent;
+    return Colors.lightBlueAccent;
+  }
+
+  Color _tempColor(int deg) {
+    if (deg >= 50) return Colors.redAccent;
+    if (deg >= 40) return Colors.orangeAccent;
+    return Colors.lightGreenAccent;
+  }
+
+  Widget _hwChip(IconData icon, String value, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(80), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(value,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 2),
+          Text(label,
+              style: TextStyle(color: color.withAlpha(160), fontSize: 10)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -70,34 +112,54 @@ class _ArScreenState extends State<ArScreen> {
               color: Colors.black87,
               padding: const EdgeInsets.symmetric(
                   horizontal: 4, vertical: 6),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.title,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  // 導航狀態標籤
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.greenAccent.withAlpha(30),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      app.navStateLabel,
-                      style: const TextStyle(
-                          color: Colors.greenAccent, fontSize: 13),
-                    ),
+                  // 第一列：標題 + 導航狀態
+                  Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      Text(widget.title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent.withAlpha(30),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          app.navStateLabel,
+                          style: const TextStyle(
+                              color: Colors.greenAccent, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                   ),
-                  // FPS 顯示
-                  const SizedBox(width: 8),
-                  Text('$_fps fps',
-                      style: const TextStyle(
-                          color: Colors.white38, fontSize: 12)),
-                  const SizedBox(width: 8),
+                  const SizedBox(height: 5),
+                  // 第二列：效能監控徽章（debug/admin 專用）
+                  Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      _hwChip(Icons.videocam_outlined, '$_fps', 'FPS', Colors.greenAccent),
+                      const SizedBox(width: 6),
+                      _hwChip(Icons.speed, '${_hw.cpuPercent}%', 'CPU',
+                          _cpuColor(_hw.cpuPercent)),
+                      const SizedBox(width: 6),
+                      _hwChip(Icons.memory_outlined, '${_hw.appRamMB}MB', 'RAM',
+                          Colors.purpleAccent),
+                      const SizedBox(width: 6),
+                      _hwChip(Icons.thermostat_outlined,
+                          _hw.tempC >= 0 ? '${_hw.tempC}°C' : '-',
+                          '溫度', _tempColor(_hw.tempC)),
+                    ],
+                  ),
                 ],
               ),
             ),

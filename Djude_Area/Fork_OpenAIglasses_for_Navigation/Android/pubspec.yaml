@@ -56,6 +56,11 @@ dependencies:
   # ── 本地通知（背景撞擊全螢幕警示）────────────────────
   flutter_local_notifications: ^17.2.0
 
+  # ── 手機端 ONNX 推論（yoloe-26n-seg AR 偵測）─────────
+  onnxruntime: ^1.4.1
+  # 影像處理：CameraImage YUV→RGB 轉換、resize、CHW 排列
+  image: ^4.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -79,6 +84,7 @@ flutter:
     - assets/icon/
     - assets/voice_map.json
     - assets/audio/
+    - assets/models/
 
 flutter_launcher_icons:
   android: true

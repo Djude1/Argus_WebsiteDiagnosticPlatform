@@ -357,6 +357,20 @@ class _MainPage extends StatelessWidget {
           ),
         ),
 
+        // ── yoloe-26n-seg AR 測試（開發者工具）────────────────────────
+        // 對應計畫：MD/plan_mobile_yolo_deployment.md Phase A
+        Expanded(
+          flex: 14,
+          child: _NavBlock(
+            label:    'yoloe-26n-seg AR 測試',
+            sublabel: '開發者工具 · 手機端 ONNX 推論',
+            icon:     Icons.center_focus_strong_rounded,
+            color:    const Color(0xFF263238),
+            isActive: false,
+            onTap:    () => Navigator.pushNamed(context, '/yoloe_ar_test'),
+          ),
+        ),
+
         // ── 過馬路 ───────────────────────────────────────────────────
         Expanded(
           flex: 14,
@@ -454,57 +468,11 @@ class _MainPage extends StatelessWidget {
           ),
         ),
 
-        // ── 訊息記錄 ─────────────────────────────────────────────────
-        Expanded(
-          flex: 16,
-          child: Container(
-            color: const Color(0xFF0A0A0A),
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('訊息記錄',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white24,
-                        letterSpacing: 1)),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: app.messages.isEmpty
-                      ? const Center(
-                          child: Text('等待伺服器訊息…',
-                              style: TextStyle(
-                                  color: Colors.white12, fontSize: 13)),
-                        )
-                      : ListView.builder(
-                          controller:  scrollCtrl,
-                          itemCount:   app.messages.length,
-                          itemBuilder: (_, i) => Text(
-                            app.messages[i],
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _msgColor(app.messages[i]),
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
         const SizedBox(height: 30), // 頁碼點空間
       ],
     );
   }
 
-  Color _msgColor(String msg) {
-    if (msg.contains('[錯誤]')) return Colors.redAccent.withAlpha(200);
-    if (msg.contains('[ASR]') || msg.contains('[USER]')) return Colors.cyanAccent.withAlpha(180);
-    if (msg.contains('[狀態]')) return Colors.greenAccent.withAlpha(160);
-    return Colors.white30;
-  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
