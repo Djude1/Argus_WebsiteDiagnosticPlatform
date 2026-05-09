@@ -1,0 +1,16 @@
+{
+  "name": "AI 智慧眼鏡",
+  "short_name": "AIGlasses",
+  "description": "專為視障人士設計的 AI 輔助系統",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#07a3d7",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
