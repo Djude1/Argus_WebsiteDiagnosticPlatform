@@ -86,6 +86,13 @@ export const createDlStep = (data)    => adminClient.post('/admin/content-steps/
 export const updateDlStep = (id, data)=> adminClient.patch(`/admin/content-steps/${id}/`, data)
 export const deleteDlStep = (id)      => adminClient.delete(`/admin/content-steps/${id}/`)
 
+// ── APK 上傳 ─────────────────────────────────────────────────────
+export const uploadApk = (formData) =>
+  adminClient.post('/admin/upload-apk/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  })
+
 // ── 儀表板與日誌 ─────────────────────────────────────────────────
 export const getTraffic      = ()       => adminClient.get('/admin/analytics/traffic/')
 export const getActivityLogs = (action) => adminClient.get('/admin/analytics/logs/', {

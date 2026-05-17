@@ -1,9 +1,12 @@
 """
 頁面內容管理後台 API
 """
+import os
+from django.conf import settings
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from accounts.permissions import IsStaff
 from analytics.utils import log_activity
 from .models import (
@@ -158,6 +161,36 @@ class AdminImpactFeedbackView(generics.ListAPIView):
             'false_positive': false_ct,
             'records':        serializer.data,
         })
+
+
+class AdminApkUploadView(APIView):
+    """上傳 APK 檔案，儲存至 media/downloads/aiglass.apk 並更新下載連結"""
+    permission_classes = [IsStaff]
+    parser_classes     = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        apk_file = request.FILES.get('apk')
+        if not apk_file:
+            return Response({'error': '請選擇 APK 檔案'}, status=status.HTTP_400_BAD_REQUEST)
+        if not apk_file.name.endswith('.apk'):
+            return Response({'error': '只接受 .apk 格式'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 儲存到 MEDIA_ROOT/downloads/aiglass.apk（固定檔名，永遠覆蓋舊版）
+        save_dir  = os.path.join(settings.MEDIA_ROOT, 'downloads')
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, 'aiglass.apk')
+        with open(save_path, 'wb') as f:
+            for chunk in apk_file.chunks():
+                f.write(chunk)
+
+        # 更新 DownloadPageContent 的下載連結
+        apk_url = '/media/downloads/aiglass.apk'
+        obj = DownloadPageContent.load()
+        obj.apk_url = apk_url
+        obj.save()
+
+        log_activity(request, 'update', 'APK 檔案', 1, apk_file.name)
+        return Response({'apk_url': apk_url, 'size': apk_file.size})
 
 
 class AdminAnnouncementTagListView(generics.ListCreateAPIView):

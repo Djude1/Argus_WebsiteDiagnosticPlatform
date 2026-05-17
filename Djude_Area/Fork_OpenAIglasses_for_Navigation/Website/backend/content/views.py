@@ -40,9 +40,10 @@ class AppConfigView(APIView):
     def get(self, request):
         config = AppServerConfig.load()
         return Response({
-            'server_url': config.server_url,
-            'note':       config.note,
-            'updated_at': config.updated_at,
+            'server_url':    config.server_url,
+            'support_phone': config.support_phone,
+            'note':          config.note,
+            'updated_at':    config.updated_at,
         })
 
 

@@ -40,6 +40,38 @@
 
 ---
 
+## 公網部署已知問題與修復紀錄（2026-05-03）
+
+### 症狀
+APP 在本地測試正常，連公網（`aiglasses.qzz.io`）後開啟避障時畫面卡在「等待 YOLO 影像串流…」。
+
+### 根因
+`websocket_service.dart` 的 viewer WS（`/ws/viewer`）沒有重連機制：
+```dart
+onError: (_) {},  // 靜默吞掉錯誤
+onDone:  () {},   // 斷線不重連
+```
+公網比本地更容易出現連線抖動、Cloudflare Tunnel timeout，viewer WS 斷一次就永遠不重連，畫面永遠沒有 frame。
+
+**相比之下 camera WS（`/ws/camera`）有正確的重連邏輯，所以導航指令不受影響，只有畫面不顯示。**
+
+### 修復（commit 含在此 push）
+`Android/lib/services/websocket_service.dart`：
+- 新增 `_viewerActive` flag（確保 `disconnectViewer` 後不再重連）
+- 新增 `_viewerOnFrame` 儲存 callback（重連後繼續用）
+- `onError` / `onDone` 改為 `_scheduleReconnect(_doConnectViewer)`（3 秒後自動重連）
+
+### 公網部署注意事項（Cloudflare Tunnel）
+| 項目 | 說明 |
+|------|------|
+| APP 伺服器位址 | `https://aiglasses.qzz.io/device/N/`，啟用 **secure = true**（使用 wss://） |
+| WebSocket 路徑 | nginx 需設 `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` |
+| viewer WS 重連 | 已修復，斷線 3 秒後自動重連 |
+| camera WS 重連 | 原本即有，無問題 |
+| 已知限制 | Cloudflare Tunnel 對長時間 idle WebSocket 可能 timeout（約 100 秒），建議心跳或重連機制 |
+
+---
+
 ## 待實作：後台管理裝置 API URL
 
 ### 背景
@@ -313,3 +345,81 @@ audio_config = texttospeech.AudioConfig(
 ### `/api/devices/N/status` 無需登入即可查詢
 - 問題：任何人可查詢裝置狀態（uptime、導航狀態等）
 - 解法（後續）：在 nginx 或 Django 加一層 proxy 驗證
+
+---
+
+## ASR 語音辨識改善（已完成，2026-04-29~30）
+
+### 問題
+APP 使用者反映「語音方面效果沒有很好」「語音轉文字收音聽不太到」。
+
+### 已完成改善
+
+#### 1. AGC 自動增益控制
+- **問題**：固定增益 5.0x 無法適應不同麥克風（ESP32 vs 手機）和環境
+- **方案**：AGC 根據最近 10 幀中位數 RMS 動態調整增益（0.5x~15.0x）
+- **參數**：目標 RMS 800~3000、平滑係數 0.5、靜音門檻從 150 降到 80
+- **檔案**：`asr_core.py`
+
+#### 2. 繁簡字元轉換
+- **問題**：Google STT cmn-Hant-TW 偶爾輸出簡體字，繁簡混合無法匹配指令
+- **方案**：`_s2t()` 使用 `str.maketrans` + `str.translate`，150+ 字元對應表
+- **檔案**：`asr_core.py`（`_SIMP_TO_TRAD`、`_s2t()`、`_normalize_cn()`）
+
+#### 3. 喚醒詞根本性重構
+- **問題**：原喚醒詞需「哈囉曼波」組合，「哈囉世界」也會誤觸發
+- **方案**：關鍵字改為「曼波」本身，7 個 ASR 誤辨變體（曼波/漫波/漫播/慢播/慢波/滿波/們波）
+- **行為變更**：「曼波」→觸發、「哈囉世界」→不觸發、「哈囉」→不觸發
+- **檔案**：`asr_core.py`（`_MAMBO_VARIANTS`、`_check_wake_word()`）
+
+#### 4. 口語化指令擴充
+- **問題**：台灣國語口語化指令成功率僅 14%
+- **方案**：新增「我要導航」「不要導航」「開導航」「停導航」「我要過馬路」等
+- **匹配順序修正**：「過馬路結束」判斷移到「過馬路開始」之前
+- **檔案**：`app_main.py`（`start_ai_with_text_custom()`）
+
+#### 5. 熱詞（speech_contexts）擴充
+- 喚醒詞 10→18、結束詞 6→11、熱詞 11→19
+- `boost=20.0` 提高曼波變體辨識優先權
+
+### 測試驗證
+- `test_mambo_keyword.py`：106/106 通過（喚醒/結束/熱詞/誤觸發/s2t）
+- `test_voice_commands.py`：91/91 通過（全部語音指令端到端）
+- `test_asr_agc.py`：21/21 通過（AGC + 噪音環境）
+- `test_traditional_chinese_user.py`：繁簡混合 100%、cmn-Hant-TW 100%
+- `test_comprehensive_stress.py`：117/117 通過（生命週期+邊界+壓力）
+- **總計 435+ 條測試全部通過**
+
+### 關鍵決策記錄
+- 喚醒詞從「哈囉曼波」改為「曼波」：使用者明確指示「主要的關鍵字是曼波」
+- cmn-Hant-TW 維持為主 language_code：對比測試 100% vs zh-CN 87.5%
+- 只保留繁體中文測試：「使用者只會說繁體中文而已」
+- `_s2t()` 用 str.translate：零外部依賴，效能最佳
+- 詳細流程圖見 `MD/關鍵字語音流程圖.md`
+
+---
+
+## APP Debug ASR Dashboard（已完成，2026-04-30）
+
+### 問題
+使用者反映「APP 看不出來語音有沒有收到」，需要即時監控語音辨識狀態。
+
+### 方案
+在 APP 的 Debug 懸浮球面板（`debug_panel.dart`）加入分頁切換（總覽 / ASR 語音）。
+
+### ASR Dashboard 顯示內容
+1. **收音狀態指示燈**：🟢 聆聽中 / 🟠 處理中 / ⚪ 待機 + 麥克風狀態
+2. **即時辨識文字**：ASR partial text 即時顯示（語音輸入時 cyan 顏色更新）
+3. **伺服器 ASR 數據**：Partial 字數、Final 紀錄數、最新辨識結果（3 秒輪詢）
+4. **辨識歷史列表**：最近 30 筆 final 辨識結果（最新在上）
+
+### 技術架構
+- **資料流**：伺服器 WS `/ws_ui` 推送 `PARTIAL:text`、`FINAL:text`、`INIT:{partial, finals}`
+- **Provider**：`app_provider.dart` 新增 `asrPartialText` + `asrFinals`，即時更新
+- **UI**：`debug_panel.dart` 分頁切換，Consumer\<AppProvider\> reactive 更新
+- **伺服器 API**：`/api/debug_status` 新增 `current_partial` + `recent_finals` 欄位
+
+### 涉及檔案
+- `app_main.py`：debug API 新增欄位
+- `Android/lib/providers/app_provider.dart`：ASR 文字追蹤 + INIT 解析
+- `Android/lib/widgets/debug_panel.dart`：分頁 UI + ASR Dashboard

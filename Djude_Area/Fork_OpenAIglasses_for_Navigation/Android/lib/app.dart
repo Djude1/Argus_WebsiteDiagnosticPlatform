@@ -15,6 +15,7 @@ import 'screens/read_screen.dart';
 import 'screens/nav_destination_screen.dart';
 import 'screens/yoloe_ar_test_screen.dart';
 import 'screens/customer_service_screen.dart';
+import 'widgets/asr_status_overlay.dart';
 
 class AiGlassesApp extends StatelessWidget {
   const AiGlassesApp({super.key});
@@ -27,8 +28,12 @@ class AiGlassesApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'AI智慧眼鏡',
+        navigatorKey: AppProvider.navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark,
+        // 全域 ASR 狀態 overlay：所有頁面右上角顯示聆聽/處理中 + partial 辨識文字
+        builder: (context, child) =>
+            AsrStatusOverlay(child: child ?? const SizedBox.shrink()),
         initialRoute: '/splash',
         routes: {
           '/splash':      (_) => const SplashScreen(),

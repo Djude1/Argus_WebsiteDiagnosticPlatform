@@ -247,7 +247,8 @@ class CrossStreetNavigator:
         if self.obstacle_detector is None and os.getenv("AIGLASS_OBS_AUTO", "1") != "0":
             try:
                 if ObstacleDetectorClient is not None:
-                    model_path = os.getenv("AIGLASS_OBS_MODEL", "model/yoloe-11l-seg.pt")
+                    from config import OBSTACLE_MODEL as _DEFAULT_OBS_MODEL  # 預設值連動 .env / config
+                    model_path = os.getenv("AIGLASS_OBS_MODEL", _DEFAULT_OBS_MODEL)
                     self.obstacle_detector = ObstacleDetectorClient(model_path)
                     logger.info("[CROSS_STREET] 障碍物检测器已自动加载")
                 else:

@@ -23,6 +23,7 @@ from content.admin_views import (
     AdminImpactFeedbackView,
     AdminAnnouncementListView, AdminAnnouncementDetailView,
     AdminAnnouncementTagListView, AdminAnnouncementTagDetailView,
+    AdminApkUploadView,
 )
 from analytics.admin_views import AdminTrafficView, AdminActivityLogView
 
@@ -61,6 +62,8 @@ admin_api = [
     # 公告標籤管理
     path('announcement-tags/',          AdminAnnouncementTagListView.as_view(),   name='admin-announcement-tag-list'),
     path('announcement-tags/<int:pk>/', AdminAnnouncementTagDetailView.as_view(), name='admin-announcement-tag-detail'),
+    # APK 上傳
+    path('upload-apk/', AdminApkUploadView.as_view(), name='admin-apk-upload'),
 ]
 
 urlpatterns = [

@@ -1,0 +1,113 @@
+### 🎓 教室環境標籤對照表 (Classroom & Academic Labels)
+
+### 1. 教學核心設備 (Instructional Tech)
+
+- **Whiteboard / Blackboard**：白板/ 黑板
+- **Projector Screen**：投影幕
+- **Lectern / Podium**：講台
+- **Microphone**：麥克風
+- **Desktop PC**：桌上型電腦（電腦教室常見）
+- **Projector**：投影機（天花板上的設備）
+
+### 2. 學生區域與家具 (Student Area)
+
+- **Student Desk**：課桌
+- **Stacking Chair**：摺疊椅 / 疊放椅
+- **Backpack / Schoolbag**：書包（這可以用來判斷位置是否有人佔位）
+- **Laptop**：筆記型電腦
+- **Textbook**：教科書
+
+### 3. 教室基礎設施 (Infrastructure)
+
+- **Air Conditioner Controller**：冷氣遙控器 / 面板
+- **Power Strip**：延長線（學生找插座必備）
+- **Window / Blind**：窗戶 / 百葉窗
+- **Clock**：時鐘
+- **Speaker**：喇叭（廣播系統用）
+
+### 🛒 市場全場景標籤對照表 (Market & Grocery Labels)
+
+### 1. 零售與包裝商品 (Packaged Goods)
+
+這類商品通常有固定的形狀，適合用於自動結帳與貨架盤點。
+
+- **Coke Bottle / Can**：可樂瓶 / 罐
+- **Mineral Water**：礦泉水
+- **Milk Carton**：牛奶盒 (利樂包)
+- **Instant Noodle Bowl**：泡麵碗
+- **Snack Bag** ：零食袋
+- **Canned Food**：罐頭食品
+- **Glass Bottle**：玻璃瓶
+
+### 2. 生鮮蔬果 (Fresh Produce)
+
+這類標籤最能發揮分割模型的優勢，能精確區分重疊的蔬果。
+
+- **Apple**：蘋果
+- **Banana**：香蕉
+- **Orange**：橘子/ 橘子
+- **Dragon Fruit**：火龍果
+- **Grapes**：葡萄
+- **Strawberry**：草莓
+- **Broccoli**：花椰菜
+- **Cabbage**：高麗菜 / 捲心菜
+- **Carrot**：胡蘿蔔
+- **Bell Pepper** ：甜椒/ 青椒
+- **Onion**：洋蔥
+- **Potato**：馬鈴薯
+
+### 3. 生鮮肉類與蛋白質 (Meat & Protein)
+
+- **Raw Steak**：生牛排
+- **Chicken Breast**：雞胸肉
+- **Salmon Fillet**：鮭魚切片
+- **Shrimp**：蝦子
+- **Egg Carton**：雞蛋盒
+
+### 4. 市場設施與導航 (Facilities & Navigation)
+
+對於你的穿戴式導航專案，這些是避障與路徑規劃的核心標籤。
+
+- **Shopping Cart**：購物車
+- **Shopping Basket**：購物籃
+- **Checkout Counter**：結帳櫃檯
+- **Refrigerator Door**：冰箱門
+- **Display Shelf**：展示貨架
+- **Price Tag**：價格標籤
+- **Wet Floor Sign**：小心地滑告示牌
+- **Entry / Exit Gate**：入口 / 出口閘門
+
+### 🏠 室內環境標籤對照表 (Indoor Environment Labels)
+
+### 1. 障礙物與安全避讓 (Obstacles & Safety)
+
+這對於穿戴式設備預防碰撞至關重要。
+
+- **Door / Door Handle**：門 / 門把手（分割模型可以幫你找出手把的精確位置）
+- **Threshold / Step**：門檻 / 階梯
+- **Power Cord / Cable**：電源線 / 電線（這是掃地機器人和穿戴式設備最怕的「地雷」）
+- **Trash Can**：垃圾桶
+- **Potted Plant**：盆栽
+- **Glass Wall / Partition**：玻璃牆 / 隔板（透明物體偵測，對導航極具挑戰）
+
+### 2. 家具與互動設備 (Furniture & Interaction)
+
+用於定位使用者可以坐下或使用的物體。
+
+- **Office Chair**：辦公椅（包含輪子的細節）
+- **Sofa / Couch**：沙發
+- **Dining Table / Desk**：餐桌 / 書桌
+- **Water Dispenser**：飲水機
+- **Power Outlet**：電源插座
+- **Light Switch**：電燈開關
+
+### 3. 生活導航與標誌 (Navigation & Signs)
+
+幫助使用者在建築物內找到方向。
+
+- **Exit Sign**：安全出口標誌
+- **Elevator Button Panel**：電梯按鈕面板
+- **Restroom Sign**：廁所標誌
+- **Fire Extinguisher**：滅火器
+- **Bulletin Board**：佈告欄
+- **Wall Clock**：掛鐘

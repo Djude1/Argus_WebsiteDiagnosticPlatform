@@ -5,7 +5,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 import '../core/constants.dart';
+
+/// 工廠：建立 WebSocket（Android only，無 Web build）。
+///
+/// 不設 pingInterval：實測 5 秒 ping 對 audio/camera binary stream 太激進，
+/// server starlette 來不及回 pong 就被 client 強制關閉（close code 1005），
+/// 造成連續重連風暴。半關閉偵測改靠 server 端 ws_audio 的 15s frame timeout。
+WebSocketChannel _connectWs(String url) => IOWebSocketChannel.connect(url);
 
 typedef FrameCallback = void Function(Uint8List jpeg);
 
@@ -33,8 +41,8 @@ class WebSocketService {
     if (!_cameraActive) return;
     _cameraWs?.sink.close();
     _cameraSub?.cancel();
-    _cameraWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsCamera(host, port, secure: secure, baseUrl: baseUrl)),
+    _cameraWs = _connectWs(
+      AppConstants.wsCamera(host, port, secure: secure, baseUrl: baseUrl),
     );
     // 監聽關閉事件，自動重連
     _cameraSub = _cameraWs!.stream.listen(
@@ -73,8 +81,8 @@ class WebSocketService {
     if (!_audioWsActive) return;
     _audioWs?.sink.close();
     _audioWsSub?.cancel();
-    _audioWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsAudio(host, port, secure: secure, baseUrl: baseUrl)),
+    _audioWs = _connectWs(
+      AppConstants.wsAudio(host, port, secure: secure, baseUrl: baseUrl),
     );
     // 根據使用者設定決定是否繞過喚醒詞
     final startCmd = _bypassWake ? 'START:BYPASS' : 'START';
@@ -117,8 +125,8 @@ class WebSocketService {
     onUiMessage = onMessage;
     _uiWs?.sink.close();
     _uiSub?.cancel();
-    _uiWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsUi(host, port, secure: secure, baseUrl: baseUrl)),
+    _uiWs = _connectWs(
+      AppConstants.wsUi(host, port, secure: secure, baseUrl: baseUrl),
     );
     _uiSub = _uiWs!.stream.listen(
       (data) {
@@ -156,8 +164,8 @@ class WebSocketService {
     if (!_imuActive) return;
     _imuWs?.sink.close();
     _imuSub?.cancel();
-    _imuWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsImu(host, port, secure: secure, baseUrl: baseUrl)),
+    _imuWs = _connectWs(
+      AppConstants.wsImu(host, port, secure: secure, baseUrl: baseUrl),
     );
     _imuSub = _imuWs!.stream.listen(
       (_) {},
@@ -192,28 +200,39 @@ class WebSocketService {
   // ── Viewer WS（接收 YOLO 處理後 JPEG，下行）────────────────────────────
   WebSocketChannel?   _viewerWs;
   StreamSubscription? _viewerSub;
+  bool _viewerActive = false;
+  FrameCallback? _viewerOnFrame;
 
   void connectViewer({required FrameCallback onFrame}) {
+    _viewerOnFrame = onFrame;
+    _viewerActive  = true;
+    _doConnectViewer();
+  }
+
+  void _doConnectViewer() {
+    if (!_viewerActive) return;
     _viewerWs?.sink.close();
     _viewerSub?.cancel();
-    _viewerWs = WebSocketChannel.connect(
-      Uri.parse(AppConstants.wsViewer(host, port, secure: secure, baseUrl: baseUrl)),
+    _viewerWs = _connectWs(
+      AppConstants.wsViewer(host, port, secure: secure, baseUrl: baseUrl),
     );
     _viewerSub = _viewerWs!.stream.listen(
       (data) {
-        if (data is List<int>) onFrame(Uint8List.fromList(data));
-        if (data is Uint8List)  onFrame(data);
+        if (data is List<int>) _viewerOnFrame!(Uint8List.fromList(data));
+        if (data is Uint8List)  _viewerOnFrame!(data);
       },
-      onError: (_) {},
-      onDone:  () {},
+      onError: (_) => _scheduleReconnect(_doConnectViewer),
+      onDone:  ()  => _scheduleReconnect(_doConnectViewer),
     );
   }
 
   void disconnectViewer() {
+    _viewerActive = false;
     _viewerSub?.cancel();
     _viewerWs?.sink.close();
-    _viewerWs  = null;
-    _viewerSub = null;
+    _viewerWs     = null;
+    _viewerSub    = null;
+    _viewerOnFrame = null;
   }
 
   // ── 全部斷線 ─────────────────────────────────────────────────────────────

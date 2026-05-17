@@ -5,6 +5,7 @@
 
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 typedef ImuCallback    = void Function(Map<String, dynamic> data);
@@ -25,7 +26,9 @@ class ImuService {
   double _impactThreshold = 30.0;
 
   /// 觸發後的冷卻時間，避免連續誤觸
-  Duration _cooldown = const Duration(seconds: 30);
+  /// 預設 10 秒：足以擋掉「同一次摔倒在地上滾動」的重複觸發，
+  /// 又能讓使用者取消後立即偵測下一次（搭配 resetCooldown）
+  Duration _cooldown = const Duration(seconds: 10);
 
   DateTime?       _lastImpact;
   ImpactCallback? _onImpact;
@@ -34,6 +37,13 @@ class ImuService {
   void configure({double? impactThreshold, int? cooldownSeconds}) {
     if (impactThreshold != null) _impactThreshold = impactThreshold;
     if (cooldownSeconds != null) _cooldown = Duration(seconds: cooldownSeconds);
+  }
+
+  /// 清除冷卻紀錄：倒數畫面結束（取消或自動撥出）後呼叫，
+  /// 讓下一次撞擊立即可觸發，不需再等冷卻秒數
+  void resetCooldown() {
+    _lastImpact = null;
+    debugPrint('[IMU-DEBUG] 冷卻已重置，下次撞擊立即可觸發');
   }
 
   // ── 啟動 IMU 資料上行 ──────────────────────────────────────────────────────
@@ -55,6 +65,7 @@ class ImuService {
 
   // ── 啟動撞擊偵測（獨立，不需要啟動資料上行）─────────────────────────────
   void startImpactDetection({required ImpactCallback onImpact}) {
+    debugPrint('[IMU-DEBUG] startImpactDetection 註冊回呼成功');
     _onImpact = onImpact;
     // 若 start() 已建立 _accelSub，撞擊偵測直接共用（_checkImpact 在 listen 裡已呼叫）
     // 若尚未建立，才獨立建立一個
@@ -114,15 +125,25 @@ class ImuService {
 
     // 計算加速度合力（向量大小）
     final magnitude = sqrt(_ax * _ax + _ay * _ay + _az * _az);
+
+    // [DEBUG] 只在 magnitude > 15 m/s² (≈1.5G) 才印，避免靜止狀態洗版
+    if (magnitude > 15.0) {
+      debugPrint('[IMU-DEBUG] magnitude=${magnitude.toStringAsFixed(1)} m/s² '
+          '(${(magnitude / 9.8).toStringAsFixed(2)}G) threshold=$_impactThreshold');
+    }
+
     if (magnitude < _impactThreshold) return;
 
     // 冷卻期內不重複觸發
     final now = DateTime.now();
     if (_lastImpact != null && now.difference(_lastImpact!) < _cooldown) {
+      debugPrint('[IMU-DEBUG] 撞擊偵測到 magnitude=${magnitude.toStringAsFixed(1)} '
+          '但在冷卻期內，已跳過');
       return;
     }
 
     _lastImpact = now;
+    debugPrint('[IMU-DEBUG] >>> 觸發撞擊回呼 magnitude=${magnitude.toStringAsFixed(1)}');
     _onImpact!(magnitude);
   }
 }

@@ -143,15 +143,15 @@ class MainActivity : FlutterActivity() {
 
             val elapsedMs   = nowMs - _lastCpuTimeMs
             val tickDiff    = totalTicks - _lastCpuTicks
-            _lastCpuTicks   = totalTicks
-            _lastCpuTimeMs  = nowMs
+            if (elapsedMs <= 0) return _lastCpuPercent
 
-            if (elapsedMs <= 0 || _lastCpuTimeMs == nowMs) return _lastCpuPercent
+            _lastCpuTicks  = totalTicks
+            _lastCpuTimeMs = nowMs
 
             // Android 時鐘頻率通常為 100 ticks/s
-            val hz       = 100L
-            val cores    = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
-            val pct = (tickDiff * 1000L / hz / elapsedMs * 100L / cores).toInt()
+            // 不除 cores：顯示 APP 自身等效單核 CPU %（NNAPI 卸載到 GPU 後數值仍有意義）
+            val hz  = 100L
+            val pct = (tickDiff * 100000L / hz / elapsedMs).toInt()
             _lastCpuPercent = pct.coerceIn(0, 100)
             _lastCpuPercent
         } catch (_: Exception) {
