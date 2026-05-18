@@ -56,8 +56,11 @@ dependencies:
   # ── 本地通知（背景撞擊全螢幕警示）────────────────────
   flutter_local_notifications: ^17.2.0
 
-  # ── 手機端 ONNX 推論（yoloe-26n-seg AR 偵測）─────────
-  onnxruntime: ^1.4.1
+  # ── 手機端 ONNX 推論（yoloe-26s-seg 偵測模式）──────────
+  # onnxruntime_v2：ORT 1.23.2，支援 NNAPI / setIntraOpNumThreads
+  onnxruntime_v2: 1.23.2+2
+  # dart:ffi 輔助工具（calloc）；onnxruntime_v2 的傳遞依賴，明示加入供直接使用
+  ffi: ^2.1.0
   # 影像處理：CameraImage YUV→RGB 轉換、resize、CHW 排列
   image: ^4.2.0
 

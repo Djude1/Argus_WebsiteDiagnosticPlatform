@@ -65,14 +65,14 @@ USE_VERTEX_AI: bool  = os.environ.get("USE_VERTEX_AI", "true").lower() == "true"
 # 模型路徑（預設為相對路徑 model/，可在 .env 覆寫為絕對路徑）
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# 盲道分割模型
-BLIND_PATH_MODEL: str = os.getenv("BLIND_PATH_MODEL", "model/ALL.pt")
-# 障礙物偵測模型（ALL.pt 含障礙物類別，亦可換回 yoloe-11l-seg.pt）
-OBSTACLE_MODEL: str = os.getenv("OBSTACLE_MODEL", "model/ALL.pt")
-# YOLO-E 後端預設路徑（與 OBSTACLE_MODEL 共用）
-YOLOE_MODEL_PATH: str = os.getenv("YOLOE_MODEL_PATH", "model/ALL.pt")
-# 紅綠燈偵測模型
-TRAFFICLIGHT_MODEL: str = os.getenv("TRAFFICLIGHT_MODEL", "model/ALL.pt")
+# 盲道分割模型（源專案 yolo-seg.pt，2 類：road_crossing / blind_path）
+BLIND_PATH_MODEL: str = os.getenv("BLIND_PATH_MODEL", "model/yolo-seg.pt")
+# 障礙物偵測模型（yoloe-26s-seg：41MB，get_text_pe 預算 embedding 只算白名單類別，比 ALL.pt 快）
+OBSTACLE_MODEL: str = os.getenv("OBSTACLE_MODEL", "model/yoloe-26s-seg.pt")
+# YOLO-E 後端預設路徑（與 OBSTACLE_MODEL 共用同一個 small 模型）
+YOLOE_MODEL_PATH: str = os.getenv("YOLOE_MODEL_PATH", "model/yoloe-26s-seg.pt")
+# 紅綠燈偵測模型（trafficlight.pt 源專案專訓，已知地雷：中國資料訓練，台灣紅綠燈識別率不確定）
+TRAFFICLIGHT_MODEL: str = os.getenv("TRAFFICLIGHT_MODEL", "model/trafficlight.pt")
 # 物品識別模型（購物場景）
 SHOPPING_MODEL: str = os.getenv("SHOPPING_MODEL", "model/shoppingbest5.pt")
 # MediaPipe 手部偵測任務檔

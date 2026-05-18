@@ -18,20 +18,22 @@ function isValidUrl(str) {
 }
 
 export default function ServerConfig() {
-  const [serverUrl, setServerUrl] = useState('')
-  const [note, setNote]           = useState('')
-  const [updatedAt, setUpdatedAt] = useState(null)
-  const [loading, setLoading]     = useState(true)
-  const [saving, setSaving]       = useState(false)
-  const [message, setMessage]     = useState(null) // { type: 'success'|'error', text }
-  const [urlError, setUrlError]   = useState('') // URL 驗證錯誤訊息
-  const [savedAt, setSavedAt]     = useState(null) // 儲存成功時間戳
+  const [serverUrl, setServerUrl]       = useState('')
+  const [supportPhone, setSupportPhone] = useState('')
+  const [note, setNote]                 = useState('')
+  const [updatedAt, setUpdatedAt]       = useState(null)
+  const [loading, setLoading]           = useState(true)
+  const [saving, setSaving]             = useState(false)
+  const [message, setMessage]           = useState(null) // { type: 'success'|'error', text }
+  const [urlError, setUrlError]         = useState('') // URL 驗證錯誤訊息
+  const [savedAt, setSavedAt]           = useState(null) // 儲存成功時間戳
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await getContentSection('app-config')
       setServerUrl(res.data.server_url ?? '')
+      setSupportPhone(res.data.support_phone ?? '')
       setNote(res.data.note ?? '')
       setUpdatedAt(res.data.updated_at ?? null)
     } catch {
@@ -54,10 +56,12 @@ export default function ServerConfig() {
     setMessage(null)
     try {
       const res = await updateContentSection('app-config', {
-        server_url: serverUrl.trim(),
-        note:       note.trim(),
+        server_url:    serverUrl.trim(),
+        support_phone: supportPhone.trim(),
+        note:          note.trim(),
       })
       setServerUrl(res.data.server_url ?? '')
+      setSupportPhone(res.data.support_phone ?? '')
       setNote(res.data.note ?? '')
       setUpdatedAt(res.data.updated_at ?? null)
       setMessage({ type: 'success', text: '儲存成功！APP 下次啟動將套用新設定' })
@@ -134,6 +138,23 @@ export default function ServerConfig() {
           )}
           <p className="text-xs text-slate-400 mt-1">
             需包含路徑（例如 <code>/GlassesBackstage/</code> 或 <code>/device/1/</code>），WebSocket 才能正確連線
+          </p>
+        </div>
+
+        {/* 客服電話 */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            客服電話（選填）
+          </label>
+          <input
+            type="tel"
+            value={supportPhone}
+            onChange={e => { setSupportPhone(e.target.value); setMessage(null) }}
+            placeholder="例如：0800-123-456"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            視障使用者連線失敗時，APP 顯示此號碼並提供一鍵撥打
           </p>
         </div>
 

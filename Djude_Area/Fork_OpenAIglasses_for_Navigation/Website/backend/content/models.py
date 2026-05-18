@@ -274,6 +274,10 @@ class AppServerConfig(SingletonModel):
         'AI 伺服器 URL', max_length=500, blank=True, default='',
         help_text='APP 連線的 AI 伺服器位址，例如：https://xxxx.devtunnels.ms 或 http://192.168.1.100:8081',
     )
+    support_phone = models.CharField(
+        '客服電話', max_length=30, blank=True, default='',
+        help_text='視障使用者連線失敗時顯示的客服電話號碼，例如：0800-123-456',
+    )
     note = models.TextField(
         '備註', blank=True, default='',
         help_text='說明目前伺服器狀態，例如：DevTunnel URL，每次重啟需更新',

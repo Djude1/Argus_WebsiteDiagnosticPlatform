@@ -331,10 +331,27 @@ async def generate_text_async(content_list: List[Dict[str, Any]],
     )
 
 def _call_tts(text: str, voice: str) -> Optional[bytes]:
-    """呼叫 Gemini TTS，回傳 PCM16 24kHz bytes（阻塞式）。"""
+    """呼叫 TTS，回傳 PCM16 24kHz bytes（阻塞式）。
+
+    優先用 Google Cloud WaveNet（走 GCP 試用金，對話/陳述句皆穩定）。
+    Gemini TTS 對對話形式句子常返 400（"Model tried to generate text..."），
+    留作後備（WaveNet 失敗時才嘗試）。voice 參數僅 Gemini TTS 用，WaveNet 忽略。
+    """
     # TTS 模型對無標點的短句會返回 finishReason=OTHER，補句號確保正常生成
     if text and text[-1] not in "。！？!?.，,":
         text = text + "。"
+
+    # 第一優先：WaveNet（cmn-TW-Wavenet-A，PCM16 24kHz）
+    try:
+        from audio_player import _wavenet_tts
+        audio = _wavenet_tts(text)
+        if audio:
+            return audio
+        print(f"[TTS] WaveNet 回傳空音訊，fallback Gemini TTS", flush=True)
+    except Exception as e:
+        print(f"[TTS] WaveNet 例外 ({e})，fallback Gemini TTS", flush=True)
+
+    # 後備：Gemini TTS（可能因對話形式句子 400，繼續嘗試）
     payload = json.dumps({
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {

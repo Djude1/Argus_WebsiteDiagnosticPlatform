@@ -16,7 +16,6 @@ import '../providers/app_provider.dart';
 import '../widgets/debug_panel.dart';
 import 'contacts_screen.dart';
 import 'emergency_select_screen.dart';
-import 'emergency_countdown_screen.dart';
 
 class BlindScreen extends StatefulWidget {
   const BlindScreen({super.key});
@@ -35,7 +34,7 @@ class _BlindScreenState extends State<BlindScreen>
   String _prevNavState    = '';
   int    _prevMsgCount    = 0;
   bool?  _prevConnected;
-  int    _prevImpactVersion = 0;   // 上一次消化的撞擊版本號，避免重複彈出
+  String _prevAsrState    = 'standby';  // ASR 收音狀態追蹤
 
   // DEBUG 懸浮球（僅開發人員模式顯示）
   OverlayEntry? _debugEntry;
@@ -50,6 +49,7 @@ class _BlindScreenState extends State<BlindScreen>
       _prevNavState  = app.navState;
       _prevMsgCount  = app.messageCount;
       _prevConnected = app.connected;
+      _prevAsrState  = app.asrState;
       app.addListener(_onAppChanged);
       _announce(app.connected
           ? 'AI智慧眼鏡已連線。向左滑動可進入設定頁面。'
@@ -111,85 +111,16 @@ class _BlindScreenState extends State<BlindScreen>
       _prevMsgCount = app.messageCount;
     }
 
-    // ── 消化待辦撞擊事件（前台直接觸發 / 背景返回後補觸發）───────────────
-    // 以版本號比對取代力道值比對，確保相同力道的撞擊也能重複觸發
-    final impact        = app.pendingImpactMagnitude;
-    final impactVersion = app.impactVersion;
-    if (impact > 0 && impactVersion != _prevImpactVersion) {
-      _prevImpactVersion = impactVersion;
-      app.clearPendingImpact();
-      if (app.contacts.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EmergencyCountdownScreen(
-              magnitude: impact,
-              onOutcome: (outcome) =>
-                  _handleImpactOutcome(impact, outcome),
-            ),
-          ),
-        );
-      }
+    // ── ASR 收音狀態變更 ────────────────────────────────────────────────
+    if (_prevAsrState != app.asrState) {
+      _prevAsrState = app.asrState;
+      // listening 狀態由「開始對話」音效告知，不再額外 TTS 播報
+      // standby 由「結束收音」音效告知，不再額外 TTS 播報
+      // 但需要 setState 讓 UI 更新（狀態色條閃爍）
+      setState(() {});
     }
-  }
 
-  // ── 撞擊倒數結束後：詢問是否誤判，再回報伺服器 ──────────────────────────
-  Future<void> _handleImpactOutcome(double magnitude, String outcome) async {
-    if (!mounted) return;
-    final app = context.read<AppProvider>();
-
-    // 等畫面回到 BlindScreen 後再彈出對話框
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
-    final isFalse = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          '這次偵測是誤判嗎？',
-          style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '撞擊力道：${magnitude.toStringAsFixed(1)} m/s²',
-              style: const TextStyle(fontSize: 14, color: Colors.white54),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '您的回饋將幫助我們調整偵測靈敏度。',
-              style: TextStyle(fontSize: 14, color: Colors.white70),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('是，這是誤判',
-                style: TextStyle(color: Colors.orangeAccent, fontSize: 16)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B5E20),
-            ),
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('不是，真的摔倒了',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
-          ),
-        ],
-      ),
-    );
-
-    if (isFalse == null || !mounted) return;
-    // 回報伺服器（含誤判旗標）
-    app.reportImpactEvent(magnitude, outcome, isFalsePositive: isFalse);
-    app.speak(isFalse ? '已記錄為誤判，感謝回饋' : '已記錄，請注意安全');
+    // 撞擊偵測 UI 由 AppProvider 透過 navigatorKey 全域 push，BlindScreen 不參與
   }
 
   void _announce(String text) =>
@@ -315,7 +246,7 @@ class _BlindScreenState extends State<BlindScreen>
                 HapticFeedback.selectionClick();
                 setState(() => _currentPage = i);
                 if (i == 0) _announce('首頁。導航、閱讀、緊急求救。');
-                if (i == 1) _announce('設定頁面。有緊急聯絡人、語音開關、語音速度、報位方式。向右滑動返回首頁。');
+                if (i == 1) _announce('設定頁面。有緊急聯絡人、語音開關、語音速度、報位方式、喚醒詞。向右滑動返回首頁。');
               },
               children: [
                 // ── 頁面 0：主功能（預設）─────────────────────────────────
@@ -340,6 +271,9 @@ class _BlindScreenState extends State<BlindScreen>
               left: 0, right: 0,
               child: _PageDots(current: _currentPage, total: 2),
             ),
+
+            // 右上「聆聽中」chip 已由全域 AsrStatusOverlay 統一處理，
+            // 此處只保留頂部 _StatusBar 的色條閃爍作為視障者邊緣觸覺/視覺提示
           ],
         ),
       ),
@@ -382,7 +316,7 @@ class _MainPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ── 頂部狀態色條 ───────────────────────────────────────────────
-        _StatusBar(connected: app.connected, navState: app.navState),
+        _StatusBar(connected: app.connected, navState: app.navState, asrState: app.asrState),
 
         // ── 頁面標題列 ─────────────────────────────────────────────────
         Container(
@@ -755,6 +689,27 @@ class _SettingsPageState extends State<_SettingsPage> {
                   },
                 ),
 
+                const SizedBox(height: 4),
+
+                // ── 喚醒詞開關（需先說「哈囉」才收音）────────────────────
+                _BigBlock(
+                  label: '喚醒詞：${app.wakeWordEnabled ? '開啟' : '關閉'}',
+                  sublabel: app.wakeWordEnabled
+                      ? '需先說哈囉才收音　點擊關閉'
+                      : '語音直接送AI處理　點擊開啟',
+                  color: app.wakeWordEnabled
+                      ? const Color(0xFF00695C)
+                      : const Color(0xFF424242),
+                  onAnnounce: widget.onAnnounce,
+                  onAction: () {
+                    final next = !app.wakeWordEnabled;
+                    app.setWakeWordEnabled(next);
+                    widget.onAnnounce(
+                      next ? '喚醒詞已開啟，請先說哈囉再說指令' : '喚醒詞已關閉，語音直接送AI處理',
+                    );
+                  },
+                ),
+
                 // ── 切換開發者模式（僅手機開啟開發人員選項時顯示）───
                 if (_isDevMode) ...[
                   const SizedBox(height: 4),
@@ -819,15 +774,54 @@ class _TriggerButton extends StatelessWidget {
 // 共用 UI 小元件
 // ════════════════════════════════════════════════════════════════════════════
 
-class _StatusBar extends StatelessWidget {
+class _StatusBar extends StatefulWidget {
   final bool connected;
   final String navState;
-  const _StatusBar({required this.connected, required this.navState});
+  final String asrState;
+  const _StatusBar({required this.connected, required this.navState, required this.asrState});
+
+  @override
+  State<_StatusBar> createState() => _StatusBarState();
+}
+
+class _StatusBarState extends State<_StatusBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final navigating = !['IDLE', 'CHAT', ''].contains(navState);
-    Color c = !connected
+    final listening = widget.asrState == 'listening';
+    final navigating = !['IDLE', 'CHAT', ''].contains(widget.navState);
+
+    if (listening) {
+      return AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, __) {
+          final alpha = (120 + 135 * _ctrl.value).toInt();
+          return Container(
+            height: 6,
+            color: Color.fromARGB(alpha, 255, 179, 0),
+          );
+        },
+      );
+    }
+
+    Color c = !widget.connected
         ? Colors.grey.shade800
         : navigating
             ? Colors.green.shade700

@@ -19,6 +19,10 @@ class AudioService {
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription? _recordSub;
   bool _recording = false;
+  PcmChunkCallback? _onChunkCb;        // 保存 callback 供自動重啟使用
+  DateTime _lastChunkAt = DateTime.now();
+  Timer? _micWatchdog;
+  bool _restarting = false;            // 防止 onError + watchdog 同時重啟
 
   // ── TTS 串流重連狀態 ─────────────────────────────────────────────────────
   bool _shouldPlayStream = false;   // 是否應維持串流播放
@@ -30,20 +34,77 @@ class AudioService {
   Future<void> startMicrophone({required PcmChunkCallback onChunk}) async {
     if (_recording) return;
     _recording = true;
+    _onChunkCb = onChunk;
 
+    await _startInternal();
+    _startMicWatchdog();
+  }
+
+  /// 內部啟動 stream（首次啟動 + 自動重啟共用）
+  Future<void> _startInternal() async {
     final stream = await _recorder.startStream(const RecordConfig(
       encoder:    AudioEncoder.pcm16bits,
       sampleRate: 16000,
       numChannels: 1,
     ));
 
-    _recordSub = stream.listen((data) {
-      onChunk(Uint8List.fromList(data));
+    _lastChunkAt = DateTime.now();
+    _recordSub = stream.listen(
+      (data) {
+        _lastChunkAt = DateTime.now();
+        _onChunkCb?.call(Uint8List.fromList(data));
+      },
+      onError: (e) {
+        debugPrint('[AudioService] 錄音 stream onError: $e → 嘗試重啟麥克風');
+        _restartMic('stream onError');
+      },
+      onDone: () {
+        debugPrint('[AudioService] 錄音 stream onDone → 嘗試重啟麥克風');
+        _restartMic('stream onDone');
+      },
+      cancelOnError: true,
+    );
+  }
+
+  /// Watchdog：5 秒沒新 chunk → 強制重啟麥克風
+  /// （即使 stream 沒拋 onError/onDone，半關閉狀態也能恢復）
+  void _startMicWatchdog() {
+    _micWatchdog?.cancel();
+    _micWatchdog = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!_recording) return;
+      final since = DateTime.now().difference(_lastChunkAt).inSeconds;
+      if (since >= 5) {
+        debugPrint('[AudioService] watchdog: ${since}s 無新 audio chunk → 重啟麥克風');
+        _restartMic('watchdog ${since}s no chunk');
+      }
     });
+  }
+
+  Future<void> _restartMic(String reason) async {
+    if (_restarting || !_recording || _onChunkCb == null) return;
+    _restarting = true;
+    try {
+      try { await _recordSub?.cancel(); } catch (_) {}
+      _recordSub = null;
+      try { await _recorder.stop(); } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 200));
+      await _startInternal();
+      debugPrint('[AudioService] 麥克風重啟成功（原因: $reason）');
+    } catch (e) {
+      debugPrint('[AudioService] 麥克風重啟失敗: $e（原因: $reason）→ 1 秒後重試');
+      Future.delayed(const Duration(seconds: 1), () {
+        if (_recording) _restartMic('retry after fail: $reason');
+      });
+    } finally {
+      _restarting = false;
+    }
   }
 
   Future<void> stopMicrophone() async {
     _recording = false;
+    _onChunkCb = null;
+    _micWatchdog?.cancel();
+    _micWatchdog = null;
     await _recordSub?.cancel();
     _recordSub = null;
     await _recorder.stop();

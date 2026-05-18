@@ -90,6 +90,11 @@ class ObstacleDetectorClient:
                 self.model = YOLOE(model_path)
                 self.model.to(DEVICE)
                 self.model.fuse()
+                # 真正的 YOLOE 模型類別名稱為純數字（'0','1','2'...）；
+                # 若有具名類別（'person','car'...）代表這是標準 YOLO，強制 fallback。
+                class_names = list(self.model.names.values())
+                if not all(str(n).isdigit() for n in class_names):
+                    raise ValueError(f"具名類別模型，非 YOLOE（{class_names[:3]}...）")
                 # 嘗試預計算文字特徵，若成功代表確實是 YOLOE 模型
                 logger.info("正在為 YOLOE 預計算白名單文字特徵...")
                 if IS_CUDA and AMP_DTYPE is not None:

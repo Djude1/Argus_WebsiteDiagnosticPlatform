@@ -77,7 +77,7 @@ class WebsiteAnnouncementsView(generics.ListAPIView):
     """
     前台網站公告列表 API
     - 僅顯示 is_active=True 且 show_on_website=True 的公告
-    - 支援標籤篩選
+    - 支援標籤篩選：?tag=<slug>
     """
     serializer_class = AppAnnouncementSerializer
     permission_classes = [AllowAny]
@@ -86,11 +86,10 @@ class WebsiteAnnouncementsView(generics.ListAPIView):
         now = timezone.now()
         qs = AppAnnouncement.objects.filter(
             is_active=True,
-            show_on_website=True  # 僅顯示允許網站展示的公告
+            show_on_website=True
         ).filter(
             Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=now)
         )
-        # 支援標籤篩選
         tag_slug = self.request.query_params.get('tag')
         if tag_slug:
             qs = qs.filter(tags__slug=tag_slug)

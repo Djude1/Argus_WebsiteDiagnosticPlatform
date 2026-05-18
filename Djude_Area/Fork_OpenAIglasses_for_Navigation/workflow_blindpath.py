@@ -248,10 +248,12 @@ class BlindPathNavigator:
         self.last_traffic_light_state = "unknown"
         self.green_light_announced = False
         
-        # 阈值设置
+        # 阈值设置（以類別名稱為 key，跨模型相容：yolo-seg.pt 與 ALL.pt）
         self.CLASS_CONF_THRESHOLDS = {
-            8: 0.20,  # guide_bricks（ALL.pt）→ 盲道
-            9: 0.30,  # crossing_crosswalk（ALL.pt）→ 斑馬線
+            'blind_path':         0.20,  # yolo-seg.pt
+            'guide_bricks':       0.20,  # ALL.pt
+            'road_crossing':      0.30,  # yolo-seg.pt
+            'crossing_crosswalk': 0.30,  # ALL.pt
         }
         
         # 导航阈值
@@ -905,30 +907,39 @@ class BlindPathNavigator:
             # imgsz=320：比預設 640 快約 3-4 倍，盲道為地面大面積特徵，精度仍足夠
             # half=True：FP16 半精度推理（GPU 限定），再加速 ~1.5 倍
             _use_half = torch.cuda.is_available()
+            # 移除 classes filter：改用 class_name 匹配，跨模型相容（yolo-seg.pt 與 ALL.pt）
             results = self.yolo_model.predict(
-                image, verbose=False, conf=min_conf, classes=[8, 9],
+                image, verbose=False, conf=min_conf,
                 imgsz=320, half=_use_half
             )
-            
-            if (results and results[0] and results[0].masks is not None and 
+
+            if (results and results[0] and results[0].masks is not None and
                 results[0].boxes is not None and len(results[0].masks.data) > 0):
-                
+
+                names = results[0].names
                 for mask_tensor, conf_tensor, cls_tensor in zip(
                     results[0].masks.data, results[0].boxes.conf, results[0].boxes.cls
                 ):
                     class_id = int(cls_tensor.item())
                     confidence = float(conf_tensor.item())
-                    threshold = self.CLASS_CONF_THRESHOLDS.get(class_id, 1.0)
-                    
+                    # 用類別名稱查 threshold 與分類，跨模型相容
+                    if isinstance(names, dict):
+                        class_name = names.get(class_id, '')
+                    elif isinstance(names, (list, tuple)) and 0 <= class_id < len(names):
+                        class_name = names[class_id]
+                    else:
+                        class_name = ''
+                    threshold = self.CLASS_CONF_THRESHOLDS.get(class_name, 1.0)
+
                     if confidence >= threshold:
                         current_mask = self._tensor_to_mask(mask_tensor, image.shape[1], image.shape[0])
-                        
-                        if class_id == 8:  # guide_bricks → 盲道
+
+                        if class_name in ('blind_path', 'guide_bricks'):  # 盲道
                             if blind_path_mask is None:
                                 blind_path_mask = current_mask
                             else:
                                 blind_path_mask = cv2.bitwise_or(blind_path_mask, current_mask)
-                        elif class_id == 9:  # crossing_crosswalk → 斑馬線
+                        elif class_name in ('road_crossing', 'crossing_crosswalk'):  # 斑馬線
                             if crosswalk_mask is None:
                                 crosswalk_mask = current_mask
                             else:

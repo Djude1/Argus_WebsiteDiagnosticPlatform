@@ -323,7 +323,7 @@ class AppAnnouncement(models.Model):
         '排程時間', null=True, blank=True,
         help_text='留空表示立即生效；設定後到達該時間才對 APP 可見',
     )
-    # 新增：標籤系統與網站顯示
+    # 標籤系統與網站顯示
     tags = models.ManyToManyField(
         AnnouncementTag,
         verbose_name='標籤',
@@ -332,7 +332,7 @@ class AppAnnouncement(models.Model):
     )
     show_on_website = models.BooleanField(
         '顯示於網站',
-        default=False,  # 重要：預設 False，避免既有資料洩漏
+        default=False,
         help_text='勾選後，前台公告頁會顯示此公告'
     )
     created_at   = models.DateTimeField('建立時間', auto_now_add=True)

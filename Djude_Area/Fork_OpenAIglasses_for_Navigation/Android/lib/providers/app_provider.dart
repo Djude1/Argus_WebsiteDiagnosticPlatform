@@ -22,8 +22,12 @@ import '../services/gps_navigation_service.dart';
 import '../services/emergency_notification_service.dart';
 import '../services/voice_cache_service.dart';
 import '../services/local_voice_service.dart';
+import '../screens/emergency_countdown_screen.dart';
 
 class AppProvider extends ChangeNotifier {
+  /// 全域 NavigatorKey — 讓 Provider 可在任何頁面 push 倒數畫面（摔倒偵測）
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   // ── 伺服器設定 ──────────────────────────────────────────────────────────
   String _host         = AppConstants.defaultHost;
   int    _port         = AppConstants.defaultPort;
@@ -70,6 +74,21 @@ class AppProvider extends ChangeNotifier {
   // false → 語音直接送 AI 處理（預設關閉喚醒詞）
   bool _wakeWordEnabled = false;
   bool get wakeWordEnabled => _wakeWordEnabled;
+
+  // ── ASR 收音狀態 ───────────────────────────────────────────────────────────
+  // "standby"    → 待機中，等待喚醒詞或靜音
+  // "listening"  → 正在聆聽使用者的語音指令
+  // "processing" → 語音已送出，等待 AI 回應
+  String _asrState = 'standby';
+  String get asrState => _asrState;
+  bool get isListening => _asrState == 'listening';
+
+  // ── ASR 辨識文字追蹤 ──────────────────────────────────────────────────────
+  String _asrPartialText = '';          // 即時辨識中的文字
+  String get asrPartialText => _asrPartialText;
+
+  final List<String> _asrFinals = [];   // 辨識完成的歷史紀錄（最近 30 筆）
+  List<String> get asrFinals => List.unmodifiable(_asrFinals);
 
   // ── 方位播報模式 ───────────────────────────────────────────────────────────
   // "clock"    → 時鐘方向（如：3點鐘方向）
@@ -292,7 +311,8 @@ class AppProvider extends ChangeNotifier {
 
   // ── 裝置感測器設定（固定預設值）──────────────────────────────────────────
   final double _impactThreshold = 30.0;   // m/s²，預設 3G
-  final int    _cooldownSeconds = 30;     // 冷卻秒數
+  // 冷卻 10 秒：擋同一次摔倒的重複觸發，但倒數結束後會立即 resetCooldown()
+  final int    _cooldownSeconds = 10;
 
   double get impactThreshold => _impactThreshold;
   int    get cooldownSeconds  => _cooldownSeconds;
@@ -319,46 +339,117 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── 背景撞擊偵測狀態 ─────────────────────────────────────────────────────
-  bool   _appInForeground       = true;
+  bool   _appInForeground        = true;
+  /// 背景偵測到的撞擊力道，等使用者點通知回到前台後補彈倒數畫面
   double _pendingImpactMagnitude = 0.0;
-  /// 每次新撞擊遞增，BlindScreen 以版本號比對，避免相同力道的撞擊被擋住
-  int    _impactVersion          = 0;
-
-  /// 待辦撞擊量（> 0 表示有未處理的撞擊，BlindScreen 回到前台後消化）
-  double get pendingImpactMagnitude => _pendingImpactMagnitude;
-  int    get impactVersion          => _impactVersion;
 
   /// App 前台/背景狀態切換（由 BlindScreen 的 WidgetsBindingObserver 呼叫）
   void handleLifecycleState(AppLifecycleState state) {
     _appInForeground = (state == AppLifecycleState.resumed);
     if (_appInForeground && _pendingImpactMagnitude > 0) {
-      // App 回到前台，取消通知並通知 BlindScreen 彈出倒數畫面
+      // App 回到前台：取消系統通知，補彈倒數畫面
       EmergencyNotificationService().cancelFallAlert();
-      notifyListeners();
+      final m = _pendingImpactMagnitude;
+      _pendingImpactMagnitude = 0.0;
+      _showImpactCountdown(m);
     }
   }
 
-  /// BlindScreen 消化撞擊後呼叫，清除待辦狀態
-  void clearPendingImpact() {
-    _pendingImpactMagnitude = 0.0;
-  }
-
-  /// IMU 撞擊回呼：在 Provider 層統一處理（前台 / 背景均有效）
+  /// IMU 撞擊回呼：Provider 層統一處理，任何頁面都會觸發
   void _onImpactDetected(double magnitude) {
+    debugPrint('[IMPACT-DEBUG] _onImpactDetected 收到事件 '
+        'magnitude=${magnitude.toStringAsFixed(1)} '
+        'contacts=${_contacts.length} '
+        'foreground=$_appInForeground');
     if (_contacts.isEmpty) {
       // 無緊急連絡人，僅記錄（no-op），不觸發倒數
+      debugPrint('[IMPACT-DEBUG] contacts 為空，直接 return，不彈倒數');
       reportImpactEvent(magnitude, 'no_contacts');
       return;
     }
-    _pendingImpactMagnitude = magnitude;
-    _impactVersion++;
     if (_appInForeground) {
-      // 前台：透過 notifyListeners 讓 BlindScreen 彈出倒數畫面
-      notifyListeners();
+      debugPrint('[IMPACT-DEBUG] 前台 → 透過 navigatorKey push 倒數畫面');
+      _showImpactCountdown(magnitude);
     } else {
-      // 背景：顯示全螢幕系統通知，喚醒使用者注意
+      // 背景：先存待辦量，發系統通知；回前台時 handleLifecycleState 會補彈
+      debugPrint('[IMPACT-DEBUG] 背景 → 顯示系統通知，等回前台補彈');
+      _pendingImpactMagnitude = magnitude;
       EmergencyNotificationService().showFallAlert(magnitude);
     }
+  }
+
+  /// 用全域 NavigatorKey push 倒數畫面，不受當前頁面是 Blind/Home/Settings 影響
+  void _showImpactCountdown(double magnitude) {
+    final nav = navigatorKey.currentState;
+    debugPrint('[IMPACT-DEBUG] _showImpactCountdown navigatorKey.currentState=${nav == null ? "NULL" : "OK"}');
+    if (nav == null) return;
+    nav.push(MaterialPageRoute(
+      builder: (_) => EmergencyCountdownScreen(
+        magnitude: magnitude,
+        onOutcome: (outcome) => _afterImpactCountdown(magnitude, outcome),
+      ),
+    ));
+    debugPrint('[IMPACT-DEBUG] 倒數畫面已 push');
+  }
+
+  /// 倒數結束後彈誤判詢問 dialog，再把結果回報伺服器
+  Future<void> _afterImpactCountdown(double magnitude, String outcome) async {
+    debugPrint('[IMPACT-DEBUG] _afterImpactCountdown outcome=$outcome');
+    // 倒數結束（取消或自動撥出）→ 立即重置冷卻，下次撞擊立刻可再觸發
+    _imu.resetCooldown();
+    // 等畫面回到原本所在頁面後再彈 dialog
+    await Future.delayed(const Duration(milliseconds: 400));
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+
+    final isFalse = await showDialog<bool>(
+      // ignore: use_build_context_synchronously
+      context: ctx,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          '這次偵測是誤判嗎？',
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '撞擊力道：${magnitude.toStringAsFixed(1)} m/s²',
+              style: const TextStyle(fontSize: 14, color: Colors.white54),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '您的回饋將幫助我們調整偵測靈敏度。',
+              style: TextStyle(fontSize: 14, color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('是，這是誤判',
+                style: TextStyle(color: Colors.orangeAccent, fontSize: 16)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B5E20),
+            ),
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('不是，真的摔倒了',
+                style: TextStyle(color: Colors.white, fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+
+    if (isFalse == null) return;
+    reportImpactEvent(magnitude, outcome, isFalsePositive: isFalse);
+    await speak(isFalse ? '已記錄為誤判，感謝回饋' : '已記錄，請注意安全');
   }
 
   // ── 回報撞擊事件（含使用者誤判回饋）────────────────────────────────────────
@@ -394,7 +485,6 @@ class AppProvider extends ChangeNotifier {
     _ws.connectImu();
 
     await _startCamera();
-    await _startMicrophone();
     _imu.start(onData: (d) => _ws.sendImu(d));
 
     // 重置伺服器導航狀態：僅在伺服器確實有導航在運行時才發送停止指令，避免廣播無謂的錯誤訊息
@@ -419,10 +509,23 @@ class AppProvider extends ChangeNotifier {
     // ignore: unawaited_futures
     _audio.playStreamWav(_host, _port, secure: _secure, baseUrl: _baseUrl);
     _connected = true;
+    _addMessage('[版本] APP 2026-05-13 ASR 修復版 — chip+filter+ping+寬鬆 nav');
+    _addMessage('[系統] 已連線 SERVER → ${_endpointLabel()}');
     notifyListeners();
 
     startPollingNavState();
     _startWatchdog();
+
+    // 麥克風立即啟動（使用者要求一進入 APP 就收音）
+    // 注意：splash 階段的歡迎 TTS 可能被錄到，使用者已知此限制
+    await _startMicrophone();
+  }
+
+  /// 構造目前 server 端點字串（baseUrl 優先，否則回 host:port）
+  String _endpointLabel() {
+    final base = _baseUrl.trim();
+    if (base.isNotEmpty) return base;
+    return '$_host:$_port';
   }
 
   // ── Watchdog：定期確認連線，斷線自動恢復 ─────────────────────────────────
@@ -460,6 +563,7 @@ class AppProvider extends ChangeNotifier {
       // ignore: unawaited_futures
       _audio.playStreamWav(_host, _port, secure: _secure, baseUrl: _baseUrl);
       _connected = true;
+      _addMessage('[系統] 重新連線 SERVER → ${_endpointLabel()}');
       notifyListeners();
       startPollingNavState();
     } catch (_) {
@@ -509,6 +613,9 @@ class AppProvider extends ChangeNotifier {
     await _audio.stopForegroundService();
     stopPollingNavState();
     _connected = false;
+    _asrState = 'standby';
+    _asrPartialText = '';
+    _asrFinals.clear();
     notifyListeners();
   }
 
@@ -519,6 +626,10 @@ class AppProvider extends ChangeNotifier {
       final s = msg.substring(10);
       if (s != _navState) {
         _navState = s;
+        // 導航狀態變更表示指令已處理完畢，ASR 回到待機
+        if (_asrState == 'processing') {
+          _asrState = 'standby';
+        }
         notifyListeners();
       }
       return;
@@ -526,11 +637,79 @@ class AppProvider extends ChangeNotifier {
     // 伺服器每 30 秒發送的保活訊號，不顯示在訊息記錄中
     if (msg == 'PING') return;
 
+    // INIT: WebSocket 連線時伺服器推送初始 ASR 狀態
+    if (msg.startsWith('INIT:')) {
+      try {
+        final payload = jsonDecode(msg.substring(5)) as Map<String, dynamic>;
+        _asrPartialText = (payload['partial'] as String?) ?? '';
+        final finals = payload['finals'] as List?;
+        if (finals != null) {
+          _asrFinals.clear();
+          _asrFinals.addAll(finals.map((e) => e.toString()));
+        }
+        notifyListeners();
+      } catch (_) {}
+      return;
+    }
+
     // SPEAK: 本地語音播放（伺服器命中預錄 WAV 時推送）
     // 格式：SPEAK:{"text":"請向左平移","duration_ms":1640}
     if (msg.startsWith('SPEAK:')) {
       _handleSpeakMessage(msg.substring(6));
       return;
+    }
+
+    // PARTIAL: 語音正在辨識中 → ASR 進入聆聽狀態
+    // 旁路模式下伺服器不推 SPEAK:開始對話，需靠 PARTIAL 偵測
+    // [ 開頭的 partial 是 server 廣播 stream（[AI]/[系统]/[导航] 等）
+    //   [AI] → 強制切 processing 並顯示 AI 回覆（不論先前狀態為何，重設 15s timer）
+    //   其他廣播 → 不切狀態，僅在 processing 期間更新 chip 文字
+    if (msg.startsWith('PARTIAL:')) {
+      final partialText = msg.substring(8).trim();
+      final isServerBroadcast = partialText.startsWith('[');
+      if (isServerBroadcast) {
+        final stripped = partialText.replaceFirst(RegExp(r'^\[[^\]]+\]\s*'), '');
+        if (partialText.startsWith('[AI]') && stripped.isNotEmpty) {
+          _asrPartialText = stripped;
+          _updateAsrState('processing');   // 強切 processing，重設 15s timer
+        } else if (_asrState == 'processing' && stripped.isNotEmpty) {
+          _asrPartialText = stripped;
+          notifyListeners();
+        }
+      } else {
+        _asrPartialText = partialText;
+        if (partialText.isNotEmpty && partialText != '（已開始接收音訊…）') {
+          _updateAsrState('listening');
+          _resetListeningTimeout();   // 每次新 partial 都重置 5 秒超時
+        }
+      }
+      notifyListeners();
+    }
+
+    // FINAL: server 端的 ui_broadcast_final 同時被「ASR 真實語音 final」和
+    // 「[系統]/[导航]/[AI]/[狀態]/[錯誤] 等廣播訊息」共用。
+    // 使用者真實語音 final 不會以 [ 開頭；[AI] 前綴強切 processing；
+    // 其他 [xxx] 不切狀態僅更新 chip。
+    if (msg.startsWith('FINAL:')) {
+      final finalText = msg.substring(6).trim();
+      final isServerBroadcast = finalText.startsWith('[');
+      if (!isServerBroadcast) {
+        if (finalText.isNotEmpty) {
+          _asrFinals.add(finalText);
+          if (_asrFinals.length > 30) _asrFinals.removeAt(0);
+        }
+        _asrPartialText = '';
+        _updateAsrState('processing');
+      } else {
+        final stripped = finalText.replaceFirst(RegExp(r'^\[[^\]]+\]\s*'), '');
+        if (finalText.startsWith('[AI]') && stripped.isNotEmpty) {
+          _asrPartialText = stripped;
+          _updateAsrState('processing');   // 強切 processing，重設 15s timer
+        } else if (_asrState == 'processing' && stripped.isNotEmpty) {
+          _asrPartialText = stripped;
+        }
+      }
+      notifyListeners();
     }
 
     _addMessage(msg);
@@ -544,6 +723,13 @@ class AppProvider extends ChangeNotifier {
       final durationMs = (data['duration_ms'] as num?)?.toInt() ?? 2000;
       if (text.isEmpty) return;
 
+      // 追蹤 ASR 音效，更新收音狀態
+      if (text == '開始對話') {
+        _updateAsrState('listening');
+      } else if (text == '結束收音') {
+        _updateAsrState('standby');
+      }
+
       // 非同步：本地 WAV 優先，stream 靜音；未命中則放行 stream
       LocalVoiceService.instance.speak(text).then((playedMs) {
         if (playedMs != null) {
@@ -554,6 +740,48 @@ class AppProvider extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('[AppProvider] SPEAK 解析失敗: $e');
+    }
+  }
+
+  Timer? _asrProcessingTimer;
+  Timer? _asrListeningTimer;
+
+  /// 重置 listening 超時：每收到新 partial 就重新計時 5 秒，
+  /// 避免 server 沒推 final / SPEAK:結束收音 時 chip 永遠卡「聆聽中」
+  void _resetListeningTimeout() {
+    _asrListeningTimer?.cancel();
+    _asrListeningTimer = Timer(const Duration(seconds: 5), () {
+      if (_asrState == 'listening') {
+        _asrState = 'standby';
+        _asrPartialText = '';
+        debugPrint('[AppProvider] listening 5 秒無新 partial → 回 standby');
+        notifyListeners();
+      }
+    });
+  }
+
+  void _updateAsrState(String newState) {
+    if (_asrState != newState) {
+      _asrState = newState;
+      debugPrint('[AppProvider] ASR 狀態: $_asrState');
+
+      // 任何狀態切換都清空兩個 timer，下面只重設當前狀態需要的
+      _asrProcessingTimer?.cancel();
+      _asrListeningTimer?.cancel();
+
+      // processing 狀態設定 15 秒超時，自動回到 standby
+      // 避免 Omni 對話等不推送 NAV_STATE 的場景卡在 processing
+      if (newState == 'processing') {
+        _asrProcessingTimer = Timer(const Duration(seconds: 15), () {
+          if (_asrState == 'processing') {
+            _asrState = 'standby';
+            debugPrint('[AppProvider] ASR 超時回到 standby');
+            notifyListeners();
+          }
+        });
+      }
+
+      notifyListeners();
     }
   }
 
@@ -824,6 +1052,8 @@ class AppProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _asrProcessingTimer?.cancel();
+    _asrListeningTimer?.cancel();
     stopAllServices();
     _tts.stop();
     _viewerController.close();

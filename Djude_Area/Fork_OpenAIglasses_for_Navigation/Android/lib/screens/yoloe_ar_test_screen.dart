@@ -45,13 +45,11 @@ class Detection {
 }
 
 /// 單次推論回傳：含偵測 + 推論當下 CameraImage 的真實尺寸。
-/// painter 必須用 srcH/srcW 對齊（而非 previewSize），因為某些裝置
-/// previewSize ≠ CameraImage.width/height。
 class InferResult {
   final List<Detection> detections;
-  final int srcW;   // CameraImage.width  (sensor 橫向)
-  final int srcH;   // CameraImage.height
-  final double globalMaxConf;   // 本幀 output0 最高分數（診斷用）
+  final int srcW;           // CameraImage.width  (sensor 橫向)
+  final int srcH;           // CameraImage.height
+  final double globalMaxConf;
   const InferResult({
     required this.detections,
     required this.srcW,
@@ -79,12 +77,12 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
   String? _inferError;            // init 失敗時的錯誤訊息
   bool _showLabels = false;       // 切換標籤清單面板
 
-  // FPS 計數：在 startImageStream 的每幀回呼中累加 _frameCount，
-  // 每超過 1 秒就把 frameCount/elapsed 換算成 fps 並 setState。
-  int _fps = 0;
-  int _frameCount = 0;
-  int _fpsLastTickMs = 0;
   bool _streaming = false;
+
+  // 推論 FPS：每次推論完成累加，每秒更新一次
+  double _inferFps = 0.0;
+  int _inferCount = 0;
+  int _inferFpsLastTickMs = 0;
 
   // 效能監控
   final HardwareMonitor _hw = HardwareMonitor();
@@ -95,13 +93,8 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
   // 推論管線（單例，App 生命週期內共用）
   final YoloeInference _infer = YoloeInference();
   bool _inferReady = false;
-  // 推論節流：onnxruntime Flutter 套件 value getter 把 native float buffer
-  // 透過 dynamic List<num> 一個個 push，沒 zero-copy；output0 (1,4+nc+32,8400) +
-  // proto1 (1,32,160,160) 主 isolate 一次攤平要 ~200ms。再加上 isolate 端
-  // NMS + mask 解碼 + Moore tracing ~50ms，端到端 ~300ms。
-  // 節流到 500ms（2 推論/秒）；相機畫面仍以原生 FPS 流暢顯示。
-  int _lastInferAtMs = 0;
-  static const int _inferIntervalMs = 500;
+  // 推論全速：不節流，busy flag 確保同一時間只有一條推論在跑。
+  // 實際推論 FPS 由硬體決定，顯示在 UI 的「推論FPS」欄位。
 
   @override
   void initState() {
@@ -173,31 +166,25 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
     }
   }
 
-  /// 啟動相機 image stream，僅用於累計 FPS。
-  /// 未來 Phase 3.1 ONNX 整合時，可在同一個回呼裡把 [img] 餵給推論模型。
   void _startFpsStream(CameraController ctrl) {
     if (_streaming) return;
-    _frameCount = 0;
-    _fpsLastTickMs = DateTime.now().millisecondsSinceEpoch;
+    _inferCount = 0;
+    _inferFpsLastTickMs = DateTime.now().millisecondsSinceEpoch;
     try {
       ctrl.startImageStream((CameraImage img) {
-        _frameCount++;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final elapsed = now - _fpsLastTickMs;
-        if (elapsed >= 1000) {
-          final fps = (_frameCount * 1000 / elapsed).round();
-          _frameCount = 0;
-          _fpsLastTickMs = now;
-          if (mounted) setState(() => _fps = fps);
-        }
-        // 觸發推論：節流 + busy 雙保險
-        if (_inferReady &&
-            !_infer.isBusy &&
-            now - _lastInferAtMs >= _inferIntervalMs) {
-          _lastInferAtMs = now;
+        if (_inferReady && !_infer.isBusy) {
           _infer.confTh = _confThreshold;
           _infer.infer(img).then((res) {
-            if (res != null && mounted) {
+            if (res == null || !mounted) return;
+            _inferCount++;
+            final now = DateTime.now().millisecondsSinceEpoch;
+            final elapsed = now - _inferFpsLastTickMs;
+            if (elapsed >= 1000) {
+              final ifps = _inferCount * 1000 / elapsed;
+              _inferCount = 0;
+              _inferFpsLastTickMs = now;
+              setState(() { _result = res; _inferFps = ifps; });
+            } else {
               setState(() => _result = res);
             }
           });
@@ -205,7 +192,6 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
       });
       _streaming = true;
     } catch (e) {
-      // 部分裝置或模擬器可能不支援 image stream；FPS 維持 0
       debugPrint('[YoloeArTest] startImageStream 失敗：$e');
     }
   }
@@ -257,9 +243,8 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
       );
     }
     final preview = _camera!.value.previewSize!;
-    // painter 偏好用 inference 回報的真實 srcSize（旋轉 90° CW 後的 portrait）；
-    // 還沒推論過 → 退回 previewSize 轉置（兩者通常一致，但某些裝置會有差）。
     final res = _result;
+    // portrait 尺寸：推論回報的 srcSize（sensor 橫向，旋轉 90° 後寬高互換）
     final Size imageSize = res != null && res.srcW > 0 && res.srcH > 0
         ? Size(res.srcH.toDouble(), res.srcW.toDouble())
         : Size(preview.height, preview.width);
@@ -272,16 +257,11 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. 相機預覽（全螢幕，覆滿）
+          // 1. 相機預覽（30 FPS 即時顯示，YOLO 框從上一幀推論疊加）
           Positioned.fill(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: preview.height,
-                height: preview.width,
-                child: CameraPreview(_camera!),
-              ),
-            ),
+            child: _cameraReady
+                ? CameraPreview(_camera!)
+                : const ColoredBox(color: Colors.black),
           ),
 
           // 2. AR 偵測框疊加（polygon mask + box stroke + label）
@@ -332,8 +312,7 @@ class _YoloeArTestScreenState extends State<YoloeArTestScreen>
                           ),
                         ),
                         const Spacer(),
-                        _statBadge(Icons.videocam_outlined, '$_fps', 'FPS',
-                            Colors.greenAccent),
+                        _statBadge(Icons.psychology_outlined, _inferFps.toStringAsFixed(1), 'FPS', Colors.cyanAccent),
                         const SizedBox(width: 6),
                         _statBadge(Icons.center_focus_weak, '${detections.length}',
                             '物', Colors.white70),

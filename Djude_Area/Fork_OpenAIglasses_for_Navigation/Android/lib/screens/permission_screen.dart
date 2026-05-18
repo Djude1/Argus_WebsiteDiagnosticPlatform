@@ -186,6 +186,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1565C0),
+                    foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(80),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),

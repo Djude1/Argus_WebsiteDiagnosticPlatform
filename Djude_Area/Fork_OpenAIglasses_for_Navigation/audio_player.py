@@ -466,7 +466,6 @@ def _log_missing_voice(text: str) -> None:
     t = text.strip()
     if not t or t in _missing_voice_set:
         return
-    _missing_voice_set.add(t)
     try:
         os.makedirs(_MISSING_LOG_DIR, exist_ok=True)
         today = datetime.date.today().isoformat()
@@ -479,8 +478,9 @@ def _log_missing_voice(text: str) -> None:
         if t not in existing:
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(t + "\n")
-    except Exception:
-        pass  # 記錄失敗不影響主流程
+        _missing_voice_set.add(t)  # 只有寫入成功才記入 set
+    except Exception as e:
+        print(f"[AUDIO] 缺失語音記錄失敗: {e}（路徑: {_MISSING_LOG_DIR}）")
 
 def play_voice_text(text: str):
     """

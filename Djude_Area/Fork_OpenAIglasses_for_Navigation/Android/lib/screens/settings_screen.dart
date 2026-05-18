@@ -125,14 +125,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     HapticFeedback.selectionClick();
   }
 
+  // 斷線時返回管理員首頁；已連線時返回視障者主頁
+  void _goBack() {
+    debugPrint('[SettingsScreen] _goBack called, connected=${context.read<AppProvider>().connected}');
+    final app = context.read<AppProvider>();
+    if (app.connected) {
+      Navigator.pushReplacementNamed(context, '/blind');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
   // ── UI ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
 
-    return GestureDetector(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _goBack(); },
+      child: GestureDetector(
       onHorizontalDragEnd: (details) {
-        if ((details.primaryVelocity ?? 0) > 300) Navigator.pop(context);
+        if ((details.primaryVelocity ?? 0) > 300) _goBack();
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0A0A0A),
@@ -165,7 +179,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
-    );
+      ), // GestureDetector
+    );   // PopScope
   }
 
   // ── 頂部列 ─────────────────────────────────────────────────────────────
@@ -176,7 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Row(
         children: [
           InkWell(
-            onTap: () => Navigator.pop(context),
+            onTap: _goBack,
             borderRadius: BorderRadius.circular(8),
             child: const Padding(
               padding: EdgeInsets.all(4),
