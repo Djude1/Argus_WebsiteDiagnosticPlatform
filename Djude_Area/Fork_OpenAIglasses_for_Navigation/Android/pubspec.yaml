@@ -23,6 +23,10 @@ dependencies:
   # 鎖定 5.0.5 確保版本一致性
   record: 5.0.5
   audioplayers: ^6.1.0
+  # just_audio：Android 用 ExoPlayer，對 chunked HTTP wav stream 處理穩定
+  # （audioplayers 6.x 用 MediaPlayer，prepare 階段對 chunked 會卡 30s timeout）
+  # 僅 audio_service.dart 的 stream player 使用，chime/cached TTS 仍用 audioplayers
+  just_audio: ^0.9.40
   flutter_tts: ^4.2.1
 
   # ── IMU 感測器 ────────────────────────────────────────

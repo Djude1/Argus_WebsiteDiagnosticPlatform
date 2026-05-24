@@ -1,5 +1,9 @@
 // lib/services/camera_service.dart
 // 攝影機管理：取得 JPEG 幀並送到 WebSocket
+//
+// 策略：用 takePicture 走相機硬體 JPEG encoder（CPU 不重，debug/release 都能跑）
+//      + 動態 fps：待機（IDLE/CHAT）2 fps、導航中 10 fps，由 AppProvider 監聽
+//      NAV_STATE: 切換呼叫 setFps()，待機時降 capture pipeline 觸發頻率 5 倍。
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -11,6 +15,8 @@ class CameraService {
   CameraController? _controller;
   Timer?            _timer;
   bool              _running = false;
+  FrameCallback?    _onFrame;
+  int               _currentFps = 10;
 
   /// 初始化攝影機（預設使用後鏡頭）
   Future<void> initialize() async {
@@ -38,22 +44,40 @@ class CameraService {
   void startStreaming({required FrameCallback onFrame, int fps = 10}) {
     if (_running) return;
     _running = true;
-    final interval = Duration(milliseconds: (1000 / fps).round());
+    _onFrame = onFrame;
+    _currentFps = fps;
+    _startTimer();
+  }
+
+  /// 動態調整 fps（待機 ↔ 導航時切換）。fps 相同則 no-op。
+  void setFps(int fps) {
+    if (fps <= 0 || fps == _currentFps) return;
+    _currentFps = fps;
+    if (_running) _startTimer();
+  }
+
+  int get currentFps => _currentFps;
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (!_running) return;
+    final interval = Duration(milliseconds: (1000 / _currentFps).round());
     _timer = Timer.periodic(interval, (_) async {
-      if (_controller == null || !_controller!.value.isInitialized) return;
+      final ctrl = _controller;
+      if (ctrl == null || !ctrl.value.isInitialized) return;
       try {
-        final xfile = await _controller!.takePicture();
+        final xfile = await ctrl.takePicture();
         final bytes = await xfile.readAsBytes();
-        onFrame(bytes);
+        _onFrame?.call(bytes);
       } catch (_) {
-        // 拍照失敗時重置旗標，讓下一幀可以重試
-        // 不停止 timer，維持週期嘗試
+        // 拍照失敗時不停止 timer，維持週期嘗試
       }
     });
   }
 
   void stopStreaming() {
     _running = false;
+    _onFrame = null;
     _timer?.cancel();
     _timer = null;
   }

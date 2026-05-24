@@ -2739,47 +2739,6 @@ class BlindPathNavigator:
         except:
             return '障碍物'
 
-    def _speech_for_obstacle(self, name: str, area_ratio: float = 0, bottom_y_ratio: float = 0) -> str:
-        """障礙物語音（前方固定），產生可匹配預錄音檔的文字"""
-        return self._speech_for_obstacle_dir(name, "前方", area_ratio, bottom_y_ratio)
-
-    def _speech_for_obstacle_dir(self, name: str, direction: str = "前方",
-                                  area_ratio: float = 0, bottom_y_ratio: float = 0,
-                                  center_x_ratio: float = 0.5) -> str:
-        """帶方向的障礙物語音，產生可匹配預錄音檔的繁體中文提示
-
-        語音設計：告訴使用者「哪裡有什麼」＋「該怎麼做」，而非只說「注意」。
-        center_x_ratio：障礙物在畫面中的水平位置（0=最左, 1=最右），
-                        用於「前方有人」時建議往空曠側移動。
-        """
-        k = (name or '').strip().lower()
-        if direction in ("左側", "右側"):
-            opposite = "右" if direction == "左側" else "左"
-            if k == 'person':
-                return f"{direction}有人請向{opposite}避開"
-            elif k in ('car', 'truck'):
-                return f"{direction}有車請向{opposite}避開"
-            else:
-                return f"{direction}有障礙請向{opposite}避開"
-        else:  # 前方
-            if k == 'person':
-                # 人偏左 → 建議往右移；人偏右 → 建議往左移
-                return "前方有人可往右移" if center_x_ratio < 0.5 else "前方有人可往左移"
-            elif k in ('car', 'truck'):
-                return "前方有車請稍等"
-            elif k in ('motorcycle', 'scooter', 'bicycle'):
-                return "前方有機車請稍等"
-            elif k == 'bus':
-                return "前方有公車請稍等"
-            elif k in ('animal', 'dog'):
-                return "前方有動物請小心"
-            elif k == 'stairs':
-                return "前方有台階請小心"
-            elif k == 'curb':
-                return "前方路緣，可踏上斑馬線"
-            else:
-                return "前方有障礙物請往右繞行"
-
     def _draw_command_button(self, image, text):
         """绘制底部中央的指令按钮（与斑马线模式统一）"""
         try:

@@ -69,9 +69,9 @@ class WebSocketService {
   WebSocketChannel?   _audioWs;
   StreamSubscription? _audioWsSub;
   bool _audioWsActive = false;
-  bool _bypassWake    = true;   // 預設繞過喚醒詞
+  bool _bypassWake    = false;  // 預設啟用喚醒詞模式
 
-  void connectAudio({bool bypassWake = true}) {
+  void connectAudio({bool bypassWake = false}) {
     _audioWsActive = true;
     _bypassWake    = bypassWake;
     _doConnectAudio();
@@ -106,6 +106,11 @@ class WebSocketService {
   /// 送出 PCM16 資料塊
   void sendAudioChunk(Uint8List pcm16) {
     try { _audioWs?.sink.add(pcm16); } catch (_) {}
+  }
+
+  /// 送出手動喚醒指令（APP 音量鍵組合觸發，等同說喚醒詞「哈囉」）
+  void sendAudioWake() {
+    try { _audioWs?.sink.add('WAKE'); } catch (_) {}
   }
 
   void disconnectAudio() {

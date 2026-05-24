@@ -603,6 +603,8 @@ async def start_ai_with_text_custom(user_text: str):
                 "盲道导航",
                 "停止导航",
                 "结束导航",
+                "关闭导航",
+                "关掉导航",
                 "检测红绿灯",
                 "看红绿灯",
                 "停止检测",
@@ -613,6 +615,8 @@ async def start_ai_with_text_custom(user_text: str):
                 "開啟導航",
                 "停止導航",
                 "結束導航",
+                "關閉導航",
+                "關掉導航",
                 "檢測紅綠燈",
                 "看紅綠燈",
                 "停止檢測",
@@ -833,6 +837,20 @@ async def start_ai_with_text_custom(user_text: str):
 
             return
 
+    # 「打給XX」/「聯絡XX」/「打電話XX」/「撥給XX」：APP 端 _checkEmergencyCall
+    # 會比對聯絡人並自動撥打。server 不送 LLM（否則「打給爸爸」會被當對話送
+    # Gemini，看圖瞎掰「你爸爸的電腦鍵盤燈光在變化」等亂七八糟內容）。
+    # ASR FINAL 已在 ASRCallback._handle 廣播給 APP，不會因為這裡 return 而漏。
+    contact_call_keywords = [
+        "打給", "打给", "聯絡", "联络", "打電話", "打电话", "撥給", "拨给",
+    ]
+    if any(k in user_text for k in contact_call_keywords):
+        print(
+            f"[CONTACT-CALL] APP 端會處理（_checkEmergencyCall），server 跳過 LLM: '{user_text}'",
+            flush=True,
+        )
+        return
+
     # 检查是否是"找到了"的命令
     if "找到了" in user_text or "拿到了" in user_text:
         print("[COMMAND] Found command detected", flush=True)
@@ -983,6 +1001,7 @@ async def start_ai_with_text(user_text: str):
                         pcm24 = base64.b64decode(piece.audio_b64)
                     except Exception:
                         pcm24 = b""
+                    print(f"[TTS-DEBUG] app_main received audio_b64: decoded={len(pcm24)} bytes (24k)", flush=True)
                     if pcm24:
                         # 24k → 8k (使用ratecv保证音调和速度不变)
                         pcm8k, rate_state = audioop.ratecv(
@@ -990,7 +1009,10 @@ async def start_ai_with_text(user_text: str):
                         )
                         pcm8k = audioop.mul(pcm8k, 2, 0.60)
                         if pcm8k:
+                            print(f"[TTS-DEBUG] app_main broadcast_pcm16_realtime: {len(pcm8k)} bytes (8k)", flush=True)
                             await broadcast_pcm16_realtime(pcm8k)
+                        else:
+                            print(f"[TTS-DEBUG] app_main resample 後 pcm8k 為空，跳過 broadcast", flush=True)
 
         except asyncio.CancelledError:
             # 被新一轮打断
@@ -1146,7 +1168,7 @@ async def api_set_param(name: str, value: float):
 
 @app.post("/api/bypass_wake")
 async def bypass_wake(enabled: bool):
-    """開啟 / 關閉旁路模式：跳過喚醒詞「哈囉曼波」，所有 STT 結果直接送給 AI 處理。
+    """開啟 / 關閉旁路模式：跳過喚醒詞「哈囉」，所有 STT 結果直接送給 AI 處理。
     開啟後終端機會顯示每次 STT 辨識結果（[ASR-旁路] STT → '...'）。"""
     import asr_core
 
@@ -1508,8 +1530,6 @@ async def ws_audio(ws: WebSocket):
                         interrupt_lock=interrupt_lock,
                         # 喚醒詞「哈囉」→ 播放開始對話音效 + 推送 SPEAK 給 APP
                         on_wake_fn=lambda: _play_and_speak("開始對話"),
-                        # 結束詞「謝謝 曼波」→ 播放結束收音音效 + 推送 SPEAK 給 APP
-                        on_end_fn=lambda: _play_and_speak("結束收音"),
                         # 主動錄音自然結束 → 播放結束收音音效 + 推送 SPEAK 給 APP
                         on_recording_end_fn=lambda: _play_and_speak("結束收音"),
                     )
@@ -1530,6 +1550,26 @@ async def ws_audio(ws: WebSocket):
 
                 elif cmd == "STOP":
                     await stop_rec(send_notice="OK:STOPPED")
+
+                elif cmd == "WAKE":
+                    # 手動喚醒（APP 音量鍵組合觸發）：等同說喚醒詞「哈囉」
+                    if recognition is None:
+                        # ASR 尚未啟動（沒收到 START）→ WAKE 無意義
+                        print("[AUDIO] WAKE received — ASR 未啟動，忽略", flush=True)
+                    elif _audio_bypass_mode:
+                        # 旁路模式：麥克風本就全程收音，手動喚醒為無害 no-op
+                        print("[AUDIO] WAKE received — 旁路模式，忽略（麥克風已全開）", flush=True)
+                    else:
+                        # 先停掉正在播的 TTS / 清空串流佇列，避免 APP 喇叭播 server 音訊回灌
+                        # 麥克風→ASR 干擾收音開頭（使用者體感「按下後等 2 秒才開始收音」的真兇）
+                        await hard_reset_audio("manual_wake")
+                        recognition.enter_active_mode()
+                        _play_and_speak("開始對話")
+                        print("[AUDIO] WAKE received — 手動喚醒，進入主動聆聽", flush=True)
+                    try:
+                        await ws.send_text("OK:WAKE")
+                    except Exception:
+                        pass
 
                 elif raw.startswith("PROMPT:"):
                     # 设备端主动发起一轮：同样使用"先硬重置后播放"的强语义
@@ -2545,7 +2585,6 @@ async def _local_mode_init():
             full_system_reset_fn=full_system_reset,
             interrupt_lock=interrupt_lock,
             on_wake_fn=lambda: _play_and_speak("開始對話"),
-            on_end_fn=lambda: _play_and_speak("結束收音"),
             on_recording_end_fn=lambda: _play_and_speak("結束收音"),
         )
 

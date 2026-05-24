@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../services/intersection_wait_service.dart';
 import '../core/constants.dart';
 
 class DebugFloatingPanel extends StatefulWidget {
@@ -368,6 +369,47 @@ class _PanelContentState extends State<_PanelContent> {
             app.ttsEnabled ? '已開啟' : '已關閉',
             color: app.ttsEnabled
                 ? Colors.greenAccent : Colors.white38),
+        const SizedBox(height: 8),
+        const Divider(color: Colors.white12, height: 1),
+
+        // ── 路口停等（群眾外包資料）─────────────────────
+        const SizedBox(height: 8),
+        _SectionTitle('路口停等（群眾外包）'),
+        ValueListenableBuilder<IntersectionWaitStatus?>(
+          valueListenable: IntersectionWaitService.instance.statusNotifier,
+          builder: (_, s, __) {
+            if (s == null) {
+              return _Row('狀態', '尚未啟用', color: Colors.white38);
+            }
+            final children = <Widget>[
+              _Row(
+                '目前停等',
+                s.isWaiting ? '${s.currentWaitSec} 秒' : '—',
+                color: s.isWaiting ? Colors.greenAccent : Colors.white38,
+              ),
+            ];
+            if (s.lastCompletedWaitSec != null) {
+              children.add(_Row('上次停等', '${s.lastCompletedWaitSec} 秒'));
+            }
+            final info = s.info;
+            if (info != null) {
+              children.add(_Row('路口 ID', info.gridId));
+              final avg = info.avgDurationSec;
+              children.add(_Row(
+                '平均停等',
+                avg != null
+                    ? '${avg.toStringAsFixed(1)} 秒（樣本 ${info.sampleSize}）'
+                    : '無資料',
+              ));
+              children.add(_Row('現有等候', '${info.activeCount} 人'));
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            );
+          },
+        ),
+
         const SizedBox(height: 8),
         const Divider(color: Colors.white12, height: 1),
 

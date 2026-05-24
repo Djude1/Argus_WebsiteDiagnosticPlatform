@@ -32,12 +32,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # 載入伺服器端的指令匹配邏輯
 # ═══════════════════════════════════════════════════════════════════════════════
 
-from asr_core import (
-    WAKE_WORDS, END_WORDS, INTERRUPT_KEYWORDS,
-    _normalize_cn, GoogleASR,
-)
-
-_MAMBO_VARIANTS = GoogleASR._MAMBO_VARIANTS
+from asr_core import INTERRUPT_KEYWORDS, _normalize_cn, is_wake_word
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -350,43 +345,30 @@ def test_navigation_mode_filtering():
     return results
 
 
-def test_wake_and_end_words():
-    """測試 3：喚醒詞 / 結束詞 / 中斷熱詞匹配"""
+def test_wake_and_interrupt_words():
+    """測試 3：喚醒詞「哈囉」/ 中斷熱詞匹配（結束詞已移除）"""
     print("=" * 70)
-    print("測試 3：喚醒詞 / 結束詞 / 中斷熱詞 — ESP32 喚醒模式")
+    print("測試 3：喚醒詞「哈囉」/ 中斷熱詞")
     print("=" * 70)
 
     test_cases = [
-        # ── 喚醒詞（含曼波變體→觸發）──
-        ("哈囉 曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈囉曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈囉，曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈喽曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈喽漫播", "wake", True, "喚醒詞-含漫播"),
-        ("哈喽 曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈喽，曼波", "wake", True, "喚醒詞-含曼波"),
-        ("羅曼波", "wake", True, "喚醒詞-含曼波"),
-        ("哈囉慢播", "wake", True, "喚醒詞-含慢播"),
-        ("曼波", "wake", True, "喚醒詞-只有曼波→觸發"),
-        ("漫波", "wake", True, "喚醒詞-漫波變體→觸發"),
-        ("慢播", "wake", True, "喚醒詞-慢播變體→觸發"),
-
-        # ── 結束詞 ──
-        ("謝謝 曼波", "end", True, "結束詞-標準(繁)"),
-        ("謝謝曼波", "end", True, "結束詞-無空格(繁)"),
-        ("謝謝，曼波", "end", True, "結束詞-含逗號(繁)"),
-        ("谢谢曼波", "end", True, "結束詞-簡體"),
-        ("谢谢漫播", "end", True, "結束詞-ASR誤辨"),
-        ("谢谢 曼波", "end", True, "結束詞-簡體空格"),
+        # ── 喚醒詞「哈囉」（繁 / 簡 / 英變體，包含即命中）──
+        ("哈囉", "wake", True, "喚醒詞-標準"),
+        ("哈嘍", "wake", True, "喚醒詞-諧音"),
+        ("哈羅", "wake", True, "喚醒詞-諧音"),
+        ("哈喽", "wake", True, "喚醒詞-簡體"),
+        ("hello", "wake", True, "喚醒詞-英文"),
+        ("哈囉幫我看前面", "wake", True, "喚醒詞-含後續指令"),
 
         # ── 中斷熱詞 ──
         ("停下所有功能", "interrupt", True, "中斷-繁體標準"),
         ("停止所有功能", "interrupt", True, "中斷-繁體變體"),
 
         # ── 不應匹配的 ──
-        ("哈囉", "wake", False, "只有哈囉（無曼波）→不觸發"),
-        ("你好曼波", "wake", True, "含曼波→觸發"),
-        ("謝謝", "end", False, "非結束詞-只有謝謝"),
+        ("你好", "wake", False, "打招呼-非喚醒詞"),
+        ("曼波", "wake", False, "舊喚醒詞-已不觸發"),
+        ("謝謝", "wake", False, "謝謝-已非結束詞也非喚醒詞"),
+        ("開始導航", "interrupt", False, "一般指令-非中斷詞"),
     ]
 
     passed = 0
@@ -394,19 +376,15 @@ def test_wake_and_end_words():
     results = []
 
     for phrase, word_type, should_match, desc in test_cases:
-        norm = _normalize_cn(phrase)
-
         if word_type == "wake":
-            matched = any(v in norm for v in _MAMBO_VARIANTS)
-        elif word_type == "end":
-            matched = any(w and _normalize_cn(w) in norm for w in END_WORDS)
+            matched = is_wake_word(phrase)
         elif word_type == "interrupt":
+            norm = _normalize_cn(phrase)
             matched = any(w and _normalize_cn(w) in norm for w in INTERRUPT_KEYWORDS)
         else:
             matched = False
 
         ok = (matched == should_match)
-        status = "✅ 通過" if ok else "❌ 失敗"
 
         if not ok:
             print(f"  ❌ 「{phrase}」({desc})")
@@ -417,9 +395,9 @@ def test_wake_and_end_words():
 
         results.append({"phrase": phrase, "type": word_type, "passed": ok, "desc": desc})
 
-    print(f"\n  📊 喚醒/結束/中斷詞結果: {passed}/{len(test_cases)} 通過")
+    print(f"\n  📊 喚醒/中斷詞結果: {passed}/{len(test_cases)} 通過")
     if failed == 0:
-        print(f"  ✅ 所有喚醒詞/結束詞/中斷詞匹配正確！")
+        print(f"  ✅ 所有喚醒詞/中斷詞匹配正確！")
     else:
         print(f"  ❌ {failed} 條匹配失敗")
 
@@ -489,8 +467,8 @@ def main():
     filter_pass = sum(1 for r in filter_results if r["passed"])
     filter_total = len(filter_results)
 
-    # 測試 3：喚醒/結束/中斷詞
-    word_results = test_wake_and_end_words()
+    # 測試 3：喚醒詞 / 中斷詞
+    word_results = test_wake_and_interrupt_words()
     word_pass = sum(1 for r in word_results if r["passed"])
     word_total = len(word_results)
 
@@ -506,7 +484,7 @@ def main():
 
     print(f"  指令匹配（繁簡+誤辨）: {cmd_pass}/{cmd_total} 通過")
     print(f"  導航模式過濾:          {filter_pass}/{filter_total} 通過")
-    print(f"  喚醒/結束/中斷詞:      {word_pass}/{word_total} 通過")
+    print(f"  喚醒詞 / 中斷詞:        {word_pass}/{word_total} 通過")
     print(f"  IDLE 雜訊過濾:         {idle_pass}/{idle_total} 通過")
 
     all_pass = (

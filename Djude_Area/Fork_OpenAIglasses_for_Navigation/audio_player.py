@@ -62,6 +62,31 @@ _worker_thread = None
 _worker_loop = None
 _is_playing = False  # 标记是否正在播放音频
 _playing_lock = threading.Lock()  # 播放锁
+
+# ASR active 模式時暫停播放：避免 server TTS 經 APP 喇叭 echo 回麥克風干擾辨識
+# 白名單音效（提示音）仍允許播，導航播報 / Gemini TTS / WaveNet 等被擋
+_asr_active_mode = False
+_ASR_ACTIVE_AUDIO_WHITELIST = {"開始對話", "結束收音"}
+
+def set_asr_active_mode(active: bool) -> None:
+    """ASR 進入主動模式 → True；結束 → False。期間導航 TTS 不播，避免 echo loop。
+
+    active 開始時還要清空已排隊的 PCM，否則「ASR active 之前剛 enqueue 的 TTS」
+    （如「盲道導航已開始」「紅燈，請停止」等）仍會被 worker 取出推給 APP 播放，
+    APP 喇叭發聲 → 麥克風收 echo → ASR partial 干擾辨識 → 使用者真實指令被埋沒。
+    """
+    global _asr_active_mode, _audio_queue
+    _asr_active_mode = active
+    if active:
+        # 雙保險：先 drain 舊 queue（worker 透過 bound method 持有的 ref 也會見到 empty）
+        # 再 reassign 新的（new put 進這個）
+        try:
+            while True:
+                _audio_queue.get_nowait()
+        except queue.Empty:
+            pass
+        _audio_queue = queue.PriorityQueue(maxsize=10)
+        print("[AUDIO] ASR active 開始：已清空 audio_player 排隊 PCM")
 _initialized = False
 _last_play_ts = 0.0  # 记录上次播放结束时间，用于决定预热静音长度
 
@@ -282,12 +307,17 @@ def initialize_audio_system():
 def play_audio_threadsafe(audio_key):
     """线程安全的音频播放函数"""
     global _audio_queue, _audio_priority
-    
+
     if not _initialized:
         initialize_audio_system()
-    
+
     if audio_key not in AUDIO_MAP:
         print(f"[AUDIO] 未知的音频键: {audio_key}")
+        return
+
+    # ASR 主動模式中：除提示音外的所有 TTS 一律 drop，避免 APP 喇叭播 → 麥克風收 → ASR 干擾
+    if _asr_active_mode and audio_key not in _ASR_ACTIVE_AUDIO_WHITELIST:
+        print(f"[AUDIO] ASR active 中，跳過播放: {audio_key}")
         return
     
     filepath = AUDIO_MAP[audio_key]
@@ -493,6 +523,11 @@ def play_voice_text(text: str):
     global _last_voice_time, _last_voice_text
 
     if not text:
+        return
+    # ASR 主動模式中：擋掉所有 TTS（含 WaveNet fallback），避免 echo 干擾辨識
+    # 提示音「開始對話/結束收音」走 play_audio_threadsafe，那邊另有白名單放行
+    if _asr_active_mode:
+        print(f"[AUDIO] ASR active 中，跳過播放（play_voice_text）: {text}")
         return
     if not _initialized:
         initialize_audio_system()

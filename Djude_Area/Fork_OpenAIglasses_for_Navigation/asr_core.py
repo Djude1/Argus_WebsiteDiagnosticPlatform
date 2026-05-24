@@ -8,7 +8,7 @@ ASR 核心模組：使用 Google Speech-to-Text 串流 API 進行即時語音辨
 - ASRCallback 處理熱詞觸發與 LLM 驅動流程
 """
 
-import os, json, asyncio, io, wave, struct, time, threading, queue, urllib.request, urllib.error
+import os, json, asyncio, io, wave, struct, time, threading, queue, re, urllib.request, urllib.error
 from typing import Any, Dict, List, Optional, Callable, Tuple
 
 ASR_DEBUG_RAW = os.getenv("ASR_DEBUG_RAW", "0") == "1"
@@ -229,21 +229,42 @@ INTERRUPT_KEYWORDS = set(
     os.getenv("INTERRUPT_KEYWORDS", "停下所有功能,停止所有功能").split(",")
 )
 
-# ── 喚醒詞 / 結束詞設定 ──────────────────────────────────────────────────────
-WAKE_WORDS = set(os.getenv("WAKE_WORDS", (
-    # 標準喚醒詞
-    "哈囉 曼波,哈囉曼波,哈囉，曼波,哈喽曼波,哈喽漫播,哈喽 曼波,哈喽，曼波,"
-    # ASR 誤辨常見變體（含「羅曼波」可涵蓋「阿羅曼波」「沙羅曼波」）
-    "羅曼波,哈囉慢播,哈囉嗎,"
-    # 快語速 / 口音 / 誤辨變體
-    "哈曼波,哈羅曼波,哈洛曼波,哈漏曼波,"
-    "哈囉慢波,哈囉漫波,哈囉滿波,哈囉們波"
-)).split(","))
-END_WORDS  = set(os.getenv("END_WORDS",  (
-    "謝謝 曼波,謝謝曼波,謝謝，曼波,谢谢曼波,谢谢漫播,谢谢 曼波,"
-    # ASR 誤辨變體：曼→漫/慢/滿，播→波
-    "謝謝漫波,謝謝慢播,謝謝慢波,謝謝滿波,謝謝漫播"
-)).split(","))
+# ── 喚醒詞設定 ──────────────────────────────────────────────────────
+_WAKE_WORDS_DEFAULT = (
+    # 繁體諧音
+    "哈囉,哈嘍,哈羅,哈摟,哈漏,哈樓,哈咯,哈囖,蛤囉,蝦囉,"
+    # 簡體
+    "哈啰,哈喽,哈罗,哈搂,哈楼,"
+    # 英文（ASR 將「哈囉」辨識成英文時）
+    "hello,hallo,halo,hullo"
+)
+WAKE_WORDS = set(
+    w.strip().lower()
+    for w in os.getenv("WAKE_WORDS", _WAKE_WORDS_DEFAULT).split(",")
+    if w.strip()
+)
+
+
+def is_wake_word(text: str) -> bool:
+    """判斷辨識文字是否含喚醒詞「哈囉」（繁 / 簡 / 英變體）。
+
+    中文喚醒詞：子字串匹配（「哈囉幫我看前面」也應觸發）。
+    英文喚醒詞：word-boundary 整詞匹配（避免 halogen / halo effect 中 halo 子字串誤命中）。
+    """
+    if not text:
+        return False
+    norm = _normalize_cn(text)   # 簡→繁 + 小寫
+    raw  = text.lower()          # 保留簡體原樣，涵蓋簡繁轉換表未收錄的字
+    for w in WAKE_WORDS:
+        if w.isascii():
+            # 英文：用 \b 整詞匹配，避免 halo 命中 halogen
+            if re.search(rf"\b{re.escape(w)}\b", raw):
+                return True
+        else:
+            # 中文：子字串匹配
+            if w in norm or w in raw:
+                return True
+    return False
 
 # ── ASR 全局總閘 ─────────────────────────────────────────────────────────────
 
@@ -299,7 +320,6 @@ class ASRCallback:
         full_system_reset_fn,
         interrupt_lock: asyncio.Lock,
         on_wake_fn:           Optional[Callable] = None,
-        on_end_fn:            Optional[Callable] = None,
         on_recording_end_fn:  Optional[Callable] = None,
     ):
         self._on_sdk_error = on_sdk_error
@@ -314,7 +334,6 @@ class ASRCallback:
         self._ai_dispatched:   bool = False           # 是否已派發 AI 處理（用於避免重複播 結束收音）
         self._rec_end_played:  bool = False           # 結束收音音效是否已提前播放
         self._on_wake          = on_wake_fn           # 喚醒詞觸發（播放「開始對話」）
-        self._on_end           = on_end_fn            # 結束詞「謝謝曼波」觸發（播放「結束對話」）
         self._on_recording_end = on_recording_end_fn  # 主動錄音自然結束（播放「結束收音」）
 
     def on_open(self):  pass
@@ -326,14 +345,6 @@ class ASRCallback:
         if self._on_wake:
             try:
                 self._on_wake()
-            except Exception:
-                pass
-
-    def on_end_word(self):
-        """結束詞「謝謝曼波」觸發：播放結束對話音效"""
-        if self._on_end:
-            try:
-                self._on_end()
             except Exception:
                 pass
 
@@ -471,19 +482,20 @@ class GoogleASR:
     介面：start() / stop() / send_audio_frame()
 
     運作模式：
-    - 待機模式（standby）：持續串流，偵測喚醒詞「哈囉曼波」
+    - 待機模式（standby）：持續串流，偵測喚醒詞「哈囉」
     - 主動模式（active）：收到喚醒詞後啟動，靜音超過 SILENCE_SEC 即結束並派發指令
     """
 
-    SILENCE_SEC:        float = 2.5    # 主動模式靜音判斷秒數（延長避免截斷指令）
+    SILENCE_SEC:        float = 2.0    # 主動模式靜音判斷秒數（盲人講完一句後 2s 沒新聲音即結束收音）
     SILENCE_RMS_THRESH: float = 80.0  # RMS 低於此值視為靜音（降低以提升收音靈敏度）
-    ACTIVE_MAX_SEC:     float = 12.0   # 主動模式最長錄音時間
+    GRACE_PERIOD_SEC:   float = 6.5    # 進入 active 後 grace 期：盲人需要聽完「開始對話」chime
+                                       # + 反應 + 開講，此段時間內 silence 不算結束（含 chime 播放）
+    ACTIVE_MAX_SEC:     float = 12.0   # 主動模式最長錄音時間（partial 可重置 _active_start）
+    ACTIVE_ABSOLUTE_MAX_SEC: float = 25.0  # active 進入後絕對上限（partial 不能重置），
+                                            # 防止 echo / 雜訊持續 partial 造成 infinite active
     STREAM_RESTART_SEC: float = 200.0  # Google 串流 5 分鐘上限，提前重啟
     # 說話人驗證用的近期音訊緩衝（滑動視窗保留最近 N 秒音訊）
     _RECENT_BUF_SEC:    float = 5.0    # 保留最近 5 秒供聲紋比對
-
-    # 曼波關鍵字變體：偵測到「曼波」（含 ASR 誤辨）即觸發喚醒
-    _MAMBO_VARIANTS = ("曼波", "漫波", "漫播", "慢播", "慢波", "滿波", "們波")
 
     def __init__(self, credentials_path: str, sample_rate: int, callback: "ASRCallback",
                  bypass_wake: bool = False):
@@ -496,6 +508,13 @@ class GoogleASR:
         self._mode             = "standby"
         self._last_voice_ts    = 0.0
         self._active_start     = 0.0
+        self._active_enter_ts  = 0.0   # 絕對 enter active 時間（partial 不重置）
+        self._last_partial_text = ""   # active 期間最近一個非空 partial；active 結束且
+                                       # Google 尚未送 final 時，視為 final 派發（修 Bug 1）
+        self._first_voice_received = False  # 本輪 active 是否已收到 Google STT partial（真實人聲），
+                                            # 配合 GRACE_PERIOD_SEC：未收到 partial 前 silence 不算結束。
+                                            # 故意不用 RMS 判斷：chime 回灌會讓 RMS 短暫 > 門檻，誤觸 grace 結束
+        self._cycle_count = 0          # 一次收音 = 一次 active 進出；用於 DEBUG log 標明本輪邊界
         self._stream_thread: Optional[threading.Thread] = None
 
         # 近期音訊滑動緩衝（用於說話人驗證）
@@ -526,10 +545,24 @@ class GoogleASR:
         print("[GoogleASR] stopped", flush=True)
 
     def enter_active_mode(self):
-        self._mode = "active"
+        # 先寫 timestamps、後 publish _mode：避免 _stream_loop 另一 thread 看到
+        # _mode=active 但讀到 _last_voice_ts 的舊值（0.0 或前一輪結束時間），
+        # 導致 _check_active_timeout 誤判已靜音 2.5 秒立刻結束 active。
         now = time.monotonic()
-        self._active_start  = now
-        self._last_voice_ts = now
+        self._active_start    = now
+        self._active_enter_ts = now   # 絕對上限基準，partial 不重置
+        self._last_voice_ts   = now
+        self._last_partial_text = ""  # 重置上輪 active 殘留，避免錯派發
+        self._first_voice_received = False  # 重置 grace 旗標：本輪等使用者第一個聲音
+        self._cycle_count += 1
+        print(f"[ASR-CYCLE] ========== 收音 #{self._cycle_count} 開始（grace={self.GRACE_PERIOD_SEC}s）==========", flush=True)
+        self._mode = "active"
+        # 通知 audio_player 進入 ASR 主動模式 → 暫停導航 TTS + 清空已排隊 PCM
+        try:
+            from audio_player import set_asr_active_mode
+            set_asr_active_mode(True)
+        except Exception:
+            pass
         print("[GoogleASR] 進入主動錄音模式，等待指令…", flush=True)
 
     def send_audio_frame(self, data: bytes):
@@ -560,10 +593,35 @@ class GoogleASR:
                 self._recent_buf = self._recent_buf[-self._recent_max_bytes:]
 
         self._audio_queue.put(data)
-        if self._mode == "active" and _calc_rms(data) > self.SILENCE_RMS_THRESH:
-            self._last_voice_ts = time.monotonic()
+        if self._mode == "active":
+            if _calc_rms(data) > self.SILENCE_RMS_THRESH:
+                self._last_voice_ts = time.monotonic()
+                # 注意：此處只 update silence 計時，不 set _first_voice_received。
+                # 原因：chime「開始對話」播放回灌進 mic 會讓 RMS 短暫 > 門檻 → 誤觸 grace 結束 →
+                # 盲人還沒講話就被靜音超時收掉。改在 _handle_active 收 Google STT partial 才算
+                # 「真實人聲」（chime 不會被辨識成文字）。
+            # 即使沒 ASR partial 也要檢查超時，否則純背景雜訊會讓 active 永不退出
+            self._check_active_timeout()
 
     # ── 內部方法 ────────────────────────────────────────────────────────────
+
+    def _restart_stream(self):
+        """強制讓當前 Google STT 串流結束，由 outer loop 自動開新 session。
+
+        用途：active 結束時清掉 Google 那邊累積的 partial buffer，
+        避免下次 active 的 partial 與舊未送 final 的內容混在一起。
+        """
+        drained = 0
+        try:
+            while True:
+                self._audio_queue.get_nowait()
+                drained += 1
+        except queue.Empty:
+            pass
+        # sentinel：_audio_generator 看到 None 即 return，
+        # _stream_loop 的 while self._running 仍 True → 自動重新呼叫 streaming_recognize
+        self._audio_queue.put(None)
+        print(f"[GoogleASR] 重啟串流（drain {drained} chunk）", flush=True)
 
     def _audio_generator(self, stop_event: threading.Event):
 
@@ -605,14 +663,65 @@ class GoogleASR:
         else:
             # 主動模式：即時顯示 partial，final 派發指令
             self._handle_active(transcript, is_final)
-            # 靜音 / 超時 → 切回待機
-            now = time.monotonic()
-            if (now - self._last_voice_ts >= self.SILENCE_SEC or
-                    now - self._active_start >= self.ACTIVE_MAX_SEC):
-                reason = "靜音" if now - self._last_voice_ts >= self.SILENCE_SEC else "超時"
-                print(f"[GoogleASR] 主動模式結束（{reason}）", flush=True)
-                self._mode = "standby"
-                self._callback.on_recording_end()  # 播放「結束收音」音效
+            self._check_active_timeout()
+
+    def _check_active_timeout(self) -> bool:
+        """檢查主動模式是否該結束（靜音 / 超時 / 絕對上限）。回 True 表示已結束。
+
+        send_audio_frame 與 _handle_result 都會呼叫，避免無 ASR partial 時 active 卡住。
+        雙重檢查 _mode 防止 race condition 造成 on_recording_end 被連調兩次。
+        """
+        if self._mode != "active":
+            return False
+        now = time.monotonic()
+        silence_elapsed  = now - self._last_voice_ts   >= self.SILENCE_SEC
+        timeout_elapsed  = now - self._active_start    >= self.ACTIVE_MAX_SEC
+        # 絕對上限：partial 重置 _active_start 防止短話被截斷，但若 echo / 雜訊
+        # 持續送 partial，active 會無限延長，所以加一個 partial 不能重置的絕對上限
+        absolute_elapsed = now - self._active_enter_ts >= self.ACTIVE_ABSOLUTE_MAX_SEC
+        # Grace period：盲人需要聽完「開始對話」chime + 反應 + 開講。
+        # 還沒收到第一個聲音時，silence_elapsed 不算結束，至少撐到 GRACE_PERIOD_SEC。
+        in_grace = (not self._first_voice_received
+                    and now - self._active_enter_ts < self.GRACE_PERIOD_SEC)
+        if silence_elapsed and in_grace:
+            return False
+        if not (silence_elapsed or timeout_elapsed or absolute_elapsed):
+            return False
+        if self._mode != "active":
+            return False
+        if absolute_elapsed:
+            reason = "絕對上限"
+        elif silence_elapsed:
+            reason = "grace 期滿無聲" if not self._first_voice_received else "靜音"
+        else:
+            reason = "超時"
+        print(f"[GoogleASR] 主動模式結束（{reason}）", flush=True)
+        # Fallback：Google 常在使用者停話後 1~3 秒才送 final，但本地 SILENCE_SEC 已切回 standby，
+        # 後續真正 final 會走待機分支被「無喚醒詞」忽略 → 指令丟失。
+        # 此處在切 standby 前，主動把最後一個 partial 視為 final 派發（修 Bug 1）。
+        pending = self._last_partial_text
+        self._last_partial_text = ""
+        if pending:
+            print(f"[GoogleASR] 最後 partial 視為 final: '{pending}'", flush=True)
+            pending_event = {"output": {"sentence": {"text": pending, "sentence_end": True}}}
+            try:
+                self._callback.on_event(pending_event)
+            except Exception:
+                pass
+        self._mode = "standby"
+        # 通知 audio_player 退出 ASR 主動模式 → 恢復導航 TTS 播報
+        try:
+            from audio_player import set_asr_active_mode
+            set_asr_active_mode(False)
+        except Exception:
+            pass
+        self._callback.on_recording_end()
+        # 強制重啟 Google STT 串流：清掉 Google 內部累積的 partial buffer，
+        # 避免下次 active 把舊 partial 跟新講話混在一起（修 Bug 2）。
+        self._restart_stream()
+        duration = now - self._active_enter_ts
+        print(f"[ASR-CYCLE] ========== 收音 #{self._cycle_count} 結束（reason={reason}, duration={duration:.1f}s, partial_dispatched={'yes' if pending else 'no'}）==========", flush=True)
+        return True
 
     def _check_wake_word(self, text: str):
         # 旁路模式（全域或實例級）：跳過喚醒詞，STT 結果直接派發給 AI
@@ -622,9 +731,8 @@ class GoogleASR:
             self._callback.on_event(event)
             return
 
-        norm = _normalize_cn(text)
-        # 只要偵測到「曼波」（含 ASR 誤辨變體）即觸發喚醒
-        matched = any(v in norm for v in self._MAMBO_VARIANTS)
+        # 偵測到「哈囉」（含繁 / 簡 / 英變體）即觸發喚醒
+        matched = is_wake_word(text)
 
         if not matched:
             print(f"[GoogleASR] 待機中收到: '{text}'（無喚醒詞，忽略）", flush=True)
@@ -644,17 +752,21 @@ class GoogleASR:
         self.enter_active_mode()
 
     def _handle_active(self, text: str, is_final: bool):
-        norm = _normalize_cn(text)
-        # 結束詞偵測
-        if is_final:
-            for w in END_WORDS:
-                if w and _normalize_cn(w) in norm:
-                    print(f"[GoogleASR] 結束詞偵測: '{text}'", flush=True)
-                    self._mode = "standby"
-                    self._callback.on_end_word()
-                    return
+        # 結束對話改由主動模式靜音 / 超時自動結束（_handle_result），不再偵測結束詞
         event = {"output": {"sentence": {"text": text, "sentence_end": is_final}}}
         self._callback.on_event(event)
+        stripped = text.strip()
+        if stripped:
+            # 收到 STT 內容（不論 partial/final）→ 確定有聲音，grace 期結束
+            self._first_voice_received = True
+        if is_final:
+            # Google 自然送出 final → 清空 partial 暫存，避免 _check_active_timeout 重複派發
+            self._last_partial_text = ""
+        elif stripped:
+            # 還在說話中（有 partial）→ 延長 12s 上限，避免在 TTS 干擾下 final 還沒到就切回 standby
+            # 同時記下最後 partial，供 active 結束時（Google 未及時 final）fallback 視為 final 派發
+            self._active_start = time.monotonic()
+            self._last_partial_text = stripped
 
     def _stream_loop(self):
         """主串流執行緒：含自動重啟邏輯"""
@@ -667,15 +779,10 @@ class GoogleASR:
             language_code="cmn-Hant-TW",
             alternative_language_codes=["zh-CN"],
             enable_automatic_punctuation=True,
-            # 熱詞：提高「曼波」相關詞的辨識權重
+            # 熱詞：提高喚醒詞「哈囉」相關變體的辨識權重
             speech_contexts=[_speech.SpeechContext(
-                phrases=["哈囉曼波", "哈囉 曼波", "謝謝曼波", "謝謝 曼波",
-                         "羅曼波", "哈囉慢播", "哈囉嗎",
-                         "曼波", "漫波", "漫播", "慢播",
-                         # 新增：常見 ASR 誤辨變體
-                         "慢波", "滿波", "們波",
-                         "哈羅曼波", "哈洛曼波",
-                         "哈囉慢波", "哈囉漫波", "哈囉滿波"],
+                phrases=["哈囉", "哈嘍", "哈羅", "哈摟", "哈漏",
+                         "蛤囉", "hello"],
                 boost=20.0,
             )],
         )

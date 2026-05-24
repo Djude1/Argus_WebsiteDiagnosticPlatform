@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -15,6 +16,12 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aiglasses/app_control"
+    private var methodChannel: MethodChannel? = null
+
+    // 音量雙鍵（音量＋與音量－同時按下）手動喚醒語音的偵測狀態
+    private var _volUpPressed   = false
+    private var _volDownPressed = false
+    private var _wakeComboFired = false
 
     // Maps 啟動前的原始媒體音量，用於導航結束後還原
     private var _savedMusicVolume: Int = -1
@@ -27,8 +34,8 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-            .setMethodCallHandler { call, result ->
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel!!.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "bringToForeground" -> {
                         bringAppToForeground()
@@ -52,6 +59,32 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * 攔截音量鍵：音量＋與音量－「同時按下」→ 觸發手動喚醒語音（等同說「哈囉」）。
+     * 單獨按音量鍵維持系統原本的音量調整行為，不受影響。
+     * 僅在 APP 位於前景且取得焦點時有效。
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            val pressed = event.action == KeyEvent.ACTION_DOWN
+            if (code == KeyEvent.KEYCODE_VOLUME_UP)   _volUpPressed   = pressed
+            if (code == KeyEvent.KEYCODE_VOLUME_DOWN) _volDownPressed = pressed
+
+            if (_volUpPressed && _volDownPressed) {
+                // 兩鍵同時按下 → 觸發一次手動喚醒（按住期間不重複觸發）
+                if (!_wakeComboFired) {
+                    _wakeComboFired = true
+                    methodChannel?.invokeMethod("onManualWake", null)
+                }
+                return true   // 消耗事件，避免同時調整音量
+            }
+            // 任一鍵放開 → 重置，下次組合可再次觸發
+            if (!pressed) _wakeComboFired = false
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     /** 將 APP 切回前景 */

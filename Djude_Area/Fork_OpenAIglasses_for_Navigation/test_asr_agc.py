@@ -232,11 +232,7 @@ def test_keyword_coverage():
     print("測試 3：關鍵字觸發覆蓋率 — 模擬 ASR 誤辨場景")
     print("=" * 70)
 
-    from asr_core import (
-        WAKE_WORDS, END_WORDS, INTERRUPT_KEYWORDS,
-        _normalize_cn, GoogleASR
-    )
-    _MAMBO_VARIANTS = GoogleASR._MAMBO_VARIANTS
+    from asr_core import INTERRUPT_KEYWORDS, _normalize_cn, is_wake_word
 
     # 模擬 ASR 可能的辨識結果（含正確與常見誤辨）
     test_phrases = [
@@ -271,11 +267,10 @@ def test_keyword_coverage():
         ("我是誰", False, "非指令-問題"),
 
         # 喚醒詞變體（非旁路模式下測試）
-        ("哈囉 曼波", True, "喚醒詞-標準"),
-        ("哈囉曼波", True, "喚醒詞-無空格"),
-        ("羅曼波", True, "喚醒詞-誤辨"),
-        ("哈囉", True, "喚醒詞-寬鬆匹配"),
-        ("哈喽曼波", True, "喚醒詞-簡體變體"),
+        ("哈囉", True, "喚醒詞-標準"),
+        ("哈嘍", True, "喚醒詞-諧音變體"),
+        ("哈喽", True, "喚醒詞-簡體變體"),
+        ("hello", True, "喚醒詞-英文變體"),
     ]
 
     # 在旁路模式下，所有語音都直接派發
@@ -294,12 +289,12 @@ def test_keyword_coverage():
         norm = _normalize_cn(phrase)
         # 檢查是否包含任何導航相關關鍵字
         has_keyword = any(kw in norm for kw in navigation_keywords)
-        # 檢查喚醒詞（偵測到「曼波」變體即觸發）
-        is_mambo = any(v in norm for v in _MAMBO_VARIANTS)
+        # 檢查喚醒詞（偵測到「哈囉」變體即觸發）
+        is_wake = is_wake_word(phrase)
         # 檢查熱詞
         is_interrupt = any(w and _normalize_cn(w) in norm for w in INTERRUPT_KEYWORDS)
 
-        matched = has_keyword or is_mambo or is_interrupt
+        matched = has_keyword or is_wake or is_interrupt
 
         # 對於「應該匹配」的指令，只要包含關鍵字就算通過
         if should_match:

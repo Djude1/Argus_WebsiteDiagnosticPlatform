@@ -94,6 +94,35 @@ class AppConstants {
   // 配置來源網站 URL（Django Website，用於遠端讀取 AI 伺服器位址）
   static const String keyWebsiteUrl  = 'config_website_url';
 
+  // ── Django Website 連線推導 ────────────────────────────────────────────
+  // 公網預設 domain（部署機 Cloudflared）；要換主機改這一行
+  static const String defaultWebsitePublicUrl = 'https://aiglasses.qzz.io';
+  // 區網模式下 Django nginx 對外埠
+  static const int    websiteLanPort = 8888;
+
+  /// 推導 Django Website base URL：
+  /// 1) 若 SharedPreferences 有 keyWebsiteUrl（使用者手動覆蓋），優先使用
+  /// 2) 若 AI server 走 https://（公網/Cloudflared），用 defaultWebsitePublicUrl
+  /// 3) 區網模式（http + IP）→ 同 host 換 port 8888
+  static String resolveWebsiteUrl({
+    required String aiHost,
+    required bool aiSecure,
+    String? aiBaseUrl,
+    String? userOverride,
+  }) {
+    if (userOverride != null && userOverride.isNotEmpty) {
+      return userOverride.replaceAll(RegExp(r'/+$'), '');
+    }
+    final isPublicHttps = (aiBaseUrl != null && aiBaseUrl.startsWith('https://')) || aiSecure;
+    if (isPublicHttps) return defaultWebsitePublicUrl;
+    return 'http://$aiHost:$websiteLanPort';
+  }
+
+  // 路口停等 API path（attach 到 resolveWebsiteUrl 結果後使用）
+  static const String pathIntersectionWait      = '/api/analytics/intersections/wait/';
+  static const String pathIntersectionHeartbeat = '/api/analytics/intersections/heartbeat/';
+  static const String pathIntersectionInfo      = '/api/analytics/intersections/info/';
+
   // ── 導航狀態顯示名稱對照 ─────────────────────────────────────────────────
   static const Map<String, String> navStateLabels = {
     'IDLE':                     '待機',

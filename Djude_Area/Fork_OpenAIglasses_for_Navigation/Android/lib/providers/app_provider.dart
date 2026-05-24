@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../core/constants.dart';
@@ -27,6 +28,9 @@ import '../screens/emergency_countdown_screen.dart';
 class AppProvider extends ChangeNotifier {
   /// 全域 NavigatorKey — 讓 Provider 可在任何頁面 push 倒數畫面（摔倒偵測）
   static final navigatorKey = GlobalKey<NavigatorState>();
+
+  /// 與原生（Kotlin）溝通的 MethodChannel — 接收音量鍵手動喚醒事件
+  static const _appControlChannel = MethodChannel('com.aiglasses/app_control');
 
   // ── 伺服器設定 ──────────────────────────────────────────────────────────
   String _host         = AppConstants.defaultHost;
@@ -70,9 +74,9 @@ class AppProvider extends ChangeNotifier {
   double get ttsSpeechRate => _ttsSpeechRate;
 
   // ── 喚醒詞設定 ─────────────────────────────────────────────────────────────
-  // true  → 需要先說「哈囉」才會開始接收語音指令
-  // false → 語音直接送 AI 處理（預設關閉喚醒詞）
-  bool _wakeWordEnabled = false;
+  // true  → 需要先說「哈囉」或按 WAKE 才會開始接收語音指令（預設）
+  // false → 旁路模式，語音直接送 AI 處理（課堂轉錄等情境）
+  bool _wakeWordEnabled = true;
   bool get wakeWordEnabled => _wakeWordEnabled;
 
   // ── ASR 收音狀態 ───────────────────────────────────────────────────────────
@@ -82,6 +86,10 @@ class AppProvider extends ChangeNotifier {
   String _asrState = 'standby';
   String get asrState => _asrState;
   bool get isListening => _asrState == 'listening';
+
+  // DEBUG：收音 cycle 計數（對齊 server [ASR-CYCLE]，診斷 mic 上行）
+  int _asrCycleCounter = 0;
+  DateTime? _asrCycleStart;
 
   // ── ASR 辨識文字追蹤 ──────────────────────────────────────────────────────
   String _asrPartialText = '';          // 即時辨識中的文字
@@ -122,6 +130,23 @@ class AppProvider extends ChangeNotifier {
       _ws.connectAudio(bypassWake: !v);
     }
     notifyListeners();
+  }
+
+  // ── 音量鍵手動喚醒 ────────────────────────────────────────────────────────
+  /// 處理原生（Kotlin）端透過 MethodChannel 送來的呼叫
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    if (call.method == 'onManualWake') {
+      _onManualWake();
+    }
+    return null;
+  }
+
+  /// 音量鍵組合（音量＋與音量－同時按）觸發：送 WAKE 給伺服器，等同說「哈囉」。
+  /// 伺服器在喚醒詞模式下會進入主動聆聽並播「開始對話」；旁路模式下為無害 no-op。
+  void _onManualWake() {
+    if (!_connected) return;
+    _ws.sendAudioWake();
+    _addMessage('[系統] 音量鍵手動喚醒');
   }
 
   Future<void> setPositionMode(String mode) async {
@@ -196,7 +221,7 @@ class AppProvider extends ChangeNotifier {
     _ttsEnabled      = prefs.getBool('tts_enabled')        ?? true;
     _ttsSpeechRate   = prefs.getDouble('tts_speech_rate') ?? 0.5;
     _positionMode    = prefs.getString('position_mode')   ?? 'clock';
-    _wakeWordEnabled = prefs.getBool('wake_word_enabled') ?? false;
+    _wakeWordEnabled = prefs.getBool('wake_word_enabled') ?? true;
 
     await _tts.setLanguage('zh-TW');
     await _tts.setSpeechRate(_ttsSpeechRate);
@@ -204,6 +229,19 @@ class AppProvider extends ChangeNotifier {
     // 背景預載固定語音快取（不阻塞啟動流程）
     VoiceCacheService.instance.init(_tts);
     LocalVoiceService.instance.init(); // 載入 assets/voice_map.json
+    // chime 播完同步處理兩件事：
+    // 1. restart mic（audioplayers 播 chime 期間 Android 暫停 voiceRecognition
+    //    AudioRecord callback，不會自動恢復）
+    // 2. resume stream player（chime 搶 audio focus 讓 just_audio ExoPlayer
+    //    pause，chime 結束雖然 focus 回來但不自動 resume）
+    LocalVoiceService.instance.onChimeComplete = () {
+      debugPrint('[AppProvider] chime 完成 → restart mic + resume stream');
+      _audio.restartMicNow('chime completed');
+      _audio.resumeStreamIfPaused();
+    };
+
+    // 接收原生端（Kotlin）的音量鍵手動喚醒事件
+    _appControlChannel.setMethodCallHandler(_handleNativeMethodCall);
 
     await loadContacts();
     await loadPlaces();
@@ -485,7 +523,8 @@ class AppProvider extends ChangeNotifier {
     _ws.connectImu();
 
     await _startCamera();
-    _imu.start(onData: (d) => _ws.sendImu(d));
+    // IMU 200ms（5 Hz）上行，撞擊偵測仍即時（raw accel callback 內判斷）
+    _imu.start(onData: (d) => _ws.sendImu(d), intervalMs: 200);
 
     // 重置伺服器導航狀態：僅在伺服器確實有導航在運行時才發送停止指令，避免廣播無謂的錯誤訊息
     try {
@@ -513,7 +552,8 @@ class AppProvider extends ChangeNotifier {
     _addMessage('[系統] 已連線 SERVER → ${_endpointLabel()}');
     notifyListeners();
 
-    startPollingNavState();
+    // 移除週期性 navState 輪詢：WS 推送 NAV_STATE: 已即時更新狀態（0ms 延遲）
+    // 斷線恢復時由 _reconnect() 補一次 _pollNavState 即可
     _startWatchdog();
 
     // 麥克風立即啟動（使用者要求一進入 APP 就收音）
@@ -533,7 +573,8 @@ class AppProvider extends ChangeNotifier {
 
   void _startWatchdog() {
     _watchdogTimer?.cancel();
-    _watchdogTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+    // 30 秒：HTTP healthCheck 偏慢，10s 太密集造成手機無線電晶片無法低功耗
+    _watchdogTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (!_connected) return;
       try {
         await _api.healthCheck();
@@ -565,7 +606,9 @@ class AppProvider extends ChangeNotifier {
       _connected = true;
       _addMessage('[系統] 重新連線 SERVER → ${_endpointLabel()}');
       notifyListeners();
-      startPollingNavState();
+      // 重連後同步一次 server 端 navState（之後靠 WS NAV_STATE: 推送即時更新）
+      // ignore: unawaited_futures
+      _pollNavState();
     } catch (_) {
       // 還沒回來，5 秒後再試
       Future.delayed(const Duration(seconds: 5), _reconnect);
@@ -575,10 +618,23 @@ class AppProvider extends ChangeNotifier {
   Future<void> _startCamera() async {
     try {
       await _camera.initialize();
-      _camera.startStreaming(onFrame: (b) => _ws.sendFrame(b), fps: 10);
+      // 預設待機 fps：收到 NAV_STATE: 後由 _applyCameraFpsForState 切換
+      _camera.startStreaming(onFrame: (b) => _ws.sendFrame(b), fps: _idleFps);
+      _applyCameraFpsForState(_navState);
     } catch (e) {
       _addMessage('[系統] 攝影機：$e');
     }
+  }
+
+  // ── 動態相機 fps（待機 ↔ 導航）───────────────────────────────────────────
+  // takePicture 走 capture pipeline + 磁碟 IO 是耗能大戶；待機時降頻可顯著降溫，
+  // 導航中保持 10 fps 不影響避障即時性。
+  static const int _idleFps = 2;      // IDLE/CHAT：viewer 觀看用
+  static const int _navigatingFps = 10; // 導航/避障/物搜：與原本相同
+
+  void _applyCameraFpsForState(String state) {
+    final isNavigating = !['IDLE', 'CHAT', '', 'unavailable'].contains(state);
+    _camera.setFps(isNavigating ? _navigatingFps : _idleFps);
   }
 
   Future<void> _startMicrophone() async {
@@ -630,6 +686,8 @@ class AppProvider extends ChangeNotifier {
         if (_asrState == 'processing') {
           _asrState = 'standby';
         }
+        // 待機 ↔ 導航切換相機 fps（待機 2 / 導航 10）
+        _applyCameraFpsForState(s);
         notifyListeners();
       }
       return;
@@ -723,10 +781,24 @@ class AppProvider extends ChangeNotifier {
       final durationMs = (data['duration_ms'] as num?)?.toInt() ?? 2000;
       if (text.isEmpty) return;
 
-      // 追蹤 ASR 音效，更新收音狀態
+      // 追蹤 ASR 音效，更新收音狀態 + cycle log（對齊 server [ASR-CYCLE]）
       if (text == '開始對話') {
+        _asrCycleCounter++;
+        _asrCycleStart = DateTime.now();
+        _audio.resetMicCounter();
+        debugPrint('[ASR-CYCLE-APP] ========== 收音 #$_asrCycleCounter 開始 @ '
+            '${_asrCycleStart!.toIso8601String()} ==========');
         _updateAsrState('listening');
       } else if (text == '結束收音') {
+        final now = DateTime.now();
+        final durMs = _asrCycleStart != null
+            ? now.difference(_asrCycleStart!).inMilliseconds : -1;
+        final chunks = _audio.micTotalChunks;
+        final samples = _audio.micTotalSamples;
+        final audioMs = samples * 1000 ~/ 16000;
+        debugPrint('[ASR-CYCLE-APP] ========== 收音 #$_asrCycleCounter 結束 @ '
+            '${now.toIso8601String()}（duration=${durMs}ms, '
+            'mic_chunks=$chunks, mic_audio=${audioMs}ms）==========');
         _updateAsrState('standby');
       }
 
@@ -868,6 +940,8 @@ class AppProvider extends ChangeNotifier {
 
     // 去掉 FINAL: 前綴後再比對，避免前綴干擾中文比對
     final text  = msg.startsWith('FINAL:') ? msg.substring(6) : msg;
+    // [ 開頭是 server 廣播（[系统]/[导航]/[AI] 等），不是使用者真實語音 → 跳過
+    if (text.startsWith('[')) return;
     final lower = text.toLowerCase();
 
     for (final c in _contacts) {
@@ -876,9 +950,21 @@ class AppProvider extends ChangeNotifier {
           lower.contains('聯絡$name') ||
           lower.contains('call $name') ||
           (lower.contains(name) && lower.contains('打電話'))) {
+        debugPrint('[EMERGENCY-CALL] 命中聯絡人「${c['name']}」→ 撥打 ${c['phone']}（原文："$text"）');
         _initiateCall(c['name'] as String, c['phone'] as String);
         return;
       }
+    }
+    // 有撥打意圖但沒命中任何聯絡人 → 印 log 方便判斷
+    // （可能 ASR 把名字辨錯、或聯絡人沒設、或意圖字串沒涵蓋到）
+    final hasCallIntent = lower.contains('打給') || lower.contains('打给') ||
+        lower.contains('打電話') || lower.contains('打电话') ||
+        lower.contains('聯絡') || lower.contains('联络') ||
+        lower.contains('撥給') || lower.contains('拨给');
+    if (hasCallIntent) {
+      final names = _contacts.map((c) => c['name']).toList();
+      debugPrint('[EMERGENCY-CALL] 偵測到撥打意圖但聯絡人不匹配: "$text"，'
+          '聯絡人清單: $names');
     }
   }
 
@@ -1026,16 +1112,9 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── 輪詢導航狀態 ─────────────────────────────────────────────────────────
+  // ── 導航狀態同步 ─────────────────────────────────────────────────────────
+  // 改為純被動：靠 WS NAV_STATE: 推送即時更新，重連後手動 _pollNavState 補一次
   Timer? _stateTimer;
-
-  void startPollingNavState() {
-    _stateTimer?.cancel();
-    // 10 秒備援輪詢（主要靠 NAV_STATE: WebSocket 推送即時更新）
-    _stateTimer = Timer.periodic(
-      const Duration(seconds: 10), (_) => _pollNavState(),
-    );
-  }
 
   void stopPollingNavState() {
     _stateTimer?.cancel();

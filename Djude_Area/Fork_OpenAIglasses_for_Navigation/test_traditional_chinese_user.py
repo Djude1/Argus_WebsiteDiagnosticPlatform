@@ -33,11 +33,8 @@ sys.stderr.reconfigure(encoding='utf-8')
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from asr_core import (
-    WAKE_WORDS, END_WORDS, INTERRUPT_KEYWORDS,
-    _normalize_cn, _s2t, GoogleASR,
+    INTERRUPT_KEYWORDS, _normalize_cn, _s2t, is_wake_word,
 )
-
-_MAMBO_VARIANTS = GoogleASR._MAMBO_VARIANTS
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -442,7 +439,6 @@ def test_cmn_hant_vs_zh_cn():
         ("看紅綠燈", "看紅綠燈", "看红绿灯", "start_traffic_light"),
         ("停止紅綠燈", "停止紅綠燈", "停止红绿灯", "stop_traffic_light"),
         ("停止所有功能", "停止所有功能", "停止所有功能", "interrupt"),
-        ("謝謝曼波", "謝謝曼波", "谢谢曼波", "end_word"),
     ]
 
     trad_pass = 0
@@ -461,11 +457,6 @@ def test_cmn_hant_vs_zh_cn():
             norm_s = _normalize_cn(simp_output)
             trad_ok = any(w and _normalize_cn(w) in norm_t for w in INTERRUPT_KEYWORDS)
             simp_ok = any(w and _normalize_cn(w) in norm_s for w in INTERRUPT_KEYWORDS)
-        elif expected_cmd == "end_word":
-            norm_t = _normalize_cn(trad_output)
-            norm_s = _normalize_cn(simp_output)
-            trad_ok = any(w and _normalize_cn(w) in norm_t for w in END_WORDS)
-            simp_ok = any(w and _normalize_cn(w) in norm_s for w in END_WORDS)
         else:
             trad_ok = trad_result["command"] == expected_cmd
             simp_ok = simp_result["command"] == expected_cmd
@@ -593,9 +584,8 @@ def test_speech_speed_and_accent():
                     # 意外匹配到了 — 不算失敗，但記錄
                     pass
             elif expected == "wake_word":
-                # 喚醒詞特殊處理：偵測到「曼波」變體即觸發
-                norm = _normalize_cn(phrase)
-                if any(v in norm for v in _MAMBO_VARIANTS):
+                # 喚醒詞特殊處理：偵測到「哈囉」變體即觸發
+                if is_wake_word(phrase):
                     matched += 1
                 else:
                     failed.append((phrase, expected, result.get("command")))
@@ -654,8 +644,6 @@ def test_mixed_trad_simp_output():
         ("过马路結束", "stop_crossing", "混合-過→过"),
         ("看红綠燈", "start_traffic_light", "混合-紅→红"),
         ("停下所有功能", "interrupt", "混合-停→停（同）"),
-        ("谢謝曼波", "end_word", "混合-謝→谢（第一字）"),
-        ("謝谢曼波", "end_word", "混合-謝→谢（第二字）"),
     ]
 
     matched = 0
@@ -668,9 +656,6 @@ def test_mixed_trad_simp_output():
         if expected_cmd == "interrupt":
             norm = _normalize_cn(asr_output)
             ok = any(w and _normalize_cn(w) in norm for w in INTERRUPT_KEYWORDS)
-        elif expected_cmd == "end_word":
-            norm = _normalize_cn(asr_output)
-            ok = any(w and _normalize_cn(w) in norm for w in END_WORDS)
         else:
             ok = result["command"] == expected_cmd
 

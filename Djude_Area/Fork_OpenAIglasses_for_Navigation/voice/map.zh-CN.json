@@ -849,13 +849,13 @@
     "files": [
       "6點鐘方向有狹長障礙物.wav"
     ],
-    "duration_ms": 3200
+    "duration_ms": 2800
   },
   "左側有大量機車，通道狹窄": {
     "files": [
       "左側有大量機車，通道狹窄.wav"
     ],
-    "duration_ms": 3680
+    "duration_ms": 4240
   },
   "前方路面狹窄且左側有倒臥機車": {
     "files": [
@@ -867,13 +867,13 @@
     "files": [
       "2點鐘方向有排水溝高低.wav"
     ],
-    "duration_ms": 3080
+    "duration_ms": 3040
   },
   "前方有小坡道或路緣": {
     "files": [
       "前方有小坡道或路緣.wav"
     ],
-    "duration_ms": 3000
+    "duration_ms": 2400
   },
   "右前方有路緣": {
     "files": [
@@ -891,43 +891,43 @@
     "files": [
       "右側5點鐘方向有花台.wav"
     ],
-    "duration_ms": 2520
+    "duration_ms": 2560
   },
   "桌面纜線雜亂，可能絆倒": {
     "files": [
       "桌面纜線雜亂，可能絆倒.wav"
     ],
-    "duration_ms": 3040
+    "duration_ms": 2880
   },
   "桌面線路雜亂": {
     "files": [
       "桌面線路雜亂.wav"
     ],
-    "duration_ms": 1840
+    "duration_ms": 1800
   },
   "9點鐘方向有一條低垂的線": {
     "files": [
       "9點鐘方向有一條低垂的線.wav"
     ],
-    "duration_ms": 2760
+    "duration_ms": 2960
   },
   "正前方有條白色電線": {
     "files": [
       "正前方有條白色電線.wav"
     ],
-    "duration_ms": 2400
+    "duration_ms": 2440
   },
   "3點鐘方向有電線纏繞": {
     "files": [
       "3點鐘方向有電線纏繞.wav"
     ],
-    "duration_ms": 2920
+    "duration_ms": 2600
   },
   "地板可能濕滑": {
     "files": [
       "地板可能濕滑.wav"
     ],
-    "duration_ms": 1840
+    "duration_ms": 2000
   },
   "12點鐘方向地板濕滑": {
     "files": [
@@ -939,13 +939,13 @@
     "files": [
       "12點鐘方向有門檻.wav"
     ],
-    "duration_ms": 2360
+    "duration_ms": 2200
   },
   "前方有電動步道階梯": {
     "files": [
       "前方有電動步道階梯.wav"
     ],
-    "duration_ms": 2720
+    "duration_ms": 2360
   },
   "右側9點鐘方向有一排停放機車": {
     "files": [
@@ -963,7 +963,7 @@
     "files": [
       "9點鐘方向路面高低差，有落差.wav"
     ],
-    "duration_ms": 4240
+    "duration_ms": 3680
   },
   "前方雜物堆，注意絆倒": {
     "files": [

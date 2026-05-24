@@ -12,7 +12,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../core/constants.dart';
 import '../providers/app_provider.dart';
+import '../services/intersection_wait_service.dart';
 import '../widgets/debug_panel.dart';
 import 'contacts_screen.dart';
 import 'emergency_select_screen.dart';
@@ -55,7 +57,22 @@ class _BlindScreenState extends State<BlindScreen>
           ? 'AI智慧眼鏡已連線。向左滑動可進入設定頁面。'
           : '正在連線伺服器，請稍候。');
       _checkDevModeForDebug();
+      _startIntersectionWait(app);
     });
+  }
+
+  /// 群眾外包路口停等資料收集（隱私 L2：座標 5 位、匿名 64-hex device id）
+  void _startIntersectionWait(AppProvider app) {
+    final websiteBase = AppConstants.resolveWebsiteUrl(
+      aiHost: app.host,
+      aiSecure: app.secure,
+      aiBaseUrl: app.baseUrl.isNotEmpty ? app.baseUrl : null,
+      userOverride: app.websiteUrl.isNotEmpty ? app.websiteUrl : null,
+    );
+    IntersectionWaitService.instance.start(
+      websiteBaseUrl: websiteBase,
+      onStatus: (_) {}, // 真正 UI 顯示走 ValueNotifier，這裡只需要把 start 接通
+    );
   }
 
   /// 檢查手機開發人員模式，有則插入 DEBUG 懸浮球
@@ -75,6 +92,7 @@ class _BlindScreenState extends State<BlindScreen>
 
   @override
   void dispose() {
+    IntersectionWaitService.instance.stop();
     _debugEntry?.remove();
     _debugEntry = null;
     WidgetsBinding.instance.removeObserver(this);

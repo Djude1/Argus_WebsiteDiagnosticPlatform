@@ -337,6 +337,7 @@ def _call_tts(text: str, voice: str) -> Optional[bytes]:
     Gemini TTS 對對話形式句子常返 400（"Model tried to generate text..."），
     留作後備（WaveNet 失敗時才嘗試）。voice 參數僅 Gemini TTS 用，WaveNet 忽略。
     """
+    print(f"[TTS-DEBUG] _call_tts called: text={text!r}, len={len(text)}", flush=True)
     # TTS 模型對無標點的短句會返回 finishReason=OTHER，補句號確保正常生成
     if text and text[-1] not in "。！？!?.，,":
         text = text + "。"
@@ -346,6 +347,7 @@ def _call_tts(text: str, voice: str) -> Optional[bytes]:
         from audio_player import _wavenet_tts
         audio = _wavenet_tts(text)
         if audio:
+            print(f"[TTS-DEBUG] WaveNet returned {len(audio)} bytes for text={text!r}", flush=True)
             return audio
         print(f"[TTS] WaveNet 回傳空音訊，fallback Gemini TTS", flush=True)
     except Exception as e:
@@ -368,7 +370,9 @@ def _call_tts(text: str, voice: str) -> Optional[bytes]:
             print(f"[GeminiTTS] 無音訊內容（finishReason={cand.get('finishReason', '?')}）", flush=True)
             return None
         data = cand["content"]["parts"][0].get("inlineData", {}).get("data", "")
-        return base64.b64decode(data) if data else None
+        result_bytes = base64.b64decode(data) if data else None
+        print(f"[TTS-DEBUG] Gemini TTS returned {len(result_bytes) if result_bytes else 0} bytes for text={text!r}", flush=True)
+        return result_bytes
     except Exception as e:
         print(f"[GeminiTTS] 錯誤: {e}", flush=True)
         return None
@@ -599,6 +603,7 @@ async def stream_chat(
     # ② 處理 Flash 串流結束後剩餘的未分句文字（無句末標點的片段）
     remaining = (text_accumulator + pending_buf).strip()
     if remaining:
+        print(f"[TTS-DEBUG] stream_chat remaining text={remaining!r}, len={len(remaining)} → enqueue TTS future", flush=True)
         future = loop.run_in_executor(None, _call_tts, remaining, gemini_voice)
         tts_futures.append(future)
 
@@ -607,18 +612,23 @@ async def stream_chat(
         return
 
     print(f"[GeminiFlash] 串流完成，全文: {full_text}", flush=True)
+    print(f"[TTS-DEBUG] stream_chat finished: full_text_len={len(full_text)}, tts_futures={len(tts_futures)}", flush=True)
 
     # ③ yield 完整文字（UI 顯示用）
     yield OmniStreamPiece(text_delta=full_text)
 
     # ④ 按句序 await TTS Future，yield 音訊
     #    此時大部分 TTS 已在 Flash 串流期間並行完成，await 幾乎無額外等待
-    for future in tts_futures:
+    for i, future in enumerate(tts_futures):
         try:
             pcm_bytes = await future
             if pcm_bytes:
+                print(f"[TTS-DEBUG] stream_chat yield audio #{i+1}/{len(tts_futures)} len={len(pcm_bytes)} bytes", flush=True)
                 yield OmniStreamPiece(audio_b64=base64.b64encode(pcm_bytes).decode())
+            else:
+                print(f"[TTS-DEBUG] stream_chat future #{i+1}/{len(tts_futures)} returned None (TTS failed)", flush=True)
         except asyncio.CancelledError:
+            print(f"[TTS-DEBUG] stream_chat future #{i+1}/{len(tts_futures)} CANCELLED", flush=True)
             raise
         except Exception as e:
             print(f"[GeminiTTS] 合成失敗: {e}", flush=True)
