@@ -4,8 +4,17 @@ CLAUDE.local.md
 GoogleCloud_ApiKey.json
 client_secret_*.json
 交接資料/
-螢幕擷取畫面*.png
-Screenshot*.png
+# 圖片類型禁止上傳（svg/ico 為程式資源排除在外）
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.tif
+*.heic
+*.heif
 .venv/
 node_modules/
 __pycache__/
