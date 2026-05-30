@@ -15,7 +15,6 @@
 
 - [專案簡介](#專案簡介)
 - [功能特色](#功能特色)
-- [系統截圖](#系統截圖)
 - [技術棧](#技術棧)
 - [系統架構](#系統架構)
 - [快速開始](#快速開始)
@@ -63,21 +62,6 @@
 
 ---
 
-## 系統截圖
-
-### 管理後台總覽
-![Admin Overview](admin-overview-after.png)
-
-### 使用者管理
-![Admin Users](admin-users.png)
-
-### 交易紀錄
-![Admin Transactions](admin-transactions.png)
-
-### 1440px 寬螢幕檢視
-![Admin 1440](admin-1440.png)
-
----
 
 ## 技術棧
 
