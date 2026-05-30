@@ -1,0 +1,34 @@
+# 不要把主機 Python 虛擬環境與快取打進 image
+.venv
+.ruff_cache
+**/__pycache__
+**/*.pyc
+
+# 不要把主機 Playwright 快取與本機資料庫打進 image
+.ms-playwright
+backend/db.sqlite3
+backend/media
+backend/staticfiles
+
+# 前端在 image 內重新 npm ci，不複用主機的 node_modules / dist
+frontend/node_modules
+frontend/dist
+
+# 機密與本機交接檔
+.env
+.env.local
+GoogleCloud_ApiKey.json
+client_secret_*.json
+螢幕擷取畫面*.png
+Screenshot*.png
+.sisyphus
+
+# Git 與 IDE
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+
+# 文件與映像無關
+*.md

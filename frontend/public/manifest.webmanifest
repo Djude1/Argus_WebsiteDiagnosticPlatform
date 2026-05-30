@@ -1,0 +1,21 @@
+{
+  "name": "Argus 網站健檢平台",
+  "short_name": "Argus",
+  "description": "授權式 AI 網站健檢平台 — SEO/AEO/GEO/資安四維掃描 + 互動式報告",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1a2e",
+  "theme_color": "#06b6d4",
+  "lang": "zh-Hant",
+  "categories": ["productivity", "utilities", "developer"],
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

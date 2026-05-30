@@ -1,0 +1,81 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  .adjust-card {
+    max-width: 720px;
+    margin: 24px auto;
+    padding: 24px 28px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .adjust-card h1 { margin-top: 0; }
+  .adjust-summary {
+    display: flex; gap: 20px; align-items: center;
+    background: #f5f7fb; padding: 14px 18px;
+    border-radius: 8px; margin-bottom: 20px;
+  }
+  .adjust-balance {
+    color: #0d6efd; font-size: 32px; font-weight: 700;
+  }
+  .adjust-form label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  .adjust-form input[type=number], .adjust-form textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+  }
+  .adjust-form .hint { color: #6c757d; font-size: 12px; margin: 4px 0 0; }
+  .adjust-actions { margin-top: 20px; display: flex; gap: 10px; }
+  .quick-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
+  .quick-row button {
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid #d1d5db; background: #fff; cursor: pointer;
+    font-size: 12px;
+  }
+  .quick-row button:hover { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="adjust-card">
+  <h1>調整使用者點數</h1>
+  <div class="adjust-summary">
+    <div>
+      <div style="color:#6c757d;font-size:12px;">使用者</div>
+      <div style="font-size:18px;font-weight:700;">{{ wallet.user.username }}</div>
+      <div style="color:#6c757d;font-size:12px;">{{ wallet.user.email }}</div>
+    </div>
+    <div style="margin-left:auto;text-align:right;">
+      <div style="color:#6c757d;font-size:12px;">目前餘額</div>
+      <div class="adjust-balance">{{ wallet.balance }} <span style="font-size:14px;">coin</span></div>
+    </div>
+  </div>
+
+  <form method="post" class="adjust-form">
+    {% csrf_token %}
+    <label for="id_delta">變動金額（正數為加 / 退費，負數為扣）</label>
+    <input type="number" id="id_delta" name="delta" required step="1" placeholder="例如 500 或 -100">
+    <div class="quick-row">
+      <button type="button" onclick="document.getElementById('id_delta').value=100">+100</button>
+      <button type="button" onclick="document.getElementById('id_delta').value=500">+500</button>
+      <button type="button" onclick="document.getElementById('id_delta').value=1000">+1000</button>
+      <button type="button" onclick="document.getElementById('id_delta').value=-100">-100</button>
+      <button type="button" onclick="document.getElementById('id_delta').value=-500">-500</button>
+    </div>
+    <p class="hint">扣到餘額為 0 為止，不會出現負餘額；實際扣到的金額會記在備註中。</p>
+
+    <label for="id_note">備註（將存入交易紀錄）</label>
+    <textarea id="id_note" name="note" rows="3"
+              placeholder="例如：對失敗掃描 #123 的退費"></textarea>
+
+    <div class="adjust-actions">
+      <button type="submit" class="default" style="background:#4f46e5;color:#fff;padding:8px 22px;border-radius:6px;border:none;cursor:pointer;font-weight:600;">
+        送出調整
+      </button>
+      <a href="../change/" style="padding:8px 22px;border:1px solid #d1d5db;border-radius:6px;text-decoration:none;color:#374151;">
+        取消
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

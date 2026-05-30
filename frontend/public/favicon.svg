@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="argus-favicon-bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <radialGradient id="argus-favicon-glow" cx="32" cy="28" r="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67e8f9" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#67e8f9" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#argus-favicon-bg)"/>
+  <circle cx="32" cy="30" r="25" fill="url(#argus-favicon-glow)"/>
+  <path
+    d="M32 12c2.5 9.7 6.3 13.5 16 16-9.7 2.5-13.5 6.3-16 16-2.5-9.7-6.3-13.5-16-16 9.7-2.5 13.5-6.3 16-16Z"
+    fill="#ffffff"
+  />
+</svg>

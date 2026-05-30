@@ -1,0 +1,94 @@
+# Argus 完整本機部署：web / worker / redis / db / nginx(frontend)
+# 啟動：docker compose up --build
+# 所有依賴都在 image 與 volume 內，不會污染主機環境
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: argus_local_password
+      POSTGRES_DB: argus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argus -d argus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # 本機 docker compose 為開發用途；DEBUG=true 讓 runserver 自動服務 Django Admin 的靜態檔
+      # 正式部署需改用 gunicorn + collectstatic + nginx，並設 DEBUG=false
+      DJANGO_DEBUG: "true"
+      # 主網址:巧.tw (xn--gst.tw) / 備援:argus6.qzz.io
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io"
+      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      ARGUS_AUTO_QUEUE_SCANS: "true"
+      CORS_ALLOWED_ORIGINS: "http://localhost,http://localhost:80,http://127.0.0.1,https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
+      CSRF_TRUSTED_ORIGINS: "https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: >
+      sh -c "uv run python manage.py migrate &&
+             uv run python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - media_data:/app/backend/media
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uv run celery -A config worker -l info
+    volumes:
+      - media_data:/app/backend/media
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # 從專案根 .env 讀（docker compose 預設會載入），讓 Vite build 時帶入
+        GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+    ports:
+      # 主機 8080 → container 80（避開 aiglasses 與其他可能佔 80 的服務）
+      - "8080:80"
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  media_data:
