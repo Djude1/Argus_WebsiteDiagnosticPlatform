@@ -1,2 +1,3 @@
 [2026-05-31 11:47] XiuJie2 — fix: address buffer overflow in speech synthesis buffer
 [2026-05-31 13:10] — — fix: address buffer overflow in speech synthesis buffer
+[2026-05-31 14:52] ZengAnatoliy, XiuJie2, Djude1 — fix: correct timestamp ordering in detection event stream
