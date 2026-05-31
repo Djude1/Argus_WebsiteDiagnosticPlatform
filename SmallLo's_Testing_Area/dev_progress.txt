@@ -1,0 +1,1 @@
+[2026-05-31 11:47] XiuJie2 — fix: address buffer overflow in speech synthesis buffer
