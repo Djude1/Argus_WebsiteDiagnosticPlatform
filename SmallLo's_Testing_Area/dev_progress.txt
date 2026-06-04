@@ -11,3 +11,4 @@
 [2026-06-04 16:39] ZengAnatoliy — fix: correct bounding box coordinate scaling on high-DPI screens
 [2026-06-04 20:25] Djude1 — fix: address buffer overflow in speech synthesis buffer
 [2026-06-04 22:01] — — fix: improve WebSocket reconnection logic after network dropout
+[2026-06-05 00:22] Djude1 — fix: correct device orientation handling for iPad
