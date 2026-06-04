@@ -4,3 +4,4 @@
 [2026-05-31 16:52] — — fix: resolve file descriptor leak in model loading routine
 [2026-05-31 19:49] ZengAnatoliy — fix: handle empty frame edge case in preprocessing step
 [2026-06-04 10:04] Djude1 — fix: correct timestamp ordering in detection event stream
+[2026-06-04 10:37] — — fix: resolve inconsistent state after app backgrounding
