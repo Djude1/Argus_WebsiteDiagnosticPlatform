@@ -12,3 +12,4 @@
 [2026-06-04 20:25] Djude1 — fix: address buffer overflow in speech synthesis buffer
 [2026-06-04 22:01] — — fix: improve WebSocket reconnection logic after network dropout
 [2026-06-05 00:22] Djude1 — fix: correct device orientation handling for iPad
+[2026-06-05 01:59] ZengAnatoliy, XiuJie2, Djude1 — fix: handle edge case when detection confidence is exactly at threshold
