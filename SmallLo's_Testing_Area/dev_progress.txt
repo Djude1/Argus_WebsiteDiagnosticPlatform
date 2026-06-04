@@ -10,3 +10,4 @@
 [2026-06-04 14:12] XiuJie2, Djude1, ZengAnatoliy — fix: handle network timeout during model download
 [2026-06-04 16:39] ZengAnatoliy — fix: correct bounding box coordinate scaling on high-DPI screens
 [2026-06-04 20:25] Djude1 — fix: address buffer overflow in speech synthesis buffer
+[2026-06-04 22:01] — — fix: improve WebSocket reconnection logic after network dropout
