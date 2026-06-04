@@ -5,3 +5,4 @@
 [2026-05-31 19:49] ZengAnatoliy — fix: handle empty frame edge case in preprocessing step
 [2026-06-04 10:04] Djude1 — fix: correct timestamp ordering in detection event stream
 [2026-06-04 10:37] — — fix: resolve inconsistent state after app backgrounding
+[2026-06-04 13:00] Djude1, XiuJie2 — fix: handle case where camera permissions are denied
