@@ -7,3 +7,4 @@
 [2026-06-04 10:37] — — fix: resolve inconsistent state after app backgrounding
 [2026-06-04 13:00] Djude1, XiuJie2 — fix: handle case where camera permissions are denied
 [2026-06-04 13:39] ZengAnatoliy, XiuJie2, Djude1 — fix: address memory leak in audio buffer management
+[2026-06-04 14:12] XiuJie2, Djude1, ZengAnatoliy — fix: handle network timeout during model download
