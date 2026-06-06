@@ -14,7 +14,7 @@ def get_severity_display(severity: str) -> str:
         "low": "低風險",
         "info": "資訊提示",
     }
-    return severity_map.get(severity, severity())
+    return severity_map.get(severity, severity or "未知")
 
 def get_finding_description_label(severity: str) -> str:
     if severity in {"critical", "high"}:
@@ -62,6 +62,7 @@ def build_scan_report(scan_job: ScanJob) -> str:
 
         document.add_heading(finding.title, level=2)
         document.add_paragraph(f"分類：{finding.category} / 嚴重度：{severity_display}")
+        document.add_paragraph(f"規則 ID：{finding.rule_id or '未標示'}")
 
         if finding.page:
             document.add_paragraph(f"頁面：{finding.page.final_url}")
@@ -75,13 +76,27 @@ def build_scan_report(scan_job: ScanJob) -> str:
         document.add_paragraph(finding.remediation)
 
         if finding.evidence:
-            document.add_paragraph("證據")
+            document.add_paragraph("Deterministic Evidence")
+            if finding.evidence_source:
+                document.add_paragraph(f"證據來源：{finding.evidence_source}")
+            if finding.evidence_type:
+                document.add_paragraph(f"證據型態：{finding.evidence_type}")
             document.add_paragraph(finding.evidence[:1000])
+
+        if finding.ai_explanation or finding.ai_remediation:
+            document.add_paragraph("AI 解釋與改善建議")
+            if finding.llm_model:
+                document.add_paragraph(f"模型：{finding.llm_model}")
+            if finding.ai_explanation:
+                document.add_paragraph(finding.ai_explanation)
+            if finding.ai_remediation:
+                document.add_paragraph(finding.ai_remediation)
 
     document.add_heading("附錄", level=1)
     document.add_paragraph(
-        "本報告僅提供問題描述、證據與修補方向，"
-        "不產生修復後程式碼。"
+        "本報告採 Evidence-first 原則：SEO、AEO、GEO 與資安建議均先由爬蟲與規則引擎"
+        "產生可驗證之 Deterministic Evidence，再交由 AI 進行自然語言解釋與改善建議撰寫。"
+        "AI 不直接判斷網站好壞，也不得新增未被掃描器驗證的證據。"
     )
     document.save(output_path)
     return str(output_path)
