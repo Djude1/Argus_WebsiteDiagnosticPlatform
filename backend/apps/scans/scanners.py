@@ -1,3 +1,4 @@
+import hashlib
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -258,6 +259,36 @@ def build_ai_handoff_prompt(
     )
 
 
+def _normalize_rule_token(value: str) -> str:
+    token = re.sub(r"[^0-9A-Za-z]+", "_", value or "").strip("_").upper()
+    return token[:80] or "GENERAL"
+
+
+def _default_rule_id(category: str, title: str) -> str:
+    digest = hashlib.sha1(title.encode("utf-8")).hexdigest()[:10].upper()
+    return f"{_normalize_rule_token(str(category))}_{_normalize_rule_token(title)}_{digest}"
+
+
+def _default_evidence_json(
+    *,
+    evidence: str,
+    evidence_type: str,
+    evidence_source: str,
+    selector: str,
+    bounding_box: dict | None,
+) -> dict:
+    payload = {
+        "type": evidence_type or "text",
+        "source": evidence_source,
+        "excerpt": (evidence or "")[:1000],
+    }
+    if selector:
+        payload["selector"] = selector
+    if bounding_box:
+        payload["bounding_box"] = bounding_box
+    return payload
+
+
 def make_finding(
     *,
     category: str,
@@ -271,14 +302,36 @@ def make_finding(
     priority_score: float | None = None,
     impact_area: str = "",
     confidence: float = 1.0,
+    rule_id: str = "",
+    evidence_type: str = "",
+    evidence_json: dict | None = None,
+    evidence_source: str = "",
 ) -> dict:
+    resolved_rule_id = rule_id or _default_rule_id(str(category), title)
+    resolved_evidence_type = evidence_type or "text"
+    resolved_evidence_source = evidence_source or "rule_engine"
+    resolved_evidence_json = evidence_json or _default_evidence_json(
+        evidence=evidence,
+        evidence_type=resolved_evidence_type,
+        evidence_source=resolved_evidence_source,
+        selector=selector,
+        bounding_box=bounding_box,
+    )
     return {
         "category": category,
         "severity": severity,
+        "rule_id": resolved_rule_id,
         "title": title,
         "description": description,
         "remediation": remediation,
         "evidence": evidence[:4000],
+        "evidence_type": resolved_evidence_type,
+        "evidence_json": resolved_evidence_json,
+        "evidence_source": resolved_evidence_source,
+        "ai_explanation": "",
+        "ai_remediation": "",
+        "llm_model": "",
+        "llm_generated_at": None,
         "selector": selector,
         "bounding_box": bounding_box,
         "priority_score": priority_score,
