@@ -621,6 +621,68 @@
     @apply space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700;
   }
 
+  .evidence-panel {
+    @apply overflow-hidden rounded-xl border border-cyan-200 bg-white text-xs text-slate-700;
+  }
+
+  .evidence-panel.is-empty {
+    @apply p-3 text-slate-500;
+  }
+
+  .evidence-panel-header {
+    @apply flex cursor-pointer flex-col gap-0.5 border-b border-cyan-100 bg-cyan-50 px-3 py-2;
+  }
+
+  .evidence-panel-title {
+    @apply text-sm font-bold text-cyan-900;
+  }
+
+  .evidence-panel-subtitle {
+    @apply text-[11px] font-medium text-cyan-700;
+  }
+
+  .evidence-meta-grid {
+    @apply grid gap-2 p-3;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .evidence-meta-grid div {
+    @apply min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5;
+  }
+
+  .evidence-meta-grid span {
+    @apply block text-[10px] font-semibold uppercase tracking-wide text-slate-400;
+  }
+
+  .evidence-meta-grid strong {
+    @apply block truncate font-mono text-[11px] text-slate-800;
+  }
+
+  .evidence-block,
+  .ai-explanation-block {
+    @apply mx-3 mb-3 rounded-lg border border-slate-100 bg-slate-950 p-3 text-slate-100;
+  }
+
+  .ai-explanation-block {
+    @apply bg-slate-50 text-slate-700;
+  }
+
+  .evidence-block-label {
+    @apply mb-1 block text-[10px] font-bold uppercase tracking-wide text-cyan-600;
+  }
+
+  .evidence-block pre {
+    @apply max-h-44 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed;
+  }
+
+  .ai-model {
+    @apply font-mono text-[11px] text-slate-500;
+  }
+
+  .evidence-copy-button {
+    @apply mx-3 mb-3 w-[calc(100%-1.5rem)] justify-center text-xs;
+  }
+
   .status-badge {
     @apply inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-semibold;
   }
