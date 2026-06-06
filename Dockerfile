@@ -11,6 +11,20 @@ RUN pip install --no-cache-dir uv==0.9.17
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# 安裝 ProjectDiscovery 資安工具（Nuclei + Katana）
+ARG NUCLEI_VERSION=3.8.0
+ARG KATANA_VERSION=1.1.2
+RUN apt-get update && apt-get install -y --no-install-recommends unzip wget \
+    && wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" -O /tmp/nuclei.zip \
+    && unzip /tmp/nuclei.zip nuclei -d /usr/local/bin/ \
+    && chmod +x /usr/local/bin/nuclei \
+    && wget -q "https://github.com/projectdiscovery/katana/releases/download/v${KATANA_VERSION}/katana_${KATANA_VERSION}_linux_amd64.zip" -O /tmp/katana.zip \
+    && unzip /tmp/katana.zip katana -d /usr/local/bin/ \
+    && chmod +x /usr/local/bin/katana \
+    && rm /tmp/nuclei.zip /tmp/katana.zip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && nuclei -update-templates -silent || true
+
 # 複製後端原始碼
 COPY backend ./backend
 
