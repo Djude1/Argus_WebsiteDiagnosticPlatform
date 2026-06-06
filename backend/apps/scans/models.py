@@ -188,6 +188,14 @@ class Finding(models.Model):
     description = models.TextField()
     remediation = models.TextField()
     evidence = models.TextField(blank=True)
+    rule_id = models.CharField(max_length=128, blank=True, db_index=True)
+    evidence_type = models.CharField(max_length=64, blank=True)
+    evidence_json = models.JSONField(default=dict, blank=True)
+    evidence_source = models.CharField(max_length=512, blank=True)
+    ai_explanation = models.TextField(blank=True)
+    ai_remediation = models.TextField(blank=True)
+    llm_model = models.CharField(max_length=128, blank=True)
+    llm_generated_at = models.DateTimeField(null=True, blank=True)
     bounding_box = models.JSONField(null=True, blank=True)
     selector = models.CharField(max_length=512, blank=True)
     ai_handoff_prompt = models.TextField()
@@ -265,6 +273,5 @@ class AgentStep(models.Model):
 
     def __str__(self) -> str:
         return f"{self.session_id} step {self.step_number}"
-
 
 
