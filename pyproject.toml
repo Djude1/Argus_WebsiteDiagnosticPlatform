@@ -12,6 +12,7 @@ dependencies = [
     "djangorestframework>=3.15,<4",
     "djangorestframework-simplejwt>=5.3,<6",
     "google-auth>=2.53.0",
+    "matplotlib>=3.10.9",
     "pillow>=12.2.0",
     "playwright>=1.48,<2",
     "psycopg[binary]>=3.2,<4",
