@@ -5,6 +5,9 @@
 services:
   db:
     image: postgres:16-alpine
+    ports:
+      # 讓 Navicat / DBeaver 等主機端資料庫工具可連到本機開發 DB
+      - "5432:5432"
     environment:
       POSTGRES_USER: argus
       POSTGRES_PASSWORD: argus_local_password
@@ -25,9 +28,11 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      # 本機 docker compose 為開發用途；DEBUG=true 讓 runserver 自動服務 Django Admin 的靜態檔
-      # 正式部署需改用 gunicorn + collectstatic + nginx，並設 DEBUG=false
-      DJANGO_DEBUG: "true"
+      # 正式部署（公網）：DEBUG=false
+      # 注意：runserver 在 DEBUG=false 時不會自動服務 STATIC_URL 的檔案，
+      # Django Admin (/django-admin/) 的 CSS/JS 會失效。若需要 admin 樣式，
+      # 改 command 加 --insecure，或改用 gunicorn + collectstatic + nginx alias。
+      DJANGO_DEBUG: "false"
       # 主網址:巧.tw (xn--gst.tw) / 備援:argus6.qzz.io
       DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io"
       DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
