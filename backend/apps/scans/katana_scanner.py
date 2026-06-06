@@ -1,20 +1,22 @@
 """Katana 補充型爬蟲整合。
 
-透過 Docker 執行 projectdiscovery/katana，提供：
+透過本機 katana binary 執行，提供：
 - JS 端點挖掘（-jc）：從 JS 原始碼解析出隱藏 API 路由
 - JS 秘鑰解析（-jsl）：jsluice 深度分析 JS 檔案中的秘鑰與端點
 - 技術棧識別（-td）：識別框架/版本，存入 warning_summary.tech_stack
 
 設計原則：
-- Docker 不可用或 Katana 失敗時靜默回傳空結果，不影響主掃描流程。
+- katana binary 不存在或失敗時靜默回傳空結果，不影響主掃描流程。
 - Tech stack 以獨立列表回傳，由 tasks.py 存入 warning_summary。
 - 所有 security finding 的 page=None（Finding FK 已是 nullable）。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import shutil
 import subprocess
 from typing import Any
 
@@ -57,32 +59,56 @@ _SECRET_SEVERITY: dict[str, str] = {
 }
 
 
+def _evidence_metadata(rule_id: str, evidence: str, source: str) -> dict:
+    return {
+        "rule_id": rule_id,
+        "evidence_type": "katana_jsonl",
+        "evidence_json": {
+            "type": "katana_jsonl",
+            "source": source,
+            "excerpt": evidence[:1000],
+        },
+        "evidence_source": source,
+        "ai_explanation": "",
+        "ai_remediation": "",
+        "llm_model": "",
+        "llm_generated_at": None,
+    }
+
+
+def _rule_id(prefix: str, value: str) -> str:
+    digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:10].upper()
+    return f"{prefix}_{digest}"
+
+
 def run_katana(
     url: str,
     max_depth: int = 3,
     max_pages: int = 50,
 ) -> tuple[list[dict], list[str]]:
-    """以 Docker 執行 Katana 並回傳 (findings, tech_stack)。
+    """以本機 katana binary 執行並回傳 (findings, tech_stack)。
 
-    任何錯誤（Docker 不可用、timeout、parse 失敗）皆靜默回傳 ([], [])。
+    max_pages 保留於簽名供未來加入爬行頁數上限使用，目前由 katana 自行決定。
+    任何錯誤（binary 不存在、timeout、parse 失敗）皆靜默回傳 ([], [])。
     """
-    image = getattr(settings, "KATANA_DOCKER_IMAGE", "projectdiscovery/katana:latest")
+    if not shutil.which("katana"):
+        logger.warning("katana_scanner: katana binary 不存在，略過")
+        return [], []
+
     timeout = getattr(settings, "KATANA_TIMEOUT", 90)
 
     cmd = [
-        "docker", "run", "--rm",
-        image,
+        "katana",
         "-u", url,
         "-d", str(max_depth),
-        "-jc",           # JS 端點解析
-        "-jsl",          # jsluice 深度 JS 秘鑰挖掘
-        "-td",           # 技術棧識別
-        "-j",            # JSONL 輸出
+        "-jc",
+        "-jsl",
+        "-td",
+        "-j",
         "-silent",
         "-timeout", "10",
         "-rl", "10",
         "-c", "5",
-        "-p", "1",
     ]
 
     try:
@@ -92,9 +118,6 @@ def run_katana(
             text=True,
             timeout=timeout,
         )
-    except FileNotFoundError:
-        logger.warning("katana_scanner: docker 指令不存在，略過 Katana 掃描")
-        return [], []
     except subprocess.TimeoutExpired:
         logger.warning("katana_scanner: Katana 超時（%ds），略過", timeout)
         return [], []
@@ -220,9 +243,15 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
         evidence_parts.append(f"行號：{line_no}")
     evidence_parts.append(f"比對值（遮罩）：{masked}")
 
+    evidence = "；".join(evidence_parts)
     return {
         "category": "security",
         "severity": severity,
+        **_evidence_metadata(
+            _rule_id("KATANA_JS_SECRET", f"{endpoint}:{secret_type}:{line_no}"),
+            evidence,
+            "katana_jsluice",
+        ),
         "title": f"JS 檔案含硬編碼秘鑰：{secret_type}",
         "description": (
             f"在 {endpoint} 偵測到疑似硬編碼的 {secret_type}。"
@@ -234,7 +263,7 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
             "改用環境變數或密鑰管理服務（Vault、AWS Secrets Manager 等）注入，"
             "確保秘鑰絕不進入版本控制或前端打包產物。"
         ),
-        "evidence": "；".join(evidence_parts),
+        "evidence": evidence,
         "selector": "",
         "bounding_box": None,
         "impact_area": "secret_disclosure",
@@ -276,9 +305,15 @@ def _detect_vite_dev_exposure(record: dict[str, Any]) -> dict | None:
     if not (is_vite or is_source):
         return None
 
+    evidence = f"Katana 偵測：GET {endpoint} → HTTP {status_int}（應回傳 404）"
     return {
         "category": "security",
         "severity": "critical",
+        **_evidence_metadata(
+            _rule_id("KATANA_VITE_DEV_EXPOSURE", endpoint),
+            evidence,
+            "katana_tech_detection",
+        ),
         "title": "生產環境暴露 Vite Dev Server 原始碼",
         "description": (
             f"偵測到 {endpoint} 回傳 HTTP {status_int}，"
@@ -291,7 +326,7 @@ def _detect_vite_dev_exposure(record: dict[str, Any]) -> dict | None:
             "確認 Web Server（Nginx/Cloudflare）只提供 `dist/` 目錄下的靜態檔案，"
             "並封鎖對 `/src/`、`/node_modules/`、`/@vite/`、`/@react-refresh` 等路徑的存取。"
         ),
-        "evidence": f"Katana 偵測：GET {endpoint} → HTTP {status_int}（應回傳 404）",
+        "evidence": evidence,
         "selector": "",
         "bounding_box": None,
         "impact_area": "source_code_exposure",
@@ -346,9 +381,15 @@ def _extract_endpoint_finding(record: dict[str, Any]) -> dict | None:
     if "/api/" not in low and not low.endswith("/api"):
         return None
 
+    evidence = f"Katana JS 解析：{endpoint} → HTTP {status_int}（來源：{source}）"
     return {
         "category": "security",
         "severity": "medium",
+        **_evidence_metadata(
+            _rule_id("KATANA_HIDDEN_API_ENDPOINT", f"{endpoint}:{source}"),
+            evidence,
+            "katana_js_endpoint",
+        ),
         "title": f"JS 中發現隱藏 API 端點：{endpoint}",
         "description": (
             f"Katana 從 JavaScript 原始碼中解析出 API 端點 {endpoint}，"
@@ -359,7 +400,7 @@ def _extract_endpoint_finding(record: dict[str, Any]) -> dict | None:
             "確認此端點是否需要對公開網路開放；若否，加上認證中介軟體或 IP 白名單。"
             "建議對所有 API 端點實施統一的認證與授權策略。"
         ),
-        "evidence": f"Katana JS 解析：{endpoint} → HTTP {status_int}（來源：{source}）",
+        "evidence": evidence,
         "selector": "",
         "bounding_box": None,
         "impact_area": "exposed_endpoints",
