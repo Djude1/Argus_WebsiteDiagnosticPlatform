@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable
 
 from apps.scans.models import Finding, Page, ScanJob
@@ -59,6 +60,8 @@ def persist_agent_issues(
         selector = (issue.get("selector") or "").strip()[:512]
 
         page = _resolve_page(scan_job, url, page_cache)
+        evidence = f"URL: {url}\nselector: {selector}"
+        rule_id = f"AGENT_UX_{hashlib.sha1(title.encode('utf-8')).hexdigest()[:10].upper()}"
 
         handoff = UX_HANDOFF_TEMPLATE.format(
             severity=severity,
@@ -76,7 +79,21 @@ def persist_agent_issues(
             title=title,
             description=description,
             remediation=remediation,
-            evidence=f"URL: {url}\nselector: {selector}",
+            evidence=evidence,
+            rule_id=rule_id,
+            evidence_type="agent_observation",
+            evidence_json={
+                "type": "agent_observation",
+                "source": "hermes_agent",
+                "excerpt": evidence,
+                "url": url,
+                "selector": selector,
+            },
+            evidence_source="hermes_agent",
+            ai_explanation="",
+            ai_remediation="",
+            llm_model="",
+            llm_generated_at=None,
             selector=selector,
             ai_handoff_prompt=handoff,
             priority_score=default_priority,
