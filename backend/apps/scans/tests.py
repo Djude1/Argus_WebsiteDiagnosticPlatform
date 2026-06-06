@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from apps.billing.models import CoinWallet
 from apps.scans.crawler import classify_blocked, classify_cf_challenge, compute_min_interval
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
+from apps.scans.reports import build_scan_report, get_severity_display
 from apps.scans.scanners import (
     PageAnalysisInput,
     analyze_aeo,
@@ -25,8 +26,10 @@ from apps.scans.scanners import (
     is_binary_resource,
     is_valid_luhn,
     is_valid_tw_national_id,
+    make_finding,
     parse_html_signals,
 )
+from apps.scans.serializers import FindingSerializer
 
 
 class ScanJobModelTests(APITestCase):
@@ -107,6 +110,81 @@ class StaticScannerTests(APITestCase):
         self.assertLess(overall_score, 100)
         self.assertLess(category_scores["security"], category_scores["aeo"])
         self.assertEqual(top_actions[0]["title"], "頁面未使用 HTTPS")
+
+    def test_make_finding_adds_evidence_first_metadata(self):
+        finding = make_finding(
+            category=Finding.Category.SEO,
+            severity=Finding.Severity.MEDIUM,
+            title="缺少 meta description",
+            description="頁面未提供摘要。",
+            remediation="補上可描述頁面內容的 meta description。",
+            evidence="未找到 meta[name='description']",
+            evidence_type="html_rule",
+            evidence_source="seo_rule_engine",
+        )
+
+        self.assertTrue(finding["rule_id"].startswith("SEO_"))
+        self.assertEqual(finding["evidence_type"], "html_rule")
+        self.assertEqual(finding["evidence_source"], "seo_rule_engine")
+        self.assertEqual(finding["evidence_json"]["excerpt"], "未找到 meta[name='description']")
+        self.assertEqual(finding["ai_explanation"], "")
+        self.assertEqual(finding["ai_remediation"], "")
+
+    def test_finding_serializer_exposes_evidence_first_fields(self):
+        user = get_user_model().objects.create_user(
+            username="evidence-user",
+            email="evidence@example.com",
+            password="safe-test-password",
+        )
+        scan_job = ScanJob.objects.create(
+            user=user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+        )
+        finding_payload = make_finding(
+            category=Finding.Category.SECURITY,
+            severity=Finding.Severity.HIGH,
+            title="頁面未使用 HTTPS",
+            description="目標頁面使用 HTTP。",
+            remediation="改用 HTTPS 並設定 HSTS。",
+            evidence="scheme=http",
+            rule_id="SECURITY_HTTPS_REQUIRED",
+            evidence_type="url_scheme",
+            evidence_source="security_rule_engine",
+        )
+        finding = Finding.objects.create(scan_job=scan_job, **finding_payload)
+
+        data = FindingSerializer(finding).data
+
+        self.assertEqual(data["rule_id"], "SECURITY_HTTPS_REQUIRED")
+        self.assertEqual(data["evidence_type"], "url_scheme")
+        self.assertEqual(data["evidence_source"], "security_rule_engine")
+        self.assertEqual(data["evidence_json"]["excerpt"], "scheme=http")
+
+    def test_report_handles_unknown_action_severity(self):
+        user = get_user_model().objects.create_user(
+            username="report-user",
+            email="report@example.com",
+            password="safe-test-password",
+        )
+        scan_job = ScanJob.objects.create(
+            user=user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            status=ScanJob.Status.COMPLETED,
+            top_actions=[
+                {
+                    "category": "security",
+                    "severity": "warning",
+                    "title": "未知嚴重度測試",
+                }
+            ],
+        )
+
+        self.assertEqual(get_severity_display("warning"), "warning")
+        self.assertTrue(build_scan_report(scan_job).endswith(".docx"))
 
 
 @override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
