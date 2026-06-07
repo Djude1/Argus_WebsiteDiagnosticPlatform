@@ -14,3 +14,4 @@
 [2026-06-05 00:22] Djude1 — fix: correct device orientation handling for iPad
 [2026-06-05 01:59] ZengAnatoliy, XiuJie2, Djude1 — fix: handle edge case when detection confidence is exactly at threshold
 [2026-06-06 13:49] Djude1, XiuJie2 — fix: resolve file descriptor leak in model loading routine
+[2026-06-07 09:15] — — fix: handle network timeout during model download
