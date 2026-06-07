@@ -15,3 +15,4 @@
 [2026-06-05 01:59] ZengAnatoliy, XiuJie2, Djude1 — fix: handle edge case when detection confidence is exactly at threshold
 [2026-06-06 13:49] Djude1, XiuJie2 — fix: resolve file descriptor leak in model loading routine
 [2026-06-07 09:15] — — fix: handle network timeout during model download
+[2026-06-07 10:49] — — fix: improve WebSocket reconnection logic after network dropout
