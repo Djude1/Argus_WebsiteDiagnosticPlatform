@@ -17,3 +17,4 @@
 [2026-06-07 09:15] — — fix: handle network timeout during model download
 [2026-06-07 10:49] — — fix: improve WebSocket reconnection logic after network dropout
 [2026-06-07 13:41] ZengAnatoliy — fix: resolve flickering issue in status indicator LED
+[2026-06-07 22:04] XiuJie2, ZengAnatoliy, Djude1 — fix: address race condition between audio thread and UI thread
