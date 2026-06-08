@@ -21,3 +21,4 @@
 [2026-06-08 10:51] — — feat: implement cookie security flag analysis
 [2026-06-08 18:17] — — feat: implement report generation with python-docx
 [2026-06-08 22:07] XiuJie2, Djude1 — refactor: rename detection to scan in all models
+[2026-06-09 00:29] ZengAnatoliy, Djude1 — refactor: move analyzer logic to dedicated insights app
