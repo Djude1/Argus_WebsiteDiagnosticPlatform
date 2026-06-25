@@ -168,6 +168,17 @@ async def scroll_to_bottom(page) -> None:
     )
 
 
+_CONTEXT_RECYCLE_EVERY = 15
+
+
+async def _make_context(browser):
+    """建立標準 scanner 瀏覽器 context（user-agent + viewport）。"""
+    return await browser.new_context(
+        user_agent=settings.ARGUS_SCANNER_USER_AGENT,
+        viewport={"width": 1440, "height": 1000},
+    )
+
+
 async def crawl_site(
     *,
     start_url: str,
@@ -202,10 +213,8 @@ async def crawl_site(
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=settings.ARGUS_SCANNER_USER_AGENT,
-            viewport={"width": 1440, "height": 1000},
-        )
+        context = await _make_context(browser)
+        pages_in_context = 0
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
             while queue and len(pages) < max_pages:
@@ -279,6 +288,11 @@ async def crawl_site(
                     warnings["failed_urls"].append({"url": url, "reason": exc.__class__.__name__})
                 finally:
                     await page.close()
+                    pages_in_context += 1
+                    if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
+                        await context.close()
+                        context = await _make_context(browser)
+                        pages_in_context = 0
                     if progress_callback is not None:
                         done = len(visited)
                         total = min(len(visited) + len(queue), max_pages)

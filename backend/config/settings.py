@@ -123,6 +123,24 @@ CORS_ALLOWED_ORIGINS = env_list(
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
 
+# ============================================================
+# 安全 HTTP 頭部（由 SecurityMiddleware 與 XFrameOptionsMiddleware 注入）
+# ============================================================
+# 告訴 Django 信任 upstream proxy（nginx / Cloudflare）的 X-Forwarded-Proto，
+# 讓 request.is_secure() 在 HTTPS 連線時正確回傳 True。
+# 注意：不設 SECURE_SSL_REDIRECT，由 nginx/Cloudflare 負責 HTTP→HTTPS redirect，
+#       避免 nginx→Django 的內部 HTTP 請求觸發無限 redirect 迴圈。
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+# HSTS 初始設 60 秒可逆測試，確認 HTTPS 全程正常後在 .env 設 SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_SECONDS = 0 if DEBUG else int(os.getenv("SECURE_HSTS_SECONDS", "60"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = False  # 等 HSTS_SECONDS 穩定後再改 True
+SECURE_CONTENT_TYPE_NOSNIFF = True                           # X-Content-Type-Options: nosniff
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"  # Referrer-Policy
+X_FRAME_OPTIONS = "DENY"                                     # 防 Clickjacking
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -145,6 +163,8 @@ CELERY_RESULT_BACKEND = os.getenv(
     os.getenv("REDIS_URL", "redis://localhost:6379/1"),
 )
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "3600"))       # 硬限 60 分，OS 強制殺掉 worker
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300"))  # 軟限 55 分，task 內捕捉並優雅退出
 
 ARGUS_DEFAULT_MAX_DEPTH = 3
 ARGUS_DEFAULT_MAX_PAGES = 50
