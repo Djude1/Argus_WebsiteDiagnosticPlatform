@@ -29,3 +29,4 @@ backend/staticfiles/
 .ruff_cache/
 .ms-playwright/
 frontend/dist/
+測試文件/*
