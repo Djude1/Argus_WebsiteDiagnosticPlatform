@@ -8,10 +8,12 @@ cms_router.register("features", cms_views.ProjectFeatureViewSet, basename="admin
 cms_router.register("team", cms_views.TeamMemberViewSet, basename="admin-team-member")
 cms_router.register("releases", cms_views.AppReleaseViewSet, basename="admin-release")
 cms_router.register("plans", cms_views.PricingPlanViewSet, basename="admin-plan")
+cms_router.register("milestones", cms_views.ProjectMilestoneViewSet, basename="admin-milestone")
 
 urlpatterns = [
     path("cms/", include(cms_router.urls)),
     path("me/", views.me, name="admin-me"),
+    path("settings/", views.system_settings, name="admin-settings"),
     path("overview/", views.overview, name="admin-overview"),
     path("users/", views.users_list, name="admin-users"),
     path("users/<int:user_id>/", views.user_detail, name="admin-user-detail"),

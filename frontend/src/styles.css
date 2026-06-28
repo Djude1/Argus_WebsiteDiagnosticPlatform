@@ -49,7 +49,7 @@
 .public-plan-desc { font-size: 1rem !important; }
 .public-cta-primary,
 .public-cta-ghost,
-.public-plan-cta { font-size: 1rem !important; padding-top: 0.65rem; padding-bottom: 0.65rem; }
+.public-plan-cta { font-size: 1.05rem !important; padding: 0.8rem 1.7rem !important; }
 
 /* tech chip 與 install 卡片 */
 .public-tech-chip { font-size: 1rem !important; padding: 0.4rem 0.9rem; }
@@ -59,7 +59,11 @@
 
 /* PublicNav 與 footer */
 .public-brand-title { font-size: 1.25rem !important; }
-.public-nav-link { font-size: 1rem !important; padding: 0.55rem 0.9rem; }
+.public-nav-link {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  padding: 0.58rem 0.95rem;
+}
 
 /* FAQ */
 .public-faq-item summary { font-size: 1.125rem; }
@@ -171,7 +175,7 @@
 }
 
 .argus-main {
-  @apply mx-auto max-w-7xl p-4 md:p-8;
+  @apply w-full p-4 md:p-8;
 }
 
 .argus-main.with-nav {
@@ -186,7 +190,7 @@
 }
 
 .argus-nav-inner {
-  @apply mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 md:px-8;
+  @apply flex w-full flex-wrap items-center gap-4 px-4 py-3 md:px-8;
 }
 
 .argus-brand {
@@ -733,6 +737,15 @@
     color: rgba(186, 230, 253, 0.7);
   }
 
+  .dashboard-hero-text { @apply flex flex-col; }
+  .dashboard-hero-actions {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+  .dashboard-hero-actions .primary-button,
+  .dashboard-hero-actions .secondary-button {
+    @apply text-sm;
+  }
+
   .stat-grid {
     @apply col-span-full grid grid-cols-2 gap-3 md:grid-cols-4;
   }
@@ -760,9 +773,23 @@
     box-shadow: 0 0 18px -6px rgba(251, 113, 133, 0.5);
   }
 
+  /* StatTile 變 button 時的可點 affordance（無 AI 味，只加 cursor + 輕量 hover） */
+  button.stat-tile.is-clickable {
+    @apply text-left w-full;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  button.stat-tile.is-clickable:hover {
+    transform: translateY(-2px);
+  }
+  button.stat-tile.is-clickable:focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.6);
+    outline-offset: 2px;
+  }
+
   .stat-tile-label {
     @apply text-xs uppercase tracking-[0.18em];
-    color: rgba(186, 230, 253, 0.65);
+    color: rgba(186, 230, 253, 0.82);
   }
 
   .stat-tile-value {
@@ -772,7 +799,7 @@
 
   .stat-tile-hint {
     @apply mt-1 text-xs;
-    color: rgba(186, 230, 253, 0.55);
+    color: rgba(186, 230, 253, 0.8);
   }
 
   .dashboard-panel {
@@ -854,6 +881,11 @@
 
   .recent-origin {
     @apply flex-1 truncate font-mono text-slate-700;
+  }
+
+  .recent-time {
+    @apply text-xs whitespace-nowrap;
+    color: #94a3b8;
   }
 
   /* ========================================
@@ -2211,7 +2243,7 @@
   .reviews-sort-btn {
     @apply rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer;
     background: transparent;
-    color: #64748b;
+    color: #475569;
     border: none;
   }
   .reviews-sort-btn:hover { color: #0f172a; }
@@ -2509,26 +2541,42 @@
     height: 100vh;
     box-shadow: 2px 0 24px -8px rgba(15, 23, 42, 0.25);
   }
+  /* 科技主控台微光：sidebar 頂部一道靜態 cyan accent（克制、無動畫，符合後台冷靜原則） */
+  .admin-sidebar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.75), transparent);
+    pointer-events: none;
+  }
 
   .admin-brand {
-    @apply flex items-center gap-3;
+    @apply flex flex-col items-start gap-2;
     padding: 20px 14px;
+    border: none;
     border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    background: transparent;
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
   }
-  .admin-brand-glyph {
-    @apply flex h-9 w-9 items-center justify-center rounded-xl text-base font-extrabold flex-shrink-0;
-    background: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%);
-    color: #fff;
-    box-shadow: 0 6px 14px -4px rgba(99, 102, 241, 0.5);
+  .admin-brand:hover {
+    background: rgba(34, 211, 238, 0.06);
   }
-  .admin-brand-title {
-    @apply text-sm font-bold leading-tight;
-    color: #f8fafc;
-    letter-spacing: 0.18em;
+  .admin-brand-logo {
+    height: 40px;
+    width: auto;
+    display: block;
+    flex-shrink: 0;
   }
   .admin-brand-sub {
-    @apply text-xs mt-0.5 font-medium;
+    @apply text-xs font-medium;
     color: #22d3ee;
+    letter-spacing: 0.04em;
   }
 
   .admin-nav {
@@ -3060,6 +3108,14 @@
     color: #fff;
   }
   .wizard-confirm-total-value { @apply text-2xl font-bold; }
+  .wizard-confirm-saved {
+    @apply mt-2 text-sm;
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+  }
 
   .wizard-success {
     @apply mx-auto max-w-xl rounded-2xl border p-8 text-center;
@@ -3089,6 +3145,10 @@
   .admin-panel-head-row {
     @apply flex flex-wrap items-center justify-between gap-2 mb-3;
   }
+  .admin-panel-head-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .admin-panel-head-actions a.admin-btn { text-decoration: none; }
   .admin-chart-legend {
     @apply flex flex-wrap gap-3 text-xs;
     color: #475569;
@@ -3177,18 +3237,19 @@
     border-bottom: 1px solid rgba(56, 189, 248, 0.12);
   }
   .public-nav-inner {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 14px 24px;
+    max-width: none;
+    margin: 0;
+    padding: 14px clamp(1rem, 4vw, 4rem);
     display: flex;
     align-items: center;
     gap: 24px;
   }
-  .public-brand {
-    @apply inline-flex items-center gap-2;
-    text-decoration: none;
-    color: #f1f5f9;
-  }
+.public-brand {
+  @apply inline-flex items-center gap-2;
+  text-decoration: none;
+  color: #f1f5f9;
+  gap: 0.75rem;
+}
   .public-brand-glyph {
     @apply flex h-9 w-9 items-center justify-center rounded-xl text-lg font-bold;
     background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
@@ -3222,6 +3283,11 @@
   }
   .public-nav-cta {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex: 0 0 auto;
   }
   .public-cta-primary {
     @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
@@ -3252,9 +3318,9 @@
   .public-main {
     flex: 1;
     width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 24px 60px;
+    max-width: none;
+    margin: 0;
+    padding: 0 clamp(1rem, 4vw, 4rem) 60px;
   }
   .public-page {
     @apply space-y-12;
@@ -3392,6 +3458,7 @@
   }
   .public-tech-chip {
     @apply inline-flex items-center rounded-full border bg-transparent px-3 py-1 text-sm font-medium;
+    color: var(--chip-color, #67e8f9);
     transition: transform 0.2s;
   }
   .public-tech-chip:hover { transform: translateY(-2px); }
@@ -3416,9 +3483,17 @@
     color: #94a3b8;
   }
 
+  /* 四宮格（2×2）：桌機/平板兩欄，手機單欄（RWD） */
   .public-team-grid-pro {
     @apply grid gap-6;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 1040px;
+    margin-inline: auto;
+  }
+  @media (max-width: 640px) {
+    .public-team-grid-pro {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .public-team-card-pro {
     @apply rounded-2xl p-6 transition;
@@ -3431,6 +3506,21 @@
     transform: translateY(-4px);
     border-color: rgba(103, 232, 249, 0.45);
     box-shadow: 0 18px 40px -12px rgba(6, 182, 212, 0.4);
+  }
+  /* 卡片頂部科技感漸層飾條，hover 時點亮 */
+  .public-team-card-pro::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #06b6d4, #6366f1, #ec4899);
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+  }
+  .public-team-card-pro:hover::before {
+    opacity: 1;
   }
 
   .public-team-card-head {
@@ -3472,6 +3562,34 @@
   .public-team-card-meta {
     flex: 1;
     min-width: 0;
+  }
+  /* 學號徽章：等寬字玻璃膠囊 */
+  .public-team-id-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 6px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+    letter-spacing: 0.04em;
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.12);
+  }
+
+  /* 卡片內區塊小標（⚡ 技能熟練度 / 🧩 技術棧），與負責項目標題同調 */
+  .public-team-block-label {
+    @apply mb-3 text-xs uppercase tracking-wider;
+    color: #67e8f9;
+    font-weight: 600;
+  }
+  /* 技術棧小標：在 chip flex 容器中佔滿整行，讓 chips 換到下一行 */
+  .public-team-skills-label {
+    flex: 0 0 100%;
+    text-align: left;
+    margin-bottom: 4px;
   }
 
   /* skill bar */
@@ -3627,9 +3745,13 @@
     box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
   }
   .public-plan-badge {
-    @apply absolute right-4 top-4 rounded-full px-2 py-0.5 text-xs font-bold;
-    background: #ec4899;
-    color: #fff;
+    @apply absolute right-5 top-4 font-extrabold;
+    font-size: 1.35rem;
+    letter-spacing: 0.02em;
+    color: #ec4899;
+    text-shadow: 0 0 12px rgba(236, 72, 153, 0.4);
+    background: none;
+    padding: 0;
   }
   .public-plan-name {
     @apply text-lg font-bold;
@@ -3655,6 +3777,93 @@
     @apply mt-2 text-sm;
     color: #cbd5e1;
     line-height: 1.7;
+  }
+  .argus-toast-stack {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+    max-width: min(380px, calc(100vw - 2rem));
+  }
+  .argus-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(103, 232, 249, 0.4);
+    border-left: 3px solid rgba(34, 211, 238, 0.85);
+    border-radius: 10px;
+    padding: 0.7rem 0.85rem;
+    box-shadow: 0 14px 32px -10px rgba(2, 8, 23, 0.7), 0 0 16px -8px rgba(34, 211, 238, 0.35);
+    backdrop-filter: blur(8px);
+    animation: argus-toast-in 0.22s ease;
+  }
+  @keyframes argus-toast-in {
+    from { transform: translateX(20px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+  .argus-toast-body {
+    flex: 1;
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  .argus-toast-title {
+    font-weight: 600;
+    color: #67e8f9;
+    margin-bottom: 2px;
+  }
+  .argus-toast-content {
+    color: #cbd5e1;
+    font-size: 0.82rem;
+  }
+  .argus-toast-close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.15rem;
+    transition: color 0.12s;
+  }
+  .argus-toast-close:hover { color: #cbd5e1; }
+  @media (prefers-reduced-motion: reduce) {
+    .argus-toast { animation: none; }
+  }
+
+  .billing-test-banner {
+    @apply mt-3 flex items-start gap-3 rounded-lg px-4 py-3 text-sm;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(99, 102, 241, 0.1));
+    border: 1px solid rgba(245, 158, 11, 0.42);
+    color: #fbbf24;
+    line-height: 1.6;
+  }
+  .billing-test-banner strong { color: #fde68a; }
+  .billing-test-chip {
+    @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-extrabold tracking-wider;
+    background: rgba(245, 158, 11, 0.25);
+    color: #fde68a;
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .public-plan-equivalents {
+    @apply mt-3 space-y-1 text-sm list-none;
+    color: #cbd5e1;
+    border-top: 1px dashed rgba(148, 163, 184, 0.22);
+    padding-top: 0.6rem;
+  }
+  .public-plan-equivalents li::before {
+    content: "✓ ";
+    color: #67e8f9;
+    font-weight: 700;
+    margin-right: 0.25rem;
   }
   .public-plan-cta {
     @apply mt-4 w-full rounded-lg px-4 py-2.5 font-semibold transition;
@@ -4101,7 +4310,7 @@
   .insight-result-sub,
   .insight-note {
     color: #94a3b8;
-    font-size: 0.88rem;
+    font-size: 0.98rem;
     line-height: 1.65;
   }
   .insight-metrics-grid {
@@ -4119,7 +4328,7 @@
   .insight-metrics-grid span {
     display: block;
     color: #94a3b8;
-    font-size: 0.74rem;
+    font-size: 0.88rem;
   }
   .insight-metrics-grid strong {
     display: block;
@@ -4152,7 +4361,7 @@
   .insight-feature-list span {
     display: block;
     color: #94a3b8;
-    font-size: 0.84rem;
+    font-size: 0.95rem;
     margin-top: 0.15rem;
     overflow-wrap: anywhere;
   }
@@ -4578,9 +4787,42 @@
 }
 .login-submit:disabled { opacity: .6; cursor: default; }
 .login-forgot-hint { text-align: center; color: #64748b; font-size: .8rem; margin: 0; }
+.login-forgot-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: #818cf8; font-size: .8rem;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(129, 140, 248, .4);
+  transition: color .15s, text-decoration-color .15s;
+}
+.login-forgot-link:hover {
+  color: #a5b4fc;
+  text-decoration-color: #a5b4fc;
+}
 .login-google-wrap { display: flex; justify-content: center; padding: .5rem 0; }
 .login-error { color: #f87171; font-size: .875rem; text-align: center; margin: 0; }
 .login-notice { font-size: .75rem; color: #475569; text-align: center; margin: 0; }
+.login-back {
+  align-self: flex-start;
+  background: none; border: none; padding: 0;
+  color: #94a3b8; font-size: .85rem; cursor: pointer;
+  transition: color .15s;
+}
+.login-back:hover { color: #cbd5e1; }
+.login-info-box {
+  display: flex; flex-direction: column; gap: .9rem;
+  background: rgba(99, 102, 241, .08);
+  border: 1px solid rgba(99, 102, 241, .25);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  color: #cbd5e1;
+  font-size: .92rem;
+  line-height: 1.6;
+}
+.login-info-box p { margin: 0; }
+.login-info-box .login-info-foot {
+  font-size: .8rem;
+  color: #64748b;
+}
 
 /* 掃描預估費用 */
 .scan-estimate-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
@@ -4601,15 +4843,11 @@
 .scan-estimate-conf { color: #64748b; font-size: .8rem; }
 
 /* ===== Responsive polish：收斂手機版密度與可點擊範圍 ===== */
-@media (max-width: 900px) {
-  .argus-main {
-    padding: 0.875rem;
-  }
 
-  .argus-main.with-nav {
-    padding-top: 0.875rem;
-  }
-
+/* TOP BAR（登入後 nav）：在 ≤1140px 就把連結列收到第二行（全寬、可橫向捲動），
+   避免 ~640–1133px 之間 nav 連結與 brand/dashboard 擠在一起、換行雜亂。
+   斷點刻意設在 1133px 之上，讓該區間呈現與手機一致的「連結獨佔一列」樣式。 */
+@media (max-width: 1140px) {
   .argus-nav-inner {
     gap: 0.625rem;
     padding: 0.75rem;
@@ -4654,6 +4892,16 @@
     padding: 0.5rem 0.65rem;
     white-space: nowrap;
   }
+}
+
+@media (max-width: 900px) {
+  .argus-main {
+    padding: 0.875rem;
+  }
+
+  .argus-main.with-nav {
+    padding-top: 0.875rem;
+  }
 
   .scan-layout.list-mode {
     display: block;
@@ -4669,10 +4917,7 @@
   }
 
   .scope-grid,
-  .billing-plan-grid,
-  .public-plan-grid,
-  .public-feature-grid,
-  .project-stats-grid {
+  .billing-plan-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -4718,6 +4963,7 @@
 
   .public-brand {
     min-width: 0;
+    gap: 0.42rem;
   }
 
   .public-brand-glyph {
@@ -4732,16 +4978,22 @@
   }
 
   .public-brand-sub {
-    font-size: 0.64rem;
-    letter-spacing: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
   }
 
   .public-nav-cta {
     margin-left: 0;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
   }
 
   .public-nav-cta .public-cta-primary {
-    min-height: 2.25rem;
+    min-height: 2.75rem;
     padding: 0.5rem 0.65rem;
     font-size: 0.82rem !important;
     white-space: nowrap;
@@ -4749,11 +5001,13 @@
 
   .public-nav-links {
     grid-column: 1 / -1;
+    grid-row: 2;
     margin-left: 0;
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
-    gap: 0.35rem;
+    justify-content: space-between;
+    gap: 0.15rem;
     padding-bottom: 0.125rem;
     scrollbar-width: none;
   }
@@ -4764,8 +5018,9 @@
 
   .public-nav-link {
     flex: 0 0 auto;
-    padding: 0.5rem 0.7rem !important;
-    font-size: 0.88rem !important;
+    padding: 0.48rem 0.42rem !important;
+    font-size: 0.86rem !important;
+    font-weight: 700 !important;
     white-space: nowrap;
   }
 
@@ -4980,7 +5235,7 @@
 .settings-section-title.danger { color: #f87171; }
 .settings-form { display: flex; flex-direction: column; gap: .75rem; }
 .settings-field { display: flex; flex-direction: column; gap: .25rem; }
-.settings-field label { font-size: .8rem; color: #64748b; }
+.settings-field label { font-size: .8rem; color: #94a3b8; }
 .settings-field-value { color: #e2e8f0; margin: 0; }
 .settings-save-btn { padding: .6rem 1.25rem; background: #6366f1; border: none; border-radius: 8px; color: #fff; font-weight: 600; cursor: pointer; align-self: flex-start; }
 .settings-save-btn:disabled { opacity: .6; }
@@ -5017,6 +5272,36 @@
 .admin-plan-actions { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
 .admin-plan-actions button { padding: .3rem .75rem; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; background: transparent; color: #94a3b8; cursor: pointer; font-size: .85rem; }
 .admin-plan-actions button.danger { border-color: rgba(239,68,68,.3); color: #f87171; }
+.admin-plan-econ {
+  display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem;
+  margin: .35rem 0 0; padding: .5rem .65rem;
+  background: rgba(15, 23, 42, .45);
+  border: 1px dashed rgba(148, 163, 184, .25);
+  border-radius: 8px;
+  font-size: .8rem;
+}
+.admin-plan-econ dt { color: #94a3b8; margin: 0; }
+.admin-plan-econ dd { color: #e2e8f0; margin: 0; }
+.admin-plan-econ dd.tone-good { color: #34d399; }
+.admin-plan-econ dd.tone-warn { color: #fbbf24; }
+.admin-plan-econ dd.tone-bad { color: #f87171; }
+
+.admin-plan-econ-preview {
+  font-size: .85rem; padding: .55rem .75rem; border-radius: 8px;
+  background: rgba(15, 23, 42, .55); border: 1px solid rgba(148, 163, 184, .25);
+  color: #cbd5e1;
+}
+.admin-plan-econ-preview.tone-good { color: #6ee7b7; border-color: rgba(52, 211, 153, .4); }
+.admin-plan-econ-preview.tone-warn { color: #fcd34d; border-color: rgba(251, 191, 36, .4); }
+.admin-plan-econ-preview.tone-bad { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+
+.admin-page-note {
+  color: #94a3b8; font-size: .85rem; margin: .25rem 0 1rem;
+  padding: .6rem .85rem;
+  background: rgba(15, 23, 42, .35);
+  border-left: 3px solid rgba(34, 211, 238, .5);
+  border-radius: 4px;
+}
 
 /* ===== Scan Log Panel ===== */
 .scan-log-panel {
@@ -5054,3 +5339,802 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
 .scan-log-warn .scan-log-msg { color: #fbbf24; }
 .scan-log-error .scan-log-lvl { color: #f87171; }
 .scan-log-error .scan-log-msg { color: #fca5a5; }
+
+/* ============================================================
+   首次進站粒子過場動畫（IntroSequence）
+   移植自「過場動畫和網站設計範本/index.html」的青藍科技風 overlay；
+   播完淡出露出首頁。樣式自包含，不依賴其他 token。
+   ============================================================ */
+.argus-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(ellipse at center, #001428 0%, #000308 70%, #000 100%);
+  font-family: "Consolas", "Courier New", monospace;
+  color: #00d4ff;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  cursor: pointer;
+}
+.argus-intro--out {
+  opacity: 0;
+  pointer-events: none;
+}
+.argus-intro-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+.argus-intro-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.argus-intro-corner {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #00f7ff;
+  pointer-events: none;
+}
+.argus-intro-corner.tl { top: 16px; left: 16px; border-right: none; border-bottom: none; }
+.argus-intro-corner.tr { top: 16px; right: 16px; border-left: none; border-bottom: none; }
+.argus-intro-corner.bl { bottom: 16px; left: 16px; border-right: none; border-top: none; }
+.argus-intro-corner.br { bottom: 16px; right: 16px; border-left: none; border-top: none; }
+.argus-intro-hud {
+  position: absolute;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: #00f7ff;
+  line-height: 1.7;
+  font-weight: bold;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(0, 247, 255, 0.6);
+}
+.argus-intro-hud.tl { top: 32px; left: 32px; }
+.argus-intro-hud.tr { top: 32px; right: 32px; text-align: right; }
+.argus-intro-hud.br { bottom: 32px; right: 32px; text-align: right; }
+.argus-intro-hud .v { color: #fff; }
+.argus-intro-hud .dim { opacity: 0.55; }
+.argus-intro-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.argus-intro-hint {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(0, 247, 255, 0.75);
+  font-size: 12px;
+  letter-spacing: 4px;
+  font-weight: bold;
+  pointer-events: none;
+  animation: introHintPulse 1.8s ease-in-out infinite;
+}
+@keyframes introHintPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.95; } }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 偏好減少動態者：元件層已直接略過並 onComplete，這裡確保不殘留任何 overlay 畫面 */
+  .argus-intro { display: none; }
+}
+
+/* ============================================================
+   首頁 page2 科技主控台視覺（公開頁 hero 的 console 變體）
+   參考「過場動畫和網站設計範本/page2.html」：科技網格漂移 / 掃描線 / HUD 邊角 / 發光標題。
+   內容沿用 .public-shell 放大規則，解決 page2 原稿「字太小」的問題。
+   ============================================================ */
+.public-hero--console {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 60, 110, 0.45) 0%, rgba(6, 11, 31, 0) 60%),
+    radial-gradient(ellipse at center, #001a2e 0%, #050a1c 60%, #03060f 100%);
+  border-bottom: 1px solid rgba(0, 247, 255, 0.18);
+  overflow: hidden;
+}
+.public-hero--console .hero-grid {
+  position: absolute;
+  inset: -2px;
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: heroGridDrift 14s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes heroGridDrift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(48px, 48px); }
+}
+.public-hero--console .hero-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 247, 255, 0.55) 50%, transparent);
+  box-shadow: 0 0 18px rgba(0, 247, 255, 0.6);
+  animation: heroScan 6s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes heroScan {
+  0% { top: -4px; }
+  100% { top: 100%; }
+}
+.public-hero--console .hero-corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(0, 247, 255, 0.75);
+  box-shadow: 0 0 16px rgba(0, 247, 255, 0.4);
+  pointer-events: none;
+  z-index: 1;
+}
+.public-hero--console .hero-corner.tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+.public-hero--console .hero-corner.tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
+.public-hero--console .hero-corner.bl { bottom: 18px; left: 18px; border-right: none; border-top: none; }
+.public-hero--console .hero-corner.br { bottom: 18px; right: 18px; border-left: none; border-top: none; }
+.public-hero--console .public-hero-content { position: relative; z-index: 2; }
+.public-hero--console .public-hero-title {
+  color: #f2feff;
+  text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35);
+  animation: heroTitleGlow 3.2s ease-in-out infinite;
+}
+@keyframes heroTitleGlow {
+  0%, 100% { text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35); }
+  50% { text-shadow: 0 0 22px rgba(0, 247, 255, 0.85), 0 0 60px rgba(0, 247, 255, 0.55); }
+}
+.public-hero--console .public-hero-eyebrow {
+  color: #67e8f9;
+  text-shadow: 0 0 10px rgba(0, 247, 255, 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-hero--console .hero-grid,
+  .public-hero--console .hero-scan,
+  .public-hero--console .public-hero-title { animation: none; }
+}
+
+/* ============================================================
+   免費工具分頁籤（/free-tools）：一次顯示一個工具，避免頁面過長雜亂
+   ============================================================ */
+.insight-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+.insight-tab {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(103, 232, 249, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(8, 20, 40, 0.5);
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.insight-tab:hover {
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.6);
+}
+.insight-tab.active {
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+  border-color: rgba(34, 211, 238, 0.6);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(8, 145, 178, 0.6);
+}
+.insight-tab:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   品牌列：改為可點按鈕（點整塊 → 重播開場動畫）+ 用商標圖取代文字 glyph
+   ============================================================ */
+.public-brand,
+.argus-brand {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.public-brand-logo,
+.argus-brand-logo {
+  height: 64px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  filter: saturate(1.15) contrast(1.08) drop-shadow(0 4px 10px rgba(14, 165, 233, 0.22));
+}
+.public-brand-sub,
+.argus-brand-sub {
+  font-size: 1.02rem !important;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+}
+.argus-brand-sub { color: rgba(186, 230, 253, 0.9) !important; }
+.public-brand:focus-visible,
+.argus-brand:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+@media (max-width: 640px) {
+  .public-brand-logo,
+  .argus-brand-logo { height: 48px; }
+  .public-brand-sub,
+  .argus-brand-sub {
+    font-size: 0.78rem !important;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+}
+
+/* 全寬化後：限制 section 標題/描述行長，避免寬螢幕單行過長難讀；描述提高對比 */
+.public-section-head { max-width: 72ch; }
+.public-section-head p { color: #cbd5e1 !important; }
+
+/* ============================================================
+   雙色主題：日間模式（light）
+   data-theme="light" 設在 <html>；僅套用於公開頁 .public-shell。
+   後台 /admin 維持深色。
+   設計理念：乾淨、低彩度、專業感。
+   off-white 底 + 白卡 + 深炭文字 + 約制 teal 強調。
+   ============================================================ */
+
+/* ── 主題切換按鈕（基礎樣式，兩種主題共用） ── */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 6.25rem;
+  height: 40px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  background: rgba(8, 20, 40, 0.62);
+  color: #67e8f9;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(8, 20, 40, 0.28);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.theme-toggle:hover {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(103, 232, 249, 0.72);
+  transform: translateY(-1px);
+}
+.theme-toggle:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+.theme-toggle-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: rgba(103, 232, 249, 0.14);
+  font-size: 0.86rem;
+}
+
+/* ── 1. Shell & Nav ── */
+:root[data-theme="light"] .argus-app.is-public-mode {
+  background: #edf4f8;
+}
+:root[data-theme="light"] .public-shell {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(14, 165, 233, 0.14), transparent 32rem),
+    radial-gradient(circle at 86% 10%, rgba(20, 184, 166, 0.12), transparent 28rem),
+    linear-gradient(180deg, #eef7fb 0%, #f8fbfd 46%, #f1f5f9 100%);
+  color: #132033;
+}
+:root[data-theme="light"] .public-nav {
+  background: rgba(248, 252, 254, 0.9);
+  backdrop-filter: saturate(150%) blur(14px);
+  -webkit-backdrop-filter: saturate(150%) blur(14px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+:root[data-theme="light"] .public-brand,
+:root[data-theme="light"] .public-brand-title { color: #132033; }
+:root[data-theme="light"] .public-brand-logo,
+:root[data-theme="light"] .argus-brand-logo {
+  padding: 0.22rem 0.34rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(224, 242, 254, 0.94));
+  border: 1px solid rgba(8, 145, 178, 0.26);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+    0 10px 22px rgba(14, 116, 144, 0.18),
+    0 1px 0 rgba(15, 23, 42, 0.12);
+  filter:
+    saturate(1.7)
+    contrast(1.55)
+    brightness(0.86)
+    drop-shadow(0 0 1px rgba(8, 47, 73, 0.82))
+    drop-shadow(0 4px 8px rgba(14, 116, 144, 0.22));
+}
+:root[data-theme="light"] .public-brand-sub {
+  color: #253449;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+:root[data-theme="light"] .public-nav-link {
+  color: #253449;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+:root[data-theme="light"] .public-nav-link:hover {
+  background: rgba(8, 145, 178, 0.1);
+  color: #132033;
+}
+:root[data-theme="light"] .public-nav-link.active {
+  color: #075985;
+  background: #e0f2fe;
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.16);
+}
+:root[data-theme="light"] .theme-toggle {
+  border-color: rgba(8, 145, 178, 0.2);
+  background: #ffffff;
+  color: #075985;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .theme-toggle:hover {
+  background: #e0f2fe;
+  border-color: rgba(8, 145, 178, 0.36);
+}
+:root[data-theme="light"] .theme-toggle-icon {
+  background: #dff7ff;
+  color: #0369a1;
+}
+:root[data-theme="light"] .public-cta-primary {
+  background: linear-gradient(135deg, #0e7490 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+}
+
+/* ── 2. Hero ── */
+:root[data-theme="light"] .hero-grid,
+:root[data-theme="light"] .hero-scan,
+:root[data-theme="light"] .hero-corner,
+:root[data-theme="light"] .hero-orb { display: none; }
+
+:root[data-theme="light"] .public-hero--console {
+  background:
+    linear-gradient(180deg, rgba(224, 242, 254, 0.72), rgba(248, 251, 253, 0.2)),
+    transparent;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .public-hero-title,
+:root[data-theme="light"] .public-hero--console .public-hero-title {
+  color: #132033;
+  text-shadow: none;
+  animation: none;
+}
+:root[data-theme="light"] .hero-grad {
+  background: none;
+  -webkit-text-fill-color: #0e7490;
+  background-clip: unset;
+  -webkit-background-clip: unset;
+  color: #0e7490;
+}
+:root[data-theme="light"] .public-hero-eyebrow {
+  color: #075985;
+  background: #e0f2fe;
+  border-color: rgba(8, 145, 178, 0.18);
+}
+:root[data-theme="light"] .public-hero-sub { color: #334155; }
+
+/* hero 商標（基礎 + 日間覆寫） */
+.public-hero-logo {
+  display: block;
+  height: clamp(76px, 11vw, 132px);
+  width: auto;
+  margin: 0 auto 1.25rem;
+  filter: drop-shadow(0 0 22px rgba(56, 189, 248, 0.45));
+}
+:root[data-theme="light"] .public-hero-logo {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+/* ── 3. Section headings ── */
+:root[data-theme="light"] .public-section-head h2 { color: #132033; }
+:root[data-theme="light"] .public-section-head p { color: #475569 !important; }
+:root[data-theme="light"] .public-empty { color: #64748b; }
+
+/* ── 4. Cards（統一處理） ── */
+:root[data-theme="light"] .public-feature-card,
+:root[data-theme="light"] .public-team-card-pro,
+:root[data-theme="light"] .public-plan-card,
+:root[data-theme="light"] .project-stat-card,
+:root[data-theme="light"] .insight-tool-card,
+:root[data-theme="light"] .insight-result-card,
+:root[data-theme="light"] .public-install-card {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+  color: #132033;
+}
+
+:root[data-theme="light"] .public-feature-title,
+:root[data-theme="light"] .insight-card-title,
+:root[data-theme="light"] .project-stat-value,
+:root[data-theme="light"] .public-install-title { color: #132033; }
+
+:root[data-theme="light"] .public-feature-desc,
+:root[data-theme="light"] .project-stat-label,
+:root[data-theme="light"] .project-stat-hint,
+:root[data-theme="light"] .insight-result-sub,
+:root[data-theme="light"] .insight-note,
+:root[data-theme="light"] .insight-metrics-grid span { color: #475569; }
+
+:root[data-theme="light"] .insight-metrics-grid strong,
+:root[data-theme="light"] .insight-finding-list strong { color: #132033; }
+
+:root[data-theme="light"] .insight-finding-list li,
+:root[data-theme="light"] .insight-feature-list li {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #334155;
+}
+:root[data-theme="light"] .insight-metrics-grid div {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light"] .public-install-card ol,
+:root[data-theme="light"] .public-install-card li { color: #475569; }
+
+/* ── 5. 比較表 ── */
+:root[data-theme="light"] .public-compare-wrap {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
+}
+:root[data-theme="light"] .public-compare-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .public-compare-table thead th.public-compare-argus {
+  background: #e0f2fe;
+}
+:root[data-theme="light"] .public-compare-brand { color: #075985; }
+:root[data-theme="light"] .public-compare-table,
+:root[data-theme="light"] .public-compare-table thead,
+:root[data-theme="light"] .public-compare-table tbody,
+:root[data-theme="light"] .public-compare-table tr,
+:root[data-theme="light"] .public-compare-table td {
+  color: #475569;
+}
+:root[data-theme="light"] .public-compare-table td.public-compare-feature { color: #132033; }
+:root[data-theme="light"] .public-compare-table td.public-compare-argus {
+  background: #f0f9ff;
+  color: #075985;
+}
+:root[data-theme="light"] .public-compare-table td.public-compare-cell { color: #475569; }
+:root[data-theme="light"] .public-compare-table tbody tr {
+  border-color: rgba(15, 23, 42, 0.06);
+}
+
+/* ── 6. 快速檢查 / Free Tools ── */
+:root[data-theme="light"] .insight-tab {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #475569;
+}
+:root[data-theme="light"] .insight-tab:hover {
+  color: #132033;
+  border-color: rgba(8, 145, 178, 0.2);
+}
+:root[data-theme="light"] .insight-tab.active {
+  background: #0e7490;
+  color: #FFFFFF;
+  border-color: #0e7490;
+}
+:root[data-theme="light"] .insight-field input,
+:root[data-theme="light"] .insight-field textarea {
+  background: #FFFFFF;
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #132033;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+:root[data-theme="light"] .insight-field input::placeholder,
+:root[data-theme="light"] .insight-field textarea::placeholder {
+  color: #94a3b8;
+}
+:root[data-theme="light"] .insight-field,
+:root[data-theme="light"] .insight-check {
+  color: #334155;
+}
+:root[data-theme="light"] .insight-empty { color: #64748b; }
+:root[data-theme="light"] .insight-empty strong,
+:root[data-theme="light"] .insight-feature-list strong,
+:root[data-theme="light"] .insight-risk-head strong {
+  color: #132033;
+}
+:root[data-theme="light"] .insight-feature-list span,
+:root[data-theme="light"] .insight-risk-result p {
+  color: #475569;
+}
+:root[data-theme="light"] .insight-email-meta span {
+  background: #eef2ff;
+  color: #3730a3;
+}
+:root[data-theme="light"] .insight-error {
+  background: #FEF2F2;
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #991B1B;
+}
+:root[data-theme="light"] .insight-success {
+  background: #F0FDF4;
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #166534;
+}
+
+/* ── 7. CTA 按鈕 ── */
+:root[data-theme="light"] .public-cta-ghost {
+  color: #075985;
+  border-color: rgba(8, 145, 178, 0.34);
+  background: rgba(255, 255, 255, 0.7);
+}
+:root[data-theme="light"] .public-final-cta {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #132033;
+}
+:root[data-theme="light"] .public-final-cta-title { color: #132033; }
+:root[data-theme="light"] .public-final-cta-sub { color: #475569; }
+
+/* ── 8. FAQ ── */
+:root[data-theme="light"] .public-faq-item {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #132033;
+}
+:root[data-theme="light"] .public-faq-item[open] {
+  background: #effaff;
+}
+:root[data-theme="light"] .public-faq-item summary { color: #132033; }
+:root[data-theme="light"] .public-faq-item summary::after { color: #0e7490; }
+:root[data-theme="light"] .public-faq-item p { color: #475569; }
+
+/* ── 9. Release notes ── */
+:root[data-theme="light"] .public-release-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .public-release-history { background: #f8fafc; }
+:root[data-theme="light"] .public-release-history li { background: #FFFFFF; }
+
+/* ── 10. Demo window ── */
+:root[data-theme="light"] .project-demo-window {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+}
+:root[data-theme="light"] .project-demo-body {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .project-demo-title-bar {
+  background: #f8fafc;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .project-demo-finding {
+  background: #f8fafc;
+  color: #334155;
+}
+:root[data-theme="light"] .project-demo-finding-sev { background: rgba(15, 23, 42, 0.06); }
+:root[data-theme="light"] .project-demo-progress { background: rgba(15, 23, 42, 0.08); }
+:root[data-theme="light"] .project-demo-url { color: #64748b; }
+:root[data-theme="light"] .project-demo-phase { color: #075985; }
+:root[data-theme="light"] .project-demo-finding-title { color: #132033; }
+:root[data-theme="light"] .project-demo-finding.sev-high .project-demo-finding-sev {
+  background: #fee2e2;
+  color: #991b1b;
+}
+:root[data-theme="light"] .project-demo-finding.sev-medium .project-demo-finding-sev {
+  background: #fef3c7;
+  color: #92400e;
+}
+:root[data-theme="light"] .project-demo-finding.sev-low .project-demo-finding-sev {
+  background: #e0f2fe;
+  color: #075985;
+}
+:root[data-theme="light"] .project-demo-finding.sev-info .project-demo-finding-sev {
+  background: #e2e8f0;
+  color: #334155;
+}
+:root[data-theme="light"] .project-timeline::before {
+  background: linear-gradient(180deg, #0e7490, rgba(37, 99, 235, 0.78) 58%, transparent);
+}
+:root[data-theme="light"] .project-timeline-marker {
+  box-shadow: 0 0 0 4px #f8fbfd, 0 12px 22px rgba(14, 116, 144, 0.18);
+}
+:root[data-theme="light"] .project-timeline-date { color: #075985; }
+:root[data-theme="light"] .project-timeline-title { color: #132033; }
+:root[data-theme="light"] .project-timeline-desc { color: #475569; }
+
+/* ── 11. Footer ── */
+:root[data-theme="light"] .public-footer {
+  background: #e8f0f5;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .public-footer-brand { color: #132033; }
+:root[data-theme="light"] .public-footer-inner,
+:root[data-theme="light"] .public-footer-sub,
+:root[data-theme="light"] .public-footer-links a { color: #475569; }
+:root[data-theme="light"] .public-footer-links a:hover { color: #075985; }
+:root[data-theme="light"] .public-footer-copy { color: #64748b; }
+
+/* ── 12. Badges & risk indicators ── */
+:root[data-theme="light"] .public-plan-badge {
+  color: #BE185D;
+  text-shadow: none;
+}
+:root[data-theme="light"] .public-tech-chip {
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+:root[data-theme="light"] .insight-risk-badge.risk-minimal {
+  color: #047857;
+  background: rgba(4, 120, 87, 0.10);
+}
+:root[data-theme="light"] .insight-risk-badge.risk-low {
+  color: #92400E;
+  background: rgba(245, 158, 11, 0.10);
+}
+:root[data-theme="light"] .insight-risk-badge.risk-medium {
+  color: #9A3412;
+  background: rgba(194, 65, 12, 0.10);
+}
+:root[data-theme="light"] .insight-risk-badge.risk-high {
+  color: #991B1B;
+  background: rgba(185, 28, 28, 0.10);
+}
+:root[data-theme="light"] .insight-risk-badge.risk-critical {
+  color: #991B1B;
+  background: rgba(185, 28, 28, 0.14);
+}
+
+/* ── 14. 漸層文字元件（日間移除 background-clip 技巧，改用純色） ── */
+:root[data-theme="light"] .project-stat-value {
+  background: none;
+  -webkit-text-fill-color: #132033;
+  background-clip: unset;
+  -webkit-background-clip: unset;
+  color: #132033;
+}
+:root[data-theme="light"] .public-team-stat-value {
+  background: none;
+  -webkit-text-fill-color: #0e7490;
+  background-clip: unset;
+  -webkit-background-clip: unset;
+  color: #0e7490;
+}
+
+/* ── 15. Plan card 子元素（深色模式用淺色字，日間需翻深） ── */
+:root[data-theme="light"] .public-plan-recommend {
+  background: #0e7490;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.2);
+}
+:root[data-theme="light"] .public-plan-name { color: #132033; }
+:root[data-theme="light"] .public-plan-coin { color: #0e7490; }
+:root[data-theme="light"] .public-plan-coin span { color: #475569; }
+:root[data-theme="light"] .public-plan-price { color: #132033; }
+:root[data-theme="light"] .public-plan-rate { color: #475569; }
+:root[data-theme="light"] .public-plan-desc { color: #475569; }
+
+/* ── 16. Stat card 子元素 ── */
+:root[data-theme="light"] .project-stat-label { color: #475569; }
+:root[data-theme="light"] .project-stat-hint { color: #64748b; }
+:root[data-theme="light"] .public-team-stat-label { color: #475569; }
+:root[data-theme="light"] .public-plan-note { color: #475569; }
+
+/* ── 17. Team card 子元素 ── */
+:root[data-theme="light"] .public-team-name,
+:root[data-theme="light"] .public-team-role { color: #132033; }
+:root[data-theme="light"] .public-team-bio,
+:root[data-theme="light"] .public-team-contributions,
+:root[data-theme="light"] .public-team-skill-label { color: #475569; }
+:root[data-theme="light"] .public-team-skill-row-head { color: #334155; }
+:root[data-theme="light"] .public-team-skill-pct,
+:root[data-theme="light"] .public-team-contrib-label { color: #075985; }
+:root[data-theme="light"] .public-team-skill-track { background: rgba(15, 23, 42, 0.1); }
+:root[data-theme="light"] .public-team-contrib {
+  border-top-color: rgba(15, 23, 42, 0.12);
+}
+:root[data-theme="light"] .public-team-contrib-title { color: #132033; }
+:root[data-theme="light"] .public-team-contrib-desc { color: #475569; }
+:root[data-theme="light"] .public-team-id-badge {
+  color: #0369a1;
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.25);
+}
+:root[data-theme="light"] .public-team-block-label { color: #075985; }
+:root[data-theme="light"] .public-team-skill-chip {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: rgba(8, 145, 178, 0.18);
+}
+:root[data-theme="light"] .public-team-links a { color: #075985; }
+:root[data-theme="light"] .public-team-links a:hover { color: #0E7490; }
+
+/* ── 18. Release card 子元素 ── */
+:root[data-theme="light"] .public-release-title,
+:root[data-theme="light"] .public-release-card h3 { color: #132033; }
+:root[data-theme="light"] .public-release-summary,
+:root[data-theme="light"] .public-release-date,
+:root[data-theme="light"] .public-release-notes,
+:root[data-theme="light"] .public-release-history li { color: #475569; }
+:root[data-theme="light"] .public-release-version { color: #132033; }
+:root[data-theme="light"] .public-release-history li strong { color: #075985; }
+:root[data-theme="light"] .public-release-history summary { color: #075985; }
+:root[data-theme="light"] .public-install-hint { color: #64748b; }
+:root[data-theme="light"] .public-install-installed {
+  background: #dcfce7;
+  color: #166534;
+  border-color: rgba(22, 101, 52, 0.18);
+}
+:root[data-theme="light"] .public-install-card kbd {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: rgba(8, 145, 178, 0.2);
+}
+
+/* ── 19. Feature card 圖示容器（確保不在日間發光） ── */
+:root[data-theme="light"] .public-feature-icon {
+  color: #0e7490;
+}
+
+/* ── 20. Free tools 補強（確保日間下所有文字可讀） ── */
+:root[data-theme="light"] .insight-card-desc { color: #475569; }
+:root[data-theme="light"] .insight-result-title { color: #132033; }
+:root[data-theme="light"] .star-rating .star {
+  color: #64748b;
+}
+:root[data-theme="light"] .star-rating .star.filled {
+  color: #d97706;
+}
+
+@media (max-width: 640px) {
+  .theme-toggle {
+    min-width: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+  }
+  .theme-toggle span:not(.theme-toggle-icon) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .public-nav-cta {
+    gap: 0.5rem;
+  }
+}
+

@@ -1,0 +1,3 @@
+# 這個資料夾存 dev 環境寄出的 email（filebased backend）
+# 每次寄信 Django 會在這裡產一個 .log 檔，內含 raw email 內容
+# 想看收據實際長相：開最新的 .log 檔

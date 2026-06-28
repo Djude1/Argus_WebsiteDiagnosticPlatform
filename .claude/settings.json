@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; $p=$j.tool_input.file_path; if($p -match '(\\.env$|GoogleCloud_ApiKey\\.json$|client_secret_.*\\.json$|\\.pem$)'){[Console]::Error.WriteLine(\"BLOCKED: 禁止寫入機密檔案 $p — 請告知使用者手動更新\"); exit 2}; exit 0",
+            "timeout": 10,
+            "statusMessage": "檢查機密檔案保護"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude\\hooks\\ruff-fix.ps1",
+            "timeout": 30,
+            "statusMessage": "ruff auto-fix"
+          }
+        ]
+      }
+    ]
+  }
+}

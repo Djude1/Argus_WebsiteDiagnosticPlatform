@@ -1,0 +1,5085 @@
+{
+  "docx": "E:\\Argus\\專題文件\\四技第 115401 組-ARGUS AI網站健檢平台-系統手冊.docx",
+  "paragraph_count": 260,
+  "table_count": 27,
+  "image_count": 13,
+  "headings": [
+    {
+      "index": 16,
+      "style": "toc 2",
+      "text": "1-1 背景介紹 1"
+    },
+    {
+      "index": 17,
+      "style": "toc 2",
+      "text": "1-2 動機 1"
+    },
+    {
+      "index": 18,
+      "style": "toc 2",
+      "text": "1-3 系統目的與目標 4"
+    },
+    {
+      "index": 19,
+      "style": "toc 2",
+      "text": "1-4 預期成果 4"
+    },
+    {
+      "index": 21,
+      "style": "toc 2",
+      "text": "2-1 可行性分析 6"
+    },
+    {
+      "index": 22,
+      "style": "toc 2",
+      "text": "2-2 商業模式（Business Model） 7"
+    },
+    {
+      "index": 23,
+      "style": "toc 2",
+      "text": "2-3 市場分析（STP） 8"
+    },
+    {
+      "index": 24,
+      "style": "toc 2",
+      "text": "2-4 競爭力分析（SWOT-TOWS） 9"
+    },
+    {
+      "index": 26,
+      "style": "toc 2",
+      "text": "3-1 系統架構 10"
+    },
+    {
+      "index": 27,
+      "style": "toc 2",
+      "text": "3-2 系統軟、硬體需求與技術平台 12"
+    },
+    {
+      "index": 28,
+      "style": "toc 2",
+      "text": "3-3 使用標準與工具 13"
+    },
+    {
+      "index": 30,
+      "style": "toc 2",
+      "text": "4-1 專案時程 16"
+    },
+    {
+      "index": 31,
+      "style": "toc 2",
+      "text": "4-2 專案組織與分工 17"
+    },
+    {
+      "index": 32,
+      "style": "toc 2",
+      "text": "4-3 上傳 GitHub 紀錄 21"
+    },
+    {
+      "index": 34,
+      "style": "toc 2",
+      "text": "5-1 使用者需求 22"
+    },
+    {
+      "index": 35,
+      "style": "toc 2",
+      "text": "5-2 使用個案圖（Use Case Diagram） 23"
+    },
+    {
+      "index": 36,
+      "style": "toc 2",
+      "text": "5-3 使用個案描述（Activity Diagram） 24"
+    },
+    {
+      "index": 37,
+      "style": "toc 2",
+      "text": "5-4 分析類別圖（Analysis Class Diagram） 26"
+    },
+    {
+      "index": 39,
+      "style": "toc 2",
+      "text": "6-1 循序圖（Sequential Diagram） 28"
+    },
+    {
+      "index": 40,
+      "style": "toc 2",
+      "text": "6-2 設計類別圖（Design Class Diagram） 28"
+    },
+    {
+      "index": 42,
+      "style": "toc 2",
+      "text": "7-1 佈署圖（Deployment Diagram） 31"
+    },
+    {
+      "index": 43,
+      "style": "toc 2",
+      "text": "7-2 套件圖（Package Diagram） 32"
+    },
+    {
+      "index": 44,
+      "style": "toc 2",
+      "text": "7-3 元件圖（Component Diagram） 33"
+    },
+    {
+      "index": 45,
+      "style": "toc 2",
+      "text": "7-4 狀態機（State Machine） 34"
+    },
+    {
+      "index": 47,
+      "style": "toc 2",
+      "text": "8-1 資料庫關聯表 36"
+    },
+    {
+      "index": 48,
+      "style": "toc 2",
+      "text": "8-2 表格及其 Meta Data 37"
+    },
+    {
+      "index": 94,
+      "style": "Heading 1",
+      "text": "第1章 前言"
+    },
+    {
+      "index": 95,
+      "style": "Heading 2",
+      "text": "1-1 背景介紹"
+    },
+    {
+      "index": 98,
+      "style": "Heading 2",
+      "text": "1-2 動機"
+    },
+    {
+      "index": 109,
+      "style": "Heading 2",
+      "text": "1-3 系統目的與目標"
+    },
+    {
+      "index": 113,
+      "style": "Heading 2",
+      "text": "1-4 預期成果"
+    },
+    {
+      "index": 116,
+      "style": "Heading 1",
+      "text": "第2章 營運計畫"
+    },
+    {
+      "index": 117,
+      "style": "Heading 2",
+      "text": "2-1 可行性分析"
+    },
+    {
+      "index": 125,
+      "style": "Heading 2",
+      "text": "2-2 商業模式（Business Model）"
+    },
+    {
+      "index": 128,
+      "style": "Heading 2",
+      "text": "2-3 市場分析（STP）"
+    },
+    {
+      "index": 143,
+      "style": "Heading 2",
+      "text": "2-4 競爭力分析（SWOT-TOWS）"
+    },
+    {
+      "index": 145,
+      "style": "Heading 1",
+      "text": "第3章 系統規格 [序號1]"
+    },
+    {
+      "index": 146,
+      "style": "Heading 2",
+      "text": "3-1 系統架構"
+    },
+    {
+      "index": 156,
+      "style": "Heading 2",
+      "text": "3-2 系統軟、硬體需求與技術平台"
+    },
+    {
+      "index": 164,
+      "style": "Heading 2",
+      "text": "3-3 使用標準與工具"
+    },
+    {
+      "index": 181,
+      "style": "Heading 1",
+      "text": "第4章 專案時程與組織分工"
+    },
+    {
+      "index": 182,
+      "style": "Heading 2",
+      "text": "4-1 專案時程"
+    },
+    {
+      "index": 186,
+      "style": "TblCap",
+      "text": "4-2 專案組織與分工"
+    },
+    {
+      "index": 194,
+      "style": "Heading 2",
+      "text": "4-3 上傳 GitHub 紀錄"
+    },
+    {
+      "index": 198,
+      "style": "Heading 1",
+      "text": "第5章 需求模型 [序號2]"
+    },
+    {
+      "index": 199,
+      "style": "Heading 2",
+      "text": "5-1使用者需求"
+    },
+    {
+      "index": 206,
+      "style": "Heading 2",
+      "text": "5-2 使用個案圖（Use Case Diagram）"
+    },
+    {
+      "index": 210,
+      "style": "Heading 2",
+      "text": "5-3 使用個案描述（Activity Diagram）"
+    },
+    {
+      "index": 217,
+      "style": "Heading 2",
+      "text": "5-4 分析類別圖（Analysis Class Diagram）"
+    },
+    {
+      "index": 221,
+      "style": "Heading 1",
+      "text": "第6章 設計模型 [序號3]"
+    },
+    {
+      "index": 222,
+      "style": "Heading 2",
+      "text": "6-1 循序圖（Sequential Diagram）"
+    },
+    {
+      "index": 226,
+      "style": "Heading 2",
+      "text": "6-2 設計類別圖（Design Class Diagram）"
+    },
+    {
+      "index": 231,
+      "style": "Heading 1",
+      "text": "第7章 實作模型 [序號4]"
+    },
+    {
+      "index": 232,
+      "style": "Heading 2",
+      "text": "7-1 佈署圖（Deployment Diagram）"
+    },
+    {
+      "index": 238,
+      "style": "Heading 2",
+      "text": "7-2 套件圖（Package Diagram）"
+    },
+    {
+      "index": 242,
+      "style": "Heading 2",
+      "text": "7-3 元件圖（Component Diagram）"
+    },
+    {
+      "index": 246,
+      "style": "Heading 2",
+      "text": "7-4 狀態機（State Machine）"
+    },
+    {
+      "index": 251,
+      "style": "Heading 1",
+      "text": "第8章 資料庫設計 [序號5]"
+    },
+    {
+      "index": 252,
+      "style": "Heading 2",
+      "text": "8-1 資料庫關聯表"
+    },
+    {
+      "index": 256,
+      "style": "Heading 2",
+      "text": "8-2 表格及其 Meta Data"
+    }
+  ],
+  "chapter_markers": [],
+  "captions": [
+    {
+      "index": 47,
+      "style": "toc 2",
+      "text": "8-1 資料庫關聯表 36"
+    },
+    {
+      "index": 50,
+      "style": "toc 1",
+      "text": "附錄一 人工智慧使用說明表 47"
+    },
+    {
+      "index": 51,
+      "style": "Normal",
+      "text": "圖 目 錄"
+    },
+    {
+      "index": 52,
+      "style": "toc 1",
+      "text": "圖 3-1-1 Argus SaaS 分層系統架構圖 11"
+    },
+    {
+      "index": 53,
+      "style": "toc 1",
+      "text": "圖 4-3-1 GitHub 提交紀錄截圖 21"
+    },
+    {
+      "index": 54,
+      "style": "toc 1",
+      "text": "圖 5-2-1 使用個案圖（Use Case Diagram） 24"
+    },
+    {
+      "index": 55,
+      "style": "toc 1",
+      "text": "圖5-3-1 活動圖：提交掃描任務（Activity Diagram） 25"
+    },
+    {
+      "index": 56,
+      "style": "toc 1",
+      "text": "圖 5-4-1 分析類別圖（Analysis Class Diagram） 27"
+    },
+    {
+      "index": 57,
+      "style": "toc 1",
+      "text": "圖 6-1-1 掃描任務循序圖（Sequential Diagram） 28"
+    },
+    {
+      "index": 58,
+      "style": "toc 1",
+      "text": "圖 6-2-1 設計類別圖（Design Class Diagram） 29"
+    },
+    {
+      "index": 59,
+      "style": "toc 1",
+      "text": "圖 7-1-1 Docker Compose 佈署圖（Deployment Diagram） 31"
+    },
+    {
+      "index": 60,
+      "style": "toc 1",
+      "text": "圖 7-2-1 套件架構圖（Package Diagram） 33"
+    },
+    {
+      "index": 61,
+      "style": "toc 1",
+      "text": "圖 7-3-1 系統元件圖（Component Diagram） 33"
+    },
+    {
+      "index": 62,
+      "style": "toc 1",
+      "text": "圖 7-4-1 ScanJob 狀態機圖（State Machine） 34"
+    },
+    {
+      "index": 63,
+      "style": "toc 1",
+      "text": "圖 8-1-1 資料庫 ER 圖（Entity-Relationship Diagram） 36"
+    },
+    {
+      "index": 66,
+      "style": "Normal",
+      "text": "表 目 錄"
+    },
+    {
+      "index": 67,
+      "style": "toc 1",
+      "text": "表 1-2-1 各平台功能特性比較表 2"
+    },
+    {
+      "index": 68,
+      "style": "toc 1",
+      "text": "表 2-1-1 技術可行性評估表 6"
+    },
+    {
+      "index": 69,
+      "style": "toc 1",
+      "text": "表 2-2-1 商業模式Business Model 7"
+    },
+    {
+      "index": 70,
+      "style": "toc 1",
+      "text": "表 2-4-1 競爭力分析 SWOT-TOWS 矩陣 9"
+    },
+    {
+      "index": 71,
+      "style": "toc 1",
+      "text": "表 3-1-1 系統分層職責說明表 11"
+    },
+    {
+      "index": 72,
+      "style": "toc 1",
+      "text": "表 3-2-1 系統硬體需求表 12"
+    },
+    {
+      "index": 73,
+      "style": "toc 1",
+      "text": "表 3-3-1 使用標準與工具表 14"
+    },
+    {
+      "index": 74,
+      "style": "toc 1",
+      "text": "表 4-1-1 專案甘特圖（114/12 – 115/06） 16"
+    },
+    {
+      "index": 75,
+      "style": "toc 1",
+      "text": "表 4-2-1 專案組織分工表（● 主要負責，○ 次要協助） 18"
+    },
+    {
+      "index": 76,
+      "style": "toc 1",
+      "text": "表 4-2-2 專題成果工作內容與貢獻度表 20"
+    },
+    {
+      "index": 77,
+      "style": "toc 1",
+      "text": "表5-1-1 功能需求清單 22"
+    },
+    {
+      "index": 78,
+      "style": "toc 1",
+      "text": "表5-1-2 非功能需求清單 23"
+    },
+    {
+      "index": 79,
+      "style": "toc 1",
+      "text": "表5-3-1 使用個案描述：提交掃描任務 25"
+    },
+    {
+      "index": 80,
+      "style": "toc 1",
+      "text": "表 6-2-1 設計類別主要屬性與方法規格 29"
+    },
+    {
+      "index": 81,
+      "style": "toc 1",
+      "text": "表 7-1-1 容器通訊規格 32"
+    },
+    {
+      "index": 82,
+      "style": "toc 1",
+      "text": "表 7-4-1 ScanJob 狀態說明 34"
+    },
+    {
+      "index": 83,
+      "style": "toc 1",
+      "text": "表 8-2-1 auth_user 資料表 37"
+    },
+    {
+      "index": 84,
+      "style": "toc 1",
+      "text": "表 8-2-2 billing_coinwallet 資料表 38"
+    },
+    {
+      "index": 85,
+      "style": "toc 1",
+      "text": "表 8-2-3 billing_cointransaction 資料表 39"
+    },
+    {
+      "index": 86,
+      "style": "toc 1",
+      "text": "表 8-2-4 billing_pricingplan 資料表 39"
+    },
+    {
+      "index": 87,
+      "style": "toc 1",
+      "text": "表 8-2-5 billing_purchaseorder 資料表 40"
+    },
+    {
+      "index": 88,
+      "style": "toc 1",
+      "text": "表 8-2-6 scans_scanjob 資料表 41"
+    },
+    {
+      "index": 89,
+      "style": "toc 1",
+      "text": "表 8-2-7 scans_page 資料表 43"
+    },
+    {
+      "index": 90,
+      "style": "toc 1",
+      "text": "表 8-2-8 scans_finding 資料表 43"
+    },
+    {
+      "index": 91,
+      "style": "toc 1",
+      "text": "表 8-2-9 reviews_platformreview 資料表 44"
+    },
+    {
+      "index": 92,
+      "style": "toc 1",
+      "text": "表 8-2-10 admin_api_adminauditlog 資料表 45"
+    },
+    {
+      "index": 101,
+      "style": "Normal",
+      "text": "因此我們希望打造一個更全面也更好用的網站健檢平台—Argus（名稱取自希臘神話中擁有百眼的守衛者，象徵對網站全方位、無死角的監測）。 Argus，一套整合 SEO、AEO（答案引擎最佳化）、GEO 與資安檢測的網站健檢平台，讓使用者只需輸入網址，即可透過中文化、圖形化介面取得網站問題、改善方向與 AI Handoff Prompt（AI 交接提示），協助沒有技術背景的使用者更清楚地理解網站狀況。為具體說明 Argus 相較於現有工具的優勢，以下表 1-2-1 就關鍵功能維度進行比較："
+    },
+    {
+      "index": 106,
+      "style": "TblCap",
+      "text": "▼表 1-2-1 各平台功能特性比較表"
+    },
+    {
+      "index": 108,
+      "style": "Normal",
+      "text": "由表 1-2-1 可見，AHHA 與 GeoWeb 在 SEO/GEO 訊號檢查與 AI 搜尋能見度分析上已具備明確定位；直接詢問 AI 則適合已能清楚描述問題、並能提供足夠上下文的使用者。Argus 的差異在於整合 SEO、AEO、GEO 與 Security 四維健檢，並將檢測證據轉換為可交付給 AI 或開發者的結構化問題。換言之，Argus 不只是告訴使用者網站有問題，也協助網站新手把「不知道怎麼問」轉換成「能被回答與修正的問題」。"
+    },
+    {
+      "index": 119,
+      "style": "TblCap",
+      "text": "▼表 2-1-1 技術可行性評估表"
+    },
+    {
+      "index": 126,
+      "style": "TblCap",
+      "text": "▼表 2-2-1 商業模式Business Model"
+    },
+    {
+      "index": 144,
+      "style": "TblCap",
+      "text": "▼表 2-4-1 競爭力分析 SWOT-TOWS 矩陣"
+    },
+    {
+      "index": 152,
+      "style": "FigCap",
+      "text": "▲圖 3-1-1 Argus SaaS 分層系統架構圖"
+    },
+    {
+      "index": 153,
+      "style": "Normal",
+      "text": "圖 3-1-1 呈現本系統的整體架構與資料流向。使用者透過瀏覽器操作 React 前端，前端以 HTTPS 將請求送至 Nginx，再轉送至 Django 後端；Django 負責驗證請求、執行業務邏輯，並將耗時的掃描任務派送至 Celery Worker。Worker 啟動 Playwright 爬取授權網站、執行四維掃描，並將進度與結果回寫資料庫。PostgreSQL 與 Redis 分別承擔資料持久化與任務佇列，外部則串接 Google OAuth 與 AI 模型服務。此分層設計確保資料傳遞的即時性、系統的擴充性與掃描任務的可追蹤性。"
+    },
+    {
+      "index": 154,
+      "style": "TblCap",
+      "text": "▼表 3-1-1 系統分層職責說明表"
+    },
+    {
+      "index": 159,
+      "style": "Normal",
+      "text": "考量到網站掃描與報告產出需要較高資源，本組將系統硬體需求分為使用者端與伺服器端，如表 3-2-1 所示："
+    },
+    {
+      "index": 160,
+      "style": "TblCap",
+      "text": "▼表 3-2-1 系統硬體需求表"
+    },
+    {
+      "index": 180,
+      "style": "TblCap",
+      "text": "▼表 3-3-1 使用標準與工具表"
+    },
+    {
+      "index": 184,
+      "style": "TblCap",
+      "text": "▼表 4-1-1 專案甘特圖（114/12 – 115/11）"
+    },
+    {
+      "index": 188,
+      "style": "TblCap",
+      "text": "▼表 4-2-1 專案組織分工表（● 主要負責，○ 次要協助）"
+    },
+    {
+      "index": 191,
+      "style": "TblCap",
+      "text": "▼表 4-2-2 專題成果工作內容與貢獻度表"
+    },
+    {
+      "index": 196,
+      "style": "FigCap",
+      "text": "▲圖 4-3-1 GitHub 提交紀錄截圖"
+    },
+    {
+      "index": 201,
+      "style": "TblCap",
+      "text": "▼表5-1-1 功能需求清單"
+    },
+    {
+      "index": 204,
+      "style": "TblCap",
+      "text": "▼表5-1-2 非功能需求清單"
+    },
+    {
+      "index": 207,
+      "style": "Normal",
+      "text": "系統定義三類參與者（Actor）：一般使用者（User）、管理員 Staff（Staff）及 Celery Worker（系統背景服務）。主要使用個案如圖 5-2-1 所示，涵蓋登入、提交掃描、查看結果、下載報告、購買點數、撰寫評論等 12 個案例。"
+    },
+    {
+      "index": 209,
+      "style": "FigCap",
+      "text": "▲圖 5-2-1 使用個案圖（Use Case Diagram）"
+    },
+    {
+      "index": 214,
+      "style": "FigCap",
+      "text": "▲圖5-3-1 活動圖：提交掃描任務（Activity Diagram）"
+    },
+    {
+      "index": 215,
+      "style": "TblCap",
+      "text": "▼表5-3-1 使用個案描述：提交掃描任務"
+    },
+    {
+      "index": 218,
+      "style": "Normal",
+      "text": "圖 5-4-1 為系統分析層級的類別圖，展示八個核心實體——User、ScanJob、、CoinWallet、PurchaseOrder、CoinTransaction（虛線表示依賴關係）、 Finding、Page 及 AgentSession——之間的關聯關係。"
+    },
+    {
+      "index": 220,
+      "style": "FigCap",
+      "text": "▲圖 5-4-1 分析類別圖（Analysis Class Diagram）"
+    },
+    {
+      "index": 223,
+      "style": "Normal",
+      "text": "圖 6-1-1 為提交掃描任務之循序圖，涉及六個生命線：使用者瀏覽器（User Browser）、Django REST API（DRF）、計費服務（BillingService）、Celery 任務佇列（Celery Queue）、Celery Worker 及資料庫（PostgreSQL）。核心流程包含預扣點數（hold_for_scan）、任務入佇列、BFS 爬蟲、四維掃描、結算點數（settle_scan_actual）及 Word 報告生成共 18 個互動步驟。"
+    },
+    {
+      "index": 225,
+      "style": "FigCap",
+      "text": "▲圖 6-1-1 掃描任務循序圖（Sequential Diagram）"
+    },
+    {
+      "index": 227,
+      "style": "Normal",
+      "text": "圖 6-2-1 展示系統設計層級的類別圖，每個類別包含三個區塊：名稱、屬性及方法。BillingService 以 «service» 構造型標示，採用靜態方法設計，是 CoinWallet 與 CoinTransaction 的唯一合法寫入入口，所有計費操作透過 select_for_update + transaction.atomic 保護。"
+    },
+    {
+      "index": 229,
+      "style": "FigCap",
+      "text": "▲圖 6-2-1 設計類別圖（Design Class Diagram）"
+    },
+    {
+      "index": 230,
+      "style": "TblCap",
+      "text": "▼表 6-2-1 設計類別主要屬性與方法規格"
+    },
+    {
+      "index": 233,
+      "style": "Normal",
+      "text": "Argus 採用 Docker Compose 進行容器化部署，如圖 7-1-1 所示，由 frontend、web、worker、redis、db 五個容器組成。對外服務全程經 Cloudflare Tunnel：使用者以 HTTPS 443 連線至 Cloudflare 邊緣（巧.tw／www.巧.tw／備用argus6.qzz.io），再由本機 cloudflared 服務回源至 frontend 容器（nginx，對外 0.0.0.0:8080 → 容器 80），對外不暴露任何裸 port。frontend 提供 React SPA 靜態資源，並將 /api/、/static/ 等請求反向代理至 web 容器（Django + DRF，:8000，僅容器網路）。worker 為 Celery 背景任務處理器，執行 Playwright 爬蟲與四維掃描；redis（:6379）作為 Celery Broker 與結果快取；db 為 PostgreSQL 主資料庫（:5432）。所有容器透過 Docker Bridge Network 互通，8000／6379／5432 僅在容器網路內，不對外開放。"
+    },
+    {
+      "index": 235,
+      "style": "FigCap",
+      "text": "▲圖 7-1-1 Docker Compose 佈署圖（Deployment Diagram）"
+    },
+    {
+      "index": 236,
+      "style": "TblCap",
+      "text": "▼表 7-1-1 容器通訊規格"
+    },
+    {
+      "index": 239,
+      "style": "Normal",
+      "text": "圖 7-2-1 為 Django 後端的套件架構圖，展示 backend/apps/ 下七個 Django App 的依賴關係。各 App 職責清晰分離，所有 App 共用 config（Django 設定與路由）作為根套件。"
+    },
+    {
+      "index": 241,
+      "style": "FigCap",
+      "text": "▲圖 7-2-1 套件架構圖（Package Diagram）"
+    },
+    {
+      "index": 243,
+      "style": "Normal",
+      "text": "圖 7-3-1 以 UML 元件圖呈現系統各主要元件及其介面。元件包含 Browser（客戶端）、Nginx（:443）、Django Application（:8000）、Celery Worker、Redis Broker（:6379）、PostgreSQL（:5432）及 Playwright Chromium（虛線，外部爬蟲目標）。"
+    },
+    {
+      "index": 245,
+      "style": "FigCap",
+      "text": "▲圖 7-3-1 系統元件圖（Component Diagram）"
+    },
+    {
+      "index": 247,
+      "style": "Normal",
+      "text": "圖 7-4-1 為 ScanJob 掃描任務的狀態機圖，描述任務從建立到終止的完整生命週期。在任何階段均可轉入 failed（失敗）或 cancelled（已取消）終止狀態，若成功則轉入下個階段。"
+    },
+    {
+      "index": 249,
+      "style": "FigCap",
+      "text": "▲圖 7-4-1 ScanJob 狀態機圖（State Machine）"
+    },
+    {
+      "index": 250,
+      "style": "TblCap",
+      "text": "▼表 7-4-1 ScanJob 狀態說明"
+    },
+    {
+      "index": 253,
+      "style": "Normal",
+      "text": "Argus 系統採用 PostgreSQL 16 作為主要關聯式資料庫，依 Django 的 7 個 App 模型對應出 21 個應用資料表，並透過外鍵（Foreign Key）建立各資料表之間的關聯。系統採自訂使用者模型（accounts.User，繼承 AbstractUser），故使用者資料表名為 accounts_user；Django 框架內建表（auth_group、auth_permission、django_session、django_migrations 等）與多對多中介表屬框架基礎設施，未列入本章。整體實體關聯（Entity-Relationship）設計如圖 8-1-1 所示。"
+    },
+    {
+      "index": 255,
+      "style": "FigCap",
+      "text": "▲圖 8-1-1 資料庫 ER 圖（Entity-Relationship Diagram）"
+    },
+    {
+      "index": 258,
+      "style": "TblCap",
+      "text": "▼表 8-2-1 auth_user 資料表"
+    },
+    {
+      "index": 260,
+      "style": "TblCap",
+      "text": "▼表 8-2-2 billing_coinwallet 資料表"
+    },
+    {
+      "index": 262,
+      "style": "TblCap",
+      "text": "▼表 8-2-3 billing_cointransaction 資料表"
+    },
+    {
+      "index": 264,
+      "style": "TblCap",
+      "text": "▼表 8-2-4 billing_pricingplan 資料表"
+    },
+    {
+      "index": 266,
+      "style": "TblCap",
+      "text": "▼表 8-2-5 billing_purchaseorder 資料表"
+    },
+    {
+      "index": 268,
+      "style": "TblCap",
+      "text": "▼表 8-2-6 scans_scanjob 資料表"
+    },
+    {
+      "index": 270,
+      "style": "TblCap",
+      "text": "▼表 8-2-7 scans_page 資料表"
+    },
+    {
+      "index": 272,
+      "style": "TblCap",
+      "text": "▼表 8-2-8 scans_finding 資料表"
+    },
+    {
+      "index": 274,
+      "style": "TblCap",
+      "text": "▼表 8-2-9 reviews_platformreview 資料表"
+    },
+    {
+      "index": 276,
+      "style": "TblCap",
+      "text": "▼表 8-2-10 admin_api_adminauditlog 資料表"
+    }
+  ],
+  "responsibility_tables": [
+    {
+      "index": 4,
+      "rows": [
+        [
+          "層級",
+          "主要元件",
+          "責任範圍"
+        ],
+        [
+          "用戶端層",
+          "React 18 SPA、Zustand、Axios、ReactFlow",
+          "提供掃描提交、結果工作區、網站拓樸圖、購點、評論與後台管理介面。"
+        ],
+        [
+          "反向代理層",
+          "Nginx、Docker frontend 服務",
+          "服務前端靜態資源並將 API 請求轉送至 Django 後端。"
+        ],
+        [
+          "應用程式層",
+          "Django 5、DRF、Google OAuth",
+          "負責認證、權限、輸入驗證、業務邏輯、點數計費與報告產出。"
+        ],
+        [
+          "非同步任務層",
+          "Celery Worker、Playwright、四維掃描引擎",
+          "處理長時間網頁爬取、四維掃描與第二階段 AI 體驗測試。"
+        ],
+        [
+          "資料持久層",
+          "PostgreSQL、Redis、檔案儲存",
+          "保存掃描任務、檢測發現、截圖、交易與稽核紀錄，並承擔任務佇列。"
+        ]
+      ]
+    },
+    {
+      "index": 8,
+      "rows": [
+        [
+          "組員 項目",
+          "組員 項目",
+          "11246034 侯雨利",
+          "11246001 羅建凱",
+          "11246038 李仕傑",
+          "11246041 曾子睿"
+        ],
+        [
+          "系通規劃",
+          "需求與市場分析",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "系通規劃",
+          "系統架構設計（前後端分離）",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "系通規劃",
+          "資料庫 ER 模型設計",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "系通規劃",
+          "RESTful API 介面規格設計",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "系通規劃",
+          "UI/UX 原型與Logo設計",
+          "●",
+          "○",
+          "",
+          ""
+        ],
+        [
+          "後端開發",
+          "Google OAuth 第三方登入",
+          "●",
+          "",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "JWT 認證與使用者資料 API",
+          "●",
+          "○",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "ScanJob 狀態機與掃描 CRUD API",
+          "",
+          "",
+          "●",
+          "○"
+        ],
+        [
+          "後端開發",
+          "Findings／Dashboard 資料 API",
+          "",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "掃描歷史與稽核 API",
+          "",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "CoinWallet 錢包與冪等交易",
+          "○",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "點數預扣／結算／退款機制",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "月贈點與點數購買流程",
+          "",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "平台評論 CRUD 與留言串 API",
+          "●",
+          "",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "CMS 公開內容 API",
+          "●",
+          "○",
+          "",
+          ""
+        ],
+        [
+          "爬蟲掃描",
+          "Playwright BFS 爬蟲引擎",
+          "",
+          "○",
+          "○",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "robots.txt 與 same-origin 合規",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "四維度掃描器",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Cloudflare challenge 偵測",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Active 主動探測模組",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "katana 爬蟲整合",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "四維加權評分系統",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "合作式掃描取消機制",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Word 弱點報告產出",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "前端開發",
+          "登入頁（Google OAuth）",
+          "○",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描提交與儀表板頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描歷史列表頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描結果詳情頁",
+          "",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "前端開發",
+          "網站拓樸圖頁",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "前端開發",
+          "點數錢包與設定頁",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "前端開發",
+          "購買點數結帳精靈",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "報告下載頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "平台評論頁",
+          "○",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "產品介紹與團隊介紹頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "伺服器部署",
+          "Docker Compose 容器化",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "伺服器部署",
+          "Nginx 反向代理設定",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "伺服器部署",
+          "PostgreSQL 資料庫部署",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "伺服器部署",
+          "Redis 與 Celery Worker 部署",
+          "",
+          "",
+          "●",
+          "○"
+        ],
+        [
+          "伺服器部署",
+          "cloudflared 對外通道設定",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "統整與格式校對",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 1 章 前言",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "文件撰寫",
+          "第 2 章 營運計畫",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "文件撰寫",
+          "第 3 章 系統規格",
+          "○",
+          "○",
+          "●",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 4 章 專案時程與組織分工",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 5 章 需求模型",
+          "○",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 6 章 設計模型",
+          "○",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 7 章 實作模型",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 8 章 資料庫設計",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "報告",
+          "簡報製作",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "報告",
+          "影片製作",
+          "○",
+          "○",
+          "",
+          "●"
+        ]
+      ]
+    },
+    {
+      "index": 9,
+      "rows": [
+        [
+          "序號",
+          "姓名",
+          "工作內容（各限 100 字以內）",
+          "貢獻度"
+        ],
+        [
+          "1",
+          "組長 侯雨利",
+          "負責整體系統架構規劃與技術選型、後端 API 整合（Django + DRF）、Docker Compose 部署與維運，並統籌前後端協調與系統手冊撰寫。",
+          "26%"
+        ],
+        [
+          "2",
+          "組員 羅建凱",
+          "負責 React 18 前端 SPA 開發（掃描提交、結果展示、後台管理）、ReactFlow 網站拓樸圖，以及全站 UI/UX 視覺設計與互動效果。",
+          "26%"
+        ],
+        [
+          "3",
+          "組員 李仕傑",
+          "負責 PostgreSQL 資料庫設計與 Migration、Celery 非同步掃描任務、點數計費系統（BillingService 冪等交易）與後端 API 開發。",
+          "22%"
+        ],
+        [
+          "4",
+          "組員 曾子睿",
+          "負責 Playwright BFS 爬蟲引擎、四維掃描引擎（SEO／AEO／GEO／Security）開發，以及 Nginx 反向代理與伺服器部署設定。",
+          "26%"
+        ]
+      ]
+    }
+  ],
+  "tables_preview": [
+    {
+      "index": 0,
+      "rows": [
+        [
+          "比較細項",
+          "Argus （本系統）",
+          "AHHA",
+          "GeoWeb",
+          "直接詢問 AI"
+        ],
+        [
+          "【整體定位】",
+          "【整體定位】",
+          "【整體定位】",
+          "【整體定位】",
+          "【整體定位】"
+        ],
+        [
+          "主要定位",
+          "四維網站健檢與 AI 提問輔助平台。",
+          "免費 SEO、GEO、AI SEO 單頁健檢工具。",
+          "AI 搜尋能見度與 GEO 分析平台。",
+          "通用問答工具，非專門網站健檢系統。"
+        ],
+        [
+          "適合使用情境",
+          "網站新手、個人品牌、新創與中小企業自助健檢。",
+          "快速檢查單一網頁 SEO/GEO/AI 爬蟲訊號。",
+          "評估網站 GEO 體質與 AI 搜尋能見度。",
+          "使用者已知道問題並能清楚描述需求。"
+        ],
+        [
+          "【SEO 分析維度】",
+          "【SEO 分析維度】",
+          "【SEO 分析維度】",
+          "【SEO 分析維度】",
+          "【SEO 分析維度】"
+        ],
+        [
+          "Title、Meta、H1、alt、canonical 等基礎檢查",
+          "✅",
+          "✅",
+          "✅",
+          "△需使用者提供資料"
+        ],
+        [
+          "全站爬蟲與多頁平均檢查",
+          "✅",
+          "△以單頁快速檢測為主",
+          "✅",
+          "❌"
+        ],
+        [
+          "關鍵字研究／排名追蹤",
+          "❌",
+          "❌",
+          "❌",
+          "△可建議方向但無即時資料"
+        ],
+        [
+          "【AEO／GEO／AI 可理解度】",
+          "【AEO／GEO／AI 可理解度】",
+          "【AEO／GEO／AI 可理解度】",
+          "【AEO／GEO／AI 可理解度】",
+          "【AEO／GEO／AI 可理解度】"
+        ],
+        [
+          "FAQ／HowTo／結構化資料檢查",
+          "✅",
+          "✅",
+          "✅",
+          "△需貼程式碼或頁面內容"
+        ],
+        [
+          "llms.txt 與 AI 爬蟲允許性檢查",
+          "✅",
+          "✅",
+          "✅",
+          "❌"
+        ],
+        [
+          "AI 搜尋能見度／GEO 評分",
+          "✅",
+          "✅",
+          "✅",
+          "△多為概念性建議"
+        ],
+        [
+          "將問題轉成 AI Handoff Prompt",
+          "✅",
+          "❌",
+          "△提供修復建議",
+          "❌ 需使用者自行組織問題"
+        ],
+        [
+          "【資安掃描維度】",
+          "【資安掃描維度】",
+          "【資安掃描維度】",
+          "【資安掃描維度】",
+          "【資安掃描維度】"
+        ],
+        [
+          "HTTPS／安全標頭檢查",
+          "✅",
+          "△以 HTTPS 等基礎項目為主",
+          "✅",
+          "△需使用者提供 header 或程式碼"
+        ],
+        [
+          "CSRF／表單防護檢查",
+          "✅",
+          "❌",
+          "❌",
+          "△需提供完整程式脈絡"
+        ],
+        [
+          "授權式主動檢測（如後台路徑、開放目錄、SQLi）",
+          "✅",
+          "❌",
+          "❌",
+          "❌"
+        ],
+        [
+          "主動弱點探測（後台路徑／開放目錄／SQLi）",
+          "✅",
+          "❌",
+          "❌",
+          "❌"
+        ],
+        [
+          "【使用門檻】",
+          "【使用門檻】",
+          "【使用門檻】",
+          "【使用門檻】",
+          "【使用門檻】"
+        ],
+        [
+          "中文圖形化結果",
+          "✅",
+          "✅",
+          "✅",
+          "△依 AI 回答而定"
+        ],
+        [
+          "Word／PDF 報告輸出",
+          "✅Word",
+          "❌",
+          "✅PDF",
+          "❌"
+        ],
+        [
+          "新手提問輔助",
+          "✅自動整理證據與 Prompt",
+          "△ 提供檢測與建議",
+          "△ 提供分析與修復建議",
+          "❌需自己知道怎麼問"
+        ],
+        [
+          "點數制／功能解鎖規劃",
+          "✅",
+          "❌免費限次",
+          "△ 免費分析後導向服務",
+          "❌"
+        ]
+      ]
+    },
+    {
+      "index": 1,
+      "rows": [
+        [
+          "評估維度",
+          "技術選型",
+          "成熟度",
+          "可行性評估"
+        ],
+        [
+          "後端框架",
+          "Django 5.1 + DRF 3.15",
+          "★★★★★",
+          "高：主流框架，文件完整"
+        ],
+        [
+          "前端框架",
+          "React 18 + Vite 5",
+          "★★★★★",
+          "高：社群活躍，生態完整"
+        ],
+        [
+          "爬蟲引擎",
+          "Playwright 1.45 + Chromium",
+          "★★★★☆",
+          "高：Microsoft 維護"
+        ],
+        [
+          "任務佇列",
+          "Celery 5.4 + Redis 7.2",
+          "★★★★★",
+          "高：業界標準組合"
+        ],
+        [
+          "資料庫",
+          "PostgreSQL 16",
+          "★★★★★",
+          "高：企業級穩定性"
+        ],
+        [
+          "容器化",
+          "Docker 26 + Compose 2.28",
+          "★★★★★",
+          "高：部署一致性佳"
+        ],
+        [
+          "AI API",
+          "MiniMax / Google Gemini",
+          "★★★☆☆",
+          "中高：API 成本需控管"
+        ]
+      ]
+    },
+    {
+      "index": 2,
+      "rows": [
+        [
+          "① 關鍵夥伴 • 雲端服務商（AWS / GCP） • 支付閘道（綠界 ECPay） • AI 模型供應商（MiniMax / Google Gemini） • 企業客戶（白牌合作）",
+          "② 關鍵活動 • 系統開發與日常維運 • 四維掃描引擎持續優化 • AI 代理（Hermes）訓練迭代 • 客戶支援與教育訓練",
+          "④ 價值主張 • 一站式四維網站健檢（SEO+AEO+GEO+資安） • AI 代理自動 UX 測試（Phase 2） • 大幅降低工具訂閱成本（按需點數制） • Word 格式專業報告輸出",
+          "⑤ 顧客關係 • 自助式 SaaS 自動化流程 • 線上即時客服支援 • 電子郵件行銷活動 • 使用者社群與論壇",
+          "目標客群 • vibe coding 新手 • 個人品牌經營者 • 新創團隊 • 中小企業網站經營者"
+        ],
+        [
+          "① 關鍵夥伴 • 雲端服務商（AWS / GCP） • 支付閘道（綠界 ECPay） • AI 模型供應商（MiniMax / Google Gemini） • 企業客戶（白牌合作）",
+          "③ 關鍵資源 • 掃描引擎核心技術 • Hermes-Agent AI 模組 • 雲端基礎設施（Docker） • 開發團隊人力",
+          "④ 價值主張 • 一站式四維網站健檢（SEO+AEO+GEO+資安） • AI 代理自動 UX 測試（Phase 2） • 大幅降低工具訂閱成本（按需點數制） • Word 格式專業報告輸出",
+          "⑥ 通路 • 官方網站直接銷售 • 數位行銷代理商合作 • GitHub 開源社群曝光 • 搜尋引擎廣告（SEA）",
+          "目標客群 • vibe coding 新手 • 個人品牌經營者 • 新創團隊 • 中小企業網站經營者"
+        ],
+        [
+          "⑧ 成本結構 • 雲端伺服器費用（AWS EC2 / RDS） • AI API 呼叫費用（MiniMax / Gemini） • 開發與維護人力成本 • 支付手續費（ECPay）",
+          "⑧ 成本結構 • 雲端伺服器費用（AWS EC2 / RDS） • AI API 呼叫費用（MiniMax / Gemini） • 開發與維護人力成本 • 支付手續費（ECPay）",
+          "⑧ 成本結構 • 雲端伺服器費用（AWS EC2 / RDS） • AI API 呼叫費用（MiniMax / Gemini） • 開發與維護人力成本 • 支付手續費（ECPay）",
+          "⑨ 收益來源 • 點數購買（主要，按需付費） • 企業月訂閱方案（固定費用、解鎖進階企業功能） • 客製化健檢報告服務 • 白牌 API 授權（B2B）",
+          "⑨ 收益來源 • 點數購買（主要，按需付費） • 企業月訂閱方案（固定費用、解鎖進階企業功能） • 客製化健檢報告服務 • 白牌 API 授權（B2B）"
+        ]
+      ]
+    },
+    {
+      "index": 3,
+      "rows": [
+        [
+          "內部 外部",
+          "優勢（Strengths）",
+          "劣勢（Weaknesses）"
+        ],
+        [
+          "機會（Opportunities）",
+          "以四維健檢與點數制切入新手建站與個人品牌市場，建立低門檻工具形象。",
+          "補足首頁品牌定義、功能頁、知識庫與結構化資料，逐步提升 Argus 自身 SEO/GEO 表現。"
+        ],
+        [
+          "威脅（Threats）",
+          "面對成熟 SEO/GEO 服務商，避免主打顧問服務，改以自助式掃描、報告與資安整合形成差異。",
+          "初期控制功能範圍，以首頁掃描、全站掃描、點數解鎖與報告匯出為優先，降低維運成本。"
+        ]
+      ]
+    },
+    {
+      "index": 4,
+      "rows": [
+        [
+          "層級",
+          "主要元件",
+          "責任範圍"
+        ],
+        [
+          "用戶端層",
+          "React 18 SPA、Zustand、Axios、ReactFlow",
+          "提供掃描提交、結果工作區、網站拓樸圖、購點、評論與後台管理介面。"
+        ],
+        [
+          "反向代理層",
+          "Nginx、Docker frontend 服務",
+          "服務前端靜態資源並將 API 請求轉送至 Django 後端。"
+        ],
+        [
+          "應用程式層",
+          "Django 5、DRF、Google OAuth",
+          "負責認證、權限、輸入驗證、業務邏輯、點數計費與報告產出。"
+        ],
+        [
+          "非同步任務層",
+          "Celery Worker、Playwright、四維掃描引擎",
+          "處理長時間網頁爬取、四維掃描與第二階段 AI 體驗測試。"
+        ],
+        [
+          "資料持久層",
+          "PostgreSQL、Redis、檔案儲存",
+          "保存掃描任務、檢測發現、截圖、交易與稽核紀錄，並承擔任務佇列。"
+        ]
+      ]
+    },
+    {
+      "index": 5,
+      "rows": [
+        [
+          "系統硬體需求",
+          "規格"
+        ],
+        [
+          "使用者端裝置",
+          "可執行現代瀏覽器之桌上型電腦、筆記型電腦、平板或智慧型手機"
+        ],
+        [
+          "使用者端瀏覽器",
+          "Chrome、Edge、Firefox、Safari 最新穩定版本"
+        ],
+        [
+          "使用者端網路",
+          "可連線至 Argus 平台之 Wi-Fi、4G、5G 或有線網路"
+        ],
+        [
+          "伺服器 CPU",
+          "建議 4 vCPU 以上，以支援Web API 與背景掃描任務"
+        ],
+        [
+          "伺服器記憶體",
+          "建議 16 GB 以上，供 Playwright Chromium、Celery Worker 與資料庫運作"
+        ],
+        [
+          "伺服器儲存空間",
+          "建議 SSD 100 GB 以上，用於資料庫、頁面截圖、Word 報告與 Docker Image"
+        ],
+        [
+          "伺服器網路",
+          "建議 100 Mbps 以上，支援網站爬取、報告下載與後台管理操作"
+        ]
+      ]
+    },
+    {
+      "index": 6,
+      "rows": [
+        [
+          "系統開發環境",
+          "系統開發環境"
+        ],
+        [
+          "作業系統",
+          "Windows 11、macOS、Linux（Docker 部署）"
+        ],
+        [
+          "開發平台",
+          "Python、Django、React、PostgreSQL、Docker"
+        ],
+        [
+          "程式撰寫工具",
+          "Visual Studio Code"
+        ],
+        [
+          "程式開發工具",
+          "程式開發工具"
+        ],
+        [
+          "前端技術",
+          "React 18、Vite、Tailwind CSS、shadcn/ui、ReactFlow"
+        ],
+        [
+          "後端技術",
+          "Python、Django、Django REST Framework、Celery、Redis"
+        ],
+        [
+          "爬蟲與掃描",
+          "Playwright、Chromium、四維掃描引擎（SEO／AEO／GEO／資安）"
+        ],
+        [
+          "資料庫",
+          "PostgreSQL（正式）、SQLite（開發）"
+        ],
+        [
+          "相依套件管理",
+          "uv（Python）、npm（Node）"
+        ],
+        [
+          "API 測試",
+          "Postman"
+        ],
+        [
+          "AI 技術運用",
+          "AI 技術運用"
+        ],
+        [
+          "AI 模型服務",
+          "MiniMax、Google Gemini（Hermes-Agent）"
+        ],
+        [
+          "社群登入",
+          "Google OAuth 2.0"
+        ],
+        [
+          "文件美工工具",
+          "文件美工工具"
+        ],
+        [
+          "圖表與設計",
+          "Diagrams.net、PlantUML"
+        ],
+        [
+          "文件",
+          "Microsoft Word、python-docx（報告自動產出）"
+        ],
+        [
+          "簡報",
+          "Microsoft PowerPoint、Canva"
+        ],
+        [
+          "專案管理平台",
+          "專案管理平台"
+        ],
+        [
+          "版本與專案管理",
+          "Git、GitHub"
+        ],
+        [
+          "檔案儲存",
+          "GitHub、Google Drive"
+        ]
+      ]
+    },
+    {
+      "index": 7,
+      "rows": [
+        [
+          "月份 項目",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年",
+          "中華民國 114～115 年"
+        ],
+        [
+          "月份 項目",
+          "12月",
+          "01月",
+          "02月",
+          "03月",
+          "04月",
+          "05月",
+          "06月",
+          "07月",
+          "08月",
+          "09月",
+          "10月",
+          "11月"
+        ],
+        [
+          "主題構思",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "主題構思",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "需求分析",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "需求分析",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "相關資料蒐集",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "相關資料蒐集",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "競品分析",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "競品分析",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "系統架構設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "系統架構設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "資料庫 Schema 設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "資料庫 Schema 設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "資料庫建置",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "資料庫建置",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "UI/UX設計/Logo設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "UI/UX設計/Logo設計",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "React 前端開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "React 前端開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "後端 API 開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "後端 API 開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Playwright 爬蟲引擎",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Playwright 爬蟲引擎",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "四維掃描引擎開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "四維掃描引擎開發",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Django框架整合",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Django框架整合",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "建議互動介面與 Word 匯出",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "建議互動介面與 Word 匯出",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Docker 容器化部署",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Docker 容器化部署",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Hermes-Agent (phase 2)與拓樸圖",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Hermes-Agent (phase 2)與拓樸圖",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "點數計費與商業化模",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "點數計費與商業化模",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "管理後台與 PWA",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "管理後台與 PWA",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "系統整合測試",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "系統整合測試",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "文件撰寫與簡報製作",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "文件撰寫與簡報製作",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "初評排練",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "初評排練",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "複評排練",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "複評排練",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ]
+    },
+    {
+      "index": 8,
+      "rows": [
+        [
+          "組員 項目",
+          "組員 項目",
+          "11246034 侯雨利",
+          "11246001 羅建凱",
+          "11246038 李仕傑",
+          "11246041 曾子睿"
+        ],
+        [
+          "系通規劃",
+          "需求與市場分析",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "系通規劃",
+          "系統架構設計（前後端分離）",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "系通規劃",
+          "資料庫 ER 模型設計",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "系通規劃",
+          "RESTful API 介面規格設計",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "系通規劃",
+          "UI/UX 原型與Logo設計",
+          "●",
+          "○",
+          "",
+          ""
+        ],
+        [
+          "後端開發",
+          "Google OAuth 第三方登入",
+          "●",
+          "",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "JWT 認證與使用者資料 API",
+          "●",
+          "○",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "ScanJob 狀態機與掃描 CRUD API",
+          "",
+          "",
+          "●",
+          "○"
+        ],
+        [
+          "後端開發",
+          "Findings／Dashboard 資料 API",
+          "",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "掃描歷史與稽核 API",
+          "",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "CoinWallet 錢包與冪等交易",
+          "○",
+          "○",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "點數預扣／結算／退款機制",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "月贈點與點數購買流程",
+          "",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "後端開發",
+          "平台評論 CRUD 與留言串 API",
+          "●",
+          "",
+          "○",
+          ""
+        ],
+        [
+          "後端開發",
+          "CMS 公開內容 API",
+          "●",
+          "○",
+          "",
+          ""
+        ],
+        [
+          "爬蟲掃描",
+          "Playwright BFS 爬蟲引擎",
+          "",
+          "○",
+          "○",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "robots.txt 與 same-origin 合規",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "四維度掃描器",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Cloudflare challenge 偵測",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Active 主動探測模組",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "katana 爬蟲整合",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "四維加權評分系統",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "合作式掃描取消機制",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "爬蟲掃描",
+          "Word 弱點報告產出",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "前端開發",
+          "登入頁（Google OAuth）",
+          "○",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描提交與儀表板頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描歷史列表頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "掃描結果詳情頁",
+          "",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "前端開發",
+          "網站拓樸圖頁",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "前端開發",
+          "點數錢包與設定頁",
+          "",
+          "●",
+          "○",
+          ""
+        ],
+        [
+          "前端開發",
+          "購買點數結帳精靈",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "報告下載頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "平台評論頁",
+          "○",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "前端開發",
+          "產品介紹與團隊介紹頁",
+          "",
+          "●",
+          "",
+          ""
+        ],
+        [
+          "伺服器部署",
+          "Docker Compose 容器化",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "伺服器部署",
+          "Nginx 反向代理設定",
+          "○",
+          "",
+          "",
+          "●"
+        ],
+        [
+          "伺服器部署",
+          "PostgreSQL 資料庫部署",
+          "○",
+          "",
+          "●",
+          ""
+        ],
+        [
+          "伺服器部署",
+          "Redis 與 Celery Worker 部署",
+          "",
+          "",
+          "●",
+          "○"
+        ],
+        [
+          "伺服器部署",
+          "cloudflared 對外通道設定",
+          "●",
+          "",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "統整與格式校對",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 1 章 前言",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "文件撰寫",
+          "第 2 章 營運計畫",
+          "",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "文件撰寫",
+          "第 3 章 系統規格",
+          "○",
+          "○",
+          "●",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 4 章 專案時程與組織分工",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 5 章 需求模型",
+          "○",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 6 章 設計模型",
+          "○",
+          "●",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 7 章 實作模型",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "文件撰寫",
+          "第 8 章 資料庫設計",
+          "●",
+          "○",
+          "",
+          "○"
+        ],
+        [
+          "報告",
+          "簡報製作",
+          "○",
+          "○",
+          "",
+          "●"
+        ],
+        [
+          "報告",
+          "影片製作",
+          "○",
+          "○",
+          "",
+          "●"
+        ]
+      ]
+    },
+    {
+      "index": 9,
+      "rows": [
+        [
+          "序號",
+          "姓名",
+          "工作內容（各限 100 字以內）",
+          "貢獻度"
+        ],
+        [
+          "1",
+          "組長 侯雨利",
+          "負責整體系統架構規劃與技術選型、後端 API 整合（Django + DRF）、Docker Compose 部署與維運，並統籌前後端協調與系統手冊撰寫。",
+          "26%"
+        ],
+        [
+          "2",
+          "組員 羅建凱",
+          "負責 React 18 前端 SPA 開發（掃描提交、結果展示、後台管理）、ReactFlow 網站拓樸圖，以及全站 UI/UX 視覺設計與互動效果。",
+          "26%"
+        ],
+        [
+          "3",
+          "組員 李仕傑",
+          "負責 PostgreSQL 資料庫設計與 Migration、Celery 非同步掃描任務、點數計費系統（BillingService 冪等交易）與後端 API 開發。",
+          "22%"
+        ],
+        [
+          "4",
+          "組員 曾子睿",
+          "負責 Playwright BFS 爬蟲引擎、四維掃描引擎（SEO／AEO／GEO／Security）開發，以及 Nginx 反向代理與伺服器部署設定。",
+          "26%"
+        ]
+      ]
+    },
+    {
+      "index": 10,
+      "rows": [
+        [
+          "編號",
+          "需求名稱",
+          "說明",
+          "優先度"
+        ],
+        [
+          "FR-01",
+          "使用者登入",
+          "支援 Google OAuth 2.0 社群登入及開發模式帳密登入",
+          "中"
+        ],
+        [
+          "FR-02",
+          "提交掃描任務",
+          "輸入目標 URL，選擇掃描模式（passive/active）與最大頁數",
+          "高"
+        ],
+        [
+          "FR-03",
+          "SEO 掃描",
+          "檢測 Meta 標籤、標題結構、圖片 alt、robots.txt、sitemap、頁面速度",
+          "高"
+        ],
+        [
+          "FR-04",
+          "AEO 掃描",
+          "檢測結構化資料（Schema.org JSON-LD）、FAQ/HowTo 標記、精選摘要適配性",
+          "高"
+        ],
+        [
+          "FR-05",
+          "GEO 掃描",
+          "評估語意密度、長尾關鍵字覆蓋率、AI 引擎可讀性評分",
+          "高"
+        ],
+        [
+          "FR-06",
+          "資安被動掃描",
+          "檢測 HTTPS/HSTS/CSP/XFO/XSS-Protection 等 HTTP 安全標頭",
+          "高"
+        ],
+        [
+          "FR-07",
+          "BFS 網頁爬蟲",
+          "以廣度優先搜尋爬取所有可達頁面，支援 max_depth / max_pages 設定",
+          "高"
+        ],
+        [
+          "FR-08",
+          "點數計費",
+          "hold→settle→refund 原子交易機制，支援月贈點與方案購買",
+          "高"
+        ],
+        [
+          "FR-09",
+          "下載健檢報告",
+          "掃描完成後自動生成 .docx 格式專業報告供下載",
+          "高"
+        ],
+        [
+          "FR-10",
+          "ReactFlow 拓樸圖",
+          "視覺化呈現 BFS 爬蟲涵蓋的頁面節點結構",
+          "中"
+        ],
+        [
+          "FR-11",
+          "管理員後台",
+          "Staff 可管理使用者點數、查看掃描任務、回覆評論",
+          "中"
+        ],
+        [
+          "FR-12",
+          "Hermes-Agent（Phase 2）",
+          "AI 代理以 observe→think→act 循環自動 UX 測試",
+          "低"
+        ]
+      ]
+    },
+    {
+      "index": 11,
+      "rows": [
+        [
+          "編號",
+          "需求類別",
+          "需求說明",
+          "衡量指標"
+        ],
+        [
+          "NFR-01",
+          "效能",
+          "掃描結果 API 回應時間 ≤ 500ms（P95）",
+          "Locust 壓測 100 同時用戶"
+        ],
+        [
+          "NFR-02",
+          "可靠性",
+          "系統可用性 ≥ 99%（月計算）",
+          "Docker health check 自動重啟"
+        ],
+        [
+          "NFR-03",
+          "安全性",
+          "所有 API 端點須通過 JWT 或 Session 認證",
+          "Django IsAuthenticated 防護"
+        ],
+        [
+          "NFR-04",
+          "可維護性",
+          "後端測試覆蓋率 ≥ 80%（Django TestCase）",
+          "192 項自動化測試"
+        ],
+        [
+          "NFR-05",
+          "可擴展性",
+          "Celery Worker 支援水平擴展（多 Worker 並行）",
+          "Docker Compose scale"
+        ],
+        [
+          "NFR-06",
+          "資料一致性",
+          "計費操作使用 select_for_update + transaction.atomic",
+          "BillingService 冪等保護"
+        ],
+        [
+          "NFR-07",
+          "隱私合規",
+          "API 端點不得直接回傳使用者個資，需透過 Serializer whitelist",
+          "DRF Serializer 實施"
+        ]
+      ]
+    },
+    {
+      "index": 12,
+      "rows": [
+        [
+          "欄位",
+          "說明"
+        ],
+        [
+          "使用個案名稱",
+          "提交掃描任務（Submit Scan Job）"
+        ],
+        [
+          "主要參與者",
+          "一般使用者（User）"
+        ],
+        [
+          "前置條件",
+          "使用者已登入，且錢包點數 ≥ 所需預扣額度"
+        ],
+        [
+          "正常流程",
+          "1. 使用者輸入目標網址與掃描設定（模式、最大頁數） 2. 系統驗證 URL 格式合法性 3. BillingService 執行 hold_for_scan（預扣點數） 4. 建立 ScanJob 記錄（status=queued） 5. Celery 派發背景任務 6. Worker 執行 BFS 爬蟲（status=crawling） 7. Worker 逐頁執行四維掃描（status=scanning） 8. 掃描完成，settle_scan_actual 結算實際點數 9. 自動生成 Word 報告（status=completed）"
+        ],
+        [
+          "替代流程",
+          "A1. URL 格式錯誤 → 回傳 HTTP 400 A2. 點數不足 → 回傳 HTTP 402，引導至購買頁面 A3. 使用者取消 → cancel API 呼叫，refund_full_for_scan 全退"
+        ],
+        [
+          "後置條件",
+          "ScanJob.status=completed，Finding 已寫入資料庫，Word 報告可下載"
+        ]
+      ]
+    },
+    {
+      "index": 13,
+      "rows": [
+        [
+          "類別名稱",
+          "主要屬性",
+          "主要方法",
+          "說明"
+        ],
+        [
+          "User",
+          "id, username, email, is_staff, is_active",
+          "get_wallet(), is_staff_user()",
+          "繼承 Django AbstractUser"
+        ],
+        [
+          "ScanJob",
+          "id(UUID), user, original_url, status, scan_mode, max_pages, progress(JSON), overall_score",
+          "cancel(), get_findings_summary()",
+          "狀態機：queued→crawling→scanning→completed"
+        ],
+        [
+          "CoinWallet",
+          "id, user, balance, total_purchased_ntd, last_bonus_year/month",
+          "get_balance(), check_sufficient()",
+          "一對一對應 User，禁止直接 .save()"
+        ],
+        [
+          "CoinTransaction",
+          "id, wallet, amount, type, scan(FK nullable), note",
+          "（唯讀）",
+          "amount 正=入帳，負=扣款"
+        ],
+        [
+          "BillingService",
+          "（靜態類別，無實例屬性）",
+          "hold_for_scan(scan, max_pages) settle_scan_actual(scan, actual_pages) refund_full_for_scan(scan) grant_monthly_bonus(user)",
+          "所有寫入操作的唯一入口，select_for_update 保護"
+        ],
+        [
+          "Finding",
+          "id, page, category, severity, title, description, recommendation",
+          "（查詢用）",
+          "category: SEO/AEO/GEO/Security"
+        ],
+        [
+          "Page",
+          "id, scan, url, status_code, title, depth",
+          "（查詢用）",
+          "BFS 爬取的每一頁面"
+        ]
+      ]
+    },
+    {
+      "index": 14,
+      "rows": [
+        [
+          "容器名稱",
+          "映像",
+          "對外埠",
+          "對內通訊",
+          "職責"
+        ],
+        [
+          "Frontend",
+          "nginx:1.26-alpine",
+          "8080 → 80",
+          "web:8000",
+          "React SPA 靜態資源、反向代理"
+        ],
+        [
+          "Web",
+          "python:3.12-slim",
+          "8000（內部）",
+          "db:5432, redis:6379",
+          "Django + DRF（REST API）"
+        ],
+        [
+          "Worker",
+          "（同 web 映像）",
+          "無",
+          "db:5432, redis:6379",
+          "Celery Worker，執行掃描任務"
+        ],
+        [
+          "Redis",
+          "redis:7.2-alpine",
+          "6379（內部）",
+          "worker, web",
+          "Celery Broker + 結果快取"
+        ],
+        [
+          "DB",
+          "postgres:16-alpine",
+          "5432（內部）",
+          "web, worker",
+          "PostgreSQL 主資料庫"
+        ]
+      ]
+    },
+    {
+      "index": 15,
+      "rows": [
+        [
+          "狀態",
+          "觸發條件",
+          "說明"
+        ],
+        [
+          "Queued",
+          "ScanJob 建立後立即",
+          "任務已排入 Celery 佇列，等待 Worker 處理"
+        ],
+        [
+          "Crawling",
+          "Worker 開始執行",
+          "Playwright BFS 爬蟲啟動，爬取可達頁面"
+        ],
+        [
+          "Scanning",
+          "爬蟲階段完成",
+          "逐頁執行四維掃描引擎（SEO/AEO/GEO/Security）"
+        ],
+        [
+          "agent_testing",
+          "scanning 完成（Phase 2）",
+          "Hermes-Agent AI 代理執行 UX 自動測試"
+        ],
+        [
+          "Completed",
+          "所有掃描階段完成",
+          "結算點數（settle_scan_actual），產生 Word 報告"
+        ],
+        [
+          "Failed",
+          "任何階段發生例外",
+          "記錄錯誤訊息，執行 refund_full_for_scan 全退點數"
+        ],
+        [
+          "Cancelled",
+          "使用者呼叫 cancel API",
+          "Worker 協作式取消，執行 refund_full_for_scan 全退"
+        ]
+      ]
+    },
+    {
+      "index": 16,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "Id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "使用者唯一識別碼（自動遞增）"
+        ],
+        [
+          "Username",
+          "VARCHAR(150)",
+          "UNIQUE, NOT NULL",
+          "登入帳號"
+        ],
+        [
+          "Email",
+          "VARCHAR(254)",
+          "UNIQUE, NOT NULL",
+          "電子信箱"
+        ],
+        [
+          "first_name",
+          "VARCHAR(150)",
+          "NOT NULL, DEFAULT ''",
+          "名字"
+        ],
+        [
+          "last_name",
+          "VARCHAR(150)",
+          "NOT NULL, DEFAULT ''",
+          "姓氏"
+        ],
+        [
+          "is_staff",
+          "BOOLEAN",
+          "NOT NULL, DEFAULT FALSE",
+          "Staff 管理員旗標"
+        ],
+        [
+          "is_active",
+          "BOOLEAN",
+          "NOT NULL, DEFAULT TRUE",
+          "帳號啟用狀態"
+        ],
+        [
+          "is_superuser",
+          "BOOLEAN",
+          "NOT NULL, DEFAULT FALSE",
+          "超級管理員旗標"
+        ],
+        [
+          "date_joined",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "帳號建立時間"
+        ],
+        [
+          "last_login",
+          "TIMESTAMPTZ",
+          "NULL",
+          "最近登入時間"
+        ]
+      ]
+    },
+    {
+      "index": 17,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "Id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "錢包唯一識別碼"
+        ],
+        [
+          "user_id",
+          "INTEGER",
+          "FK→auth_user, UNIQUE, NOT NULL",
+          "關聯使用者（一對一）"
+        ],
+        [
+          "Balance",
+          "INTEGER",
+          "NOT NULL, DEFAULT 0, CHECK(≥0)",
+          "目前點數餘額"
+        ],
+        [
+          "total_purchased_ntd",
+          "DECIMAL(10,2)",
+          "NOT NULL, DEFAULT 0",
+          "累計購買金額（NT$）"
+        ],
+        [
+          "total_scans_used",
+          "INTEGER",
+          "NOT NULL, DEFAULT 0",
+          "累計掃描次數"
+        ],
+        [
+          "last_bonus_year",
+          "INTEGER",
+          "NULL",
+          "最近月贈點年份（冪等鎖）"
+        ],
+        [
+          "last_bonus_month",
+          "INTEGER",
+          "NULL",
+          "最近月贈點月份（冪等鎖）"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "建立時間"
+        ]
+      ]
+    },
+    {
+      "index": 18,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "Id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "交易唯一識別碼"
+        ],
+        [
+          "wallet_id",
+          "INTEGER",
+          "FK→billing_coinwallet, NOT NULL",
+          "關聯錢包"
+        ],
+        [
+          "Amount",
+          "INTEGER",
+          "NOT NULL",
+          "交易點數（正=入帳，負=扣款）"
+        ],
+        [
+          "Type",
+          "VARCHAR(20)",
+          "NOT NULL",
+          "枚舉：purchase/hold/settle/refund/bonus/manual"
+        ],
+        [
+          "scan_id",
+          "UUID",
+          "FK→scans_scanjob, NULL",
+          "關聯掃描任務（可為 NULL）"
+        ],
+        [
+          "Note",
+          "TEXT",
+          "NOT NULL, DEFAULT ''",
+          "備註說明"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "交易時間"
+        ]
+      ]
+    },
+    {
+      "index": 19,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "Id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "方案唯一識別碼"
+        ],
+        [
+          "Name",
+          "VARCHAR(100)",
+          "NOT NULL",
+          "方案名稱（如：基本方案 100 點）"
+        ],
+        [
+          "Coins",
+          "INTEGER",
+          "NOT NULL, CHECK(>0)",
+          "購買所得點數"
+        ],
+        [
+          "price_ntd",
+          "DECIMAL(8,0)",
+          "NOT NULL, CHECK(>0)",
+          "定價（新台幣）"
+        ],
+        [
+          "is_active",
+          "BOOLEAN",
+          "NOT NULL, DEFAULT TRUE",
+          "是否上架中"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "建立時間"
+        ]
+      ]
+    },
+    {
+      "index": 20,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "id",
+          "UUID",
+          "PK, NOT NULL",
+          "訂單唯一識別碼（UUID 防爬蟲）"
+        ],
+        [
+          "user_id",
+          "INTEGER",
+          "FK→auth_user, NOT NULL",
+          "關聯使用者"
+        ],
+        [
+          "plan_id",
+          "INTEGER",
+          "FK→billing_pricingplan, NOT NULL",
+          "關聯購買方案"
+        ],
+        [
+          "transaction_id",
+          "INTEGER",
+          "FK→billing_cointransaction, NULL",
+          "關聯點數入帳交易"
+        ],
+        [
+          "status",
+          "VARCHAR(20)",
+          "NOT NULL",
+          "枚舉：pending/paid/failed/refunded"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "建立時間"
+        ],
+        [
+          "paid_at",
+          "TIMESTAMPTZ",
+          "NULL",
+          "付款完成時間"
+        ]
+      ]
+    },
+    {
+      "index": 21,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "id",
+          "UUID",
+          "PK, NOT NULL",
+          "任務唯一識別碼（UUID 防爬蟲探測）"
+        ],
+        [
+          "user_id",
+          "INTEGER",
+          "FK→auth_user, NOT NULL",
+          "關聯使用者"
+        ],
+        [
+          "original_url",
+          "VARCHAR(2048)",
+          "NOT NULL",
+          "目標網站 URL"
+        ],
+        [
+          "status",
+          "VARCHAR(20)",
+          "NOT NULL, DEFAULT 'queued'",
+          "狀態機：queued/crawling/scanning/agent_testing/completed/failed/cancelled"
+        ],
+        [
+          "scan_mode",
+          "VARCHAR(20)",
+          "NOT NULL, DEFAULT 'passive'",
+          "掃描模式：passive/active"
+        ],
+        [
+          "max_depth",
+          "INTEGER",
+          "NOT NULL, DEFAULT 3",
+          "BFS 最大爬取深度"
+        ],
+        [
+          "max_pages",
+          "INTEGER",
+          "NOT NULL, DEFAULT 50",
+          "BFS 最大爬取頁數"
+        ],
+        [
+          "progress",
+          "JSONB",
+          "NOT NULL, DEFAULT '{}'",
+          "即時進度（pages_crawled/pages_scanned 等）"
+        ],
+        [
+          "overall_score",
+          "DECIMAL(5,2)",
+          "NULL",
+          "綜合評分（0–100）"
+        ],
+        [
+          "category_scores",
+          "JSONB",
+          "NULL",
+          "各維度評分 {SEO:xx, AEO:xx, GEO:xx, Security:xx}"
+        ],
+        [
+          "top_actions",
+          "JSONB",
+          "NULL",
+          "前 5 項改善建議清單"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "建立時間"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "最後更新時間"
+        ]
+      ]
+    },
+    {
+      "index": 22,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "Id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "頁面唯一識別碼"
+        ],
+        [
+          "scan_id",
+          "UUID",
+          "FK→scans_scanjob, NOT NULL",
+          "關聯掃描任務"
+        ],
+        [
+          "url",
+          "VARCHAR(2048)",
+          "NOT NULL",
+          "頁面 URL"
+        ],
+        [
+          "status_code",
+          "INTEGER",
+          "NULL",
+          "HTTP 狀態碼"
+        ],
+        [
+          "Title",
+          "VARCHAR(500)",
+          "NOT NULL, DEFAULT ''",
+          "頁面標題"
+        ],
+        [
+          "Depth",
+          "INTEGER",
+          "NOT NULL, DEFAULT 0",
+          "BFS 爬取深度"
+        ],
+        [
+          "screenshot_path",
+          "VARCHAR(500)",
+          "NULL",
+          "截圖檔案路徑"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "爬取時間"
+        ]
+      ]
+    },
+    {
+      "index": 23,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "發現事項唯一識別碼"
+        ],
+        [
+          "page_id",
+          "INTEGER",
+          "FK→scans_page, NOT NULL",
+          "關聯頁面"
+        ],
+        [
+          "category",
+          "VARCHAR(20)",
+          "NOT NULL",
+          "掃描維度：SEO/AEO/GEO/Security"
+        ],
+        [
+          "severity",
+          "VARCHAR(20)",
+          "NOT NULL",
+          "嚴重程度：high/medium/low/info"
+        ],
+        [
+          "title",
+          "VARCHAR(200)",
+          "NOT NULL",
+          "問題標題"
+        ],
+        [
+          "description",
+          "TEXT",
+          "NOT NULL",
+          "詳細說明"
+        ],
+        [
+          "recommendation",
+          "TEXT",
+          "NOT NULL, DEFAULT ''",
+          "改善建議"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "發現時間"
+        ]
+      ]
+    },
+    {
+      "index": 24,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "評論唯一識別碼"
+        ],
+        [
+          "user_id",
+          "INTEGER",
+          "FK→auth_user, UNIQUE（主評論）, NOT NULL",
+          "關聯使用者（每人一則主評論）"
+        ],
+        [
+          "rating",
+          "SMALLINT",
+          "NOT NULL, CHECK(1≤rating≤5)",
+          "評分（1–5 星）"
+        ],
+        [
+          "content",
+          "TEXT",
+          "NOT NULL",
+          "評論內容"
+        ],
+        [
+          "images",
+          "JSONB",
+          "NOT NULL, DEFAULT '[]'",
+          "附圖 URL 清單"
+        ],
+        [
+          "parent_id",
+          "INTEGER",
+          "FK→self, NULL",
+          "父評論（用於 thread 回覆結構）"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "評論時間"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "最後修改時間"
+        ]
+      ]
+    },
+    {
+      "index": 25,
+      "rows": [
+        [
+          "欄位名稱",
+          "資料型別",
+          "限制",
+          "說明"
+        ],
+        [
+          "id",
+          "SERIAL",
+          "PK, NOT NULL",
+          "稽核日誌唯一識別碼"
+        ],
+        [
+          "actor_id",
+          "INTEGER",
+          "FK→auth_user, NOT NULL",
+          "執行操作的 Staff 管理員"
+        ],
+        [
+          "action",
+          "VARCHAR(100)",
+          "NOT NULL",
+          "操作類型（如：adjust_coins、reply_review）"
+        ],
+        [
+          "target_user_id",
+          "INTEGER",
+          "FK→auth_user, NULL",
+          "被操作的目標使用者"
+        ],
+        [
+          "detail",
+          "JSONB",
+          "NOT NULL, DEFAULT '{}'",
+          "操作詳細資料（金額、原因等）"
+        ],
+        [
+          "created_at",
+          "TIMESTAMPTZ",
+          "NOT NULL",
+          "操作時間（禁止刪除此表紀錄）"
+        ]
+      ]
+    },
+    {
+      "index": 26,
+      "rows": [
+        [
+          "序號",
+          "使用工具名稱",
+          "使用範圍及說明",
+          "頁碼"
+        ],
+        [
+          "1",
+          "Claude Code",
+          "使用Claude第3章整體的專案邏輯校正、系統可行性分析以及文檔格式微調。",
+          "10"
+        ],
+        [
+          "2",
+          "Google Gemini",
+          "使用Gemini的API串接Hermes-Agent ；並使用工具調用邏輯設計參考與網頁設計分析。",
+          "22"
+        ],
+        [
+          "3",
+          "Claude Code",
+          "使用Claude第6章整體的專案邏輯校正、系統可行性分析以及文檔格式微調。",
+          "28"
+        ],
+        [
+          "4",
+          "Claude Code",
+          "使用Claude第7章整體的專案邏輯校正、系統可行性分析以及文檔格式微調。",
+          "31"
+        ],
+        [
+          "5",
+          "Claude Code",
+          "使用Claude第8章整體的專案邏輯校正、系統可行性分析以及文檔格式微調。",
+          "36"
+        ]
+      ]
+    }
+  ],
+  "paragraphs_preview": [
+    {
+      "index": 0,
+      "style": "Normal",
+      "text": "國立臺北商業大學"
+    },
+    {
+      "index": 1,
+      "style": "Normal",
+      "text": "資 訊 管 理 系"
+    },
+    {
+      "index": 2,
+      "style": "Normal",
+      "text": "115資訊系統專案設計"
+    },
+    {
+      "index": 4,
+      "style": "Normal",
+      "text": "系統手冊"
+    },
+    {
+      "index": 6,
+      "style": "Normal",
+      "text": "組 別：第115401組"
+    },
+    {
+      "index": 7,
+      "style": "Normal",
+      "text": "題 目： ARGUS AI網站健檢平台"
+    },
+    {
+      "index": 8,
+      "style": "Normal",
+      "text": "指導老師：李文毅老師"
+    },
+    {
+      "index": 9,
+      "style": "Normal",
+      "text": "組 長：11246034 侯雨利"
+    },
+    {
+      "index": 10,
+      "style": "Normal",
+      "text": "組 員：11246001 羅建凱 11246038 李仕傑"
+    },
+    {
+      "index": 11,
+      "style": "Normal",
+      "text": "11246041 曾子睿"
+    },
+    {
+      "index": 12,
+      "style": "Normal",
+      "text": "中華民國115年6月2日"
+    },
+    {
+      "index": 14,
+      "style": "Normal",
+      "text": "目錄"
+    },
+    {
+      "index": 15,
+      "style": "toc 1",
+      "text": "第1章 前言 1"
+    },
+    {
+      "index": 16,
+      "style": "toc 2",
+      "text": "1-1 背景介紹 1"
+    },
+    {
+      "index": 17,
+      "style": "toc 2",
+      "text": "1-2 動機 1"
+    },
+    {
+      "index": 18,
+      "style": "toc 2",
+      "text": "1-3 系統目的與目標 4"
+    },
+    {
+      "index": 19,
+      "style": "toc 2",
+      "text": "1-4 預期成果 4"
+    },
+    {
+      "index": 20,
+      "style": "toc 1",
+      "text": "第2章 營運計畫 6"
+    },
+    {
+      "index": 21,
+      "style": "toc 2",
+      "text": "2-1 可行性分析 6"
+    },
+    {
+      "index": 22,
+      "style": "toc 2",
+      "text": "2-2 商業模式（Business Model） 7"
+    },
+    {
+      "index": 23,
+      "style": "toc 2",
+      "text": "2-3 市場分析（STP） 8"
+    },
+    {
+      "index": 24,
+      "style": "toc 2",
+      "text": "2-4 競爭力分析（SWOT-TOWS） 9"
+    },
+    {
+      "index": 25,
+      "style": "toc 1",
+      "text": "第3章 系統規格 10"
+    },
+    {
+      "index": 26,
+      "style": "toc 2",
+      "text": "3-1 系統架構 10"
+    },
+    {
+      "index": 27,
+      "style": "toc 2",
+      "text": "3-2 系統軟、硬體需求與技術平台 12"
+    },
+    {
+      "index": 28,
+      "style": "toc 2",
+      "text": "3-3 使用標準與工具 13"
+    },
+    {
+      "index": 29,
+      "style": "toc 1",
+      "text": "第4章 專案時程與組織分工 16"
+    },
+    {
+      "index": 30,
+      "style": "toc 2",
+      "text": "4-1 專案時程 16"
+    },
+    {
+      "index": 31,
+      "style": "toc 2",
+      "text": "4-2 專案組織與分工 17"
+    },
+    {
+      "index": 32,
+      "style": "toc 2",
+      "text": "4-3 上傳 GitHub 紀錄 21"
+    },
+    {
+      "index": 33,
+      "style": "toc 1",
+      "text": "第5章 需求模型 22"
+    },
+    {
+      "index": 34,
+      "style": "toc 2",
+      "text": "5-1 使用者需求 22"
+    },
+    {
+      "index": 35,
+      "style": "toc 2",
+      "text": "5-2 使用個案圖（Use Case Diagram） 23"
+    },
+    {
+      "index": 36,
+      "style": "toc 2",
+      "text": "5-3 使用個案描述（Activity Diagram） 24"
+    },
+    {
+      "index": 37,
+      "style": "toc 2",
+      "text": "5-4 分析類別圖（Analysis Class Diagram） 26"
+    },
+    {
+      "index": 38,
+      "style": "toc 1",
+      "text": "第6章 設計模型 28"
+    },
+    {
+      "index": 39,
+      "style": "toc 2",
+      "text": "6-1 循序圖（Sequential Diagram） 28"
+    },
+    {
+      "index": 40,
+      "style": "toc 2",
+      "text": "6-2 設計類別圖（Design Class Diagram） 28"
+    },
+    {
+      "index": 41,
+      "style": "toc 1",
+      "text": "第7章 實作模型 31"
+    },
+    {
+      "index": 42,
+      "style": "toc 2",
+      "text": "7-1 佈署圖（Deployment Diagram） 31"
+    },
+    {
+      "index": 43,
+      "style": "toc 2",
+      "text": "7-2 套件圖（Package Diagram） 32"
+    },
+    {
+      "index": 44,
+      "style": "toc 2",
+      "text": "7-3 元件圖（Component Diagram） 33"
+    },
+    {
+      "index": 45,
+      "style": "toc 2",
+      "text": "7-4 狀態機（State Machine） 34"
+    },
+    {
+      "index": 46,
+      "style": "toc 1",
+      "text": "第8章 資料庫設計 36"
+    },
+    {
+      "index": 47,
+      "style": "toc 2",
+      "text": "8-1 資料庫關聯表 36"
+    },
+    {
+      "index": 48,
+      "style": "toc 2",
+      "text": "8-2 表格及其 Meta Data 37"
+    },
+    {
+      "index": 49,
+      "style": "toc 1",
+      "text": "第9章 參考資料 46"
+    },
+    {
+      "index": 50,
+      "style": "toc 1",
+      "text": "附錄一 人工智慧使用說明表 47"
+    },
+    {
+      "index": 51,
+      "style": "Normal",
+      "text": "圖 目 錄"
+    },
+    {
+      "index": 52,
+      "style": "toc 1",
+      "text": "圖 3-1-1 Argus SaaS 分層系統架構圖 11"
+    },
+    {
+      "index": 53,
+      "style": "toc 1",
+      "text": "圖 4-3-1 GitHub 提交紀錄截圖 21"
+    },
+    {
+      "index": 54,
+      "style": "toc 1",
+      "text": "圖 5-2-1 使用個案圖（Use Case Diagram） 24"
+    },
+    {
+      "index": 55,
+      "style": "toc 1",
+      "text": "圖5-3-1 活動圖：提交掃描任務（Activity Diagram） 25"
+    },
+    {
+      "index": 56,
+      "style": "toc 1",
+      "text": "圖 5-4-1 分析類別圖（Analysis Class Diagram） 27"
+    },
+    {
+      "index": 57,
+      "style": "toc 1",
+      "text": "圖 6-1-1 掃描任務循序圖（Sequential Diagram） 28"
+    },
+    {
+      "index": 58,
+      "style": "toc 1",
+      "text": "圖 6-2-1 設計類別圖（Design Class Diagram） 29"
+    },
+    {
+      "index": 59,
+      "style": "toc 1",
+      "text": "圖 7-1-1 Docker Compose 佈署圖（Deployment Diagram） 31"
+    },
+    {
+      "index": 60,
+      "style": "toc 1",
+      "text": "圖 7-2-1 套件架構圖（Package Diagram） 33"
+    },
+    {
+      "index": 61,
+      "style": "toc 1",
+      "text": "圖 7-3-1 系統元件圖（Component Diagram） 33"
+    },
+    {
+      "index": 62,
+      "style": "toc 1",
+      "text": "圖 7-4-1 ScanJob 狀態機圖（State Machine） 34"
+    },
+    {
+      "index": 63,
+      "style": "toc 1",
+      "text": "圖 8-1-1 資料庫 ER 圖（Entity-Relationship Diagram） 36"
+    },
+    {
+      "index": 66,
+      "style": "Normal",
+      "text": "表 目 錄"
+    },
+    {
+      "index": 67,
+      "style": "toc 1",
+      "text": "表 1-2-1 各平台功能特性比較表 2"
+    },
+    {
+      "index": 68,
+      "style": "toc 1",
+      "text": "表 2-1-1 技術可行性評估表 6"
+    },
+    {
+      "index": 69,
+      "style": "toc 1",
+      "text": "表 2-2-1 商業模式Business Model 7"
+    },
+    {
+      "index": 70,
+      "style": "toc 1",
+      "text": "表 2-4-1 競爭力分析 SWOT-TOWS 矩陣 9"
+    },
+    {
+      "index": 71,
+      "style": "toc 1",
+      "text": "表 3-1-1 系統分層職責說明表 11"
+    },
+    {
+      "index": 72,
+      "style": "toc 1",
+      "text": "表 3-2-1 系統硬體需求表 12"
+    },
+    {
+      "index": 73,
+      "style": "toc 1",
+      "text": "表 3-3-1 使用標準與工具表 14"
+    },
+    {
+      "index": 74,
+      "style": "toc 1",
+      "text": "表 4-1-1 專案甘特圖（114/12 – 115/06） 16"
+    },
+    {
+      "index": 75,
+      "style": "toc 1",
+      "text": "表 4-2-1 專案組織分工表（● 主要負責，○ 次要協助） 18"
+    },
+    {
+      "index": 76,
+      "style": "toc 1",
+      "text": "表 4-2-2 專題成果工作內容與貢獻度表 20"
+    },
+    {
+      "index": 77,
+      "style": "toc 1",
+      "text": "表5-1-1 功能需求清單 22"
+    },
+    {
+      "index": 78,
+      "style": "toc 1",
+      "text": "表5-1-2 非功能需求清單 23"
+    },
+    {
+      "index": 79,
+      "style": "toc 1",
+      "text": "表5-3-1 使用個案描述：提交掃描任務 25"
+    },
+    {
+      "index": 80,
+      "style": "toc 1",
+      "text": "表 6-2-1 設計類別主要屬性與方法規格 29"
+    },
+    {
+      "index": 81,
+      "style": "toc 1",
+      "text": "表 7-1-1 容器通訊規格 32"
+    },
+    {
+      "index": 82,
+      "style": "toc 1",
+      "text": "表 7-4-1 ScanJob 狀態說明 34"
+    },
+    {
+      "index": 83,
+      "style": "toc 1",
+      "text": "表 8-2-1 auth_user 資料表 37"
+    },
+    {
+      "index": 84,
+      "style": "toc 1",
+      "text": "表 8-2-2 billing_coinwallet 資料表 38"
+    },
+    {
+      "index": 85,
+      "style": "toc 1",
+      "text": "表 8-2-3 billing_cointransaction 資料表 39"
+    },
+    {
+      "index": 86,
+      "style": "toc 1",
+      "text": "表 8-2-4 billing_pricingplan 資料表 39"
+    },
+    {
+      "index": 87,
+      "style": "toc 1",
+      "text": "表 8-2-5 billing_purchaseorder 資料表 40"
+    },
+    {
+      "index": 88,
+      "style": "toc 1",
+      "text": "表 8-2-6 scans_scanjob 資料表 41"
+    },
+    {
+      "index": 89,
+      "style": "toc 1",
+      "text": "表 8-2-7 scans_page 資料表 43"
+    },
+    {
+      "index": 90,
+      "style": "toc 1",
+      "text": "表 8-2-8 scans_finding 資料表 43"
+    },
+    {
+      "index": 91,
+      "style": "toc 1",
+      "text": "表 8-2-9 reviews_platformreview 資料表 44"
+    },
+    {
+      "index": 92,
+      "style": "toc 1",
+      "text": "表 8-2-10 admin_api_adminauditlog 資料表 45"
+    },
+    {
+      "index": 94,
+      "style": "Heading 1",
+      "text": "第1章 前言"
+    },
+    {
+      "index": 95,
+      "style": "Heading 2",
+      "text": "1-1 背景介紹"
+    },
+    {
+      "index": 96,
+      "style": "Normal",
+      "text": "在這個數位化快速發展的時代，網站已成為企業與個人不可或缺的一環。隨著商業活動與服務逐漸轉向線上，網站不再只是單純的資訊展示頁面，而是品牌溝通、顧客服務與交易流程的重要入口。在這樣的趨勢下，一個網站能否被搜尋引擎找到、能否帶給訪客良好的使用體驗、是否具備基本的資安防護，都直接影響經營成效；再加上近年生成式 AI 興起，使用者搜尋資訊的習慣正在改變，要維持一個「健康」的網站，變得越來越具有挑戰性。"
+    },
+    {
+      "index": 97,
+      "style": "Normal",
+      "text": "因此，我們先以中小企業、個人品牌經營者與網站新手的角度出發，旨在利用網路上現有的各種檢測工具與資源，改善我們所發現的問題，為有網站經營需求的人提供更全面、更易懂的健檢資訊。我們將探討現有檢測工具的優缺點，分析使用者在維護網站健康時的實際需求，並提出相應的解決方案，讓使用者能夠更輕鬆地掌握自己網站的整體狀況，為網站經營的品質帶來更多可能性。"
+    },
+    {
+      "index": 98,
+      "style": "Heading 2",
+      "text": "1-2 動機"
+    },
+    {
+      "index": 99,
+      "style": "Normal",
+      "text": "現在不論是企業、個人品牌還是新創團隊，幾乎都會經營自己的網站或品牌頁面，但網站「做出來」之後，是否容易被搜尋引擎找到、是否能被 ChatGPT、Gemini 等 AI 工具正確理解與引用，以及是否存在基本資安風險，往往不是一般使用者能自行判斷的問題。尤其是中小企業或網站新手，通常沒有專職工程或行銷人員，網站上線後若缺乏持續檢查，可能等到流量不足、搜尋曝光不佳，甚至發生安全問題時，才發現需要改善。"
+    },
+    {
+      "index": 100,
+      "style": "Normal",
+      "text": "雖然說目前已有許多網站檢測工具，但多半各自聚焦於 SEO（搜尋引擎最佳化）、GEO（生成式引擎最佳化）或資安等單一面向，使用者常需要切換多套工具才能拼湊完整結果；而直接詢問 AI 時，也常因問題描述過於抽象，難以得到可執行的建議。"
+    },
+    {
+      "index": 101,
+      "style": "Normal",
+      "text": "因此我們希望打造一個更全面也更好用的網站健檢平台—Argus（名稱取自希臘神話中擁有百眼的守衛者，象徵對網站全方位、無死角的監測）。 Argus，一套整合 SEO、AEO（答案引擎最佳化）、GEO 與資安檢測的網站健檢平台，讓使用者只需輸入網址，即可透過中文化、圖形化介面取得網站問題、改善方向與 AI Handoff Prompt（AI 交接提示），協助沒有技術背景的使用者更清楚地理解網站狀況。為具體說明 Argus 相較於現有工具的優勢，以下表 1-2-1 就關鍵功能維度進行比較："
+    },
+    {
+      "index": 106,
+      "style": "TblCap",
+      "text": "▼表 1-2-1 各平台功能特性比較表"
+    },
+    {
+      "index": 108,
+      "style": "Normal",
+      "text": "由表 1-2-1 可見，AHHA 與 GeoWeb 在 SEO/GEO 訊號檢查與 AI 搜尋能見度分析上已具備明確定位；直接詢問 AI 則適合已能清楚描述問題、並能提供足夠上下文的使用者。Argus 的差異在於整合 SEO、AEO、GEO 與 Security 四維健檢，並將檢測證據轉換為可交付給 AI 或開發者的結構化問題。換言之，Argus 不只是告訴使用者網站有問題，也協助網站新手把「不知道怎麼問」轉換成「能被回答與修正的問題」。"
+    },
+    {
+      "index": 109,
+      "style": "Heading 2",
+      "text": "1-3 系統目的與目標"
+    },
+    {
+      "index": 110,
+      "style": "Normal",
+      "text": "本系統的主要目的，在於為入門個人品牌經營者與中小企業提供一套低門檻、高整合度的網站健康診斷平台，從使用者實際經營網站的角度出發，解決現有工具功能分散、操作門檻高、訂閱成本昂貴的痛點。"
+    },
+    {
+      "index": 111,
+      "style": "Normal",
+      "text": "第一階段（本手冊聚焦範圍）以「授權式被動健檢」為核心：使用者登入後須先完成掃描授權確認，系統才會在同一網域內，以 BFS 廣度優先爬蟲結合 Playwright 無頭瀏覽器爬取可達頁面，並保存頁面證據（最終網址、狀態碼、內容雜湊與截圖），再逐頁進行 SEO 技術健檢、AEO 答案引擎優化、GEO 生成式引擎優化與資安被動檢測四維分析，輸出 0–100 分的可解釋綜合評分與專業 Word 格式健檢報告，讓使用者能一眼掌握網站體質並據以改善。所有 AI 產生的說明都必須對應到確定性掃描器（deterministic scanner）所保存的證據，不會以生成式文字取代實際檢測結果。"
+    },
+    {
+      "index": 112,
+      "style": "Normal",
+      "text": "點數計費、Hermes-Agent 自動化代理與主動式資安探測（如後台路徑、開放目錄、SQL Injection）則列為第二階段，須以獨立開關啟用，並搭配更嚴格的授權確認、範圍與速率限制以及完整稽核，確保系統定位清楚、責任邊界明確，達到「先授權、再掃描；被動健檢、四維把關」的目標。"
+    },
+    {
+      "index": 113,
+      "style": "Heading 2",
+      "text": "1-4 預期成果"
+    },
+    {
+      "index": 114,
+      "style": "Normal",
+      "text": "我們預期完成一套可完整運作的 Argus 授權式網站健檢 SaaS 平台。第一階段交付的端對端功能涵蓋：使用者登入與掃描授權確認、SSRF 防護（URL 正規化、私有 IP／localhost／雲端 metadata IP 阻擋、redirect 後再驗證與同網域限制）、同網域被動爬取與頁面證據保存、SEO/AEO/GEO/Security 四維被動分析、網站拓樸視覺化，以及 Word 相容的健檢報告匯出。系統能自動爬取網站可達頁面並逐頁產出結構化的發現事項（Finding）與改善方向，協助使用者精準找出四個面向的問題，提升網站在傳統搜尋與 AI 生成式搜尋中的可見度與安全性，且每一項 AI 說明都可追溯到確定性掃描器保存的證據。"
+    },
+    {
+      "index": 115,
+      "style": "Normal",
+      "text": "點數計費、Hermes-Agent 自動化代理與主動式弱點探測等較高風險或需獨立授權的功能，則列為第二階段並預設關閉，須個別啟用且加強授權與稽核控管。最終達到以低成本、高整合度且責任邊界清楚的方式，讓中小企業「網站健檢不求人，四維把關更安心」的預期效益。"
+    },
+    {
+      "index": 116,
+      "style": "Heading 1",
+      "text": "第2章 營運計畫"
+    },
+    {
+      "index": 117,
+      "style": "Heading 2",
+      "text": "2-1 可行性分析"
+    },
+    {
+      "index": 118,
+      "style": "List Paragraph",
+      "text": "技術可行性：本系統所採用的核心技術均為成熟的開源框架與商業 API，技術可行性高，說明如下：Django + DRF 負責後端 API、授權紀錄、掃描任務與後台管理（Django Software Foundation, 2024）；React 可提供圖形化操作介面，使不熟悉技術的使用者也能查看掃描結果與點數狀態；Playwright 可取得渲染後頁面、DOM（文件物件模型）、截圖與連結，支援同網域被動爬取與 SEO、AEO、GEO、Security 四維分析；PostgreSQL 保存使用者、掃描任務、Finding（發現事項）、點數與交易紀錄。此外，掃描型 SaaS 最關鍵的網路安全邊界，亦可透過 URL 正規化、DNS 解析檢查、私有 IP／localhost／雲端 metadata IP 阻擋、redirect 後再驗證、scheme allowlist 與受限 egress 網路等成熟手段實作，避免掃描誤觸內網資源。"
+    },
+    {
+      "index": 119,
+      "style": "TblCap",
+      "text": "▼表 2-1-1 技術可行性評估表"
+    },
+    {
+      "index": 121,
+      "style": "List Paragraph",
+      "text": "經濟可行性：開發採用開源技術棧（Django、React、PostgreSQL、Celery 等），無框架授權費用，顯著降低初期投入成本。商業模式上，Argus 不以高額月費作為起步方案，而是以點數制降低使用門檻，使使用者可依實際需求解鎖完整報告、AEO/GEO 詳細分析或 AI 輔助改善方向。此模式較符合個人品牌經營者、新創團隊與中小企業「偶爾掃描、需要時修正」的使用情境。"
+    },
+    {
+      "index": 123,
+      "style": "List Paragraph",
+      "text": "操作可行性：Argus 的目標受眾包含 vibe coding（自然語言輔助開發）新手、沒有完整技術團隊的網站經營者、個人品牌經營者，以及剛建立網站的新創或中小企業，且根據台灣中小企業基數龐大－經濟部《2025 年中小企業白皮書》指出全台中小企業逾 171.5 萬家，占全體企業 98% 以上，其中具網站經營需求者為本系統的潛在使用族群，市場基礎充足。"
+    },
+    {
+      "index": 124,
+      "style": "Normal",
+      "text": "此類使用者通常知道自己需要網站曝光與基本安全檢查，但不一定具備 SEO、AEO、GEO 或資安專業。因此我們採用全圖形化 Web 介面、中文說明、分數化結果與 Word 報告降低理解成本，且操作流程簡化為三步：輸入目標網址→選擇掃描模式→下載報告，平均學習時間短。"
+    },
+    {
+      "index": 125,
+      "style": "Heading 2",
+      "text": "2-2 商業模式（Business Model）"
+    },
+    {
+      "index": 126,
+      "style": "TblCap",
+      "text": "▼表 2-2-1 商業模式Business Model"
+    },
+    {
+      "index": 127,
+      "style": "Normal",
+      "text": "依據表2-2-1商業模式－Business Model，在初期營運設計上，Argus 採點數制較符合目標使用者的付費心理。使用者可能在網站上線、改版或行銷活動前後進行掃描，並不一定每月持續使用；因此以小額點數購買、功能解鎖與報告輸出作為主要收益來源，較能降低首次付費阻力。待使用者量與資料量增加後，再延伸企業方案，提供定期掃描、AI 引用監控、競品追蹤與 Email 通知等進階企業功能。"
+    },
+    {
+      "index": 128,
+      "style": "Heading 2",
+      "text": "2-3 市場分析（STP）"
+    },
+    {
+      "index": 129,
+      "style": "Normal",
+      "text": "Segmentation 市場區隔"
+    },
+    {
+      "index": 130,
+      "style": "Normal",
+      "text": "➤ 地理區隔：以台灣繁體中文市場為主要起點，並可延伸至同樣使用中文內容經營網站的個人品牌、新創與中小企業。"
+    },
+    {
+      "index": 131,
+      "style": "Normal",
+      "text": "➤ 人口區隔：18-45 歲，正在使用 AI 工具或 vibe coding 建立網站的新手、自由工作者、個人品牌經營者與中小企業主為主。"
+    },
+    {
+      "index": 132,
+      "style": "Normal",
+      "text": "➤ 行為區隔：曾使用網站架設平台、AI 程式工具、Google Search Console 或 SEO 工具，但不熟悉 SEO、AEO、GEO 與資安檢測細節，常以抽象方式詢問 AI 如何優化網站。"
+    },
+    {
+      "index": 133,
+      "style": "Normal",
+      "text": "➤ 心理區隔：重視曝光、效率與成本，知道網站可能需要改善，但不確定問題在哪裡，也不知道應該如何向 ChatGPT、Claude 或 Gemini 提出明確問題。"
+    },
+    {
+      "index": 135,
+      "style": "Normal",
+      "text": "Targeting 目標市場"
+    },
+    {
+      "index": 136,
+      "style": "Normal",
+      "text": "➤ 主要目標：使用 vibe coding 或網站架設工具自行建立網站的新手、個人品牌經營者、新創團隊與中小企業。此族群通常缺乏完整技術團隊，擔心網站沒有曝光、AI 搜尋無法理解內容，或存在基本資安問題。"
+    },
+    {
+      "index": 137,
+      "style": "Normal",
+      "text": "➤ 次要目標：自由接案網頁開發者、數位行銷助理與小型工作室。此族群可利用 Argus 快速檢查客戶網站，並將系統產生的 Finding（發現事項）與 Word 報告作為溝通依據。"
+    },
+    {
+      "index": 138,
+      "style": "Normal",
+      "text": "Positioning 市場定位"
+    },
+    {
+      "index": 139,
+      "style": "Normal",
+      "text": "➤ 定位聲明：「Argus 是一套 AI Search Visibility & Security Scanner，協助網站新手以低門檻方式完成 SEO、AEO、GEO 與 Security 四維健檢，並將模糊的網站問題轉換為可交付給 AI 或開發者的具體改善項目。」"
+    },
+    {
+      "index": 140,
+      "style": "Normal",
+      "text": "➤ 差異化優勢一：Argus 不只是讓使用者直接問 AI，而是先掃描網站、整理證據、標示嚴重度，再產生 AI Handoff Prompt（AI 交接提示）。"
+    },
+    {
+      "index": 141,
+      "style": "Normal",
+      "text": "➤ 差異化優勢二：Argus 採工具型 SaaS（軟體即服務）與點數制，使用者可依需求解鎖完整分析，而不必一開始負擔高額月費。"
+    },
+    {
+      "index": 142,
+      "style": "Normal",
+      "text": "➤ 差異化優勢三：圖形化操作－相較於 Nmap、Dirsearch、Katana 等命令列工具，Argus 提供完整 GUI，大幅降低操作門檻。"
+    },
+    {
+      "index": 143,
+      "style": "Heading 2",
+      "text": "2-4 競爭力分析（SWOT-TOWS）"
+    },
+    {
+      "index": 144,
+      "style": "TblCap",
+      "text": "▼表 2-4-1 競爭力分析 SWOT-TOWS 矩陣"
+    },
+    {
+      "index": 145,
+      "style": "Heading 1",
+      "text": "第3章 系統規格 [序號1]"
+    },
+    {
+      "index": 146,
+      "style": "Heading 2",
+      "text": "3-1 系統架構"
+    },
+    {
+      "index": 147,
+      "style": "Normal",
+      "text": "Argus 是一套以網站健檢為核心的 SaaS 平台，採用前後端分離與非同步任務的分層架構。系統將使用者互動、API 與業務邏輯、耗時的爬蟲與掃描，以及資料儲存分別交由不同層級負責，使每一次掃描任務從提交、執行到完成都能清楚追蹤。整體架構主要分為以下三個部分："
+    },
+    {
+      "index": 148,
+      "style": "Normal",
+      "text": "1. 前端介面：採用 React 18 搭配 Vite 建構單頁式應用程式（SPA），透過 Zustand 管理全域狀態、ReactFlow 繪製網站拓樸圖，並以 Axios 與後端 REST API 交換資料。介面採響應式設計，支援手機、平板與電腦；掃描進行中則以輪詢方式即時更新進度，提供接近原生應用程式的操作體驗。"
+    },
+    {
+      "index": 149,
+      "style": "Normal",
+      "text": "2. 後端服務：以 Django 5 與 Django REST Framework 開發 API，負責使用者認證、權限控管、輸入驗證、點數計費與健檢報告產出。耗時的網站爬取與掃描則交由 Celery Worker 以非同步方式處理，透過 Playwright 無頭瀏覽器逐頁載入網頁，再由四維掃描引擎（SEO、AEO、GEO、資安）進行檢測，避免長時間任務阻塞前端請求。"
+    },
+    {
+      "index": 150,
+      "style": "Normal",
+      "text": "3. 資料儲存與外部串接：採用 PostgreSQL 儲存掃描任務、檢測發現、點數交易與稽核紀錄；Redis 作為 Celery 的訊息佇列與快取；前端靜態資源與 API 請求由 Nginx 反向代理統一對外。此外系統串接 Google OAuth 提供社群登入，並於第二階段（Phase 2）整合 MiniMax、Gemini 等 AI 模型服務，作為 Hermes-Agent 自動化使用者體驗測試的能力來源。"
+    },
+    {
+      "index": 152,
+      "style": "FigCap",
+      "text": "▲圖 3-1-1 Argus SaaS 分層系統架構圖"
+    },
+    {
+      "index": 153,
+      "style": "Normal",
+      "text": "圖 3-1-1 呈現本系統的整體架構與資料流向。使用者透過瀏覽器操作 React 前端，前端以 HTTPS 將請求送至 Nginx，再轉送至 Django 後端；Django 負責驗證請求、執行業務邏輯，並將耗時的掃描任務派送至 Celery Worker。Worker 啟動 Playwright 爬取授權網站、執行四維掃描，並將進度與結果回寫資料庫。PostgreSQL 與 Redis 分別承擔資料持久化與任務佇列，外部則串接 Google OAuth 與 AI 模型服務。此分層設計確保資料傳遞的即時性、系統的擴充性與掃描任務的可追蹤性。"
+    },
+    {
+      "index": 154,
+      "style": "TblCap",
+      "text": "▼表 3-1-1 系統分層職責說明表"
+    },
+    {
+      "index": 156,
+      "style": "Heading 2",
+      "text": "3-2 系統軟、硬體需求與技術平台"
+    },
+    {
+      "index": 157,
+      "style": "Normal",
+      "text": "由於 Argus 為 Web SaaS 平台，使用者端不需安裝傳統桌面程式，只要使用 Chrome、Edge、Firefox 或 Safari 等現代瀏覽器即可操作。相較於開發單一 Android 或 iOS App，Web 系統能同時支援 Windows、macOS、Linux 與行動裝置瀏覽器，較符合本系統希望降低使用門檻與快速部署的目標。"
+    },
+    {
+      "index": 158,
+      "style": "Normal",
+      "text": "而在伺服器端，本系統需要同時執行 Django API、React 靜態檔服務、Celery Worker、Redis、資料庫與 Playwright 無頭瀏覽器。由於網站掃描會產生多頁 HTML、DOM、截圖與 Finding，硬體需求需考量 CPU、記憶體、儲存空間與網路頻寬。若正式部署，建議以 Docker Compose（容器編排工具）將 web、worker、redis、db 與 nginx 分離，讓掃描任務與使用者請求能穩定運作。"
+    },
+    {
+      "index": 159,
+      "style": "Normal",
+      "text": "考量到網站掃描與報告產出需要較高資源，本組將系統硬體需求分為使用者端與伺服器端，如表 3-2-1 所示："
+    },
+    {
+      "index": 160,
+      "style": "TblCap",
+      "text": "▼表 3-2-1 系統硬體需求表"
+    },
+    {
+      "index": 162,
+      "style": "Normal",
+      "text": "系統技術平台方面，Argus 採用前後端分離與容器化部署方式。前端以 React 建立單頁式應用，後端以 Django REST API 提供資料服務，掃描任務由 Celery 背景執行，資料則保存於 SQLite 或 PostgreSQL。此架構能讓開發環境與正式環境保持一致，也便於後續擴充更多掃描規則與 AI Agent（人工智慧代理）功能。"
+    },
+    {
+      "index": 164,
+      "style": "Heading 2",
+      "text": "3-3 使用標準與工具"
+    },
+    {
+      "index": 165,
+      "style": "Normal",
+      "text": "本專題在系統分析、設計、實作、測試與文件產出各階段採用多項業界標準與工具。系統建模以 UML 2.x要規範；前後端資料交換以 REST/JSON 為核心；資安檢測遵循「授權式、被動優先、無破壞性」原則；開發流程則以 Git、Docker、uv 與套件版本鎖定維持環境一致與可重現性。各主要工具與選用理由如下："
+    },
+    {
+      "index": 166,
+      "style": "Normal",
+      "text": "▪ Python：語法簡潔、生態完整，搭配豐富第三方套件，適合快速建構後端邏輯與掃描引擎，為本系統主要開發語言。"
+    },
+    {
+      "index": 167,
+      "style": "Normal",
+      "text": "▪ Django + Django REST Framework：成熟的 Python Web 框架，內建 ORM、認證與後台；DRF 進一步提供 Serializer、ViewSet 與權限控管，便於實作 RESTful API。"
+    },
+    {
+      "index": 168,
+      "style": "Normal",
+      "text": "▪ Celery + Redis：以 Redis 作為訊息佇列，Celery 將耗時的爬蟲與掃描任務非同步執行，避免阻塞 Web 請求，並支援多 Worker 水平擴展。"
+    },
+    {
+      "index": 169,
+      "style": "Normal",
+      "text": "▪ PostgreSQL：穩定的企業級關聯式資料庫，用於儲存掃描任務、檢測發現、點數交易與稽核紀錄，確保資料一致性。"
+    },
+    {
+      "index": 170,
+      "style": "Normal",
+      "text": "▪ React + Vite：以 React 建構單頁式前端，Vite 提供快速的開發與打包流程；搭配 ReactFlow 呈現網站拓樸圖，提升互動與視覺化效果。"
+    },
+    {
+      "index": 171,
+      "style": "Normal",
+      "text": "▪ Playwright：Microsoft 維護的無頭瀏覽器自動化工具，用於廣度優先（BFS）爬取網頁、載入動態內容並擷取全頁截圖，是四維掃描的資料來源。"
+    },
+    {
+      "index": 172,
+      "style": "Normal",
+      "text": "▪ Docker + Docker Compose：以容器化部署統一開發與正式環境，將前端、後端、Worker、資料庫與快取分離管理，降低環境差異造成的錯誤。"
+    },
+    {
+      "index": 173,
+      "style": "Normal",
+      "text": "▪ Nginx：作為反向代理，負責前端靜態資源服務、SSL 終止與 API 請求轉送。"
+    },
+    {
+      "index": 174,
+      "style": "Normal",
+      "text": "▪ uv / npm：分別管理 Python 與 Node 套件版本，透過 lock 檔鎖定版本，確保團隊成員與部署環境一致。"
+    },
+    {
+      "index": 175,
+      "style": "Normal",
+      "text": "▪ Git + GitHub：用於版本控制與多人協作，支援分支開發、Pull Request 審查與歷程追蹤。"
+    },
+    {
+      "index": 176,
+      "style": "Normal",
+      "text": "▪ Google OAuth 2.0：提供社群登入，免去自行管理密碼的安全負擔。"
+    },
+    {
+      "index": 177,
+      "style": "Normal",
+      "text": "▪ AI 模型服務（MiniMax / Gemini）：作為第二階段 Hermes-Agent 的能力來源，用於自動化使用者體驗測試與建議產出。"
+    },
+    {
+      "index": 178,
+      "style": "Normal",
+      "text": "▪ python-docx：將掃描結果自動產出為 Word 格式專業健檢報告供使用者下載。"
+    },
+    {
+      "index": 179,
+      "style": "Normal",
+      "text": "▪ Visual Studio Code：主要整合開發環境，支援多語言補全與除錯，並可透過擴充套件強化開發流程。"
+    },
+    {
+      "index": 180,
+      "style": "TblCap",
+      "text": "▼表 3-3-1 使用標準與工具表"
+    },
+    {
+      "index": 181,
+      "style": "Heading 1",
+      "text": "第4章 專案時程與組織分工"
+    },
+    {
+      "index": 182,
+      "style": "Heading 2",
+      "text": "4-1 專案時程"
+    },
+    {
+      "index": 183,
+      "style": "Normal",
+      "text": "本專案自 114 年 12 月起始，預計於 115 年 6月完成初評，整體開發週期至目前共 7 個月，我們將各工作項目分為22個項目，以下是專案彙整甘特圖："
+    },
+    {
+      "index": 184,
+      "style": "TblCap",
+      "text": "▼表 4-1-1 專案甘特圖（114/12 – 115/11）"
+    },
+    {
+      "index": 185,
+      "style": "Normal",
+      "text": "■ 預期進度 ■ 實際進度"
+    },
+    {
+      "index": 186,
+      "style": "TblCap",
+      "text": "4-2 專案組織與分工"
+    },
+    {
+      "index": 187,
+      "style": "Normal",
+      "text": "本組共 4 名成員，依系統開發流程將工作劃分為系統規劃、後端開發、爬蟲掃描、前端開發、伺服器部屬、文件撰寫、報告七大分組，再細分為 50 項具體工作項目，每項工作指定 1 位主要負責人（●），次要協助最多 2 位（○），確保每項項目都具有最具專長的主要負責人主導完成。。"
+    },
+    {
+      "index": 188,
+      "style": "TblCap",
+      "text": "▼表 4-2-1 專案組織分工表（● 主要負責，○ 次要協助）"
+    },
+    {
+      "index": 189,
+      "style": "Normal",
+      "text": "●主要負責人/○次要負責人"
+    },
+    {
+      "index": 190,
+      "style": "Normal",
+      "text": "各組員工作內容與貢獻度如下所示："
+    },
+    {
+      "index": 191,
+      "style": "TblCap",
+      "text": "▼表 4-2-2 專題成果工作內容與貢獻度表"
+    },
+    {
+      "index": 194,
+      "style": "Heading 2",
+      "text": "4-3 上傳 GitHub 紀錄"
+    },
+    {
+      "index": 195,
+      "style": "Normal",
+      "text": "本專題原始碼統一於 GitHub 進行版本控制，採用 Git Flow 工作流程管理，主要分支說明如下："
+    },
+    {
+      "index": 196,
+      "style": "FigCap",
+      "text": "▲圖 4-3-1 GitHub 提交紀錄截圖"
+    },
+    {
+      "index": 198,
+      "style": "Heading 1",
+      "text": "第5章 需求模型 [序號2]"
+    },
+    {
+      "index": 199,
+      "style": "Heading 2",
+      "text": "5-1使用者需求"
+    },
+    {
+      "index": 200,
+      "style": "Normal",
+      "text": "1. 功能需求（Functional Requirements）"
+    },
+    {
+      "index": 201,
+      "style": "TblCap",
+      "text": "▼表5-1-1 功能需求清單"
+    },
+    {
+      "index": 203,
+      "style": "Normal",
+      "text": "（二）非功能需求（Non-Functional Requirements）"
+    },
+    {
+      "index": 204,
+      "style": "TblCap",
+      "text": "▼表5-1-2 非功能需求清單"
+    },
+    {
+      "index": 206,
+      "style": "Heading 2",
+      "text": "5-2 使用個案圖（Use Case Diagram）"
+    },
+    {
+      "index": 207,
+      "style": "Normal",
+      "text": "系統定義三類參與者（Actor）：一般使用者（User）、管理員 Staff（Staff）及 Celery Worker（系統背景服務）。主要使用個案如圖 5-2-1 所示，涵蓋登入、提交掃描、查看結果、下載報告、購買點數、撰寫評論等 12 個案例。"
+    },
+    {
+      "index": 209,
+      "style": "FigCap",
+      "text": "▲圖 5-2-1 使用個案圖（Use Case Diagram）"
+    },
+    {
+      "index": 210,
+      "style": "Heading 2",
+      "text": "5-3 使用個案描述（Activity Diagram）"
+    },
+    {
+      "index": 211,
+      "style": "Normal",
+      "text": "以下以提交掃描任務為主要使用個案，以活動圖（Activity Diagram）描述從使用者輸入網址到系統完成掃描的完整流程，涵蓋輸入驗證、點數檢查、Celery 任務派發、BFS 爬蟲、四維掃描及報告生成六個主要階段，並標示失敗與取消路徑。"
+    },
+    {
+      "index": 214,
+      "style": "FigCap",
+      "text": "▲圖5-3-1 活動圖：提交掃描任務（Activity Diagram）"
+    },
+    {
+      "index": 215,
+      "style": "TblCap",
+      "text": "▼表5-3-1 使用個案描述：提交掃描任務"
+    },
+    {
+      "index": 217,
+      "style": "Heading 2",
+      "text": "5-4 分析類別圖（Analysis Class Diagram）"
+    },
+    {
+      "index": 218,
+      "style": "Normal",
+      "text": "圖 5-4-1 為系統分析層級的類別圖，展示八個核心實體——User、ScanJob、、CoinWallet、PurchaseOrder、CoinTransaction（虛線表示依賴關係）、 Finding、Page 及 AgentSession——之間的關聯關係。"
+    },
+    {
+      "index": 220,
+      "style": "FigCap",
+      "text": "▲圖 5-4-1 分析類別圖（Analysis Class Diagram）"
+    },
+    {
+      "index": 221,
+      "style": "Heading 1",
+      "text": "第6章 設計模型 [序號3]"
+    },
+    {
+      "index": 222,
+      "style": "Heading 2",
+      "text": "6-1 循序圖（Sequential Diagram）"
+    },
+    {
+      "index": 223,
+      "style": "Normal",
+      "text": "圖 6-1-1 為提交掃描任務之循序圖，涉及六個生命線：使用者瀏覽器（User Browser）、Django REST API（DRF）、計費服務（BillingService）、Celery 任務佇列（Celery Queue）、Celery Worker 及資料庫（PostgreSQL）。核心流程包含預扣點數（hold_for_scan）、任務入佇列、BFS 爬蟲、四維掃描、結算點數（settle_scan_actual）及 Word 報告生成共 18 個互動步驟。"
+    },
+    {
+      "index": 225,
+      "style": "FigCap",
+      "text": "▲圖 6-1-1 掃描任務循序圖（Sequential Diagram）"
+    },
+    {
+      "index": 226,
+      "style": "Heading 2",
+      "text": "6-2 設計類別圖（Design Class Diagram）"
+    },
+    {
+      "index": 227,
+      "style": "Normal",
+      "text": "圖 6-2-1 展示系統設計層級的類別圖，每個類別包含三個區塊：名稱、屬性及方法。BillingService 以 «service» 構造型標示，採用靜態方法設計，是 CoinWallet 與 CoinTransaction 的唯一合法寫入入口，所有計費操作透過 select_for_update + transaction.atomic 保護。"
+    },
+    {
+      "index": 229,
+      "style": "FigCap",
+      "text": "▲圖 6-2-1 設計類別圖（Design Class Diagram）"
+    },
+    {
+      "index": 230,
+      "style": "TblCap",
+      "text": "▼表 6-2-1 設計類別主要屬性與方法規格"
+    },
+    {
+      "index": 231,
+      "style": "Heading 1",
+      "text": "第7章 實作模型 [序號4]"
+    },
+    {
+      "index": 232,
+      "style": "Heading 2",
+      "text": "7-1 佈署圖（Deployment Diagram）"
+    },
+    {
+      "index": 233,
+      "style": "Normal",
+      "text": "Argus 採用 Docker Compose 進行容器化部署，如圖 7-1-1 所示，由 frontend、web、worker、redis、db 五個容器組成。對外服務全程經 Cloudflare Tunnel：使用者以 HTTPS 443 連線至 Cloudflare 邊緣（巧.tw／www.巧.tw／備用argus6.qzz.io），再由本機 cloudflared 服務回源至 frontend 容器（nginx，對外 0.0.0.0:8080 → 容器 80），對外不暴露任何裸 port。frontend 提供 React SPA 靜態資源，並將 /api/、/static/ 等請求反向代理至 web 容器（Django + DRF，:8000，僅容器網路）。worker 為 Celery 背景任務處理器，執行 Playwright 爬蟲與四維掃描；redis（:6379）作為 Celery Broker 與結果快取；db 為 PostgreSQL 主資料庫（:5432）。所有容器透過 Docker Bridge Network 互通，8000／6379／5432 僅在容器網路內，不對外開放。"
+    },
+    {
+      "index": 235,
+      "style": "FigCap",
+      "text": "▲圖 7-1-1 Docker Compose 佈署圖（Deployment Diagram）"
+    },
+    {
+      "index": 236,
+      "style": "TblCap",
+      "text": "▼表 7-1-1 容器通訊規格"
+    },
+    {
+      "index": 238,
+      "style": "Heading 2",
+      "text": "7-2 套件圖（Package Diagram）"
+    },
+    {
+      "index": 239,
+      "style": "Normal",
+      "text": "圖 7-2-1 為 Django 後端的套件架構圖，展示 backend/apps/ 下七個 Django App 的依賴關係。各 App 職責清晰分離，所有 App 共用 config（Django 設定與路由）作為根套件。"
+    },
+    {
+      "index": 241,
+      "style": "FigCap",
+      "text": "▲圖 7-2-1 套件架構圖（Package Diagram）"
+    },
+    {
+      "index": 242,
+      "style": "Heading 2",
+      "text": "7-3 元件圖（Component Diagram）"
+    },
+    {
+      "index": 243,
+      "style": "Normal",
+      "text": "圖 7-3-1 以 UML 元件圖呈現系統各主要元件及其介面。元件包含 Browser（客戶端）、Nginx（:443）、Django Application（:8000）、Celery Worker、Redis Broker（:6379）、PostgreSQL（:5432）及 Playwright Chromium（虛線，外部爬蟲目標）。"
+    },
+    {
+      "index": 245,
+      "style": "FigCap",
+      "text": "▲圖 7-3-1 系統元件圖（Component Diagram）"
+    },
+    {
+      "index": 246,
+      "style": "Heading 2",
+      "text": "7-4 狀態機（State Machine）"
+    },
+    {
+      "index": 247,
+      "style": "Normal",
+      "text": "圖 7-4-1 為 ScanJob 掃描任務的狀態機圖，描述任務從建立到終止的完整生命週期。在任何階段均可轉入 failed（失敗）或 cancelled（已取消）終止狀態，若成功則轉入下個階段。"
+    },
+    {
+      "index": 249,
+      "style": "FigCap",
+      "text": "▲圖 7-4-1 ScanJob 狀態機圖（State Machine）"
+    },
+    {
+      "index": 250,
+      "style": "TblCap",
+      "text": "▼表 7-4-1 ScanJob 狀態說明"
+    },
+    {
+      "index": 251,
+      "style": "Heading 1",
+      "text": "第8章 資料庫設計 [序號5]"
+    },
+    {
+      "index": 252,
+      "style": "Heading 2",
+      "text": "8-1 資料庫關聯表"
+    },
+    {
+      "index": 253,
+      "style": "Normal",
+      "text": "Argus 系統採用 PostgreSQL 16 作為主要關聯式資料庫，依 Django 的 7 個 App 模型對應出 21 個應用資料表，並透過外鍵（Foreign Key）建立各資料表之間的關聯。系統採自訂使用者模型（accounts.User，繼承 AbstractUser），故使用者資料表名為 accounts_user；Django 框架內建表（auth_group、auth_permission、django_session、django_migrations 等）與多對多中介表屬框架基礎設施，未列入本章。整體實體關聯（Entity-Relationship）設計如圖 8-1-1 所示。"
+    },
+    {
+      "index": 255,
+      "style": "FigCap",
+      "text": "▲圖 8-1-1 資料庫 ER 圖（Entity-Relationship Diagram）"
+    },
+    {
+      "index": 256,
+      "style": "Heading 2",
+      "text": "8-2 表格及其 Meta Data"
+    },
+    {
+      "index": 257,
+      "style": "Normal",
+      "text": "以下依序說明系統 10 個資料表的欄位定義與限制（Constraints）。"
+    },
+    {
+      "index": 258,
+      "style": "TblCap",
+      "text": "▼表 8-2-1 auth_user 資料表"
+    },
+    {
+      "index": 260,
+      "style": "TblCap",
+      "text": "▼表 8-2-2 billing_coinwallet 資料表"
+    },
+    {
+      "index": 262,
+      "style": "TblCap",
+      "text": "▼表 8-2-3 billing_cointransaction 資料表"
+    },
+    {
+      "index": 264,
+      "style": "TblCap",
+      "text": "▼表 8-2-4 billing_pricingplan 資料表"
+    },
+    {
+      "index": 266,
+      "style": "TblCap",
+      "text": "▼表 8-2-5 billing_purchaseorder 資料表"
+    },
+    {
+      "index": 268,
+      "style": "TblCap",
+      "text": "▼表 8-2-6 scans_scanjob 資料表"
+    },
+    {
+      "index": 270,
+      "style": "TblCap",
+      "text": "▼表 8-2-7 scans_page 資料表"
+    },
+    {
+      "index": 272,
+      "style": "TblCap",
+      "text": "▼表 8-2-8 scans_finding 資料表"
+    },
+    {
+      "index": 274,
+      "style": "TblCap",
+      "text": "▼表 8-2-9 reviews_platformreview 資料表"
+    },
+    {
+      "index": 276,
+      "style": "TblCap",
+      "text": "▼表 8-2-10 admin_api_adminauditlog 資料表"
+    },
+    {
+      "index": 279,
+      "style": "專題用標題",
+      "text": "第9章 參考資料"
+    },
+    {
+      "index": 280,
+      "style": "Normal",
+      "text": "[1] Google Search Console — 官方說明（免費）："
+    },
+    {
+      "index": 281,
+      "style": "Normal",
+      "text": "https://search.google.com/search-console/about"
+    },
+    {
+      "index": 282,
+      "style": "Normal",
+      "text": "[2] AHHA — Pricing（Starter NT$5,999 / 年，2026）：https://ahha.com.tw/#pricing"
+    },
+    {
+      "index": 283,
+      "style": "Normal",
+      "text": "[3] GeoWeb — About（2026）：https://geoweb.tw/about"
+    },
+    {
+      "index": 284,
+      "style": "Normal",
+      "text": "[4] 經濟部中小及新創企業署 —《2025 年中小企業白皮書》（中小企業逾 171.5 家）：https://www.sme.gov.tw/article-tw-2345-13928"
+    },
+    {
+      "index": 285,
+      "style": "Normal",
+      "text": "[5] OWASP Foundation — OWASP Top 10:2021：https://owasp.org/Top10/"
+    },
+    {
+      "index": 286,
+      "style": "Normal",
+      "text": "[6] Django Software Foundation — Django 5.1 documentation：https://docs.djangoproject.com/en/5.1/"
+    },
+    {
+      "index": 287,
+      "style": "Normal",
+      "text": "[7] Django REST Framework — documentation：https://www.django-rest-framework.org/"
+    },
+    {
+      "index": 288,
+      "style": "Normal",
+      "text": "[8] React — 官方文件：https://react.dev/"
+    },
+    {
+      "index": 289,
+      "style": "Normal",
+      "text": "[9] Vite — 官方文件：https://vitejs.dev/"
+    },
+    {
+      "index": 290,
+      "style": "Normal",
+      "text": "[10] Tailwind CSS — 官方文件：https://tailwindcss.com/"
+    },
+    {
+      "index": 291,
+      "style": "Normal",
+      "text": "[11] ReactFlow — 官方文件：https://reactflow.dev/"
+    },
+    {
+      "index": 292,
+      "style": "Normal",
+      "text": "[12] Microsoft — Playwright 官方文件：https://playwright.dev/"
+    },
+    {
+      "index": 293,
+      "style": "Normal",
+      "text": "[13] Celery Project — Celery 5.4 documentation：https://docs.celeryq.dev/en/stable/"
+    },
+    {
+      "index": 294,
+      "style": "Normal",
+      "text": "[14] Redis Ltd. — Redis 7.2 documentation：https://redis.io/docs/"
+    },
+    {
+      "index": 295,
+      "style": "Normal",
+      "text": "[15] PostgreSQL Global Development Group — PostgreSQL 16 documentation：https://www.postgresql.org/docs/16/"
+    },
+    {
+      "index": 296,
+      "style": "Normal",
+      "text": "[16] Docker Inc. — Docker documentation：https://docs.docker.com/"
+    },
+    {
+      "index": 297,
+      "style": "Normal",
+      "text": "[17] F5/NGINX — NGINX documentation：https://nginx.org/en/docs/"
+    },
+    {
+      "index": 298,
+      "style": "Normal",
+      "text": "[18] Astral — uv 官方文件（Python 套件管理）：https://docs.astral.sh/uv/"
+    },
+    {
+      "index": 299,
+      "style": "Normal",
+      "text": "[19] Git — 官方文件：https://git-scm.com/doc"
+    },
+    {
+      "index": 300,
+      "style": "Normal",
+      "text": "[20] python-docx — 官方文件：https://python-docx.readthedocs.io/"
+    },
+    {
+      "index": 301,
+      "style": "Normal",
+      "text": "[21] Matplotlib — 官方文件：https://matplotlib.org/"
+    },
+    {
+      "index": 302,
+      "style": "Normal",
+      "text": "[22] Google — Identity / OAuth 2.0 文件：https://developers.google.com/identity"
+    },
+    {
+      "index": 303,
+      "style": "Normal",
+      "text": "[23] PlantUML — 官方網站：https://plantuml.com/"
+    },
+    {
+      "index": 304,
+      "style": "Normal",
+      "text": "[24] OMG — Unified Modeling Language (UML) 2.5.1 規格：https://www.omg.org/spec/UML/"
+    },
+    {
+      "index": 305,
+      "style": "TblCap",
+      "text": "附錄一 人工智慧使用說明表"
+    },
+    {
+      "index": 306,
+      "style": "Normal",
+      "text": "※ 使用人工智慧輔助說明："
+    }
+  ]
+}

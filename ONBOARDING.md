@@ -12,10 +12,10 @@
 - **技術棧**：Django 5 + DRF + Celery + Playwright Python async + React 18 + Vite + Tailwind + Zustand
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；media 存截圖與評論圖片
 - **後端約 252 個測試全綠**（測試方法數；以 `manage.py test apps` 實跑為準）、ruff All checks passed、frontend build 通過
-- **三個介面層**：
-  - 前台（使用者）：`/dashboard /scans /history /billing /reviews /settings` + 公開頁 `/project /team /purchase /download`
-  - React 後台：`/admin/*`（dark cyan + 淺色內容；staff 可進、有 `📜 操作紀錄` 僅 superuser）
-  - Django Admin（Django 預設樣式，W4 已移除 django-jazzmin）：`/django-admin/`（superuser 後門）
+- **兩個介面層**：
+  - 前台（使用者）：`/dashboard /scans /history /billing /reviews /settings` + 公開頁 `/project /team /purchase /download`（首次進站播粒子過場動畫）
+  - React 後台：`/admin/*`（**唯一後台**；dark cyan + 淺色內容；staff 可進、`📜 操作紀錄`/`📢 公告管理` 僅 superuser）
+  - （django-admin 已於 2026-06 整併移除；管理員改走前台 email 登入）
 - **真實 PWA**：可一鍵安裝到桌面/手機主畫面
 - **已是 git repo**，最新 commit 在 `origin/main`
 
@@ -27,12 +27,9 @@
 2. `CLAUDE.md` — 行為準則（用繁體中文回覆、簡潔優先、目標導向執行、修改後測試）
 3. `Project_說明.md` — 專案規格與法律限制
 4. `開發計畫.md` — T1–T26 已完成與未完成項目
-5. `AGENTS.md` — Agent 規則
-6. `skills/argus-project/SKILL.md` 與 references
-7. `.sisyphus/argus-project-memory.md` — 歷史決策與地雷
-8. `.sisyphus/argus-handoff.local.md` — 最近一次工作快照（如有）
+5. `.sisyphus/argus-handoff.local.md` — 最近一次工作快照（如有）
 
-**對話開始時必做**：`git pull --rebase origin main`（與另一個 Claude Code 同步）
+**對話開始時必做**：先 `git fetch origin` 再比對差異，**不要無腦 `git pull` / `git pull --rebase`**——本機規則只能被增量新增/更新，不可被遠端覆蓋；詳見 `CLAUDE.local.md`「git pull 保護本機規則」。
 
 ---
 
@@ -101,8 +98,8 @@ uv run python backend/manage.py runserver 127.0.0.1:8000
 打開 http://127.0.0.1:8000 ：
 - 未登入 → 自動跳 `/project`（公開介紹頁）
 - 登入後 → `/dashboard`
-- Superuser 登入後右上角會看到「🛡️ 後台」chip → `/admin/overview`
-- `/django-admin/` 進 Django Admin（預設樣式，jazzmin 已於 W4 移除）
+- staff 登入後右上角會看到「🛡️ 後台」chip → `/admin/overview`（superuser 多看操作紀錄/公告管理）
+- 管理員帳號（如 `115401@gmail.com`）以前台 email 登入即可進 `/admin`；授予 staff/superuser 用 `manage.py seed_admin`（django-admin 已移除）
 
 ### 2.5 驗證一切正常
 ```powershell
@@ -125,7 +122,7 @@ docker compose up -d --build
 | 層級 | 套件 |
 |---|---|
 | 前端 | React 18 (Vite 6)、Tailwind CSS、Zustand、Axios、react-router-dom v7、reactflow（拓撲圖）、@react-oauth/google |
-| 後端 | Django 5 + DRF + SimpleJWT + google-auth + Pillow（圖片）+ python-docx + python-dotenv（W4 已 uv remove django-jazzmin，/django-admin 用 Django 預設樣式） |
+| 後端 | Django 5 + DRF + SimpleJWT + google-auth + Pillow（圖片）+ python-docx + python-dotenv（django-admin 已整併移除，唯一後台為 React `/admin/*`） |
 | 任務 | Celery + Redis |
 | 爬蟲 | Playwright Python async（Chromium headless） |
 | DB | SQLite（dev）/ PostgreSQL（prod，via dj-database-url） |
@@ -143,9 +140,7 @@ Argus/
 ├── CLAUDE.md               ← 行為準則（繁中、簡潔、目標導向）
 ├── Project_說明.md         ← 專案規格 + 法律限制
 ├── 開發計畫.md             ← T1–T26 任務清單
-├── AGENTS.md               ← Agent 入口規則
 ├── .sisyphus/
-│   ├── argus-project-memory.md   ← 長期記憶與決策
 │   └── argus-handoff.local.md    ← 最近一次工作快照（.gitignore）
 ├── pyproject.toml          ← Python 依賴（uv 管）
 ├── uv.lock
@@ -238,10 +233,10 @@ Argus/
 | `/admin/plans` | staff（**inline CRUD** 編輯 PricingPlan） |
 | `/admin/audit-log` | **superuser** |
 
-### 6.3 Django Admin（**已砍 Jazzmin**，superuser 應急後門）
-- `/django-admin/` — Django 預設樣式（醜但 functional）
-- 主要 admin 介面已搬到 React `/admin/*`
-- W4 移除 django-jazzmin 套件，settings 內保留 `_JAZZMIN_*_DEPRECATED` 命名常數供未來參考
+### 6.3 ~~Django Admin~~（已於 2026-06 整併移除）
+- 原 `/django-admin/` superuser 後門已移除；**唯一後台為 React `/admin/*`**。
+- 管理員改走前台 email 登入；授予 staff/superuser 用 `manage.py seed_admin`（或 Django shell）。
+- `/django-admin/*` 現在落入 SPA fallback（回 `index.html`），不再是 Django Admin。
 
 ### 6.4 PWA 必要檔（Django runserver 用 re_path 明確 serve）
 - `/manifest.webmanifest`
@@ -514,9 +509,10 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 
 ### 12.1 每次動手前
 ```powershell
-git pull --rebase origin main
+git fetch origin
+git log --oneline --left-right HEAD...origin/main   # 比對差異，不要無腦 pull
 ```
-若有 unstaged 改動先 stash 或 commit。
+確認遠端不會覆蓋本機規則後再整合；若有 unstaged 改動先 stash 或 commit。詳見 `CLAUDE.local.md`「git pull 保護本機規則」。
 
 ### 12.2 分工溝通
 - 用聊天明確告訴對方「我要改 X、預計動 Y 檔」

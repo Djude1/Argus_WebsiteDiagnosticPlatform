@@ -480,7 +480,8 @@ def _try_sitemap(base_url: str, timeout: int = 5) -> int | None:
     """嘗試取得 sitemap.xml，回傳 <loc> 數量；失敗回傳 None。"""
     sitemap_url = urljoin(base_url, "/sitemap.xml")
     try:
-        resp = http_requests.get(sitemap_url, timeout=timeout, allow_redirects=True)
+        # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
+        resp = http_requests.get(sitemap_url, timeout=timeout, allow_redirects=False)
         if resp.status_code == 200 and "xml" in resp.headers.get("content-type", ""):
             locs = re.findall(r"<loc>([^<]+)</loc>", resp.text, re.IGNORECASE)
             return len(locs)
@@ -524,10 +525,11 @@ def estimate_scan(request):
         })
 
     try:
+        # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
         resp = http_requests.get(
             url,
             timeout=8,
-            allow_redirects=True,
+            allow_redirects=False,
             headers={"User-Agent": "Argus-Estimator/1.0"},
         )
         count = _count_links(resp.text, url)

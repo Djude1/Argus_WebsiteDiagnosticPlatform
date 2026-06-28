@@ -25,6 +25,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && nuclei -update-templates -silent || true
 
+# 安裝 docker CLI 靜態 binary（僅 client，無 daemon）
+# 用途：worker 透過掛載的 host docker.sock 對 argus-kali-1 執行 docker exec（Phase 3 攻擊鏈）
+# 僅 worker 服務會用到；web 服務雖也含此 binary 但不掛 socket，不會生效
+ARG DOCKER_CLI_VERSION=27.3.1
+RUN wget -q "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" -O /tmp/docker.tgz \
+    && tar -xzf /tmp/docker.tgz -C /tmp \
+    && mv /tmp/docker/docker /usr/local/bin/docker \
+    && chmod +x /usr/local/bin/docker \
+    && rm -rf /tmp/docker /tmp/docker.tgz
+
 # 複製後端原始碼
 COPY backend ./backend
 

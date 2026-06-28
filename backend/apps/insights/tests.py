@@ -53,6 +53,33 @@ class InsightsApiTests(TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertIn("authorization_confirmed", res.data)
 
+    @patch("apps.insights.analyzers.socket.getaddrinfo")
+    @patch("apps.insights.analyzers.requests.get")
+    def test_speed_test_blocks_redirect_to_internal_host(self, mock_get, mock_getaddrinfo):
+        """公開 URL 若 302 轉址到內網（如雲端 metadata），必須被 SSRF 防護擋下。"""
+
+        def fake_getaddrinfo(host, *args, **kwargs):
+            if host == "evil.example":  # redirect 目標解析到 link-local 內網
+                return [(None, None, None, "", ("169.254.169.254", 0))]
+            return [(None, None, None, "", ("93.184.216.34", 0))]  # 原始公開主機
+
+        mock_getaddrinfo.side_effect = fake_getaddrinfo
+        redirect = Mock()
+        redirect.status_code = 302
+        redirect.headers = {"Location": "http://evil.example/latest/meta-data/"}
+        mock_get.return_value = redirect
+
+        res = self.client.post(
+            "/api/insights/speed-test/",
+            {"url": "https://example.com", "authorization_confirmed": True},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("url", res.data)
+        # 只應發出第一個（原始）請求，不應真的去抓內網
+        self.assertEqual(mock_get.call_count, 1)
+
     def test_phishing_url_flags_suspicious_features(self):
         res = self.client.post(
             "/api/insights/phishing-url/",

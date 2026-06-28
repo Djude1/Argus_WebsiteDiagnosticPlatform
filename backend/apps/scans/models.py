@@ -198,6 +198,8 @@ class Finding(models.Model):
     llm_generated_at = models.DateTimeField(null=True, blank=True)
     bounding_box = models.JSONField(null=True, blank=True)
     selector = models.CharField(max_length=512, blank=True)
+    owasp_category = models.CharField(max_length=16, blank=True, db_index=True)
+    cwe_id = models.CharField(max_length=16, blank=True)
     ai_handoff_prompt = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 

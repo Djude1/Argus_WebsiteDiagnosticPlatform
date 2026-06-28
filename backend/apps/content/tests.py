@@ -74,3 +74,31 @@ class ContentAPITests(APITestCase):
         for m in with_contrib:
             self.assertIsInstance(m["contributions"], list)
             self.assertIsInstance(m["skill_levels"], list)
+
+    def test_team_seeded_with_real_members(self):
+        """migration 0009：團隊頁應顯示真實組員、回傳學號，且不殘留佔位資料。"""
+        response = self.client.get(reverse("content-team"))
+        members = response.data["members"]
+        names = [m["name"] for m in members]
+        # 真實組員存在
+        for real in ["侯雨利", "羅建凱", "李仕傑", "曾子睿"]:
+            self.assertIn(real, names)
+        # 佔位資料不殘留
+        for placeholder in ["後端工程師", "前端工程師", "AI / Agent", "DevOps / QA", "組長A"]:
+            self.assertNotIn(placeholder, names)
+        # 學號欄位有回傳且正確
+        leader = next(m for m in members if m["name"] == "侯雨利")
+        self.assertEqual(leader["student_id"], "11246034")
+
+    def test_milestones_seeded_real_timeline(self):
+        """migration 0010：開發歷程應為手冊真實時程（跨 2025/12–2026/06），不殘留舊里程碑。"""
+        response = self.client.get(reverse("content-milestones"))
+        ms = response.data["milestones"]
+        titles = [m["title"] for m in ms]
+        self.assertIn("主題構思與需求分析", titles)
+        self.assertIn("系統整合測試與初評", titles)
+        # 舊的擠在 5 月的里程碑不應殘留
+        for old in ["MVP 完成", "Hermes-Agent 上線", "電子發票 + 載具"]:
+            self.assertNotIn(old, titles)
+        # 時間軸應回溯到 2025（手冊起始 114/12）
+        self.assertTrue(any(str(m["date"]).startswith("2025") for m in ms))

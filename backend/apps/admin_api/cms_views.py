@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from apps.admin_api.models import AdminAuditLog, log_admin_action
 from apps.billing.models import PricingPlan
-from apps.content.models import AppRelease, ProjectFeature, TeamMember
+from apps.content.models import AppRelease, ProjectFeature, ProjectMilestone, TeamMember
 
 
 class ProjectFeatureWriteSerializer(serializers.ModelSerializer):
@@ -27,7 +27,7 @@ class TeamMemberWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamMember
         fields = [
-            "id", "name", "role", "avatar_emoji", "avatar_url", "bio",
+            "id", "name", "role", "student_id", "avatar_emoji", "avatar_url", "bio",
             "skills", "skill_levels", "contributions",
             "email", "github_url",
             "sort_order", "is_active",
@@ -130,4 +130,21 @@ class AppReleaseViewSet(_AuditedModelViewSet):
 class PricingPlanViewSet(_AuditedModelViewSet):
     queryset = PricingPlan.objects.all().order_by("sort_order", "price_ntd")
     serializer_class = PricingPlanWriteSerializer
+    action_kind = AdminAuditLog.Action.OTHER
+
+
+class ProjectMilestoneWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectMilestone
+        fields = [
+            "id", "title", "date", "description", "icon",
+            "sort_order", "is_active",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ProjectMilestoneViewSet(_AuditedModelViewSet):
+    queryset = ProjectMilestone.objects.all().order_by("sort_order", "-date")
+    serializer_class = ProjectMilestoneWriteSerializer
     action_kind = AdminAuditLog.Action.OTHER

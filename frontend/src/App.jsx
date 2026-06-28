@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import {
+  Link,
   Navigate,
   NavLink,
   Outlet,
@@ -23,6 +24,8 @@ import "reactflow/dist/style.css";
 
 import { api } from "./api";
 import { useArgusStore } from "./store";
+import introLogo from "./assets/intro-logo.png";
+import brandLogo from "./assets/brand-logo.png";
 
 // ============================================================
 // 常數
@@ -398,10 +401,14 @@ function CrawlingAnimation({
 
   // ETA：基於當前 phase 的 elapsed × (total / done - 1)
   let etaSec = null;
+  let etaPending = false;
   if (hasProgress && done > 0 && done < total && progress?.phase_started_at) {
     const phaseStart = new Date(progress.phase_started_at).getTime();
     const phaseElapsed = Math.max(1, Math.floor((Date.now() - phaseStart) / 1000));
     etaSec = Math.max(0, Math.round(phaseElapsed * (total / done - 1)));
+  } else if (hasProgress && done === 0) {
+    // 剛開始掃、還沒抓到第一頁時：avg ≈ 2 秒/頁的粗估，先給使用者一個範圍
+    etaPending = true;
   }
 
   return (
@@ -430,6 +437,10 @@ function CrawlingAnimation({
           {etaSec !== null ? (
             <span className="crawl-meta-chip is-eta">
               剩餘約 <strong>{formatMMSS(etaSec)}</strong>
+            </span>
+          ) : etaPending ? (
+            <span className="crawl-meta-chip is-eta">
+              剩餘時間 <strong>估算中…</strong>
             </span>
           ) : null}
         </div>
@@ -537,7 +548,7 @@ function NavActions() {
       >
         <span className="coin-chip-icon" aria-hidden="true">💎</span>
         <span className="coin-chip-value">
-          {balance === undefined ? "—" : balance.toLocaleString()}
+          {balance == null ? "—" : balance.toLocaleString()}
         </span>
         <span className="coin-chip-unit">coin</span>
       </button>
@@ -648,11 +659,16 @@ function ScanJobForm({ onCreated }) {
       clearScanDraft();
       fetchWallet();
       onCreated(response.data);
+      // 保險：直接 navigate 到新掃描的詳情頁。原本依賴 parent ScanLayout 的
+      // handleScanCreated 內 navigate，但實機測試發現 setState batch 之後
+      // 那個 navigate 偶爾不生效（URL 不變），導致使用者按了「建立掃描」後
+      // 還要手動點列表才能進詳情頁。ScanJobForm 自己持有 useNavigate（604 行），
+      // 直接呼叫一次最可靠。
+      if (response.data?.id) {
+        navigate(`/scans/${response.data.id}`);
+      }
     } catch (errorResponse) {
-      const data = errorResponse.response?.data;
-      setError(
-        (data && (data.coin || data.detail)) || JSON.stringify(data || "建立掃描失敗。"),
-      );
+      setError(apiErrorMessage(errorResponse, "建立掃描失敗。"));
     } finally {
       setSubmitting(false);
     }
@@ -662,11 +678,13 @@ function ScanJobForm({ onCreated }) {
     if (!url || scope === "single") return;
     setEstimating(true);
     setEstimate(null);
+    setError("");
     try {
       const res = await api.post("/estimate/", { url });
       setEstimate(res.data);
-    } catch {
-      setEstimate({ estimated_pages: "?", estimated_cost: "?", confidence: "low" });
+    } catch (err) {
+      setError(apiErrorMessage(err, "預估費用失敗，請確認網址格式正確、可公開連線。"));
+      setEstimate(null);
     } finally {
       setEstimating(false);
     }
@@ -732,13 +750,19 @@ function ScanJobForm({ onCreated }) {
             </button>
             {estimate && (
               <div className={`scan-estimate-result conf-${estimate.confidence}`}>
-                <span>約 <strong>{estimate.estimated_pages}</strong> 頁</span>
-                <span>≈ <strong>{estimate.estimated_cost}</strong> coin</span>
+                <span>預估約 <strong>{estimate.estimated_pages}</strong> 頁 ≈ <strong>{estimate.estimated_cost}</strong> coin</span>
                 <span className="scan-estimate-conf">
                   {estimate.confidence === "high" ? "（sitemap 精準）" :
                    estimate.confidence === "medium" ? "（連結計算，中等精確）" :
                    "（估算，實際可能不同）"}
                 </span>
+                {/* 避免使用者看到「10 coin」卻被預扣 500 coin 而誤以為 bug：明示預扣與結算機制 */}
+                {Number.isFinite(estimate.estimated_cost) && estimatedCost > estimate.estimated_cost && (
+                  <span className="scan-estimate-hold">
+                    ⓘ 系統先預扣 <strong>{estimatedCost.toLocaleString()}</strong> coin
+                    （上限 {effectivePages} 頁），結束後依實際爬到頁數退回差額。
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -1106,6 +1130,8 @@ function buildEvidenceCopyText(finding) {
     `Category: ${finding.category || ""}`,
     `Severity: ${finding.severity || ""}`,
     `Rule ID: ${finding.rule_id || "N/A"}`,
+    ...(finding.owasp_category ? [`OWASP: ${finding.owasp_category}`] : []),
+    ...(finding.cwe_id ? [`CWE: ${finding.cwe_id}`] : []),
     `Evidence Source: ${finding.evidence_source || "N/A"}`,
     `Evidence Type: ${finding.evidence_type || "N/A"}`,
     "",
@@ -1159,6 +1185,18 @@ function EvidencePanel({ finding }) {
           <span>證據型態</span>
           <strong>{finding.evidence_type || "text"}</strong>
         </div>
+        {finding.owasp_category && (
+          <div>
+            <span>OWASP</span>
+            <strong>{finding.owasp_category}</strong>
+          </div>
+        )}
+        {finding.cwe_id && (
+          <div>
+            <span>CWE</span>
+            <strong>{finding.cwe_id}</strong>
+          </div>
+        )}
       </div>
 
       {finding.evidence && (
@@ -1586,11 +1624,10 @@ function FindingsWorkspace({ scan }) {
               .replace(scan.origin, "")
               .split("?")[0]
               .replace(/^\//, "");
-            const label = isHome
-              ? "首頁"
-              : urlPath.slice(0, 18) ||
-                page.title?.slice(0, 16) ||
-                `Page ${page.id}`;
+            // 標籤優先用 page.title（更語意化），缺則 fallback 到 URL path
+            // 截斷統一 18 字並加 ellipsis，避免「p/412-1000-172.ph」這種被切掉副檔名字尾的歧義
+            const rawLabel = (page.title?.trim() || urlPath || `Page ${page.id}`);
+            const label = isHome ? "首頁" : (rawLabel.length > 18 ? rawLabel.slice(0, 18) + "…" : rawLabel);
             const cnt = findingsPerPage.perPage.get(page.id) || 0;
             return (
               <button
@@ -1912,6 +1949,13 @@ function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
+        <button
+          type="button"
+          className="login-back"
+          onClick={() => navigate("/project")}
+        >
+          ← 返回首頁
+        </button>
         <div className="login-brand">
           <span className="login-brand-glyph">⟡</span>
           <span className="login-brand-name">ARGUS</span>
@@ -1977,7 +2021,13 @@ function LoginPage() {
               {loading ? "登入中…" : "登入"}
             </button>
             <p className="login-forgot-hint">
-              忘記密碼？請聯絡管理員協助重設。
+              <button
+                type="button"
+                className="login-forgot-link"
+                onClick={() => navigate("/password-reset")}
+              >
+                忘記密碼？
+              </button>
             </p>
           </form>
         )}
@@ -2018,8 +2068,213 @@ function LoginPage() {
         )}
 
         <p className="login-notice">
-          系統管理員透過 <code>/django-admin/</code> 以 username/password 登入。
+          管理員請用上方 Email 登入，登入後於右上角進入 <code>/admin</code> 後台。
         </p>
+      </div>
+    </div>
+  );
+}
+
+function PasswordResetRequestPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [serverMessage, setServerMessage] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/password-reset/request/", {
+        email: email.trim().toLowerCase(),
+      });
+      setServerMessage(res.data?.detail || "若該 Email 已註冊，重設信已寄出。");
+      setSubmitted(true);
+    } catch {
+      // 後端設計為永遠成功；網路錯誤才會走到這
+      setServerMessage("送出失敗，請檢查網路連線後再試。");
+      setSubmitted(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <button
+          type="button"
+          className="login-back"
+          onClick={() => navigate("/login")}
+        >
+          ← 返回登入
+        </button>
+        <div className="login-brand">
+          <span className="login-brand-glyph">⟡</span>
+          <span className="login-brand-name">重設密碼</span>
+        </div>
+        <p className="login-sub">輸入註冊時的 Email，我們會寄出重設連結（60 分鐘內有效）。</p>
+
+        {submitted ? (
+          <div className="login-info-box">
+            <p>{serverMessage}</p>
+            <p className="login-info-foot">
+              收不到信？請檢查垃圾郵件夾，或確認 Email 是否拼寫正確。
+            </p>
+            <button
+              type="button"
+              className="login-submit"
+              onClick={() => navigate("/login")}
+            >
+              回到登入頁
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              autoFocus
+            />
+            <button className="login-submit" type="submit" disabled={loading || !email.trim()}>
+              {loading ? "送出中…" : "寄出重設連結"}
+            </button>
+            <p className="login-forgot-hint">
+              Google 帳號的密碼請至 Google 帳號設定管理，本平台無法重設。
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PasswordResetConfirmPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = (searchParams.get("token") || "").trim();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    if (password.length < 8) {
+      setError("新密碼至少需要 8 個字元。");
+      return;
+    }
+    if (password !== confirm) {
+      setError("兩次輸入的密碼不一致。");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post("/auth/password-reset/confirm/", {
+        token,
+        new_password: password,
+      });
+      setDone(true);
+    } catch (err) {
+      const data = err.response?.data || {};
+      setError(data.token || data.new_password || data.detail || "重設失敗，請重新申請。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <button type="button" className="login-back" onClick={() => navigate("/login")}>
+            ← 返回登入
+          </button>
+          <div className="login-brand">
+            <span className="login-brand-glyph">⟡</span>
+            <span className="login-brand-name">重設密碼</span>
+          </div>
+          <p className="login-error">
+            連結缺少 token；請從信件中重新點擊重設連結，或回到「忘記密碼」重新申請。
+          </p>
+          <button
+            type="button"
+            className="login-submit"
+            onClick={() => navigate("/password-reset")}
+          >
+            重新申請
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <button type="button" className="login-back" onClick={() => navigate("/login")}>
+          ← 返回登入
+        </button>
+        <div className="login-brand">
+          <span className="login-brand-glyph">⟡</span>
+          <span className="login-brand-name">設定新密碼</span>
+        </div>
+
+        {done ? (
+          <div className="login-info-box">
+            <p>密碼已重設成功。</p>
+            <p className="login-info-foot">請用新密碼登入。</p>
+            <button
+              type="button"
+              className="login-submit"
+              onClick={() => navigate("/login")}
+            >
+              前往登入
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
+            <p className="login-sub">請設定新密碼（至少 8 個字元）。設定完成後請用新密碼登入。</p>
+            {error && <p className="login-error">{error}</p>}
+            <input
+              className="input"
+              type="password"
+              placeholder="新密碼"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              autoFocus
+              minLength={8}
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="再次輸入新密碼"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              autoComplete="new-password"
+              minLength={8}
+            />
+            <button
+              className="login-submit"
+              type="submit"
+              disabled={loading || !password || !confirm}
+            >
+              {loading ? "送出中…" : "確認重設"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -2413,6 +2668,7 @@ const NAV_ITEMS = [
 
 function TopNav() {
   const accessToken = useArgusStore((state) => state.accessToken);
+  const replayIntro = useArgusStore((s) => s.replayIntro);
   const location = useLocation();
   if (!accessToken) return null;
   // /admin/* 與公開頁走獨立 layout，不顯示前台 TopNav
@@ -2420,18 +2676,20 @@ function TopNav() {
   if (["/project", "/team", "/purchase", "/download"].some((p) =>
     location.pathname.startsWith(p),
   )) return null;
+  // 掃描頁的 top bar 不顯示「評論」入口（首頁等其他頁保留）
+  const onScanPage = location.pathname.startsWith("/scans");
+  const visibleNavItems = onScanPage
+    ? NAV_ITEMS.filter((item) => item.to !== "/reviews")
+    : NAV_ITEMS;
   return (
     <nav className="argus-nav">
       <div className="argus-nav-inner">
-        <NavLink to="/project" className="argus-brand" aria-label="回首頁">
-          <span className="argus-brand-glyph">⟡</span>
-          <span>
-            <span className="argus-brand-title">ARGUS</span>
-            <span className="argus-brand-sub">AI 網站健檢平台</span>
-          </span>
-        </NavLink>
+        <button type="button" className="argus-brand active" onClick={replayIntro} title="重播開場動畫" aria-label="重播 ARGUS 開場動畫">
+          <img src={brandLogo} className="argus-brand-logo" alt="ARGUS — AI 網站健檢平台" />
+          <span className="argus-brand-sub">AI 網站健檢平台</span>
+        </button>
         <div className="argus-nav-links">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -2501,14 +2759,72 @@ function ScoreRing({ value, label, size = 96 }) {
   );
 }
 
-function StatTile({ label, value, hint, tone = "neutral", animateValue }) {
-  return (
-    <div className={`stat-tile tone-${tone}`}>
+function StatTile({ label, value, hint, tone = "neutral", animateValue, onClick }) {
+  const inner = (
+    <>
       <p className="stat-tile-label">{label}</p>
       <p className="stat-tile-value">
         {typeof animateValue === "number" ? <CountUp value={animateValue} /> : value}
       </p>
       {hint && <p className="stat-tile-hint">{hint}</p>}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`stat-tile tone-${tone} is-clickable`}
+        onClick={onClick}
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div className={`stat-tile tone-${tone}`}>{inner}</div>;
+}
+
+// formatRelativeTime 在下方 L3690 已定義，這裡不重複。
+
+// 臨時公告用右下 toast（自動 5 秒消失、不阻斷使用流）；常駐公告用中央 modal（要求使用者確認）。
+// 業界做法：把不重要的通知降級為 toast，避免每次小事都打斷使用者操作。
+function AnnouncementToast({ announcements, onDismiss }) {
+  const [hovering, setHovering] = useState({});
+
+  useEffect(() => {
+    // 對每個顯示中的 toast 排 5 秒自動關（hover 時暫停）
+    const timers = announcements
+      .filter((a) => !hovering[a.id])
+      .map((a) =>
+        setTimeout(() => onDismiss(a.id), 5000),
+      );
+    return () => timers.forEach((t) => clearTimeout(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announcements, hovering]);
+
+  if (!announcements.length) return null;
+  return (
+    <div className="argus-toast-stack" role="status" aria-live="polite">
+      {announcements.map((ann) => (
+        <div
+          key={ann.id}
+          className="argus-toast"
+          onMouseEnter={() => setHovering((h) => ({ ...h, [ann.id]: true }))}
+          onMouseLeave={() => setHovering((h) => ({ ...h, [ann.id]: false }))}
+        >
+          <div className="argus-toast-body">
+            <div className="argus-toast-title">{ann.title}</div>
+            <div className="argus-toast-content">{ann.content.slice(0, 100)}{ann.content.length > 100 ? "…" : ""}</div>
+          </div>
+          <button
+            type="button"
+            className="argus-toast-close"
+            onClick={() => onDismiss(ann.id)}
+            aria-label="關閉公告"
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2566,7 +2882,8 @@ function DashboardPage() {
   const [data, setData] = useState(null);
   const [categoriesData, setCategoriesData] = useState(null);
   const [error, setError] = useState("");
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]); // permanent → modal
+  const [toasts, setToasts] = useState([]); // temporary → toast
   const [annVisible, setAnnVisible] = useState(false);
 
   useEffect(() => {
@@ -2597,9 +2914,15 @@ function DashboardPage() {
           if (!confirmed) return true;
           return Date.now() - Number(confirmed) > 24 * 60 * 60 * 1000;
         });
-        if (toShow.length) {
-          setAnnouncements(toShow);
+        // 分流：temporary → toast (右下、自動消失)；permanent → modal (中央、要求確認)
+        const permanent = toShow.filter((a) => a.type === "permanent");
+        const temporary = toShow.filter((a) => a.type === "temporary");
+        if (permanent.length) {
+          setAnnouncements(permanent);
           setAnnVisible(true);
+        }
+        if (temporary.length) {
+          setToasts(temporary);
         }
       })
       .catch(() => {});
@@ -2607,6 +2930,7 @@ function DashboardPage() {
 
   function handleDismiss(annId) {
     localStorage.setItem(`ann_dismissed_${annId}`, "1");
+    setToasts((prev) => prev.filter((a) => a.id !== annId));
     const remaining = announcements.filter((a) => a.id !== annId);
     if (!remaining.length) setAnnVisible(false);
     setAnnouncements(remaining);
@@ -2641,7 +2965,7 @@ function DashboardPage() {
   return (
     <div className="dashboard-grid">
       <div className="dashboard-hero">
-        <div>
+        <div className="dashboard-hero-text">
           <p className="eyebrow text-cyan-300">總覽</p>
           <h2 className="dashboard-hero-title">
             你已執行 <span>{data.total_scans}</span> 次健檢
@@ -2650,6 +2974,22 @@ function DashboardPage() {
             完成 {data.completed_scans}・失敗 {data.failed_scans}・點數餘額{" "}
             <strong>{wallet?.balance ?? 0}</strong> coin
           </p>
+          <div className="dashboard-hero-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => navigate("/scans")}
+            >
+              + 開始新掃描
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => navigate("/history")}
+            >
+              查看歷史
+            </button>
+          </div>
         </div>
         <ScoreRing value={data.average_score} label="平均分" size={120} />
       </div>
@@ -2664,7 +3004,7 @@ function DashboardPage() {
         <StatTile
           label="點數餘額"
           animateValue={wallet?.balance || 0}
-          hint={`累積購買 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
+          hint={`≈ 還能掃 ${Math.floor((wallet?.balance || 0) / (wallet?.coin_per_page || 10)).toLocaleString()} 頁 · 累積花費 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
           tone="violet"
         />
         <StatTile
@@ -2679,8 +3019,9 @@ function DashboardPage() {
             (data.severity_totals?.critical || 0) +
             (data.severity_totals?.high || 0)
           }
-          hint="critical + high"
+          hint="critical + high · 點看清單"
           tone="rose"
+          onClick={() => navigate("/scans")}
         />
       </div>
 
@@ -2752,6 +3093,7 @@ function DashboardPage() {
                 onClick={() => navigate(`/scans/${scan.id}`)}
               >
                 <span className="recent-origin">{scan.origin}</span>
+                <span className="recent-time">{formatRelativeTime(scan.completed_at || scan.created_at)}</span>
                 <ScanStatusBadge status={scan.status} />
                 <ScoreBadge score={scan.overall_score} />
               </button>
@@ -2766,6 +3108,7 @@ function DashboardPage() {
           onConfirm={handleConfirm}
         />
       )}
+      <AnnouncementToast announcements={toasts} onDismiss={handleDismiss} />
     </div>
   );
 }
@@ -2937,6 +3280,7 @@ function BillingPage() {
   const me = useArgusStore((s) => s.me);
   const fetchMe = useArgusStore((s) => s.fetchMe);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [buyer, setBuyer] = useState({
     buyer_name: "",
@@ -2963,6 +3307,20 @@ function BillingPage() {
       buyer_email: prev.buyer_email || me.email || "",
     }));
   }, [me]);
+
+  // 從 /purchase 跳來時帶 ?plan=advanced：plans 載完後自動選好並進 step 2
+  useEffect(() => {
+    if (selectedPlan || plans.length === 0) return;
+    const target = searchParams.get("plan");
+    if (!target) return;
+    const match = plans.find((p) => p.code === target);
+    if (match) {
+      setSelectedPlan(match);
+      setStep(2);
+      // 清掉 URL 上的 plan，避免使用者後續回到 step 1 再選又被自動覆蓋
+      setSearchParams({}, { replace: true });
+    }
+  }, [plans, searchParams, selectedPlan, setSearchParams]);
 
   function pickPlan(plan) {
     setSelectedPlan(plan);
@@ -3090,6 +3448,13 @@ function BillingPage() {
         <p className="mt-1 text-sm text-slate-600">
           每爬一頁需 {wallet?.coin_per_page ?? 10} coin；目前餘額 <strong>{wallet?.balance?.toLocaleString() ?? "—"}</strong> coin。
         </p>
+        <div className="billing-test-banner" role="status">
+          <span className="billing-test-chip">TEST MODE</span>
+          <span>
+            目前為<strong>測試環境模擬付款</strong>，不會真的扣款；正式上線將串接金流（Stripe / 綠界 ECPay）。
+            點數會立即入帳，並寄送收據到你的 email。
+          </span>
+        </div>
       </div>
 
       <WizardStepper current={step} />
@@ -3326,6 +3691,21 @@ function BillingPage() {
             <span>應付金額</span>
             <span className="wizard-confirm-total-value">NT$ {selectedPlan.price_ntd.toLocaleString()}</span>
           </div>
+          {(() => {
+            // 以最便宜方案（sort_order 最小）的單位單價為基準，算「比 N 次最便宜方案省多少」
+            const baseline = [...plans].sort((a, b) => a.price_ntd - b.price_ntd)[0];
+            if (!baseline || baseline.code === selectedPlan.code) return null;
+            const baselineRate = baseline.coin_amount / baseline.price_ntd;
+            const fairPrice = Math.round(selectedPlan.coin_amount / baselineRate);
+            const saved = fairPrice - selectedPlan.price_ntd;
+            if (saved <= 0) return null;
+            const pct = Math.round((saved / fairPrice) * 100);
+            return (
+              <p className="wizard-confirm-saved">
+                相比同等 coin 數量買{baseline.name}，這個方案省下 NT$ {saved.toLocaleString()}（約 {pct}%）。
+              </p>
+            );
+          })()}
 
           {Object.keys(errors).length > 0 && (
             <div className="billing-feedback tone-bad">
@@ -3712,7 +4092,7 @@ function ReviewsPage() {
     <section className="panel space-y-4">
       <div>
         <p className="eyebrow">使用者評論</p>
-        <h2 className="section-title">大家對 Argus 的評價</h2>
+        <h1 className="section-title">大家對 Argus 的評價</h1>
         <p className="mt-1 text-xs text-slate-500">
           星等一人只能評一次（送出後鎖定）；後續可在留言區補充意見、附上問題照片，與管理員對話。
         </p>
@@ -3966,7 +4346,7 @@ function SettingsPage() {
 
 const PUBLIC_NAV_ITEMS = [
   { to: "/project", label: "專案介紹" },
-  { to: "/free-tools", label: "免費分析" },
+  { to: "/free-tools", label: "快速檢查" },
   { to: "/team", label: "團隊" },
   { to: "/purchase", label: "購買" },
   { to: "/download", label: "下載" },
@@ -3975,16 +4355,16 @@ const PUBLIC_NAV_ITEMS = [
 
 function PublicNav() {
   const accessToken = useArgusStore((s) => s.accessToken);
+  const replayIntro = useArgusStore((s) => s.replayIntro);
+  const theme = useArgusStore((s) => s.theme);
+  const toggleTheme = useArgusStore((s) => s.toggleTheme);
   return (
     <nav className="public-nav">
       <div className="public-nav-inner">
-        <NavLink to="/project" className="public-brand">
-          <span className="public-brand-glyph">⟡</span>
-          <span>
-            <span className="public-brand-title">ARGUS</span>
-            <span className="public-brand-sub">AI 網站健檢平台</span>
-          </span>
-        </NavLink>
+        <button type="button" className="public-brand active" onClick={replayIntro} title="重播開場動畫" aria-label="重播 ARGUS 開場動畫">
+          <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
+          <span className="public-brand-sub">AI 網站健檢平台</span>
+        </button>
         <div className="public-nav-links">
           {PUBLIC_NAV_ITEMS.map((item) => (
             <NavLink
@@ -3999,6 +4379,18 @@ function PublicNav() {
           ))}
         </div>
         <div className="public-nav-cta">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title="切換深色 / 淺色主題"
+            aria-label="切換深色 / 淺色主題"
+          >
+            <span className="theme-toggle-icon" aria-hidden="true">
+              {theme === "light" ? "☾" : "☀"}
+            </span>
+            <span>{theme === "light" ? "夜間" : "日間"}</span>
+          </button>
           {accessToken ? (
             <NavLink to="/dashboard" className="public-cta-primary">
               進入 Dashboard
@@ -4049,30 +4441,50 @@ function PublicLayout() {
   );
 }
 
-// useInstallPrompt：監聽 beforeinstallprompt 事件，給 DownloadPage 的安裝按鈕用
+// useInstallPrompt：取得 PWA 安裝能力。事件在 main.jsx 已全域捕捉到 window，
+// 這裡讀回並監聽後續事件，避免「事件在元件掛載前觸發」的 race。
+function isStandalone() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+}
 function useInstallPrompt() {
-  const [deferred, setDeferred] = useState(null);
-  const [installed, setInstalled] = useState(false);
+  const [deferred, setDeferred] = useState(() => window.__argusInstallPrompt || null);
+  const [installed, setInstalled] = useState(() => !!window.__argusInstalled || isStandalone());
   useEffect(() => {
     function onPrompt(e) {
       e.preventDefault();
+      window.__argusInstallPrompt = e;
       setDeferred(e);
+    }
+    function onInstallable() {
+      setDeferred(window.__argusInstallPrompt);
     }
     function onInstalled() {
       setInstalled(true);
       setDeferred(null);
     }
+    // 掛載時若全域已捕捉到事件，立即採用（修正 race）
+    if (window.__argusInstallPrompt) setDeferred(window.__argusInstallPrompt);
     window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("argus-installable", onInstallable);
     window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("argus-installed", onInstalled);
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("argus-installable", onInstallable);
       window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("argus-installed", onInstalled);
     };
   }, []);
   async function trigger() {
-    if (!deferred) return null;
-    deferred.prompt();
-    const { outcome } = await deferred.userChoice;
+    const d = deferred || window.__argusInstallPrompt;
+    if (!d) return null;
+    d.prompt();
+    const { outcome } = await d.userChoice;
+    window.__argusInstallPrompt = null;
     setDeferred(null);
     return outcome;
   }
@@ -4094,10 +4506,10 @@ const TECH_STACK_CHIPS = [
 ];
 
 const PROJECT_PLATFORM_STATS = [
-  { label: "Django Apps", value: "7", hint: "accounts / scans / agent / billing / reviews / admin_api / content" },
+  { label: "Django Apps", value: "8", hint: "accounts / scans / agent / billing / reviews / admin_api / content / insights" },
   { label: "資料模型", value: "20+", hint: "ScanJob、Finding、CoinWallet、PurchaseOrder…" },
-  { label: "自動化測試", value: "210+", hint: "API / 權限 / billing 流程 / 圖片上傳" },
-  { label: "REST 端點", value: "40+", hint: "billing / reviews / content / admin / scans" },
+  { label: "自動化測試", value: "250+", hint: "API / 權限 / billing 流程 / 圖片上傳" },
+  { label: "REST 端點", value: "40+", hint: "billing / reviews / content / admin / scans / insights" },
 ];
 
 function ProjectScanDemo() {
@@ -4142,41 +4554,95 @@ function ProjectScanDemo() {
   );
 }
 
+// 後台 CMS 可編輯前，先用這份 fallback；API 拉到資料就會覆蓋掉
+const PROJECT_FEATURES_FALLBACK = [
+  { id: -1, icon: "🕷️", title: "BFS 深度爬蟲", description: "以 Playwright 驅動的 BFS 爬蟲，自動探索整站結構。" },
+  { id: -2, icon: "🔍", title: "四維安全掃描", description: "涵蓋 SEO、AEO、GEO、Security 四個維度的全面分析。" },
+  { id: -3, icon: "🤖", title: "Hermes AI Agent", description: "LLM 驅動的智慧代理人，提供主動式漏洞驗證。" },
+  { id: -4, icon: "📊", title: "即時進度追蹤", description: "掃描進度即時更新，支援多任務並行管理。" },
+  { id: -5, icon: "📝", title: "Word 報告匯出", description: "一鍵產生專業 Word 格式掃描報告，方便交付客戶。" },
+  { id: -6, icon: "💎", title: "點數計費系統", description: "靈活的 Coin 計費模式，按頁計費，精準控制成本。" },
+];
+
 function ProjectPage() {
-  const features = [
-    { id: 1, icon: "🕷️", title: "BFS 深度爬蟲", description: "以 Playwright 驅動的 BFS 爬蟲，自動探索整站結構。" },
-    { id: 2, icon: "🔍", title: "四維安全掃描", description: "涵蓋 SEO、AEO、GEO、Security 四個維度的全面分析。" },
-    { id: 3, icon: "🤖", title: "Hermes AI Agent", description: "LLM 驅動的智慧代理人，提供主動式漏洞驗證。" },
-    { id: 4, icon: "📊", title: "即時進度追蹤", description: "掃描進度即時更新，支援多任務並行管理。" },
-    { id: 5, icon: "📝", title: "Word 報告匯出", description: "一鍵產生專業 Word 格式掃描報告，方便交付客戶。" },
-    { id: 6, icon: "💎", title: "點數計費系統", description: "靈活的 Coin 計費模式，按頁計費，精準控制成本。" },
-  ];
+  const [features, setFeatures] = useState(PROJECT_FEATURES_FALLBACK);
   const [milestones, setMilestones] = useState([]);
   useEffect(() => {
+    api.get("/content/features/")
+      .then((r) => {
+        const list = r.data.features || [];
+        if (list.length) setFeatures(list);
+      })
+      .catch(() => {});
     api.get("/content/milestones/").then((r) => setMilestones(r.data.milestones || [])).catch(() => {});
   }, []);
   return (
     <div className="public-page">
-      <section className="public-hero">
+      <section className="public-hero public-hero--console">
         <div className="public-hero-bg" aria-hidden="true">
           <span className="hero-orb hero-orb-1" />
           <span className="hero-orb hero-orb-2" />
           <span className="hero-orb hero-orb-3" />
+          <span className="hero-grid" />
+          <span className="hero-scan" />
+          <span className="hero-corner tl" />
+          <span className="hero-corner tr" />
+          <span className="hero-corner bl" />
+          <span className="hero-corner br" />
         </div>
         <div className="public-hero-content">
-          <span className="public-hero-eyebrow">PROJECT · 專案介紹</span>
+          <img src={brandLogo} className="public-hero-logo" alt="ARGUS" />
+          <span className="public-hero-eyebrow">掃描 · 洞察 · 證據</span>
           <h1 className="public-hero-title">
             一鍵看見<span className="hero-grad">網站的所有問題</span>
           </h1>
           <p className="public-hero-sub">
-            Argus 整合全站爬蟲、四維靜態掃描與 LLM Agent 行為測試，
-            為「你授權的網站」產出可互動報告與管理層 Word 文件，
-            並輸出結構化問題 Prompt 給你帶去 ChatGPT / Claude 取得修補方向。
+            把網站問題整理成可以執行的改善順序。
+            整合全站爬蟲、四維靜態掃描與 LLM Agent 行為測試，
+            為你授權的網站產出可互動報告與 Word 文件，
+            並輸出結構化 Prompt 帶去 ChatGPT / Claude 取得修補方向。
           </p>
           <div className="public-hero-actions">
-            <NavLink to="/purchase" className="public-cta-primary">立即購買 →</NavLink>
+            <NavLink to="/login" className="public-cta-primary">登入進行詳細檢查 →</NavLink>
             <NavLink to="/download" className="public-cta-ghost">下載 PWA</NavLink>
           </div>
+        </div>
+      </section>
+
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>安全邊界</h2>
+          <p>不是文宣口號，每一項都對應實際程式碼</p>
+        </header>
+        <div className="public-feature-grid">
+          <article className="public-feature-card">
+            <div className="public-feature-icon">🔐</div>
+            <h3 className="public-feature-title">授權確認</h3>
+            <p className="public-feature-desc">
+              每次任務記錄 IP、時間、User-Agent 與授權勾選狀態；第三方或敏感網域要求二次確認。
+            </p>
+          </article>
+          <article className="public-feature-card">
+            <div className="public-feature-icon">🌐</div>
+            <h3 className="public-feature-title">同網域邏輯</h3>
+            <p className="public-feature-desc">
+              爬蟲與 finding 證據只限授權目標的同網域頁面，不會跨域追蹤或污染他站。
+            </p>
+          </article>
+          <article className="public-feature-card">
+            <div className="public-feature-icon">🛡️</div>
+            <h3 className="public-feature-title">SSRF 防護（已實作）</h3>
+            <p className="public-feature-desc">
+              阻擋 localhost、私網段、雲端 metadata、IP 字面，且逐跳 redirect 都重新檢查目標主機。
+            </p>
+          </article>
+          <article className="public-feature-card">
+            <div className="public-feature-icon">👀</div>
+            <h3 className="public-feature-title">預設被動模式</h3>
+            <p className="public-feature-desc">
+              Phase 1 不做破壞性或主動式漏洞攻擊；主動模式需額外勾選且記入稽核軌跡。
+            </p>
+          </article>
         </div>
       </section>
 
@@ -4260,7 +4726,7 @@ function ProjectPage() {
             <span
               key={t.label}
               className="public-tech-chip"
-              style={{ borderColor: t.colour + "60", color: t.colour }}
+              style={{ borderColor: t.colour + "60", "--chip-color": t.colour }}
             >{t.label}</span>
           ))}
         </div>
@@ -4270,7 +4736,7 @@ function ProjectPage() {
         <div className="public-final-cta">
           <div>
             <h2 className="public-final-cta-title">準備好健檢你的網站了嗎？</h2>
-            <p className="public-final-cta-sub">新會員每月送 200 coin，最小規模試用免費。</p>
+            <p className="public-final-cta-sub">想先試用？「快速檢查」免登入、不扣點；登入後每月自動贈 200 coin，掃描依實際頁數計點。</p>
           </div>
           <NavLink to="/purchase" className="public-cta-primary public-final-cta-btn">
             查看方案 →
@@ -4293,12 +4759,16 @@ function TeamMemberCard({ member }) {
         <div className="public-team-card-meta">
           <div className="public-team-name">{m.name}</div>
           <div className="public-team-role">{m.role}</div>
+          {m.student_id && (
+            <div className="public-team-id-badge">🎓 學號 {m.student_id}</div>
+          )}
           {m.bio && <p className="public-team-bio">{m.bio}</p>}
         </div>
       </header>
 
       {Array.isArray(m.skill_levels) && m.skill_levels.length > 0 && (
         <div className="public-team-skill-bars">
+          <div className="public-team-block-label">⚡ 技能熟練度</div>
           {m.skill_levels.map((s) => (
             <div key={s.name} className="public-team-skill-row">
               <div className="public-team-skill-row-head">
@@ -4318,7 +4788,7 @@ function TeamMemberCard({ member }) {
 
       {Array.isArray(m.contributions) && m.contributions.length > 0 && (
         <div className="public-team-contrib">
-          <div className="public-team-contrib-label">負責項目</div>
+          <div className="public-team-contrib-label">🎯 負責項目</div>
           <ul className="public-team-contrib-list">
             {m.contributions.map((c, i) => (
               <li key={i}>
@@ -4335,6 +4805,7 @@ function TeamMemberCard({ member }) {
 
       {Array.isArray(m.skills) && m.skills.length > 0 && (
         <div className="public-team-skills">
+          <div className="public-team-block-label public-team-skills-label">🧩 技術棧</div>
           {m.skills.map((s) => (
             <span key={s} className="public-team-skill-chip">{s}</span>
           ))}
@@ -4371,7 +4842,7 @@ function TeamPage() {
         <div className="public-hero-content">
           <span className="public-hero-eyebrow">TEAM · 團隊</span>
           <h1 className="public-hero-title">
-            打造 Argus 的<span className="hero-grad">人們</span>
+            打造 Argus 的<span className="hero-grad">團隊</span>
           </h1>
           <p className="public-hero-sub">
             {members.length} 位成員跨領域協作，從 Playwright 爬蟲、LLM Agent
@@ -4383,11 +4854,11 @@ function TeamPage() {
               <div className="public-team-stat-label">核心成員</div>
             </div>
             <div className="public-team-stat">
-              <div className="public-team-stat-value">7</div>
+              <div className="public-team-stat-value">8</div>
               <div className="public-team-stat-label">Django apps</div>
             </div>
             <div className="public-team-stat">
-              <div className="public-team-stat-value">210+</div>
+              <div className="public-team-stat-value">249+</div>
               <div className="public-team-stat-label">自動化測試</div>
             </div>
           </div>
@@ -4463,12 +4934,8 @@ const COMPARE_ROWS = [
 ];
 
 function PurchasePage() {
-  const [plans, setPlans] = useState([]);
   const [openFaq, setOpenFaq] = useState(0);
   const navigate = useNavigate();
-  useEffect(() => {
-    api.get("/billing/plans/").then((r) => setPlans(r.data.plans || [])).catch(() => {});
-  }, []);
   return (
     <div className="public-page">
       <section className="public-hero compact">
@@ -4478,7 +4945,7 @@ function PurchasePage() {
           <span className="hero-orb hero-orb-3" />
         </div>
         <div className="public-hero-content">
-          <span className="public-hero-eyebrow">PURCHASE · 購買方案</span>
+          <span className="public-hero-eyebrow">PRICING · 為什麼選 Argus</span>
           <h1 className="public-hero-title">
             <span className="hero-grad">按頁付費</span>，永久有效
           </h1>
@@ -4486,37 +4953,16 @@ function PurchasePage() {
             每爬一頁 10 coin，新會員每月自動贈送 200 coin；買越多越划算，
             點數不會過期，失敗或取消自動全額退回。
           </p>
+          <div className="public-hero-actions">
+            <button
+              type="button"
+              className="public-cta-primary"
+              onClick={() => navigate("/billing")}
+            >
+              看方案 + 開始結帳 →
+            </button>
+          </div>
         </div>
-      </section>
-
-      <section className="public-section">
-        <header className="public-section-head">
-          <h2>方案一覽</h2>
-          <p>四個方案任選，全部一次看清楚</p>
-        </header>
-        <div className="public-plan-grid">
-          {plans.map((p) => {
-            const featured = p.code === "advanced";
-            return (
-              <div
-                key={p.code}
-                className={`public-plan-card ${featured ? "is-featured" : ""}`}
-              >
-                {featured && <span className="public-plan-recommend">★ 最受歡迎</span>}
-                {p.badge && <span className="public-plan-badge">{p.badge}</span>}
-                <h3 className="public-plan-name">{p.name}</h3>
-                <div className="public-plan-coin">{p.coin_amount.toLocaleString()}<span> coin</span></div>
-                <div className="public-plan-price">NT$ {p.price_ntd.toLocaleString()}</div>
-                <div className="public-plan-rate">{p.coin_per_ntd?.toFixed(2)} coin / NT$</div>
-                {p.description && <p className="public-plan-desc">{p.description}</p>}
-              </div>
-            );
-          })}
-          {plans.length === 0 && <p className="public-empty">尚未設定方案。</p>}
-        </div>
-        <p className="public-plan-note">
-          ※ 想結帳請點下方「前往結帳」進入 3 步驟結帳流程
-        </p>
       </section>
 
       <section className="public-section">
@@ -4622,6 +5068,11 @@ function FreeToolsPage() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailResult, setEmailResult] = useState(null);
   const [emailError, setEmailError] = useState("");
+  const [quickForm, setQuickForm] = useState({ url: "", authorization_confirmed: false });
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickResult, setQuickResult] = useState(null);
+  const [quickError, setQuickError] = useState("");
+  const [tool, setTool] = useState("scan"); // 免費工具分頁：scan / speed / phish
 
   const runSpeedTest = async (event) => {
     event.preventDefault();
@@ -4635,6 +5086,21 @@ function FreeToolsPage() {
       setSpeedError(apiErrorMessage(err, "測速失敗，請確認網址可公開連線。"));
     } finally {
       setSpeedLoading(false);
+    }
+  };
+
+  const runQuickScan = async (event) => {
+    event.preventDefault();
+    setQuickLoading(true);
+    setQuickError("");
+    setQuickResult(null);
+    try {
+      const res = await api.post("/insights/quick-scan/", quickForm);
+      setQuickResult(res.data);
+    } catch (err) {
+      setQuickError(apiErrorMessage(err, "單頁快速檢查失敗，請確認網址可公開連線。"));
+    } finally {
+      setQuickLoading(false);
     }
   };
 
@@ -4677,20 +5143,101 @@ function FreeToolsPage() {
           <span className="hero-orb hero-orb-3" />
         </div>
         <div className="public-hero-content">
-          <span className="public-hero-eyebrow">FREE TOOLS · 免費分析</span>
+          <span className="public-hero-eyebrow">QUICK CHECK · 快速檢查</span>
           <h1 className="public-hero-title">
-            先用<span className="hero-grad">免費工具</span>快速判斷
+            先用<span className="hero-grad">快速檢查</span>初步判斷
           </h1>
           <p className="public-hero-sub">
-            單頁測速參考 PageSpeed / Lighthouse 的效能思路；釣魚 URL 與郵件判斷使用本機特徵分類器，
-            不把內容送到大模型 API。
+            <strong>免登入、不扣點數、即時出結果。</strong>單頁測速參考 PageSpeed / Lighthouse 的效能思路；
+            釣魚網址與郵件判斷使用本機特徵分類器，不把內容送到大模型 API。
           </p>
         </div>
       </section>
 
+      <div className="insight-tabs">
+        <button type="button" className={`insight-tab ${tool === "scan" ? "active" : ""}`} onClick={() => setTool("scan")}>🩺 單頁檢查</button>
+        <button type="button" className={`insight-tab ${tool === "speed" ? "active" : ""}`} onClick={() => setTool("speed")}>⚡ 網站測速</button>
+        <button type="button" className={`insight-tab ${tool === "phish" ? "active" : ""}`} onClick={() => setTool("phish")}>🛡️ 釣魚偵測</button>
+      </div>
+
+      {tool === "scan" && (
       <section className="public-section">
         <header className="public-section-head">
-          <h2>免費測速分析</h2>
+          <h2>單頁快速檢查</h2>
+          <p>輸入一個網址，立即看 SEO / 資安 / AEO·GEO 的單頁體檢分數與重點問題；完整多頁＋AI 深掃請登入後到「掃描」</p>
+        </header>
+        <div className="insight-tool-layout">
+          <form className="insight-tool-card" onSubmit={runQuickScan}>
+            <h3 className="insight-card-title">單頁快速檢查</h3>
+            <label className="insight-field">
+              <span>網址</span>
+              <input
+                value={quickForm.url}
+                onChange={(e) => setQuickForm((f) => ({ ...f, url: e.target.value }))}
+                placeholder="https://example.com/"
+                required
+              />
+            </label>
+            <label className="insight-check">
+              <input
+                type="checkbox"
+                checked={quickForm.authorization_confirmed}
+                onChange={(e) => setQuickForm((f) => ({ ...f, authorization_confirmed: e.target.checked }))}
+              />
+              <span>我確認此頁面可公開檢測，或我擁有分析授權。</span>
+            </label>
+            {quickError && <div className="insight-error">{quickError}</div>}
+            <button type="submit" className="public-cta-primary" disabled={quickLoading}>
+              {quickLoading ? "檢查中..." : "開始單頁檢查"}
+            </button>
+          </form>
+
+          <div className="insight-result-card">
+            {!quickResult ? (
+              <div className="insight-empty">
+                <strong>會輸出哪些結果</strong>
+                <span>整體分數 + SEO / 資安 / AEO·GEO 三維單頁分數與重點問題清單。</span>
+              </div>
+            ) : (
+              <>
+                <div className="insight-score-row">
+                  <div className={`insight-score score-${quickResult.grade}`}>
+                    {quickResult.overall_score}
+                  </div>
+                  <div>
+                    <div className="insight-result-title">{quickResult.final_url}</div>
+                    <div className="insight-result-sub">單頁快速檢查（不含多頁爬蟲 / Playwright）</div>
+                  </div>
+                </div>
+                <div className="insight-metrics-grid">
+                  {quickResult.categories.map((c) => (
+                    <div key={c.key}><span>{c.label}</span><strong>{c.score}</strong></div>
+                  ))}
+                </div>
+                {quickResult.findings.length > 0 ? (
+                  <ul className="insight-finding-list">
+                    {quickResult.findings.map((f, idx) => (
+                      <li key={`${f.title}-${idx}`}>
+                        <strong>{f.title}</strong>
+                        <span>{f.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="insight-success">單頁檢查未發現明顯問題。</div>
+                )}
+                <p className="insight-note">{quickResult.note}</p>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+      )}
+
+      {tool === "speed" && (
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>網站測速分析</h2>
           <p>單一 URL、單次請求，不扣 coin，不啟動全站爬蟲</p>
         </header>
         <div className="insight-tool-layout">
@@ -4759,15 +5306,17 @@ function FreeToolsPage() {
           </div>
         </div>
       </section>
+      )}
 
+      {tool === "phish" && (
       <section className="public-section">
         <header className="public-section-head">
-          <h2>釣魚 URL / 郵件風險</h2>
-          <p>本機特徵分類器，先看證據，不把判斷全交給大模型</p>
+          <h2>可疑網址 / 詐騙郵件檢測</h2>
+          <p>貼上一個網址或一封郵件內容，本機特徵分類器幫你判斷「是否可能是釣魚／詐騙」（不外送大模型 API）</p>
         </header>
         <div className="insight-two-col">
           <form className="insight-tool-card" onSubmit={runUrlCheck}>
-            <h3 className="insight-card-title">URL 風險判斷</h3>
+            <h3 className="insight-card-title">網址安全檢測（防釣魚）</h3>
             <label className="insight-field">
               <span>可疑連結</span>
               <input
@@ -4801,7 +5350,7 @@ function FreeToolsPage() {
           </form>
 
           <form className="insight-tool-card" onSubmit={runEmailCheck}>
-            <h3 className="insight-card-title">郵件原始碼判斷</h3>
+            <h3 className="insight-card-title">郵件詐騙檢測（防釣魚信）</h3>
             <label className="insight-field">
               <span>.eml / 原始信件內容</span>
               <textarea
@@ -4840,6 +5389,7 @@ function FreeToolsPage() {
           </form>
         </div>
       </section>
+      )}
     </div>
   );
 }
@@ -4864,25 +5414,40 @@ function DownloadPage() {
             <span className="hero-grad">隨身</span>使用 Argus
           </h1>
           <p className="public-hero-sub">
-            PWA（漸進式網頁應用）— 一鍵安裝到主畫面，像 App 一樣開啟，支援離線瀏覽既有報告。
+            Argus 是 PWA（漸進式網頁應用），無需透過 App Store — 直接從瀏覽器加到主畫面，像 App 一樣開啟，支援離線瀏覽既有報告。
           </p>
           <div className="public-hero-actions">
             {installed ? (
               <span className="public-install-installed">✓ 已安裝，請從主畫面開啟</span>
-            ) : canInstall ? (
-              <button type="button" className="public-cta-primary public-install-cta" onClick={trigger}>
-                ⬇ 安裝 Argus PWA
-              </button>
             ) : (
-              <span className="public-install-hint">
-                請使用 Chrome / Edge / Safari 開啟並點選「加到主畫面」（不同瀏覽器選單位置略異）
-              </span>
+              <button
+                type="button"
+                className="public-cta-primary public-install-cta"
+                onClick={async () => {
+                  if (canInstall) {
+                    await trigger();
+                  } else {
+                    // 瀏覽器尚未提供安裝（如 iOS Safari 不支援程式化安裝，或事件未就緒）
+                    // → 帶到各平台安裝步驟
+                    document
+                      .getElementById("install-guide")
+                      ?.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+              >
+                ⬇ 點擊下載
+              </button>
+            )}
+            {!installed && latest?.download_url && (
+              <a className="public-cta-ghost" href={latest.download_url}>
+                取得 {latest.platform_label} 版 →
+              </a>
             )}
           </div>
         </div>
       </section>
 
-      <section className="public-section">
+      <section className="public-section" id="install-guide">
         <header className="public-section-head">
           <h2>安裝步驟</h2>
           <p>三大平台一覽</p>
@@ -4967,9 +5532,12 @@ function DownloadPage() {
 const ADMIN_NAV_ITEMS = [
   { to: "/admin/overview", label: "概覽", emoji: "📊" },
   { to: "/admin/users", label: "使用者", emoji: "👥" },
+  { to: "/admin/scans", label: "掃描", emoji: "🔍" },
+  { to: "/admin/transactions", label: "交易", emoji: "💳" },
   { to: "/admin/plans", label: "方案", emoji: "💼" },
   { to: "/admin/content", label: "內容", emoji: "📝" },
   { to: "/admin/reviews", label: "評論", emoji: "⭐" },
+  { to: "/admin/settings", label: "設定", emoji: "⚙️" },
 ];
 
 function RequireAdmin({ children }) {
@@ -5001,7 +5569,7 @@ function RequireAdmin({ children }) {
 }
 
 function AdminLayout() {
-  const { setToken, me } = useArgusStore();
+  const { setToken, me, replayIntro } = useArgusStore();
   const navigate = useNavigate();
   function handleLogout() {
     setToken(null);
@@ -5014,13 +5582,10 @@ function AdminLayout() {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <span className="admin-brand-glyph">⟡</span>
-          <div>
-            <div className="admin-brand-title">ARGUS</div>
-            <div className="admin-brand-sub">管理後台</div>
-          </div>
-        </div>
+        <button type="button" className="admin-brand" onClick={replayIntro} title="回到前台首頁" aria-label="回到前台首頁">
+          <img src={brandLogo} className="admin-brand-logo" alt="ARGUS" />
+          <span className="admin-brand-sub">管理後台</span>
+        </button>
         <nav className="admin-nav">
           {navItems.map((item) => (
             <NavLink
@@ -5144,7 +5709,7 @@ function AdminOverviewPage() {
   if (!data || !dash) return <div className="admin-loading">載入中…</div>;
   const t = data.totals;
   const providerMaxTokens = Math.max(
-    ...dash.provider_breakdown.map((r) => r.tokens), 1,
+    ...(dash.provider_breakdown || []).map((r) => r.tokens), 1,
   );
 
   return (
@@ -6022,9 +6587,22 @@ function AdminCmsManager({ schema }) {
     <section className="admin-panel">
       <div className="admin-panel-head-row">
         <h3>{schema.title}（{items.length}）</h3>
-        <button type="button" className="admin-btn primary" onClick={startNew}>
-          + 新增
-        </button>
+        <div className="admin-panel-head-actions">
+          {schema.previewPath && (
+            <a
+              className="admin-btn"
+              href={schema.previewPath}
+              target="_blank"
+              rel="noreferrer noopener"
+              title="另開新分頁預覽前台效果"
+            >
+              {schema.previewLabel || "預覽前台 ↗"}
+            </a>
+          )}
+          <button type="button" className="admin-btn primary" onClick={startNew}>
+            + 新增
+          </button>
+        </div>
       </div>
 
       {/* 列表 */}
@@ -6140,12 +6718,36 @@ function AdminCmsManager({ schema }) {
   );
 }
 
+const FEATURE_SCHEMA = {
+  endpoint: "/admin/cms/features/",
+  title: "專案特色卡片",
+  previewPath: "/project",
+  previewLabel: "預覽 /project",
+  titleField: "title",
+  fields: [
+    { key: "title", label: "標題", type: "text", required: true },
+    { key: "icon", label: "圖示 emoji", type: "text", hint: "例：🕷️ 🔍 🤖" },
+    { key: "description", label: "說明", type: "textarea", rows: 3, required: true },
+    { key: "sort_order", label: "排序", type: "number", default: 0 },
+    { key: "is_active", label: "啟用", type: "boolean", default: true },
+  ],
+  displayFields: [
+    { key: "sort_order", label: "順序", num: true },
+    { key: "icon", label: "圖示", render: (i) => <span style={{ fontSize: 22 }}>{i.icon}</span> },
+    { key: "title", label: "標題" },
+    { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
+  ],
+};
+
 const TEAM_SCHEMA = {
   endpoint: "/admin/cms/team/",
   title: "團隊成員",
+  previewPath: "/team",
+  previewLabel: "預覽 /team",
   titleField: "name",
   fields: [
     { key: "name", label: "姓名", type: "text", required: true },
+    { key: "student_id", label: "學號", type: "text", hint: "例：11246034" },
     { key: "role", label: "角色", type: "text", required: true },
     { key: "avatar_emoji", label: "頭像 emoji", type: "text", hint: "例：🧑‍💻 🎨" },
     { key: "bio", label: "簡介", type: "textarea", rows: 3 },
@@ -6159,6 +6761,7 @@ const TEAM_SCHEMA = {
     { key: "sort_order", label: "順序", num: true },
     { key: "avatar_emoji", label: "頭像", render: (i) => <span style={{ fontSize: 22 }}>{i.avatar_emoji}</span> },
     { key: "name", label: "姓名" },
+    { key: "student_id", label: "學號" },
     { key: "role", label: "角色" },
     { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
   ],
@@ -6167,6 +6770,8 @@ const TEAM_SCHEMA = {
 const RELEASE_SCHEMA = {
   endpoint: "/admin/cms/releases/",
   title: "APP / PWA 版本",
+  previewPath: "/download",
+  previewLabel: "預覽 /download",
   titleField: "version",
   fields: [
     { key: "version", label: "版本", type: "text", required: true, hint: "例：1.0.0" },
@@ -6192,37 +6797,38 @@ const RELEASE_SCHEMA = {
   ],
 };
 
-const PLAN_SCHEMA = {
-  endpoint: "/admin/cms/plans/",
-  title: "購點方案",
-  titleField: "name",
+const MILESTONE_SCHEMA = {
+  endpoint: "/admin/cms/milestones/",
+  title: "開發里程碑",
+  previewPath: "/project",
+  previewLabel: "預覽 /project（timeline）",
+  titleField: "title",
   fields: [
-    { key: "code", label: "code（系統識別，建立後勿改）", type: "text", required: true },
-    { key: "name", label: "名稱", type: "text", required: true },
-    { key: "price_ntd", label: "價格（NT$）", type: "number", required: true },
-    { key: "coin_amount", label: "coin 數量", type: "number", required: true },
-    { key: "badge", label: "徽章", type: "text", hint: "例：-20%、最熱門" },
-    { key: "description", label: "描述", type: "text" },
+    { key: "title", label: "標題", type: "text", required: true },
+    { key: "date", label: "日期（YYYY-MM-DD）", type: "text", required: true, hint: "例：2026-06-04" },
+    { key: "icon", label: "圖示 emoji", type: "text", hint: "例：🚀 🎯 ✨" },
+    { key: "description", label: "說明", type: "textarea", rows: 3 },
     { key: "sort_order", label: "排序", type: "number", default: 0 },
     { key: "is_active", label: "啟用", type: "boolean", default: true },
   ],
   displayFields: [
     { key: "sort_order", label: "順序", num: true },
-    { key: "name", label: "名稱" },
-    { key: "price_ntd", label: "價格 NT$", num: true },
-    { key: "coin_amount", label: "coin", num: true },
-    { key: "badge", label: "徽章" },
+    { key: "icon", label: "圖示" },
+    { key: "title", label: "標題" },
+    { key: "date", label: "日期" },
     { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
   ],
 };
 
 const CONTENT_TABS = [
+  { key: "features", label: "🎯 專案特色", schema: FEATURE_SCHEMA },
   { key: "team", label: "👥 團隊成員", schema: TEAM_SCHEMA },
   { key: "releases", label: "📱 APP / PWA 版本", schema: RELEASE_SCHEMA },
+  { key: "milestones", label: "🚀 開發里程碑", schema: MILESTONE_SCHEMA },
 ];
 
 function AdminContentPage() {
-  const [tab, setTab] = useState("team");
+  const [tab, setTab] = useState("features");
   const active = CONTENT_TABS.find((t) => t.key === tab);
   return (
     <div className="admin-page">
@@ -6245,6 +6851,78 @@ function AdminContentPage() {
       </div>
 
       <AdminCmsManager key={tab} schema={active.schema} />
+    </div>
+  );
+}
+
+// 內部成本估算（依 log/2026-06-14_ui-ux-billing-cms-audit.md 中的推算）：
+//   - MiniMax M2 token 成本：每 12 頁 scan ≈ NT$0.43
+//   - 伺服器月固定費攤提（200 scans/月）：每 scan ≈ NT$7.5
+//   - 合計每 scan ≈ NT$8 → 每頁 ≈ NT$0.67（COIN = PAGE）
+const COIN_COST_NTD = 0.67;
+
+function planEconomics(plan) {
+  const coin = plan.coin_amount || 0;
+  const price = plan.price_ntd || 0;
+  const cost = Number((coin * COIN_COST_NTD).toFixed(1));
+  const margin = price - cost;
+  const marginPct = price > 0 ? Math.round((margin / price) * 100) : 0;
+  // pages = coin（每頁 10 coin 是 settings 的 ARGUS_COIN_PER_PAGE）
+  // 但這裡是「使用者能掃幾頁」直觀感受，所以直接顯示 coin / 10
+  const pagesEstimate = Math.floor(coin / 10);
+  return { cost, margin, marginPct, pagesEstimate };
+}
+
+function AdminSettingsPage() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.get("/admin/settings/")
+      .then((r) => setData(r.data))
+      .catch((err) => setError(err.response?.data?.detail || "讀取設定失敗"));
+  }, []);
+
+  if (error) return <div className="admin-error">{error}</div>;
+  if (!data) return <div className="admin-loading">載入中…</div>;
+
+  const Section = ({ title, rows }) => (
+    <section className="admin-panel">
+      <h3>{title}</h3>
+      <table className="admin-table compact">
+        <tbody>
+          {rows.map(([k, v]) => {
+            let display;
+            if (v === true) display = <span className="status-active">是 / 已設定</span>;
+            else if (v === false) display = <span className="status-inactive">否 / 未設定</span>;
+            else if (Array.isArray(v)) display = v.join(", ");
+            else display = String(v);
+            return (
+              <tr key={k}>
+                <td style={{ width: 280, fontFamily: "monospace", color: "#94a3b8" }}>{k}</td>
+                <td>{display}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+
+  return (
+    <div className="admin-page">
+      <header className="admin-page-head">
+        <h1>系統設定（唯讀）</h1>
+        <p>{data.note}</p>
+      </header>
+      <Section title="計費" rows={Object.entries(data.billing)} />
+      <Section title="Hermes-Agent" rows={Object.entries(data.agent)} />
+      <Section title="Email 寄送" rows={Object.entries(data.email)} />
+      <Section title="第三方登入 / API 金鑰" rows={[
+        ...Object.entries(data.auth),
+        ...Object.entries(data.providers),
+      ]} />
+      <Section title="部署" rows={Object.entries(data.deployment)} />
     </div>
   );
 }
@@ -6292,24 +6970,43 @@ function AdminPlansPage() {
         <button className="admin-add-btn" onClick={openNew}>＋ 新增方案</button>
       </header>
 
+      <p className="admin-page-note">
+        定價建議：每 coin 內部成本約 NT$ {COIN_COST_NTD}（含 MiniMax token 與伺服器攤提）；
+        毛利率 80% 以上算健康，低於 50% 請重新定價。
+      </p>
+
       <div className="admin-plans-grid">
-        {plans.map((plan) => (
-          <div key={plan.id} className={`admin-plan-card ${plan.is_active ? "" : "is-inactive"}`}>
-            {plan.badge && <span className="admin-plan-badge">{plan.badge}</span>}
-            <h3 className="admin-plan-name">{plan.name}</h3>
-            <p className="admin-plan-price">NT$ {(plan.price_ntd || 0).toLocaleString()}</p>
-            <p className="admin-plan-coin">{(plan.coin_amount || 0).toLocaleString()} Coin</p>
-            <p className="admin-plan-rate">{coinPerNtd(plan)} coin/NT$</p>
-            {plan.description && <p className="admin-plan-desc">{plan.description}</p>}
-            <div className="admin-plan-actions">
-              <button onClick={() => openEdit(plan)}>編輯</button>
-              <button className="danger" onClick={() => handleDelete(plan.id)}>刪除</button>
-              <span className={plan.is_active ? "status-active" : "status-inactive"}>
-                {plan.is_active ? "啟用" : "停用"}
-              </span>
+        {plans.map((plan) => {
+          const econ = planEconomics(plan);
+          const marginTone = econ.marginPct >= 80 ? "good" : econ.marginPct >= 50 ? "warn" : "bad";
+          return (
+            <div key={plan.id} className={`admin-plan-card ${plan.is_active ? "" : "is-inactive"}`}>
+              {plan.badge && <span className="admin-plan-badge">{plan.badge}</span>}
+              <h3 className="admin-plan-name">{plan.name}</h3>
+              <p className="admin-plan-price">NT$ {(plan.price_ntd || 0).toLocaleString()}</p>
+              <p className="admin-plan-coin">{(plan.coin_amount || 0).toLocaleString()} Coin</p>
+              <p className="admin-plan-rate">{coinPerNtd(plan)} coin/NT$ · ≈ {econ.pagesEstimate.toLocaleString()} 頁掃描</p>
+
+              <dl className="admin-plan-econ">
+                <dt>內部成本</dt>
+                <dd>NT$ {econ.cost.toLocaleString()}</dd>
+                <dt>毛利</dt>
+                <dd className={`tone-${marginTone}`}>
+                  NT$ {econ.margin.toLocaleString()}（{econ.marginPct}%）
+                </dd>
+              </dl>
+
+              {plan.description && <p className="admin-plan-desc">{plan.description}</p>}
+              <div className="admin-plan-actions">
+                <button onClick={() => openEdit(plan)}>編輯</button>
+                <button className="danger" onClick={() => handleDelete(plan.id)}>刪除</button>
+                <span className={plan.is_active ? "status-active" : "status-inactive"}>
+                  {plan.is_active ? "啟用" : "停用"}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {!plans.length && <div className="admin-empty">尚無方案</div>}
       </div>
 
@@ -6327,6 +7024,15 @@ function AdminPlansPage() {
               </div>
               <input className="input" placeholder="徽章（選填）" value={form.badge || ""} onChange={(e) => setForm({ ...form, badge: e.target.value })} />
               <textarea className="input" rows={3} placeholder="描述" value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              {(() => {
+                const e = planEconomics(form);
+                const tone = e.marginPct >= 80 ? "good" : e.marginPct >= 50 ? "warn" : "bad";
+                return (
+                  <div className={`admin-plan-econ-preview tone-${tone}`}>
+                    內部成本 NT$ {e.cost} · 毛利 NT$ {e.margin}（{e.marginPct}%） · ≈ {e.pagesEstimate} 頁
+                  </div>
+                );
+              })()}
               <label><input type="checkbox" checked={form.is_active !== false} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用</label>
             </div>
             <footer className="ann-modal-footer">
@@ -6356,12 +7062,19 @@ function AdminAnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: "", content: "", type: "temporary", active_days: 7, is_active: true });
+  const me = useArgusStore((s) => s.me);
 
   function loadList() {
     setLoading(true);
     api.get("/admin/announcements/").then((r) => setList(r.data.announcements || [])).finally(() => setLoading(false));
   }
-  useEffect(loadList, []);
+  useEffect(() => {
+    if (me?.is_superuser) loadList();
+  }, [me]);
+
+  if (!me?.is_superuser) {
+    return <div className="admin-error">需要超級管理員權限才能查看。</div>;
+  }
 
   function openNew() {
     setForm({ title: "", content: "", type: "temporary", active_days: 7, is_active: true });
@@ -6561,23 +7274,468 @@ function AuditLogTab() {
 }
 
 // ============================================================
+// 首次進站粒子過場動畫（移植自 過場動畫和網站設計範本/index.html）
+// 階段：STORM → ASSEMBLE → DISPLAY → EXPLODE → WARP，結束呼叫 onComplete。
+// 尊重 prefers-reduced-motion：偏好減少動態時直接略過。
+// ============================================================
+
+const INTRO_PHASE = { storm: 2000, assemble: 2400, display: 400, warp: 2200 };
+const INTRO_TOTAL =
+  INTRO_PHASE.storm + INTRO_PHASE.assemble + INTRO_PHASE.display + INTRO_PHASE.warp;
+const INTRO_STORM_CHARS = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$&*+={}/<>";
+const INTRO_ARGUS_CHARS = "ARGUS";
+const INTRO_STORM_COLORS = [
+  "rgba(80, 220, 255, 0.55)", "rgba(100, 235, 255, 0.7)", "rgba(60, 200, 240, 0.65)",
+  "rgba(140, 240, 255, 0.6)", "rgba(70, 210, 250, 0.75)", "rgba(170, 245, 255, 0.55)",
+  "rgba(40, 180, 220, 0.65)", "rgba(110, 230, 255, 0.7)",
+];
+// 時空穿越光束色盤（沿用開頭動畫的青藍系，不另加雜色）
+const INTRO_WARP_COLORS = [
+  [56, 189, 248],   // argus-cyan
+  [103, 232, 249],  // cyan-glow
+  [125, 211, 252],  // sky
+  [14, 165, 233],   // cyan-dot
+  [150, 220, 255],  // 淺藍
+  [224, 242, 254],  // 近白 cyan tint
+  [255, 255, 255],  // 白
+];
+
+function IntroSequence({ onComplete }) {
+  const canvasRef = useRef(null);
+  const statusRef = useRef(null);
+  const phaseRef = useRef(null);
+  const timeRef = useRef(null);
+  const fpsRef = useRef(null);
+  const countRef = useRef(null);
+  const finishRef = useRef(null);
+  const completeRef = useRef(onComplete);
+  completeRef.current = onComplete;
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    const prefersReduced =
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      if (completeRef.current) completeRef.current();
+      return undefined;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    let W = 0, H = 0;
+    let particles = [];
+    let imgRef = null;
+    let logoBox = null;
+    let fallbackCanvas = null;
+    let warpInited = false;
+    let startTime = 0, fpsCount = 0, fpsTimer = 0;
+    let mainRAF = null;
+    let finished = false;
+    let finishTimer = null;
+
+    function resize() {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    }
+    resize();
+
+    function buildLogoBox() {
+      if (!imgRef) return;
+      const maxW = Math.min(W * 0.6, 720);
+      const maxH = Math.min(H * 0.6, 540);
+      const ratio = imgRef.width / imgRef.height;
+      let tw, th;
+      if (maxW / ratio < maxH) { tw = maxW; th = maxW / ratio; }
+      else { th = maxH; tw = maxH * ratio; }
+      logoBox = { ox: (W - tw) / 2, oy: (H - th) / 2, tw, th };
+    }
+
+    function makeParticles(pts) {
+      for (let i = pts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pts[i], pts[j]] = [pts[j], pts[i]];
+      }
+      const N = Math.min(pts.length, 1000);
+      const cx = W / 2, cy = H / 2;
+      const arr = new Array(N);
+      for (let i = 0; i < N; i++) {
+        const t = pts[i];
+        const ang = Math.random() * Math.PI * 2;
+        const r0 = Math.max(W, H) * (0.7 + Math.random() * 0.5);
+        const isArgus = Math.random() < 0.2;
+        arr[i] = {
+          tx: t.x, ty: t.y,
+          x: cx + Math.cos(ang) * r0, y: cy + Math.sin(ang) * r0,
+          r: t.r, g: t.g, b: t.b,
+          displayColor: `rgba(${Math.min(255, t.r + 50)}, ${Math.min(255, t.g + 50)}, ${Math.min(255, t.b + 50)}, 0.95)`,
+          char: isArgus
+            ? INTRO_ARGUS_CHARS[(Math.random() * 5) | 0]
+            : INTRO_STORM_CHARS[(Math.random() * INTRO_STORM_CHARS.length) | 0],
+          size: [9, 11, 13][(Math.random() * 3) | 0],
+          sAng: Math.atan2(t.y - cy, t.x - cx) + (Math.random() - 0.5) * Math.PI,
+          sDist: 120 + Math.random() * Math.max(W, H) * 0.5,
+          sSpd: 0.5 + Math.random() * 1.5,
+          changeTimer: Math.random() * 25,
+          eAng: Math.atan2(t.y - cy, t.x - cx) + (Math.random() - 0.5) * 0.4,
+          eSpd: 800 + Math.random() * 1400,
+          phase: Math.random() * Math.PI * 2,
+          locked: false,
+        };
+      }
+      arr.sort((a, b) => a.size - b.size);
+      particles = arr;
+      if (countRef.current) countRef.current.textContent = String(N);
+    }
+
+    function buildFallback() {
+      const cx = W / 2, cy = H / 2;
+      const s = Math.min(W, H) / 900;
+      const off = document.createElement("canvas");
+      off.width = W; off.height = H;
+      const octx = off.getContext("2d");
+      octx.strokeStyle = "#0096ff"; octx.lineWidth = 12 * s;
+      octx.beginPath(); octx.ellipse(cx, cy - 30 * s, 260 * s, 110 * s, 0, 0, Math.PI * 2); octx.stroke();
+      octx.fillStyle = "#0066cc"; octx.beginPath(); octx.arc(cx, cy - 30 * s, 90 * s, 0, Math.PI * 2); octx.fill();
+      octx.fillStyle = "#001a33"; octx.beginPath(); octx.arc(cx, cy - 30 * s, 40 * s, 0, Math.PI * 2); octx.fill();
+      octx.fillStyle = "#00aaff";
+      octx.font = `bold ${150 * s}px 'Arial Black', 'Impact', sans-serif`;
+      octx.textAlign = "center"; octx.textBaseline = "middle";
+      octx.fillText("ARGUS", cx, cy + 180 * s);
+      fallbackCanvas = off;
+      const data = octx.getImageData(0, 0, W, H).data;
+      const pts = [];
+      for (let y = 0; y < H; y += 5) {
+        for (let x = 0; x < W; x += 5) {
+          const idx = (y * W + x) * 4;
+          if (data[idx + 3] > 80) pts.push({ x, y, r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+        }
+      }
+      makeParticles(pts);
+    }
+
+    function buildTargets() {
+      if (!imgRef || !logoBox) { buildFallback(); return; }
+      const { ox, oy, tw, th } = logoBox;
+      const off = document.createElement("canvas");
+      off.width = Math.floor(tw); off.height = Math.floor(th);
+      const octx = off.getContext("2d");
+      octx.drawImage(imgRef, 0, 0, off.width, off.height);
+      let data;
+      try { data = octx.getImageData(0, 0, off.width, off.height).data; }
+      catch (e) { buildFallback(); return; }
+      const w = off.width, h = off.height;
+      const cornerIdx = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + w - 1) * 4];
+      let tCount = 0;
+      for (const idx of cornerIdx) if (data[idx + 3] < 30) tCount++;
+      const isTransparentBg = tCount >= 3;
+      const pts = [];
+      const step = 5;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const idx = (y * w + x) * 4;
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+          let keep;
+          if (isTransparentBg) keep = a > 40;
+          else {
+            const lum = (r + g + b) / 3 / 255;
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sat = mx === 0 ? 0 : (mx - mn) / mx;
+            keep = a > 60 && !(lum > 0.93 && sat < 0.06);
+          }
+          if (keep) pts.push({ x: ox + x, y: oy + y, r, g, b });
+        }
+      }
+      makeParticles(pts);
+    }
+
+    function randomizeWarp(p) {
+      // 不規則：每粒子隨機顏色 / 寬度 / 拉長長度 / 速度
+      p.warpColor = INTRO_WARP_COLORS[(Math.random() * INTRO_WARP_COLORS.length) | 0];
+      p.warpWidth = 2 + Math.random() * 9;        // 粗細不一
+      p.warpLenK = 0.7 + Math.random() * 2.8;     // 拉長長度不一
+      p.warpSpeedK = 0.6 + Math.random() * 1.2;   // 速度不一
+    }
+    function initWarp() {
+      // 從粒子「目前位置」(剛聚合成 logo 的位置) 直接往外發射 →
+      // logo 散開無縫接上時空穿越，中間不經過白色閃光。
+      const cx = W / 2, cy = H / 2;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const dx = p.x - cx, dy = p.y - cy;
+        p.warpAng = Math.atan2(dy, dx);
+        p.warpDist = Math.max(2, Math.hypot(dx, dy));
+        randomizeWarp(p);
+      }
+    }
+
+    function updateAndDraw(phase, pt, elapsed) {
+      const cx = W / 2, cy = H / 2;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      let lastSize = -1;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (phase === "STORM") {
+          const settle = pt * pt; const chaos = 1 - settle * 0.6;
+          p.sAng += p.sSpd * 0.011 * chaos;
+          p.sDist -= settle * 1.4;
+          const maxR = Math.max(W, H) * (0.7 - settle * 0.35);
+          if (p.sDist < 60) p.sDist = 60; if (p.sDist > maxR) p.sDist = maxR;
+          const slow = elapsed * 0.001;
+          const w1 = Math.sin(slow + p.phase) * 50 * chaos;
+          const w2 = Math.cos(slow * 1.4 + p.phase * 2.3) * 35 * chaos;
+          const driftX = Math.sin(slow * 0.6 + p.phase * 3.7) * 28 * chaos;
+          const driftY = Math.cos(slow * 0.9 + p.phase * 1.7) * 32 * chaos;
+          const r = p.sDist + w1 + w2;
+          const sx = cx + Math.cos(p.sAng) * r * 1.3 + driftX;
+          const sy = cy + Math.sin(p.sAng) * r * 0.8 + driftY;
+          const lerpK = Math.max(0, settle - 0.15) * 0.11;
+          p.x = sx + (p.tx - sx) * lerpK; p.y = sy + (p.ty - sy) * lerpK;
+          p.changeTimer--;
+          if (p.changeTimer < 0) {
+            p.char = INTRO_STORM_CHARS[(Math.random() * INTRO_STORM_CHARS.length) | 0];
+            p.changeTimer = 10 + Math.random() * 25;
+          }
+        } else if (phase === "ASSEMBLE") {
+          const k = 0.08 + pt * 0.09;
+          p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k;
+          if (pt > 0.8) {
+            const blend = (pt - 0.8) / 0.2;
+            const breath = Math.sin(elapsed * 0.003 + p.phase) * 1;
+            p.x = p.x * (1 - blend) + (p.tx + breath) * blend;
+            p.y = p.y * (1 - blend) + (p.ty + breath * 0.5) * blend;
+          }
+          if (pt > 0.6 && !p.locked) {
+            const inText = (p.ty - cy) > 60;
+            if (inText && Math.random() < 0.55) p.char = INTRO_ARGUS_CHARS[(Math.random() * 5) | 0];
+            p.locked = true;
+          } else if (!p.locked) {
+            p.changeTimer--;
+            if (p.changeTimer < 0) {
+              p.char = INTRO_STORM_CHARS[(Math.random() * INTRO_STORM_CHARS.length) | 0];
+              p.changeTimer = 10 + Math.random() * 20;
+            }
+          }
+        } else if (phase === "DISPLAY") {
+          const breath = Math.sin(elapsed * 0.003 + p.phase) * 1;
+          p.x = p.tx + breath; p.y = p.ty + breath * 0.5;
+        }
+        let fill;
+        if (phase === "STORM") fill = INTRO_STORM_COLORS[i & 7];
+        else if (phase === "ASSEMBLE") fill = pt > 0.5 ? p.displayColor : INTRO_STORM_COLORS[i & 7];
+        else fill = p.displayColor;
+        if (p.size !== lastSize) { ctx.font = `bold ${p.size}px 'Consolas', monospace`; lastSize = p.size; }
+        ctx.fillStyle = fill;
+        ctx.fillText(p.char, p.x, p.y);
+      }
+    }
+
+    function mainLoop(now) {
+      const elapsed = now - startTime;
+      fpsCount++;
+      if (now - fpsTimer > 500) {
+        if (fpsRef.current) fpsRef.current.textContent = String(Math.round(fpsCount * 1000 / (now - fpsTimer)));
+        fpsCount = 0; fpsTimer = now;
+      }
+      if (timeRef.current) timeRef.current.textContent = (elapsed / 1000).toFixed(1).padStart(4, "0");
+      const P = INTRO_PHASE;
+      let phaseName, pt;
+      if (elapsed < P.storm) { phaseName = "STORM"; pt = elapsed / P.storm; }
+      else if (elapsed < P.storm + P.assemble) { phaseName = "ASSEMBLE"; pt = (elapsed - P.storm) / P.assemble; }
+      else if (elapsed < P.storm + P.assemble + P.display) { phaseName = "DISPLAY"; pt = (elapsed - P.storm - P.assemble) / P.display; }
+      else if (elapsed < INTRO_TOTAL) { phaseName = "WARP"; pt = (elapsed - P.storm - P.assemble - P.display) / P.warp; }
+      else { if (finishRef.current) finishRef.current(); return; }
+      if (phaseRef.current) phaseRef.current.textContent = phaseName;
+      const STATUS_MAP = { STORM: "ANALYZING", ASSEMBLE: "CONVERGING", DISPLAY: "LOCKED-ON", WARP: "HYPERSPACE" };
+      if (statusRef.current) statusRef.current.textContent = STATUS_MAP[phaseName];
+
+      if (phaseName === "WARP") {
+        if (!warpInited) { initWarp(); warpInited = true; }
+        const zoom = 1 + pt * pt * 0.65;
+        canvas.style.transform = `scale(${zoom})`;
+        // 觀測者越來越快 → 每幀清除越少、上一幀殘留越久 → 粒子拉出長殘影拖曳
+        const trailFade = Math.max(0.05, 0.2 - pt * 0.15);
+        ctx.fillStyle = `rgba(12, 16, 38, ${trailFade})`;
+        ctx.fillRect(0, 0, W, H);
+        const cxw = W / 2, cyw = H / 2;
+        const baseSpeed = 5 + pt * pt * 80;
+        const maxD = Math.max(W, H) * 1.35;
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          p.warpDist += baseSpeed * p.warpSpeedK;
+          if (p.warpDist > maxD) {
+            // 回收：隨機角度 + 重抽顏色/寬/長 → 持續不規則放射
+            p.warpDist = Math.random() * 40;
+            p.warpAng = Math.random() * Math.PI * 2;
+            randomizeWarp(p);
+          }
+          const cosA = Math.cos(p.warpAng), sinA = Math.sin(p.warpAng);
+          const x = cxw + cosA * p.warpDist, y = cyw + sinA * p.warpDist;
+          // 拉長：長度隨距離增加且每粒子不一
+          const tailLen = (baseSpeed * 1.5 + p.warpDist * 0.3) * p.warpLenK;
+          const tx = cxw + cosA * (p.warpDist - tailLen), ty = cyw + sinA * (p.warpDist - tailLen);
+          // 外端寬、內端收尖的錐形（垂直方向取半寬）
+          const hw = p.warpWidth * Math.min(1, p.warpDist / 200);
+          const px = -sinA, py = cosA;
+          const a = Math.min(0.82, p.warpDist / 130);
+          const c = p.warpColor;
+          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);                   // 內端尖點
+          ctx.lineTo(x + px * hw, y + py * hw); // 外端一側
+          ctx.lineTo(x - px * hw, y - py * hw); // 外端另一側
+          ctx.closePath();
+          ctx.fill();
+        }
+        mainRAF = requestAnimationFrame(mainLoop);
+        return;
+      }
+
+      ctx.clearRect(0, 0, W, H);
+      let logoAlpha = 0;
+      if (phaseName === "ASSEMBLE") logoAlpha = pt * 0.9;
+      else if (phaseName === "DISPLAY") logoAlpha = 0.9 + Math.sin(elapsed * 0.003) * 0.08;
+      if (logoAlpha > 0) {
+        ctx.save(); ctx.globalAlpha = logoAlpha;
+        if (imgRef && logoBox) ctx.drawImage(imgRef, logoBox.ox, logoBox.oy, logoBox.tw, logoBox.th);
+        else if (fallbackCanvas) ctx.drawImage(fallbackCanvas, 0, 0);
+        ctx.restore();
+      }
+      updateAndDraw(phaseName, pt, elapsed);
+      mainRAF = requestAnimationFrame(mainLoop);
+    }
+
+    function finish() {
+      if (finished) return;
+      finished = true;
+      if (mainRAF) cancelAnimationFrame(mainRAF);
+      setFading(true);
+      finishTimer = window.setTimeout(() => { if (completeRef.current) completeRef.current(); }, 650);
+    }
+    finishRef.current = finish;
+
+    const onResize = () => { resize(); if (imgRef) buildLogoBox(); };
+    window.addEventListener("resize", onResize);
+    // 點畫面任一處 / Esc / Enter / 空白鍵 皆可跳過動畫
+    const onKey = (e) => {
+      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { e.preventDefault(); finish(); }
+    };
+    window.addEventListener("keydown", onKey);
+
+    const img = new Image();
+    img.onload = () => { imgRef = img; buildLogoBox(); buildTargets(); startTime = performance.now(); fpsTimer = startTime; mainRAF = requestAnimationFrame(mainLoop); };
+    img.onerror = () => { buildFallback(); startTime = performance.now(); fpsTimer = startTime; mainRAF = requestAnimationFrame(mainLoop); };
+    img.src = introLogo;
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKey);
+      if (mainRAF) cancelAnimationFrame(mainRAF);
+      if (finishTimer) clearTimeout(finishTimer);
+    };
+  }, []);
+
+  return (
+    <div
+      className={`argus-intro ${fading ? "argus-intro--out" : ""}`}
+      role="presentation"
+      onClick={() => { if (finishRef.current) finishRef.current(); }}
+    >
+      <div className="argus-intro-grid" />
+      <canvas ref={canvasRef} className="argus-intro-canvas" />
+      <span className="argus-intro-corner tl" />
+      <span className="argus-intro-corner tr" />
+      <span className="argus-intro-corner bl" />
+      <span className="argus-intro-corner br" />
+      <div className="argus-intro-hud tl">
+        <span className="dim">SYS://</span> <span className="v">ARGUS-CORE</span><br />
+        <span className="dim">VER</span> <span className="v">v3.14.59</span><br />
+        <span className="dim">NODE</span> <span className="v">ATHENS-07</span>
+      </div>
+      <div className="argus-intro-hud tr">
+        <span className="dim">STATUS</span> <span className="v" ref={statusRef}>STAND-BY</span><br />
+        <span className="dim">PHASE</span> <span className="v" ref={phaseRef}>--</span><br />
+        <span className="dim">TIME</span> <span className="v" ref={timeRef}>00.0</span><span className="dim">s</span>
+      </div>
+      <div className="argus-intro-hud br">
+        <span className="dim">PARTICLES</span> <span className="v" ref={countRef}>0</span><br />
+        <span className="dim">FPS</span> <span className="v" ref={fpsRef}>--</span>
+      </div>
+      <div className="argus-intro-hint">點擊任意處跳過</div>
+    </div>
+  );
+}
+
+// ============================================================
 // 根 App + Routes
 // ============================================================
+
+function NotFoundPage() {
+  const accessToken = useArgusStore((s) => s.accessToken);
+  return (
+    <div className="public-shell">
+      <section className="public-hero">
+        <div className="public-hero-content" style={{ textAlign: "center" }}>
+          <span className="public-hero-eyebrow">404 · 找不到頁面</span>
+          <h1 className="public-hero-title">
+            這個頁面<span className="hero-grad">不存在</span>
+          </h1>
+          <p className="public-hero-sub">
+            您嘗試訪問的網址不在 Argus 上，可能是連結已失效、輸入錯誤，或頁面已被移除。
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              marginTop: "1.5rem",
+            }}
+          >
+            <Link
+              to={accessToken ? "/dashboard" : "/project"}
+              className="public-cta-primary"
+            >
+              {accessToken ? "回 Dashboard" : "回首頁"}
+            </Link>
+            <Link to="/free-tools" className="public-cta-ghost">
+              免費快速檢查
+            </Link>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function AppShell() {
   const accessToken = useArgusStore((state) => state.accessToken);
   const location = useLocation();
+  const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith("/admin");
   const isPublic = ["/project", "/free-tools", "/team", "/purchase", "/download", "/reviews"].some((p) =>
     location.pathname.startsWith(p),
   );
   const showTopNav = !isAdmin && !isPublic;
+  // 首次進站才播過場動畫（旗標在 store/localStorage）；品牌 ⟡ icon 可呼叫 replayIntro 重播
+  const introSeen = useArgusStore((s) => s.introSeen);
+  const markIntroSeen = useArgusStore((s) => s.markIntroSeen);
+  function handleIntroDone() {
+    markIntroSeen();
+    // 播完一律導向首頁 /project（含已登入者；唯獨 /login 不覆寫，讓登入流程自身導向）
+    if (location.pathname !== "/login") {
+      navigate("/project", { replace: true });
+    }
+  }
   return (
     <div className={`argus-app ${isAdmin ? "is-admin-mode" : ""} ${isPublic ? "is-public-mode" : ""}`}>
+      {!introSeen && <IntroSequence onComplete={handleIntroDone} />}
       {showTopNav && <TopNav />}
       <main className={`argus-main ${accessToken && showTopNav ? "with-nav" : ""} ${isAdmin ? "is-admin" : ""} ${isPublic ? "is-public" : ""}`}>
         <Routes>
+          <Route path="/" element={<Navigate to={accessToken ? "/dashboard" : "/project"} replace />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/password-reset" element={<PasswordResetRequestPage />} />
+          <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
           <Route element={<PublicLayout />}>
             <Route path="/project" element={<ProjectPage />} />
             <Route path="/free-tools" element={<FreeToolsPage />} />
@@ -6646,15 +7804,11 @@ function AppShell() {
             <Route path="/admin/scans/:scanId" element={<AdminScanDetailPage />} />
             <Route path="/admin/content" element={<AdminContentPage />} />
             <Route path="/admin/plans" element={<AdminPlansPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />
             <Route path="/admin/announcements" element={<AdminAnnouncementsPage />} />
           </Route>
-          <Route
-            path="*"
-            element={
-              <Navigate to={accessToken ? "/dashboard" : "/project"} replace />
-            }
-          />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
     </div>

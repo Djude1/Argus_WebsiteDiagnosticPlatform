@@ -192,6 +192,8 @@ class FindingSerializer(serializers.ModelSerializer):
             "remediation",
             "evidence",
             "rule_id",
+            "owasp_category",
+            "cwe_id",
             "evidence_type",
             "evidence_json",
             "evidence_source",

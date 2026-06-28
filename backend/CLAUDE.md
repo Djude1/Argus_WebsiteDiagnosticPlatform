@@ -46,6 +46,15 @@ Claude 操作 `backend/` 目錄時，本檔在專案層 `CLAUDE.md` 之後自動
          overall_score、category_scores（JSON）、top_actions（JSON）
 ```
 
+**Finding**（`apps/scans/models.py`）
+```
+scan_job FK、page FK（nullable）、category（seo/aeo/geo/security/ux）、severity、
+title、description、remediation、evidence_json（JSON）、rule_id
+owasp_category（A01~A10，nullable）、cwe_id（CWE 編號，nullable）
+→ owasp/cwe 只對 category=security 的 finding 填值；由 security/owasp_mapper.py 的
+  tag()（寫入前）/ backfill()（既有資料回填）負責；空字串代表無對映
+```
+
 **CoinWallet**（`apps/billing/models.py`）
 ```
 balance（目前餘額）、total_purchased_ntd、total_scans_used

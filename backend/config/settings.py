@@ -89,10 +89,15 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+# conn_max_age=0：每個請求結束即關閉 DB 連線。
+# 原因：web 用多執行緒 runserver，搭配 conn_max_age>0 的持久連線 +
+# 前端高頻輪詢，會讓連線只進不出，撐滿 Postgres max_connections（100）後
+# 整個 API 回 500「too many clients already」。設 0 讓連線數被「同時處理中的
+# 請求數」上限住，不再累積。改用 gunicorn 綁定 worker 數後可再評估調回 >0。
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
+        conn_max_age=0,
     )
 }
 
@@ -123,24 +128,6 @@ CORS_ALLOWED_ORIGINS = env_list(
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
 
-# ============================================================
-# 安全 HTTP 頭部（由 SecurityMiddleware 與 XFrameOptionsMiddleware 注入）
-# ============================================================
-# 告訴 Django 信任 upstream proxy（nginx / Cloudflare）的 X-Forwarded-Proto，
-# 讓 request.is_secure() 在 HTTPS 連線時正確回傳 True。
-# 注意：不設 SECURE_SSL_REDIRECT，由 nginx/Cloudflare 負責 HTTP→HTTPS redirect，
-#       避免 nginx→Django 的內部 HTTP 請求觸發無限 redirect 迴圈。
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
-# HSTS 初始設 60 秒可逆測試，確認 HTTPS 全程正常後在 .env 設 SECURE_HSTS_SECONDS=31536000
-SECURE_HSTS_SECONDS = 0 if DEBUG else int(os.getenv("SECURE_HSTS_SECONDS", "60"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = False  # 等 HSTS_SECONDS 穩定後再改 True
-SECURE_CONTENT_TYPE_NOSNIFF = True                           # X-Content-Type-Options: nosniff
-SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"  # Referrer-Policy
-X_FRAME_OPTIONS = "DENY"                                     # 防 Clickjacking
-
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -163,8 +150,6 @@ CELERY_RESULT_BACKEND = os.getenv(
     os.getenv("REDIS_URL", "redis://localhost:6379/1"),
 )
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
-CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "3600"))       # 硬限 60 分，OS 強制殺掉 worker
-CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300"))  # 軟限 55 分，task 內捕捉並優雅退出
 
 ARGUS_DEFAULT_MAX_DEPTH = 3
 ARGUS_DEFAULT_MAX_PAGES = 50
@@ -184,6 +169,12 @@ ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 ARGUS_AGENT_STEP_TIMEOUT = int(os.getenv("ARGUS_AGENT_STEP_TIMEOUT", "30"))
 ARGUS_AGENT_ENABLED = env_bool("ARGUS_AGENT_ENABLED", default=False)
 
+# Phase 3 Kali 主動驗證工具（docker exec 呼叫 kali container 的 sqlmap/metasploit）
+# 預設關閉；即使開啟，仍需 scan_mode=active 且 active_testing_authorized=True 才會執行（三重鎖）
+ARGUS_KALI_ENABLED = env_bool("ARGUS_KALI_ENABLED", default=False)
+ARGUS_KALI_CONTAINER = os.getenv("ARGUS_KALI_CONTAINER", "argus-kali-1")
+ARGUS_KALI_TIMEOUT = int(os.getenv("ARGUS_KALI_TIMEOUT", "120"))  # 單一工具 subprocess 超時（秒）
+
 # Google OAuth Client ID（從 Google Cloud Console > Credentials 取得）
 # 一般使用者透過 Google 帳號登入時用於驗證 ID Token；空字串代表未啟用
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
@@ -194,98 +185,27 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
 ARGUS_COIN_PER_PAGE = int(os.getenv("ARGUS_COIN_PER_PAGE", "10"))
 
-# ============================================================
-# Django Admin：保留 `/django-admin/` 為 superuser 應急後門（樣式預設、刻意樸素）
-# 主要管理介面已搬到 React `/admin/*`（admin_api 提供 CRUD endpoint）
-# 以下舊 jazzmin 設定已禁用（套件已 uv remove），保留註解供未來如需 demo Django admin 顏色可參考
-# ============================================================
-_JAZZMIN_SETTINGS_DEPRECATED = {
-    "site_title": "Argus 後台",
-    "site_header": "Argus 管理後台",
-    "site_brand": "Argus",
-    "site_logo": None,
-    "site_icon": None,
-    "welcome_sign": "歡迎來到 Argus 管理後台",
-    "copyright": "Argus AI 網站健檢平台",
-    "search_model": [
-        "accounts.User",
-        "scans.ScanJob",
-        "reviews.PlatformReview",
-    ],
-    "topmenu_links": [
-        {"name": "首頁", "url": "admin:index"},
-        {"name": "錢包", "url": "admin:billing_coinwallet_changelist"},
-        {"name": "交易紀錄", "url": "admin:billing_cointransaction_changelist"},
-        {"name": "評論", "url": "admin:reviews_platformreview_changelist"},
-        {"name": "掃描", "url": "admin:scans_scanjob_changelist"},
-    ],
-    "show_sidebar": True,
-    "navigation_expanded": True,
-    "icons": {
-        "auth": "fas fa-users-cog",
-        "auth.user": "fas fa-user",
-        "auth.Group": "fas fa-users",
-        "accounts.User": "fas fa-user-shield",
-        "billing": "fas fa-coins",
-        "billing.CoinWallet": "fas fa-wallet",
-        "billing.CoinTransaction": "fas fa-exchange-alt",
-        "billing.PricingPlan": "fas fa-tags",
-        "billing.PurchaseOrder": "fas fa-receipt",
-        "admin_api": "fas fa-shield-alt",
-        "admin_api.AdminAuditLog": "fas fa-clipboard-list",
-        "content": "fas fa-newspaper",
-        "content.ProjectFeature": "fas fa-rocket",
-        "content.TeamMember": "fas fa-user-friends",
-        "content.AppRelease": "fas fa-mobile-alt",
-        "reviews": "fas fa-star-half-alt",
-        "reviews.PlatformReview": "fas fa-star",
-        "scans": "fas fa-search",
-        "scans.ScanJob": "fas fa-spider",
-        "scans.Finding": "fas fa-bug",
-        "scans.Page": "fas fa-file-alt",
-        "scans.AuthorizationConsent": "fas fa-shield-alt",
-        "scans.AgentSession": "fas fa-robot",
-        "scans.AgentStep": "fas fa-shoe-prints",
-    },
-    "default_icon_parents": "fas fa-chevron-circle-right",
-    "default_icon_children": "fas fa-circle",
-    "related_modal_active": True,
-    "changeform_format": "horizontal_tabs",
-    "changeform_format_overrides": {
-        "accounts.user": "collapsible",
-    },
-    "show_ui_builder": False,
-    "language_chooser": False,
-}
+# Email 寄送（購買收據、未來通知）
+# dev 預設用 filebased backend（信件存到 dev_emails/，每封一檔，可直接打開看內容；
+# 避開 Windows console cp950 編碼炸 emoji 的問題）。
+# production 設 DJANGO_EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# 並提供 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD（Gmail 用 App Password，不是登入密碼）
+EMAIL_BACKEND = os.getenv(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.filebased.EmailBackend",
+)
+EMAIL_FILE_PATH = os.getenv(
+    "EMAIL_FILE_PATH",
+    str(PROJECT_ROOT / "backend" / "dev_emails"),
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Argus 系統 <no-reply@argus.local>")
 
-_JAZZMIN_UI_TWEAKS_DEPRECATED = {
-    "navbar_small_text": False,
-    "footer_small_text": False,
-    "body_small_text": False,
-    "brand_small_text": False,
-    "brand_colour": "navbar-indigo",
-    "accent": "accent-info",
-    "navbar": "navbar-indigo navbar-dark",
-    "no_navbar_border": False,
-    "navbar_fixed": True,
-    "layout_boxed": False,
-    "footer_fixed": False,
-    "sidebar_fixed": True,
-    "sidebar": "sidebar-dark-indigo",
-    "sidebar_nav_small_text": False,
-    "sidebar_disable_expand": False,
-    "sidebar_nav_child_indent": True,
-    "sidebar_nav_compact_style": False,
-    "sidebar_nav_legacy_style": False,
-    "sidebar_nav_flat_style": False,
-    "theme": "flatly",
-    "default_theme_mode": "auto",
-    "button_classes": {
-        "primary": "btn-primary",
-        "secondary": "btn-secondary",
-        "info": "btn-info",
-        "warning": "btn-warning",
-        "danger": "btn-danger",
-        "success": "btn-success",
-    },
-}
+# Django Admin 已完全移除（不再提供 `/django-admin/` 後門）；唯一後台為 React `/admin/*`
+# （admin_api 提供 CRUD endpoint）。`django.contrib.admin` 仍留在 INSTALLED_APPS：
+# 提供 LogEntry 等基礎設施並避免動到既有 migration，但已無對外 URL、無法存取。
+# 舊 jazzmin 設定常數已於 W4 移除（套件已 uv remove）

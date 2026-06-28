@@ -207,8 +207,7 @@ uv run python backend/manage.py runserver 127.0.0.1:8000
 | `/project` | 公開介紹頁（未登入預設跳轉） |
 | `/login` | Google OAuth 登入 |
 | `/scans` | 掃描列表（登入後） |
-| `/admin/overview` | React 管理後台（staff 限定） |
-| `/django-admin/` | Django Admin 後門（superuser） |
+| `/admin/overview` | React 管理後台（staff 限定，唯一後台；管理員前台 email 登入後進入） |
 
 ### 6. 驗證環境
 

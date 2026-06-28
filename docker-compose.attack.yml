@@ -1,0 +1,22 @@
+# Phase 3 攻擊鏈 override（僅授權的隔離展示環境使用，不影響生產）
+#
+# 用途：把 worker 升級為「能 docker exec argus-kali-1」並開啟 Kali 主動驗證。
+# 這些設定刻意**不放進** docker-compose.yml，避免公網生產部署的 worker 取得
+# host docker socket（近乎 root 權限）。只有明確疊加本檔時才生效。
+#
+# 啟動 demo（含 kali container）：
+#   docker compose -f docker-compose.yml -f docker-compose.attack.yml --profile attack up -d --build
+#
+# 仍受三重鎖保護：即使本檔啟用，單一掃描還需 scan_mode=active 且
+# active_testing_authorized=True 才會真的對目標執行 sqlmap。
+
+services:
+  worker:
+    environment:
+      # 開啟 Kali 主動驗證總開關（仍受 per-scan active + authorized 二鎖）
+      ARGUS_KALI_ENABLED: "true"
+      ARGUS_KALI_CONTAINER: "argus-kali-1"
+    volumes:
+      # 掛載 host docker socket，讓 worker 能對 kali container 執行 docker exec
+      # ⚠ 安全代價：等同給 worker 近乎 host root 權限，僅限隔離展示環境
+      - /var/run/docker.sock:/var/run/docker.sock

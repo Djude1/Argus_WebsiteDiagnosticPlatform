@@ -1,6 +1,6 @@
 """對 LLM provider 做安全 smoke test。
 
-依 skills/argus-project/references/api-provider-workflow.md：
+依 backend/apps/agent/CLAUDE.md 的 API Key 安全規則：
 只輸出 provider / HTTP / 能力摘要，不輸出 key、headers、raw body。
 未來換 key 或新增 provider 時用：
     uv run python backend/manage.py smoke_providers

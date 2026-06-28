@@ -2,103 +2,129 @@ from django.core.management.base import BaseCommand
 
 from apps.content.models import TeamMember
 
+# 兩套已知佔位成員的 name（清除用，與 migration 0009 一致）
+PLACEHOLDER_NAMES = [
+    "後端工程師", "前端工程師", "AI / Agent", "DevOps / QA",
+    "組長A", "B同學", "C同學", "D同學",
+]
+
+# 真實組員：與 migration 0009 同一份資料（手冊表 4-2-2 / 4-2-1，第115401組）
 TEAM_DATA = [
     {
-        "sort_order": 0,
-        "name": "組長A",
-        "role": "全端整合 / 專題組長",
+        "student_id": "11246034",
+        "name": "侯雨利",
+        "role": "組長｜系統架構與後端整合",
         "avatar_emoji": "👑",
-        "bio": "負責整體專案規劃與系統整合，協調前後端架構設計。",
-        "skills": ["Django", "React", "Docker", "系統架構"],
+        "bio": "負責整體系統架構規劃與技術選型、後端 API 整合（Django + DRF）、"
+               "Docker Compose 部署與維運，並統籌前後端協調與系統手冊撰寫。",
+        "skills": ["Django", "DRF", "Docker Compose", "系統架構", "Google OAuth"],
         "skill_levels": [
-            {"name": "Django", "level": 90},
-            {"name": "React", "level": 85},
-            {"name": "Docker", "level": 80},
-            {"name": "系統整合", "level": 92},
+            {"name": "系統架構規劃", "level": 92},
+            {"name": "Django / DRF", "level": 88},
+            {"name": "Docker 部署維運", "level": 85},
+            {"name": "專案統籌", "level": 90},
         ],
         "contributions": [
-            {"title": "專案規劃與架構設計", "desc": "訂定系統架構、技術選型、分工規劃"},
-            {"title": "後端 API 整合", "desc": "Django REST Framework API 設計與整合"},
-            {"title": "部署與維運", "desc": "Docker Compose 多服務部署流程"},
+            {"title": "系統架構設計", "desc": "前後端分離分層架構與技術選型"},
+            {"title": "後端 API 與登入整合", "desc": "Google OAuth / JWT 認證、評論與 CMS API"},
+            {"title": "Docker 部署與維運", "desc": "Compose 多服務容器化 + cloudflared 對外通道"},
+            {"title": "報告產出與文件統籌", "desc": "Word 弱點報告、系統手冊統整與格式校對"},
         ],
-        "email": "",
+        "email": "11246034@ntub.edu.tw",
         "github_url": "",
+        "sort_order": 0,
+        "is_active": True,
     },
     {
-        "sort_order": 1,
-        "name": "B同學",
-        "role": "前端工程師",
+        "student_id": "11246001",
+        "name": "羅建凱",
+        "role": "組員｜前端開發與 UI/UX",
         "avatar_emoji": "🎨",
-        "bio": "負責前端 React 介面開發與視覺設計，打造直覺的使用者體驗。",
-        "skills": ["React", "CSS", "Figma", "PWA"],
+        "bio": "負責 React 18 前端 SPA 開發（掃描提交、結果展示、後台管理）、"
+               "ReactFlow 網站拓樸圖，以及全站 UI/UX 視覺設計與互動效果。",
+        "skills": ["React 18", "Vite", "Tailwind CSS", "ReactFlow", "UI/UX"],
         "skill_levels": [
-            {"name": "React", "level": 88},
-            {"name": "CSS/Tailwind", "level": 85},
-            {"name": "UI 設計", "level": 80},
-            {"name": "PWA", "level": 75},
+            {"name": "React 18 SPA", "level": 90},
+            {"name": "UI/UX 設計", "level": 88},
+            {"name": "Tailwind CSS", "level": 85},
+            {"name": "ReactFlow 視覺化", "level": 78},
         ],
         "contributions": [
-            {"title": "React UI 元件開發", "desc": "App.jsx 所有頁面元件設計與實作"},
-            {"title": "視覺設計", "desc": "色彩系統、排版、互動動畫"},
-            {"title": "PWA 離線支援", "desc": "Service Worker、manifest 設定"},
+            {"title": "React SPA 全頁開發", "desc": "掃描提交、儀表板、歷史、結果詳情與後台"},
+            {"title": "ReactFlow 網站拓樸圖", "desc": "視覺化 BFS 爬取的頁面節點結構"},
+            {"title": "全站 UI/UX 與互動", "desc": "配色、版面、動效與結帳 3 步驟精靈"},
+            {"title": "API 規格與行銷頁", "desc": "RESTful 介面規格、產品介紹與團隊介紹頁"},
         ],
-        "email": "",
+        "email": "11246001@ntub.edu.tw",
         "github_url": "",
+        "sort_order": 1,
+        "is_active": True,
     },
     {
-        "sort_order": 2,
-        "name": "C同學",
-        "role": "後端 / 資料庫工程師",
+        "student_id": "11246038",
+        "name": "李仕傑",
+        "role": "組員｜資料庫與計費後端",
         "avatar_emoji": "🗄️",
-        "bio": "負責後端 API 開發、資料庫設計與 Celery 非同步任務管理。",
-        "skills": ["Django", "PostgreSQL", "Celery", "Redis"],
+        "bio": "負責 PostgreSQL 資料庫設計與 Migration、Celery 非同步掃描任務、"
+               "點數計費系統（BillingService 冪等交易）與後端 API 開發。",
+        "skills": ["PostgreSQL", "Celery", "Redis", "BillingService", "REST API"],
         "skill_levels": [
-            {"name": "Django", "level": 88},
-            {"name": "PostgreSQL", "level": 85},
-            {"name": "Celery", "level": 82},
-            {"name": "Redis", "level": 78},
+            {"name": "PostgreSQL 設計", "level": 88},
+            {"name": "計費冪等交易", "level": 86},
+            {"name": "Celery 非同步", "level": 84},
+            {"name": "REST API", "level": 82},
         ],
         "contributions": [
-            {"title": "資料庫設計與 Migration", "desc": "設計 ScanJob、Billing 等核心 Model"},
-            {"title": "Celery 非同步掃描任務", "desc": "掃描工作佇列與進度追蹤"},
-            {"title": "點數計費系統", "desc": "CoinWallet 冪等交易設計"},
+            {"title": "資料庫設計與 ER 模型", "desc": "PostgreSQL schema、Migration 與實體關聯"},
+            {"title": "點數計費系統", "desc": "CoinWallet 冪等交易、預扣／結算／退款機制"},
+            {"title": "Celery 非同步任務", "desc": "掃描工作佇列與進度追蹤"},
+            {"title": "資料 API", "desc": "Findings／Dashboard 與掃描歷史／稽核 API"},
         ],
-        "email": "",
+        "email": "11246038@ntub.edu.tw",
         "github_url": "",
+        "sort_order": 2,
+        "is_active": True,
     },
     {
-        "sort_order": 3,
-        "name": "D同學",
-        "role": "網頁架設 / 資料處理",
+        "student_id": "11246041",
+        "name": "曾子睿",
+        "role": "組員｜爬蟲與四維掃描引擎",
         "avatar_emoji": "🕷️",
-        "bio": "負責伺服器部署、Playwright 爬蟲開發與掃描資料分析處理。",
-        "skills": ["Playwright", "Nginx", "Python", "資料分析"],
+        "bio": "負責 Playwright BFS 爬蟲引擎、四維掃描引擎（SEO／AEO／GEO／Security）"
+               "開發，以及 Nginx 反向代理與伺服器部署設定。",
+        "skills": ["Playwright", "四維掃描", "Nginx", "Python", "資安掃描"],
         "skill_levels": [
             {"name": "Playwright 爬蟲", "level": 90},
-            {"name": "Nginx 部署", "level": 82},
-            {"name": "Python 資料處理", "level": 85},
-            {"name": "安全掃描分析", "level": 80},
+            {"name": "四維掃描引擎", "level": 88},
+            {"name": "被動資安分析", "level": 82},
+            {"name": "Nginx 部署", "level": 80},
         ],
         "contributions": [
-            {"title": "Playwright BFS 爬蟲", "desc": "多深度網站爬取、截圖與頁面分析"},
-            {"title": "四維掃描器", "desc": "SEO/AEO/GEO/Security 掃描邏輯"},
-            {"title": "伺服器架設與 Nginx", "desc": "Docker 部署、反向代理、SSL 設定"},
+            {"title": "Playwright BFS 爬蟲", "desc": "同網域、深度爬取、截圖與頁面證據保存"},
+            {"title": "四維掃描引擎", "desc": "SEO／AEO／GEO／Security 規則與 Finding 產出"},
+            {"title": "四維加權評分與取消", "desc": "0–100 綜合評分與合作式掃描取消機制"},
+            {"title": "合規與主動探測", "desc": "robots／same-origin、katana 整合、主動探測模組"},
         ],
-        "email": "",
+        "email": "11246041@ntub.edu.tw",
         "github_url": "",
+        "sort_order": 3,
+        "is_active": True,
     },
 ]
 
 
 class Command(BaseCommand):
-    help = "Seed 四位組員資料（idempotent）"
+    help = "Seed 四位真實組員資料（idempotent，以 student_id 為鍵，並清除舊佔位成員）"
 
     def handle(self, *args, **options):
+        removed, _ = TeamMember.objects.filter(name__in=PLACEHOLDER_NAMES).delete()
+        if removed:
+            self.stdout.write(f"  清除佔位成員：{removed} 筆")
         for data in TEAM_DATA:
             member, created = TeamMember.objects.update_or_create(
-                name=data["name"],
-                defaults={k: v for k, v in data.items() if k != "name"},
+                student_id=data["student_id"],
+                defaults={k: v for k, v in data.items() if k != "student_id"},
             )
             action = "建立" if created else "更新"
-            self.stdout.write(f"  {action}：{member.name} ({member.role})")
-        self.stdout.write(self.style.SUCCESS("[OK] 組員資料 seed 完成"))
+            self.stdout.write(f"  {action}：{member.student_id} {member.name}（{member.role}）")
+        self.stdout.write(self.style.SUCCESS("[OK] 真實組員資料 seed 完成"))

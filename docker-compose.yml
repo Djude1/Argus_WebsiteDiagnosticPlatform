@@ -81,6 +81,25 @@ services:
     volumes:
       - media_data:/app/backend/media
 
+  # Phase 3 攻擊平台：Kali container，提供 sqlmap / metasploit 等主動驗證工具。
+  # 預設不啟動，僅在明確授權的展示環境用 `docker compose --profile attack up -d kali` 啟動。
+  # container_name 必須對齊 settings.ARGUS_KALI_CONTAINER（預設 argus-kali-1）。
+  #
+  # ⚠ 完整攻擊鏈（worker 透過 docker exec 呼叫本服務）尚需兩項手動 infra 設定，請勿略過：
+  #   1. worker image 安裝 docker CLI
+  #   2. worker service 掛載宿主 docker socket（- /var/run/docker.sock:/var/run/docker.sock）
+  #   這兩項屬主機層權限變更，須在授權的隔離展示環境手動套用，未在此預設開啟。
+  kali:
+    image: kalilinux/kali-rolling
+    container_name: argus-kali-1
+    profiles:
+      - attack
+    command: >
+      bash -c "apt-get update -q &&
+               apt-get install -y -q sqlmap metasploit-framework nmap &&
+               sleep infinity"
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

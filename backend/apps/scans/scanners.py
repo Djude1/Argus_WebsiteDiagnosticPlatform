@@ -19,6 +19,34 @@ TW_NATIONAL_ID_PATTERN = re.compile(r"\b[A-Z][12]\d{8}\b")
 # 信用卡號：13-19 位數字，常見 16 位 4-4-4-4 格式或無分隔。需另經 is_valid_luhn 驗證
 CREDIT_CARD_PATTERN = re.compile(r"(?<!\d)(?:\d[\s\-]?){12,18}\d(?!\d)")
 
+# B1: 移除 SVG 元素（雷達圖等動態 SVG 內 polygon points / path d 屬性的浮點座標
+# 數字片段巧合通過 Luhn 會被誤判為卡號，已實證 https://camb.xn--gst.tw 雷達圖案例）。
+# 用非貪婪 + DOTALL，能抓含巢狀子元素的整段 <svg>...</svg>。
+_HTML_SVG_STRIP = re.compile(r"<svg\b[^>]*>.*?</svg>", re.IGNORECASE | re.DOTALL)
+# 殘留的 SVG 子元素標籤（裸的 <polygon>、<path>、<circle>...）整段移除，避免外層 <svg> 缺失時座標漏掉。
+_HTML_SVG_ELEMENTS = re.compile(
+    r"<(?:polygon|polyline|path|circle|ellipse|line|rect|use|g|defs|symbol|marker|pattern|mask|clipPath|filter|feGaussianBlur|feOffset|feMerge|feMergeNode|feColorMatrix|feFlood|feComposite|stop|linearGradient|radialGradient)\b[^>]*/?>",
+    re.IGNORECASE,
+)
+# 同步移除所有 SVG 座標 / 尺寸 / 變換屬性殘留值（保險：若整段 SVG 沒匹配到，仍可清掉純屬性）。
+# 補齊比上一版更完整的屬性清單：除 points/d 外含 cx/cy/r/rx/ry/x/y/x1/y1/x2/y2/dx/dy/fx/fy/
+# width/height/transform/viewBox/stroke-width/stroke-dasharray/stroke-dashoffset/font-size。
+_HTML_PATH_ATTR = re.compile(
+    r"""\b(?:points|d|cx|cy|r|rx|ry|x|y|x1|y1|x2|y2|dx|dy|fx|fy|width|height|transform|viewBox|stroke-width|stroke-dasharray|stroke-dashoffset|font-size)\s*=\s*(?:"[^"]*"|'[^']*')""",
+    re.IGNORECASE,
+)
+# B2: HTML 註解抽取（開發者最常把測試資料 / TODO / 卡號 / token 留在 <!-- --> 內）
+_HTML_COMMENT = re.compile(r"<!--([\s\S]*?)-->")
+
+# B5: 開發者預留字串（CTF flag 格式 + 常見 placeholder）。
+# 正規網站若意外留下這些字串、報告應該直接 echo 給使用者看到、方便定位。
+# 涵蓋：`flag{...}`（CTF / 資安教學）、`{{TODO}}`、`<<<placeholder>>>`、明顯的
+# `XXX-XXXX-XXXX` 樣式佔位、`Lorem ipsum` 開頭。
+_DEV_ARTIFACT_PATTERN = re.compile(
+    r"(?:flag\{[a-zA-Z0-9_-]+\}|\{\{\s*TODO[^}]*\}\}|<{2,}[A-Z][A-Z0-9_\s-]*>{2,}|Lorem ipsum\b)",
+    re.IGNORECASE,
+)
+
 # 台灣身分證號第一碼字母對應的兩位數值（內政部標準）
 _TW_ID_LETTER_VALUES = {
     "A": 10, "B": 11, "C": 12, "D": 13, "E": 14, "F": 15, "G": 16, "H": 17,
@@ -91,12 +119,48 @@ def is_valid_luhn(text: str) -> bool:
     return checksum % 10 == 0
 
 
+# 信用卡上下文關鍵字：附近出現這些字才把「裸數字串」當卡號，降低隨機數字誤報
+_CARD_CONTEXT_KEYWORDS = (
+    "card", "卡", "信用", "visa", "master", "amex", "jcb", "unionpay", "銀聯",
+    "付款", "payment", "刷卡", "帳單", "cvv", "cvc", "expir", "到期", "持卡",
+)
+
+
+def _is_formatted_card(match: str) -> bool:
+    """卡號有 4-4-4-4 / 4-6-5 之類分隔且去分隔後為 15/16 位 → 視為高信心格式。"""
+    digits = re.sub(r"\D", "", match)
+    return ("-" in match or " " in match) and len(digits) in (15, 16)
+
+
+def _card_has_context(text: str, match: str, window: int = 48) -> bool:
+    """match 在 text 任一出現位置的前後 window 字元內，是否有信用卡關鍵字。"""
+    low = text.lower()
+    target = match.lower()
+    idx = low.find(target)
+    while idx != -1:
+        seg = low[max(0, idx - window): idx + len(target) + window]
+        if any(k in seg for k in _CARD_CONTEXT_KEYWORDS):
+            return True
+        idx = low.find(target, idx + 1)
+    return False
+
+
 def detect_pii_in_text(text: str) -> dict[str, list[str]]:
     """從文字中偵測 PII，回傳各類別去重後的列表（按出現順序保留）。
 
     身分證與信用卡會額外用檢查碼過濾，降低 false positive。
+
+    信用卡精準度（收斂誤報）：通過 Luhn 後，僅在「格式化（含分隔且 15/16 位）」
+    或「附近有信用卡關鍵字」時才採計；裸數字串（流水號、座標、雜湊片段巧過 Luhn）
+    不採計，避免報告灌入大量假卡號（已於靶機報告觀察到此問題）。
     """
     text = text or ""
+    cc_valid = [
+        m for m in dict.fromkeys(CREDIT_CARD_PATTERN.findall(text)) if is_valid_luhn(m)
+    ]
+    credit_card = [
+        m for m in cc_valid if _is_formatted_card(m) or _card_has_context(text, m)
+    ]
     return {
         "email": list(dict.fromkeys(EMAIL_PATTERN.findall(text))),
         "mobile": list(dict.fromkeys(TW_MOBILE_PATTERN.findall(text))),
@@ -104,10 +168,7 @@ def detect_pii_in_text(text: str) -> dict[str, list[str]]:
             m for m in dict.fromkeys(TW_NATIONAL_ID_PATTERN.findall(text))
             if is_valid_tw_national_id(m)
         ],
-        "credit_card": [
-            m for m in dict.fromkeys(CREDIT_CARD_PATTERN.findall(text))
-            if is_valid_luhn(m)
-        ],
+        "credit_card": credit_card,
     }
 
 
@@ -674,10 +735,45 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     顯示原始 PII 在 finding evidence 中（依使用者明確要求，不做遮罩）；
     description 前置警示文字，讓報告閱讀者意識到本報告含未遮罩個資的法律責任。
     身分證與信用卡含檢查碼驗證以降低 false positive。
+
+    防誤報（B1）：移除 SVG 元素與所有 points/d 屬性，避免雷達圖等動態
+    SVG 內的浮點座標數字（如 133.4346474264069）剛好 13-19 位且巧合通過
+    Luhn 被誤判為信用卡號（實機在 cekb.local 測試靶機已觀察到此 FP）。
+
+    強化覆蓋率（B2）：額外掃 HTML <!-- --> 註解內容，因為開發者最常把
+    測試資料（PCI 測試卡 4111-1111-1111-1111、員工聯絡簿、TODO 含路徑、
+    API key sample）以註解形式留在 production HTML。同類 evidence 會
+    在文案上標示「含 HTML 註解 X 筆」讓使用者注意成因。
     """
-    pii = detect_pii_in_text(page_input.html)
+    raw_html = page_input.html or ""
+
+    # B1: 移除 SVG 整段 → 殘留的 SVG 子元素 → 殘留的 SVG 座標屬性；三層防護避免浮點誤判為卡號
+    safe_html = _HTML_SVG_STRIP.sub(" ", raw_html)
+    safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
+    safe_html = _HTML_PATH_ATTR.sub(" ", safe_html)
+    pii_main = detect_pii_in_text(safe_html)
+
+    # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
+    comments_text = "\n".join(_HTML_COMMENT.findall(raw_html))
+    pii_comments = detect_pii_in_text(comments_text) if comments_text else {}
+
+    # 合併 main + comments（去重保序）
+    pii = {}
+    comment_only_counts: dict[str, int] = {}
+    for key in ("email", "mobile", "national_id", "credit_card"):
+        main_list = pii_main.get(key) or []
+        comment_list = pii_comments.get(key) or []
+        merged = list(dict.fromkeys(main_list + comment_list))
+        pii[key] = merged
+        # 計算「只在註解中發現」的筆數，提供使用者明確線索
+        comment_only_counts[key] = len([v for v in comment_list if v not in main_list])
+
+    # B5: 額外掃 raw HTML（不剝 SVG、不只看註解）內的開發者預留字串。
+    # 為了避免一般網站誤觸發、僅當「同頁 PII 已有 1 筆以上 OR 字串看起來像 CTF flag」才報。
+    dev_artifacts = list(dict.fromkeys(_DEV_ARTIFACT_PATTERN.findall(raw_html)))
+
     total = sum(len(v) for v in pii.values())
-    if total == 0:
+    if total == 0 and not dev_artifacts:
         return []
 
     # 每類最多列前 50 筆，避免 evidence 欄位被個資灌爆（make_finding 還會截到 4000 字）
@@ -691,7 +787,17 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     for key, label in pii_labels:
         values = pii[key]
         if values:
-            parts.append(f"{label}（{len(values)} 筆）：{', '.join(values[:50])}")
+            comment_note = ""
+            if comment_only_counts.get(key):
+                comment_note = f"，其中 {comment_only_counts[key]} 筆在 HTML 註解中"
+            parts.append(f"{label}（{len(values)} 筆{comment_note}）：{', '.join(values[:50])}")
+
+    # B5: 開發者預留字串獨立一行顯示（CTF flag / TODO placeholder / Lorem 等）
+    if dev_artifacts:
+        parts.append(
+            f"⚠️ 開發者預留字串（{len(dev_artifacts)} 筆）：{', '.join(dev_artifacts[:50])}"
+        )
+
     evidence = "\n".join(parts)
 
     return [

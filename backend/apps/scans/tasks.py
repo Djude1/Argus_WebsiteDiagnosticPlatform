@@ -1,9 +1,9 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 from asgiref.sync import sync_to_async
 from celery import shared_task
-from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.utils import timezone
 
@@ -20,6 +20,15 @@ from apps.scans.scanners import (
     analyze_site_signals,
     calculate_scores,
 )
+from apps.scans.security import exposure_scanner, owasp_mapper
+from apps.scans.security.cookie_scanner import analyze_cookies
+from apps.scans.security.dns_scanner import analyze_dns
+from apps.scans.security.header_scanner import analyze_headers
+from apps.scans.security.js_library_scanner import analyze_js_libraries
+from apps.scans.security.kali_tools import validate_findings_with_kali
+from apps.scans.security.secret_scanner import build_secret_finding, detect_secrets_in_text
+from apps.scans.security.sri_scanner import analyze_sri
+from apps.scans.security.ssl_scanner import analyze_ssl
 
 
 def _write_progress(
@@ -139,6 +148,15 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 all_findings.extend(page_findings)
                 for finding in page_findings:
                     Finding.objects.create(scan_job=scan_job, page=page, **finding)
+                # Inline/HTML 硬編碼秘鑰偵測（被動：只分析已抓到的 HTML，不發額外請求）
+                page_secrets = detect_secrets_in_text(page.html)
+                secret_finding = build_secret_finding(
+                    page_secrets, page.final_url or page.url, source="inline_html"
+                )
+                if secret_finding:
+                    secret_finding = owasp_mapper.tag(secret_finding)
+                    Finding.objects.create(scan_job=scan_job, page=page, **secret_finding)
+                    all_findings.append(secret_finding)
             # 不論是否被阻擋，已處理一頁就更新 progress；同時當作 cancel 檢查點
             _write_progress(
                 scan_job.id,
@@ -245,6 +263,92 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         for finding in katana_findings + nuclei_findings:
             Finding.objects.create(scan_job=scan_job, page=None, **finding)
         all_findings.extend(katana_findings + nuclei_findings)
+
+        # === Kali 主動驗證（攻擊鏈，純加法、三重授權鎖、silent-fail）===
+        # 僅 deep_mode（active + authorized）才嘗試；ARGUS_KALI_ENABLED 等其餘 gating
+        # 由 validate_findings_with_kali → run_sqlmap 的三重鎖負責，預設完全 inert。
+        if deep_mode:
+            try:
+                kali_findings = validate_findings_with_kali(scan_job_id, crawled_urls)
+            except Exception as exc:  # noqa: BLE001
+                append_log(
+                    scan_job_id,
+                    f"Kali 主動驗證略過（{exc.__class__.__name__}）",
+                    level="warn",
+                )
+                kali_findings = []
+            for finding in kali_findings:
+                Finding.objects.create(scan_job=scan_job, page=None, **finding)
+            all_findings.extend(kali_findings)
+            if kali_findings:
+                append_log(
+                    scan_job_id,
+                    f"Kali 主動驗證確認 {len(kali_findings)} 項可利用漏洞",
+                )
+
+        # === 深度被動安全掃描（security/ sub-package，純加法、silent-fail）===
+        host = urlparse(scan_job.normalized_url).hostname or ""
+        root_page = next((p for p in crawled_pages if p.get("headers")), None)
+        root_headers = root_page["headers"] if root_page else {}
+        root_url = (
+            (root_page.get("final_url") or root_page.get("url"))
+            if root_page else scan_job.normalized_url
+        )
+        deep_security_findings = (
+            analyze_ssl(host, scan_job_id=scan_job.id)
+            + analyze_cookies(root_headers, root_url)
+            + analyze_headers(crawled_pages)
+            + analyze_sri(crawled_pages)
+            + analyze_dns(host)
+            + analyze_js_libraries(crawled_pages)
+        )
+        deep_security_findings = [owasp_mapper.tag(f) for f in deep_security_findings]
+        for finding in deep_security_findings:
+            Finding.objects.create(scan_job=scan_job, page=None, **finding)
+        all_findings.extend(deep_security_findings)
+        owasp_mapper.backfill(scan_job)
+        append_log(
+            scan_job_id,
+            f"深度被動安全掃描完成：{len(deep_security_findings)} 項發現",
+        )
+
+        # === robots.txt 敏感路徑洩露（被動，任何模式都產出）===
+        robots_disclosure = exposure_scanner.analyze_robots_disclosure(
+            site_signals.get("robots_disallow") or []
+        )
+        for finding in robots_disclosure:
+            tagged = owasp_mapper.tag(finding)
+            Finding.objects.create(scan_job=scan_job, page=None, **tagged)
+        all_findings.extend(robots_disclosure)
+
+        # === 敏感檔案外洩主動探測（content discovery，僅付費 active+authorized）===
+        if deep_mode:
+            raise_if_cancelled(scan_job_id)
+            append_log(scan_job_id, "敏感檔案外洩探測開始（主動內容探測，繞連結直接探隱藏檔）")
+            try:
+                probe_results = asyncio.run(
+                    exposure_scanner.probe_paths(
+                        scan_job.normalized_url, scan_job.origin, scan_job_id
+                    )
+                )
+                exposure_findings = [
+                    owasp_mapper.tag(f)
+                    for f in exposure_scanner.analyze_probe_results(probe_results)
+                ]
+                for finding in exposure_findings:
+                    Finding.objects.create(scan_job=scan_job, page=None, **finding)
+                all_findings.extend(exposure_findings)
+                append_log(
+                    scan_job_id,
+                    f"敏感檔案外洩探測完成：探測 {len(probe_results)} 路徑，"
+                    f"發現 {len(exposure_findings)} 項外洩",
+                )
+            except Exception as exc:  # noqa: BLE001 — 探測失敗不影響主掃描
+                append_log(
+                    scan_job_id,
+                    f"敏感檔案外洩探測略過（{exc.__class__.__name__}）",
+                    level="warn",
+                )
 
         if katana_tech:
             updated_warnings = dict(scan_job.warning_summary or {})
@@ -361,21 +465,6 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         except Exception:  # noqa: BLE001
             pass
         return {"status": "cancelled"}
-    except SoftTimeLimitExceeded:
-        soft_limit_min = settings.CELERY_TASK_SOFT_TIME_LIMIT // 60
-        timeout_msg = f"掃描超時（超過 {soft_limit_min} 分鐘上限）"
-        append_log(scan_job_id, timeout_msg, level="error")
-        ScanJob.objects.filter(id=scan_job_id).update(
-            status=ScanJob.Status.FAILED,
-            completed_at=timezone.now(),
-            progress={},
-            error_message=timeout_msg,
-        )
-        try:
-            refund_full_for_scan(scan_job.user, scan_job, reason="超時")
-        except Exception:  # noqa: BLE001
-            pass
-        return {"status": "timeout"}
     except Exception as exc:
         detail = str(exc).strip()[:500]
         class_name = exc.__class__.__name__

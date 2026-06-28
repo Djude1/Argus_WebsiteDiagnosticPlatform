@@ -445,6 +445,21 @@ class PiiDetectionTests(APITestCase):
         result = detect_pii_in_text("流水號 1234567890123456 不是卡號")
         self.assertEqual(result["credit_card"], [])
 
+    def test_detect_pii_ignores_bare_luhn_valid_without_context(self):
+        # 通過 Luhn 但無分隔、附近也無信用卡關鍵字（流水號）→ 不採計，收斂誤報
+        result = detect_pii_in_text("序號 4111111111111111 結束")
+        self.assertEqual(result["credit_card"], [])
+
+    def test_detect_pii_keeps_formatted_card_without_context(self):
+        # 4-4-4-4 格式化卡號即使無關鍵字，仍視為高信心
+        result = detect_pii_in_text("備註 4111-1111-1111-1111 完")
+        self.assertEqual(result["credit_card"], ["4111-1111-1111-1111"])
+
+    def test_detect_pii_keeps_bare_card_with_context(self):
+        # 裸號但附近有「卡」關鍵字 → 採計
+        result = detect_pii_in_text("信用卡號 4111111111111111")
+        self.assertEqual(result["credit_card"], ["4111111111111111"])
+
     def test_detect_pii_dedups_repeated_values(self):
         result = detect_pii_in_text("a@b.com a@b.com a@b.com 重複出現")
         self.assertEqual(result["email"], ["a@b.com"])
@@ -570,28 +585,6 @@ class GeoFastScannerTests(APITestCase):
         findings = analyze_site_signals({"llms_txt_found": True, "blocked_ai_crawlers": []})
 
         self.assertEqual(findings, [])
-
-
-class ScanAdminTests(APITestCase):
-    def setUp(self):
-        self.admin = get_user_model().objects.create_superuser(
-            username="root",
-            email="root@example.com",
-            password="safe-test-password",
-        )
-        self.client.force_login(self.admin)
-
-    def test_scanjob_changelist_shows_summary(self):
-        response = self.client.get("/django-admin/scans/scanjob/")
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertContains(response, "掃描總覽")
-
-    def test_authorization_consent_admin_is_view_only(self):
-        # 授權同意書是法律證據，不允許透過 Admin 新增
-        response = self.client.get("/django-admin/scans/authorizationconsent/add/")
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class RerunScanCommandTests(APITestCase):

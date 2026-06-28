@@ -15,9 +15,11 @@ class CoinWallet(models.Model):
         on_delete=models.CASCADE,
         related_name="coin_wallet",
     )
-    balance = models.PositiveIntegerField(default=0)
-    total_purchased_ntd = models.PositiveIntegerField(default=0)
-    total_scans_used = models.PositiveIntegerField(default=0)
+    # 改用 BigInteger（int64）避免 admin 累加調整或長期使用後超出 int32（≈21億）導致
+    # 「integer out of range」造成登入/月贈點失敗。
+    balance = models.PositiveBigIntegerField(default=0)
+    total_purchased_ntd = models.PositiveBigIntegerField(default=0)
+    total_scans_used = models.PositiveBigIntegerField(default=0)
     # 月贈點冪等用：記錄最近一次發放的年份與月份，避免同月重複發放
     last_bonus_year = models.PositiveSmallIntegerField(null=True, blank=True)
     last_bonus_month = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -158,9 +160,9 @@ class CoinTransaction(models.Model):
         on_delete=models.CASCADE,
         related_name="transactions",
     )
-    amount = models.IntegerField()  # 正 = 入帳；負 = 扣款
+    amount = models.BigIntegerField()  # 正 = 入帳；負 = 扣款（BigInt 避免單筆大額調整爆 int32）
     kind = models.CharField(max_length=32, choices=Kind.choices, db_index=True)
-    balance_after = models.PositiveIntegerField()
+    balance_after = models.PositiveBigIntegerField()  # 與 CoinWallet.balance 同步擴大
     scan_job = models.ForeignKey(
         "scans.ScanJob",
         on_delete=models.SET_NULL,

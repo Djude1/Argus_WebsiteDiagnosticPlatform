@@ -19,11 +19,11 @@ class ProjectFeatureAdmin(admin.ModelAdmin):
 @admin.register(TeamMember)
 class TeamMemberAdmin(admin.ModelAdmin):
     list_display = [
-        "sort_order", "avatar_emoji", "name", "role",
+        "sort_order", "avatar_emoji", "name", "student_id", "role",
         "skills_display", "is_active",
     ]
     list_editable = ["is_active"]
-    search_fields = ["name", "role", "bio", "email"]
+    search_fields = ["name", "student_id", "role", "bio", "email"]
     ordering = ["sort_order"]
 
     @admin.display(description="技能")

@@ -11,6 +11,7 @@ from apps.billing.serializers import (
     PurchaseOrderSerializer,
     PurchaseRequestSerializer,
 )
+from apps.billing.emails import send_purchase_receipt
 from apps.billing.services import get_or_create_wallet, purchase_plan
 
 
@@ -70,6 +71,8 @@ class PurchaseView(views.APIView):
         order.save(update_fields=["transaction", "status", "paid_at"])
 
         wallet = get_or_create_wallet(request.user)
+        # 寄送購點收據（失敗不阻擋）
+        send_purchase_receipt(order, wallet.balance)
         return Response(
             {
                 "wallet": CoinWalletSerializer(wallet).data,
