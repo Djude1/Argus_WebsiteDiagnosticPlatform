@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from asgiref.sync import sync_to_async
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.utils import timezone
 
@@ -465,6 +466,21 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         except Exception:  # noqa: BLE001
             pass
         return {"status": "cancelled"}
+    except SoftTimeLimitExceeded:
+        soft_limit_min = settings.CELERY_TASK_SOFT_TIME_LIMIT // 60
+        timeout_msg = f"掃描超時（超過 {soft_limit_min} 分鐘上限）"
+        append_log(scan_job_id, timeout_msg, level="error")
+        ScanJob.objects.filter(id=scan_job_id).update(
+            status=ScanJob.Status.FAILED,
+            completed_at=timezone.now(),
+            progress={},
+            error_message=timeout_msg,
+        )
+        try:
+            refund_full_for_scan(scan_job.user, scan_job, reason="超時")
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "timeout"}
     except Exception as exc:
         detail = str(exc).strip()[:500]
         class_name = exc.__class__.__name__
