@@ -125,20 +125,38 @@ def refund_full_for_scan(user, scan_job, *, reason: str) -> CoinTransaction | No
 def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | None:
     """掃描完成：依實際頁數退差額（max_pages - actual_pages）× coin_per_page。
 
-    同時將 wallet.total_scans_used 累計 +1。冪等：若已結算（淨扣等於實際成本）則
-    只更新 total_scans_used、不再退款。
+    同時將 wallet.total_scans_used 累計 +1。
+    冪等：若已存在此 scan 的 SCAN_REFUND 交易（本函式的差額退款、無退款標記、
+    或 refund_full_for_scan 的全退），代表已結算，整段跳過（含 total_scans_used）。
     """
     wallet = CoinWallet.objects.select_for_update().get(user=user)
+
+    # 冪等前置檢查：已有此 scan 的 SCAN_REFUND 交易 → 已結算，避免 total_scans_used 重複累加
+    if CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind=CoinTransaction.Kind.SCAN_REFUND,
+    ).exists():
+        return None
+
     actual_cost = max(0, int(actual_pages)) * settings.ARGUS_COIN_PER_PAGE
     outstanding = _sum_holds(wallet, scan_job.id)
     refund_amount = max(0, outstanding - actual_cost)
 
-    # 統計：完成一次掃描，total_scans_used +1（即使 0 refund 也要計數）
+    # 統計：完成一次掃描（冪等前置檢查已擋掉重複，這裡保證只在第一次計數）
     wallet.total_scans_used = (wallet.total_scans_used or 0) + 1
 
     if refund_amount <= 0:
+        # 建立 0 元標記交易作為冪等信號：讓 actual_pages == max_pages 情境也能被下次呼叫偵測
         wallet.save(update_fields=["total_scans_used", "updated_at"])
-        return None
+        return CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=0,
+            kind=CoinTransaction.Kind.SCAN_REFUND,
+            balance_after=wallet.balance,
+            scan_job=scan_job,
+            note=f"實際 {actual_pages} 頁，無退款差額",
+        )
 
     new_balance = wallet.balance + refund_amount
     wallet.balance = new_balance
