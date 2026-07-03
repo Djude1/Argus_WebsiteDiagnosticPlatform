@@ -5,7 +5,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests as http_requests
 from django.conf import settings
-from django.db.models import Avg, Count, Max
+from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -56,11 +57,28 @@ class ScanJobViewSet(viewsets.ModelViewSet):
     pagination_class = ScansPagination
 
     def get_queryset(self):
+        # 用 Subquery 各自算 findings_count / pages_count，避免同時 Count 兩個反向 FK
+        # 產生的 Cartesian product（一筆 scan 有 300 findings + 50 pages 時，中間 join
+        # 會膨脹到 15000 rows 再 DISTINCT）。Coalesce 補零讓沒有子紀錄的 scan 回 0。
+        findings_sq = (
+            Finding.objects.filter(scan_job=OuterRef("pk"))
+            .order_by()
+            .values("scan_job")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
+        pages_sq = (
+            Page.objects.filter(scan_job=OuterRef("pk"))
+            .order_by()
+            .values("scan_job")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
         qs = (
             ScanJob.objects.filter(user=self.request.user)
             .annotate(
-                findings_count=Count("findings", distinct=True),
-                pages_count=Count("pages", distinct=True),
+                findings_count=Coalesce(Subquery(findings_sq, output_field=IntegerField()), 0),
+                pages_count=Coalesce(Subquery(pages_sq, output_field=IntegerField()), 0),
             )
             .order_by("-created_at")
         )
@@ -268,11 +286,17 @@ def dashboard_summary(request):
     scans = ScanJob.objects.filter(user=user)
     completed_scans = scans.filter(status=ScanJob.Status.COMPLETED)
 
-    total_scans = scans.count()
-    completed_count = completed_scans.count()
-    failed_count = scans.filter(status=ScanJob.Status.FAILED).count()
-
-    avg_score = completed_scans.aggregate(v=Avg("overall_score"))["v"]
+    # 三個 count + avg 原本各發一次 SQL（4 次 round-trip），合併成一次 aggregate
+    agg = scans.aggregate(
+        total=Count("id"),
+        completed=Count("id", filter=Q(status=ScanJob.Status.COMPLETED)),
+        failed=Count("id", filter=Q(status=ScanJob.Status.FAILED)),
+        avg_score=Avg("overall_score", filter=Q(status=ScanJob.Status.COMPLETED)),
+    )
+    total_scans = agg["total"]
+    completed_count = agg["completed"]
+    failed_count = agg["failed"]
+    avg_score = agg["avg_score"]
 
     # 各類別平均分（從 ScanJob.category_scores JSONField aggregate）
     category_totals = defaultdict(lambda: {"sum": 0.0, "count": 0})
