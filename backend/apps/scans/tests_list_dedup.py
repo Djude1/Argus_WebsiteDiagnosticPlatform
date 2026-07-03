@@ -50,14 +50,14 @@ class ScanListDedupTests(APITestCase):
     def test_list_returns_only_latest_per_origin(self):
         resp = self.client.get("/api/scans/")
         self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
-        ids = {row["id"] for row in resp.json()}
+        ids = {row["id"] for row in resp.json()["results"]}
         # a.com 只回最新（a_new），不含 a_old；b.com 全回
         self.assertEqual(ids, {self.a_new.id, self.b.id})
 
     def test_include_history_returns_all(self):
         resp = self.client.get("/api/scans/?include_history=true")
         self.assertEqual(resp.status_code, http_status.HTTP_200_OK)
-        ids = {row["id"] for row in resp.json()}
+        ids = {row["id"] for row in resp.json()["results"]}
         self.assertEqual(ids, {self.a_old.id, self.a_new.id, self.b.id})
 
     def test_detail_still_accessible_for_old_scan(self):
@@ -88,6 +88,6 @@ class ScanListDedupTests(APITestCase):
             status=ScanJob.Status.COMPLETED,
         )
         resp = self.client.get("/api/scans/")
-        ids = {row["id"] for row in resp.json()}
+        ids = {row["id"] for row in resp.json()["results"]}
         # 仍只有當前使用者的 a_new 與 b
         self.assertEqual(ids, {self.a_new.id, self.b.id})

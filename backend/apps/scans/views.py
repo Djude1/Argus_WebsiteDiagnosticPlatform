@@ -9,6 +9,7 @@ from django.db.models import Avg, Count, Max
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -38,8 +39,21 @@ def _truthy(value):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+class ScansPagination(PageNumberPagination):
+    """scans 家族分頁：Finding / Page / ScanJob list 端點的預設分頁。
+
+    - `page_size` 100 覆蓋 90% 掃描（單次 50 頁 × 平均 findings/頁 < 2）
+    - `?page_size=N` 允許前端要更多（例如報告匯出全撈）
+    - `max_page_size` 500 阻擋惡意大請求把 memory 撐爆
+    """
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
 class ScanJobViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
+    pagination_class = ScansPagination
 
     def get_queryset(self):
         qs = (
@@ -213,6 +227,7 @@ class ScanJobViewSet(viewsets.ModelViewSet):
 
 
 class PageViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    pagination_class = ScansPagination
     serializer_class = PageSerializer
 
     def get_queryset(self):
@@ -225,6 +240,7 @@ class PageViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gen
 
 class FindingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     serializer_class = FindingSerializer
+    pagination_class = ScansPagination
 
     def get_queryset(self):
         queryset = Finding.objects.filter(scan_job__user=self.request.user).order_by(
