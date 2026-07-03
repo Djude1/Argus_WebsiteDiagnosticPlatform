@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "apps.accounts",
     "apps.scans",
     "apps.agent",
@@ -154,6 +155,14 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
         minutes=int(os.getenv("JWT_ACCESS_TOKEN_LIFETIME", "60"))
     ),
+    # Refresh token 明確設定天數（SimpleJWT 預設 1 天，這裡拉長並允許 .env 覆寫）
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        days=int(os.getenv("JWT_REFRESH_TOKEN_LIFETIME_DAYS", "7"))
+    ),
+    # 每次呼叫 /refresh/ 換發新 access 時，同時發新的 refresh，舊 refresh 立即失效（透過 blacklist）
+    # 防止 refresh token 一被竊就長期存取；需搭配 rest_framework_simplejwt.token_blacklist app
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
     "SIGNING_KEY": os.getenv("JWT_SECRET_KEY", SECRET_KEY),
 }
 
