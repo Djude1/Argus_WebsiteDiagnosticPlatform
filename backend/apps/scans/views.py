@@ -13,6 +13,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 from apps.billing.services import get_or_create_wallet, refund_full_for_scan
 from apps.scans.models import (
@@ -40,6 +41,16 @@ def _truthy(value):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+class ScanCreateThrottle(UserRateThrottle):
+    """建立掃描的專屬 throttle，用 rate 表中的 `scan_create` scope。
+
+    掃描是最貴的操作（Playwright + Celery worker + LLM），每小時限 30 次防止
+    使用者無意間或惡意瘋狂觸發（例如前端邏輯 bug 或 API script 誤觸發）。
+    """
+
+    scope = "scan_create"
+
+
 class ScansPagination(PageNumberPagination):
     """scans 家族分頁：Finding / Page / ScanJob list 端點的預設分頁。
 
@@ -55,6 +66,12 @@ class ScansPagination(PageNumberPagination):
 class ScanJobViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ScansPagination
+
+    def get_throttles(self):
+        """僅在 create action 加上 ScanCreateThrottle，其他 action 使用預設 user throttle。"""
+        if self.action == "create":
+            return [ScanCreateThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         # 用 Subquery 各自算 findings_count / pages_count，避免同時 Count 兩個反向 FK

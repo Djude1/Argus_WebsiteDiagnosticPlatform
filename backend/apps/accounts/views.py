@@ -7,6 +7,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.emails import send_password_reset_email
@@ -31,6 +32,8 @@ class GoogleLoginView(views.APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         credential = request.data.get("credential")
@@ -94,6 +97,8 @@ class EmailRegisterView(views.APIView):
     """以 email + password 建立帳號。"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "register"
 
     def post(self, request):
         email = (request.data.get("email") or "").strip().lower()
@@ -134,6 +139,8 @@ class EmailLoginView(views.APIView):
     """以 email + password 登入，回傳 JWT。"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
     def post(self, request):
         email = (request.data.get("email") or "").strip().lower()
@@ -201,6 +208,8 @@ class PasswordResetRequestView(views.APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
 
     GENERIC_OK = {
         "detail": "若該 Email 已註冊本平台帳號（且設有密碼），重設信已寄出，請至信箱收信並於 60 分鐘內完成重設。",
@@ -234,6 +243,8 @@ class PasswordResetConfirmView(views.APIView):
     """忘記密碼 step 2：用 token 設定新密碼。"""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
 
     def post(self, request):
         token_value = (request.data.get("token") or "").strip()

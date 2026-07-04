@@ -1,6 +1,7 @@
 from rest_framework import permissions, serializers, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from apps.insights.analyzers import (
     PublicHostError,
@@ -9,6 +10,12 @@ from apps.insights.analyzers import (
     analyze_speed,
     score_url_risk,
 )
+
+
+class InsightsAnonThrottle(AnonRateThrottle):
+    """免登入 insights 端點的專屬 throttle，用 rate 表中的 `insights` scope。"""
+
+    scope = "insights"
 
 
 class SpeedAnalysisSerializer(serializers.Serializer):
@@ -41,6 +48,7 @@ class QuickScanSerializer(serializers.Serializer):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([InsightsAnonThrottle])
 def speed_test(request):
     serializer = SpeedAnalysisSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -60,6 +68,7 @@ def speed_test(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([InsightsAnonThrottle])
 def phishing_url_check(request):
     serializer = UrlRiskSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -72,6 +81,7 @@ def phishing_url_check(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([InsightsAnonThrottle])
 def phishing_email_check(request):
     serializer = EmailRiskSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -81,6 +91,7 @@ def phishing_email_check(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([InsightsAnonThrottle])
 def quick_scan(request):
     """免登入單頁健檢（試用版）：HTTP 抓單頁 + 輕量四維檢查，不啟 Playwright、不扣 coin。"""
     serializer = QuickScanSerializer(data=request.data)

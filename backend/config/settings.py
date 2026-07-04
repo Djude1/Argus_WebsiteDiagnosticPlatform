@@ -142,6 +142,21 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
+# ============================================================
+# Cache（DRF throttle 依賴此後端儲存 rate limit 計數）
+# ============================================================
+# 預設 LocMemCache：per-process 記憶體，dev/test 夠用；production 多 worker 應設
+# DJANGO_CACHE_BACKEND=django.core.cache.backends.redis.RedisCache + DJANGO_CACHE_LOCATION=redis://...
+CACHES = {
+    "default": {
+        "BACKEND": os.getenv(
+            "DJANGO_CACHE_BACKEND",
+            "django.core.cache.backends.locmem.LocMemCache",
+        ),
+        "LOCATION": os.getenv("DJANGO_CACHE_LOCATION", "argus-default"),
+    }
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -149,6 +164,23 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    # 全域 throttle：anon 用 IP、user 用 user.id 計數；ScopedRateThrottle 供敏感端點使用
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        # 預設額度（含前端輪詢空間）
+        "anon": os.getenv("THROTTLE_ANON", "200/min"),
+        "user": os.getenv("THROTTLE_USER", "3000/hour"),
+        # 敏感端點的 scope 額度（防暴力破解、垃圾註冊、Email 洪水）
+        "login": os.getenv("THROTTLE_LOGIN", "10/min"),
+        "register": os.getenv("THROTTLE_REGISTER", "10/hour"),
+        "password_reset": os.getenv("THROTTLE_PASSWORD_RESET", "5/hour"),
+        "insights": os.getenv("THROTTLE_INSIGHTS", "30/hour"),
+        "scan_create": os.getenv("THROTTLE_SCAN_CREATE", "30/hour"),
+    },
 }
 
 SIMPLE_JWT = {
