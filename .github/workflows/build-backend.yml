@@ -1,0 +1,57 @@
+# 後端 image（web 與 worker 共用同一個 image，差別只在 k8s 啟動 command）
+# 觸發：push 到 main 且動到後端相關檔案時，自動 build 並推到 Docker Hub
+name: Build & Push Backend Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".dockerignore"
+      - ".github/workflows/build-backend.yml"
+  workflow_dispatch: {} # 允許在 Actions 頁面手動觸發
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+
+      # buildx：啟用 layer cache 與進階 build 功能
+      - name: 設定 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登入 Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 依 git 資訊自動產生 tag：latest + sha-<短碼>（供 k8s 精準 pin 版本 / 回滾）
+      - name: 產生 image tag
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/argus-backend
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build 並推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          # Dockerfile 內硬編碼下載 linux_amd64 版的 nuclei/katana/docker CLI，
+          # 且 PVE k8s 節點為 x86，故只 build amd64，不做 arm64 多架構。
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 用 GitHub Actions cache 加速重複 build（Playwright base image 很重）
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
