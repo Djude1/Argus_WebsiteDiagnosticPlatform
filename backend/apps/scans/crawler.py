@@ -57,6 +57,39 @@ def classify_blocked(status_code: int | None) -> str:
     return BLOCKED_STATUS_REASONS.get(status_code, "")
 
 
+# 單頁回應體上限（防止巨大回應撐爆 Chromium/worker 記憶體）
+# 一般 HTML < 500KB；30MB 覆蓋絕大多數合理情境，仍能攔下 PDF/影片/惡意 gzip bomb
+_MAX_RESPONSE_BYTES = 30 * 1024 * 1024
+
+
+def classify_oversized(headers: dict | None, body: str | None = None) -> str:
+    """檢查回應是否超過 _MAX_RESPONSE_BYTES，超過回中文原因，否則空字串。
+
+    優先看 Content-Length header（免下載 body 就能判斷）；
+    沒有 header 時（chunked encoding）用實際 body 長度 fallback。
+    """
+    if headers:
+        cl = headers.get("content-length") or headers.get("Content-Length")
+        if cl:
+            try:
+                size = int(cl)
+            except (TypeError, ValueError):
+                size = 0
+            if size > _MAX_RESPONSE_BYTES:
+                return (
+                    f"回應過大（Content-Length {size:,} bytes 超過上限 "
+                    f"{_MAX_RESPONSE_BYTES:,}）"
+                )
+    if body is not None:
+        # 用 len(body) 而非 encode，避免大字串複製一份；str 本身足以判斷量級
+        if len(body) > _MAX_RESPONSE_BYTES:
+            return (
+                f"回應過大（實際 body {len(body):,} chars 超過上限 "
+                f"{_MAX_RESPONSE_BYTES:,}）"
+            )
+    return ""
+
+
 def classify_cf_challenge(html: str | None) -> str:
     """偵測頁面是否為 Cloudflare challenge 攔截頁，回傳中文原因；非 challenge 回傳空字串。
 
@@ -250,24 +283,43 @@ async def crawl_site(
                 started_at = time.perf_counter()
                 try:
                     response = await page.goto(url, wait_until="networkidle", timeout=30000)
-                    await scroll_to_bottom(page)
-                    title = await page.title()
-                    html = await page.content()
                     headers = await response.all_headers() if response else {}
                     status_code = response.status if response else None
-                    try:
-                        html_only = await response.text() if response else ""
-                    except Exception:
-                        html_only = ""
-                    # 先看 body 是否為 CF challenge——CF 常回 200 但 body 是攔截頁，
-                    # 必須在 status code 判斷之前先攔下，否則 scanners 會誤判為真實內容。
-                    blocked_reason = classify_cf_challenge(html) or classify_blocked(status_code)
                     final_url = normalize_crawl_url(page.url)
-                    screenshot_path = screenshot_dir / f"page-{len(pages) + 1}.png"
-                    await page.screenshot(path=str(screenshot_path), full_page=True)
-                    # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
-                    links = [] if blocked_reason else await extract_links(page, final_url, origin)
-                    element_boxes = await collect_element_boxes(page)
+
+                    # 早期 Content-Length 檢查：超大回應（PDF/影片/gzip bomb）跳過 scroll/
+                    # content/screenshot 等耗記憶體操作，防止 worker 被單頁撐爆
+                    oversized_reason = classify_oversized(headers)
+                    if oversized_reason:
+                        blocked_reason = oversized_reason
+                        title = ""
+                        html = ""
+                        html_only = ""
+                        links = []
+                        element_boxes = {}
+                        screenshot_path = None
+                    else:
+                        await scroll_to_bottom(page)
+                        title = await page.title()
+                        html = await page.content()
+                        try:
+                            html_only = await response.text() if response else ""
+                        except Exception:
+                            html_only = ""
+                        # 二次檢查：無 Content-Length 時用實際 body 大小 fallback
+                        # 再看 body 是否為 CF challenge——CF 常回 200 但 body 是攔截頁，
+                        # 必須在 status code 判斷之前先攔下，否則 scanners 會誤判為真實內容。
+                        blocked_reason = (
+                            classify_oversized(None, html)
+                            or classify_cf_challenge(html)
+                            or classify_blocked(status_code)
+                        )
+                        screenshot_path = screenshot_dir / f"page-{len(pages) + 1}.png"
+                        # 被阻擋的頁面（含 CF challenge）仍拍截圖供人工核對；oversized 已在前分支返回
+                        await page.screenshot(path=str(screenshot_path), full_page=True)
+                        # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
+                        links = [] if blocked_reason else await extract_links(page, final_url, origin)
+                        element_boxes = await collect_element_boxes(page)
                     load_time_ms = round((time.perf_counter() - started_at) * 1000)
                     pages.append(
                         {
@@ -279,7 +331,11 @@ async def crawl_site(
                             "html": html,
                             "rendered_dom": html,
                             "html_only": html_only,
-                            "screenshot_path": str(screenshot_path.relative_to(settings.BASE_DIR)),
+                            "screenshot_path": (
+                                str(screenshot_path.relative_to(settings.BASE_DIR))
+                                if screenshot_path is not None
+                                else ""
+                            ),
                             "load_time_ms": load_time_ms,
                             "depth": depth,
                             "blocked_reason": blocked_reason,
