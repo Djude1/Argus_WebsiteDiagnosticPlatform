@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.contrib.auth import authenticate as django_authenticate
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from google.auth.transport import requests as google_requests
@@ -109,13 +111,12 @@ class EmailRegisterView(views.APIView):
                 {"email": "請輸入有效的 Email。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if len(password) < 8:
-            return Response(
-                {"password": "密碼至少需要 8 個字元。"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        # 建立 unsaved user instance 給 UserAttributeSimilarityValidator 比對 email
         user_model = get_user_model()
+        try:
+            validate_password(password, user=user_model(username=email, email=email))
+        except DjangoValidationError as exc:
+            return Response({"password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
         if user_model.objects.filter(username=email).exists():
             return Response({"email": "此 Email 已被註冊。"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -255,11 +256,6 @@ class PasswordResetConfirmView(views.APIView):
                 {"token": "缺少重設 token。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if len(new_password) < 8:
-            return Response(
-                {"new_password": "新密碼至少需要 8 個字元。"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         token = (
             PasswordResetToken.objects.select_related("user")
@@ -269,6 +265,14 @@ class PasswordResetConfirmView(views.APIView):
         if token is None or not token.is_valid():
             return Response(
                 {"token": "重設連結無效或已過期，請重新申請。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # 密碼強度檢查放在 token 驗證之後（避免透過此端點嘗試爆破密碼複雜度規則）
+        try:
+            validate_password(new_password, user=token.user)
+        except DjangoValidationError as exc:
+            return Response(
+                {"new_password": list(exc.messages)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -297,9 +301,11 @@ class ChangePasswordView(views.APIView):
         new_password = request.data.get("new_password") or ""
         if not request.user.check_password(old_password):
             return Response({"detail": "目前密碼錯誤。"}, status=status.HTTP_400_BAD_REQUEST)
-        if len(new_password) < 8:
+        try:
+            validate_password(new_password, user=request.user)
+        except DjangoValidationError as exc:
             return Response(
-                {"detail": "新密碼至少需要 8 個字元。"},
+                {"new_password": list(exc.messages)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         request.user.set_password(new_password)
