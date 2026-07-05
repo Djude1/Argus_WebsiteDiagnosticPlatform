@@ -10,7 +10,7 @@ description: Argus 版本控制 / commit / push / 協作安全規範與部署現
 ## 專案部署現況（必知事實）
 
 - Argus **已部署到公網正式對外**：`https://xn--gst.tw/`（部署在另一台電腦）。
-- GitHub repo `https://github.com/Djude1/Argus.git` **與那台部署機共用**。
+- GitHub repo `https://github.com/Djude1/Argus_WebsiteDiagnosticPlatform.git` **與那台部署機共用**。
 - repo 裡**有其他組員同時在開發**。
 - 推論：push 到 origin＝進入一個「正在線上服務 ＋ 多人協作」的共用 repo；push 後若部署機有自動 pull / CI，可能連動線上環境。**任何 push 都是對外、會影響他人的操作。**
 

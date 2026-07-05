@@ -45,7 +45,7 @@
 
 ### 2.2 Clone 與環境
 ```powershell
-git clone https://github.com/Djude1/Argus.git
+git clone https://github.com/Djude1/Argus_WebsiteDiagnosticPlatform.git Argus
 cd Argus
 
 # 後端依賴
