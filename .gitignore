@@ -24,6 +24,8 @@ frontend/dist/
 # === 個人 / 工具暫存 / 大型素材（不該推上 GitHub）===
 # Playwright MCP 工具暫存
 .playwright-mcp/
+# 個人 Obsidian vault 設定（每人 / 每機不同，不進共用 repo）
+.obsidian/
 # 本機截圖工具與輸出
 _shot.py
 _shots/
