@@ -19,7 +19,8 @@ resources:
 # 改成該次 commit 的 sha-<7碼>，commit 回 repo → Argo CD 偵測 git 變更 → 滾動更新。
 images:
 - name: shijie85/argus-backend
-  newTag: latest
+  newName: shijie85/argus-backend
+  newTag: sha-7eab2f3
 - name: shijie85/argus-frontend
   newName: shijie85/argus-frontend
   newTag: sha-d2f7925
