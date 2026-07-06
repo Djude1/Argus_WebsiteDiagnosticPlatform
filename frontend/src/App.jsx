@@ -4735,7 +4735,7 @@ function ProjectPage() {
       <section className="public-section public-final-cta-wrap">
         <div className="public-final-cta">
           <div>
-            <h2 className="public-final-cta-title">準備好健檢你的網站了嗎？</h2>
+            <h2 className="public-final-cta-title">準備好健檢你的網站了嗎？傻逼</h2>
             <p className="public-final-cta-sub">想先試用？「快速檢查」免登入、不扣點；登入後每月自動贈 200 coin，掃描依實際頁數計點。</p>
           </div>
           <NavLink to="/purchase" className="public-cta-primary public-final-cta-btn">
