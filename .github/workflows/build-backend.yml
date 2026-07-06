@@ -14,6 +14,12 @@ on:
       - ".github/workflows/build-backend.yml"
   workflow_dispatch: {} # 允許在 Actions 頁面手動觸發
 
+# 序列化 GitOps write-back：兩個 workflow 共用同一個 group → 同時只有一個在跑，
+# 避免兩者同時改 k8s/kustomization.yaml 撞在一起（cancel-in-progress:false = 排隊不取消）
+concurrency:
+  group: argus-gitops-cd
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -66,12 +72,13 @@ jobs:
           SHA_TAG="sha-${GITHUB_SHA:0:7}"
           curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" | tar -xz -C /tmp
           sudo mv /tmp/kustomize /usr/local/bin/
-          cd k8s
-          kustomize edit set image ${{ vars.DOCKERHUB_USERNAME }}/argus-backend=${{ vars.DOCKERHUB_USERNAME }}/argus-backend:${SHA_TAG}
-          cd ..
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add k8s/kustomization.yaml
-          git diff --cached --quiet && { echo "image tag 未變，略過"; exit 0; }
-          git commit -m "ci(cd): argus-backend -> ${SHA_TAG}"
-          git push origin HEAD:main || (git fetch origin main && git rebase origin/main && git push origin HEAD:main)
+          # 抓 main 最新狀態 → 只重設自己這個 image 欄位 → push。
+          # concurrency 已保證不會有另一個 write-back 同時跑，故一次到位、不需重試迴圈。
+          git fetch origin main
+          git reset --hard FETCH_HEAD
+          ( cd k8s && kustomize edit set image ${{ vars.DOCKERHUB_USERNAME }}/argus-backend=${{ vars.DOCKERHUB_USERNAME }}/argus-backend:${SHA_TAG} )
+          git diff --quiet k8s/kustomization.yaml && { echo "image tag 未變，略過"; exit 0; }
+          git commit -am "ci(cd): argus-backend -> ${SHA_TAG}"
+          git push origin HEAD:main
