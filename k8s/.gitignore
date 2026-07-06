@@ -1,0 +1,3 @@
+# 填了真實機密的 Secret 絕不可 commit（只保留 02-secret.example.yaml 範本）
+secret.yaml
+*.secret.yaml

@@ -17,9 +17,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 讓 GITHUB_TOKEN 能把 kustomization 版本 bump push 回 repo
     steps:
       - name: Checkout 原始碼
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # GitOps write-back 需要完整歷史才能 rebase/push
 
       # buildx：啟用 layer cache 與進階 build 功能
       - name: 設定 Docker Buildx
@@ -55,3 +59,19 @@ jobs:
           # 用 GitHub Actions cache 加速重複 build（Playwright base image 很重）
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: GitOps write-back（把新 sha 寫進 k8s/kustomization.yaml）
+        run: |
+          set -e
+          SHA_TAG="sha-${GITHUB_SHA:0:7}"
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" | tar -xz -C /tmp
+          sudo mv /tmp/kustomize /usr/local/bin/
+          cd k8s
+          kustomize edit set image ${{ vars.DOCKERHUB_USERNAME }}/argus-backend=${{ vars.DOCKERHUB_USERNAME }}/argus-backend:${SHA_TAG}
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/kustomization.yaml
+          git diff --cached --quiet && { echo "image tag 未變，略過"; exit 0; }
+          git commit -m "ci(cd): argus-backend -> ${SHA_TAG}"
+          git push origin HEAD:main || (git fetch origin main && git rebase origin/main && git push origin HEAD:main)

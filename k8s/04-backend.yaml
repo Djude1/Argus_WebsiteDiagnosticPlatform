@@ -1,0 +1,155 @@
+# 後端：migrate Job（單次）+ web（Django runserver ×2）+ worker（Celery ×2）
+# 共用同一個 argus-backend image 與 RWX media PVC（NFS），可跨節點
+---
+# 資料庫 migration：單次執行，避免多 replica 同時 migrate 撞車（也負責首次建立 bootstrap superuser）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: argus
+  annotations:
+    # Argo CD 把 migrate 當 PreSync hook：每次同步先刪舊 Job 再建，避開「Job spec 不可變」衝突
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: shijie85/argus-backend:latest
+          command: ["uv", "run", "python", "manage.py", "migrate", "--noinput"]
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web # ⚠ 名稱必須是 web：前端 nginx.conf 的 upstream 寫死 http://web:8000
+  namespace: argus
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: argus
+spec:
+  replicas: 2 # RWX media 已可跨節點；⚠ runserver 非正式伺服器，正式請換 gunicorn（見 README 待辦）
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      # 等 migrate Job 完成後才起 runserver（migrate --check 有 pending 會回非零 → 迴圈等待）
+      # 這也順帶等 DB 就緒；migrate 實際動作只由上面的 Job 執行一次，不會多 replica 撞車
+      initContainers:
+        - name: wait-migrate
+          image: shijie85/argus-backend:latest
+          command:
+            - sh
+            - -c
+            - "until uv run python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secret
+      containers:
+        - name: web
+          image: shijie85/argus-backend:latest
+          command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secret
+          volumeMounts:
+            - name: media
+              mountPath: /app/backend/media
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: media
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: argus
+spec:
+  replicas: 2 # RWX media 已可跨節點，移除原本綁 web 同節點的 podAffinity
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      initContainers:
+        - name: wait-migrate
+          image: shijie85/argus-backend:latest
+          command:
+            - sh
+            - -c
+            - "until uv run python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secret
+      containers:
+        - name: worker
+          image: shijie85/argus-backend:latest
+          command: ["uv", "run", "celery", "-A", "config", "worker", "-l", "info"]
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secret
+          volumeMounts:
+            - name: media
+              mountPath: /app/backend/media
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi # Playwright + Chromium 吃記憶體，給寬一點
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: media

@@ -1,0 +1,131 @@
+# 有狀態層：PostgreSQL（StatefulSet + headless Service）、Redis、共享 media PVC
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: argus
+spec:
+  clusterIP: None # headless，供 StatefulSet 穩定 DNS
+  selector:
+    app: db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: argus
+spec:
+  serviceName: db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: argus
+            - name: POSTGRES_DB
+              value: argus
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: argus-secret
+                  key: POSTGRES_PASSWORD
+            # 資料放子目錄，避免掛載點根目錄的 lost+found 讓 initdb 失敗
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          # startupProbe：initdb 完成前（尤其 NFS 慢）先擋住 liveness/readiness，
+          # 給最長 5 分鐘（60 × 5s）讓初始化跑完，避免初始化被中途殺掉造成半殘資料目錄。
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "argus", "-d", "argus"]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "argus", "-d", "argus"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "argus", "-d", "argus"]
+            periodSeconds: 15
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: nfs-client
+        resources:
+          requests:
+            storage: 5Gi
+        # 註：postgres 資料落在 NFS（nfs-client 為 default SC）。NFS 對 DB 有 fsync/locking 疑慮，
+        #     專案規模可接受；要更穩健可換 block 儲存（如 local-path / Ceph RBD）。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: argus
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: argus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+# 註：redis 與 compose 一致「不做持久化」（celery broker，重啟後任務佇列清空可接受）
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media
+  namespace: argus
+spec:
+  # RWX via NFS（nfs-client）：web/worker 可跨節點共用 media，無需 podAffinity
+  accessModes: ["ReadWriteMany"]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 5Gi

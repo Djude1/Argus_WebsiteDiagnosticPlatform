@@ -1,0 +1,18 @@
+# 把 NGINX Gateway Fabric 的資料平面（gateway nginx）開成 2 副本，
+# 讓對外入口跨 worker1/worker2、不再是單點（Local 政策下兩台都能對外）。
+#
+# ⚠ 這是「GatewayClass nginx 已綁定的既有 NginxProxy」（由 NGF 的 helm release
+#   建立於 nginx-gateway namespace）。metadata 的 name/namespace 必須與它一致，
+#   kubectl apply 才會把 replicas 合併進去，不影響 helm 設定的其他欄位。
+#
+# ⚠ 下次 `helm upgrade` NGF 時，此 replicas 可能被 helm 值蓋回 1；
+#   長久做法是把對應的 chart 值（nginx.replicas）也設進 helm values。
+apiVersion: gateway.nginx.org/v1alpha2
+kind: NginxProxy
+metadata:
+  name: nginx-gateway-fabric-proxy-config
+  namespace: nginx-gateway
+spec:
+  kubernetes:
+    deployment:
+      replicas: 2

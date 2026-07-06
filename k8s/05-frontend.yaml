@@ -1,0 +1,109 @@
+# 前端：nginx serve Vite 產物 + 反代 /api 到後端；對外由 Gateway API（06-gateway.yaml）導流
+# 用 ConfigMap 覆蓋 image 內建的 nginx.conf：改靜態 upstream、拿掉 Docker 專用 resolver
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx
+  namespace: argus
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+      client_max_body_size 16m;
+
+      # k8s 版：Service ClusterIP 穩定，用靜態 upstream，啟動時經 CoreDNS 解析一次即可。
+      # （image 內建版用 resolver 127.0.0.11 是 Docker 專用 DNS，在 k8s 會解析失敗 → 502）
+      location /api/ {
+        proxy_pass http://web:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+      }
+      location /django-admin/ {
+        proxy_pass http://web:8000;
+        proxy_set_header Host $host;
+      }
+      location /media/ {
+        proxy_pass http://web:8000;
+        proxy_set_header Host $host;
+      }
+      location /static/ {
+        proxy_pass http://web:8000;
+        proxy_set_header Host $host;
+      }
+      location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+        default_type application/manifest+json;
+        try_files /manifest.webmanifest =404;
+      }
+      location = /favicon.ico {
+        default_type image/svg+xml;
+        try_files /favicon.svg =404;
+      }
+      location = /favicon.svg {
+        default_type image/svg+xml;
+        try_files /favicon.svg =404;
+      }
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: argus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: shijie85/argus-frontend:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: frontend-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: argus
+spec:
+  # ClusterIP：對外改由 Gateway API（06-gateway.yaml）的 HTTPRoute 導流到此 Service
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80

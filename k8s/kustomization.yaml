@@ -1,0 +1,24 @@
+# Argo CD 以此為進入點（path: k8s）→ 用 kustomize 渲染後套用。
+#
+# 只納入「argus namespace 那批、且要由 GitOps 託管」的資源：
+#   - 不含 02-secret.example.yaml（佔位範本）
+#   - 不含 secret.yaml（gitignored、真機密另手動 apply，不進 git）
+#   - 不含 08-nginxproxy.yaml（NGF 由 helm 管、不同 namespace，避免所有權打架）
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 01-namespace-config.yaml
+  - 03-data.yaml
+  - 04-backend.yaml
+  - 05-frontend.yaml
+  - 06-gateway.yaml
+
+# image 版本集中在此一處管理。
+# CI（build-*.yml）build 完會用 `kustomize edit set image` 把對應的 newTag
+# 改成該次 commit 的 sha-<7碼>，commit 回 repo → Argo CD 偵測 git 變更 → 滾動更新。
+images:
+  - name: shijie85/argus-backend
+    newTag: latest
+  - name: shijie85/argus-frontend
+    newTag: latest

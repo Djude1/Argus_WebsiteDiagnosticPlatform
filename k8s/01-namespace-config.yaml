@@ -1,0 +1,36 @@
+# Namespace + 非機密環境變數（機密另見 02-secret.example.yaml）
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argus-config
+  namespace: argus
+data:
+  DJANGO_DEBUG: "false"
+  # Host 白名單（比對用不含 port）。含三個節點 IP + 對外域名；換新域名這裡要加一筆。
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,172.16.2.122,172.16.2.123,172.16.2.124,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io,argus.clouda.dpdns.org"
+  REDIS_URL: "redis://redis:6379/0"
+  CELERY_BROKER_URL: "redis://redis:6379/0"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/1"
+  CELERY_TASK_ALWAYS_EAGER: "false"
+  ARGUS_AUTO_QUEUE_SCANS: "true"
+  # 多 replica 共用 throttle 計數：用 Redis 當 cache（db 2，避開 broker db0 / result db1）。
+  # 不設的話每個 web pod 各自用記憶體計數，rate limit 會失準（等於放大額度）。
+  DJANGO_CACHE_BACKEND: "django.core.cache.backends.redis.RedisCache"
+  DJANGO_CACHE_LOCATION: "redis://redis:6379/2"
+  # 註：此拓樸下前端與 API 同源（都在 Gateway 後、由 nginx 反代 /api），CORS/CSRF 幾乎用不到
+  # （API 走 JWT、無 session CSRF）。下面留網域即可；要用網域對外時 DNS 指到 Gateway 位址。
+  CORS_ALLOWED_ORIGINS: "https://argus.clouda.dpdns.org,http://argus.clouda.dpdns.org,https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
+  CSRF_TRUSTED_ORIGINS: "https://argus.clouda.dpdns.org,http://argus.clouda.dpdns.org,https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
+  PLAYWRIGHT_BROWSERS_PATH: "/ms-playwright"
+  # 前端公開值（瀏覽器可見，非機密）；填你的 Google OAuth Client ID
+  GOOGLE_OAUTH_CLIENT_ID: "856926123222-ci7ubqlvdi1shkjopgkicef71tf3ksr9.apps.googleusercontent.com"
+  # Hermes-Agent 預設關閉
+  ARGUS_AGENT_ENABLED: "true"
+  # Email：預設 filebased（寄出的信寫到 container 內 backend/dev_emails/*.log）
+  # 要真寄信改成 django.core.mail.backends.smtp.EmailBackend 並把 EMAIL_* 放進 Secret
+  DJANGO_EMAIL_BACKEND: "django.core.mail.backends.filebased.EmailBackend"
