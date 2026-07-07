@@ -91,7 +91,7 @@
 |---|---|
 | 敏感檔/路徑主動探測（content discovery） | `security/exposure_scanner.py` |
 | 硬編碼秘鑰偵測（API key/token/private key） | `security/secret_scanner.py` |
-| Nuclei→Kali sqlmap 主動驗證攻擊鏈 | `security/kali_tools.py`（三重授權鎖，待實機 demo 收尾） |
+| Nuclei→Kali sqlmap 主動驗證攻擊鏈 | `security/kali_tools.py`（三重授權鎖；端到端已實跑驗證 2026-07-07，worker→docker exec kali→sqlmap 對真實目標成功執行） |
 
 ---
 

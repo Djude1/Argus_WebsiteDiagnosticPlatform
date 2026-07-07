@@ -6,7 +6,7 @@
 
 ---
 
-## 進度快照（2026-06-23）
+## 進度快照（2026-07-07）
 
 | Phase | 狀態 | 說明 |
 |---|---|---|
@@ -14,7 +14,7 @@
 | Phase 2 — `kali_tools.py` | ✅ **已接進掃描流程** | `run_sqlmap` / `run_metasploit` + 編排層 `validate_findings_with_kali`；`tasks.py` 在 nuclei 後（deep_mode）呼叫，sqlmap 確認注入才寫 `kali-sqlmap-sqli`（A03/CWE-89）critical Finding。18 項單元測試綠燈 |
 | Phase 1 — docker-compose kali | ✅ **完成** | kali 服務（`--profile attack` 隔離）+ worker docker CLI（Dockerfile）+ docker.sock 掛載（`docker-compose.attack.yml` override，不污染生產） |
 | Phase 1 — 靶機 | ✅ 已就緒 | CTF 靶機 `https://htb.xn--gst.tw/`（「宇宙錯誤知識管理局」）運行中，Kali 已驗證可連通 |
-| Phase 3 — CVE 實機展示 | ⏳ **待 worker rebuild 後實跑** | 程式鏈路全通；需 `--build` 重建 worker 並跑一次 active+authorized 掃描驗證端到端（實際攻擊動作需在場授權） |
+| Phase 3 — CVE 實機展示 | ✅ **端到端已產出 positive SQLi finding（2026-07-07）** | 對自有站 aiglasses 跑 active+authorized 掃描，pipeline 全自動完成 爬取→Nuclei 深度→**worker `docker exec argus-kali-1` 實跑 sqlmap**→回報。scan #5 由 sqlmap 主動驗證確認 **2 項可利用 SQL Injection**，寫成 `kali-sqlmap-sqli`（critical / OWASP A03 / CWE-89）。為此在自有靶機加了刻意注入端點 `/api/products/search?q=`（見 aiglasses 專案）。**注意 demo 前置**：① 目標公網走 Cloudflare WAF 會擋 sqlmap，需讓 Argus 直打 origin（worker+kali `/etc/hosts` 映射 `aiglasses.qzz.io`→host，掃 `http://aiglasses.qzz.io:8888/`）；② 靶機端點需豁免 DRF 限流（sqlmap 送 60+ 請求）；③ `run_sqlmap` 未帶 `--flush-session`，同 host 前次失敗 session 會污染，需先清 `/tmp/sqlmap`（Argus 可改進點） |
 | Phase 4 次要 gap — SRI + DNS/郵件安全 | ✅ **已完成** | `security/sri_scanner.py`（SRI 缺失偵測，stdlib HTMLParser）/ `security/dns_scanner.py`（SPF/DMARC/DNSSEC，dnspython）已建並接入 `tasks.py` deep_security_findings；`owasp_mapper` 加 6 個 rule_id（含首用 A08）；新增相依 dnspython |
 | Phase 4 次要 gap — 第三方 JS 庫版本→CVE（gap C） | ✅ **已完成** | `security/js_library_scanner.py`（被動，vendored Retire.js 規則庫離線比對，zero-HTTP，零新套件）；`owasp_mapper` 加 `js-lib-known-vuln`→A06/CWE-1104；接入 `tasks.py` deep_security_findings；**Web 層 gap 全數補齊** |
 
