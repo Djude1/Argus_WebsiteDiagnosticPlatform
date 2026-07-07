@@ -421,7 +421,7 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 
 ---
 
-## 9. 行為準則（**寫 code 前必讀**，沿用 CLAUDE.md）
+## 9. 行為準則（**寫 code 前必讀**，沿用 CLAUDE.md 摘要；完整版見 `docs/behavior-guidelines.md`）
 
 1. **動手前先思考**：不要假設。列假設、列取捨、有疑慮先問。
 2. **簡潔優先**：用最少的程式碼解決問題。不寫推測性內容、不加未要求的彈性。

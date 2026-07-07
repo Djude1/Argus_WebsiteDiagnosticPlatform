@@ -2,6 +2,19 @@
 
 > **此規則的存在原因（真實事故）**：2026-06 發現 `ONBOARDING.md` 與 `CLAUDE.md` 同時嚴重漂移——新增了 `insights` app（第 8 個）、`/free-tools` 公開頁、`/api/insights/*` 端點、`/api/content/milestones/`，且 W4 已移除 jazzmin、測試數已增長，但兩份接手文件全部沒同步，仍寫「7 個 app / Jazzmin / 192 測試」。**過時的接手文件會讓下一個接手者（人或 Claude）依錯誤事實操作、甚至寫出錯誤的專題文件。**
 
+## CLAUDE.md 跨層同步規則（強制）
+
+本專案的 CLAUDE.md 採四層串接架構（使用者層 → 專案層 → 子目錄層 → `CLAUDE.local.md`；各層載入時機見 [`專案導覽.md`](../專案導覽.md) 第一節）。**任何一層的 CLAUDE.md 有內容異動，必須在同一次 commit 內同步所有受影響的層。**
+
+| 你改了哪一層 | 必須同時檢查並同步 |
+|---|---|
+| 根層 `CLAUDE.md`（專案層） | 所有相關子目錄 CLAUDE.md（規則是否矛盾、索引連結是否仍正確） |
+| 任一子目錄 CLAUDE.md | `專案導覽.md` 第三節索引（涵蓋內容是否需要更新） + 兄弟層（同模組其他 CLAUDE.md）|
+| 新增子目錄 CLAUDE.md | `專案導覽.md` 第三節「子目錄 CLAUDE.md 索引」 |
+| 刪除或移動 CLAUDE.md | 根層 CLAUDE.md 及所有引用它的檔案的連結必須同步移除或改路徑 |
+
+**檢查方式**：改完後執行 `grep -r "對應關鍵字" */CLAUDE.md`，確認跨檔描述一致、無殘留舊事實。
+
 ## 規則 A：改了程式 → 同次提交必須同步文件
 
 任何「會改變對外事實」的程式改動，**必須在同一次 commit 內**更新所有受影響的文件，不可留到下次。
@@ -14,7 +27,7 @@
 | 改 Model 欄位 / 狀態機 / 列舉值 | `CLAUDE.md` 關鍵 Model 速查、`ONBOARDING.md` §8 資料模型、對應子目錄 `CLAUDE.md` |
 | 新增 / 移除 Python 或 Node 套件 | `CLAUDE.md`（技術棧相關段）、`ONBOARDING.md` §3 技術棧 + §2 安裝步驟 |
 | 改 `ARGUS_*` 等 settings 常數 | `ONBOARDING.md` 附錄 B、`CLAUDE.md` 對應段落 |
-| 新增 / 修改 Skill | `CLAUDE.md` 的 Skills 表格（並跑 [`docs/md-checklist.md`](md-checklist.md)） |
+| 新增 / 修改 Skill | `專案導覽.md` 第二節「SKILL 索引」（並跑 [`docs/md-checklist.md`](md-checklist.md)） |
 | 測試數量變動 | 不要寫死精確數字於多處；以「約 N 項，以 `manage.py test apps` 實跑為準」描述，且全檔一致 |
 
 ## 規則 B：純文件改動 → 動筆前必須對照程式碼驗證

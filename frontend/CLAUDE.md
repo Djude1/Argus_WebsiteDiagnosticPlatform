@@ -25,14 +25,14 @@ Select-String -Path "src\App.jsx" -Pattern "function AdminUsersPage"
 
 **必須使用 `build-node22.ps1`，禁止直接執行 `npm run build`。**
 
-原因：系統 Node v24.x + Rollup 4.x 在 Windows 有已知 bug（`STATUS_STACK_BUFFER_OVERRUN`，exit code `-1073740791`），build 會無聲 crash。`build-node22.ps1` 自動切換到 `D:\node22` portable Node 22 執行。
+原因：系統 Node v24.x + Rollup 4.x 在 Windows 有已知 bug（`STATUS_STACK_BUFFER_OVERRUN`，exit code `-1073740791`），build 會無聲 crash。`build-node22.ps1` 會自動偵測 portable Node 22 位置（候選路徑與安裝方式見 [`docs/node22-guide.md`](../docs/node22-guide.md)）。
 
 ```powershell
 # 正確 build 方式（在專案根目錄執行）
 cd frontend ; .\build-node22.ps1 ; cd ..
 
-# 重灌 node_modules 也要用 Node 22
-D:\node22\npm.cmd install
+# 重灌 node_modules 也要用 portable Node 22 的 npm（路徑見 docs/node22-guide.md，例如）
+D:\nodejs\npm.cmd install
 ```
 
 Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollup 打包。
@@ -66,10 +66,10 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 
 ## 套件安裝
 
-安裝新套件前**必須告知使用者**，因為需要用特定 Node 版本：
+安裝新套件前**必須告知使用者**，因為需要用 portable Node 22 的 npm（路徑見 [`docs/node22-guide.md`](../docs/node22-guide.md)，例如）：
 
 ```powershell
-D:\node22\npm.cmd install 套件名
+D:\nodejs\npm.cmd install 套件名
 ```
 
 ---
