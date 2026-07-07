@@ -37,14 +37,21 @@ DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開
 
 請不要操作他站資源、不要繞過驗證、不要送出破壞性 payload。"""
 
-# 僅在 deep_mode（active + authorized）附加：授權 agent 對同源帶參數端點做 SQLi 主動驗證。
-SECURITY_PROBE_ADDENDUM = """
+# 僅在 deep_mode（active + authorized）使用：資安優先的任務指示，讓 agent 先做 SQLi 主動驗證。
+# 置於任務最前面（第一優先），避免 agent 把 token 預算耗在 UX 探索上而沒機會 probe。
+SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】，已開啟頁面 {url}。
 
-【已授權的主動資安驗證】本次為授權的主動測試。若你在頁面上發現帶 query 參數的端點
-（例如搜尋框送出後的 ?q=、商品查詢 ?id= 等），且你合理懷疑後端可能未妥善處理輸入，
-可呼叫 probe_sql_injection(url) 對「該同源、帶參數的 URL」發動一次 SQL injection 主動驗證。
-系統會自動判定並在確認可注入時記錄為 critical 漏洞（你無需再 report_ux_issue）。
-僅對本站同源 URL 使用；跨站或無參數 URL 會被系統拒絕。"""
+請**最優先**完成以下資安驗證步驟（在任何 UX 測試之前）：
+1. 呼叫 get_dom_summary，找出頁面上所有帶 query 參數（URL 含 ?xxx=）的連結或端點
+   （特別留意搜尋、商品查詢類，如 /api/products/search?q=、?id= 等）。
+2. 對每一個「本站同源、且帶參數」的可疑端點，呼叫 probe_sql_injection(url) 進行
+   SQL injection 主動驗證。系統會自動判定並在確認可注入時記錄為 critical 漏洞
+   （確認後你無需再 report_ux_issue）。
+3. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
+4. 全部完成或無法繼續時呼叫 finish 並附短總結。
+
+限制：只對本站同源 URL 使用 probe_sql_injection；跨站或無參數 URL 會被系統拒絕。
+不要繞過驗證、不要操作他站資源。"""
 
 
 async def run_agent_for_scan(
@@ -69,17 +76,20 @@ async def run_agent_for_scan(
     media_dir = Path(settings.MEDIA_ROOT) / "agent" / f"scan_{scan_job.id}"
     media_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt = task_prompt or DEFAULT_TASK_PROMPT_TEMPLATE.format(
-        origin=scan_job.origin, url=target_url
-    )
-    # 僅在授權的主動掃描（deep_mode）才把 SQLi 主動驗證能力交給 agent；
+    # 僅在授權的主動掃描（deep_mode）才把 SQLi 主動驗證能力交給 agent 並列為第一優先；
     # 授權鎖最終仍由 kali_tools.run_sqlmap 的三重鎖把關，此處只影響提示。
     deep_mode = (
         scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
         and scan_job.active_testing_authorized
     )
-    if deep_mode and task_prompt is None:
-        prompt += SECURITY_PROBE_ADDENDUM
+    if task_prompt is not None:
+        prompt = task_prompt
+    elif deep_mode:
+        prompt = SECURITY_FIRST_PROMPT.format(origin=scan_job.origin, url=target_url)
+    else:
+        prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
+            origin=scan_job.origin, url=target_url
+        )
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
