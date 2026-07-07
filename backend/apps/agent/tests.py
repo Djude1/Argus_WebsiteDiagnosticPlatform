@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase, override_settings
 
-from apps.agent.findings import persist_agent_issues
+from apps.agent.findings import persist_agent_issues, persist_agent_security_findings
 from apps.agent.loop import HermesAgent
 from apps.agent.providers import (
     ChatProvider,
@@ -157,6 +157,7 @@ class ToolSchemaTests(TestCase):
             "get_dom_summary",
             "take_screenshot",
             "report_ux_issue",
+            "probe_sql_injection",
             "finish",
         }
         self.assertEqual(names, expected)
@@ -218,6 +219,99 @@ class ToolExecutorTests(TestCase):
         executor, _ = self._make_executor()
         outcome = asyncio.run(executor.run("finish", {"summary": "ok"}))
         self.assertTrue(outcome.finish)
+
+
+class ProbeSqlInjectionTests(TestCase):
+    """agent 的 probe_sql_injection tool：同源約束 + 授權鎖委派 + 確認才產 finding。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="probeuser", password="x")
+        self.scan_job = _make_scan_job(self.user)  # origin=https://example.com
+
+    def _executor(self):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        return ToolExecutor(
+            page=page, screenshot_dir="/tmp/agent", scan_job=self.scan_job
+        )
+
+    def test_cross_origin_is_forbidden(self):
+        executor = self._executor()
+        with patch("apps.scans.security.kali_tools.run_sqlmap") as m:
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://evil.com/?id=1"})
+            )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "cross_origin_forbidden")
+        m.assert_not_called()  # 跨站直接擋，不呼叫 sqlmap
+
+    def test_requires_query_parameter(self):
+        executor = self._executor()
+        with patch("apps.scans.security.kali_tools.run_sqlmap") as m:
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://example.com/products"})
+            )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "no_query_parameter")
+        m.assert_not_called()
+
+    def test_blocked_when_run_sqlmap_reports_blocked(self):
+        executor = self._executor()
+        blocked = {"ok": False, "blocked_reason": "active_testing_unauthorized", "stdout": ""}
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=blocked):
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
+            )
+        self.assertFalse(outcome.result["confirmed"])
+        self.assertEqual(outcome.result["blocked"], "active_testing_unauthorized")
+        self.assertIsNone(outcome.security_finding)
+
+    def test_not_vulnerable_produces_no_finding(self):
+        executor = self._executor()
+        res = {"ok": True, "blocked_reason": "", "stdout": "do not appear to be injectable"}
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
+            )
+        self.assertTrue(outcome.ok)
+        self.assertFalse(outcome.result["confirmed"])
+        self.assertIsNone(outcome.security_finding)
+
+    def test_confirmed_produces_critical_security_finding(self):
+        executor = self._executor()
+        res = {"ok": True, "blocked_reason": "", "stdout": "GET parameter 'q' is vulnerable"}
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
+            )
+        self.assertTrue(outcome.result["confirmed"])
+        self.assertIsNotNone(outcome.security_finding)
+        f = outcome.security_finding
+        self.assertEqual(f["category"], "security")
+        self.assertEqual(f["severity"], "critical")
+        self.assertEqual(f["rule_id"], "kali-sqlmap-sqli")
+
+
+class PersistAgentSecurityFindingsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="secuser", password="x")
+        self.scan_job = _make_scan_job(self.user)
+
+    def test_persists_security_finding_with_owasp_tag(self):
+        from apps.scans.models import Finding
+        from apps.scans.scanners import make_finding
+
+        f = make_finding(
+            category="security", severity="critical", rule_id="kali-sqlmap-sqli",
+            title="SQLi via agent", description="確認 https://example.com/s?q=1 可注入",
+            remediation="用參數化查詢", evidence="sqlmap: is vulnerable",
+            impact_area="vulnerability", confidence=1.0,
+        )
+        created = persist_agent_security_findings(self.scan_job, [f, f])  # 同 desc → 去重
+        self.assertEqual(len(created), 1)
+        obj = Finding.objects.get(scan_job=self.scan_job, rule_id="kali-sqlmap-sqli")
+        self.assertEqual(obj.category, "security")
+        self.assertEqual(obj.owasp_category, "A03")  # owasp_mapper 對 kali-sqlmap-sqli 的對映
 
 
 # ---------------- loop ----------------

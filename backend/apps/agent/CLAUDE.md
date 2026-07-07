@@ -10,13 +10,17 @@ Phase 2 **Hermes-Agent**（掃描後的動態 UX 測試）。**預設關閉**（
 |---|---|
 | `runner.py` | `run_agent_for_scan`（async，Celery 掃描流程呼叫；挑已成功爬到的 Page 當起點；**強制 same-origin**） |
 | `providers.py` | `ChatProvider` / `ProviderChain`（MiniMax / GLM = OpenAI-compatible tool calling；Gemini = 純文字 fallback）；`ProviderError` 只帶公開資訊 |
-| `loop.py` | `HermesAgent` tool-calling 迴圈、`AgentRunResult` |
-| `tools.py` | `ToolExecutor`（8 個 tool）：`click` / `type_text` / `scroll` / `get_visible_text` / `get_dom_summary` / `take_screenshot` / `report_ux_issue` / `finish` |
-| `findings.py` | `persist_agent_issues` 寫回 DB |
+| `loop.py` | `HermesAgent` tool-calling 迴圈、`AgentRunResult`（含 `issues` 與 `security_findings`） |
+| `tools.py` | `ToolExecutor`（9 個 tool）：`click` / `type_text` / `scroll` / `get_visible_text` / `get_dom_summary` / `take_screenshot` / `report_ux_issue` / `probe_sql_injection` / `finish` |
+| `findings.py` | `persist_agent_issues`（UX findings）+ `persist_agent_security_findings`（`probe_sql_injection` 確認的 security findings）寫回 DB |
 
 ## 安全（硬規則）
 - **嚴禁**在 log / exception / repr 印出 API key（金鑰一律 `.env`）。
 - agent **沒有** `navigate(url)` tool → 隱含 same-origin 約束；**不要**新增可跨站導覽的 tool。
+- `probe_sql_injection(url)`（LLM 自主觸發的 SQLi 主動驗證）**必須維持三層防護**，不可放寬：
+  ① `tools.py` 內強制**同源**（比對 `scan_job.origin`）+ 需帶 query 參數；
+  ② 實際攻擊委派 `kali_tools.run_sqlmap` 的**三重授權鎖**（`ARGUS_KALI_ENABLED` + active + authorized）；
+  ③ 提示層只在 `deep_mode`（active+authorized）才把此能力寫進 prompt。確認可注入才由 runner 落地 `kali-sqlmap-sqli`（A03/CWE-89）critical finding。
 - 沿用 `SiteSense-AI-Scanner` User-Agent；Playwright 路徑由 settings 注入（`.ms-playwright`）。
 
 ## 禁止事項

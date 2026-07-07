@@ -106,6 +106,38 @@ def persist_agent_issues(
     return created
 
 
+def persist_agent_security_findings(
+    scan_job: ScanJob, findings: Iterable[dict]
+) -> list[Finding]:
+    """把 Hermes-Agent 主動驗證（probe_sql_injection）確認的 security finding 落地。
+
+    - findings 為 `scanners.make_finding` 產生的 dict（欄位對應 Finding model）。
+    - 套 `owasp_mapper.tag` 補 OWASP/CWE，使與 pipeline 的 kali finding 標籤一致。
+    - 依 description 去重（description 內含具體 URL），避免 agent 多輪對同一 URL 重複記錄。
+    - 任一筆失敗只跳過該筆，不影響其他（silent-fail），不讓 agent 例外拖垮掃描。
+    """
+    from apps.scans.security import owasp_mapper
+
+    created: list[Finding] = []
+    seen = set(
+        scan_job.findings.filter(rule_id="kali-sqlmap-sqli").values_list(
+            "description", flat=True
+        )
+    )
+    for raw in findings:
+        try:
+            tagged = owasp_mapper.tag(dict(raw))
+            desc = tagged.get("description", "")
+            if not desc or desc in seen:
+                continue
+            obj = Finding.objects.create(scan_job=scan_job, page=None, **tagged)
+            created.append(obj)
+            seen.add(desc)
+        except Exception:  # noqa: BLE001 — 單筆落地失敗不影響其他 finding 與主掃描
+            continue
+    return created
+
+
 def _resolve_page(scan_job: ScanJob, url: str, cache: dict[str, Page | None]) -> Page | None:
     if not url:
         return None

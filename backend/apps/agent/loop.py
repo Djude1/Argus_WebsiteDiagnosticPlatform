@@ -51,6 +51,7 @@ class AgentRunResult:
     steps: int
     total_tokens: int
     issues: list[dict[str, Any]] = field(default_factory=list)
+    security_findings: list[dict[str, Any]] = field(default_factory=list)
     final_summary: str = ""
     error: str = ""
 
@@ -80,6 +81,7 @@ class HermesAgent:
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self._messages: list[dict[str, Any]] = []
         self._issues: list[dict[str, Any]] = []
+        self._security_findings: list[dict[str, Any]] = []
         self._total_tokens = 0
         self._step_counter = 0  # AgentStep DB 流水號，與 LLM round 解耦
 
@@ -152,6 +154,8 @@ class HermesAgent:
                     )
                     if outcome.issue:
                         self._issues.append(outcome.issue)
+                    if outcome.security_finding:
+                        self._security_findings.append(outcome.security_finding)
                     if outcome.finish:
                         final_summary = str(outcome.result.get("summary", ""))
                         finished = True
@@ -180,6 +184,7 @@ class HermesAgent:
             steps=self._step_counter,
             total_tokens=self._total_tokens,
             issues=self._issues,
+            security_findings=self._security_findings,
             final_summary=final_summary,
             error=error,
         )

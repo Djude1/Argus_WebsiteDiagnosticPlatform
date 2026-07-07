@@ -22,7 +22,7 @@ from playwright.async_api import async_playwright
 
 from apps.scans.models import ScanJob
 
-from .findings import persist_agent_issues
+from .findings import persist_agent_issues, persist_agent_security_findings
 from .loop import AgentRunResult, HermesAgent
 from .providers import ProviderChain, build_default_chain
 from .tools import ToolExecutor
@@ -36,6 +36,15 @@ DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開
 5. 完成或無法繼續時呼叫 finish，並附短總結。
 
 請不要操作他站資源、不要繞過驗證、不要送出破壞性 payload。"""
+
+# 僅在 deep_mode（active + authorized）附加：授權 agent 對同源帶參數端點做 SQLi 主動驗證。
+SECURITY_PROBE_ADDENDUM = """
+
+【已授權的主動資安驗證】本次為授權的主動測試。若你在頁面上發現帶 query 參數的端點
+（例如搜尋框送出後的 ?q=、商品查詢 ?id= 等），且你合理懷疑後端可能未妥善處理輸入，
+可呼叫 probe_sql_injection(url) 對「該同源、帶參數的 URL」發動一次 SQL injection 主動驗證。
+系統會自動判定並在確認可注入時記錄為 critical 漏洞（你無需再 report_ux_issue）。
+僅對本站同源 URL 使用；跨站或無參數 URL 會被系統拒絕。"""
 
 
 async def run_agent_for_scan(
@@ -63,6 +72,14 @@ async def run_agent_for_scan(
     prompt = task_prompt or DEFAULT_TASK_PROMPT_TEMPLATE.format(
         origin=scan_job.origin, url=target_url
     )
+    # 僅在授權的主動掃描（deep_mode）才把 SQLi 主動驗證能力交給 agent；
+    # 授權鎖最終仍由 kali_tools.run_sqlmap 的三重鎖把關，此處只影響提示。
+    deep_mode = (
+        scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+        and scan_job.active_testing_authorized
+    )
+    if deep_mode and task_prompt is None:
+        prompt += SECURITY_PROBE_ADDENDUM
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -74,7 +91,9 @@ async def run_agent_for_scan(
             page = await context.new_page()
             await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
 
-            executor = ToolExecutor(page=page, screenshot_dir=str(media_dir))
+            executor = ToolExecutor(
+                page=page, screenshot_dir=str(media_dir), scan_job=scan_job
+            )
             agent = HermesAgent(scan_job=scan_job, executor=executor, chain=chain)
             result = await agent.run(task_prompt=prompt)
         finally:
@@ -82,6 +101,10 @@ async def run_agent_for_scan(
 
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)
+    if result and result.security_findings:
+        await sync_to_async(persist_agent_security_findings)(
+            scan_job, result.security_findings
+        )
     return result
 
 

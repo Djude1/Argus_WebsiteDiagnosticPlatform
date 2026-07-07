@@ -116,6 +116,28 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "probe_sql_injection",
+            "description": (
+                "對『目前站台同源、且帶 query 參數』的 URL 發動一次授權範圍內的 "
+                "SQL injection 主動驗證（背後以 Kali 的 sqlmap 執行）。只在你懷疑某個帶參數的 "
+                "端點（例如搜尋、商品查詢）可能存在注入時才呼叫；跨站或無參數的 URL 會被拒絕。"
+                "回傳是否確認可注入；確認時系統會自動記錄為 critical 資安漏洞，你不需再 report。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "要驗證的完整 URL，須與目前站台同源且含 ?參數=值",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finish",
             "description": "完成本次任務並結束。當你已經回報完所有發現或無法繼續時呼叫。",
             "parameters": {
@@ -137,6 +159,7 @@ class ToolOutcome:
     result: dict[str, Any]
     finish: bool = False  # finish/error 達成終止條件
     issue: dict[str, Any] | None = None  # report_ux_issue 的 payload
+    security_finding: dict[str, Any] | None = None  # probe_sql_injection 確認後的 security finding
 
 
 def _truncate(text: str, limit: int = MAX_TEXT_BYTES) -> str:
@@ -159,10 +182,13 @@ class ToolExecutor:
         page: Page,
         screenshot_dir: str,
         action_timeout_ms: int = DEFAULT_ACTION_TIMEOUT_MS,
+        scan_job=None,
     ):
         self.page = page
         self.screenshot_dir = screenshot_dir
         self.action_timeout_ms = action_timeout_ms
+        # probe_sql_injection 需要 scan_job.id / origin（同源檢查 + 授權鎖）
+        self.scan_job = scan_job
         self._screenshot_counter = 0
 
     async def run(self, name: str, args: dict[str, Any]) -> ToolOutcome:
@@ -183,6 +209,8 @@ class ToolExecutor:
                 return await self._take_screenshot()
             if name == "report_ux_issue":
                 return self._report_ux_issue(args)
+            if name == "probe_sql_injection":
+                return await self._probe_sql_injection(args.get("url", ""))
             if name == "finish":
                 return ToolOutcome(
                     ok=True,
@@ -287,3 +315,76 @@ class ToolExecutor:
             "url": self.page.url,
         }
         return ToolOutcome(ok=True, result={"reported": True, "title": title}, issue=payload)
+
+    async def _probe_sql_injection(self, url: str) -> ToolOutcome:
+        """LLM 自主觸發的授權範圍內 SQLi 主動驗證。
+
+        安全約束：
+        - 強制**同源**（比對 scan_job.origin）：即使 LLM 給出他站 URL 也拒絕，維持
+          agent 既有的 same-origin 邊界（見 agent/CLAUDE.md）。
+        - 必須帶 query 參數（sqlmap 需要注入點）。
+        - 授權鎖完全交給 kali_tools.run_sqlmap 的三重鎖（ARGUS_KALI_ENABLED + active +
+          authorized）；未授權時回 blocked，LLM 會知道無法執行。
+        - subprocess 阻塞，包進 to_thread 避免卡住 event loop。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
+            )
+        if "?" not in url or "=" not in url:
+            return ToolOutcome(ok=False, result={"error": "no_query_parameter"})
+
+        from apps.scans.security.kali_tools import _stdout_indicates_sqli, run_sqlmap
+
+        res = await asyncio.to_thread(run_sqlmap, url, self.scan_job.id)
+        if res.get("blocked_reason"):
+            return ToolOutcome(
+                ok=False, result={"confirmed": False, "blocked": res["blocked_reason"]}
+            )
+        if not res.get("ok"):
+            return ToolOutcome(
+                ok=True, result={"confirmed": False, "error": res.get("error", "")}
+            )
+        if not _stdout_indicates_sqli(res.get("stdout", "")):
+            return ToolOutcome(ok=True, result={"confirmed": False})
+
+        # 確認可注入 → 產 security finding（欄位與 validate_findings_with_kali 一致）
+        from apps.scans.scanners import make_finding
+
+        finding = make_finding(
+            category="security",
+            severity="critical",
+            rule_id="kali-sqlmap-sqli",
+            title="SQL Injection 已由 Hermes-Agent 觸發 sqlmap 主動驗證可利用",
+            description=(
+                f"Hermes-Agent 在授權的主動測試中自主判斷並對 {url} 觸發 sqlmap，"
+                "確認存在可被利用的 SQL injection 注入點。此為已驗證漏洞，非僅靜態判斷。"
+            ),
+            remediation=(
+                "使用參數化查詢（prepared statements）或 ORM，對所有使用者輸入做嚴格驗證與轉義，"
+                "並以最小權限資料庫帳號連線。"
+            ),
+            evidence=res.get("stdout", "")[:1000],
+            impact_area="vulnerability",
+            confidence=1.0,
+        )
+        return ToolOutcome(
+            ok=True,
+            result={
+                "confirmed": True,
+                "url": url,
+                "note": "已自動記錄為 critical 資安漏洞，無需再 report",
+            },
+            security_finding=finding,
+        )
