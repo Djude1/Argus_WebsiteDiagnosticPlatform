@@ -137,8 +137,14 @@ def run_sqlmap(target_url: str, scan_job_id: int) -> dict:
 
     timeout = getattr(settings, "ARGUS_KALI_TIMEOUT", 120)
     append_log(scan_job_id, f"Kali {tool} 開始驗證：{parsed.netloc}", level="info")
+    # --flush-session + per-scan output dir：sqlmap 的 output dir 僅以 hostname 為 key
+    # （忽略 port），若沿用舊 session，同 host 前次失敗的判定會被 resume 而短路成
+    # 「not injectable」，污染後續掃描。強制每次掃描獨立且不吃舊 session。
     rc, out, err = _docker_exec(
-        ["sqlmap", "-u", target_url, "--batch", "--output-dir=/tmp/sqlmap"],
+        [
+            "sqlmap", "-u", target_url, "--batch", "--flush-session",
+            f"--output-dir=/tmp/sqlmap_{scan_job_id}",
+        ],
         timeout=timeout,
     )
     if rc is None:

@@ -95,6 +95,23 @@ class TestRunSqlmap(TestCase):
         self.assertEqual(res["returncode"], 0)
         self.assertIn("vulnerable", res["stdout"])
 
+    def test_command_flushes_session_and_isolates_output_dir(self):
+        """回歸：sqlmap 指令須帶 --flush-session 且 output dir 綁 scan_job_id。
+
+        原因（見 log/2026-07-07_aiglasses-sqli-target-and-positive-finding.md）：
+        sqlmap output dir 僅以 hostname 為 key（忽略 port），若無 --flush-session，
+        同 host 前次失敗的 session 會被沿用而短路成「not injectable」，污染後續掃描。
+        """
+        scan = _make_scan()
+        with mock.patch.object(kali_tools, "_container_running", return_value=True), \
+                mock.patch.object(
+                    kali_tools, "_docker_exec", return_value=(0, "", ""),
+                ) as m:
+            kali_tools.run_sqlmap("https://target.local/?id=1", scan.id)
+        args = m.call_args[0][0]  # 傳給 _docker_exec 的指令 list
+        self.assertIn("--flush-session", args)
+        self.assertIn(f"--output-dir=/tmp/sqlmap_{scan.id}", args)
+
     def test_timeout_is_silent_fail(self):
         scan = _make_scan()
         with mock.patch.object(kali_tools, "_container_running", return_value=True), \
