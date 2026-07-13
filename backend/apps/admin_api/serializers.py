@@ -120,17 +120,25 @@ class AdminReviewSerializer(serializers.ModelSerializer):
         return f"{u.first_name} {u.last_name}".strip() or u.username
 
     def get_message_count(self, obj) -> int:
+        if hasattr(obj, "message_count_annotated"):
+            return obj.message_count_annotated
         return obj.messages.count()
 
     def get_has_admin_reply(self, obj) -> bool:
+        if hasattr(obj, "has_admin_reply_annotated"):
+            return obj.has_admin_reply_annotated
         return obj.messages.filter(is_admin=True).exists()
 
     def get_last_message_at(self, obj):
+        if hasattr(obj, "last_message_at_annotated"):
+            return obj.last_message_at_annotated
         last = obj.messages.order_by("-created_at").first()
         return last.created_at if last else None
 
     def get_last_message_is_user(self, obj) -> bool:
         """最後一則由非 admin 發 → 表示「正等管理員回覆」。"""
+        if hasattr(obj, "is_pending"):
+            return obj.is_pending
         last = obj.messages.order_by("-created_at").first()
         if not last:
             return True  # 只有評分還沒任何 thread，視為待回覆

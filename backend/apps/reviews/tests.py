@@ -1,13 +1,68 @@
+import os
+import subprocess
+import sys
 from io import BytesIO
+from pathlib import Path
+from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import InMemoryStorage, storages
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.reviews.models import PlatformReview, ReviewMessage
+
+
+class RemoteMemoryStorage(InMemoryStorage):
+    """模擬可寫入、但 URL 位於獨立 media origin 的 object storage。"""
+
+    def url(self, name):
+        return f"https://media.invalid/{name}"
+
+
+class MediaStorageSettingsTests(SimpleTestCase):
+    def _settings_process(self, *, bucket: str):
+        env = os.environ.copy()
+        env.update(
+            {
+                "DJANGO_SECRET_KEY": "test-only-django-secret-with-at-least-32-bytes",
+                "PASSWORD_RESET_TOKEN_PEPPER": "test-only-reset-pepper-with-at-least-32-bytes",
+                "ARGUS_PAYMENT_MODE": "disabled",
+                "ARGUS_MEDIA_STORAGE_BACKEND": "storages.backends.s3.S3Storage",
+                "ARGUS_MEDIA_BUCKET": bucket,
+            }
+        )
+        return subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from config import settings; "
+                    "assert settings.ARGUS_MEDIA_STORAGE_BACKEND == "
+                    "'storages.backends.s3.S3Storage'; "
+                    "assert settings.AWS_STORAGE_BUCKET_NAME == 'test-bucket'"
+                ),
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+
+    def test_s3_storage_requires_bucket(self):
+        result = self._settings_process(bucket="")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("S3 media storage requires ARGUS_MEDIA_BUCKET", result.stderr)
+
+    def test_s3_storage_maps_bucket(self):
+        result = self._settings_process(bucket="test-bucket")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 def _make_user(username, **extra):
@@ -25,6 +80,14 @@ def _png_bytes():
     buf = BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _image_bytes(*, size=(1, 1), image_format="PNG", exif=None):
+    image = Image.new("RGB", size, color="red")
+    buffer = BytesIO()
+    save_kwargs = {"exif": exif} if exif is not None else {}
+    image.save(buffer, format=image_format, **save_kwargs)
+    return buffer.getvalue()
 
 
 class PlatformReviewModelTests(APITestCase):
@@ -125,7 +188,81 @@ class ReviewMessageTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         msg = ReviewMessage.objects.get()
         self.assertTrue(msg.image.name.startswith("review_images/"))
+        self.assertNotIn("issue", msg.image.name)
         self.assertTrue(response.data["image_url"])
+        image_response = self.client.get(urlparse(response.data["image_url"]).path)
+        self.assertEqual(image_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(image_response["X-Content-Type-Options"], "nosniff")
+        self.assertIn("sandbox", image_response["Content-Security-Policy"])
+
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "apps.reviews.tests.RemoteMemoryStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        }
+    )
+    def test_review_image_supports_configurable_non_filesystem_storage(self):
+        image = SimpleUploadedFile(
+            "external.png", _png_bytes(), content_type="image/png",
+        )
+
+        response = self.client.post(self.url, {"image": image}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        message = ReviewMessage.objects.get()
+        self.assertEqual(storages["default"].__class__.__name__, "RemoteMemoryStorage")
+        self.assertTrue(storages["default"].exists(message.image.name))
+        self.assertEqual(
+            response.data["image_url"],
+            f"https://media.invalid/{message.image.name}",
+        )
+
+    def test_image_rejects_unsupported_mime_extension_and_oversized_file(self):
+        cases = (
+            SimpleUploadedFile("issue.png", _png_bytes(), content_type="text/html"),
+            SimpleUploadedFile("issue.png.php", _png_bytes(), content_type="image/png"),
+            SimpleUploadedFile(
+                "issue.png",
+                _png_bytes() + b"x" * (5 * 1024 * 1024),
+                content_type="image/png",
+            ),
+        )
+        for image in cases:
+            with self.subTest(name=image.name, content_type=image.content_type):
+                response = self.client.post(self.url, {"image": image}, format="multipart")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_image_rejects_excessive_dimensions_and_truncated_content(self):
+        cases = (
+            SimpleUploadedFile(
+                "wide.png", _image_bytes(size=(4097, 1)), content_type="image/png",
+            ),
+            SimpleUploadedFile("broken.png", b"\x89PNG\r\n\x1a\n", content_type="image/png"),
+        )
+        for image in cases:
+            with self.subTest(name=image.name):
+                response = self.client.post(self.url, {"image": image}, format="multipart")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_image_is_reencoded_without_original_metadata_or_trailing_content(self):
+        exif = Image.Exif()
+        exif[0x010E] = "不應保留的描述"
+        original = _image_bytes(image_format="JPEG", exif=exif) + b"TRAILING-PAYLOAD"
+        image = SimpleUploadedFile("same-name.jpg", original, content_type="image/jpeg")
+
+        response = self.client.post(self.url, {"image": image}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        message = ReviewMessage.objects.get()
+        with message.image.open("rb") as stored:
+            stored_bytes = stored.read()
+            stored.seek(0)
+            with Image.open(stored) as decoded:
+                self.assertEqual(dict(decoded.getexif()), {})
+        self.assertNotIn(b"TRAILING-PAYLOAD", stored_bytes)
+        self.assertRegex(message.image.name, r"^review_images/[0-9a-f]{32}\.jpg$")
 
     def test_staff_author_marked_is_admin(self):
         admin = _make_user("admin1", is_staff=True)

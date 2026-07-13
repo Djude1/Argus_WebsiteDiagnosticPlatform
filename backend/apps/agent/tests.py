@@ -25,8 +25,14 @@ from apps.agent.providers import (
     ProviderError,
     ToolCall,
 )
+from apps.agent.runner import (
+    _enforce_agent_request,
+    _enforce_agent_websocket,
+    _make_agent_context,
+)
 from apps.agent.tools import TOOL_SCHEMAS, ToolExecutor, ToolOutcome
 from apps.scans.models import AgentSession, AgentStep, Finding, Page, ScanJob
+from apps.scans.services import PublicScanTargetError
 
 User = get_user_model()
 
@@ -41,6 +47,86 @@ def _make_scan_job(user) -> ScanJob:
         normalized_url="https://example.com/",
         origin="https://example.com",
     )
+
+
+class AgentBrowserBoundaryTests(TestCase):
+    def test_context_blocks_service_workers_and_registers_both_routes(self):
+        context = MagicMock()
+        context.route = AsyncMock()
+        context.route_web_socket = AsyncMock()
+        browser = MagicMock()
+        browser.new_context = AsyncMock(return_value=context)
+
+        created = asyncio.run(_make_agent_context(browser, "https://example.com"))
+
+        self.assertIs(created, context)
+        browser.new_context.assert_awaited_once()
+        self.assertEqual(
+            browser.new_context.await_args.kwargs["service_workers"],
+            "block",
+        )
+        context.route.assert_awaited_once()
+        context.route_web_socket.assert_awaited_once()
+
+    def test_request_policy_blocks_private_and_cross_origin_document(self):
+        private_route = MagicMock()
+        private_route.abort = AsyncMock()
+        private_route.continue_ = AsyncMock()
+        private_request = MagicMock(url="http://127.0.0.1/", resource_type="image")
+        with patch(
+            "apps.agent.runner.assert_public_http_url",
+            side_effect=PublicScanTargetError("blocked"),
+        ):
+            asyncio.run(
+                _enforce_agent_request(private_route, private_request, "https://example.com")
+            )
+        private_route.abort.assert_awaited_once_with("blockedbyclient")
+        private_route.continue_.assert_not_awaited()
+
+        cross_route = MagicMock()
+        cross_route.abort = AsyncMock()
+        cross_route.continue_ = AsyncMock()
+        cross_request = MagicMock(
+            url="https://other.example/page", resource_type="document"
+        )
+        with patch(
+            "apps.agent.runner.assert_public_http_url",
+            return_value="https://other.example/page",
+        ):
+            asyncio.run(
+                _enforce_agent_request(cross_route, cross_request, "https://example.com")
+            )
+        cross_route.abort.assert_awaited_once_with("blockedbyclient")
+        cross_route.continue_.assert_not_awaited()
+
+    def test_request_policy_allows_public_subresource_and_same_origin_document(self):
+        for url, resource_type in (
+            ("https://cdn.example.net/app.js", "script"),
+            ("https://example.com/next", "document"),
+        ):
+            route = MagicMock()
+            route.abort = AsyncMock()
+            route.continue_ = AsyncMock()
+            request = MagicMock(url=url, resource_type=resource_type)
+            with patch("apps.agent.runner.assert_public_http_url", return_value=url):
+                asyncio.run(
+                    _enforce_agent_request(route, request, "https://example.com")
+                )
+            route.continue_.assert_awaited_once()
+            route.abort.assert_not_awaited()
+
+    def test_websocket_policy_blocks_cross_origin(self):
+        websocket_route = MagicMock(url="wss://other.example/socket")
+        websocket_route.close = AsyncMock()
+        with patch(
+            "apps.agent.runner.assert_public_websocket_url",
+            return_value="wss://other.example/socket",
+        ):
+            asyncio.run(
+                _enforce_agent_websocket(websocket_route, "https://example.com")
+            )
+        websocket_route.close.assert_awaited_once()
+        websocket_route.connect_to_server.assert_not_called()
 
 
 class FakeProvider(ChatProvider):

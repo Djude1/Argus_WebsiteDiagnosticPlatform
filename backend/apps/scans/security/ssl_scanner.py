@@ -4,9 +4,22 @@ import ssl
 import time
 
 from apps.scans.scanners import make_finding
+from apps.scans.services import resolve_public_host_ips
 
 _WEAK_CIPHER_TOKENS = ("RC4", "3DES", "DES-CBC3", "DES-CBC")
 _OLD_PROTOCOLS = ("TLSv1", "TLSv1.1", "SSLv2", "SSLv3")
+
+
+def _open_public_socket(hostname: str, port: int):
+    last_error = None
+    for public_ip in resolve_public_host_ips(hostname):
+        try:
+            return socket.create_connection((public_ip, port), timeout=10)
+        except OSError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise OSError("無可用的公開 IP。")
 
 
 def _eval_cert_expiry(not_after: str) -> list[dict]:
@@ -88,7 +101,7 @@ def _probe_insecure(hostname: str, port: int) -> list[dict]:
     """憑證驗證失敗後，用不驗證連線取得協議/cipher。"""
     try:
         ctx = ssl._create_unverified_context()
-        with socket.create_connection((hostname, port), timeout=10) as sock:
+        with _open_public_socket(hostname, port) as sock:
             with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
                 return (
                     _eval_protocol(ssock.version() or "")
@@ -105,7 +118,7 @@ def analyze_ssl(hostname: str, port: int = 443, scan_job_id: int = 0) -> list[di
     findings: list[dict] = []
     try:
         ctx = ssl.create_default_context()
-        with socket.create_connection((hostname, port), timeout=10) as sock:
+        with _open_public_socket(hostname, port) as sock:
             with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
                 cert = ssock.getpeercert() or {}
                 findings += _eval_cert_expiry(cert.get("notAfter", ""))

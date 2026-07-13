@@ -1,15 +1,21 @@
+from config.client_ip import resolve_client_ip
+from config.throttling import ScopedRateThrottle
 from django.conf import settings
 from django.contrib.auth import authenticate as django_authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.middleware.csrf import get_token
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.emails import send_password_reset_email
@@ -17,14 +23,33 @@ from apps.accounts.models import PasswordResetToken
 from apps.billing.services import grant_monthly_bonus_if_needed
 
 
-def _client_ip(request) -> str | None:
-    """從 request 取最可信的 client IP（信任 X-Forwarded-For 第一段）。"""
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+def _auth_response(user, *, response_status: int) -> Response:
+    refresh = RefreshToken.for_user(user)
+    response = Response(
+        {"access": str(refresh.access_token)},
+        status=response_status,
+    )
+    response.set_cookie(
+        settings.AUTH_REFRESH_COOKIE_NAME,
+        str(refresh),
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        httponly=True,
+        secure=settings.AUTH_REFRESH_COOKIE_SECURE,
+        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+        path="/api/auth/",
+    )
+    return response
 
 
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        settings.AUTH_REFRESH_COOKIE_NAME,
+        path="/api/auth/",
+        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class GoogleLoginView(views.APIView):
     """以 Google ID Token 完成登入或註冊（一般使用者登入方式之一，另有 email/密碼）。
 
@@ -88,13 +113,11 @@ class GoogleLoginView(views.APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {"access": str(refresh.access_token), "refresh": str(refresh)},
-            status=status.HTTP_200_OK,
-        )
+        get_token(request)
+        return _auth_response(user, response_status=status.HTTP_200_OK)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class EmailRegisterView(views.APIView):
     """以 email + password 建立帳號。"""
 
@@ -129,13 +152,11 @@ class EmailRegisterView(views.APIView):
             user.last_login = timezone.now()
             user.save(update_fields=["last_login"])
             grant_monthly_bonus_if_needed(user)
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {"access": str(refresh.access_token), "refresh": str(refresh)},
-            status=status.HTTP_201_CREATED,
-        )
+        get_token(request)
+        return _auth_response(user, response_status=status.HTTP_201_CREATED)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class EmailLoginView(views.APIView):
     """以 email + password 登入，回傳 JWT。"""
 
@@ -157,11 +178,61 @@ class EmailLoginView(views.APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {"access": str(refresh.access_token), "refresh": str(refresh)},
-            status=status.HTTP_200_OK,
-        )
+        get_token(request)
+        return _auth_response(user, response_status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class CookieTokenRefreshView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        raw_refresh = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        if not raw_refresh:
+            return Response({"detail": "登入狀態已失效。"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            with transaction.atomic():
+                old_refresh = RefreshToken(raw_refresh)
+                outstanding = OutstandingToken.objects.select_for_update().get(
+                    jti=old_refresh["jti"]
+                )
+                if BlacklistedToken.objects.filter(token=outstanding).exists():
+                    raise TokenError("refresh token 已使用")
+                user = get_user_model().objects.get(
+                    pk=old_refresh["user_id"],
+                    is_active=True,
+                )
+                BlacklistedToken.objects.create(token=outstanding)
+        except (
+            IntegrityError,
+            OutstandingToken.DoesNotExist,
+            TokenError,
+            get_user_model().DoesNotExist,
+            KeyError,
+        ):
+            response = Response(
+                {"detail": "登入狀態已失效。"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+            _clear_refresh_cookie(response)
+            return response
+        return _auth_response(user, response_status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class LogoutView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        raw_refresh = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        if raw_refresh:
+            try:
+                RefreshToken(raw_refresh).blacklist()
+            except TokenError:
+                pass
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        _clear_refresh_cookie(response)
+        return response
 
 
 class MeView(views.APIView):
@@ -213,7 +284,10 @@ class PasswordResetRequestView(views.APIView):
     throttle_scope = "password_reset"
 
     GENERIC_OK = {
-        "detail": "若該 Email 已註冊本平台帳號（且設有密碼），重設信已寄出，請至信箱收信並於 60 分鐘內完成重設。",
+        "detail": (
+            "若該 Email 已註冊本平台帳號（且設有密碼），重設信已寄出，"
+            "請至信箱收信並於 60 分鐘內完成重設。"
+        ),
     }
 
     def post(self, request):
@@ -227,11 +301,14 @@ class PasswordResetRequestView(views.APIView):
 
         # 只對 email 帳號（has_usable_password）寄信；Google 帳號無密碼，寄了也沒意義
         if user and user.has_usable_password():
-            token = PasswordResetToken.create_for_user(user, request_ip=_client_ip(request))
+            token = PasswordResetToken.create_for_user(
+                user,
+                request_ip=resolve_client_ip(request),
+            )
             base_url = request.build_absolute_uri("/")[:-1]
             send_password_reset_email(
                 user_email=user.email or email,
-                token=token.token,
+                token=token.raw_token,
                 base_url=base_url,
                 expires_minutes=PasswordResetToken.DEFAULT_LIFETIME_MINUTES,
             )
@@ -257,31 +334,33 @@ class PasswordResetConfirmView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        token = (
-            PasswordResetToken.objects.select_related("user")
-            .filter(token=token_value)
-            .first()
-        )
-        if token is None or not token.is_valid():
-            return Response(
-                {"token": "重設連結無效或已過期，請重新申請。"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        # 密碼強度檢查放在 token 驗證之後（避免透過此端點嘗試爆破密碼複雜度規則）
-        try:
-            validate_password(new_password, user=token.user)
-        except DjangoValidationError as exc:
-            return Response(
-                {"new_password": list(exc.messages)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 設密碼 + 失效 token + JWT 不簽發（讓使用者主動回登入頁登入，確認密碼可用）
-        user = token.user
         with transaction.atomic():
+            token = (
+                PasswordResetToken.objects.select_for_update()
+                .select_related("user")
+                .filter(token_digest=PasswordResetToken.digest_token(token_value))
+                .first()
+            )
+            if token is None or not token.is_valid():
+                return Response(
+                    {"token": "重設連結無效或已過期，請重新申請。"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # 在鎖定 token 後才驗證並更新，避免並行 request 同時通過單次使用檢查。
+            try:
+                validate_password(new_password, user=token.user)
+            except DjangoValidationError as exc:
+                return Response(
+                    {"new_password": list(exc.messages)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user = token.user
             user.set_password(new_password)
             user.save(update_fields=["password"])
             token.mark_used()
+            for outstanding in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
         return Response({"detail": "密碼已重設，請用新密碼登入。"})
 
 
@@ -308,6 +387,12 @@ class ChangePasswordView(views.APIView):
                 {"new_password": list(exc.messages)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        request.user.set_password(new_password)
-        request.user.save(update_fields=["password"])
-        return Response({"detail": "密碼已更新。"})
+        with transaction.atomic():
+            user = get_user_model().objects.select_for_update().get(pk=request.user.pk)
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            for outstanding in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+        response = Response({"detail": "密碼已更新，請重新登入。"})
+        _clear_refresh_cookie(response)
+        return response

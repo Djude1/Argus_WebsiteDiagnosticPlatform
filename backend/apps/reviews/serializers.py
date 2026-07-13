@@ -1,6 +1,27 @@
+import warnings
+from io import BytesIO
+from pathlib import Path
+from uuid import uuid4
+
+from django.core.files.base import ContentFile
+from PIL import Image, ImageOps, UnidentifiedImageError
 from rest_framework import serializers
 
 from apps.reviews.models import PlatformReview, ReviewMessage
+
+MAX_REVIEW_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_REVIEW_IMAGE_EDGE = 4096
+MAX_REVIEW_IMAGE_PIXELS = 16_000_000
+ALLOWED_REVIEW_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_REVIEW_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+class ReviewImageField(serializers.ImageField):
+    def to_internal_value(self, data):
+        client_content_type = getattr(data, "content_type", "")
+        image = super().to_internal_value(data)
+        image.client_content_type = client_content_type
+        return image
 
 
 def _user_display_name(user) -> str:
@@ -14,6 +35,7 @@ def _user_display_name(user) -> str:
 
 
 class ReviewMessageSerializer(serializers.ModelSerializer):
+    image = ReviewImageField(write_only=True, required=False, allow_null=True)
     author_display = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     helpful_count = serializers.SerializerMethodField()
@@ -56,6 +78,56 @@ class ReviewMessageSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return obj.helpful_marks.filter(user=request.user).exists()
+
+    def validate_image(self, image):
+        if image.size > MAX_REVIEW_IMAGE_BYTES:
+            raise serializers.ValidationError("圖片大小不可超過 5 MiB。")
+        if image.client_content_type not in ALLOWED_REVIEW_IMAGE_TYPES:
+            raise serializers.ValidationError("只接受 JPEG、PNG 或 WebP 圖片。")
+        if Path(image.name).suffix.lower() not in ALLOWED_REVIEW_IMAGE_EXTENSIONS:
+            raise serializers.ValidationError("圖片副檔名只允許 .jpg、.jpeg、.png 或 .webp。")
+
+        try:
+            image.seek(0)
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(image) as inspected:
+                    inspected.verify()
+
+                image.seek(0)
+                with Image.open(image) as decoded:
+                    width, height = decoded.size
+                    if (
+                        max(width, height) > MAX_REVIEW_IMAGE_EDGE
+                        or width * height > MAX_REVIEW_IMAGE_PIXELS
+                    ):
+                        raise serializers.ValidationError(
+                            "圖片最長邊不可超過 4096 px，且總像素不可超過 1600 萬。"
+                        )
+                    decoded.load()
+                    transposed = ImageOps.exif_transpose(decoded)
+                    has_alpha = "A" in transposed.getbands() or "transparency" in decoded.info
+                    output_mode = "RGBA" if has_alpha else "RGB"
+                    clean = Image.frombytes(
+                        output_mode,
+                        transposed.size,
+                        transposed.convert(output_mode).tobytes(),
+                    )
+        except serializers.ValidationError:
+            raise
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+            raise serializers.ValidationError("圖片像素尺寸過大。") from None
+        except (OSError, UnidentifiedImageError, ValueError):
+            raise serializers.ValidationError("圖片已損毀或內容格式不正確。") from None
+
+        output = BytesIO()
+        if has_alpha:
+            clean.save(output, format="PNG", optimize=True)
+            extension = "png"
+        else:
+            clean.save(output, format="JPEG", quality=88, optimize=True)
+            extension = "jpg"
+        return ContentFile(output.getvalue(), name=f"{uuid4().hex}.{extension}")
 
     def validate(self, attrs):
         if not attrs.get("body") and not attrs.get("image"):

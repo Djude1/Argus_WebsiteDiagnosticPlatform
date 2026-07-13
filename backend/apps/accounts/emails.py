@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def _build_reset_link(base_url: str, token: str) -> str:
     base = base_url.rstrip("/")
-    return f"{base}/password-reset/confirm?token={token}"
+    return f"{base}/password-reset/confirm#token={token}"
 
 
 def _render_reset_text(email: str, link: str, expires_minutes: int) -> str:
@@ -87,8 +87,8 @@ def send_password_reset_email(
         )
         message.attach_alternative(html, "text/html")
         message.send(fail_silently=False)
-        logger.info("password reset 信已寄至 %s", user_email)
+        logger.info("password reset 信已寄出")
         return True
     except Exception:
-        logger.exception("password reset 信寄送失敗 to=%s", user_email)
+        logger.exception("password reset 信寄送失敗")
         return False

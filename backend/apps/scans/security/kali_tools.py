@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from urllib.parse import urlparse
@@ -92,9 +93,23 @@ def _container_running() -> bool:
 def _docker_exec(args: list[str], timeout: int) -> tuple[int | None, str, str]:
     """執行 docker exec <container> <args>，回傳 (returncode, stdout, stderr)。"""
     container = getattr(settings, "ARGUS_KALI_CONTAINER", "argus-kali-1")
+    docker_args = ["docker", "exec"]
+    proxy_url = getattr(settings, "ARGUS_EGRESS_PROXY_URL", "")
+    if proxy_url:
+        no_proxy = os.environ.get("NO_PROXY", "")
+        for name, value in (
+            ("HTTP_PROXY", proxy_url),
+            ("HTTPS_PROXY", proxy_url),
+            ("NO_PROXY", no_proxy),
+            ("http_proxy", proxy_url),
+            ("https_proxy", proxy_url),
+            ("no_proxy", no_proxy),
+        ):
+            docker_args.extend(["-e", f"{name}={value}"])
+    docker_args.extend([container, *args])
     try:
         proc = subprocess.run(
-            ["docker", "exec", container, *args],
+            docker_args,
             capture_output=True,
             text=True,
             timeout=timeout,

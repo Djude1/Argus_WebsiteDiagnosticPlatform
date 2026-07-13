@@ -1,10 +1,17 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan
+from apps.billing.ecpay import build_check_mac_value, merchant_trade_no
+from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan, PurchaseOrder
 from apps.billing.services import (
     InsufficientCoinError,
     admin_adjust,
@@ -16,6 +23,66 @@ from apps.billing.services import (
     settle_scan_actual,
 )
 from apps.scans.models import ScanJob
+
+ECPAY_TEST_SETTINGS = {
+    "ARGUS_PAYMENT_MODE": "ecpay_test",
+    "ECPAY_MERCHANT_ID": "test-merchant",
+    "ECPAY_HASH_KEY": "test-hash-key-not-secret",
+    "ECPAY_HASH_IV": "test-hash-iv",
+    "ECPAY_CHECKOUT_URL": "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
+    "ECPAY_RETURN_URL": "https://pay.argus.example.com/api/billing/ecpay/callback/",
+    "ECPAY_CLIENT_BACK_URL": "https://pay.argus.example.com/billing",
+}
+
+
+class EcpaySettingsTests(SimpleTestCase):
+    def _settings_process(self, *, return_url: str, client_back_url: str):
+        env = os.environ.copy()
+        env.update(
+            {
+                "DJANGO_SECRET_KEY": "test-only-django-secret-with-at-least-32-bytes",
+                "PASSWORD_RESET_TOKEN_PEPPER": "test-only-reset-pepper-with-at-least-32-bytes",
+                "ARGUS_PAYMENT_MODE": "ecpay_test",
+                "ECPAY_MERCHANT_ID": "test-merchant",
+                "ECPAY_HASH_KEY": "test-hash-key-not-secret",
+                "ECPAY_HASH_IV": "test-hash-iv",
+                "ECPAY_CHECKOUT_URL": "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
+                "ECPAY_RETURN_URL": return_url,
+                "ECPAY_CLIENT_BACK_URL": client_back_url,
+            }
+        )
+        return subprocess.run(
+            [sys.executable, "-c", "from config import settings"],
+            cwd=Path(__file__).resolve().parents[2],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+
+    def test_ecpay_test_accepts_public_https_urls(self):
+        result = self._settings_process(
+            return_url=ECPAY_TEST_SETTINGS["ECPAY_RETURN_URL"],
+            client_back_url=ECPAY_TEST_SETTINGS["ECPAY_CLIENT_BACK_URL"],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_ecpay_test_rejects_nonstandard_https_port(self):
+        result = self._settings_process(
+            return_url="https://pay.argus.example.com:8443/ecpay/callback/",
+            client_back_url=ECPAY_TEST_SETTINGS["ECPAY_CLIENT_BACK_URL"],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ECPAY_RETURN_URL", result.stderr)
+
+    def test_ecpay_test_rejects_invalid_port(self):
+        result = self._settings_process(
+            return_url="https://pay.argus.example.com:not-a-port/ecpay/callback/",
+            client_back_url=ECPAY_TEST_SETTINGS["ECPAY_CLIENT_BACK_URL"],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ECPAY_RETURN_URL", result.stderr)
 
 
 def _make_user(username="alice", email=None):
@@ -181,7 +248,7 @@ class AdminAdjustTests(APITestCase):
         self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 0)
 
 
-@override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
+@override_settings(ARGUS_AUTO_QUEUE_SCANS=False, **ECPAY_TEST_SETTINGS)
 class BillingAPITests(APITestCase):
     def setUp(self):
         self.user = _make_user("henry")
@@ -201,6 +268,22 @@ class BillingAPITests(APITestCase):
         codes = [p["code"] for p in response.data["plans"]]
         self.assertEqual(codes, ["starter", "standard", "advanced", "flagship"])
 
+    def test_check_mac_value_is_stable_for_known_test_vector(self):
+        result = build_check_mac_value(
+            {
+                "MerchantID": "test-merchant",
+                "MerchantTradeNo": "ARGUS000000000000001",
+                "TradeDesc": "Argus test",
+                "TotalAmount": "100",
+            },
+            hash_key="test-hash-key-not-secret",
+            hash_iv="test-hash-iv",
+        )
+        self.assertEqual(
+            result,
+            "B60ED6E86780DC96789760285A917F58C718A364D4C47CEF59B8A49FA1E19E9A",
+        )
+
     def _valid_purchase_payload(self, **overrides):
         payload = {
             "plan_code": "starter",
@@ -212,17 +295,27 @@ class BillingAPITests(APITestCase):
         payload.update(overrides)
         return payload
 
-    def test_purchase_endpoint_adds_coins(self):
+    def test_purchase_endpoint_creates_pending_order_without_early_credit(self):
         response = self.client.post(
             reverse("billing-purchase"),
             self._valid_purchase_payload(),
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        # 3 步驟結帳：回傳 wallet + order，餘額在 wallet 物件內
-        self.assertEqual(response.data["wallet"]["balance"], 300)  # 200 + 100
-        self.assertEqual(response.data["order"]["status"], "paid")
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 200)
+        self.assertEqual(response.data["order"]["status"], "pending")
         self.assertEqual(response.data["order"]["coin_amount"], 100)
+        self.assertEqual(
+            response.data["payment"]["action"],
+            "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
+        )
+        self.assertEqual(
+            response.data["payment"]["fields"]["MerchantTradeNo"],
+            merchant_trade_no(response.data["order"]["id"]),
+        )
+        self.assertFalse(
+            CoinTransaction.objects.filter(kind=CoinTransaction.Kind.PURCHASE).exists()
+        )
 
     def test_purchase_endpoint_rejects_unknown_plan(self):
         response = self.client.post(
@@ -232,8 +325,141 @@ class BillingAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @override_settings(ARGUS_PAYMENT_MODE="disabled")
+    def test_purchase_endpoint_fails_closed_when_payment_is_disabled(self):
+        response = self.client.post(
+            reverse("billing-purchase"),
+            self._valid_purchase_payload(),
+            format="json",
+        )
 
-@override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 200)
+        self.assertFalse(CoinTransaction.objects.filter(kind=CoinTransaction.Kind.PURCHASE).exists())
+
+    def _callback_payload(self, order, **overrides):
+        payload = {
+            "MerchantID": ECPAY_TEST_SETTINGS["ECPAY_MERCHANT_ID"],
+            "MerchantTradeNo": merchant_trade_no(order.id),
+            "RtnCode": "1",
+            "RtnMsg": "Succeeded",
+            "TradeAmt": str(order.price_ntd),
+            "TradeNo": "stage-trade-0001",
+            "PaymentDate": "2026/07/13 12:00:00",
+            "PaymentType": "Credit_CreditCard",
+            "SimulatePaid": "0",
+            "CustomField1": str(order.id),
+        }
+        payload.update(overrides)
+        payload["CheckMacValue"] = build_check_mac_value(
+            payload,
+            hash_key=ECPAY_TEST_SETTINGS["ECPAY_HASH_KEY"],
+            hash_iv=ECPAY_TEST_SETTINGS["ECPAY_HASH_IV"],
+        )
+        return payload
+
+    def _create_pending_order(self):
+        response = self.client.post(
+            reverse("billing-purchase"),
+            self._valid_purchase_payload(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return PurchaseOrder.objects.get(pk=response.data["order"]["id"])
+
+    @patch("apps.billing.views.send_purchase_receipt")
+    def test_signed_callback_credits_once_and_is_idempotent(self, receipt_mock):
+        order = self._create_pending_order()
+        payload = self._callback_payload(order)
+
+        first = self.client.post(reverse("billing-ecpay-callback"), payload)
+        second = self.client.post(reverse("billing-ecpay-callback"), payload)
+
+        self.assertEqual(first.content, b"1|OK")
+        self.assertEqual(second.content, b"1|OK")
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.PAID)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 300)
+        self.assertEqual(
+            CoinTransaction.objects.filter(kind=CoinTransaction.Kind.PURCHASE).count(),
+            1,
+        )
+        receipt_mock.assert_called_once()
+
+    def test_callback_rejects_invalid_signature_and_amount(self):
+        order = self._create_pending_order()
+        invalid_signature = self._callback_payload(order)
+        invalid_signature["CheckMacValue"] = "0" * 64
+        bad_mac_response = self.client.post(
+            reverse("billing-ecpay-callback"), invalid_signature
+        )
+        wrong_amount = self._callback_payload(order, TradeAmt="999")
+        wrong_amount_response = self.client.post(
+            reverse("billing-ecpay-callback"), wrong_amount
+        )
+
+        self.assertEqual(bad_mac_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(wrong_amount_response.status_code, status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.PENDING)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 200)
+
+    def test_vendor_simulated_paid_notification_does_not_credit(self):
+        order = self._create_pending_order()
+        response = self.client.post(
+            reverse("billing-ecpay-callback"),
+            self._callback_payload(order, SimulatePaid="1"),
+        )
+
+        self.assertEqual(response.content, b"1|OK")
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.PENDING)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 200)
+
+    @patch("apps.billing.views.send_purchase_receipt")
+    def test_pending_provider_status_can_later_transition_to_paid(self, receipt_mock):
+        order = self._create_pending_order()
+        pending_response = self.client.post(
+            reverse("billing-ecpay-callback"),
+            self._callback_payload(order, RtnCode="10300066"),
+        )
+        order.refresh_from_db()
+        self.assertEqual(pending_response.content, b"1|OK")
+        self.assertEqual(order.status, PurchaseOrder.Status.PENDING)
+
+        paid_response = self.client.post(
+            reverse("billing-ecpay-callback"),
+            self._callback_payload(order),
+        )
+        order.refresh_from_db()
+        self.assertEqual(paid_response.content, b"1|OK")
+        self.assertEqual(order.status, PurchaseOrder.Status.PAID)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 300)
+        receipt_mock.assert_called_once()
+
+    @patch("apps.billing.views.send_purchase_receipt")
+    def test_callback_credits_order_snapshot_after_plan_changes(self, receipt_mock):
+        order = self._create_pending_order()
+        PricingPlan.objects.filter(pk=order.plan_id).update(
+            coin_amount=9_999,
+            price_ntd=9_999,
+        )
+
+        response = self.client.post(
+            reverse("billing-ecpay-callback"),
+            self._callback_payload(order),
+        )
+
+        self.assertEqual(response.content, b"1|OK")
+        wallet = CoinWallet.objects.get(user=self.user)
+        self.assertEqual(wallet.balance, 300)
+        self.assertEqual(wallet.total_purchased_ntd, 100)
+        transaction_row = CoinTransaction.objects.get(kind=CoinTransaction.Kind.PURCHASE)
+        self.assertEqual(transaction_row.amount, 100)
+        receipt_mock.assert_called_once()
+
+
+@override_settings(ARGUS_AUTO_QUEUE_SCANS=False, **ECPAY_TEST_SETTINGS)
 class PurchaseOrderTests(APITestCase):
     """3 步驟結帳 wizard 對應的 PurchaseOrder 行為。"""
 
@@ -252,8 +478,7 @@ class PurchaseOrderTests(APITestCase):
         payload.update(overrides)
         return payload
 
-    def test_personal_invoice_creates_paid_order_with_snapshot(self):
-        from apps.billing.models import PurchaseOrder
+    def test_personal_invoice_creates_pending_order_with_snapshot(self):
         response = self.client.post(
             reverse("billing-purchase"), self._payload(), format="json",
         )
@@ -262,15 +487,13 @@ class PurchaseOrderTests(APITestCase):
         # 價格與 coin 快照寫入訂單，後續方案改動不會影響此訂單
         self.assertEqual(order.price_ntd, 450)
         self.assertEqual(order.coin_amount, 500)
-        self.assertEqual(order.status, PurchaseOrder.Status.PAID)
+        self.assertEqual(order.status, PurchaseOrder.Status.PENDING)
         self.assertEqual(order.invoice_type, PurchaseOrder.InvoiceType.PERSONAL)
         # 個人發票不應留下公司資訊
         self.assertEqual(order.company_name, "")
         self.assertEqual(order.tax_id, "")
-        # 訂單連結到入帳交易
-        self.assertIsNotNone(order.transaction)
-        self.assertEqual(order.transaction.amount, 500)
-        self.assertIsNotNone(order.paid_at)
+        self.assertIsNone(order.transaction)
+        self.assertIsNone(order.paid_at)
 
     def test_company_invoice_requires_company_name(self):
         response = self.client.post(
@@ -299,7 +522,6 @@ class PurchaseOrderTests(APITestCase):
         self.assertIn("tax_id", response.data)
 
     def test_company_invoice_with_valid_data_stored(self):
-        from apps.billing.models import PurchaseOrder
         response = self.client.post(
             reverse("billing-purchase"),
             self._payload(
@@ -337,7 +559,6 @@ class PurchaseOrderTests(APITestCase):
         self.assertEqual(len(response.data["orders"]), 2)
 
     def test_personal_invoice_accepts_mobile_barcode(self):
-        from apps.billing.models import PurchaseOrder
         response = self.client.post(
             reverse("billing-purchase"),
             self._payload(carrier_type="mobile_barcode", carrier_id="/AB12CDE"),
@@ -358,7 +579,6 @@ class PurchaseOrderTests(APITestCase):
         self.assertIn("carrier_id", response.data)
 
     def test_personal_invoice_accepts_citizen_digital(self):
-        from apps.billing.models import PurchaseOrder
         response = self.client.post(
             reverse("billing-purchase"),
             self._payload(
@@ -381,7 +601,6 @@ class PurchaseOrderTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_company_invoice_ignores_carrier_fields(self):
-        from apps.billing.models import PurchaseOrder
         response = self.client.post(
             reverse("billing-purchase"),
             self._payload(

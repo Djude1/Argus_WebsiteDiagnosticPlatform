@@ -104,6 +104,7 @@ def run_katana(
         "-jc",
         "-jsl",
         "-td",
+        "-dr",
         "-j",
         "-silent",
         "-timeout", "10",

@@ -23,7 +23,8 @@ CREDIT_CARD_PATTERN = re.compile(r"(?<!\d)(?:\d[\s\-]?){12,18}\d(?!\d)")
 # 數字片段巧合通過 Luhn 會被誤判為卡號，已實證 https://camb.xn--gst.tw 雷達圖案例）。
 # 用非貪婪 + DOTALL，能抓含巢狀子元素的整段 <svg>...</svg>。
 _HTML_SVG_STRIP = re.compile(r"<svg\b[^>]*>.*?</svg>", re.IGNORECASE | re.DOTALL)
-# 殘留的 SVG 子元素標籤（裸的 <polygon>、<path>、<circle>...）整段移除，避免外層 <svg> 缺失時座標漏掉。
+# 殘留的 SVG 子元素標籤（裸的 polygon、path、circle 等）整段移除，
+# 避免外層 SVG 缺失時座標漏掉。
 _HTML_SVG_ELEMENTS = re.compile(
     r"<(?:polygon|polyline|path|circle|ellipse|line|rect|use|g|defs|symbol|marker|pattern|mask|clipPath|filter|feGaussianBlur|feOffset|feMerge|feMergeNode|feColorMatrix|feFlood|feComposite|stop|linearGradient|radialGradient)\b[^>]*/?>",
     re.IGNORECASE,

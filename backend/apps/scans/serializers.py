@@ -9,7 +9,12 @@ from apps.billing.services import (
     hold_for_scan,
 )
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
-from apps.scans.services import get_hostname, get_origin, is_obvious_third_party, normalize_url
+from apps.scans.services import (
+    assert_public_http_url,
+    get_hostname,
+    get_origin,
+    is_obvious_third_party,
+)
 
 
 class ScanJobCreateSerializer(serializers.Serializer):
@@ -35,6 +40,11 @@ class ScanJobCreateSerializer(serializers.Serializer):
                 {"authorization_confirmed": "送出掃描前必須確認擁有網站或已取得書面授權。"}
             )
 
+        try:
+            normalized_url = assert_public_http_url(attrs["url"])
+        except ValueError as exc:
+            raise serializers.ValidationError({"url": str(exc)}) from exc
+
         # 點數檢查（取代舊的月次數配額）：以 max_pages × coin_per_page 預估
         request = self.context["request"]
         wallet = get_or_create_wallet(request.user)
@@ -49,11 +59,6 @@ class ScanJobCreateSerializer(serializers.Serializer):
                     )
                 }
             )
-
-        try:
-            normalized_url = normalize_url(attrs["url"])
-        except ValueError as exc:
-            raise serializers.ValidationError({"url": str(exc)}) from exc
 
         if attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and not attrs["active_testing_authorized"]:
             raise serializers.ValidationError(

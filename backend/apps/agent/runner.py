@@ -6,8 +6,8 @@
 - ARGUS_AGENT_ENABLED=False（預設）時 return None，向下相容既有掃描流程。
 
 安全：
-- 強制 same-origin 啟動：只在 scan_job.origin 域內導覽，由 Playwright + Agent
-  tool 自身的 URL/selector 操作隱含約束（agent 沒有 navigate(url) tool）。
+- 所有請求先套用 public target policy，主文件與 WebSocket 再強制 same-origin；
+  Service Worker 停用，避免繞過 Playwright request interception。
 - 沿用專案 User-Agent（SiteSense-AI-Scanner）。
 - Playwright Chromium 路徑由 settings 已注入環境變數的 PLAYWRIGHT_BROWSERS_PATH 決定。
 """
@@ -15,12 +15,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from asgiref.sync import sync_to_async
+from config.egress import playwright_launch_kwargs
 from django.conf import settings
 from playwright.async_api import async_playwright
 
 from apps.scans.models import ScanJob
+from apps.scans.services import (
+    PublicScanTargetError,
+    assert_public_http_url,
+    assert_public_websocket_url,
+)
 
 from .findings import persist_agent_issues, persist_agent_security_findings
 from .loop import AgentRunResult, HermesAgent
@@ -52,6 +59,52 @@ SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資�
 
 限制：只對本站同源 URL 使用 probe_sql_injection；跨站或無參數 URL 會被系統拒絕。
 不要繞過驗證、不要操作他站資源。"""
+
+
+def _origin_key(url: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(url)
+    scheme = {"ws": "http", "wss": "https"}.get(parsed.scheme, parsed.scheme)
+    default_port = 443 if scheme == "https" else 80 if scheme == "http" else None
+    return scheme, (parsed.hostname or "").lower(), parsed.port or default_port
+
+
+async def _enforce_agent_request(route, request, origin: str):
+    try:
+        normalized = assert_public_http_url(request.url)
+        if request.resource_type == "document" and _origin_key(normalized) != _origin_key(origin):
+            raise PublicScanTargetError("Agent 主文件禁止跨 origin 導覽")
+    except PublicScanTargetError:
+        await route.abort("blockedbyclient")
+        return
+    await route.continue_()
+
+
+async def _enforce_agent_websocket(websocket_route, origin: str):
+    try:
+        normalized = assert_public_websocket_url(websocket_route.url)
+        if _origin_key(normalized) != _origin_key(origin):
+            raise PublicScanTargetError("Agent WebSocket 禁止跨 origin")
+    except PublicScanTargetError:
+        await websocket_route.close(code=1008, reason="Blocked by scan target policy")
+        return
+    websocket_route.connect_to_server()
+
+
+async def _make_agent_context(browser, origin: str):
+    context = await browser.new_context(
+        user_agent=settings.ARGUS_SCANNER_USER_AGENT,
+        ignore_https_errors=True,
+        service_workers="block",
+    )
+    await context.route(
+        "**/*",
+        lambda route, request: _enforce_agent_request(route, request, origin),
+    )
+    await context.route_web_socket(
+        "**/*",
+        lambda websocket_route: _enforce_agent_websocket(websocket_route, origin),
+    )
+    return context
 
 
 async def run_agent_for_scan(
@@ -92,12 +145,12 @@ async def run_agent_for_scan(
         )
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
+        browser = await pw.chromium.launch(
+            headless=True,
+            **playwright_launch_kwargs(),
+        )
         try:
-            context = await browser.new_context(
-                user_agent=settings.ARGUS_SCANNER_USER_AGENT,
-                ignore_https_errors=True,
-            )
+            context = await _make_agent_context(browser, scan_job.origin)
             page = await context.new_page()
             await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
 

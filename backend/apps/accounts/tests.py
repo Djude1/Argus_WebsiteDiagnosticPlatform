@@ -5,6 +5,10 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from apps.accounts.models import PasswordResetToken
 
 
 @override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
@@ -25,7 +29,8 @@ class GoogleLoginTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
-        self.assertIn("refresh", response.data)
+        self.assertNotIn("refresh", response.data)
+        self.assertTrue(response.cookies["argus_refresh_token"]["httponly"])
         user = get_user_model().objects.get(username="new@example.com")
         self.assertEqual(user.email, "new@example.com")
         self.assertFalse(user.is_superuser)
@@ -89,6 +94,65 @@ class GoogleLoginConfigTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
+
+@override_settings(PASSWORD_RESET_TOKEN_PEPPER="independent-test-pepper")
+class PasswordResetTokenTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="reset@example.com",
+            email="reset@example.com",
+            password="OldPassword123!",
+        )
+
+    def test_database_stores_only_digest(self):
+        token = PasswordResetToken.create_for_user(self.user)
+
+        token.refresh_from_db()
+        self.assertNotEqual(token.token_digest, token.raw_token)
+        self.assertEqual(
+            token.token_digest,
+            PasswordResetToken.digest_token(token.raw_token),
+        )
+        self.assertNotIn("token", [field.name for field in PasswordResetToken._meta.fields])
+
+    @patch("apps.accounts.views.send_password_reset_email", return_value=True)
+    def test_raw_token_from_email_resets_password_once(self, mock_send):
+        request_response = self.client.post(
+            reverse("password-reset-request"),
+            {"email": self.user.email},
+            format="json",
+        )
+        raw_token = mock_send.call_args.kwargs["token"]
+
+        self.assertEqual(request_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(PasswordResetToken.objects.filter(token_digest=raw_token).exists())
+        first = self.client.post(
+            reverse("password-reset-confirm"),
+            {"token": raw_token, "new_password": "NewPassword456!"},
+            format="json",
+        )
+        second = self.client.post(
+            reverse("password-reset-confirm"),
+            {"token": raw_token, "new_password": "AnotherPassword789!"},
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("NewPassword456!"))
+
+    def test_database_digest_cannot_be_used_as_raw_token(self):
+        token = PasswordResetToken.create_for_user(self.user)
+
+        response = self.client.post(
+            reverse("password-reset-confirm"),
+            {"token": token.token_digest, "new_password": "NewPassword456!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 class EmailAuthTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -138,6 +202,94 @@ class EmailAuthTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn("access", resp.json())
+        self.assertNotIn("refresh", resp.json())
+        self.assertIn("argus_refresh_token", resp.cookies)
+
+    def test_http_only_refresh_cookie_can_rotate_and_logout(self):
+        User = get_user_model()
+        User.objects.create_user(
+            username="cookie@example.com",
+            email="cookie@example.com",
+            password="MyPass999!",
+        )
+        login = self.client.post(
+            "/api/auth/email-login/",
+            {"email": "cookie@example.com", "password": "MyPass999!"},
+            content_type="application/json",
+        )
+        old_refresh = login.cookies["argus_refresh_token"].value
+
+        refreshed = self.client.post("/api/auth/refresh/", content_type="application/json")
+        new_refresh = refreshed.cookies["argus_refresh_token"].value
+        logged_out = self.client.post("/api/auth/logout/", content_type="application/json")
+
+        self.assertEqual(refreshed.status_code, 200)
+        self.assertIn("access", refreshed.json())
+        self.assertNotEqual(old_refresh, new_refresh)
+        self.assertEqual(logged_out.status_code, 204)
+        self.assertEqual(logged_out.cookies["argus_refresh_token"].value, "")
+
+    def test_rotated_refresh_cookie_cannot_be_replayed(self):
+        user = get_user_model().objects.create_user(
+            username="replay@example.com",
+            email="replay@example.com",
+            password="MyPass999!",
+        )
+        old_refresh = str(RefreshToken.for_user(user))
+        self.client.cookies["argus_refresh_token"] = old_refresh
+
+        first = self.client.post("/api/auth/refresh/", content_type="application/json")
+        self.client.cookies["argus_refresh_token"] = old_refresh
+        replay = self.client.post("/api/auth/refresh/", content_type="application/json")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_change_password_revokes_all_refresh_tokens_and_clears_cookie(self):
+        user = get_user_model().objects.create_user(
+            username="change@example.com",
+            email="change@example.com",
+            password="OldPassword123!",
+        )
+        refresh = RefreshToken.for_user(user)
+        self.client.cookies["argus_refresh_token"] = str(refresh)
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {"old_password": "OldPassword123!", "new_password": "NewPassword456!"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.cookies["argus_refresh_token"].value, "")
+        outstanding = OutstandingToken.objects.get(jti=refresh["jti"])
+        self.assertTrue(BlacklistedToken.objects.filter(token=outstanding).exists())
+
+    def test_refresh_cookie_requires_csrf_header(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        User = get_user_model()
+        User.objects.create_user(
+            username="csrf@example.com",
+            email="csrf@example.com",
+            password="MyPass999!",
+        )
+        login = csrf_client.post(
+            "/api/auth/email-login/",
+            {"email": "csrf@example.com", "password": "MyPass999!"},
+            content_type="application/json",
+        )
+        csrf_token = login.cookies["csrftoken"].value
+
+        rejected = csrf_client.post("/api/auth/refresh/", content_type="application/json")
+        accepted = csrf_client.post(
+            "/api/auth/refresh/",
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
 
     def test_email_login_wrong_password_fails(self):
         User = get_user_model()

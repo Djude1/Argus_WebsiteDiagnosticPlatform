@@ -7,7 +7,18 @@
 import os
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q, Sum
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    Exists,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -30,7 +41,7 @@ from apps.admin_api.serializers import (
 )
 from apps.billing.models import CoinTransaction, CoinWallet, PurchaseOrder
 from apps.billing.services import admin_adjust
-from apps.reviews.models import PlatformReview
+from apps.reviews.models import PlatformReview, ReviewMessage
 from apps.scans.models import AgentSession, ScanJob
 
 PAGE_SIZE = 25
@@ -63,7 +74,7 @@ def overview(request):
     total_revenue = CoinWallet.objects.aggregate(s=Sum("total_purchased_ntd"))["s"] or 0
     total_scans = ScanJob.objects.count()
     scans_this_month = ScanJob.objects.filter(created_at__gte=month_start).count()
-    pending_reviews = len(_review_pending_subquery())
+    pending_reviews = _reviews_with_status().filter(is_pending=True).count()
     total_reviews = PlatformReview.objects.count()
     avg_rating = None
     if total_reviews:
@@ -338,35 +349,47 @@ def transactions_list(request):
     })
 
 
-def _review_pending_subquery():
-    """『待回覆』定義：最後一則 message 不是 admin 發的，或還沒有任何 message。
-
-    這裡用簡單做法：列出有 admin 回覆且最新訊息是 admin 的不算 pending。
-    回傳 pending review id 的 list。
-    """
-    pending = []
-    for r in PlatformReview.objects.prefetch_related("messages").all():
-        last = r.messages.order_by("-created_at").first()
-        if not last or not last.is_admin:
-            pending.append(r.id)
-    return pending
+def _reviews_with_status(queryset=None):
+    """在資料庫標註訊息統計與待回覆狀態，避免逐筆查詢。"""
+    queryset = queryset if queryset is not None else PlatformReview.objects.all()
+    latest_message = ReviewMessage.objects.filter(review_id=OuterRef("pk")).order_by(
+        "-created_at",
+        "-pk",
+    )
+    return queryset.annotate(
+        message_count_annotated=Count("messages", distinct=True),
+        has_admin_reply_annotated=Exists(
+            ReviewMessage.objects.filter(review_id=OuterRef("pk"), is_admin=True)
+        ),
+        last_message_at_annotated=Subquery(latest_message.values("created_at")[:1]),
+        last_message_is_admin_annotated=Subquery(
+            latest_message.values("is_admin")[:1],
+            output_field=BooleanField(),
+        ),
+    ).annotate(
+        is_pending=Case(
+            When(last_message_is_admin_annotated=True, then=Value(False)),
+            default=Value(True),
+            output_field=BooleanField(),
+        )
+    )
 
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def reviews_list(request):
-    qs = PlatformReview.objects.select_related("user").order_by("-created_at")
+    qs = _reviews_with_status(PlatformReview.objects.select_related("user")).order_by("-created_at")
     only_pending = request.query_params.get("pending") in {"1", "true", "yes"}
-    pending_ids = _review_pending_subquery()
     if only_pending:
-        qs = qs.filter(id__in=pending_ids)
+        qs = qs.filter(is_pending=True)
+    pending_count = _reviews_with_status().filter(is_pending=True).count()
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "reviews": AdminReviewSerializer(items, many=True).data,
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "pending_count": len(pending_ids),
+        "pending_count": pending_count,
     })
 
 

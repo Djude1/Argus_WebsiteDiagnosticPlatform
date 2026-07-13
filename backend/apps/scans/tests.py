@@ -1,15 +1,31 @@
+import asyncio
+import os
+import subprocess
+import sys
 from io import StringIO
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
 
+from config.client_ip import resolve_client_ip
+from config.egress import playwright_launch_kwargs
+from config.proxy_headers import TrustedProxyHeadersMiddleware
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import override_settings
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.billing.models import CoinWallet
-from apps.scans.crawler import classify_blocked, classify_cf_challenge, compute_min_interval
+from apps.scans.crawler import (
+    _enforce_public_request,
+    _enforce_public_websocket,
+    _make_context,
+    classify_blocked,
+    classify_cf_challenge,
+    compute_min_interval,
+)
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
 from apps.scans.reports import build_scan_report, get_severity_display
 from apps.scans.scanners import (
@@ -30,6 +46,7 @@ from apps.scans.scanners import (
     parse_html_signals,
 )
 from apps.scans.serializers import FindingSerializer
+from apps.scans.services import PublicScanTargetError, assert_public_http_url
 
 
 class ScanJobModelTests(APITestCase):
@@ -379,6 +396,235 @@ class CrawlerHelperTests(APITestCase):
         # 不收錄「Just a moment」短語標記，避免正常文章正文出現該短語時誤判
         html = "<p>Just a moment, please wait while I finish typing...</p>"
         self.assertEqual(classify_cf_challenge(html), "")
+
+
+class ScanTargetPolicyTests(APITestCase):
+    @patch(
+        "apps.scans.services.socket.getaddrinfo",
+        return_value=[(None, None, None, "", ("93.184.216.34", 0))],
+    )
+    def test_public_domain_is_normalized(self, _mock_getaddrinfo):
+        self.assertEqual(
+            assert_public_http_url("HTTPS://Example.COM/path?q=1"),
+            "https://example.com/path?q=1",
+        )
+
+    def test_private_and_metadata_addresses_are_rejected(self):
+        for target in (
+            "http://127.0.0.1/",
+            "http://[::1]/",
+            "http://10.0.0.1/",
+            "http://172.16.0.1/",
+            "http://192.168.0.1/",
+            "http://169.254.169.254/latest/meta-data/",
+        ):
+            with self.subTest(target=target):
+                with self.assertRaises(PublicScanTargetError):
+                    assert_public_http_url(target)
+
+    @patch(
+        "apps.scans.services.socket.getaddrinfo",
+        return_value=[
+            (None, None, None, "", ("93.184.216.34", 0)),
+            (None, None, None, "", ("10.0.0.8", 0)),
+        ],
+    )
+    def test_domain_with_any_private_dns_answer_is_rejected(self, _mock_getaddrinfo):
+        with self.assertRaises(PublicScanTargetError):
+            assert_public_http_url("https://mixed.example/")
+
+    def test_userinfo_and_non_web_ports_are_rejected(self):
+        for target in (
+            "https://user:password@example.com/",
+            "https://example.com:22/",
+        ):
+            with self.subTest(target=target):
+                with self.assertRaises(PublicScanTargetError):
+                    assert_public_http_url(target)
+
+    async def test_playwright_route_aborts_private_request_before_network(self):
+        route = AsyncMock()
+        request = Mock(url="http://127.0.0.1/private")
+
+        await _enforce_public_request(route, request)
+
+        route.abort.assert_awaited_once_with("blockedbyclient")
+        route.continue_.assert_not_awaited()
+
+    @patch(
+        "apps.scans.services.socket.getaddrinfo",
+        return_value=[(None, None, None, "", ("93.184.216.34", 0))],
+    )
+    async def test_playwright_route_allows_public_request(self, _mock_getaddrinfo):
+        route = AsyncMock()
+        request = Mock(url="https://cdn.example.com/app.js")
+
+        await _enforce_public_request(route, request)
+
+        route.continue_.assert_awaited_once_with()
+        route.abort.assert_not_awaited()
+
+    async def test_playwright_websocket_closes_private_target(self):
+        websocket_route = Mock(url="ws://169.254.169.254/socket")
+        websocket_route.close = AsyncMock()
+
+        await _enforce_public_websocket(websocket_route)
+
+        websocket_route.close.assert_awaited_once()
+        websocket_route.connect_to_server.assert_not_called()
+
+
+class EgressSettingsTests(SimpleTestCase):
+    def _settings_process(self, proxy_url: str):
+        env = os.environ.copy()
+        env.update(
+            {
+                "DJANGO_SECRET_KEY": "test-only-django-secret-with-at-least-32-bytes",
+                "PASSWORD_RESET_TOKEN_PEPPER": "test-only-reset-pepper-with-at-least-32-bytes",
+                "ARGUS_PAYMENT_MODE": "disabled",
+                "ARGUS_EGRESS_PROXY_URL": proxy_url,
+                "NO_PROXY": "*",
+                "no_proxy": "*",
+            }
+        )
+        return subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import os; from config import settings; "
+                    "assert os.environ['HTTP_PROXY'] == settings.ARGUS_EGRESS_PROXY_URL; "
+                    "assert os.environ['http_proxy'] == settings.ARGUS_EGRESS_PROXY_URL; "
+                    "assert os.environ['NO_PROXY'] != '*'; "
+                    "assert os.environ['no_proxy'] == os.environ['NO_PROXY']"
+                ),
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+
+    def test_proxy_overrides_upper_and_lowercase_environment(self):
+        result = self._settings_process("http://egress-proxy:3128")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_proxy_rejects_even_empty_userinfo(self):
+        result = self._settings_process("http://:@egress-proxy:3128")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ARGUS_EGRESS_PROXY_URL", result.stderr)
+
+
+class TrustedProxyClientIPTests(APITestCase):
+    @override_settings(TRUSTED_PROXY_CIDRS=[])
+    def test_direct_client_cannot_spoof_forwarded_header(self):
+        request = Mock(META={
+            "REMOTE_ADDR": "203.0.113.10",
+            "HTTP_X_FORWARDED_FOR": "1.2.3.4",
+        })
+        self.assertEqual(resolve_client_ip(request), "203.0.113.10")
+
+    @override_settings(TRUSTED_PROXY_CIDRS=["10.0.0.0/8", "2001:db8:1::/48"])
+    def test_trusted_proxy_chain_uses_first_untrusted_hop_from_right(self):
+        request = Mock(META={
+            "REMOTE_ADDR": "10.0.0.5",
+            "HTTP_X_FORWARDED_FOR": "198.51.100.8, 203.0.113.9, 10.0.0.4",
+        })
+        self.assertEqual(resolve_client_ip(request), "203.0.113.9")
+
+    @override_settings(TRUSTED_PROXY_CIDRS=["10.0.0.0/8"])
+    def test_malformed_or_excessive_chain_falls_back_to_remote(self):
+        for forwarded in ("not-an-ip", ",".join(["1.1.1.1"] * 21)):
+            with self.subTest(forwarded=forwarded):
+                request = Mock(META={
+                    "REMOTE_ADDR": "10.0.0.5",
+                    "HTTP_X_FORWARDED_FOR": forwarded,
+                })
+                self.assertEqual(resolve_client_ip(request), "10.0.0.5")
+
+    @override_settings(TRUSTED_PROXY_CIDRS=["2001:db8:1::/48"])
+    def test_ipv6_forwarded_client_is_supported(self):
+        request = Mock(META={
+            "REMOTE_ADDR": "2001:db8:1::5",
+            "HTTP_X_FORWARDED_FOR": "2001:4860:4860::8888",
+        })
+        self.assertEqual(resolve_client_ip(request), "2001:4860:4860::8888")
+
+    @override_settings(
+        TRUST_PROXY_SSL_HEADER=True,
+        TRUSTED_PROXY_CIDRS=["10.0.0.0/8"],
+        SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    )
+    def test_direct_client_cannot_spoof_forwarded_proto(self):
+        request = RequestFactory().get(
+            "/",
+            HTTP_X_FORWARDED_PROTO="https",
+            REMOTE_ADDR="198.51.100.20",
+        )
+        middleware = TrustedProxyHeadersMiddleware(lambda req: req.is_secure())
+
+        self.assertFalse(middleware(request))
+
+    @override_settings(
+        TRUST_PROXY_SSL_HEADER=True,
+        TRUSTED_PROXY_CIDRS=["10.0.0.0/8"],
+        SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    )
+    def test_trusted_proxy_can_supply_forwarded_proto(self):
+        request = RequestFactory().get(
+            "/",
+            HTTP_X_FORWARDED_PROTO="https",
+            REMOTE_ADDR="10.0.0.5",
+        )
+        middleware = TrustedProxyHeadersMiddleware(lambda req: req.is_secure())
+
+        self.assertTrue(middleware(request))
+
+    @override_settings(ARGUS_EGRESS_PROXY_URL="")
+    def test_playwright_proxy_is_omitted_by_default(self):
+        self.assertEqual(playwright_launch_kwargs(), {})
+
+    @override_settings(ARGUS_EGRESS_PROXY_URL="http://egress-proxy:3128")
+    def test_playwright_proxy_is_applied_when_configured(self):
+        self.assertEqual(
+            playwright_launch_kwargs(),
+            {"proxy": {"server": "http://egress-proxy:3128"}},
+        )
+
+    def test_crawler_context_blocks_service_workers_before_routing(self):
+        context = Mock()
+        context.route = AsyncMock()
+        context.route_web_socket = AsyncMock()
+        browser = Mock()
+        browser.new_context = AsyncMock(return_value=context)
+
+        created = asyncio.run(_make_context(browser))
+
+        self.assertIs(created, context)
+        browser.new_context.assert_awaited_once()
+        self.assertEqual(
+            browser.new_context.await_args.kwargs["service_workers"],
+            "block",
+        )
+        context.route.assert_awaited_once()
+        context.route_web_socket.assert_awaited_once()
+
+
+class HealthEndpointTests(APITestCase):
+    def test_liveness_and_readiness_are_public_and_healthy(self):
+        live = self.client.get(reverse("health-live"))
+        ready = self.client.get(reverse("health-ready"))
+
+        self.assertEqual(live.status_code, status.HTTP_200_OK)
+        self.assertEqual(ready.status_code, status.HTTP_200_OK)
+
+    def test_favicon_is_served_as_static_asset_not_spa_html(self):
+        response = self.client.get("/favicon.svg")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("svg", response["Content-Type"])
 
 
 class PiiDetectionTests(APITestCase):

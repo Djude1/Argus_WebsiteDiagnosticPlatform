@@ -77,7 +77,9 @@ class Command(BaseCommand):
         self.stdout.write(f"準備寄送：訂單 #{order.id or 'fake'} → {recipient}")
         ok = send_purchase_receipt(order, balance_after)
         if ok:
-            self.stdout.write(self.style.SUCCESS(f"[OK] 寄送成功（backend: {settings.EMAIL_BACKEND}）"))
+            self.stdout.write(
+                self.style.SUCCESS(f"[OK] 寄送成功（backend: {settings.EMAIL_BACKEND}）")
+            )
             if "filebased" in settings.EMAIL_BACKEND:
                 self.stdout.write(f"  → 開 {settings.EMAIL_FILE_PATH} 看 .log 檔")
         else:

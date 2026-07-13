@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests as http_requests
+from config.throttling import UserRateThrottle
 from django.conf import settings
 from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
@@ -13,7 +14,6 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 
 from apps.billing.services import get_or_create_wallet, refund_full_for_scan
 from apps.scans.models import (
@@ -30,7 +30,7 @@ from apps.scans.serializers import (
     ScanJobSerializer,
     ScanJobStatusSerializer,
 )
-from apps.scans.services import get_client_ip
+from apps.scans.services import PublicScanTargetError, assert_public_http_url, get_client_ip
 from apps.scans.tasks import run_scan_job
 
 
@@ -500,25 +500,6 @@ def findings_by_category(request):
     return Response({"categories": result})
 
 
-def _is_safe_url(url: str) -> bool:
-    """拒絕 localhost / 私有 IP / 非 http(s) 協定 / 無效主機名稱。"""
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in {"http", "https"}:
-        return False
-    host = parsed.hostname or ""
-    # 主機名稱必須包含至少一個點（拒絕 "not-a-url"、"localhost" 等裸主機名稱）
-    if not host or "." not in host:
-        return False
-    blocked = re.compile(
-        r"^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|0\.0\.0\.0)",
-        re.IGNORECASE,
-    )
-    return not blocked.match(host)
-
-
 def _count_links(html: str, base_url: str) -> int:
     """計算 HTML 中同域 <a href> 數量（簡易正則）。"""
     parsed_base = urlparse(base_url)
@@ -537,6 +518,7 @@ def _try_sitemap(base_url: str, timeout: int = 5) -> int | None:
     """嘗試取得 sitemap.xml，回傳 <loc> 數量；失敗回傳 None。"""
     sitemap_url = urljoin(base_url, "/sitemap.xml")
     try:
+        sitemap_url = assert_public_http_url(sitemap_url)
         # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
         resp = http_requests.get(sitemap_url, timeout=timeout, allow_redirects=False)
         if resp.status_code == 200 and "xml" in resp.headers.get("content-type", ""):
@@ -560,11 +542,11 @@ def estimate_scan(request):
     url = (request.data.get("url") or "").strip()
     if not url:
         return Response({"url": "請提供網址。"}, status=status.HTTP_400_BAD_REQUEST)
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-    if not _is_safe_url(url):
+    try:
+        url = assert_public_http_url(url)
+    except PublicScanTargetError as exc:
         return Response(
-            {"url": "不支援此網址（localhost 或私有 IP 禁止使用）。"},
+            {"url": str(exc)},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -582,6 +564,7 @@ def estimate_scan(request):
         })
 
     try:
+        url = assert_public_http_url(url)
         # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
         resp = http_requests.get(
             url,

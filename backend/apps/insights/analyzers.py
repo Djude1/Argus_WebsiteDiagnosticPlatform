@@ -387,29 +387,43 @@ def analyze_quick_scan(url: str, session=requests, timeout: int = 10) -> dict:
     # --- 資安（HTTP 標頭 + HTTPS）---
     if not is_https:
         sec -= 35
-        findings.append({"category": "security", "severity": "high", "title": "未使用 HTTPS",
-                         "detail": "頁面以 HTTP 提供，傳輸可被竊聽 / 竄改；應改用 HTTPS 並自動導向。"})
+        findings.append({
+            "category": "security", "severity": "high", "title": "未使用 HTTPS",
+            "detail": "頁面以 HTTP 提供，傳輸可被竊聽 / 竄改；應改用 HTTPS 並自動導向。",
+        })
         if p.password_inputs:
             sec -= 20
-            findings.append({"category": "security", "severity": "high", "title": "在非 HTTPS 頁面收集密碼",
-                             "detail": "偵測到密碼輸入欄卻非 HTTPS，使用者憑證可能外洩。"})
+            findings.append({
+                "category": "security", "severity": "high",
+                "title": "在非 HTTPS 頁面收集密碼",
+                "detail": "偵測到密碼輸入欄卻非 HTTPS，使用者憑證可能外洩。",
+            })
     if is_https and not headers.get("Strict-Transport-Security"):
         sec -= 10
         findings.append({"category": "security", "severity": "medium", "title": "缺少 HSTS 標頭",
                          "detail": "建議加 Strict-Transport-Security 強制瀏覽器走 HTTPS。"})
     if not headers.get("Content-Security-Policy"):
         sec -= 12
-        findings.append({"category": "security", "severity": "medium", "title": "缺少 Content-Security-Policy",
-                         "detail": "CSP 可大幅降低 XSS / 資料注入風險。"})
+        findings.append({
+            "category": "security", "severity": "medium",
+            "title": "缺少 Content-Security-Policy",
+            "detail": "CSP 可大幅降低 XSS / 資料注入風險。",
+        })
     if not headers.get("X-Content-Type-Options"):
         sec -= 6
-        findings.append({"category": "security", "severity": "low", "title": "缺少 X-Content-Type-Options",
-                         "detail": "建議加 nosniff，避免瀏覽器誤判內容型別。"})
+        findings.append({
+            "category": "security", "severity": "low",
+            "title": "缺少 X-Content-Type-Options",
+            "detail": "建議加 nosniff，避免瀏覽器誤判內容型別。",
+        })
     csp = (headers.get("Content-Security-Policy") or "").lower()
     if not headers.get("X-Frame-Options") and "frame-ancestors" not in csp:
         sec -= 8
-        findings.append({"category": "security", "severity": "low", "title": "可能可被 iframe 嵌入（點擊劫持）",
-                         "detail": "建議設定 X-Frame-Options 或 CSP frame-ancestors。"})
+        findings.append({
+            "category": "security", "severity": "low",
+            "title": "可能可被 iframe 嵌入（點擊劫持）",
+            "detail": "建議設定 X-Frame-Options 或 CSP frame-ancestors。",
+        })
 
     # --- SEO ---
     if not p.title:
@@ -444,8 +458,11 @@ def analyze_quick_scan(url: str, session=requests, timeout: int = 10) -> dict:
     # --- AEO / GEO（給 AI / 答案引擎讀的結構）---
     if p.jsonld == 0:
         geo -= 18
-        findings.append({"category": "aeo_geo", "severity": "medium", "title": "缺少結構化資料（JSON-LD）",
-                         "detail": "Schema.org JSON-LD 讓搜尋 / AI 更易理解內容並被引用。"})
+        findings.append({
+            "category": "aeo_geo", "severity": "medium",
+            "title": "缺少結構化資料（JSON-LD）",
+            "detail": "Schema.org JSON-LD 讓搜尋 / AI 更易理解內容並被引用。",
+        })
     if not p.has_canonical:
         geo -= 8
         findings.append({"category": "aeo_geo", "severity": "low", "title": "缺少 canonical 連結",

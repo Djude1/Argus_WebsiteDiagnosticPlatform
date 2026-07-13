@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan
+from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan, PurchaseOrder
 
 
 class InsufficientCoinError(Exception):
@@ -171,24 +171,69 @@ def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | N
     )
 
 
-@transaction.atomic
-def purchase_plan(user, plan: PricingPlan) -> CoinTransaction:
-    """模擬付款：直接把方案 coin 加進錢包，並更新累積購買金額。"""
+def _credit_purchase(
+    user,
+    plan: PricingPlan,
+    *,
+    coin_amount: int,
+    price_ntd: int,
+) -> CoinTransaction:
     wallet = CoinWallet.objects.select_for_update().get_or_create(user=user)[0]
-    new_balance = wallet.balance + plan.coin_amount
+    new_balance = wallet.balance + coin_amount
     wallet.balance = new_balance
-    wallet.total_purchased_ntd = (wallet.total_purchased_ntd or 0) + plan.price_ntd
+    wallet.total_purchased_ntd = (wallet.total_purchased_ntd or 0) + price_ntd
     wallet.save(update_fields=[
         "balance", "total_purchased_ntd", "updated_at",
     ])
     return CoinTransaction.objects.create(
         wallet=wallet,
-        amount=plan.coin_amount,
+        amount=coin_amount,
         kind=CoinTransaction.Kind.PURCHASE,
         balance_after=new_balance,
         plan=plan,
-        note=f"購買 {plan.name}（NT${plan.price_ntd}）",
+        note=f"購買 {plan.name}（NT${price_ntd}）",
     )
+
+
+@transaction.atomic
+def purchase_plan(user, plan: PricingPlan) -> CoinTransaction:
+    """直接以目前方案值入點；僅供非訂單流程與既有管理測試使用。"""
+    return _credit_purchase(
+        user,
+        plan,
+        coin_amount=plan.coin_amount,
+        price_ntd=plan.price_ntd,
+    )
+
+
+@transaction.atomic
+def complete_purchase_order(
+    order_id: int,
+    *,
+    provider_trade_no: str,
+) -> tuple[PurchaseOrder, bool]:
+    """在綠界簽章與金額驗證後冪等完成訂單；第二次通知不重複入點。"""
+    order = (
+        PurchaseOrder.objects.select_for_update()
+        .select_related("plan", "user")
+        .get(pk=order_id)
+    )
+    if order.status == PurchaseOrder.Status.PAID:
+        return order, False
+    if order.status != PurchaseOrder.Status.PENDING:
+        raise ValueError("只有 pending 訂單可以完成付款")
+    coin_transaction = _credit_purchase(
+        order.user,
+        order.plan,
+        coin_amount=order.coin_amount,
+        price_ntd=order.price_ntd,
+    )
+    order.transaction = coin_transaction
+    order.status = PurchaseOrder.Status.PAID
+    order.paid_at = timezone.now()
+    order.note = f"綠界測試交易：{provider_trade_no}"[:255]
+    order.save(update_fields=["transaction", "status", "paid_at", "note"])
+    return order, True
 
 
 @transaction.atomic

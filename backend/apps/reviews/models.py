@@ -75,7 +75,7 @@ class ReviewMessage(models.Model):
     """評論串內的訊息（thread）。
 
     使用者可發多則，admin 回覆也走這裡，前端依 `is_admin` 區分樣式。
-    `image` 可選的問題照片附件，存到 MEDIA_ROOT/review_images/。
+    `image` 可選的問題照片附件，透過 Django default storage 存到 review_images/。
     """
 
     review = models.ForeignKey(

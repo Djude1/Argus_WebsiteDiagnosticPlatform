@@ -30,6 +30,7 @@ from apps.scans.security.kali_tools import validate_findings_with_kali
 from apps.scans.security.secret_scanner import build_secret_finding, detect_secrets_in_text
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
+from apps.scans.services import assert_public_http_url
 
 
 def _write_progress(
@@ -48,25 +49,35 @@ def _write_progress(
 
 @shared_task(bind=True)
 def run_scan_job(self, scan_job_id: int) -> dict:
-    scan_job = ScanJob.objects.get(id=scan_job_id)
     now = timezone.now()
     crawl_phase_started = now.isoformat()
-    scan_job.status = ScanJob.Status.CRAWLING
-    scan_job.started_at = now
-    scan_job.scan_log = []  # 每次重新開始清空舊 log
-    scan_job.progress = {
+    initial_progress = {
         "pages_done": 0,
         "pages_total": 1,
         "phase": "crawling",
         "phase_started_at": crawl_phase_started,
     }
-    scan_job.save(update_fields=["status", "started_at", "scan_log", "progress", "updated_at"])
+    started = ScanJob.objects.filter(
+        id=scan_job_id,
+        status=ScanJob.Status.QUEUED,
+    ).update(
+        status=ScanJob.Status.CRAWLING,
+        started_at=now,
+        scan_log=[],
+        progress=initial_progress,
+        updated_at=now,
+    )
+    if not started:
+        current_status = ScanJob.objects.values_list("status", flat=True).get(id=scan_job_id)
+        return {"status": current_status}
+    scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
     append_log(
         scan_job_id,
         f"掃描任務啟動 — 目標：{scan_job.normalized_url}，模式：{scan_job.scan_mode}",
     )
 
     try:
+        assert_public_http_url(scan_job.normalized_url)
         # crawler callback：在 async loop 內透過 sync_to_async 寫 DB；
         # 同時是合作式 cancel 的檢查點，若已被使用者終止就 raise ScanCancelled
         async def _crawl_progress(done: int, total: int) -> None:
@@ -192,18 +203,21 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         )
         # 收集已爬取的頁面 URL（排除被阻擋的頁面），整批餵給 Nuclei
         crawled_urls = [
-            p["url"] for p in crawled_pages if not p.get("blocked_reason")
+            assert_public_http_url(p["url"])
+            for p in crawled_pages
+            if not p.get("blocked_reason")
         ]
+        validated_target = assert_public_http_url(scan_job.normalized_url)
         with ThreadPoolExecutor(max_workers=2) as executor:
             f_katana = executor.submit(
                 run_katana,
-                scan_job.normalized_url,
+                validated_target,
                 scan_job.max_depth,
                 scan_job.max_pages,
             )
             f_nuclei = executor.submit(
                 run_nuclei,
-                scan_job.normalized_url,
+                validated_target,
                 scan_job_id,
                 deep=deep_mode,
                 extra_urls=crawled_urls,
@@ -420,7 +434,6 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             scan_job_id,
             f"掃描完成 — 總分 {overall_score}，共 {len(all_findings)} 項發現",
         )
-        scan_job.status = ScanJob.Status.COMPLETED
         scan_job.overall_score = overall_score
         scan_job.category_scores = category_scores
         scan_job.top_actions = top_actions
@@ -428,25 +441,33 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             warning_summary = dict(scan_job.warning_summary or {})
             warning_summary["agent"] = agent_meta
             scan_job.warning_summary = warning_summary
-        scan_job.progress = {}  # 完成後清空，前端不再顯示進行中動畫
-        scan_job.completed_at = timezone.now()
-        scan_job.save(
-            update_fields=[
-                "status",
-                "overall_score",
-                "category_scores",
-                "top_actions",
-                "warning_summary",
-                "progress",
-                "completed_at",
-                "updated_at",
-            ]
+        completed_at = timezone.now()
+        completed = ScanJob.objects.filter(
+            id=scan_job_id,
+            status__in=[
+                ScanJob.Status.CRAWLING,
+                ScanJob.Status.SCANNING,
+                ScanJob.Status.AGENT_TESTING,
+            ],
+        ).update(
+            status=ScanJob.Status.COMPLETED,
+            overall_score=overall_score,
+            category_scores=category_scores,
+            top_actions=top_actions,
+            warning_summary=scan_job.warning_summary,
+            progress={},
+            completed_at=completed_at,
+            updated_at=completed_at,
         )
+        if not completed:
+            raise ScanCancelled()
+        scan_job.refresh_from_db()
         # 點數結算：依實際爬到的頁數退回未使用的 coin（max_pages - actual_pages）× 單價
         try:
             settle_scan_actual(scan_job.user, scan_job, len(crawled_pages))
-        except Exception:  # noqa: BLE001 — 退款失敗不應讓掃描結果消失，僅紀錄
-            pass
+        except Exception as exc:  # noqa: BLE001
+            append_log(scan_job_id, f"點數結算失敗：{exc.__class__.__name__}", level="error")
+            raise
         return {
             "status": scan_job.status,
             "pages": len(crawled_pages),
@@ -463,8 +484,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         )
         try:
             refund_full_for_scan(scan_job.user, scan_job, reason="取消")
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            append_log(scan_job_id, f"取消退款失敗：{exc.__class__.__name__}", level="error")
+            raise
         return {"status": "cancelled"}
     except SoftTimeLimitExceeded:
         soft_limit_min = settings.CELERY_TASK_SOFT_TIME_LIMIT // 60
@@ -478,10 +500,23 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         )
         try:
             refund_full_for_scan(scan_job.user, scan_job, reason="超時")
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            append_log(scan_job_id, f"超時退款失敗：{exc.__class__.__name__}", level="error")
+            raise
         return {"status": "timeout"}
     except Exception as exc:
+        if is_cancelled(scan_job_id):
+            append_log(scan_job_id, "掃描已被使用者終止", level="warn")
+            try:
+                refund_full_for_scan(scan_job.user, scan_job, reason="取消")
+            except Exception as refund_exc:  # noqa: BLE001
+                append_log(
+                    scan_job_id,
+                    f"取消退款失敗：{refund_exc.__class__.__name__}",
+                    level="error",
+                )
+                raise
+            return {"status": "cancelled"}
         detail = str(exc).strip()[:500]
         class_name = exc.__class__.__name__
         append_log(
@@ -501,6 +536,11 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # 失敗時全額退回預扣的 coin
         try:
             refund_full_for_scan(scan_job.user, scan_job, reason="失敗")
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as refund_exc:  # noqa: BLE001
+            append_log(
+                scan_job_id,
+                f"失敗退款失敗：{refund_exc.__class__.__name__}",
+                level="error",
+            )
+            raise refund_exc from exc
         raise

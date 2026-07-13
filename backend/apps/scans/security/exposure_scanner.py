@@ -19,6 +19,7 @@ from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
 from asgiref.sync import sync_to_async
+from config.egress import playwright_launch_kwargs
 from django.conf import settings
 
 from apps.scans.cancellation import is_cancelled
@@ -27,6 +28,7 @@ from apps.scans.security.secret_scanner import (
     detect_secrets_in_text,
     redact_secrets_in_text,
 )
+from apps.scans.services import assert_public_http_url
 
 # 一次探測的目標上限（避免對目標發出過多請求）
 MAX_PROBE_TARGETS = 220
@@ -382,7 +384,10 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
 
     try:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True)
+            browser = await pw.chromium.launch(
+                headless=True,
+                **playwright_launch_kwargs(),
+            )
             context = await browser.new_context(
                 user_agent=settings.ARGUS_SCANNER_USER_AGENT,
             )
@@ -391,13 +396,23 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                 robots_disallow: list[str] = []
                 sitemap_urls: list[str] = []
                 try:
-                    resp = await context.request.get(f"{origin}/robots.txt", timeout=10000)
+                    robots_url = assert_public_http_url(f"{origin}/robots.txt")
+                    resp = await context.request.get(
+                        robots_url,
+                        timeout=10000,
+                        max_redirects=0,
+                    )
                     if resp.ok:
                         robots_disallow = parse_robots_disallow(await resp.text())
                 except Exception:
                     pass
                 try:
-                    resp = await context.request.get(f"{origin}/sitemap.xml", timeout=10000)
+                    sitemap_url = assert_public_http_url(f"{origin}/sitemap.xml")
+                    resp = await context.request.get(
+                        sitemap_url,
+                        timeout=10000,
+                        max_redirects=0,
+                    )
                     if resp.ok:
                         # 上限 512KB，避免惡意 sitemap 的 XML entity expansion 撐爆記憶體
                         sitemap_urls = parse_sitemap_urls((await resp.text())[:512_000])
@@ -414,7 +429,11 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                 for _ in range(2):
                     rnd = f"{origin}/zz-nonexist-{uuid.uuid4().hex}"
                     try:
-                        bresp = await context.request.get(rnd, timeout=12000, max_redirects=0)
+                        bresp = await context.request.get(
+                            assert_public_http_url(rnd),
+                            timeout=12000,
+                            max_redirects=0,
+                        )
                         if 200 <= bresp.status < 300:
                             baselines.append(_norm_body((await bresp.text())[:20000]))
                     except Exception:
@@ -430,7 +449,11 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                     try:
                         # max_redirects=0：不跟隨重定向，避免目標站的 open redirect
                         # 把探針導向雲端 metadata / 外站（任何重定向會丟例外 → 跳過該路徑）
-                        resp = await context.request.get(url, timeout=12000, max_redirects=0)
+                        resp = await context.request.get(
+                            assert_public_http_url(url),
+                            timeout=12000,
+                            max_redirects=0,
+                        )
                         status = resp.status
                         ctype = (resp.headers or {}).get("content-type", "")
                         body = ""

@@ -5,12 +5,18 @@ from pathlib import Path
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+from config.egress import playwright_launch_kwargs
 from django.conf import settings
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.scanners import is_binary_resource
+from apps.scans.services import (
+    PublicScanTargetError,
+    assert_public_http_url,
+    assert_public_websocket_url,
+)
 
 # 會被視為「被阻擋」的 HTTP 狀態碼與對應的中文原因
 BLOCKED_STATUS_REASONS = {
@@ -128,10 +134,8 @@ def same_origin(url: str, origin: str) -> bool:
 def load_robot_parser(origin: str) -> RobotFileParser:
     parser = RobotFileParser()
     parser.set_url(urljoin(origin, "/robots.txt"))
-    try:
-        parser.read()
-    except OSError:
-        parser.parse([])
+    # robots.txt 由受控的 Playwright request context 讀取，避免 urllib 自動轉址旁路。
+    parser.parse([])
     return parser
 
 
@@ -144,14 +148,18 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
 
     signals: dict = {"llms_txt_found": False, "blocked_ai_crawlers": [], "robots_disallow": []}
     try:
-        response = await context.request.get(f"{origin}/llms.txt", timeout=10000)
+        llms_url = assert_public_http_url(f"{origin}/llms.txt")
+        response = await context.request.get(llms_url, timeout=10000, max_redirects=0)
         signals["llms_txt_found"] = response.ok
     except Exception:
         signals["llms_txt_found"] = False
     try:
-        resp = await context.request.get(f"{origin}/robots.txt", timeout=10000)
+        robots_url = assert_public_http_url(f"{origin}/robots.txt")
+        resp = await context.request.get(robots_url, timeout=10000, max_redirects=0)
         if resp.ok:
-            signals["robots_disallow"] = parse_robots_disallow(await resp.text())
+            robots_text = await resp.text()
+            robot_parser.parse(robots_text.splitlines())
+            signals["robots_disallow"] = parse_robots_disallow(robots_text)
     except Exception:
         signals["robots_disallow"] = []
     for agent in AI_CRAWLER_USER_AGENTS:
@@ -215,12 +223,36 @@ async def scroll_to_bottom(page) -> None:
 _CONTEXT_RECYCLE_EVERY = 15
 
 
+async def _enforce_public_request(route, request):
+    """在 Playwright 發出主文件、轉址或子資源請求前驗證目的地。"""
+    try:
+        assert_public_http_url(request.url)
+    except PublicScanTargetError:
+        await route.abort("blockedbyclient")
+        return
+    await route.continue_()
+
+
+async def _enforce_public_websocket(websocket_route):
+    """禁止頁面透過 WebSocket 連往內網或保留位址。"""
+    try:
+        assert_public_websocket_url(websocket_route.url)
+    except PublicScanTargetError:
+        await websocket_route.close(code=1008, reason="Blocked by scan target policy")
+        return
+    websocket_route.connect_to_server()
+
+
 async def _make_context(browser):
     """建立標準 scanner 瀏覽器 context（user-agent + viewport）。"""
-    return await browser.new_context(
+    context = await browser.new_context(
         user_agent=settings.ARGUS_SCANNER_USER_AGENT,
         viewport={"width": 1440, "height": 1000},
+        service_workers="block",
     )
+    await context.route("**/*", _enforce_public_request)
+    await context.route_web_socket("**/*", _enforce_public_websocket)
+    return context
 
 
 async def crawl_site(
@@ -256,7 +288,10 @@ async def crawl_site(
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(
+            headless=True,
+            **playwright_launch_kwargs(),
+        )
         context = await _make_context(browser)
         pages_in_context = 0
         try:
@@ -285,7 +320,7 @@ async def crawl_site(
                     response = await page.goto(url, wait_until="networkidle", timeout=30000)
                     headers = await response.all_headers() if response else {}
                     status_code = response.status if response else None
-                    final_url = normalize_crawl_url(page.url)
+                    final_url = normalize_crawl_url(assert_public_http_url(page.url))
 
                     # 早期 Content-Length 檢查：超大回應（PDF/影片/gzip bomb）跳過 scroll/
                     # content/screenshot 等耗記憶體操作，防止 worker 被單頁撐爆
@@ -315,10 +350,14 @@ async def crawl_site(
                             or classify_blocked(status_code)
                         )
                         screenshot_path = screenshot_dir / f"page-{len(pages) + 1}.png"
-                        # 被阻擋的頁面（含 CF challenge）仍拍截圖供人工核對；oversized 已在前分支返回
+                        # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
                         await page.screenshot(path=str(screenshot_path), full_page=True)
                         # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
-                        links = [] if blocked_reason else await extract_links(page, final_url, origin)
+                        links = (
+                            []
+                            if blocked_reason
+                            else await extract_links(page, final_url, origin)
+                        )
                         element_boxes = await collect_element_boxes(page)
                     load_time_ms = round((time.perf_counter() - started_at) * 1000)
                     pages.append(

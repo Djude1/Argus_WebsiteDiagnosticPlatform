@@ -155,8 +155,6 @@ class TestRunNuclei(TestCase):
         """傳入 extra_urls 時應使用 -l 旗標，且 temp file 掃完後被刪除。"""
         captured_path: list[str] = []
 
-        original_run = subprocess.run
-
         def fake_run(cmd, **kwargs):
             # 記錄 temp file 路徑並確認其存在
             if "-l" in cmd:
@@ -197,7 +195,6 @@ class TestRunNuclei(TestCase):
             )
         cmd = mock_run.call_args[0][0]
         self.assertIn("-l", cmd)
-        url_file = cmd[cmd.index("-l") + 1]
         # 檔案已刪除，無法直接讀取；驗證指令正確即可
         self.assertNotIn("-u", cmd)
 

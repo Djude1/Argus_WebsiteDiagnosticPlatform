@@ -28,6 +28,27 @@ def _make_scan(scan_mode="active", authorized=True):
     )
 
 
+class TestDockerExecProxy(TestCase):
+    @override_settings(
+        ARGUS_EGRESS_PROXY_URL="http://egress-proxy:3128",
+        ARGUS_KALI_CONTAINER="argus-kali-1",
+    )
+    @mock.patch.dict("os.environ", {"NO_PROXY": "localhost,db,redis"}, clear=False)
+    @mock.patch("apps.scans.security.kali_tools.subprocess.run")
+    def test_proxy_environment_is_forwarded_into_kali_container(self, run_mock):
+        run_mock.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+
+        kali_tools._docker_exec(["sqlmap", "--version"], 10)
+
+        command = run_mock.call_args.args[0]
+        self.assertEqual(command[:2], ["docker", "exec"])
+        self.assertIn("HTTP_PROXY=http://egress-proxy:3128", command)
+        self.assertIn("HTTPS_PROXY=http://egress-proxy:3128", command)
+        self.assertIn("NO_PROXY=localhost,db,redis", command)
+        self.assertIn("http_proxy=http://egress-proxy:3128", command)
+        self.assertIn("https_proxy=http://egress-proxy:3128", command)
+        self.assertIn("no_proxy=localhost,db,redis", command)
+        self.assertEqual(command[-3:], ["argus-kali-1", "sqlmap", "--version"])
 @override_settings(ARGUS_KALI_ENABLED=True, ARGUS_KALI_CONTAINER="argus-kali-1")
 class TestAuthorizationLock(TestCase):
     """三重授權鎖：任一不符就 blocked，不呼叫 docker。"""

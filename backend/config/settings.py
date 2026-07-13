@@ -1,6 +1,8 @@
+import ipaddress
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -34,8 +36,39 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("DJANGO_SECRET_KEY must be set in .env")
 
+PASSWORD_RESET_TOKEN_PEPPER = os.getenv("PASSWORD_RESET_TOKEN_PEPPER")
+if not PASSWORD_RESET_TOKEN_PEPPER:
+    raise RuntimeError("PASSWORD_RESET_TOKEN_PEPPER must be set in .env")
+
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+TRUSTED_PROXY_CIDRS = env_list("TRUSTED_PROXY_CIDRS")
+TRUST_PROXY_SSL_HEADER = env_bool("TRUST_PROXY_SSL_HEADER", default=False)
+ARGUS_EGRESS_PROXY_URL = os.getenv("ARGUS_EGRESS_PROXY_URL", "").strip()
+if ARGUS_EGRESS_PROXY_URL:
+    parsed_egress_proxy = urlparse(ARGUS_EGRESS_PROXY_URL)
+    try:
+        egress_proxy_port = parsed_egress_proxy.port
+    except ValueError:
+        egress_proxy_port = None
+    if parsed_egress_proxy.scheme not in {"http", "https"} or not (
+        parsed_egress_proxy.hostname and egress_proxy_port
+    ) or any(
+        (
+            parsed_egress_proxy.username is not None,
+            parsed_egress_proxy.password is not None,
+            parsed_egress_proxy.path not in {"", "/"},
+            parsed_egress_proxy.query,
+            parsed_egress_proxy.fragment,
+        )
+    ):
+        raise RuntimeError("ARGUS_EGRESS_PROXY_URL must be an http(s) URL with port")
+    egress_no_proxy = "localhost,127.0.0.1,::1,db,redis,web,frontend,egress-proxy"
+    for proxy_env_name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        os.environ[proxy_env_name] = ARGUS_EGRESS_PROXY_URL
+    # 不沿用宿主的 NO_PROXY=*；否則 requests/子程序會靜默繞過受控 proxy。
+    os.environ["NO_PROXY"] = egress_no_proxy
+    os.environ["no_proxy"] = egress_no_proxy
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -60,6 +93,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "config.proxy_headers.TrustedProxyHeadersMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -121,8 +155,30 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = os.getenv("ARGUS_MEDIA_URL", "/media/")
+MEDIA_ROOT = Path(os.getenv("ARGUS_MEDIA_ROOT", str(BASE_DIR / "media")))
+ARGUS_MEDIA_STORAGE_BACKEND = os.getenv(
+    "ARGUS_MEDIA_STORAGE_BACKEND",
+    "django.core.files.storage.FileSystemStorage",
+)
+STORAGES = {
+    "default": {"BACKEND": ARGUS_MEDIA_STORAGE_BACKEND},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+if ARGUS_MEDIA_STORAGE_BACKEND == "storages.backends.s3.S3Storage":
+    AWS_STORAGE_BUCKET_NAME = os.getenv("ARGUS_MEDIA_BUCKET", "")
+    if not AWS_STORAGE_BUCKET_NAME:
+        raise RuntimeError("S3 media storage requires ARGUS_MEDIA_BUCKET")
+    AWS_S3_ENDPOINT_URL = os.getenv("ARGUS_MEDIA_ENDPOINT_URL") or None
+    AWS_S3_REGION_NAME = os.getenv("ARGUS_MEDIA_REGION") or None
+    AWS_S3_CUSTOM_DOMAIN = os.getenv("ARGUS_MEDIA_CUSTOM_DOMAIN") or None
+    AWS_S3_ADDRESSING_STYLE = os.getenv("ARGUS_MEDIA_ADDRESSING_STYLE", "auto")
+    AWS_QUERYSTRING_AUTH = env_bool("ARGUS_MEDIA_SIGNED_URLS", default=True)
+    AWS_QUERYSTRING_EXPIRE = int(os.getenv("ARGUS_MEDIA_URL_EXPIRE_SECONDS", "3600"))
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -137,7 +193,9 @@ CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
 # ============================================================
 # 安全 HTTP 頭部（由 SecurityMiddleware 與 XFrameOptionsMiddleware 注入）
 # ============================================================
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https") if TRUST_PROXY_SSL_HEADER else None
+)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 0 if DEBUG else int(os.getenv("SECURE_HSTS_SECONDS", "60"))
@@ -171,9 +229,9 @@ REST_FRAMEWORK = {
     ),
     # 全域 throttle：anon 用 IP、user 用 user.id 計數；ScopedRateThrottle 供敏感端點使用
     "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-        "rest_framework.throttling.ScopedRateThrottle",
+        "config.throttling.AnonRateThrottle",
+        "config.throttling.UserRateThrottle",
+        "config.throttling.ScopedRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
         # 預設額度（含前端輪詢空間）
@@ -202,15 +260,21 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "SIGNING_KEY": os.getenv("JWT_SECRET_KEY", SECRET_KEY),
 }
+AUTH_REFRESH_COOKIE_NAME = "argus_refresh_token"
+AUTH_REFRESH_COOKIE_SECURE = not DEBUG
+AUTH_REFRESH_COOKIE_SAMESITE = "Lax"
 
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL", os.getenv("REDIS_URL", "redis://localhost:6379/0")
+)
 CELERY_RESULT_BACKEND = os.getenv(
     "CELERY_RESULT_BACKEND",
     os.getenv("REDIS_URL", "redis://localhost:6379/1"),
 )
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=False)
-CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "3600"))       # 硬限 60 分，OS 強制殺掉 worker
-CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300"))  # 軟限 55 分，task 內捕捉並優雅退出
+# 硬限 60 分，OS 強制殺掉 worker；軟限 55 分，task 內捕捉並優雅退出。
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "3600"))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300"))
 
 ARGUS_DEFAULT_MAX_DEPTH = 3
 ARGUS_DEFAULT_MAX_PAGES = 50
@@ -245,6 +309,69 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 # - 每爬一個頁面的單價（建立掃描時以 max_pages × 此值預扣，完成後依實際頁數退差）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
 ARGUS_COIN_PER_PAGE = int(os.getenv("ARGUS_COIN_PER_PAGE", "10"))
+
+# 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
+ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()
+if ARGUS_PAYMENT_MODE not in {"disabled", "ecpay_test"}:
+    raise RuntimeError("ARGUS_PAYMENT_MODE 只允許 disabled 或 ecpay_test。")
+ECPAY_MERCHANT_ID = os.getenv("ECPAY_MERCHANT_ID", "").strip()
+ECPAY_HASH_KEY = os.getenv("ECPAY_HASH_KEY", "").strip()
+ECPAY_HASH_IV = os.getenv("ECPAY_HASH_IV", "").strip()
+ECPAY_CHECKOUT_URL = os.getenv(
+    "ECPAY_CHECKOUT_URL",
+    "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
+).strip()
+ECPAY_RETURN_URL = os.getenv("ECPAY_RETURN_URL", "").strip()
+ECPAY_CLIENT_BACK_URL = os.getenv("ECPAY_CLIENT_BACK_URL", "").strip()
+if ARGUS_PAYMENT_MODE == "ecpay_test":
+    required_ecpay_settings = {
+        "ECPAY_MERCHANT_ID": ECPAY_MERCHANT_ID,
+        "ECPAY_HASH_KEY": ECPAY_HASH_KEY,
+        "ECPAY_HASH_IV": ECPAY_HASH_IV,
+        "ECPAY_RETURN_URL": ECPAY_RETURN_URL,
+        "ECPAY_CLIENT_BACK_URL": ECPAY_CLIENT_BACK_URL,
+    }
+    missing_ecpay_settings = [
+        name for name, value in required_ecpay_settings.items() if not value
+    ]
+    if missing_ecpay_settings:
+        raise RuntimeError(
+            "ecpay_test 缺少設定：" + ", ".join(missing_ecpay_settings)
+        )
+    if ECPAY_CHECKOUT_URL != "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5":
+        raise RuntimeError("ecpay_test 只能使用綠界 payment-stage 結帳網址。")
+    for ecpay_url_name, ecpay_url in {
+        "ECPAY_RETURN_URL": ECPAY_RETURN_URL,
+        "ECPAY_CLIENT_BACK_URL": ECPAY_CLIENT_BACK_URL,
+    }.items():
+        parsed_ecpay_url = urlparse(ecpay_url)
+        ecpay_url_host = parsed_ecpay_url.hostname or ""
+        try:
+            ecpay_url_port = parsed_ecpay_url.port
+        except ValueError as exc:
+            raise RuntimeError(
+                f"{ecpay_url_name} 必須使用有效的 HTTPS 443 URL。"
+            ) from exc
+        try:
+            ipaddress.ip_address(ecpay_url_host)
+            ecpay_host_is_ip = True
+        except ValueError:
+            ecpay_host_is_ip = False
+        reserved_suffixes = (".invalid", ".localhost", ".local", ".test")
+        if (
+            parsed_ecpay_url.scheme != "https"
+            or not ecpay_url_host
+            or "." not in ecpay_url_host
+            or ecpay_host_is_ip
+            or ecpay_url_port not in {None, 443}
+            or parsed_ecpay_url.username is not None
+            or parsed_ecpay_url.password is not None
+            or parsed_ecpay_url.fragment
+            or ecpay_url_host.lower().endswith(reserved_suffixes)
+        ):
+            raise RuntimeError(
+                f"{ecpay_url_name} 必須使用公開合法網域的 HTTPS 443 URL。"
+            )
 
 # Email 寄送（購買收據、未來通知）
 # dev 預設用 filebased backend（信件存到 dev_emails/，每封一檔，可直接打開看內容；

@@ -19,6 +19,7 @@ from apps.scans.cancellation import (
     raise_if_cancelled,
 )
 from apps.scans.models import ScanJob
+from apps.scans.tasks import run_scan_job
 
 
 def _make_scan(user, status_value=ScanJob.Status.CRAWLING) -> ScanJob:
@@ -128,3 +129,13 @@ class CancellationHelperTests(APITestCase):
         scan = _make_scan(self.user, ScanJob.Status.CRAWLING)
         # 不該 raise
         raise_if_cancelled(scan.id)
+
+    def test_worker_does_not_restart_a_queued_job_cancelled_before_pickup(self):
+        scan = _make_scan(self.user, ScanJob.Status.CANCELLED)
+
+        result = run_scan_job.run(scan.id)
+
+        scan.refresh_from_db()
+        self.assertEqual(result, {"status": ScanJob.Status.CANCELLED})
+        self.assertEqual(scan.status, ScanJob.Status.CANCELLED)
+        self.assertIsNone(scan.started_at)

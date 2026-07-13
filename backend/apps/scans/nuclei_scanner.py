@@ -77,6 +77,7 @@ def run_nuclei(
         *target_args,
         "-j",
         "-silent",
+        "-dr",
         "-timeout", "30" if deep else "15",
         "-c", "50" if deep else "25",
     ]

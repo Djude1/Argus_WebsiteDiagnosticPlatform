@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -173,6 +175,19 @@ class ReviewsEndpointTests(APITestCase):
         # 新欄位：last_message_is_user 為 True 表示等待 admin 回覆
         self.assertTrue(response.data["reviews"][0]["last_message_is_user"])
         self.assertFalse(response.data["reviews"][0]["has_admin_reply"])
+
+    def test_review_list_query_count_does_not_grow_per_review(self):
+        with CaptureQueriesContext(connection) as one_review_queries:
+            self.client.get(reverse("admin-reviews"))
+
+        for index in range(10):
+            user = _make_user(f"reviewer-{index}")
+            PlatformReview.objects.create(user=user, rating=4, comment="測試")
+        with CaptureQueriesContext(connection) as many_review_queries:
+            response = self.client.get(reverse("admin-reviews"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(one_review_queries), len(many_review_queries))
 
     def test_reply_creates_admin_review_message(self):
         from apps.reviews.models import ReviewMessage
