@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 讓 Argus K8s 正式容器直接使用 image 內既有的 Python 執行檔，避免 `uv run` 在啟動時解析並下載 dev dependency。
+**Goal:** 讓 Argus K8s 正式容器直接使用 image 內 `/app/.venv/bin` 的執行檔，避免 `uv run` 在啟動時解析並下載 dev dependency，也不依賴 image `PATH`。
 
-**Architecture:** Dockerfile 已以 `uv sync --frozen --no-dev` 建立 `/app/.venv`，並把 `/app/.venv/bin` 放入 `PATH`。K8s 的 migrate、web、worker、initContainer 與 liveness probe 應直接呼叫 `python`、`gunicorn`、`celery`，不讓正式 runtime 再執行 dependency sync。
+**Architecture:** backend image 以 `uv sync --frozen --no-dev` 建立 `/app/.venv`，但目前 pin 的 `sha-9f4f868` 建置版本尚未把 `/app/.venv/bin` 放入 `PATH`。K8s 的 migrate、web、worker、initContainer 與 liveness probe 應呼叫 `/app/.venv/bin/python`、`/app/.venv/bin/gunicorn`、`/app/.venv/bin/celery`，不讓正式 runtime 再執行 dependency sync，也不依賴 PATH。
 
 **Tech Stack:** Kubernetes manifests、Kustomize、Python `unittest`、Django、Docker image `shijie85/argus-backend`
 
@@ -66,18 +66,18 @@ Expected: FAIL，訊息指出 `k8s/04-backend.yaml` 仍包含 `["uv", "run"` 或
 - Test: `tests/test_k8s_runtime_commands.py`
 
 **Interfaces:**
-- Consumes: Dockerfile 提供的 `/app/.venv/bin` PATH
+- Consumes: backend image 內的 `/app/.venv/bin` virtualenv
 - Produces: 不需網路下載 dependency 的 migrate、web、worker 與 probe 命令
 
 - [x] **Step 1: 實作最小命令替換**
 
 ```yaml
-command: ["python", "manage.py", "migrate", "--noinput"]
-command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120"]
-command: ["celery", "-A", "config", "worker", "-l", "info"]
+command: ["/app/.venv/bin/python", "manage.py", "migrate", "--noinput"]
+command: ["/app/.venv/bin/gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120"]
+command: ["/app/.venv/bin/celery", "-A", "config", "worker", "-l", "info"]
 ```
 
-兩個 initContainer 的 shell command 改為 `python manage.py migrate --check`；worker liveness probe 改為 `celery -A config inspect ping ...`。
+兩個 initContainer 的 shell command 改為 `/app/.venv/bin/python manage.py migrate --check`；worker liveness probe 改為 `/app/.venv/bin/celery -A config inspect ping ...`。
 
 - [x] **Step 2: 執行測試確認 GREEN**
 
@@ -89,7 +89,7 @@ Expected: PASS（1 test）。
 
 Run: `kubectl kustomize k8s`
 
-Expected: exit code 0，輸出包含 direct `python`、`gunicorn`、`celery`，且不含 `uv run`。
+Expected: exit code 0，輸出包含 `/app/.venv/bin/python`、`/app/.venv/bin/gunicorn`、`/app/.venv/bin/celery`，且不含 `uv run`。
 
 ### Task 3: 同步部署文件與任務紀錄
 
@@ -104,7 +104,7 @@ Expected: exit code 0，輸出包含 direct `python`、`gunicorn`、`celery`，�
 
 - [x] **Step 1: 更新 K8s README**
 
-在 backend image 說明中記錄：正式 Pod 直接使用 image `.venv/bin` 中的執行檔，不得用 `uv run` 觸發 runtime dependency sync。
+在 backend image 說明中記錄：正式 Pod 使用 image `.venv/bin` 中執行檔的絕對路徑，不得依賴 `PATH`，也不得用 `uv run` 觸發 runtime dependency sync。
 
 - [x] **Step 2: 建立任務 log**
 
@@ -157,3 +157,27 @@ fix(k8s): prevent uv dependency sync in production pods
 ```
 
 在取得使用者明確「推」之前，不執行 commit 或 push。
+
+### Task 5: 修正 pinned image 未繼承 virtualenv PATH 的部署落差
+
+**Files:**
+- Modify: `tests/test_k8s_runtime_commands.py`
+- Modify: `k8s/04-backend.yaml`
+- Modify: `k8s/README.md`
+- Modify: `log/2026-07-13_fix-k8s-runtime-uv.md`
+
+- [x] **Step 1: 取得正式環境失敗證據**
+
+Argo CD 同步 `c852b60` 後，新 Pod `migrate-tqnb8` 已使用裸 `python`，不再下載 `ruff`，但 log 顯示 `ModuleNotFoundError: No module named 'django'`。比對 image tag 與 Git 歷史，確認 `sha-9f4f868` 的 Dockerfile 已建立 `/app/.venv` 但尚未設定 PATH。
+
+- [x] **Step 2: 以回歸測試重現裸命令問題**
+
+新增 absolute virtualenv executable assertions，執行時確認因 manifest 仍使用裸 `python` 而 FAIL。
+
+- [x] **Step 3: 使用絕對 virtualenv 路徑**
+
+將六處 runtime command 改為 `/app/.venv/bin/python`、`/app/.venv/bin/gunicorn`、`/app/.venv/bin/celery`，回歸測試 2 tests PASS。
+
+- [x] **Step 4: 完整驗證並取得第二次 push 核准**
+
+重新執行完整 Django tests、Ruff、Django check、Kustomize render、diff 與敏感資訊檢查；在第二個 commit push 前再次列出檔案、訊息草稿與結果供使用者核准。

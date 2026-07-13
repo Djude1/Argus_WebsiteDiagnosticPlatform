@@ -3,7 +3,7 @@
 把 Argus 從 Docker Compose 搬到 PVE k8s（1 master + 2 worker）的 manifest。
 image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`、`shijie85/argus-frontend`。
 
-> backend image 以 `uv sync --frozen --no-dev` 建立 `/app/.venv`，並把 `.venv/bin` 放入 `PATH`。正式 Pod 必須直接呼叫 `python`、`gunicorn`、`celery`；不要改用 `uv run`，否則 uv 會在 runtime 嘗試解析與下載 dev dependency。
+> backend image 以 `uv sync --frozen --no-dev` 建立 `/app/.venv`。正式 Pod 必須使用 `/app/.venv/bin/python`、`/app/.venv/bin/gunicorn`、`/app/.venv/bin/celery` 的絕對路徑，不可依賴 image 是否已把 `.venv/bin` 加入 `PATH`；也不要改用 `uv run`，否則 uv 會在 runtime 嘗試解析與下載 dev dependency。
 
 ## 檔案
 
