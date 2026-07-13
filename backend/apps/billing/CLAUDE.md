@@ -52,6 +52,14 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 
 `grant_monthly_bonus_if_needed` 利用 `last_bonus_year` / `last_bonus_month` 欄位判斷是否已執行。
 
+## 金流模式
+
+- `ARGUS_PAYMENT_MODE` 只允許 `disabled`（預設）或 `ecpay_test`。
+- `disabled` 時購點 API 回 503，且不得建立訂單或入點。
+- `ecpay_test` 只能送往綠界 `payment-stage`；建立訂單時維持 pending，ReturnURL 驗證 CheckMacValue、MerchantID、MerchantTradeNo、TradeAmt 後才呼叫 `complete_purchase_order()` 冪等入點。
+- `SimulatePaid=1` 是綠界後台測試 ReturnURL 的模擬通知，不代表消費者付款，必須回 `1|OK` 但禁止入點。
+- HashKey / HashIV 只放 `.env`，不得寫進程式、測試 fixture、log 或前端。
+
 ---
 
 ## CoinTransaction.kind 枚舉值
@@ -83,3 +91,5 @@ Billing 事件訂閱只在 `signals.py` 中處理，禁止在 `views.py` 或 `ta
 | 修改已存在的 CoinTransaction | 破壞稽核軌跡 |
 | 刪除 CoinWallet / CoinTransaction | 計費資料永久遺失 |
 | 在 `views.py` 手動扣款邏輯 | 邏輯應集中在 services.py |
+| callback 未驗 CheckMacValue / 訂單編號 / 金額就入點 | 可偽造或錯帳 |
+| 對 `SimulatePaid=1` 入點 | 綠界官方明示這只是 ReturnURL 測試通知 |

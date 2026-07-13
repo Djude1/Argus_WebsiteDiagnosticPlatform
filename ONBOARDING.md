@@ -10,8 +10,8 @@
 **Argus** 是一個授權式 AI 網站健檢 SaaS：使用者輸入網址 → 全站爬蟲 + 四維掃描（SEO/AEO/GEO/資安）+ LLM Agent 動態 UX 測試 → 產出可互動報告 + Word 文件 + 給 ChatGPT/Claude 的問題 Prompt。
 
 - **技術棧**：Django 5 + DRF + Celery + Playwright Python async + React 18 + Vite + Tailwind + Zustand
-- **資料**：SQLite（dev）/ PostgreSQL（prod）；media 存截圖與評論圖片
-- **後端約 252 個測試全綠**（測試方法數；以 `manage.py test apps` 實跑為準）、ruff All checks passed、frontend build 通過
+- **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
+- **後端數百項測試**（以 `manage.py test apps` 實跑為準）、ruff、frontend build 均由 CI quality gate 驗證
 - **兩個介面層**：
   - 前台（使用者）：`/dashboard /scans /history /billing /reviews /settings` + 公開頁 `/project /team /purchase /download`（首次進站播粒子過場動畫）
   - React 後台：`/admin/*`（**唯一後台**；dark cyan + 淺色內容；staff 可進、`📜 操作紀錄`/`📢 公告管理` 僅 superuser）
@@ -39,7 +39,7 @@
 - Windows（本機）或 macOS/Linux
 - Python ≥ 3.13（uv 會自動管 venv）
 - Node.js ≥ 18（dev 用；含 `npm.cmd` 在 Windows）
-- **build 專用**：Node v22 portable 解壓在 `D:\node22`（系統 Node v24 在 Windows build 會 crash，詳見 §13；build 一律走 `frontend/build-node22.ps1`）
+- **build 專用**：Node v22 portable（候選路徑見 `docs/node22-guide.md`；系統 Node v24 在 Windows build 會 crash，build 一律走 `frontend/build-node22.ps1`）
 - `uv`（Python 套件管理；https://docs.astral.sh/uv/）
 - Docker Desktop（選用，正式部署）
 
@@ -65,8 +65,9 @@ DJANGO_SECRET_KEY=請填 64-byte random
 DJANGO_DEBUG=true
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 JWT_SECRET_KEY=請填 64-byte random
+PASSWORD_RESET_TOKEN_PEPPER=請填另一組獨立的 64-byte random
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-GOOGLE_OAUTH_CLIENT_ID=向專案擁有者拿
+GOOGLE_OAUTH_CLIENT_ID=（選填；未設定時 UI 自動隱藏 Google 登入）
 ARGUS_BOOTSTRAP_SUPERUSER_USERNAME=（選填）
 ARGUS_BOOTSTRAP_SUPERUSER_PASSWORD=（選填）
 ARGUS_AGENT_ENABLED=false
@@ -88,7 +89,7 @@ uv run python backend/manage.py createsuperuser
 
 # 3. Build 前端（產 frontend/dist）
 # ⚠️ 本機 Node v24 + Rollup 4 在 Windows 會 STATUS_STACK_BUFFER_OVERRUN crash，
-#    一律走 D:\node22 portable（已包成 helper），禁止直接 npm run build
+#    一律走 portable Node 22 helper，禁止直接 npm run build
 cd frontend ; .\build-node22.ps1 ; cd ..
 
 # 4. 啟動後端（Django 同時 serve 前端 dist）
@@ -99,20 +100,21 @@ uv run python backend/manage.py runserver 127.0.0.1:8000
 - 未登入 → 自動跳 `/project`（公開介紹頁）
 - 登入後 → `/dashboard`
 - staff 登入後右上角會看到「🛡️ 後台」chip → `/admin/overview`（superuser 多看操作紀錄/公告管理）
-- 管理員帳號（如 `115401@gmail.com`）以前台 email 登入即可進 `/admin`；授予 staff/superuser 用 `manage.py seed_admin`（django-admin 已移除）
+- 管理員帳號以前台 email 登入即可進 `/admin`；授予 staff/superuser 用 `manage.py seed_admin`（django-admin 已移除）
 
 ### 2.5 驗證一切正常
 ```powershell
 uv run python backend/manage.py check
-uv run python backend/manage.py test apps        # 預期約 252 全綠
+uv run python backend/manage.py test apps        # 預期數百項全綠，以實跑數字為準
 uv run ruff check backend                         # 預期 All checks passed
 cd frontend ; .\build-node22.ps1 ; cd ..          # 預期 0 errors（禁用 npm run build，見 §13）
 ```
 
 ### 2.6 Docker 模式（選用）
 ```powershell
-docker compose up -d --build
-# 走 nginx 反向代理：localhost:80 對前端、/api → web:8000、/django-admin → web:8000
+# 本機展示環境才疊加 dev override；production 只用 docker-compose.yml
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# 走 nginx 反向代理：localhost:8080 對前端、/api → web:8000
 ```
 
 ---
@@ -177,13 +179,16 @@ Argus/
     │   └── pwa-icon.svg
     └── src/
         ├── main.jsx        ← 進入點，註冊 SW（僅 PROD）
-        ├── App.jsx         ← **巨型單檔（6500+ 行）**，所有頁面與元件
+        ├── App.jsx         ← 根路由 + React.lazy feature 載入
+        ├── features/       ← auth / scans / account / public / admin domain 頁面
+        ├── shared/         ← 跨 feature 共用 UI、hook、格式化
+        ├── components/     ← 可獨立理解的品牌與 domain 元件
         ├── api.js          ← axios（含 401 攔截）
         ├── store.js        ← Zustand：accessToken / wallet / me + fetcher
         └── styles.css      ← Tailwind + 大量 component class
 ```
 
-> ⚠️ `frontend/src/App.jsx` 已 6500+ 行包含所有頁面（`<Routes>` 在約第 6460 行）。改之前先 grep 定位（見 §12 協作守則）。
+> 前端已採 domain 分層；先在 `features/<domain>/` 定位頁面，只有新增根路由時才修改 `App.jsx`。
 
 ---
 
@@ -191,10 +196,10 @@ Argus/
 
 | app | 是什麼 | 關鍵檔 |
 |---|---|---|
-| `accounts` | User 模型（繼承 `AbstractUser`，沒加欄位）；登入方式：`GoogleLoginView`（Google ID Token）、`EmailRegisterView`（email 註冊）、`EmailLoginView`（email 登入）、`MeView`（GET/PATCH 個資）、`ChangePasswordView`（僅 email 帳號）；每次登入更新 `last_login` 並補發本月 200 coin。舊 dev-login 後門已移除（有測試斷言 404） | `views.py` `admin.py` |
+| `accounts` | User 模型；Email 登入/註冊、可選 Google OAuth、記憶體 access + HttpOnly refresh cookie、密碼重設；refresh 原子輪替，登出/變更密碼/重設會撤銷 token | `views.py` `models.py` |
 | `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`；Playwright BFS 爬蟲、四維 scanner、Word 報告、主動式資安 probe、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` |
 | `agent` | Phase 2 Hermes-Agent：MiniMax/GLM/Gemini provider chain + 8 個 tool schema + observe-think-act loop + token 安全閘；預設 `ARGUS_AGENT_ENABLED=false` 不啟用避免燒 token | `providers.py` `tools.py` `loop.py` `runner.py` |
-| `billing` | 點數系統：`CoinWallet` / `CoinTransaction`（審計不可改）/ `PricingPlan`（4 方案 seed）/ `PurchaseOrder`（含 buyer/發票快照）；**`services.py` 是 wallet 唯一寫入入口**（grant_monthly_bonus / hold_for_scan / refund / settle / purchase_plan / admin_adjust），全 atomic + select_for_update + 冪等；signal 在 user 建立時自動建錢包+發 200 coin | `models.py` `services.py` `signals.py` `views.py` |
+| `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點 | `ecpay.py` `models.py` `services.py` `views.py` |
 | `reviews` | 平台評論：`PlatformReview` OneToOne（一人一次評分，後端強制）+ `ReviewMessage` thread（multipart 含 image，staff 自動 `is_admin=True`）；admin reply 端點可同時 override rating | `models.py` `views.py` |
 | `admin_api` | React /admin 用的 API；`IsAdminUser` 保護（`/me` 是 `IsAuthenticated`）；`AdminAuditLog` model + `IsSuperuser` 權限 + audit-log endpoint；service hook 自動寫 audit | `views.py` `permissions.py` `models.py` |
 | `content` | CMS：`ProjectFeature` / `TeamMember` / `AppRelease`，公開 API 給公開頁用（features/team/releases/milestones）；React /admin 的 CMS 編輯後前台秒生效 | `models.py` `views.py` `admin.py` |
@@ -213,7 +218,7 @@ Argus/
 | `/team` ★ | `TeamPage` | 團隊成員 |
 | `/purchase` ★ | `PurchasePage` | marketing + 4 方案 + FAQ，CTA 跳 `/billing` |
 | `/download` ★ | `DownloadPage` | PWA 一鍵安裝 + 三平台步驟 |
-| `/login` ★ | `LoginPage` | 3 分頁：Google OAuth / Email 登入 / 新帳號註冊 |
+| `/login` ★ | `LoginPage` | Email 登入 / 新帳號註冊；有 Google Client ID 時才顯示 Google OAuth |
 | `/reviews` ★ | `ReviewsPage` | 評論列表（公開讀）+ thread + composer（登入後） |
 | `/dashboard` | `DashboardPage` | 個人總覽 |
 | `/scans` `/scans/:id` `/scans/:id/topology` | `ScanLayout` | 掃描列表/詳情/拓撲圖 |
@@ -252,12 +257,16 @@ Argus/
 
 | Method | 端點 | 權限 | request 參數 | 說明 |
 |---|---|---|---|---|
-| POST | `/api/auth/google/` | open | body：`credential`（Google ID Token，必填） | 驗證後簽 JWT，回 `{access, refresh}`；首登自動建帳號並補本月 200 coin |
-| POST | `/api/auth/register/` | open | body：`email`、`password`（≥8 碼） | email 註冊，回 201 `{access, refresh}` |
-| POST | `/api/auth/email-login/` | open | body：`email`、`password` | email 登入，回 `{access, refresh}` |
+| POST | `/api/auth/google/` | open | body：`credential` | 回 access；refresh 只寫 HttpOnly cookie |
+| POST | `/api/auth/register/` | open | body：`email`、`password`（依 Django policy，至少 10 碼） | Email 註冊，回 access + refresh cookie |
+| POST | `/api/auth/email-login/` | open | body：`email`、`password` | Email 登入，回 access + refresh cookie |
+| POST | `/api/auth/refresh/` | open + CSRF | cookie | 原子消耗舊 refresh、簽發新 cookie |
+| POST | `/api/auth/logout/` | open + CSRF | cookie | 撤銷 refresh 並清 cookie |
+| POST | `/api/auth/password-reset/request/` | open | body：`email` | 固定回應；DB 只保存 HMAC digest |
+| POST | `/api/auth/password-reset/confirm/` | open | body：`token`、`new_password` | 單次使用並撤銷所有 refresh |
 | GET | `/api/auth/me/` | auth | — | 個人資料（`id/email/username/display_name/first_name/last_name/is_staff/date_joined/last_login/auth_provider`） |
 | PATCH | `/api/auth/me/` | auth | body：`first_name?`、`last_name?` | 更新顯示名稱 |
-| POST | `/api/auth/change-password/` | auth（僅 email 帳號） | body：`old_password`、`new_password`（≥8 碼） | Google 帳號呼叫回 400 |
+| POST | `/api/auth/change-password/` | auth（僅 email 帳號） | body：`old_password`、`new_password`（至少 10 碼） | 成功後撤銷 refresh 並要求重新登入；Google 帳號回 400 |
 
 ### 7.2 掃描（scans）
 | Method | 端點 | 權限 | request 參數 | 說明 |
@@ -458,7 +467,7 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 
 **最新 commit**: 持續更新中（看 `git log --oneline -5`）
 
-**驗證狀態**：後端約 252 個測試全綠（以 `manage.py test apps` 實跑為準）、ruff 全綠、frontend build 通過、PWA 可安裝。
+**驗證狀態**：後端數百項測試（以 `manage.py test apps` 實跑為準）、ruff、frontend build 均納入 CI quality gate。
 
 ### 同學（另一個 Claude Code）已完成
 
@@ -469,9 +478,9 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 **重要規範**（建立於 `frontend/CLAUDE.md`）：
 - **build 必須用 `frontend/build-node22.ps1`**（系統 Node v24 + Rollup 4 在 Windows crash），dev 兩種 Node 都能跑
 - 禁止 inline style（除動態值如 progress 寬度）
-- 禁止新增獨立 `.jsx`/`.tsx` 元件檔（單檔架構）
+- 頁面依 domain 放 `features/`，共用 UI / hook 放 `components/` 或 `shared/`；`App.jsx` 只管根路由與 lazy loading
 - 禁止 `fetch()` / `axios` 直接呼叫（要走 `api.js`）
-- 套件安裝用 `D:\node22\npm.cmd install`
+- 套件安裝使用 portable Node 22 的 npm；實際候選路徑以 `docs/node22-guide.md` 為準
 
 ---
 
@@ -480,7 +489,7 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 依複雜度排列，挑一個跟另一個 Claude Code 同步是哪個再開工：
 
 ### 簡單（< 半天）
-1. **PublicNav 加 hamburger menu**（mobile 響應式）— `frontend/src/App.jsx::PublicNav` + `styles.css`
+1. **PublicNav 加 hamburger menu**（mobile 響應式）— `frontend/src/features/public/PublicPages.jsx::PublicNav` + `styles.css`
 2. **/download 加版本檢查**（SW 更新時提示 reload）— `frontend/public/service-worker.js` + `main.jsx`
 3. **（已完成）DEV LOGIN 後門清理** — dev-login 後門已移除，並有測試斷言其回 404；此項保留為歷史紀錄
 4. **TeamPage 加成員照片支援**（TeamMember 加 ImageField avatar）— `apps/content/models.py` + migration + admin + 前端 fallback
@@ -488,13 +497,13 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 ### 中等（半天 ~ 1 天）
 5. **AdminAuditLog 擴充**：訂單狀態變更、user toggle staff 也寫 log
 6. **前台 DashboardPage 加「我的 AI 用量」段**（目前只有 admin 看得到）
-7. **ReviewMessage pending_subquery 改 SQL subquery**（提升效能，目前是 Python loop）
+7. **（已完成）ReviewMessage 待回覆狀態改 DB subquery/annotation**，避免列表 N+1
 8. **iOS Safari PWA 實機測試**（修補可能的 manifest 問題）
 9. **/reviews 加篩選**（按星等 / 按 thread 有無回覆 / 按 verified）
 10. **/billing 載具表單** 改即時格式提示（輸入時 highlight 不合格字元）
 
 ### 較大（1+ 天）
-11. **真實金流串接**（綠界 / 藍新 / Stripe）—— 把 `PurchaseView` 拆 init + callback/webhook
+11. **（已完成測試環境）綠界金流**—— 建立 payment-stage 訂單 + CheckMacValue callback + 冪等入點；正式商店不在本專題範圍
 12. **Playwright E2E 測試** —— 覆蓋掃描流程、報告互動、終止按鈕、結帳 wizard
 13. **拓撲圖 v2**：加 force layout、互動拖曳保存、節點群組
 14. **AI 用量 quota / 上限警告**（超過 100k tokens/月）
@@ -516,9 +525,9 @@ git log --oneline --left-right HEAD...origin/main   # 比對差異，不要無�
 
 ### 12.2 分工溝通
 - 用聊天明確告訴對方「我要改 X、預計動 Y 檔」
-- **不要兩人同時改 `frontend/src/App.jsx`**（6500+ 行，merge 衝突解很痛）
-- 後端改不同 app 較安全；前端改不同 page 元件較安全
-- 改 `settings.py` / `urls.py` / `App.jsx` 等共用檔前先講
+- 不要兩人同時改同一個 `features/<domain>/` 檔；不同 domain 可平行開發
+- 後端改不同 app 較安全；前端改不同 feature 較安全
+- 改 `settings.py` / `urls.py` / `App.jsx` / `shared/AppShared.jsx` 等共用檔前先講
 
 ### 12.3 Commit 規範
 - 標題用**繁體中文**，1 句話描述「做了什麼」

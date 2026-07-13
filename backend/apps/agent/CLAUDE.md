@@ -16,7 +16,7 @@ Phase 2 **Hermes-Agent**（掃描後的動態 UX 測試）。**預設關閉**（
 
 ## 安全（硬規則）
 - **嚴禁**在 log / exception / repr 印出 API key（金鑰一律 `.env`）。
-- agent **沒有** `navigate(url)` tool → 隱含 same-origin 約束；**不要**新增可跨站導覽的 tool。
+- Playwright context 對所有請求套用 public target policy，停用 Service Worker，並阻擋跨 origin 主文件與 WebSocket；agent 沒有 `navigate(url)` tool，仍不得新增可繞過此邊界的導覽能力。
 - `probe_sql_injection(url)`（LLM 自主觸發的 SQLi 主動驗證）**必須維持三層防護**，不可放寬：
   ① `tools.py` 內強制**同源**（比對 `scan_job.origin`）+ 需帶 query 參數；
   ② 實際攻擊委派 `kali_tools.run_sqlmap` 的**三重授權鎖**（`ARGUS_KALI_ENABLED` + active + authorized）；

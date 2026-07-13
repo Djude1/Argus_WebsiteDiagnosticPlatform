@@ -8,14 +8,14 @@ Claude 操作 `backend/` 目錄時，本檔在專案層 `CLAUDE.md` 之後自動
 
 | URL 前綴 | Django App | 主要端點 |
 |---|---|---|
-| `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`me/`（GET/PATCH）、`change-password/` |
+| `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/` |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/` |
 | `/api/reviews/` | `reviews` | `reviews/`（CRUD + thread） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`、`transactions/`、`scans/`、`reviews/`、`orders/`、`audit-log/`、`announcements/*`、`cms/*` |
-| `/django-admin/` | Django Admin | superuser 後門（Django 預設樣式，W4 已移除 jazzmin） |
+| `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
 | `/` ～ `/*` | SPA fallback | 回傳 `frontend/dist/index.html`，由 React Router 處理 |
 
 ---
@@ -24,7 +24,7 @@ Claude 操作 `backend/` 目錄時，本檔在專案層 `CLAUDE.md` 之後自動
 
 | app | 職責 | 最重要的檔案 |
 |---|---|---|
-| `accounts` | User model（繼承 AbstractUser）、Google OAuth、Email 註冊/登入、改密碼 | `views.py` |
+| `accounts` | User model、Google/Email 登入、記憶體 access + HttpOnly refresh、密碼重設 | `views.py` |
 | `scans` | **核心**：ScanJob 狀態機、Playwright 爬蟲、四維 scanner、Word 報告、合作式 cancel | `tasks.py` `crawler.py` `scanners.py` |
 | `agent` | Phase 2 Hermes-Agent：provider chain + tool calling loop（預設 `ARGUS_AGENT_ENABLED=false`） | `providers.py` `loop.py` `runner.py` |
 | `billing` | 點數錢包；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
@@ -92,4 +92,4 @@ user（一人一則，OneToOne）、rating（1-5）、comment（TextField）、i
 
 - **前台**：`http://127.0.0.1:8000/` — 一般使用者
 - **React 後台**：`/admin/*` — staff 進入（`IsAdminUser`），superuser 多看「操作紀錄」
-- **Django Admin**：`/django-admin/` — superuser 後門，Django 預設樣式（W4 已移除 jazzmin）
+- **Django Admin**：已移除；管理員統一走 React `/admin/*`

@@ -4,20 +4,14 @@ Claude 操作 `frontend/` 目錄時，本檔會在專案層 `CLAUDE.md` 之後�
 
 ---
 
-## App.jsx 操作規範
+## React 分層架構
 
-`frontend/src/App.jsx` 是 **6500+ 行的單檔**，包含所有頁面元件與路由。
+`src/App.jsx` 只負責根路由、權限 wrapper 與 `React.lazy` 載入；頁面依 domain 放在 `src/features/`，共用 UI / hook 放在 `src/components/` 或 `src/shared/`。
 
-**修改前必須先 grep 定位，禁止從頭瀏覽。**
-原因：盲目瀏覽 6500 行會消耗大量 token 且容易看錯位置。
-
-```powershell
-# 定位元件或函式（例如找 AdminUsersPage）
-Select-String -Path "src\App.jsx" -Pattern "function AdminUsersPage"
-```
-
-- 路由定義在 App.jsx **底部約第 6460 行**的 `<Routes>` 區塊
-- 新元件加在對應頁面元件附近，不要集中放在檔案頂部
+- 新頁面放進對應 `features/<domain>/`；檔名須表達頁面集合或職責，不得再把所有頁面塞回 `App.jsx`。
+- 單一頁面若有可獨立理解的複雜區塊，抽成 `components/<domain>/<清楚元件名>.jsx`。
+- 跨 domain 共用的純 UI、格式化或 hook 放 `shared/`；避免 feature 互相循環 import。
+- 新路由在 `App.jsx` 用 `lazyNamed()` 掛載，維持 route-level code splitting。
 
 ---
 
@@ -37,6 +31,8 @@ D:\nodejs\npm.cmd install
 
 Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollup 打包。
 
+`vite.config.js` 的 `manualChunks` 固定拆出 React、ReactFlow 與 service vendor；新增大型依賴後應先確認 production build 無單一 chunk 超過 500 kB，再決定是否調整既有分組。
+
 ---
 
 ## 狀態管理
@@ -44,6 +40,7 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 - 全域狀態（`user`、`wallet` 等）放 `store.js`（Zustand）
 - API 呼叫統一使用 `api.js` 的 Axios instance
 - **禁止在元件中直接使用 `fetch()` 或 `axios`**，理由：`api.js` 統一處理 base URL、CSRF token 和 401 攔截
+- Access token 只存在 Zustand 記憶體；refresh token 由後端 HttpOnly cookie 管理，禁止存入 localStorage
 
 ---
 
@@ -58,9 +55,9 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 
 ## 元件新增規範
 
-- **禁止新增獨立的 `.jsx` / `.tsx` 元件檔案**
-  原因：本專案刻意採用單檔架構，分拆會破壞現有 import 結構
-- 只有跨多個頁面使用的小型 util 元件才考慮抽為獨立函式，但仍放在 App.jsx 頂部「元件」區
+- 鼓勵依 domain 新增獨立 `.jsx` 元件檔；檔名使用 PascalCase 並與主要 export 同名。
+- 一次性、短小且只服務單頁的元件可留在該 feature 檔案，避免過度分拆。
+- 不建立 `utils.jsx`、`helpers.jsx`、`components.jsx` 這類職責不明的垃圾桶檔名。
 
 ---
 
@@ -82,17 +79,18 @@ D:\nodejs\npm.cmd install 套件名
 | `npm install` 不指定路徑 | 可能用到系統 Node v24 |
 | `fetch()` / `axios` 直接呼叫 | 繞過 api.js 的 token 處理 |
 | inline style（除動態值）| 難以維護，破壞主題一致性 |
-| 新增獨立元件檔案 | 破壞單檔架構 |
+| 把新頁面直接塞回 `App.jsx` | 破壞 route-level 分層與 lazy loading |
+| 職責不明的 `utils.jsx` / `components.jsx` | 難以定位與形成循環依賴 |
 
 ---
 
 ## 前端路由地圖
 
-> 所有路由定義在 `App.jsx` 底部 `<Routes>` 區塊（約第 6460 行起）。
+> 所有根路由定義在 `App.jsx`；實際頁面元件位於下方對應 feature 檔。
 
 | 路由 | 元件 / 頁面 | 說明 |
 |---|---|---|
-| `/login` | `LoginPage` | Google OAuth 登入 |
+| `/login` | `LoginPage` | Email 登入/註冊；有 Google Client ID 時才顯示 Google OAuth |
 | `/project` | `ProjectPage` | 公開行銷頁：產品特色 |
 | `/free-tools` | `FreeToolsPage` | 公開免費分析（測速 / URL 風險 / 郵件風險），呼叫 `/api/insights/*` |
 | `/team` | `TeamPage` | 公開行銷頁：團隊介紹 |
@@ -118,7 +116,17 @@ D:\nodejs\npm.cmd install 套件名
 
 | 檔案 | 職責 |
 |---|---|
-| `src/App.jsx` | 6500+ 行，所有頁面元件與路由定義全在此 |
+| `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
+| `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
+| `src/features/scans/ScanExperience.jsx` | 掃描建立、列表、詳情與拓樸頁 |
+| `src/features/account/AuthenticatedPages.jsx` | Dashboard、歷史、購點、評論、設定與登入後導覽 |
+| `src/features/public/PublicPages.jsx` | 專案、免費工具、團隊、購買介紹與下載等公開頁 |
+| `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
+| `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |
+| `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
+| `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
+| `src/components/navigation/NavActions.jsx` | 登入後導覽列的通知與帳號操作 |
+| `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.js` | Axios instance，統一處理 base URL 與 CSRF token |
 | `src/store.js` | Zustand 全域狀態（user、wallet 等） |
 | `src/main.jsx` | React entry point，Provider 掛載 |

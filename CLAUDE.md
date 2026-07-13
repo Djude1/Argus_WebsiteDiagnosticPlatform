@@ -46,7 +46,7 @@ cd frontend ; .\build-node22.ps1 ; cd ..
 # 套用 migration
 uv run python backend/manage.py migrate
 
-# 後端測試（約 252 項，以實跑數字為準）
+# 後端測試（數百項，以實跑數字為準）
 uv run python backend/manage.py test apps
 
 # 單一 app 測試（例如 billing）
@@ -58,10 +58,10 @@ uv run ruff check backend
 # Django 健康檢查
 uv run python backend/manage.py check
 
-# Docker（完整部署，含 nginx 反向代理）
+# Docker production（Gunicorn + 一次性 migrate + nginx）
 docker compose up -d --build
-# 改了前端後必須 --build frontend 並強制 reload
-docker compose up -d --build frontend
+# 本機開發才疊加 dev override；購點仍由 .env 明確啟用 ecpay_test
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ---

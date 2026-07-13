@@ -89,6 +89,8 @@ playwright install chromium
 
 原因：全域 Playwright 路徑（`%USERPROFILE%\AppData\Local\ms-playwright`）若被覆蓋，會影響其他使用相同機器的開發者。
 
+所有掃描入口、redirect、子資源與 WebSocket 都必須經 `services.py` 的公開 HTTP 目標政策；禁止 localhost、非 global IP、userinfo 與非 80/443 port。應用層驗證仍不能消除 DNS rebinding 的解析/連線競態，production 必須另以受控 egress proxy / firewall 阻擋 private、loopback、link-local 與 metadata 網段。
+
 ---
 
 ## Coin 扣點流程（與 billing 整合）
@@ -113,7 +115,7 @@ refund_full_for_scan(scan)  ← 全退（冪等）
 
 ```powershell
 # 標準整合測試流程
-docker compose up -d --build web worker   # 含最新程式碼重建
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web worker   # 含最新程式碼重建
 
 # 給測試帳號補充 coin
 docker exec argus-web-1 uv run python manage.py shell -c "
