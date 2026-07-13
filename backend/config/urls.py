@@ -6,6 +6,7 @@ from django.views.generic import TemplateView
 from django.views.static import serve
 
 FRONTEND_DIST = settings.BASE_DIR.parent / "frontend" / "dist"
+BACKEND_STATIC = settings.BASE_DIR / "static"
 
 
 def robots_txt(request):
@@ -89,14 +90,14 @@ urlpatterns = [
     ),
 
 
-    # React favicon
-    # frontend/dist/favicon.svg
+    # Django static favicon
+    # backend/static/favicon.svg
     path(
         "favicon.svg",
         _serve_no_cache,
         {
             "path": "favicon.svg",
-            "document_root": FRONTEND_DIST,
+            "document_root": BACKEND_STATIC,
         },
     ),
 
