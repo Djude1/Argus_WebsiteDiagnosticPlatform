@@ -13,7 +13,8 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 | `04-backend.yaml` | migrate Job + `web`（Gunicorn ×2）+ `worker`（Celery ×2） |
 | `05-frontend.yaml` | nginx 前端（ConfigMap 覆蓋 nginx.conf）×2 + ClusterIP |
 | `06-gateway.yaml` | Gateway API 對外入口（NGINX Gateway Fabric，class `nginx`） |
-| `07-network-policies.yaml` | web/data ingress 白名單與 frontend/migrate/application/data egress 邊界 |
+| `07-network-policies.yaml` | web/data ingress 白名單與 frontend/migrate/application/data egress 邊界（含 IPv4+IPv6 公網 allow / 私網 deny） |
+| `09-ngf-client-settings.yaml` | NGF `ClientSettingsPolicy`：對齊 frontend nginx 的 `client_max_body_size 6m`，避免 NGF 資料平面回 413 |
 
 ## 前置（已就緒）
 
@@ -53,10 +54,14 @@ kubectl apply -f 06-gateway.yaml
 # 7. 網路邊界（先確認下方 CoreDNS label 與 CNI enforcement）
 kubectl apply -f 07-network-policies.yaml
 
+# 8. NGF ClientSettingsPolicy（對齊 frontend nginx 的 client_max_body_size 6m）
+kubectl apply -f 09-ngf-client-settings.yaml
+
 # 檢查
 kubectl -n argus get pods,svc,pvc
 kubectl -n argus get gateway,httproute
 kubectl -n argus get networkpolicy
+kubectl -n argus get clientsettingspolicies.gateway.nginx.org
 ```
 
 > ⚠ **不要用 `kubectl apply -f .` 套整個目錄**——那會把 `02-secret.example.yaml` 的佔位值一起套進去，蓋掉你真正的 `secret.yaml`。請照上面逐檔套用（web/worker 的 initContainer 會自動等 migrate Job 完成，套用順序不怕錯）。
@@ -86,8 +91,8 @@ kubectl -n argus get svc                       # 找 argus-gateway 相關的 ngi
 - frontend 只可連 web:8000 與 CoreDNS。
 - migrate 只可連 PostgreSQL:5432 與 CoreDNS。
 - web/worker 只可連 PostgreSQL、Redis、CoreDNS，以及排除內網/保留網段後的公開 IPv4 80/443/587。
+- web/worker 另外允許公開 IPv6 80/443/587（排除 loopback / ULA / link-local / multicast / NAT64 / discard / documentation / 6to4 / Teredo）；dual-stack 叢集若 CNI 支援 IPv6 NetworkPolicy，掃描目標 IPv6 endpoint 才會通。
 - PostgreSQL/Redis 不得主動 egress，且 ingress 只接受對應的 backend workload。
-- 未提供 IPv6 公網 allow rule；dual-stack 叢集會預設阻擋應用的 IPv6 egress。
 
 套用前先確認 CNI 支援 NetworkPolicy，且 CoreDNS 使用目前 selector：
 
@@ -135,9 +140,8 @@ kubectl -n argus rollout restart deploy/web deploy/worker deploy/frontend
 
 ## 尚未處理的待辦
 
-1. **NGF 上傳大小**：frontend nginx 設 `client_max_body_size 6m`，Gateway 資料平面也必須允許至少 6 MiB；若回 `413`，用 NGF `ClientSettingsPolicy` 調整 `body.maxSize`。
-2. **掃描 egress 隔離**：manifest 已限制 CoreDNS、資料服務與公開 IPv4 80/443/587，並排除 private、loopback、link-local、metadata 與保留網段。仍必須在實際 CNI 執行上方封包矩陣；Compose/其他平台也需等效 firewall 或受控 proxy。
-3. **Kali 主動攻擊鏈**：compose 的 `docker exec` 不適用 k8s containerd，需改成受控 Job；`attack` profile 預設不啟動。
-4. **Google service account JSON**：若功能需要，另建 Secret 掛檔並設 `GOOGLE_APPLICATION_CREDENTIALS`，不得放進 image 或 repo。
-5. **TLS / 網域**：Gateway 必須終止 HTTPS、清洗 `X-Forwarded-For/Proto`；frontend 只保留可信 Gateway 傳入的標頭。
-6. **DB 連線數**：Gunicorn 目前每 pod 2 workers × 4 threads，且 `conn_max_age=0`。若出現 `too many clients already`，依實際併發調整 worker/thread 與 PostgreSQL 上限。
+1. **掃描 egress 隔離**：manifest 已限制 CoreDNS、資料服務與公開 IPv4/IPv6 80/443/587，並排除 private、loopback、link-local、metadata 與保留網段。仍必須在實際 CNI 執行上方封包矩陣；Compose/其他平台也需等效 firewall 或受控 proxy。
+2. **Kali 主動攻擊鏈**：compose 的 `docker exec` 不適用 k8s containerd，需改成受控 Job；`attack` profile 預設不啟動。
+3. **Google service account JSON**：若功能需要，另建 Secret 掛檔並設 `GOOGLE_APPLICATION_CREDENTIALS`，不得放進 image 或 repo。
+4. **TLS / 網域**：Gateway 必須終止 HTTPS、清洗 `X-Forwarded-For/Proto`；frontend 只保留可信 Gateway 傳入的標頭。
+5. **DB 連線數**：Gunicorn 目前每 pod 2 workers × 4 threads，且 `conn_max_age=0`。若出現 `too many clients already`，依實際併發調整 worker/thread 與 PostgreSQL 上限。

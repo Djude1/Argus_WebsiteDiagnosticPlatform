@@ -194,6 +194,32 @@ spec:
           port: 443
         - protocol: TCP
           port: 587
+    # IPv6 公網 egress：dual-stack 叢集若不給此 rule，預設 deny 會擋掉所有 IPv6 出站。
+    # 排除 RFC 6890 / IANA special-purpose 範圍（loopback / ULA / link-local /
+    # multicast / NAT64 / discard / documentation / IPv4-mapped / 6to4 / Teredo），
+    # 只允許 2000::/3 等公開 IPv4 等價範圍。CNI 必須支援 IPv6 NetworkPolicy 才生效。
+    - to:
+        - ipBlock:
+            cidr: ::/0
+            except:
+              - ::/128
+              - ::1/128
+              - ::ffff:0:0/96
+              - 64:ff9b::/96
+              - 100::/64
+              - 2001::/32
+              - 2001:db8::/32
+              - 2002::/16
+              - fc00::/7
+              - fe80::/10
+              - ff00::/8
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 587
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

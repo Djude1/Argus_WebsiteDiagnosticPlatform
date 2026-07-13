@@ -87,6 +87,29 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {("TCP", 80), ("TCP", 443), ("TCP", 587)},
         )
 
+        # IPv6 公網 egress：dual-stack 叢集若無此 rule，預設 deny 擋掉所有 IPv6 出站。
+        # CNI 必須支援 IPv6 NetworkPolicy 才生效；ipBlock.except 對 IPv6 同樣有效。
+        ipv6_rule = rules[4]
+        ipv6_block = ipv6_rule["to"][0]["ipBlock"]
+        self.assertEqual(ipv6_block["cidr"], "::/0")
+        self.assertTrue(
+            {
+                "::/128",
+                "::1/128",
+                "::ffff:0:0/96",
+                "64:ff9b::/96",
+                "100::/64",
+                "2001:db8::/32",
+                "fc00::/7",
+                "fe80::/10",
+                "ff00::/8",
+            }.issubset(set(ipv6_block["except"]))
+        )
+        self.assertEqual(
+            {(port["protocol"], port["port"]) for port in ipv6_rule["ports"]},
+            {("TCP", 80), ("TCP", 443), ("TCP", 587)},
+        )
+
     def test_frontend_and_migrate_have_minimal_egress(self):
         frontend_rules = self.policies["frontend-egress-boundary"]["spec"]["egress"]
         self.assertEqual(len(frontend_rules), 2)
@@ -127,3 +150,21 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {"web", "worker"},
         )
         self.assertEqual(self.policies["data-deny-egress"]["spec"]["egress"], [])
+
+    def test_kustomization_includes_ngf_client_settings_policy(self):
+        kustomization = _documents("kustomization.yaml")[0]
+        self.assertIn("09-ngf-client-settings.yaml", kustomization["resources"])
+        documents = _documents("09-ngf-client-settings.yaml")
+        policies = [
+            doc for doc in documents
+            if doc.get("kind") == "ClientSettingsPolicy"
+        ]
+        self.assertEqual(len(policies), 1)
+        policy = policies[0]
+        self.assertEqual(policy["apiVersion"], "gateway.nginx.org/v1alpha1")
+        self.assertEqual(policy["metadata"]["namespace"], "argus")
+        target = policy["spec"]["targetRef"]
+        self.assertEqual(target["kind"], "Gateway")
+        self.assertEqual(target["name"], "argus-gateway")
+        # 對齊 frontend nginx 的 client_max_body_size 6m
+        self.assertEqual(policy["spec"]["body"]["maxSize"], "6m")

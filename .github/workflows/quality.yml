@@ -77,3 +77,9 @@ jobs:
           test "$(grep -c '^kind: NetworkPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 7
           grep -q 'name: application-egress-boundary' "$RUNNER_TEMP/argus-rendered.yaml"
           grep -q 'name: data-deny-egress' "$RUNNER_TEMP/argus-rendered.yaml"
+          # ClientSettingsPolicy：對齊 frontend nginx client_max_body_size 6m
+          test "$(grep -c '^kind: ClientSettingsPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 1
+          grep -qE 'maxSize: ?"?6m"?' "$RUNNER_TEMP/argus-rendered.yaml"
+          # application-egress 同時含 IPv4 與 IPv6 公網 allow rule
+          grep -q 'cidr: 0.0.0.0/0' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'cidr: ::/0' "$RUNNER_TEMP/argus-rendered.yaml"

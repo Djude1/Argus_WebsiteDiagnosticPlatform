@@ -1,0 +1,28 @@
+# NGINX Gateway Fabric ClientSettingsPolicy
+#
+# 對齊 frontend nginx 的 client_max_body_size 6m；上傳大圖（評論圖片上限 5 MiB
+# + multipart 一點 overhead）若超過 NGF 資料平面預設 1m，會被直接回 413 並
+# 且不會到達 frontend nginx，因此這裡必須≥6m。
+#
+# 若日後調高 frontend nginx 的 client_max_body_size，這裡也要同步調高。
+#
+# targetRef 選 Gateway（而非 HTTPRoute）：所有附著到 argus-gateway 的 route
+# 都吃同一個限制；之後若有需要差異化（例如 /api/reviews/ 想要更大、其他路徑
+# 想要更小），可改用 HTTPRoute 級別的 ClientSettingsPolicy 覆蓋。
+#
+# policy 套用後可驗證：
+#   kubectl -n argus describe clientsettingspolicies.gateway.nginx.org argus-client-settings
+#   # Status.Conditions 中 Accepted 應為 True
+---
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ClientSettingsPolicy
+metadata:
+  name: argus-client-settings
+  namespace: argus
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: argus-gateway
+  body:
+    maxSize: "6m"
