@@ -9,8 +9,10 @@ RUN pip install --no-cache-dir uv==0.9.17
 
 # 先複製依賴定義，利用 layer cache 加速重複 build
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
 
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv
+RUN uv sync --frozen --no-dev
+ENV PATH="/app/.venv/bin:$PATH"
 # 安裝 ProjectDiscovery 資安工具（Nuclei + Katana）
 ARG NUCLEI_VERSION=3.8.0
 ARG KATANA_VERSION=1.1.2
@@ -46,4 +48,17 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 # 正式 image 預設使用 production WSGI server；開發模式由 docker-compose.dev.yml 覆寫。
-CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--access-logfile", "-"]
+CMD [
+    "gunicorn",
+    "config.wsgi:application",
+    "--bind",
+    "0.0.0.0:8000",
+    "--workers",
+    "2",
+    "--threads",
+    "4",
+    "--timeout",
+    "120",
+    "--access-logfile",
+    "-"
+]
