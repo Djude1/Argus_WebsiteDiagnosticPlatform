@@ -5,7 +5,6 @@ from django.urls import include, path, re_path
 from django.views.generic import TemplateView
 from django.views.static import serve
 
-
 FRONTEND_DIST = settings.BASE_DIR.parent / "frontend" / "dist"
 
 
