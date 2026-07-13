@@ -1,41 +1,58 @@
-# Argus 完整本機部署：web / worker / redis / db / nginx(frontend)
-# 啟動：docker compose up --build
+# Argus production 基線：Gunicorn web / worker / redis / db / nginx(frontend)
+# 本機展示需疊加 docker-compose.dev.yml；正式環境只用本檔。
 # 所有依賴都在 image 與 volume 內，不會污染主機環境
 
 services:
   db:
     image: postgres:16-alpine
-    ports:
-      # 讓 Navicat / DBeaver 等主機端資料庫工具可連到本機開發 DB
-      - "5432:5432"
     environment:
-      POSTGRES_USER: argus
-      POSTGRES_PASSWORD: argus_local_password
-      POSTGRES_DB: argus
+      POSTGRES_USER: ${POSTGRES_USER:?請在 .env 設定 POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?請在 .env 設定 POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U argus -d argus"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DJANGO_DEBUG: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:?請在 .env 設定 POSTGRES_USER}:${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?請在 .env 設定 POSTGRES_DB}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uv run python manage.py migrate --noinput
+    restart: "no"
 
   web:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      # 正式部署（公網）：DEBUG=false
-      # 注意：runserver 在 DEBUG=false 時不會自動服務 STATIC_URL 的檔案，
-      # Django Admin (/django-admin/) 的 CSS/JS 會失效。若需要 admin 樣式，
-      # 改 command 加 --insecure，或改用 gunicorn + collectstatic + nginx alias。
       DJANGO_DEBUG: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:?請在 .env 設定 POSTGRES_USER}:${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?請在 .env 設定 POSTGRES_DB}
+      TRUST_PROXY_SSL_HEADER: "true"
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+      ARGUS_EGRESS_PROXY_URL: ${ARGUS_EGRESS_PROXY_URL:-}
       # 主網址:巧.tw (xn--gst.tw) / 備援:argus6.qzz.io
       DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io"
-      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -45,17 +62,20 @@ services:
       CSRF_TRUSTED_ORIGINS: "https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
-    command: >
-      sh -c "uv run python manage.py migrate &&
-             uv run python manage.py runserver 0.0.0.0:8000"
     volumes:
       - media_data:/app/backend/media
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   worker:
     build:
@@ -63,23 +83,30 @@ services:
       dockerfile: Dockerfile
     environment:
       DJANGO_DEBUG: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:?請在 .env 設定 POSTGRES_USER}:${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?請在 .env 設定 POSTGRES_DB}
       DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
+      ARGUS_EGRESS_PROXY_URL: ${ARGUS_EGRESS_PROXY_URL:-}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "false"
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     command: uv run celery -A config worker -l info
     volumes:
       - media_data:/app/backend/media
+    healthcheck:
+      test: ["CMD-SHELL", "uv run celery -A config inspect ping -d celery@$$HOSTNAME --timeout=5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Phase 3 攻擊平台：Kali container，提供 sqlmap / metasploit 等主動驗證工具。
   # 預設不啟動，僅在明確授權的展示環境用 `docker compose --profile attack up -d kali` 啟動。
@@ -111,7 +138,13 @@ services:
       # 主機 8080 → container 80（避開 aiglasses 與其他可能佔 80 的服務）
       - "8080:80"
     depends_on:
-      - web
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:

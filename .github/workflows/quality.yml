@@ -1,0 +1,79 @@
+name: Quality Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SECRET_KEY: ci-only-django-secret-key-at-least-32-bytes
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-at-least-32-bytes
+      PASSWORD_RESET_TOKEN_PEPPER: ci-only-independent-reset-token-pepper
+      DJANGO_DEBUG: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.17"
+      - name: 同步鎖定依賴
+        run: uv sync --frozen
+      - name: Ruff
+        run: uv run ruff check backend
+      - name: Django 設定與 migration 漂移
+        run: |
+          uv run python backend/manage.py check
+          uv run python backend/manage.py makemigrations --check --dry-run
+      - name: 後端完整測試
+        run: uv run python backend/manage.py test apps
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 安裝鎖定依賴
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
+
+  repository-text:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 驗證追蹤文字檔可用 UTF-8 解碼
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+
+          suffixes = {".md", ".py", ".js", ".jsx", ".css", ".json", ".toml", ".yml", ".yaml"}
+          files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          for value in files:
+              path = pathlib.Path(value)
+              if path.suffix.lower() in suffixes:
+                  path.read_text(encoding="utf-8")
+          PY
+
+  kubernetes-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v5.1.0
+        with:
+          version: v1.32.2
+      - name: Render Kustomize manifests
+        run: |
+          kubectl kustomize k8s > "$RUNNER_TEMP/argus-rendered.yaml"
+          test "$(grep -c '^kind: NetworkPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 7
+          grep -q 'name: application-egress-boundary' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: data-deny-egress' "$RUNNER_TEMP/argus-rendered.yaml"

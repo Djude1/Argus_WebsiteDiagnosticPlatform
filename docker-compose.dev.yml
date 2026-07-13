@@ -1,0 +1,24 @@
+# 本機開發 override；正式環境不得套用此檔。
+services:
+  db:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: argus_local_password
+      POSTGRES_DB: argus
+
+  migrate:
+    environment:
+      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
+
+  web:
+    environment:
+      DJANGO_DEBUG: "true"
+      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus
+      TRUST_PROXY_SSL_HEADER: "false"
+    command: uv run python manage.py runserver 0.0.0.0:8000
+
+  worker:
+    environment:
+      DATABASE_URL: postgres://argus:argus_local_password@db:5432/argus

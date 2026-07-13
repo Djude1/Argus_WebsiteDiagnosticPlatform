@@ -45,6 +45,5 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app/backend
 EXPOSE 8000
 
-# 預設啟動 Django runserver；docker-compose 會視服務覆寫此 command
-# 注意：runserver 僅適合開發；正式部署需改用 gunicorn 並關閉 DEBUG
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+# 正式 image 預設使用 production WSGI server；開發模式由 docker-compose.dev.yml 覆寫。
+CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--access-logfile", "-"]
