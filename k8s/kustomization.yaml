@@ -13,6 +13,7 @@ resources:
 - 04-backend.yaml
 - 05-frontend.yaml
 - 06-gateway.yaml
+- 07-network-policies.yaml
 
 # image 版本集中在此一處管理。
 # CI（build-*.yml）build 完會用 `kustomize edit set image` 把對應的 newTag

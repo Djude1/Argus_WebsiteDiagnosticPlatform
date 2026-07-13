@@ -10,9 +10,10 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 | `01-namespace-config.yaml` | `argus` namespace + 非機密環境變數 ConfigMap |
 | `02-secret.example.yaml` | 機密**範本**（複製成 `secret.yaml` 填真值，勿 commit） |
 | `03-data.yaml` | PostgreSQL（StatefulSet）、Redis、共享 `media` PVC（RWX/NFS） |
-| `04-backend.yaml` | migrate Job + `web`（runserver ×2）+ `worker`（celery ×2） |
+| `04-backend.yaml` | migrate Job + `web`（Gunicorn ×2）+ `worker`（Celery ×2） |
 | `05-frontend.yaml` | nginx 前端（ConfigMap 覆蓋 nginx.conf）×2 + ClusterIP |
 | `06-gateway.yaml` | Gateway API 對外入口（NGINX Gateway Fabric，class `nginx`） |
+| `07-network-policies.yaml` | web/data ingress 白名單與 frontend/migrate/application/data egress 邊界 |
 
 ## 前置（已就緒）
 
@@ -28,7 +29,7 @@ kubectl apply -f 01-namespace-config.yaml
 
 # 2. 機密：複製範本 → 填真值 → apply（secret.yaml 已被 .gitignore 排除）
 cp 02-secret.example.yaml secret.yaml
-#   至少改 POSTGRES_PASSWORD（兩處一致）、DJANGO_SECRET_KEY、JWT_SECRET_KEY
+#   至少改 POSTGRES_PASSWORD（兩處一致）、DJANGO_SECRET_KEY、JWT_SECRET_KEY、PASSWORD_RESET_TOKEN_PEPPER
 kubectl apply -f secret.yaml
 #   （或從既有 .env 建：kubectl -n argus create secret generic argus-secret --from-env-file=../.env）
 
@@ -49,9 +50,13 @@ kubectl -n argus rollout status deploy/frontend
 # 6. Gateway 對外入口
 kubectl apply -f 06-gateway.yaml
 
+# 7. 網路邊界（先確認下方 CoreDNS label 與 CNI enforcement）
+kubectl apply -f 07-network-policies.yaml
+
 # 檢查
 kubectl -n argus get pods,svc,pvc
 kubectl -n argus get gateway,httproute
+kubectl -n argus get networkpolicy
 ```
 
 > ⚠ **不要用 `kubectl apply -f .` 套整個目錄**——那會把 `02-secret.example.yaml` 的佔位值一起套進去，蓋掉你真正的 `secret.yaml`。請照上面逐檔套用（web/worker 的 initContainer 會自動等 migrate Job 完成，套用順序不怕錯）。
@@ -70,8 +75,53 @@ kubectl -n argus get svc                       # 找 argus-gateway 相關的 ngi
 ⚠ 拿到實際對外位址後，若用 `IP:port` 存取，要把來源補進 `01-namespace-config.yaml`（三個節點 IP 已預填，MetalLB VIP 或其他 IP 需自行加）：
 - `DJANGO_ALLOWED_HOSTS`：加該 IP
 - `CSRF_TRUSTED_ORIGINS` / `CORS_ALLOWED_ORIGINS`：加 `http://<IP>:<port>`
+- `TRUSTED_PROXY_CIDRS`：必須改成叢集實際 Pod CIDR；目前 `10.0.0.0/8` 僅涵蓋常見 10.x 配置。web ingress NetworkPolicy 只允許 frontend pod 連入，代理仍必須覆寫 forwarded headers。
 
 改完 `kubectl apply -f 01-namespace-config.yaml && kubectl -n argus rollout restart deploy/web`。
+
+## NetworkPolicy 部署前檢查與封包驗證
+
+`07-network-policies.yaml` 採最小白名單：
+
+- frontend 只可連 web:8000 與 CoreDNS。
+- migrate 只可連 PostgreSQL:5432 與 CoreDNS。
+- web/worker 只可連 PostgreSQL、Redis、CoreDNS，以及排除內網/保留網段後的公開 IPv4 80/443/587。
+- PostgreSQL/Redis 不得主動 egress，且 ingress 只接受對應的 backend workload。
+- 未提供 IPv6 公網 allow rule；dual-stack 叢集會預設阻擋應用的 IPv6 egress。
+
+套用前先確認 CNI 支援 NetworkPolicy，且 CoreDNS 使用目前 selector：
+
+```bash
+kubectl -n kube-system get pods -l k8s-app=kube-dns --show-labels
+kubectl get namespace kube-system --show-labels
+```
+
+若第一個命令找不到 Pod，或叢集使用 NodeLocal DNSCache，先依實際 DNS Pod label／精確 DNS IP 調整 policy；不要改回允許任意目的端的 53 port。
+
+套用後可用受 policy 選取的暫時 worker Pod 驗證。以下「應阻擋」項目應 timeout 或連線失敗；若成功，代表 CNI 未執行 policy 或規則有缺口：
+
+```bash
+kubectl -n argus run egress-policy-check \
+  --image=nicolaka/netshoot --restart=Never --labels=app=worker \
+  --command -- sleep 3600
+kubectl -n argus wait --for=condition=Ready pod/egress-policy-check --timeout=120s
+
+# 應允許：CoreDNS、資料服務、公開 HTTPS
+kubectl -n argus exec egress-policy-check -- nslookup example.com
+kubectl -n argus exec egress-policy-check -- nc -vz -w 3 db 5432
+kubectl -n argus exec egress-policy-check -- nc -vz -w 3 redis 6379
+kubectl -n argus exec egress-policy-check -- curl -I --max-time 5 https://example.com
+
+# 應阻擋：叢集 API、雲端 metadata、任意外部 DNS、節點／私網服務
+kubectl -n argus exec egress-policy-check -- nc -vz -w 3 kubernetes.default.svc 443
+kubectl -n argus exec egress-policy-check -- curl --max-time 3 http://169.254.169.254/
+kubectl -n argus exec egress-policy-check -- dig @8.8.8.8 example.com +time=2 +tries=1
+kubectl -n argus exec egress-policy-check -- nc -vz -w 3 <node-private-ip> 22
+
+kubectl -n argus delete pod egress-policy-check --ignore-not-found
+```
+
+NetworkPolicy 是否真正阻擋封包取決於叢集 CNI；必要時搭配 CNI flow log 或節點側封包紀錄確認「應阻擋」測試沒有送達目的端。若未來使用叢集內 MinIO、私有 SMTP 或 egress proxy，應為該服務新增精準的 namespace/pod selector，不可放寬整段私網。
 
 ## 更新 image（CI 推了新版後）
 
@@ -85,9 +135,9 @@ kubectl -n argus rollout restart deploy/web deploy/worker deploy/frontend
 
 ## 尚未處理的待辦
 
-1. **runserver → gunicorn**：`web` 目前跑 `runserver`（開發伺服器）。多執行緒、×2 replica 可運作，但非正式級（穩定性 / 效能 / 連線管理）。正式環境應換 gunicorn：`pyproject.toml` 加 gunicorn、重 build image、改 `04-backend.yaml` 的 command。（註：Django Admin 已在程式碼移除，故**沒有** admin 靜態檔失效問題。）
-2. **NGF 上傳大小**：前端 nginx 設 `client_max_body_size 16m`，但 NGINX Gateway Fabric 資料平面預設 client body 上限較小。上傳大圖 / 報告若回 `413`，用 NGF 的 `ClientSettingsPolicy` 調高 `body.maxSize`。
-3. **Kali 主動攻擊鏈**：compose 靠掛 `docker.sock` + `docker exec`，k8s（containerd）不適用，需改寫成 k8s Job / `kubectl exec`。預設 `attack` profile 不啟動，暫不影響。
-4. **Google service account JSON**（`GoogleCloud_ApiKey.json`）：若啟用需要它的功能，另建 Secret 掛檔並設 `GOOGLE_APPLICATION_CREDENTIALS` 指向掛載路徑。
-5. **TLS / 網域**：要 HTTPS，於 `06-gateway.yaml` 的 Gateway 加 HTTPS listener + cert-manager 簽憑證，HTTPRoute 補 `hostnames: [xn--gst.tw]`，並把網域 DNS 指到 Gateway 位址。
-6. **DB 連線數**：postgres 預設 `max_connections=100`。web ×2（多執行緒 runserver）+ 前端高頻輪詢可能逼近上限（settings 已用 `conn_max_age=0` 緩解）。若 API 冒 `too many clients already`，調高 postgres `max_connections` 或改 gunicorn 綁定固定 worker 數。
+1. **NGF 上傳大小**：frontend nginx 設 `client_max_body_size 6m`，Gateway 資料平面也必須允許至少 6 MiB；若回 `413`，用 NGF `ClientSettingsPolicy` 調整 `body.maxSize`。
+2. **掃描 egress 隔離**：manifest 已限制 CoreDNS、資料服務與公開 IPv4 80/443/587，並排除 private、loopback、link-local、metadata 與保留網段。仍必須在實際 CNI 執行上方封包矩陣；Compose/其他平台也需等效 firewall 或受控 proxy。
+3. **Kali 主動攻擊鏈**：compose 的 `docker exec` 不適用 k8s containerd，需改成受控 Job；`attack` profile 預設不啟動。
+4. **Google service account JSON**：若功能需要，另建 Secret 掛檔並設 `GOOGLE_APPLICATION_CREDENTIALS`，不得放進 image 或 repo。
+5. **TLS / 網域**：Gateway 必須終止 HTTPS、清洗 `X-Forwarded-For/Proto`；frontend 只保留可信 Gateway 傳入的標頭。
+6. **DB 連線數**：Gunicorn 目前每 pod 2 workers × 4 threads，且 `conn_max_age=0`。若出現 `too many clients already`，依實際併發調整 worker/thread 與 PostgreSQL 上限。
