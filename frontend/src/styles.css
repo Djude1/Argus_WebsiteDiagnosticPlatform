@@ -2473,7 +2473,21 @@
     color: #475569;
   }
   .review-composer-image:hover { background: #ecfeff; color: #0e7490; border-color: #67e8f9; }
-  .review-composer-image input[type="file"] { display: none; }
+  .review-composer-image:focus-within {
+    outline: 3px solid rgba(8, 145, 178, 0.35);
+    outline-offset: 2px;
+  }
+  .review-composer-image input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   .review-composer-filename {
     @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs;
     background: #f1f5f9;
@@ -2493,6 +2507,14 @@
     line-height: 1;
   }
   .review-composer-row .primary-button { margin-left: auto; }
+  .review-composer-hint { @apply text-xs text-slate-500; }
+  .review-composer-preview {
+    width: 120px;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+  }
   .review-composer-error { @apply text-xs text-rose-600; }
 
   /* ============================================================
@@ -2515,6 +2537,10 @@
     grid-template-columns: 256px 1fr;
     min-height: 100vh;
     color: #1e293b;
+  }
+  .admin-mobile-header,
+  .admin-drawer-backdrop {
+    display: none;
   }
 
   .admin-loading,
@@ -2740,6 +2766,12 @@
   }
 
   /* --- Tables --- */
+  .admin-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .admin-table-spaced { margin-top: 12px; }
   .admin-table {
     @apply w-full text-sm;
     border-collapse: separate;
@@ -2764,6 +2796,10 @@
   .admin-table tbody tr.clickable { cursor: pointer; transition: background 0.15s; }
   .admin-table tbody tr.clickable:hover {
     background: #f0f9ff;
+  }
+  .admin-table tbody tr.clickable:focus-visible {
+    outline: 3px solid #06b6d4;
+    outline-offset: -3px;
   }
   .admin-table.compact thead th,
   .admin-table.compact tbody td {
@@ -4920,12 +4956,99 @@
   .billing-plan-grid {
     grid-template-columns: 1fr;
   }
+
+  .admin-shell {
+    display: block;
+    min-width: 0;
+    padding-top: 56px;
+  }
+
+  .admin-mobile-header {
+    display: flex;
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 45;
+    height: 56px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+    color: #f8fafc;
+    background: #0f172a;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.2);
+  }
+
+  .admin-menu-button {
+    width: 44px;
+    height: 44px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #f8fafc;
+    background: #1e293b;
+    font-size: 1.25rem;
+    cursor: pointer;
+  }
+
+  .admin-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 47;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15, 23, 42, 0.58);
+  }
+
+  .admin-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 48;
+    width: min(82vw, 288px);
+    height: 100dvh;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+
+  .admin-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .admin-main {
+    width: 100%;
+    min-width: 0;
+    padding: 1rem;
+    overflow-x: hidden;
+  }
+
+  .admin-page,
+  .admin-panel,
+  .admin-grid-2col {
+    min-width: 0;
+  }
+
+  .admin-grid-2col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-panel {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .admin-table {
+    width: max(100%, 680px);
+    max-width: none;
+  }
 }
 
 @media (max-width: 640px) {
   .panel {
     border-radius: 14px;
     padding: 1rem;
+  }
+
+  .admin-main {
+    padding: 0.75rem;
   }
 
   .public-shell {

@@ -19,15 +19,18 @@ window.addEventListener("appinstalled", () => {
   window.dispatchEvent(new Event("argus-installed"));
 });
 
-const googleClientId = import.meta.env.GOOGLE_OAUTH_CLIENT_ID || "";
+const googleClientId = (import.meta.env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
+const app = (
+  <BrowserRouter>
+    <App googleOAuthEnabled={Boolean(googleClientId)} />
+  </BrowserRouter>
+);
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </GoogleOAuthProvider>
+    {googleClientId ? (
+      <GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>
+    ) : app}
   </React.StrictMode>,
 );
 
