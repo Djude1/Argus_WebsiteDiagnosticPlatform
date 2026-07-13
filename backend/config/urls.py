@@ -5,6 +5,7 @@ from django.urls import include, path, re_path
 from django.views.generic import TemplateView
 from django.views.static import serve
 
+
 FRONTEND_DIST = settings.BASE_DIR.parent / "frontend" / "dist"
 
 
@@ -28,67 +29,164 @@ def health_ready(request):
             cursor.fetchone()
     except Exception:
         return JsonResponse({"status": "unavailable"}, status=503)
+
     return JsonResponse({"status": "ready"})
 
 
 def serve_review_image(request, path):
     image_path = settings.MEDIA_ROOT / "review_images" / path
+
     if not image_path.is_file():
         raise Http404("找不到圖片。")
+
     response = FileResponse(image_path.open("rb"))
     response["X-Content-Type-Options"] = "nosniff"
     response["Content-Security-Policy"] = "default-src 'none'; sandbox"
     response["Cache-Control"] = "public, max-age=86400"
+
     return response
 
 
 def _serve_immutable(request, path, document_root=None):
-    """雜湊命名的 build 資產（/assets/*）內容變更即檔名變更，可長期快取以改善重訪效能。"""
-    response = serve(request, path, document_root=document_root)
-    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    """
+    雜湊命名的 build 資產（/assets/*）
+    內容變更即檔名變更，可長期快取。
+    """
+    response = serve(
+        request,
+        path,
+        document_root=document_root,
+    )
+
+    response["Cache-Control"] = (
+        "public, max-age=31536000, immutable"
+    )
+
     return response
 
 
 def _serve_no_cache(request, path, document_root=None):
-    """PWA 控制檔（service-worker / manifest / icon）必須每次重新驗證，否則更新不會生效。"""
-    response = serve(request, path, document_root=document_root)
+    """
+    PWA 控制檔與 icon
+    必須每次重新驗證。
+    """
+    response = serve(
+        request,
+        path,
+        document_root=document_root,
+    )
+
     response["Cache-Control"] = "no-cache"
+
     return response
 
 
 urlpatterns = [
-    path("robots.txt", robots_txt),
-    path("api/health/live/", health_live, name="health-live"),
-    path("api/health/ready/", health_ready, name="health-ready"),
+
+    # robots
+    path(
+        "robots.txt",
+        robots_txt,
+    ),
+
+
+    # React favicon
+    # frontend/dist/favicon.svg
+    path(
+        "favicon.svg",
+        _serve_no_cache,
+        {
+            "path": "favicon.svg",
+            "document_root": FRONTEND_DIST,
+        },
+    ),
+
+
+    # Health check
+    path(
+        "api/health/live/",
+        health_live,
+        name="health-live",
+    ),
+
+    path(
+        "api/health/ready/",
+        health_ready,
+        name="health-ready",
+    ),
+
+
+    # Review images
     re_path(
         r"^media/review_images/(?P<path>[0-9a-f]{32}\.(?:jpg|png))$",
         serve_review_image,
         name="review-image",
     ),
-    # Django Admin 已完全移除；唯一後台為 React /admin/*（由 admin_api 提供 REST API）
-    path("api/auth/", include("apps.accounts.urls")),
-    path("api/billing/", include("apps.billing.urls")),
-    path("api/reviews/", include("apps.reviews.urls")),
-    path("api/admin/", include("apps.admin_api.urls")),
-    path("api/content/", include("apps.content.urls")),
-    path("api/insights/", include("apps.insights.urls")),
-    path("api/", include("apps.scans.urls")),
-    # 由 Django 直接服務 Vite build 出的靜態 assets，讓 runserver 模式不必另開 npm dev
+
+
+    # APIs
+    path(
+        "api/auth/",
+        include("apps.accounts.urls"),
+    ),
+
+    path(
+        "api/billing/",
+        include("apps.billing.urls"),
+    ),
+
+    path(
+        "api/reviews/",
+        include("apps.reviews.urls"),
+    ),
+
+    path(
+        "api/admin/",
+        include("apps.admin_api.urls"),
+    ),
+
+    path(
+        "api/content/",
+        include("apps.content.urls"),
+    ),
+
+    path(
+        "api/insights/",
+        include("apps.insights.urls"),
+    ),
+
+    path(
+        "api/",
+        include("apps.scans.urls"),
+    ),
+
+
+    # Vite hashed assets
     re_path(
         r"^assets/(?P<path>.*)$",
         _serve_immutable,
-        {"document_root": FRONTEND_DIST / "assets"},
+        {
+            "document_root": FRONTEND_DIST / "assets",
+        },
     ),
-    # PWA 必要檔案（從 frontend/dist 根目錄 serve）
+
+
+    # PWA files
     re_path(
-        r"^(?P<path>manifest\.webmanifest|service-worker\.js|pwa-icon\.svg|favicon\.svg)$",
+        r"^(?P<path>manifest\.webmanifest|service-worker\.js|pwa-icon\.svg)$",
         _serve_no_cache,
-        {"document_root": FRONTEND_DIST},
+        {
+            "document_root": FRONTEND_DIST,
+        },
     ),
-    # SPA fallback：其他路徑（含 /admin/*）都回傳 index.html，由 React Router 處理
-    # （Docker 模式由 nginx 處理 SPA fallback，此路由在容器內為惰性 fallback）
+
+
+    # React SPA fallback
+    # 不讓 API/static/media/favicon 被 index.html 吃掉
     re_path(
-        r"^(?!api/|static/|media/).*$",
-        TemplateView.as_view(template_name="index.html"),
+        r"^(?!api/|static/|media/|favicon\.svg).*$",
+        TemplateView.as_view(
+            template_name="index.html"
+        ),
     ),
 ]
