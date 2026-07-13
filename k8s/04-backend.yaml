@@ -22,7 +22,7 @@ spec:
       containers:
         - name: migrate
           image: shijie85/argus-backend:latest
-          command: ["uv", "run", "python", "manage.py", "migrate", "--noinput"]
+          command: ["python", "manage.py", "migrate", "--noinput"]
           envFrom:
             - configMapRef:
                 name: argus-config
@@ -64,7 +64,7 @@ spec:
           command:
             - sh
             - -c
-            - "until uv run python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
+            - "until python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
           envFrom:
             - configMapRef:
                 name: argus-config
@@ -73,7 +73,7 @@ spec:
       containers:
         - name: web
           image: shijie85/argus-backend:latest
-          command: ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120"]
+          command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120"]
           ports:
             - containerPort: 8000
           envFrom:
@@ -129,7 +129,7 @@ spec:
           command:
             - sh
             - -c
-            - "until uv run python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
+            - "until python manage.py migrate --check; do echo 'waiting for migrations...'; sleep 3; done"
           envFrom:
             - configMapRef:
                 name: argus-config
@@ -138,7 +138,7 @@ spec:
       containers:
         - name: worker
           image: shijie85/argus-backend:latest
-          command: ["uv", "run", "celery", "-A", "config", "worker", "-l", "info"]
+          command: ["celery", "-A", "config", "worker", "-l", "info"]
           envFrom:
             - configMapRef:
                 name: argus-config
@@ -152,7 +152,7 @@ spec:
               command:
                 - sh
                 - -c
-                - "uv run celery -A config inspect ping -d celery@$HOSTNAME --timeout=5"
+                - "celery -A config inspect ping -d celery@$HOSTNAME --timeout=5"
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
