@@ -2,9 +2,11 @@
 
 **日期**：2026-07-14
 
-**狀態**：設計已核准，等待使用者審閱書面規格
+**狀態**：設計已核准；Implementation Plan 已完成，尚未執行實作
 
 **範圍**：恢復並改良 SQLmap 主動驗證；Metasploit、Nmap 與多 Job 併發不在本輪
+
+**實作計畫**：[`K8s Kali SQLmap Job Implementation Plan`](../plans/2026-07-14-k8s-kali-sqlmap-job.md)
 
 ## 背景與已確認事實
 

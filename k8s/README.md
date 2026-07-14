@@ -180,7 +180,7 @@ kubectl -n argus rollout restart deploy/web deploy/worker deploy/frontend
 ## 尚未處理的待辦
 
 1. **掃描 egress 隔離**：manifest 已限制 CoreDNS、資料服務與公開 IPv4/IPv6 80/443/587，並排除 private、loopback、link-local、metadata 與保留網段。仍必須在實際 CNI 執行上方封包矩陣；Compose/其他平台也需等效 firewall 或受控 proxy。
-2. **Kali 主動攻擊鏈**：2026-07-14 實機確認三節點皆為 containerd 2.2.5，worker 僅有 Docker CLI、沒有 socket／daemon，也沒有 Kali 工具或啟用設定；現行 `docker exec` 鏈在 K8s 不可用，需改成受控 Job，且 `attack` profile 預設不啟動。核准設計見 [`K8s Kali SQLmap Job 設計規格`](../docs/superpowers/specs/2026-07-14-k8s-kali-sqlmap-job-design.md)。
+2. **Kali 主動攻擊鏈**：2026-07-14 實機確認三節點皆為 containerd 2.2.5，worker 僅有 Docker CLI、沒有 socket／daemon，也沒有 Kali 工具或啟用設定；現行 `docker exec` 鏈在 K8s 不可用，需改成受控 Job，且 `attack` profile 預設不啟動。核准設計見 [`K8s Kali SQLmap Job 設計規格`](../docs/superpowers/specs/2026-07-14-k8s-kali-sqlmap-job-design.md)，逐步執行與驗收見 [`K8s Kali SQLmap Job Implementation Plan`](../docs/superpowers/plans/2026-07-14-k8s-kali-sqlmap-job.md)。
 3. **Google service account JSON**：若功能需要，另建 Secret 掛檔並設 `GOOGLE_APPLICATION_CREDENTIALS`，不得放進 image 或 repo。
 4. **TLS / 網域**：Gateway 必須終止 HTTPS、清洗 `X-Forwarded-For/Proto`；frontend 只保留可信 Gateway 傳入的標頭。
 5. **DB 連線數**：Gunicorn 目前每 pod 2 workers × 4 threads，且 `conn_max_age=0`。若出現 `too many clients already`，依實際併發調整 worker/thread 與 PostgreSQL 上限。
