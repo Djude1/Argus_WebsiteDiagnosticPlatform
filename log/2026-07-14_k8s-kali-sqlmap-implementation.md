@@ -228,3 +228,97 @@ reviewer 指出兩項 Important 缺陷：(1) 真實 caller 傳入完整 crawl-or
   backend/apps/scans/tests_kali_tools.py` → `All checks passed!`。
 - **Django check**：`uv run --frozen python backend/manage.py check` → 0 issues。
 - **Compose 未變動**：引用前述 Step 6 Compose config 證據，不重跑。
+
+## Task 4：Kubernetes Job executor
+
+### 變更內容
+
+- 新增 `backend/apps/scans/security/kali_kubernetes.py`：實作 `KubernetesSqlmapExecutor`，在受限的 Kubernetes Job 中執行 SQLmap。
+- 使用官方 Python client 35.x 透過 `config.load_incluster_config()` 僅連線 cluster 內 API server；無本機 kubeconfig fallback。
+- 以 Redis Lua 實作單一 owner token 的 global lock，token mismatch 時無法續約或釋除；lock 等待上限 420 秒。
+- Job-first / Secret-second lifecycle：先建立 Job 取得 UID，再建立帶 owner reference 的 Secret；Secret 僅含 `targets.json`，使用 string_data 無任何 read/list 操作。
+- Names/Labels 不含 URL/domain：job 與 secret 名稱使用 HMAC-SHA256(settings.SECRET_KEY, "kali:{scan_id}")[:10] 與隨機 hex 後綴；labels 固定為 `{"managed-by": "argus", "component": "kali-sqlmap"}`。
+- 動態 deadline：單一 target 為預設 timeout + 30 秒；多 target 時 capped at 390 秒；Job TTL 300 秒。
+- Bounded watch：整體上限 min(deadline+30, 420) 秒，每片 5 秒，片間檢查取消並每 60 秒續約 lock。
+- Safe logging：只記 `correlation_id`、`phase`、`code`，不記 URL、query value、API exception body、runner raw log。
+- Cleanup 在 finally block 執行， NotFound 視為成功，其他例外只記 safe code 不外洩 exception body。
+- `KaliResult` 新增 `correlation_id` 與 `sqlmap_version` 欄位。
+- 新增 `backend/apps/scans/tests_kali_kubernetes.py`：20 個 mocked lifecycle 測試，覆蓋所有 brief 指定場景。
+- `pyproject.toml` 新增 `kubernetes>=35.0,<36`；`uv.lock` 已包含對應條目。
+
+### 原因
+
+Task 3 已建立 Docker executor，但正式環境偏好 Kubernetes 隔離。Task 4 實作 Kubernetes Job executor，符合 Task 1-3 的安全契約與 policy，並確保每個 scan 有硬上限的執行時間、目標數與全域並發控制。
+
+### 影響範圍
+
+- `kali_tools.py` 的 `_executor_for_backend()` 在 `kubernetes` backend 下 lazy import `KubernetesSqlmapExecutor`；正式環境啟用前需設定 `ARGUS_KALI_BACKEND=kubernetes`。
+- 使用 Redis Lua 實作的 global lock 與 policy 的 `reserve_sqlmap_targets()` 共用同一個 Redis DB。
+- Kubernetes Job/Secret 無持久化狀態，所有結果透過 `KaliResult` 傳回；runner stdout 仍不外洩。
+- 不影響 Docker executor、其他 scanner、billing、前端。
+
+### 驗證方式
+
+- RED：`uv run python backend/manage.py test apps.scans.tests_kali_kubernetes -v 2` → `ImportError: cannot import name 'kali_kubernetes' from 'apps.scans.security'`，因當時 executor module 尚不存在。
+- GREEN（focused）：同一命令 → 20 tests in 0.096s，全部通過。
+- GREEN（regression）：`apps.scans.tests_kali_contracts apps.scans.tests_kali_policy apps.scans.tests_kali_tools apps.scans.tests_kali_kubernetes` → 73 tests in 18.024s，全部通過。
+- Ruff：`uv run ruff check backend/apps/scans/security/kali_kubernetes.py backend/apps/scans/tests_kali_kubernetes.py` → `All checks passed!`。
+- Lock：`uv lock --check` → `Resolved 62 packages in 4ms`。
+- Django：`uv run python backend/manage.py check` → `System check identified no issues (0 silenced).`。
+- Git：`git diff --check` → 僅有 LF/CRLF 警告（Windows 預期），無空白問題。
+
+## Task 4 review 修復：admission 契約、鎖安全與 bounded lifecycle
+
+### 變更內容
+
+- 對齊後續 Task 5 / Task 7 的 runner 與 admission shape：Job / Secret 名稱改為
+  `argus-sqlmap-{hmac10}-{hex12}` / `argus-targets-{hmac10}-{hex12}`，同一 execute
+  僅生成一次 correlation ID；補齊 `argus.io/managed-by=argus`、`app=kali-sqlmap`。
+- runner Pod 改用 `kali-runner` ServiceAccount、UID/GID/fsGroup 65532、
+  `/usr/local/bin/python /opt/argus/runner.py`、read-only targets Secret、`/tmp` 1Gi
+  emptyDir，以及 admission policy 要求的 CPU / memory / ephemeral-storage requests/limits。
+- Secret `targets.json` 對齊 runner schema：只含 `schema_version`、`scan_id` 與
+  `targets[{index,url}]`；移除 fingerprint。可信 evidence 欄位統一為 `tool_version`。
+- Redis global lock 補上失去 ownership 與 Redis 例外處理：acquire 例外 silent-fail、
+  renew 回 0/例外立即停止 runner lifecycle、release 失敗不遮蔽 `ScanCancelled`；
+  stale cleanup、Job 建立、Secret 建立後各做 ownership checkpoint。
+- 鎖等待使用 `< deadline` 與 remaining-based sleep；watch 最後一片依剩餘 budget
+  縮短，並同時設定 Kubernetes `_request_timeout`，避免 420 秒與 watch 上限各多跑一片。
+- executor outward `KaliResult.error` 與 audit `code=` 收斂至固定 taxonomy；
+  `DeadlineExceeded` 對應 `job_deadline_exceeded`，其他 runner/watch/log failure 對應
+  `runner_failed`，所有 parser contract error 對應 `invalid_result`。runner 私有
+  `error_code` 不再直接外露。
+- stale cleanup 改用每個既有 Job 自己的 `spec.active_deadline_seconds + 30`，嚴格
+  超過才刪；缺失、bool、非正整數等無效值保守跳過。
+- Pod log 只允許 exactly one、且 `metadata.name` 為非空字串的 Pod；零個、多個或
+  無效名稱皆不讀 log，回 `runner_failed`。
+
+### 原因
+
+Task 4 首次 review 發現 runner Job 尚未符合後續 admission policy、Redis lock 失效可能
+繼續建立資源或遮蔽取消、lock/watch equality edge 可超過硬界線、錯誤碼漂移、stale Job
+錯用新請求 deadline，以及多 Pod 時任選第一個等安全缺陷。依 Subagent-Driven 流程將
+finding 拆成 Fix 1、2A、2B、3A、3B、3C，由 OpenCode 逐一先寫有限 RED 再做最小修正。
+
+### 影響範圍
+
+- 僅調整 Kubernetes SQLmap executor、其 mocked lifecycle tests 與本 implementation log；
+  未修改 billing、前端、其他 scanner 或 Django schema。
+- 正式 Kali 仍維持預設 disabled；沒有 push、Argo Sync、production apply 或正式啟用。
+- `.omo/` 中既有使用者資產保留；OpenCode 自動產生的 `.codegraph/` 暫存已由控制器驗證
+  絕對路徑後清除。
+
+### RED / GREEN 與驗證
+
+- Fix 2A RED：5 個 lock ownership／取消測試在 0.026 秒內有限失敗；GREEN 後 29 tests。
+- Fix 2B RED：lock equality edge 多跑 1 秒、watch 最後 slice 多跑 3 秒；GREEN 後 31 tests。
+- Fix 3A RED：44 tests 中 27 failures，精確暴露 outward/audit taxonomy 漂移；GREEN 全綠。
+- Fix 3B RED：long、boundary、missing、boolean deadline Job 均被誤刪；GREEN 後 45 tests。
+- Fix 3C RED：多 Pod與非字串 Pod name 會誤讀 log；GREEN 後 48 tests。
+- 控制器最終 focused：`apps.scans.tests_kali_kubernetes` → **48 tests，全部通過**。
+- 控制器最終 Task 1–4 回歸：`tests_kali_contracts`、`tests_kali_policy`、
+  `tests_kali_tools`、`tests_kali_kubernetes` → **101 tests in 16.581s，全部通過**。
+- Ruff：兩個 Task 4 Python 檔 → `All checks passed!`。
+- Lock：`uv lock --check --offline --no-cache` → `Resolved 62 packages in 2ms`。
+- Django：`backend/manage.py check` → `System check identified no issues (0 silenced).`。
+- Git：`git diff --check` → 只有 Windows LF→CRLF 提示，無 whitespace error。
