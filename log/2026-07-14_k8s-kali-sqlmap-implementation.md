@@ -57,3 +57,41 @@ review 發現 Python 的相等比較會讓 `True == 1` 與 `1.0 == 1` 成立，�
 - 最小修正 GREEN：同一 focused suite 4 tests 全部通過。
 - 完整 focused suite：`uv run --frozen python backend/manage.py test apps.scans.tests_kali_contracts -v 2` → 15 tests，全部通過。
 - 指定 Ruff：`uv run --frozen ruff check backend/apps/scans/security/kali_contracts.py backend/apps/scans/tests_kali_contracts.py backend/config/settings.py` → `All checks passed!`。
+
+## Task 2：原子授權、deadline、去重與目標預算
+
+### 變更內容
+
+- 新增共用 `reserve_sqlmap_targets()`，依固定順序檢查 Kali 開關、backend、ScanJob、取消、
+  active mode、主動測試授權、公網、同源與 query parameter。
+- 以標準化 URL 的 SHA-256 指紋送入 Redis；Redis 僅使用每個 scan 的 `targets` 與
+  `started` 兩個 key。
+- 使用 Redis server `TIME` 與 Lua 原子套用 900 秒 deadline、最多 3 個不同目標、去重與
+  86400 秒 TTL，並映射固定結構化錯誤碼。
+- 新增 unit policy matrix 與隔離 Redis DB 的雙執行緒 race 測試；取消案例透過既有 Cancel
+  API 寫入真實 DB 狀態，不直接更新 status。
+- Quality Gate backend job 新增 `redis:7.4.2-alpine` service，僅設定
+  `KALI_TEST_REDIS_URL` 指向 DB 15，不改 Django cache 或 Celery broker 預設。
+
+### 原因
+
+AI tool call 與規則式 fallback 必須共用同一個 pre-Redis 授權及目標預算，避免兩個 worker
+同時對同一 URL 重複執行 SQLmap，並確保每個 scan 的執行時間與目標數均有硬上限。
+
+### 影響範圍
+
+- 只新增 Kali policy 與其測試，並調整 backend Quality Gate 的隔離測試服務。
+- Redis 不保存完整 target URL 或 query value；production 呼叫端整合由後續 Task 負責。
+- 真 Redis 測試未設定 `KALI_TEST_REDIS_URL` 時會 skip；提供 URL 時要求使用非 0 的隔離 DB，
+  且 setup／teardown 只 `flushdb` 該 DB。
+
+### RED / GREEN 與驗證
+
+- RED：`uv run --frozen python backend/manage.py test apps.scans.tests_kali_policy -v 2`
+  因 `apps.scans.security.kali_policy` 尚不存在而失敗，符合預期。
+- GREEN：同一 focused unit command 共 9 tests，全部通過。
+- 真 Redis race：以一次性 `redis:7.4.2-alpine` 容器映射 localhost 6389、隔離 DB 15，
+  `apps.scans.tests_kali_policy_redis` 共 1 test 通過；兩個 thread 中恰好一個保留共享指紋。
+- Race 首跑揭露全域 `socket.getaddrinfo` mock 也攔截 Redis localhost；將 mock 縮小到
+  `services._resolve_host_ips` 後通過，兩次容器皆由 `finally` 停止並移除。
+- `uv run --frozen ruff check` 檢查三個 Task 2 Python 檔，全部通過。

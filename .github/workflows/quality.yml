@@ -9,11 +9,22 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DJANGO_SECRET_KEY: ci-only-django-secret-key-at-least-32-bytes
       JWT_SECRET_KEY: ci-only-jwt-secret-key-at-least-32-bytes
       PASSWORD_RESET_TOKEN_PEPPER: ci-only-independent-reset-token-pepper
       DJANGO_DEBUG: "true"
+      KALI_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
