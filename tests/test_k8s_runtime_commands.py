@@ -34,6 +34,39 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
             manifest,
         )
 
+    def test_web_http_probes_use_allowed_host_header(self):
+        manifest = (
+            Path(__file__).resolve().parents[1] / "k8s" / "04-backend.yaml"
+        ).read_text(encoding="utf-8")
+
+        for probe, path in (
+            ("readinessProbe", "/api/health/ready/"),
+            ("livenessProbe", "/api/health/live/"),
+        ):
+            expected_probe = (
+                f"          {probe}:\n"
+                "            httpGet:\n"
+                f"              path: {path}\n"
+                "              port: 8000\n"
+                "              httpHeaders:\n"
+                "                - name: Host\n"
+                "                  value: localhost"
+            )
+            self.assertIn(expected_probe, manifest)
+
+    def test_ipv6_egress_uses_kubernetes_valid_global_unicast_cidr(self):
+        manifest = (
+            Path(__file__).resolve().parents[1] / "k8s" / "07-network-policies.yaml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("cidr: 2000::/3", manifest)
+        self.assertNotIn("cidr: ::/0", manifest)
+        self.assertNotIn("::ffff:0:0/96", manifest)
+        self.assertIn("- 2001::/23", manifest)
+        self.assertIn("- 2001:db8::/32", manifest)
+        self.assertIn("- 2002::/16", manifest)
+        self.assertIn("- 3fff::/20", manifest)
+
 
 if __name__ == "__main__":
     unittest.main()

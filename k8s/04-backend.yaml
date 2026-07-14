@@ -88,12 +88,18 @@ spec:
             httpGet:
               path: /api/health/ready/
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /api/health/live/
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 40
             periodSeconds: 20
           resources:

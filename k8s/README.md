@@ -4,6 +4,8 @@
 image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`、`shijie85/argus-frontend`。
 
 > backend image 以 `uv sync --frozen --no-dev` 建立 `/app/.venv`。正式 Pod 必須使用 `/app/.venv/bin/python`、`/app/.venv/bin/gunicorn`、`/app/.venv/bin/celery` 的絕對路徑，不可依賴 image 是否已把 `.venv/bin` 加入 `PATH`；也不要改用 `uv run`，否則 uv 會在 runtime 嘗試解析與下載 dev dependency。
+>
+> web 的 HTTP readiness / liveness probe 固定送出 `Host: localhost`。Kubernetes 預設使用 Pod IP 作為 Host header，但正式環境的 `DJANGO_ALLOWED_HOSTS` 不應放寬到動態 Pod IP；`localhost` 已在允許清單內，可讓 probe 通過並保留 Host header 防護。
 
 ## 檔案
 
@@ -93,7 +95,7 @@ kubectl -n argus get svc                       # 找 argus-gateway 相關的 ngi
 - frontend 只可連 web:8000 與 CoreDNS。
 - migrate 只可連 PostgreSQL:5432 與 CoreDNS。
 - web/worker 只可連 PostgreSQL、Redis、CoreDNS，以及排除內網/保留網段後的公開 IPv4 80/443/587。
-- web/worker 另外允許公開 IPv6 80/443/587（排除 loopback / ULA / link-local / multicast / NAT64 / discard / documentation / 6to4 / Teredo）；dual-stack 叢集若 CNI 支援 IPv6 NetworkPolicy，掃描目標 IPv6 endpoint 才會通。
+- web/worker 另外允許 IPv6 global unicast `2000::/3` 的 80/443/587，並排除 IETF special-purpose `2001::/23`、兩段 documentation prefix（`2001:db8::/32`、`3fff::/20`）與 6to4；dual-stack 叢集若 CNI 支援 IPv6 NetworkPolicy，掃描目標 IPv6 endpoint 才會通。IPv6 `ipBlock.except` 不可混入 IPv4-mapped prefix，否則 API Server 會以位址族不一致拒絕整份 NetworkPolicy。
 - PostgreSQL/Redis 不得主動 egress，且 ingress 只接受對應的 backend workload。
 
 套用前先確認 CNI 支援 NetworkPolicy，且 CoreDNS 使用目前 selector：
