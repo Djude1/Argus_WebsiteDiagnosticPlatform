@@ -43,6 +43,12 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
+## OpenCode 程式實作委派
+
+當使用者明確強調「使用 OpenCode 作為 subagent」時，該任務的程式實作（新功能、bug 修、重構、跨檔改動）一律委派本機 OpenCode CLI；規格撰寫、背景執行、監工、空轉處置、續 session 與最終驗收均依 [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) 執行。OpenCode 的 DONE/exit 0 只代表自我回報，Codex 仍須親自重跑測試、審 diff 與確認範圍後才能接受。
+
+---
+
 ## 禁止事項清單（Prohibited Actions）
 
 以下操作**在任何情況下都禁止**，違反可能導致資料損毀、安全漏洞或計費錯誤。
@@ -278,3 +284,4 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | 文件同步詳細規則 A/B/C | [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md) |
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
+| OpenCode CLI subagent 委派、監工與驗收 | [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) |
