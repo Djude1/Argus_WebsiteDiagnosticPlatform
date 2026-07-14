@@ -6,6 +6,7 @@ from django.views.generic import TemplateView
 from django.views.static import serve
 
 FRONTEND_DIST = settings.BASE_DIR.parent / "frontend" / "dist"
+FRONTEND_PUBLIC = settings.BASE_DIR.parent / "frontend" / "public"
 
 
 def robots_txt(request):
@@ -89,14 +90,13 @@ urlpatterns = [
     ),
 
 
-    # React favicon
-    # frontend/dist/favicon.svg
+    # React favicon 的原始資產受 Git 追蹤，不需先 build frontend。
     path(
         "favicon.svg",
         _serve_no_cache,
         {
             "path": "favicon.svg",
-            "document_root": FRONTEND_DIST,
+            "document_root": FRONTEND_PUBLIC,
         },
     ),
 

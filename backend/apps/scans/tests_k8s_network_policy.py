@@ -87,23 +87,19 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {("TCP", 80), ("TCP", 443), ("TCP", 587)},
         )
 
-        # IPv6 公網 egress：dual-stack 叢集若無此 rule，預設 deny 擋掉所有 IPv6 出站。
-        # CNI 必須支援 IPv6 NetworkPolicy 才生效；ipBlock.except 對 IPv6 同樣有效。
+        # IPv6 公網 egress：只允許 global unicast，且排除同位址族的特殊用途前綴。
+        # CNI 必須支援 IPv6 NetworkPolicy 才生效。
         ipv6_rule = rules[4]
         ipv6_block = ipv6_rule["to"][0]["ipBlock"]
-        self.assertEqual(ipv6_block["cidr"], "::/0")
-        self.assertTrue(
+        self.assertEqual(ipv6_block["cidr"], "2000::/3")
+        self.assertEqual(
+            set(ipv6_block["except"]),
             {
-                "::/128",
-                "::1/128",
-                "::ffff:0:0/96",
-                "64:ff9b::/96",
-                "100::/64",
+                "2001::/23",
                 "2001:db8::/32",
-                "fc00::/7",
-                "fe80::/10",
-                "ff00::/8",
-            }.issubset(set(ipv6_block["except"]))
+                "2002::/16",
+                "3fff::/20",
+            },
         )
         self.assertEqual(
             {(port["protocol"], port["port"]) for port in ipv6_rule["ports"]},
