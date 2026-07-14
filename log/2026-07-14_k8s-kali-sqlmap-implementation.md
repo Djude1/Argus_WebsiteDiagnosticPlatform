@@ -34,3 +34,26 @@
 - Django：`uv run --frozen python backend/manage.py check` → 0 issues。
 - 相關回歸：`uv run --frozen python backend/manage.py test apps.scans.tests_kali_contracts apps.scans.tests_kali_tools -v 1` → 23 tests，全部通過。
 - 全 backend Ruff：`uv run --frozen ruff check backend` → `All checks passed!`。
+
+## Task 1 review fix：嚴格 schema 型別與 parser 覆蓋
+
+### 變更內容
+
+- `parse_runner_result()` 現在要求 `schema_version` 的實際型別為 `int` 且值為 1，拒絕 JSON `true` 與 `1.0`。
+- contract tests 新增合法 payload 映射、有效 JSON 的 16384/16385 bytes 邊界，以及 UTF-8、schema/tool、result 欄位、索引完整性／重複／越界、bool/int 型別、安全字元與 technique allowlist 覆蓋。
+- 所有拒絕測試均斷言結構化錯誤碼，避免因非預期解析錯誤而假綠。
+
+### 原因
+
+review 發現 Python 的相等比較會讓 `True == 1` 與 `1.0 == 1` 成立，且原始測試未完整證明不可信 runner payload 的每一道契約邊界。
+
+### 影響範圍
+
+- 僅收緊 SQLmap runner schema 驗證與補強既有 contract tests；沒有改變結果固定 keys、settings、facade 或其他 Task 行為。
+
+### 驗證方式
+
+- RED：focused suite 共 4 tests；新增 schema test 的 `True`、`1.0` 兩個 subtests 皆因未拋出 `KaliResultContractError` 而失敗。
+- 最小修正 GREEN：同一 focused suite 4 tests 全部通過。
+- 完整 focused suite：`uv run --frozen python backend/manage.py test apps.scans.tests_kali_contracts -v 2` → 15 tests，全部通過。
+- 指定 Ruff：`uv run --frozen ruff check backend/apps/scans/security/kali_contracts.py backend/apps/scans/tests_kali_contracts.py backend/config/settings.py` → `All checks passed!`。

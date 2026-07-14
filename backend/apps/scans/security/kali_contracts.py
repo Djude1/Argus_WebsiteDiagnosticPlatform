@@ -108,7 +108,12 @@ def parse_runner_result(
         raise KaliResultContractError("invalid_result_type")
     if set(document) != {"schema_version", "tool", "results"}:
         raise KaliResultContractError("invalid_top_level_fields")
-    if document["schema_version"] != 1 or document["tool"] != "sqlmap":
+    schema_version = document["schema_version"]
+    if (
+        type(schema_version) is not int
+        or schema_version != 1
+        or document["tool"] != "sqlmap"
+    ):
         raise KaliResultContractError("unknown_schema")
     if not isinstance(document["results"], list):
         raise KaliResultContractError("invalid_result_type")
