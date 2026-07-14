@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
-## 多層 AGENTS.md 架構
+## 多層專案規則架構
 
 本專案採用四層結構，各層規則**串接（不覆蓋）**，避免跨層寫矛盾規則：
 
@@ -12,34 +12,34 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 |---|---|---|---|
 | 使用者層 | `~/.Codex/AGENTS.md` | 個人偏好、OMC 設定 | 不提交 |
 | 專案層 | `AGENTS.md`（本檔） | 團隊共用規範、架構、禁止事項 | ✅ 提交 |
-| 子目錄層 | `frontend/AGENTS.md` 等 | 各模組的具體規則（越深越具體） | ✅ 提交 |
+| 子目錄層 | `frontend/CLAUDE.md` 等 | 各模組的具體規則（越深越具體；Codex 也必須讀） | ✅ 提交 |
 | 個人覆寫層 | `Codex.local.md` | 本機個人微調，不影響他人 | 不提交 |
 
-**子目錄 AGENTS.md 位置**（完整地圖＋ SKILL 索引見 [`專案導覽.md`](專案導覽.md)）：
-- [`frontend/AGENTS.md`](frontend/AGENTS.md) — React/Vite build、App.jsx 操作規範
-- [`backend/AGENTS.md`](backend/AGENTS.md) — API 路由地圖、Model 速查、App 職責
-- [`backend/apps/accounts/AGENTS.md`](backend/apps/accounts/AGENTS.md) — User / JWT / Google 登入，不簽發 staff
-- [`backend/apps/scans/AGENTS.md`](backend/apps/scans/AGENTS.md) — ScanJob 狀態機、Playwright、取消機制
-- [`backend/apps/scans/security/AGENTS.md`](backend/apps/scans/security/AGENTS.md) — 深度資安掃描、Kali 工具呼叫、OWASP 對映
-- [`backend/apps/agent/AGENTS.md`](backend/apps/agent/AGENTS.md) — Hermes-Agent（預設關閉）、禁印 key、same-origin
-- [`backend/apps/billing/AGENTS.md`](backend/apps/billing/AGENTS.md) — 點數系統唯一入口規則
-- [`backend/apps/reviews/AGENTS.md`](backend/apps/reviews/AGENTS.md) — 評論（一人一則 + thread + 圖片）
-- [`backend/apps/admin_api/AGENTS.md`](backend/apps/admin_api/AGENTS.md) — 後台 API + AdminAuditLog 稽核
-- [`backend/apps/content/AGENTS.md`](backend/apps/content/AGENTS.md) — 公開 CMS 讀取（寫入走 admin_api/cms）
-- [`backend/apps/insights/AGENTS.md`](backend/apps/insights/AGENTS.md) — 免費工具 `/free-tools`（SSRF 防護）
+**子目錄規則文件位置**（完整地圖＋ SKILL 索引見 [`專案導覽.md`](專案導覽.md)）：
+- [`frontend/CLAUDE.md`](frontend/CLAUDE.md) — React/Vite build、App.jsx 操作規範
+- [`backend/CLAUDE.md`](backend/CLAUDE.md) — API 路由地圖、Model 速查、App 職責
+- [`backend/apps/accounts/CLAUDE.md`](backend/apps/accounts/CLAUDE.md) — User / JWT / Google 登入，不簽發 staff
+- [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md) — ScanJob 狀態機、Playwright、取消機制
+- [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) — 深度資安掃描、Kali 工具呼叫、OWASP 對映
+- [`backend/apps/agent/CLAUDE.md`](backend/apps/agent/CLAUDE.md) — Hermes-Agent（預設關閉）、禁印 key、same-origin
+- [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) — 點數系統唯一入口規則
+- [`backend/apps/reviews/CLAUDE.md`](backend/apps/reviews/CLAUDE.md) — 評論（一人一則 + thread + 圖片）
+- [`backend/apps/admin_api/CLAUDE.md`](backend/apps/admin_api/CLAUDE.md) — 後台 API + AdminAuditLog 稽核
+- [`backend/apps/content/CLAUDE.md`](backend/apps/content/CLAUDE.md) — 公開 CMS 讀取（寫入走 admin_api/cms）
+- [`backend/apps/insights/CLAUDE.md`](backend/apps/insights/CLAUDE.md) — 免費工具 `/free-tools`（SSRF 防護）
 
-### AGENTS.md 跨層同步規則（強制）
+### 跨層同步規則（強制）
 
-**任何一層的 AGENTS.md 有內容異動，必須在同一次 commit 內同步所有受影響的層。**
+根 `AGENTS.md` 與根 `CLAUDE.md` 的共通事實必須一致；子目錄規則目前以既有 `CLAUDE.md` 為唯一來源，Codex 修改子系統前也必須讀取。CLAUDE.md 的完整跨層同步規則見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)。
 
 | 你改了哪一層 | 必須同時檢查並同步 |
 |---|---|
-| 本檔（專案層） | 所有相關子目錄 AGENTS.md（規則是否矛盾、索引連結是否仍正確） |
-| 任一子目錄 AGENTS.md | 本檔索引表（涵蓋內容欄位是否需要更新） + 兄弟層（同模組其他 AGENTS.md）|
-| 新增子目錄 AGENTS.md | 本檔「子目錄 AGENTS.md 位置」清單與「子模組詳細資訊」索引表 |
-| 刪除或移動 AGENTS.md | 本檔及所有引用它的 AGENTS.md 的連結必須同步移除或改路徑 |
+| 根 `AGENTS.md` / `CLAUDE.md` | 另一份根規則 + 所有相關子目錄 `CLAUDE.md` |
+| 任一子目錄 `CLAUDE.md` | 根索引 + 兄弟層（同模組其他規則文件） |
+| 新增子目錄規則文件 | 本檔「子目錄規則文件位置」清單 + [`專案導覽.md`](專案導覽.md) 第三節 |
+| 刪除或移動規則文件 | 本檔、根 `CLAUDE.md` 及所有引用它的文件 |
 
-**檢查方式**：改完後執行 `grep -r "對應關鍵字" */AGENTS.md`，確認跨檔描述一致、無殘留舊事實。
+**檢查方式**：改完後執行 `rg "對應關鍵字" AGENTS.md CLAUDE.md frontend backend -g "CLAUDE.md"`，確認跨檔描述一致、無殘留舊事實。
 
 ---
 
@@ -88,15 +88,13 @@ MD 修改後必執行核對清單：[`docs/md-checklist.md`](docs/md-checklist.m
 # 啟動（Django 同時 serve 前端 dist，一個命令就能用整個 App）
 uv run python backend/manage.py runserver 127.0.0.1:8000
 
-# 前端 build（先 build 才能讓 Django serve）
-# ⚠️ 本機 Node v24 在 Windows 上會讓 Rollup STATUS_STACK_BUFFER_OVERRUN，
-# 一律用 D:\node22 portable Node，已寫成 helper script：
+# 前端 build（先 build 才能讓 Django serve；禁用 npm run build，原因見禁止事項表）
 cd frontend ; .\build-node22.ps1 ; cd ..
 
 # 套用 migration
 uv run python backend/manage.py migrate
 
-# 後端測試（約 252 項，以實跑數字為準）
+# 後端測試（數百項，以實跑數字為準）
 uv run python backend/manage.py test apps
 
 # 單一 app 測試（例如 billing）
@@ -108,10 +106,10 @@ uv run ruff check backend
 # Django 健康檢查
 uv run python backend/manage.py check
 
-# Docker（完整部署，含 nginx 反向代理）
+# Docker production（Gunicorn + 一次性 migrate + nginx）
 docker compose up -d --build
-# 改了前端後必須 --build frontend 並強制 reload
-docker compose up -d --build frontend
+# 本機開發才疊加 dev override；購點仍由 .env 明確啟用 ecpay_test
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ---
@@ -121,21 +119,32 @@ docker compose up -d --build frontend
 ### 整體資料流
 使用者在前端填網址 → `POST /api/scans/`（billing 預扣 coin）→ Celery worker 啟動 Playwright BFS 爬蟲 → 四維 scanner → 可選 Hermes-Agent → 結果寫 DB → 前端 polling 取 findings。
 
-### 子模組詳細資訊（修改前先查對應 AGENTS.md）
+### 子模組詳細資訊（修改前先查對應規則文件）
 
 | 模組 | 涵蓋內容 | 文件 |
 |---|---|---|
-| 前端 | 路由地圖、核心檔案、元件/樣式規範 | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
-| 後端整體 | API 路由地圖、Model 速查、App 職責、管理介面 | [`backend/AGENTS.md`](backend/AGENTS.md) |
-| 掃描引擎 | ScanJob 狀態機、Playwright、取消機制、Coin 扣點 | [`backend/apps/scans/AGENTS.md`](backend/apps/scans/AGENTS.md) |
-| 深度資安掃描 | SSL/TLS、Cookie 旗標、CORS/CSP 品質、OWASP 對映、Kali 工具 | [`backend/apps/scans/security/AGENTS.md`](backend/apps/scans/security/AGENTS.md) |
-| 計費系統 | services.py 函式、冪等機制、kind 枚舉 | [`backend/apps/billing/AGENTS.md`](backend/apps/billing/AGENTS.md) |
+| 前端 | 路由地圖、核心檔案、元件/樣式規範 | [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| 後端整體 | API 路由地圖、Model 速查、App 職責、管理介面 | [`backend/CLAUDE.md`](backend/CLAUDE.md) |
+| 掃描引擎 | ScanJob 狀態機、Playwright、取消機制、Coin 扣點 | [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md) |
+| 深度資安掃描 | SSL/TLS、Cookie 旗標、CORS/CSP 品質、OWASP 對映、Kali 工具 | [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) |
+| 計費系統 | services.py 函式、冪等機制、kind 枚舉 | [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) |
 
 ### Django 直接 serve 前端
 開發時不需要另開 Vite dev server，Django `runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**必須先 build 前端**，改了 React code 要重 build 才會生效。
 
 ### Node 22 portable（build 必用）
-⚠ 系統 Node v24 + Rollup 4.x 在 Windows 會 crash，build 一律用 `frontend/build-node22.ps1`（D:\node22，v22.22.3）。詳細說明見 [`docs/node22-guide.md`](docs/node22-guide.md)。
+⚠ 系統 Node v24 + Rollup 4.x 在 Windows 會 crash，build 一律用 `frontend/build-node22.ps1` 自動偵測 portable Node 22。詳細說明見 [`docs/node22-guide.md`](docs/node22-guide.md)。
+
+---
+
+## K8s / GitOps 操作底線
+
+- **先按路徑判斷自動化**：`backend/**`（以及 backend image 相依檔）與 `frontend/**` 會分別觸發 image build；成功後 bot 才會回寫 `k8s/kustomization.yaml`。只有 `k8s/**` 的變更不會建新 image。
+- **push 不等於部署完成**：必須分開檢查 GitHub Quality Gate、image build、bot write-back commit、Argo CD Sync / Health / Auto Sync、正式 Job / Pod rollout；cloudflared 是另一層服務，Git push 不會修改其設定。
+- **`migrate` 是 Argo PreSync Job**：Argo 畫面的容器 `Terminated` 只代表程序已結束；必須看 reason、exit code 與 logs，`Completed / 0` 才是成功，非零才是失敗。
+- **正式 backend runtime 契約**：migrate、web、worker、initContainer 與 worker probe 一律使用 `/app/.venv/bin/...` 絕對路徑，不可改回 `uv run` 或依賴 image `PATH`；契約由 root `tests/` 鎖定。
+- **Secret 除錯不印值**：若 Django 啟動因必要設定中止，只確認 Secret 是否存在對應 key；禁止把 Secret 值、臨時登入資訊或機器專屬 SSH 金鑰路徑寫入 log／commit。
+- **本地／CI 綠燈不取代實機驗證**：部署相關修復必須持續追到正式叢集，並明列尚未完成的 CNI 封包、Celery 任務、完整掃描、密碼重設與公開網域 smoke test。完整流程與驗證矩陣見 [`k8s/README.md`](k8s/README.md)。
 
 ---
 

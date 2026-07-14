@@ -74,6 +74,17 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 ---
 
+## K8s / GitOps 操作底線
+
+- **先按路徑判斷自動化**：`backend/**`（以及 backend image 相依檔）與 `frontend/**` 會分別觸發 image build；成功後 bot 才會回寫 `k8s/kustomization.yaml`。只有 `k8s/**` 的變更不會建新 image。
+- **push 不等於部署完成**：必須分開檢查 GitHub Quality Gate、image build、bot write-back commit、Argo CD Sync / Health / Auto Sync、正式 Job / Pod rollout；cloudflared 是另一層服務，Git push 不會修改其設定。
+- **`migrate` 是 Argo PreSync Job**：Argo 畫面的容器 `Terminated` 只代表程序已結束；必須看 reason、exit code 與 logs，`Completed / 0` 才是成功，非零才是失敗。
+- **正式 backend runtime 契約**：migrate、web、worker、initContainer 與 worker probe 一律使用 `/app/.venv/bin/...` 絕對路徑，不可改回 `uv run` 或依賴 image `PATH`；契約由 root `tests/` 鎖定。
+- **Secret 除錯不印值**：若 Django 啟動因必要設定中止，只確認 Secret 是否存在對應 key；禁止把 Secret 值、臨時登入資訊或機器專屬 SSH 金鑰路徑寫入 log／commit。
+- **本地／CI 綠燈不取代實機驗證**：部署相關修復必須持續追到正式叢集，並明列尚未完成的 CNI 封包、Celery 任務、完整掃描、密碼重設與公開網域 smoke test。完整流程與驗證矩陣見 [`k8s/README.md`](k8s/README.md)。
+
+---
+
 ## 必須遵守的規則
 
 - 所有回覆一律使用**繁體中文**，程式碼註釋也是

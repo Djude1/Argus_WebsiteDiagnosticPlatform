@@ -48,17 +48,4 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 # 正式 image 預設使用 production WSGI server；開發模式由 docker-compose.dev.yml 覆寫。
-CMD [
-    "gunicorn",
-    "config.wsgi:application",
-    "--bind",
-    "0.0.0.0:8000",
-    "--workers",
-    "2",
-    "--threads",
-    "4",
-    "--timeout",
-    "120",
-    "--access-logfile",
-    "-"
-]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--access-logfile", "-"]

@@ -27,6 +27,8 @@ jobs:
         run: |
           uv run python backend/manage.py check
           uv run python backend/manage.py makemigrations --check --dry-run
+      - name: 部署契約
+        run: uv run python -m unittest discover -s tests
       - name: 後端完整測試
         run: uv run python backend/manage.py test apps
 
