@@ -5,7 +5,7 @@ import ipaddress
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status as http_status
 from rest_framework.test import APITestCase
@@ -220,3 +220,20 @@ class KaliPolicyTests(APITestCase):
         )
 
         self.assertEqual(outcome.blocked_reason, "scan_deadline_exceeded")
+
+
+class GetKaliRedisClientTests(SimpleTestCase):
+    @override_settings(ARGUS_KALI_REDIS_URL="redis://kali.example:6379/0")
+    def test_from_url_passes_connect_and_socket_timeouts(self):
+        from apps.scans.security.kali_policy import get_kali_redis
+
+        with mock.patch(
+            "apps.scans.security.kali_policy.Redis.from_url"
+        ) as from_url:
+            get_kali_redis()
+
+        from_url.assert_called_once_with(
+            "redis://kali.example:6379/0",
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )

@@ -48,7 +48,11 @@ return admitted
 
 
 def get_kali_redis() -> Redis:
-    return Redis.from_url(settings.ARGUS_KALI_REDIS_URL)
+    return Redis.from_url(
+        settings.ARGUS_KALI_REDIS_URL,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )
 
 
 def reserve_sqlmap_targets(

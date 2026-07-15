@@ -33,7 +33,7 @@ from django.conf import settings
 from django.utils import timezone
 from kubernetes import client, config, watch
 
-from apps.scans.cancellation import raise_if_cancelled
+from apps.scans.cancellation import ScanCancelled, raise_if_cancelled
 from apps.scans.scan_logger import append_log
 
 from .kali_contracts import (
@@ -165,8 +165,10 @@ class KubernetesSqlmapExecutor:
 
     LOCK_KEY = "argus:kali:global-lock"
     WATCH_SLICE_SECONDS = 5
-    RENEW_INTERVAL_SECONDS = 60
     LOG_LIMIT_BYTES = 16385
+    # Task 4 Fix 4C2：所有非-watch Kubernetes I/O 一律套用 5 秒 _request_timeout。
+    # watcher.stream 另依 remaining budget 動態傳 1–5 秒 timeout，不走此常數。
+    K8S_IO_TIMEOUT_SECONDS = 5
 
     def __init__(
         self,
@@ -217,8 +219,14 @@ class KubernetesSqlmapExecutor:
         }
         job_uid: str | None = None
         try:
-            self._cleanup_stale_jobs(scan_job_id, correlation_id, namespace)
-            if not self._renew_lock(token):
+            if not self._cleanup_stale_jobs(
+                scan_job_id, correlation_id, namespace, token,
+            ):
+                self._safe_log(scan_job_id, correlation_id, "lock", "runner_failed")
+                return tuple(
+                    KaliResult(ok=False, error="runner_failed") for _ in targets
+                )
+            if not self._control_checkpoint(scan_job_id, token):
                 self._safe_log(scan_job_id, correlation_id, "lock", "runner_failed")
                 return tuple(
                     KaliResult(ok=False, error="runner_failed") for _ in targets
@@ -230,7 +238,7 @@ class KubernetesSqlmapExecutor:
                 return tuple(
                     KaliResult(ok=False, error="job_create_failed") for _ in targets
                 )
-            if not self._renew_lock(token):
+            if not self._control_checkpoint(scan_job_id, token):
                 self._safe_log(scan_job_id, correlation_id, "lock", "runner_failed")
                 return tuple(
                     KaliResult(ok=False, error="runner_failed") for _ in targets
@@ -242,7 +250,7 @@ class KubernetesSqlmapExecutor:
                 return tuple(
                     KaliResult(ok=False, error="secret_create_failed") for _ in targets
                 )
-            if not self._renew_lock(token):
+            if not self._control_checkpoint(scan_job_id, token):
                 self._safe_log(scan_job_id, correlation_id, "lock", "runner_failed")
                 return tuple(
                     KaliResult(ok=False, error="runner_failed") for _ in targets
@@ -271,7 +279,16 @@ class KubernetesSqlmapExecutor:
             self.cancel_check(scan_job_id)
             try:
                 if self.redis.set(self.LOCK_KEY, token, nx=True, px=lease_ms):
+                    # 已是 owner：取完 lock 立即 checkpoint，取消就用同 token 釋放後重拋。
+                    self.cancel_check(scan_job_id)
                     return token
+            except ScanCancelled:
+                try:
+                    self.redis.eval(_RELEASE_LUA, 1, self.LOCK_KEY, token)
+                except Exception:
+                    # 釋放 I/O 例外不可遮蔽原始 ScanCancelled。
+                    pass
+                raise
             except Exception:
                 return None
             remaining = deadline - self.monotonic()
@@ -287,6 +304,11 @@ class KubernetesSqlmapExecutor:
         except Exception:
             return False
         return result == 1
+
+    def _control_checkpoint(self, scan_job_id: int, token: str) -> bool:
+        # 聯合檢查點：先檢查是否已被取消（已取消則拋例外中斷流程），再續約 lock。
+        self.cancel_check(scan_job_id)
+        return self._renew_lock(token)
 
     def _release_lock(
         self, scan_job_id: int, correlation_id: str, token: str,
@@ -331,15 +353,24 @@ class KubernetesSqlmapExecutor:
     # Stale Job cleanup（建立新 Job 之前）
     # ------------------------------------------------------------------
     def _cleanup_stale_jobs(
-        self, scan_job_id: int, correlation_id: str, namespace: str,
-    ) -> None:
+        self, scan_job_id: int, correlation_id: str, namespace: str, token: str,
+    ) -> bool:
+        # Fix 4D1B：每個 Kubernetes I/O 前後都做 control checkpoint。取消時 ScanCancelled
+        # 原樣拋出（由 execute 的 finally 收尾）；lock loss 回 False，由 execute 走 safe
+        # runner_failed 路徑、不建立新 Job。
+        if not self._control_checkpoint(scan_job_id, token):
+            return False
         try:
             resp = self.batch.list_namespaced_job(
                 namespace, label_selector="managed-by=argus,component=kali-sqlmap",
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
             )
         except Exception:
             self._safe_log(scan_job_id, correlation_id, "stale_list", "cleanup_failed")
-            return
+            # list 失敗為 non-blocking：ownership 尚在回 True 放行，lock loss 回 False。
+            return self._control_checkpoint(scan_job_id, token)
+        if not self._control_checkpoint(scan_job_id, token):
+            return False
         now = timezone.now()
         for item in (getattr(resp, "items", None) or []):
             meta = getattr(item, "metadata", None)
@@ -361,7 +392,12 @@ class KubernetesSqlmapExecutor:
             expires_at = created + timedelta(seconds=active + 30)
             # 剛好等於 boundary 不刪，必須嚴格 now > expires_at。
             if now > expires_at:
+                if not self._control_checkpoint(scan_job_id, token):
+                    return False
                 self._delete_job(scan_job_id, correlation_id, namespace, name)
+                if not self._control_checkpoint(scan_job_id, token):
+                    return False
+        return True
 
     # ------------------------------------------------------------------
     # Job-first / Secret-second lifecycle
@@ -383,7 +419,10 @@ class KubernetesSqlmapExecutor:
             ),
         )
         try:
-            response = self.batch.create_namespaced_job(namespace, job_obj)
+            response = self.batch.create_namespaced_job(
+                namespace, job_obj,
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
+            )
         except Exception:
             self._safe_log(scan_job_id, correlation_id, "create", "job_create_failed")
             return None
@@ -427,7 +466,10 @@ class KubernetesSqlmapExecutor:
             string_data={"targets.json": targets_json},
         )
         try:
-            self.core.create_namespaced_secret(namespace, secret_obj)
+            self.core.create_namespaced_secret(
+                namespace, secret_obj,
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
+            )
         except Exception:
             self._safe_log(scan_job_id, correlation_id, "create", "secret_create_failed")
             return False
@@ -450,7 +492,6 @@ class KubernetesSqlmapExecutor:
         start = self.monotonic()
         watch_limit = min(deadline + 30, 420)
         watch_deadline = start + watch_limit
-        last_renew = start
         watcher = self.watch_factory()
         terminal: str | None = None
         while True:
@@ -459,7 +500,13 @@ class KubernetesSqlmapExecutor:
             if remaining < 1:
                 break
             slice_seconds = min(self.WATCH_SLICE_SECONDS, int(remaining))
-            self.cancel_check(scan_job_id)
+            # Fix 4E：watcher.stream I/O 前後各一次 owner checkpoint（cancel+PEXPIRE）；
+            # ScanCancelled 在 try 之外原樣拋出，lock 已失時 runner_failed。
+            if not self._control_checkpoint(scan_job_id, token):
+                self._safe_log(scan_job_id, correlation_id, "watch", "runner_failed")
+                return tuple(
+                    KaliResult(ok=False, error="runner_failed") for _ in targets
+                )
             try:
                 events = list(
                     watcher.stream(
@@ -474,6 +521,11 @@ class KubernetesSqlmapExecutor:
             except Exception:
                 self._safe_log(scan_job_id, correlation_id, "watch", "runner_failed")
                 return tuple(KaliResult(ok=False, error="runner_failed") for _ in targets)
+            if not self._control_checkpoint(scan_job_id, token):
+                self._safe_log(scan_job_id, correlation_id, "watch", "runner_failed")
+                return tuple(
+                    KaliResult(ok=False, error="runner_failed") for _ in targets
+                )
             for event in events:
                 obj = event.get("object") if isinstance(event, dict) else None
                 terminal = self._terminal_condition(obj)
@@ -481,14 +533,6 @@ class KubernetesSqlmapExecutor:
                     break
             if terminal:
                 break
-            post = self.monotonic()
-            if post - last_renew >= self.RENEW_INTERVAL_SECONDS:
-                if not self._renew_lock(token):
-                    self._safe_log(scan_job_id, correlation_id, "watch", "runner_failed")
-                    return tuple(
-                        KaliResult(ok=False, error="runner_failed") for _ in targets
-                    )
-                last_renew = post
 
         if terminal != "succeeded":
             if terminal == "failed":
@@ -498,7 +542,9 @@ class KubernetesSqlmapExecutor:
             self._safe_log(scan_job_id, correlation_id, "watch", code)
             return tuple(KaliResult(ok=False, error=code) for _ in targets)
 
-        payload = self._read_runner_log(scan_job_id, correlation_id, namespace, job_name)
+        payload = self._read_runner_log(
+            scan_job_id, correlation_id, namespace, job_name, token,
+        )
         if payload is None:
             return tuple(KaliResult(ok=False, error="runner_failed") for _ in targets)
         try:
@@ -507,13 +553,28 @@ class KubernetesSqlmapExecutor:
             self._safe_log(scan_job_id, correlation_id, "result", "invalid_result")
             return tuple(KaliResult(ok=False, error="invalid_result") for _ in targets)
 
-        # executor 邊界：runner private error_code（空或 "clean" 視為無錯誤；
-        # 其他值一律映射為 runner_failed，不外洩 runner 自訂 taxonomy）。
+        # executor outward 邊界：parse 成功後、加入 evidence 前，先做整批一致性檢查。
+        # runner private error_code 不外洩，矛盾狀態整批退化為 invalid_result。
+        for result in results:
+            # confirmed=True 且 ok=False：runner 自述矛盾，整批 invalid_result。
+            if result.confirmed and not result.ok:
+                self._safe_log(scan_job_id, correlation_id, "result", "invalid_result")
+                return tuple(
+                    KaliResult(ok=False, error="invalid_result") for _ in targets
+                )
+            # ok=True 時 private error 僅可為空字串或 clean；其他值（如 runner_failure）
+            # 代表 runner 內部狀態與 ok 不一致，整批 invalid_result。
+            if result.ok and result.error not in ("", "clean"):
+                self._safe_log(scan_job_id, correlation_id, "result", "invalid_result")
+                return tuple(
+                    KaliResult(ok=False, error="invalid_result") for _ in targets
+                )
+
+        # 通過一致性檢查後純依 ok 映射 outward error：ok=True → 空字串；
+        # ok=False → runner_failed（不論 private error_code 為空、clean 或其他）。
+        # 絕不產生 ok=True,error="runner_failed"，也不洩漏 private error code。
         mapped = tuple(
-            replace(
-                result,
-                error="" if not result.error or result.error == "clean" else "runner_failed",
-            )
+            replace(result, error="" if result.ok else "runner_failed")
             for result in results
         )
 
@@ -528,6 +589,9 @@ class KubernetesSqlmapExecutor:
             )
             for result in mapped
         )
+        # Fix 4B：parse/enrichment 後、回傳成功前再做一次 checkpoint，
+        # 避免成功回傳越過已知取消。
+        self.cancel_check(scan_job_id)
         self._safe_log(scan_job_id, correlation_id, "completed")
         return enriched
 
@@ -551,13 +615,21 @@ class KubernetesSqlmapExecutor:
                     return "failed"
         return None
 
-    def _read_runner_log(self, scan_job_id, correlation_id, namespace, job_name):
+    def _read_runner_log(self, scan_job_id, correlation_id, namespace, job_name, token):
+        # Fix 4E：list_namespaced_pod / read_namespaced_pod_log 各 I/O 前後一次
+        # owner checkpoint（cancel+PEXPIRE）；ScanCancelled 原樣拋出，lock 已失
+        # 時回 None，由 caller 維持既有 runner_failed。
+        if not self._control_checkpoint(scan_job_id, token):
+            return None
         try:
             pods = self.core.list_namespaced_pod(
                 namespace, label_selector=f"job-name={job_name}",
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
             )
         except Exception:
             self._safe_log(scan_job_id, correlation_id, "pod_list", "runner_failed")
+            return None
+        if not self._control_checkpoint(scan_job_id, token):
             return None
         items = getattr(pods, "items", None) or []
         # Task 4 Fix 3C：只有 exactly one named Pod 才能讀 log。
@@ -572,14 +644,19 @@ class KubernetesSqlmapExecutor:
         if not isinstance(pod_name, str) or not pod_name:
             self._safe_log(scan_job_id, correlation_id, "pod_list", "runner_failed")
             return None
+        if not self._control_checkpoint(scan_job_id, token):
+            return None
         try:
             raw = self.core.read_namespaced_pod_log(
                 name=pod_name,
                 namespace=namespace,
                 limit_bytes=self.LOG_LIMIT_BYTES,
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
             )
         except Exception:
             self._safe_log(scan_job_id, correlation_id, "log_read", "runner_failed")
+            return None
+        if not self._control_checkpoint(scan_job_id, token):
             return None
         if hasattr(raw, "read"):
             return raw.read()
@@ -598,6 +675,7 @@ class KubernetesSqlmapExecutor:
                 name=name,
                 namespace=namespace,
                 body=client.V1DeleteOptions(propagation_policy="Foreground"),
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
             )
         except Exception as exc:
             if self._is_not_found(exc):
@@ -608,7 +686,10 @@ class KubernetesSqlmapExecutor:
         self, scan_job_id, correlation_id, namespace, name,
     ) -> None:
         try:
-            self.core.delete_namespaced_secret(name=name, namespace=namespace)
+            self.core.delete_namespaced_secret(
+                name=name, namespace=namespace,
+                _request_timeout=self.K8S_IO_TIMEOUT_SECONDS,
+            )
         except Exception as exc:
             if self._is_not_found(exc):
                 return

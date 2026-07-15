@@ -196,7 +196,7 @@ Task 1 / Task 2 已建立安全結果契約與原子預算，但既有 Docker fa
 
 reviewer 指出兩項 Important 缺陷：(1) 真實 caller 傳入完整 crawl-order URL list，
 入口頁（無 query）排第一筆會讓 policy 整批回 `no_query_parameter`，後續合法 query URL
-永遠不執行；(2) 模組 docstring 與 `security/CLAUDE.md` 明定所有 Kali 呼叫（含被擋）
+永遠不執行；(2) 模組 docstring 與 `backend/apps/scans/security/CLAUDE.md` 明定所有 Kali 呼叫（含被擋）
 都需 `append_log`，但 facade 的 blocked / zero-admitted / backend-misconfigured 分支
 直接 return，缺 audit trail。
 
@@ -322,3 +322,17 @@ finding 拆成 Fix 1、2A、2B、3A、3B、3C，由 OpenCode 逐一先寫有限 
 - Lock：`uv lock --check --offline --no-cache` → `Resolved 62 packages in 2ms`。
 - Django：`backend/manage.py check` → `System check identified no issues (0 silenced).`。
 - Git：`git diff --check` → 只有 Windows LF→CRLF 提示，無 whitespace error。
+
+## Task 4 第二輪 review 修復（2026-07-15）
+
+依 reviewer findings 再拆成 OpenCode 小任務，全部先 RED 再 GREEN：
+
+- Fix 4D1B：stale Job list 與每筆 stale delete I/O 前後均做 cancellation/ownership checkpoint；lock loss 停止建立新 Job。
+- Fix 4D1C：Secret 建立成功返回後、watch 前再做 cancellation/ownership checkpoint。
+- Fix 4D2A：Redis SET 成功後立即檢查取消；取消時用同一 owner token compare-and-DEL，release 例外不得遮蔽 `ScanCancelled`。
+- Fix 4E：watch stream、Pod list、Pod log 各 I/O 前後均以同一 owner token 做 checkpoint，移除 periodic-only renew。
+
+控制端驗證：focused `apps.scans.tests_kali_policy apps.scans.tests_kali_kubernetes` 共 79 tests 全綠；
+Task 1–4 regression `apps.scans.tests_kali_contracts apps.scans.tests_kali_policy apps.scans.tests_kali_tools apps.scans.tests_kali_kubernetes`
+共 123 tests in 16.741s 全綠；四個變更檔 Ruff 全綠；`uv lock --check --offline --no-cache` 通過；Django check 無問題。
+未 push、未部署、未啟用正式 Kali；Task 5 等待 reviewer amended-commit 重審。

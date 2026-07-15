@@ -69,6 +69,31 @@ def _valid_payload(count: int = 1) -> bytes:
     return json.dumps(document, separators=(",", ":")).encode()
 
 
+def _result_payload(
+    *, ok: bool = True, confirmed: bool = False, error_code: str = "clean",
+) -> bytes:
+    """產生單一 target 的合法 runner payload，供 Fix 4A 一致性測試客製 ok/confirmed/error_code。
+
+    所有欄位皆符合 kali_contracts.parse_runner_result 的契約，確保 payload 能通過契約驗證、
+    進入 executor outward 邊界的一致性檢查，而非在 parse 階段就被擋下。
+    """
+    document = {
+        "schema_version": 1,
+        "tool": "sqlmap",
+        "results": [{
+            "index": 0,
+            "ok": ok,
+            "confirmed": confirmed,
+            "returncode": 0,
+            "parameter": "",
+            "techniques": [],
+            "dbms": "",
+            "error_code": error_code,
+        }],
+    }
+    return json.dumps(document, separators=(",", ":")).encode()
+
+
 @override_settings(
     SECRET_KEY=SECRET_KEY_VALUE,
     ARGUS_KALI_TIMEOUT=120,
@@ -358,11 +383,421 @@ class KubernetesSqlmapExecutorTests(TestCase):
         self.assertIn("delete_secret", self.calls)
 
     def test_cancel_deletes_resources_and_propagates(self):
-        self.cancel_check.side_effect = [None, ScanCancelled()]
+        def cancel_side(*a, **k):
+            if "create_job" in self.calls:
+                raise ScanCancelled()
+            return None
+
+        self.cancel_check.side_effect = cancel_side
         with self.assertRaises(ScanCancelled):
             self.make_executor().execute(17, [self.target])
         self.batch.delete_namespaced_job.assert_called()
         self.core.delete_namespaced_secret.assert_called()
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4B：watch 完成後仍以取消為優先
+    # watch stream 回傳 Complete / Pod list / Pod log 各 I/O 前後，以及
+    # parse/enrichment 後回傳成功前，都必須有 cancellation checkpoint。
+    # ScanCancelled 不得被 generic I/O exception handler 吞掉，須原樣重拋至
+    # execute() finally cleanup Job/Secret + release lock。
+    # ------------------------------------------------------------------
+    def test_cancel_after_watch_stream_returns(self):
+        """watch stream 回 Complete 時翻轉 watch_returned 旗標；旗標為 true 後
+        下一個 checkpoint 拋 ScanCancelled，log 不得被讀，finally 必須
+        delete Job/Secret + release lock。改用 stateful side effect，不依賴
+        cancel_check 的呼叫次序（新 _control_checkpoint 在 Job create 前後加
+        了兩次 checkpoint，positional side_effect 已不可靠）。"""
+        executor = self.make_executor()
+        state = {"watch_returned": False}
+
+        def cancel_side(*a, **k):
+            # 僅在 watch stream 已返回（旗標為 true）時才視為取消時機
+            if state["watch_returned"]:
+                raise ScanCancelled()
+            return None
+
+        def stream_side(*a, **k):
+            # stream 回 Complete 的同時翻轉旗標，回既有 succeeded 事件
+            state["watch_returned"] = True
+            return [{"object": self._succeeded_job()}]
+
+        self.cancel_check.side_effect = cancel_side
+        self.watcher.stream.side_effect = stream_side
+
+        with self.assertRaises(ScanCancelled):
+            executor.execute(17, [self.target])
+        # terminal 雖為 succeeded，但 checkpoint 在讀 log 前就拋出
+        self.core.read_namespaced_pod_log.assert_not_called()
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    def test_cancel_after_pod_list_returns(self):
+        """list_namespaced_pod 返回單 Pod 時翻轉 pod_list_returned 旗標；
+        旗標為 true 後下一個 checkpoint 拋 ScanCancelled，log 不得被讀，
+        必須 cleanup/release + re-raise。改用 stateful side effect，不依賴
+        cancel_check 的呼叫次序（新 _control_checkpoint 改變了 checkpoint
+        數量，positional side_effect 已不可靠）。"""
+        executor = self.make_executor()
+        state = {"pod_list_returned": False}
+
+        def cancel_side(*a, **k):
+            # 僅在 Pod list 已返回（旗標為 true）時才視為取消時機
+            if state["pod_list_returned"]:
+                raise ScanCancelled()
+            return None
+
+        def list_pod_side(*a, **k):
+            # Pod list 返回的同時翻轉旗標，回既有單 Pod response
+            state["pod_list_returned"] = True
+            pod = mock.Mock()
+            pod.metadata.name = "runner-pod"
+            return mock.Mock(items=[pod])
+
+        self.cancel_check.side_effect = cancel_side
+        self.core.list_namespaced_pod.side_effect = list_pod_side
+
+        with self.assertRaises(ScanCancelled):
+            executor.execute(17, [self.target])
+        self.core.read_namespaced_pod_log.assert_not_called()
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    def test_cancel_after_pod_log_read(self):
+        """read_namespaced_pod_log 返回合法 payload 時翻轉 log_returned 旗標；
+        旗標為 true 後下一個 checkpoint 拋 ScanCancelled，不得 parse/回成功，
+        必須 cleanup/release + re-raise，且 log 確實被讀一次。改用 stateful
+        side effect，不依賴 cancel_check 的呼叫次序。"""
+        executor = self.make_executor()
+        state = {"log_returned": False}
+
+        def cancel_side(*a, **k):
+            # 僅在 Pod log 已返回（旗標為 true）時才視為取消時機
+            if state["log_returned"]:
+                raise ScanCancelled()
+            return None
+
+        def read_log_side(*a, **k):
+            # log 返回的同時翻轉旗標，回既有合法 payload
+            state["log_returned"] = True
+            return _valid_payload(1)
+
+        self.cancel_check.side_effect = cancel_side
+        self.core.read_namespaced_pod_log.side_effect = read_log_side
+
+        with self.assertRaises(ScanCancelled):
+            executor.execute(17, [self.target])
+        # log 確實被讀（checkpoint 在讀完之後）
+        self.core.read_namespaced_pod_log.assert_called_once()
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    def test_cancel_before_success_return(self):
+        """read_namespaced_pod_log 返回時翻轉 log_returned 旗標；log 返回後
+        第一次 checkpoint 放行（完成 parse/enrichment），第二次 checkpoint
+        （enrichment 後、回傳成功前）才拋 ScanCancelled。不得回成功，必須
+        cleanup/release + re-raise，且 log 確實被讀一次。改用 stateful
+        side effect，不依賴 cancel_check 的呼叫次序。"""
+        executor = self.make_executor()
+        state = {"log_returned": False, "post_log_checks": 0}
+
+        def cancel_side(*a, **k):
+            # log 返回後才開始計數：第一次放行，第二次（return 前）才拋
+            if state["log_returned"]:
+                state["post_log_checks"] += 1
+                if state["post_log_checks"] >= 2:
+                    raise ScanCancelled()
+            return None
+
+        def read_log_side(*a, **k):
+            # log 返回的同時翻轉旗標，回既有合法 payload
+            state["log_returned"] = True
+            return _valid_payload(1)
+
+        self.cancel_check.side_effect = cancel_side
+        self.core.read_namespaced_pod_log.side_effect = read_log_side
+
+        with self.assertRaises(ScanCancelled):
+            executor.execute(17, [self.target])
+        self.core.read_namespaced_pod_log.assert_called_once()
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4D1A-RED：stale cleanup 與 create Job 兩階段缺少 cancel
+    # checkpoint。以下兩條為「期望 RED」的反例測試——預期在進入 watch 之前就
+    # 應偵測取消，因而不得建立 Job（或 Secret）；現有 production 只在 watch
+    # 階段檢查取消，故 Job / Secret 仍會先被建立，下列 assert 應失敗。
+    # 注意：此為 RED，不是完成修復；GREEN 實作由後續 task 補上 cancel
+    # checkpoint 後才會通過。
+    # ------------------------------------------------------------------
+    def test_cancel_during_stale_cleanup_skips_job_creation(self):
+        """list_namespaced_job（stale cleanup）返回時即標記取消：下一個
+        checkpoint 必須在 create_namespaced_job 之前攔下，故 Job 不應被建立；
+        finally 仍須嘗試 cleanup 並釋放 lock。現有 production 缺此 checkpoint，
+        Job 會先被建立，故 create_namespaced_job 未呼叫 assert 為 RED。"""
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # 取消旗標為 true 時立即拋 ScanCancelled，模擬 stateful checkpoint
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        def list_side(*a, **k):
+            # stale cleanup 階段才把取消旗標翻為 true，再回空 items
+            state["cancelled"] = True
+            return mock.Mock(items=[])
+
+        self.cancel_check.side_effect = cancel_side
+        self.batch.list_namespaced_job.side_effect = list_side
+
+        with self.assertRaises(ScanCancelled):
+            self.make_executor().execute(17, [self.target])
+
+        # 期望（RED）：取消應在建立 Job 前被攔下，Job 不應被建立
+        self.batch.create_namespaced_job.assert_not_called()
+        # finally 仍須嘗試 cleanup Job/Secret 並釋放 lock
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    def test_cancel_during_job_creation_skips_secret_creation(self):
+        """create_namespaced_job 建立 Job 的同時標記取消：下一個 checkpoint
+        必須在 create_namespaced_secret 之前攔下，故 Secret 不應被建立；
+        finally 仍須 cleanup 並釋放 lock。現有 production 缺此 checkpoint，
+        會先建立 Secret，故 create_namespaced_secret 未呼叫 assert 為 RED。"""
+        state = {"cancelled": False}
+        job_resp = mock.Mock()
+        job_resp.metadata.uid = "job-uid-4d1a"
+
+        def cancel_side(*a, **k):
+            # 取消旗標為 true 時立即拋 ScanCancelled，模擬 stateful checkpoint
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        def create_job_side(*a, **k):
+            # 建立 Job 的同時把取消旗標翻為 true，並回合法 response
+            state["cancelled"] = True
+            self.calls.append("create_job")
+            return job_resp
+
+        self.cancel_check.side_effect = cancel_side
+        self.batch.create_namespaced_job.side_effect = create_job_side
+
+        with self.assertRaises(ScanCancelled):
+            self.make_executor().execute(17, [self.target])
+
+        # 期望（RED）：取消應在建立 Secret 前被攔下，Secret 不應被建立
+        self.core.create_namespaced_secret.assert_not_called()
+        # finally 仍須 cleanup Job/Secret 並釋放 lock（Job 已建立，必須刪除）
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4D1B-RED：stale cleanup 逐 I/O 缺少 cancel checkpoint。
+    # 下列兩條為「期望 RED」反例測試——理想上 stale cleanup 在 list 返回後、
+    # 以及每刪除一個 stale Job 之前／之間，都應有 cancel checkpoint 攔下取消；
+    # 現有 production 的 _cleanup_stale_jobs 在 list_namespaced_job 返回後直接
+    # 連續刪除所有 stale Job，整個 method 內無任何 cancel_check，只在 method
+    # 返回後才由 _control_checkpoint 檢查取消，因此 stale name 仍會被傳給
+    # delete_namespaced_job，下列 assert 應失敗（RED）。
+    # ------------------------------------------------------------------
+    def test_cancel_during_stale_list_skips_stale_delete(self):
+        """list_namespaced_job 返回前標記取消：理想上下一個 checkpoint 應在
+        刪除任何 stale Job 之前攔下，故 stale name 不應傳給 delete_namespaced_job；
+        finally 刪 current deterministic Job 可以存在。現有 production 在 stale
+        cleanup method 內無 checkpoint，會先刪掉 stale Job 才在 method 返回後
+        checkpoint，故此 assert 為 RED。"""
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # stateful checkpoint：旗標為 true 時立即拋 ScanCancelled
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        # 沿用既有 timezone.now() 與 inline old-Job mock 模式，不自行計算時間
+        now = timezone.now()
+        old = mock.Mock()
+        old.metadata.name = "kali-stale-4d1b-a"
+        old.metadata.creation_timestamp = now - timedelta(seconds=10_000)
+        old.spec.active_deadline_seconds = 120
+
+        def list_side(*a, **k):
+            # 回 response 前才把取消旗標翻為 true，再回含一個 stale Job 的 list
+            state["cancelled"] = True
+            return mock.Mock(items=[old])
+
+        self.cancel_check.side_effect = cancel_side
+        self.batch.list_namespaced_job.side_effect = list_side
+
+        with self.assertRaises(ScanCancelled):
+            self.make_executor().execute(17, [self.target])
+
+        # 期望（RED）：stale name 從未傳給 delete_namespaced_job
+        deleted = [
+            c.kwargs.get("name")
+            for c in self.batch.delete_namespaced_job.call_args_list
+        ]
+        self.assertNotIn("kali-stale-4d1b-a", deleted)
+        # finally 刪 current deterministic Job 可以存在（此處不對它 assert）
+        # finally 必須 release lock
+        self._assert_lock_released()
+
+    def test_cancel_between_stale_deletes_skips_remaining_stale(self):
+        """list 含兩個 stale Job；第一個 stale delete 完成後標記取消：理想上下
+        一個 checkpoint 應在刪除第二個 stale Job 之前攔下，故第二個 stale name
+        不應被傳給 delete_namespaced_job；finally current Job delete 可以存在。
+        現有 production 連續刪完兩個 stale Job 才 checkpoint，故第二個 stale
+        name assert 為 RED。"""
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # stateful checkpoint：旗標為 true 時立即拋 ScanCancelled
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        # 沿用既有 timezone.now() 與 inline old-Job mock 模式，不自行計算時間
+        now = timezone.now()
+        old1 = mock.Mock()
+        old1.metadata.name = "kali-stale-4d1b-b1"
+        old1.metadata.creation_timestamp = now - timedelta(seconds=10_000)
+        old1.spec.active_deadline_seconds = 120
+        old2 = mock.Mock()
+        old2.metadata.name = "kali-stale-4d1b-b2"
+        old2.metadata.creation_timestamp = now - timedelta(seconds=10_000)
+        old2.spec.active_deadline_seconds = 120
+
+        def delete_side(*a, **k):
+            # 第一個 stale delete（即第一次呼叫）完成後才把取消旗標翻為 true；
+            # 後續 finally current Job delete 仍可照常呼叫，此 side effect 不阻擋。
+            if not state["cancelled"]:
+                state["cancelled"] = True
+            return None
+
+        self.cancel_check.side_effect = cancel_side
+        self.batch.list_namespaced_job.return_value = mock.Mock(items=[old1, old2])
+        self.batch.delete_namespaced_job.side_effect = delete_side
+
+        with self.assertRaises(ScanCancelled):
+            self.make_executor().execute(17, [self.target])
+
+        # 期望（RED）：第二個 stale name 從未傳給 delete_namespaced_job
+        deleted = [
+            c.kwargs.get("name")
+            for c in self.batch.delete_namespaced_job.call_args_list
+        ]
+        self.assertNotIn("kali-stale-4d1b-b2", deleted)
+        # finally current Job delete 可以存在（此處不對它 assert）
+        # finally 必須 release lock
+        self._assert_lock_released()
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4D1C-RED：Secret create 成功返回後、進入 watch 前缺少 cancel
+    # checkpoint。下列為「期望 RED」反例測試——理想上 create_namespaced_secret
+    # 成功返回後，下一個 checkpoint 應在進入 _watch_and_collect 之前攔下取消，
+    # 故 _watch_and_collect 不應被呼叫、execute 必須拋 ScanCancelled；現有
+    # production 在 Secret create 後只呼叫 _renew_lock(token)，沒有 cancel_check，
+    # 因此會直接進入被 mock 的 _watch_and_collect 並正常返回，不會拋
+    # ScanCancelled，下列 assert 應失敗（RED）。
+    # ------------------------------------------------------------------
+    def test_cancel_after_secret_create_skips_watch(self):
+        """create_namespaced_secret 成功返回的同時標記取消：下一個 checkpoint
+        必須在進入 _watch_and_collect 之前攔下，故 _watch_and_collect 不應被
+        呼叫；finally 仍須 cleanup 並釋放 lock。現有 production 在 Secret create
+        後只呼叫 _renew_lock(token)，沒有 cancel_check，會直接進入被 mock 的
+        _watch_and_collect 並正常返回，不會拋 ScanCancelled，故此 assert 為 RED。"""
+        executor = self.make_executor()
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # stateful checkpoint：旗標為 true 時立即拋 ScanCancelled
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        def create_secret_side(*a, **k):
+            # Secret create 成功返回的同時把取消旗標翻為 true，再回合法 response
+            state["cancelled"] = True
+            self.calls.append("create_secret")
+            return mock.Mock()
+
+        self.cancel_check.side_effect = cancel_side
+        self.core.create_namespaced_secret.side_effect = create_secret_side
+
+        # 隔離 _watch_and_collect：避免它內部既有 cancel check 讓測試誤綠。
+        # production 缺少 Secret-create 後的 checkpoint 時，會直接呼叫這個 mock
+        # 並正常返回，使「拋 ScanCancelled」與「未呼叫 _watch_and_collect」兩個
+        # assert 都失敗（RED）。
+        with mock.patch.object(executor, "_watch_and_collect") as watch_mock:
+            with self.assertRaises(ScanCancelled):
+                executor.execute(17, [self.target])
+
+        # Secret create 必須已呼叫一次
+        self.core.create_namespaced_secret.assert_called_once()
+        # _watch_and_collect 必須完全未呼叫（RED：production 會呼叫它）
+        watch_mock.assert_not_called()
+        # finally 仍須刪 Job、刪 Secret 並釋放 lock
+        self.batch.delete_namespaced_job.assert_called()
+        self.core.delete_namespaced_secret.assert_called()
+        self._assert_lock_released()
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4E-RED：_watch_and_collect 內每個 Kubernetes I/O 前後都缺少
+    # owner checkpoint（compare-and-PEXPIRE）。理想上 watch stream 前/後、
+    # Pod list 前/後、Pod log 前/後各做一次 owner-token renew，合計恰好 6 次
+    # PEXPIRE。現有 production 只有 watch loop 內的 periodic renew（每 60 秒），
+    # 且 Pod list / Pod log 僅有 cancellation check；直接呼叫 _watch_and_collect
+    # 走 happy path 時第一片即回 Succeeded，連 periodic renew 都不會觸發，故
+    # PEXPIRE 次數為 0，下列 assertEqual(..., 6) 為 RED。不得用 >= 弱化契約。
+    # ------------------------------------------------------------------
+    def test_watch_and_collect_renews_lock_around_each_io(self):
+        """直接呼叫 _watch_and_collect happy path，避免 execute lifecycle 的其他
+        checkpoint 干擾。watch stream / Pod list / Pod log 每個 I/O 前後都必須以
+        owner token compare-and-PEXPIRE 續約，合計恰好 6 次。現有 production 缺
+        這些 per-I/O renew checkpoint，故 assertEqual(6) 為 RED。"""
+        executor = self.make_executor()
+
+        results = executor._watch_and_collect(
+            17, "corr-4e", "argus-kali", "job-4e", 120, [self.target], "owner-4e",
+        )
+
+        # happy path 必須成功且恰有一筆結果（先確認流程跑完，才檢查 renew 次數）
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].ok)
+
+        # 篩出 script 含 PEXPIRE 的 eval 呼叫（_RENEW_LUA 用 PEXPIRE 續約）
+        renew_calls = [
+            c for c in self.redis.eval.call_args_list
+            if "PEXPIRE" in (c.args[0] or "")
+        ]
+        # 期望恰好 6 次：watch stream 前/後、Pod list 前/後、Pod log 前/後
+        # RED：現有 production happy path 第一片即 Succeeded，periodic renew 不
+        # 觸發；Pod list / Pod log 只有 cancel check，實際為 0 次。
+        self.assertEqual(
+            len(renew_calls), 6,
+            f"每個 I/O 前後都須 renew，期望 6 次 PEXPIRE，實際 {len(renew_calls)} 次",
+        )
+        for call in renew_calls:
+            self.assertEqual(
+                call.args[3], "owner-4e",
+                "每次 renew 必須用同一個 owner token",
+            )
+
+    def _assert_lock_released(self) -> None:
+        """驗證 finally 已用 owner token 釋放 global lock（compare-and-DEL）。"""
+        release_calls = [
+            c for c in self.redis.eval.call_args_list
+            if "DEL" in (c.args[0] or "")
+        ]
+        self.assertTrue(release_calls, "finally 必須 release lock（DEL）")
 
     # ------------------------------------------------------------------
     # capacity_timeout：lock 等待逾期 → 每個 target 回 capacity_timeout
@@ -410,6 +845,45 @@ class KubernetesSqlmapExecutorTests(TestCase):
         self.assertTrue(renew, "應在 60s 後用 owner token 續約")
         self.assertTrue(release, "應在 finally 用 owner token 釋放")
         self.assertEqual(renew[-1].args[3], set_token)
+        self.assertEqual(release[-1].args[3], set_token)
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4D2A-RED：lock acquire 成功後、回傳 owner token 前缺少 cancel
+    # checkpoint。redis.set 成功取得 lock 的瞬間若取消已發生，_acquire_global_lock
+    # 應在回傳 token 前偵測取消、先用剛取得的 owner token release lock 再拋
+    # ScanCancelled；現有 production 只在 SET 前檢查取消，SET 成功後直接回 token，
+    # 故此條為 RED，錯誤訊息為 "ScanCancelled not raised"。
+    # ------------------------------------------------------------------
+    def test_cancel_immediately_after_lock_acquire_releases_owner_token(self):
+        """redis.set 成功取得 lock 的同時標記取消：SET 成功後必須有 cancel
+        checkpoint，偵測到取消時先 release lock 再拋 ScanCancelled。現有
+        production 只在 SET 前檢查取消，SET 成功後直接回 token，故 assertRaises
+        為 RED（ScanCancelled not raised）。"""
+        executor = self.make_executor()
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # stateful checkpoint：旗標為 true 時立即拋 ScanCancelled
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        def set_side(*a, **k):
+            # SET 成功的同時把取消旗標翻為 true，再回 True（取得 lock）
+            state["cancelled"] = True
+            return True
+
+        self.cancel_check.side_effect = cancel_side
+        self.redis.set.side_effect = set_side
+
+        with self.assertRaises(ScanCancelled):
+            executor._acquire_global_lock(17, "corr-4d2a")
+
+        # GREEN 後期望：拋 ScanCancelled 前已用 owner token release lock
+        self._assert_lock_released()
+        set_token = self.redis.set.call_args.args[1]
+        release = [c for c in self.redis.eval.call_args_list
+                   if "DEL" in (c.args[0] or "")]
         self.assertEqual(release[-1].args[3], set_token)
 
     def test_lock_lua_scripts_compare_token_before_touch(self):
@@ -772,7 +1246,12 @@ class KubernetesSqlmapExecutorTests(TestCase):
         """finally compare-and-DEL 丟例外；仍須重拋原本 ScanCancelled。"""
         executor = self.make_executor()
         sensitive = "REDIS_DEL_SECRET_BODY"
-        self.cancel_check.side_effect = [None, ScanCancelled()]
+        def cancel_side(*a, **k):
+            if "create_job" in self.calls:
+                raise ScanCancelled()
+            return None
+
+        self.cancel_check.side_effect = cancel_side
 
         def eval_side(script, *args):
             if "DEL" in (script or ""):
@@ -791,6 +1270,59 @@ class KubernetesSqlmapExecutorTests(TestCase):
         self.assertIn("cleanup_failed", msgs)
         self.assertNotIn(sensitive, msgs)
         self.assertNotIn("lock_released", msgs)
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4D2A-RED：取得 global lock 後取消不得遺留 lease
+    # _acquire_global_lock 在 redis.set 成功返回後必須再做一次 cancel_check；
+    # 若旗標為 true 必須重拋 ScanCancelled 並以 owner token compare-and-DEL
+    # 釋放 lock，不得回 token。現有 production 只在 redis.set 前檢查取消，SET
+    # 成功後立刻 return token，沒有 post-SET cancel check 也沒有 release，
+    # 故下列 assert 為 RED。
+    # ------------------------------------------------------------------
+    def test_cancel_after_lock_set_releases_and_propagates(self):
+        """redis.set 成功取得 lock 的同時將 state["cancelled"] 翻為 true；注入的
+        cancel_check 在旗標為 true 時必須拋 ScanCancelled。_acquire_global_lock
+        必須重拋 ScanCancelled（不得回 token），並以 owner token compare-and-DEL
+        釋放 lock。現有 production 缺少 post-SET cancel check 與 release，故
+        assertRaises(ScanCancelled) 為 RED。"""
+        executor = self.make_executor()
+        state = {"cancelled": False}
+
+        def cancel_side(*a, **k):
+            # stateful checkpoint：旗標為 true 時立即拋 ScanCancelled
+            if state["cancelled"]:
+                raise ScanCancelled()
+            return None
+
+        def set_side(*a, **k):
+            # redis.set 成功取得 lock 的同時把取消旗標翻為 true，模擬 SET 返回後取消
+            state["cancelled"] = True
+            return True
+
+        self.cancel_check.side_effect = cancel_side
+        self.redis.set.side_effect = set_side
+
+        # _acquire_global_lock 必須重拋 ScanCancelled，不得回 token
+        # （RED：現有 production SET 成功後直接 return token）
+        with self.assertRaises(ScanCancelled):
+            executor._acquire_global_lock(17, "corr-4d2a")
+
+        # release 的 token 必須等於 redis.set 實際寫入的 token（沿用
+        # _assert_lock_released 的 DEL 篩選邏輯，再精確比對 call args）
+        set_token = self.redis.set.call_args.args[1]
+        release_calls = [
+            c for c in self.redis.eval.call_args_list
+            if "DEL" in (c.args[0] or "")
+        ]
+        self.assertTrue(
+            release_calls,
+            "取消後必須以 owner token compare-and-DEL 釋放 lock",
+        )
+        for call in release_calls:
+            self.assertEqual(
+                call.args[3], set_token,
+                "release token 必須等於 redis.set 寫入的 token",
+            )
 
     # ------------------------------------------------------------------
     # Task 4 Fix 2B：lock / watch 時間硬界線
@@ -985,6 +1517,7 @@ class KubernetesSqlmapExecutorTests(TestCase):
             name="pod-a",
             namespace="argus-kali",
             limit_bytes=16385,
+            _request_timeout=5,
         )
 
     def test_log_read_exception_maps_to_runner_failed(self):
@@ -1030,6 +1563,75 @@ class KubernetesSqlmapExecutorTests(TestCase):
         """runner error_code=clean 時 outward error 應為空字串（不外洩 runner taxonomy）。"""
         executor = self.make_executor()
         results = executor.execute(17, [self.target])
+        self.assertTrue(results[0].ok)
+        self.assertEqual(results[0].error, "")
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4A：KaliResult 欄位一致性與 error mapping
+    # parse_runner_result 成功後、加入 evidence 前，須做整批一致性檢查與映射：
+    #   - confirmed=True 且 ok=False → 整批 invalid_result
+    #   - ok=True 時 private error 僅可為 ""／"clean"，否則整批 invalid_result
+    #   - ok=False → outward 一律 runner_failed（不論 private error_code），不得為空
+    #   - 絕不產生 ok=True,error="runner_failed"，也不洩漏 private error code
+    # ------------------------------------------------------------------
+    def test_ok_false_with_empty_error_code_maps_to_runner_failed(self):
+        """ok=False 但 private error_code 為空 → outward 必為 runner_failed，不得為空。"""
+        executor = self.make_executor()
+        self.core.read_namespaced_pod_log.return_value = _result_payload(
+            ok=False, confirmed=False, error_code="",
+        )
+        results = executor.execute(17, [self.target])
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertEqual(results[0].error, "runner_failed")
+
+    def test_ok_false_with_clean_error_code_maps_to_runner_failed(self):
+        """ok=False 但 private error_code=clean → outward 必為 runner_failed，不得為空。"""
+        executor = self.make_executor()
+        self.core.read_namespaced_pod_log.return_value = _result_payload(
+            ok=False, confirmed=False, error_code="clean",
+        )
+        results = executor.execute(17, [self.target])
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertEqual(results[0].error, "runner_failed")
+
+    def test_ok_true_with_non_clean_private_error_is_batch_invalid_result(self):
+        """ok=True 但 private error_code 非 clean／空 → 整批 invalid_result，audit 安全。"""
+        executor = self.make_executor()
+        self.core.read_namespaced_pod_log.return_value = _result_payload(
+            ok=True, confirmed=False, error_code="runner_failure",
+        )
+        with mock.patch.object(kali_kubernetes, "append_log") as log_mock:
+            results = executor.execute(17, [self.target])
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertEqual(results[0].error, "invalid_result")
+        msgs = " ".join(str(c) for c in log_mock.call_args_list)
+        # audit code 必須是 invalid_result
+        self.assertIn("invalid_result", msgs)
+        # 不得外洩 runner private error code
+        self.assertNotIn("runner_failure", msgs)
+
+    def test_ok_false_with_confirmed_true_is_batch_invalid_result(self):
+        """confirmed=True 且 ok=False → 矛盾狀態，整批 invalid_result。"""
+        executor = self.make_executor()
+        self.core.read_namespaced_pod_log.return_value = _result_payload(
+            ok=False, confirmed=True, error_code="clean",
+        )
+        results = executor.execute(17, [self.target])
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertEqual(results[0].error, "invalid_result")
+
+    def test_ok_true_clean_error_code_is_outward_success_empty_error(self):
+        """ok=True 且 private error_code=clean → outward 成功，error 為空字串。"""
+        executor = self.make_executor()
+        self.core.read_namespaced_pod_log.return_value = _result_payload(
+            ok=True, confirmed=False, error_code="clean",
+        )
+        results = executor.execute(17, [self.target])
+        self.assertEqual(len(results), 1)
         self.assertTrue(results[0].ok)
         self.assertEqual(results[0].error, "")
 
@@ -1188,3 +1790,128 @@ class KubernetesSqlmapExecutorTests(TestCase):
                                 f"code={bad}", rendered,
                                 f"{label}: audit log 含禁止碼 '{bad}'",
                             )
+
+    # ------------------------------------------------------------------
+    # Task 4 Fix 4C2：非-watch Kubernetes I/O 一律帶 5 秒 _request_timeout
+    # watcher.stream 已依 remaining budget 動態傳 1–5 秒 timeout，不在此限。
+    # ------------------------------------------------------------------
+    def test_k8s_io_timeout_seconds_constant_is_five(self):
+        """executor 對外揭露單一固定 I/O timeout 常數為 5 秒。"""
+        self.assertEqual(
+            KubernetesSqlmapExecutor.K8S_IO_TIMEOUT_SECONDS, 5,
+        )
+
+    def test_lifecycle_non_watch_calls_carry_5s_io_timeout(self):
+        """成功 lifecycle 的 create/list/log/delete 全部帶 _request_timeout=5。
+
+        涵蓋：create_namespaced_job、create_namespaced_secret、
+        list_namespaced_pod、read_namespaced_pod_log、
+        finally 的 delete_namespaced_job 與 delete_namespaced_secret。
+        watcher.stream 不在此測試範圍（另以動態值測試保護）。
+        """
+        self.make_executor().execute(17, [self.target])
+
+        expected = 5
+        self.assertEqual(
+            self.batch.create_namespaced_job.call_args.kwargs.get("_request_timeout"),
+            expected,
+            "create_namespaced_job 必須帶 _request_timeout=5",
+        )
+        self.assertEqual(
+            self.core.create_namespaced_secret.call_args.kwargs.get("_request_timeout"),
+            expected,
+            "create_namespaced_secret 必須帶 _request_timeout=5",
+        )
+        self.assertEqual(
+            self.core.list_namespaced_pod.call_args.kwargs.get("_request_timeout"),
+            expected,
+            "list_namespaced_pod 必須帶 _request_timeout=5",
+        )
+        self.assertEqual(
+            self.core.read_namespaced_pod_log.call_args.kwargs.get("_request_timeout"),
+            expected,
+            "read_namespaced_pod_log 必須帶 _request_timeout=5",
+        )
+        # finally 的 delete_namespaced_job / delete_namespaced_secret 也帶 5 秒
+        delete_job_calls = self.batch.delete_namespaced_job.call_args_list
+        self.assertTrue(delete_job_calls, "finally 必須刪除 Job")
+        for call in delete_job_calls:
+            self.assertEqual(
+                call.kwargs.get("_request_timeout"), expected,
+                "delete_namespaced_job 必須帶 _request_timeout=5",
+            )
+        delete_secret_calls = self.core.delete_namespaced_secret.call_args_list
+        self.assertTrue(delete_secret_calls, "finally 必須刪除 Secret")
+        for call in delete_secret_calls:
+            self.assertEqual(
+                call.kwargs.get("_request_timeout"), expected,
+                "delete_namespaced_secret 必須帶 _request_timeout=5",
+            )
+
+    def test_stale_cleanup_list_and_delete_carry_5s_io_timeout(self):
+        """stale cleanup 的 list_namespaced_job 與 delete_namespaced_job 也帶 5 秒 timeout。"""
+        now = timezone.now()
+        old = mock.Mock()
+        old.metadata.name = "kali-stale-old"
+        old.metadata.creation_timestamp = now - timedelta(seconds=10_000)
+        old.spec.active_deadline_seconds = 120
+        # 只放舊 Job，避免新建立的 Job 在這次 list 中被誤判
+        self.batch.list_namespaced_job.return_value = mock.Mock(items=[old])
+
+        self.make_executor().execute(17, [self.target])
+
+        # stale list 帶 5 秒
+        self.assertEqual(
+            self.batch.list_namespaced_job.call_args.kwargs.get("_request_timeout"),
+            5,
+            "list_namespaced_job(stale cleanup) 必須帶 _request_timeout=5",
+        )
+        # stale delete 為 delete_namespaced_job 第一個 call，name 為 stale job
+        stale_delete_call = self.batch.delete_namespaced_job.call_args_list[0]
+        self.assertEqual(
+            stale_delete_call.kwargs.get("name"), "kali-stale-old",
+        )
+        self.assertEqual(
+            stale_delete_call.kwargs.get("_request_timeout"), 5,
+            "delete_namespaced_job(stale cleanup) 必須帶 _request_timeout=5",
+        )
+
+    def test_watch_stream_keeps_dynamic_request_timeout_after_fix(self):
+        """Fix 4C2 後 watcher.stream 仍用動態 _request_timeout，不可固定為 5。"""
+        self.clock.t = 0
+        call_count = {"n": 0}
+
+        def stream_side(*a, **k):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                self.clock.t += 3
+            else:
+                self.clock.t += k.get("timeout_seconds", 5)
+            return []
+
+        self.watcher.stream.side_effect = stream_side
+
+        self.make_executor()._watch_and_collect(
+            scan_job_id=17,
+            correlation_id="test-corr-id",
+            namespace="argus-kali",
+            job_name="argus-sqlmap-test",
+            deadline=150,
+            targets=[self.target],
+            token="test-token",
+        )
+
+        # 每片 _request_timeout 必須 <= 該片 timeout_seconds（動態）
+        for call in self.watcher.stream.call_args_list:
+            req_timeout = call.kwargs.get("_request_timeout")
+            timeout_seconds = call.kwargs.get("timeout_seconds")
+            self.assertIsNotNone(req_timeout, "watch _request_timeout 不可缺失")
+            self.assertIsNotNone(timeout_seconds, "watch timeout_seconds 不可缺失")
+            self.assertLessEqual(
+                req_timeout, timeout_seconds,
+                "watch _request_timeout 不得超過該片 timeout_seconds",
+            )
+        # 最後一片 remaining=2：明確驗證動態值，非固定 5
+        last_call = self.watcher.stream.call_args_list[-1]
+        self.assertEqual(last_call.kwargs["timeout_seconds"], 2)
+        self.assertEqual(last_call.kwargs["_request_timeout"], 2)
