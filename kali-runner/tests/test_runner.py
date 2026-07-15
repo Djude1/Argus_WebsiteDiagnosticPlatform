@@ -13,10 +13,17 @@ import contextlib
 import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+# 無論從 repo root（brief 指定的 `uv run python -m unittest discover -s
+# kali-runner/tests`）或從 kali-runner/ 目錄執行，都能讓 `import runner`
+# 找到 runner 模組。不加這行時，unittest 只把 start dir（kali-runner/tests）
+# 加入 sys.path，import runner 會 ModuleNotFoundError。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import runner
 
@@ -121,6 +128,21 @@ class ParseSqlmapStdoutTests(unittest.TestCase):
         import re
         self.assertTrue(re.fullmatch(r"[A-Za-z0-9_.-]{0,64}", parameter))
         self.assertTrue(re.fullmatch(r"[A-Za-z0-9 ._-]{0,64}", dbms))
+
+    def test_dbms_with_realistic_invalid_chars_is_sanitized(self):
+        # sqlmap 實際輸出常含 '>='、版本號等不在安全字元集 [A-Za-z0-9 ._-]
+        # 內的符號；runner 必須截斷至安全前綴，不可讓 '>'、'=' 洩入輸出。
+        import re
+        stdout = (
+            "Parameter: id (GET)\n"
+            "Parameter 'id' is vulnerable\n"
+            "back-end DBMS: MySQL >= 5.0.12\n"
+        )
+        _, _, dbms, _ = runner.parse_sqlmap_stdout(stdout)
+        self.assertTrue(re.fullmatch(r"[A-Za-z0-9 ._-]{0,64}", dbms))
+        self.assertNotIn(">", dbms)
+        self.assertNotIn("=", dbms)
+        self.assertTrue(dbms.startswith("MySQL"))
 
     def test_no_injection_marker_leaves_confirmed_false(self):
         parameter, techniques, dbms, confirmed = runner.parse_sqlmap_stdout(
