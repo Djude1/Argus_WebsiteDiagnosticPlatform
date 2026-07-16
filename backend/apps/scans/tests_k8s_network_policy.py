@@ -38,7 +38,7 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {("UDP", 53), ("TCP", 53)},
         )
 
-    def test_kustomization_includes_seven_named_policies(self):
+    def test_kustomization_includes_nine_named_policies(self):
         kustomization = _documents("kustomization.yaml")[0]
         self.assertIn("07-network-policies.yaml", kustomization["resources"])
         self.assertEqual(
@@ -51,10 +51,13 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
                 "migrate-egress-boundary",
                 "application-egress-boundary",
                 "data-deny-egress",
+                # Task 7：argus-kali namespace 隔離（default-deny + runner-egress）
+                "argus-kali-default-deny",
+                "argus-kali-runner-egress",
             },
         )
 
-    def test_application_egress_only_allows_data_dns_and_public_web_ports(self):
+    def test_application_egress_only_allows_data_dns_public_web_and_kubernetes_api(self):
         policy = self.policies["application-egress-boundary"]
         self.assertEqual(
             set(policy["spec"]["podSelector"]["matchExpressions"][0]["values"]),
@@ -105,6 +108,27 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {(port["protocol"], port["port"]) for port in ipv6_rule["ports"]},
             {("TCP", 80), ("TCP", 443), ("TCP", 587)},
         )
+
+        # Task 7：worker 對 Kubernetes API 的精確 /32 egress（不得擴大為 private CIDR）。
+        # 規則順序附在 public rule 之後；service clusterIP / endpoint 各一條。
+        api_service_rule = rules[5]
+        self.assertEqual(
+            api_service_rule["to"][0]["ipBlock"]["cidr"], "10.96.0.1/32"
+        )
+        self.assertEqual(
+            {(port["protocol"], port["port"]) for port in api_service_rule["ports"]},
+            {("TCP", 443)},
+        )
+        api_endpoint_rule = rules[6]
+        self.assertEqual(
+            api_endpoint_rule["to"][0]["ipBlock"]["cidr"], "172.16.2.122/32"
+        )
+        self.assertEqual(
+            {(port["protocol"], port["port"]) for port in api_endpoint_rule["ports"]},
+            {("TCP", 6443)},
+        )
+        # 確保 API egress 只有這兩條 /32，沒有夾帶其它目的
+        self.assertEqual(len(rules), 7)
 
     def test_frontend_and_migrate_have_minimal_egress(self):
         frontend_rules = self.policies["frontend-egress-boundary"]["spec"]["egress"]

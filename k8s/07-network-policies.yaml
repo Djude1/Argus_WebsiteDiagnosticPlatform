@@ -213,6 +213,21 @@ spec:
           port: 443
         - protocol: TCP
           port: 587
+    # Task 7：worker 對 Kubernetes API 的 egress（管理 argus-kali Job）。
+    # 只允許 Service clusterIP 與 endpoint 兩個 /32：不得擴大成 private CIDR，
+    # 避免 worker 被拿來探測內網。
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 172.16.2.122/32
+      ports:
+        - protocol: TCP
+          port: 6443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -228,3 +243,84 @@ spec:
   policyTypes:
     - Egress
   egress: []
+---
+# Task 7：argus-kali namespace 預設全拒（Ingress + Egress）。
+# 沒有這條，runner pod 會被 default allow；下面的 argus-kali-runner-egress
+# 才放行 DNS + 公網 80/443。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argus-kali-default-deny
+  namespace: argus-kali
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+# Task 7：runner（label app=kali-sqlmap，見 Task 4 build_restricted_runner_pod）
+# 只能對外：CoreDNS（UDP/TCP 53）+ IPv4/IPv6 公網（TCP 80/443）。
+# 不開 587（runner 不寄信）、不開 private CIDR（避免 SSRF 內網）。
+# CNI 必須支援 IPv6 NetworkPolicy，IPv6 rule 才生效。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argus-kali-runner-egress
+  namespace: argus-kali
+spec:
+  podSelector:
+    matchLabels:
+      app: kali-sqlmap
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 0.0.0.0/8
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.0.0.0/24
+              - 192.0.2.0/24
+              - 192.168.0.0/16
+              - 198.18.0.0/15
+              - 198.51.100.0/24
+              - 203.0.113.0/24
+              - 224.0.0.0/4
+              - 240.0.0.0/4
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 2000::/3
+            except:
+              - 2001::/23
+              - 2001:db8::/32
+              - 2002::/16
+              - 3fff::/20
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443

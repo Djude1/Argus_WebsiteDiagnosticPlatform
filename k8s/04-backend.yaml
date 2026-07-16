@@ -129,6 +129,9 @@ spec:
       labels:
         app: worker
     spec:
+      # Task 7：worker 用此 SA 跨 ns 操作 argus-kali Job（Role/RoleBinding 在 10-kali-runtime.yaml）。
+      # Kali disabled 時 worker 不會發 Job，SA 只是預先接線，啟用時免再改 worker。
+      serviceAccountName: argus-worker-kali-orchestrator
       initContainers:
         - name: wait-migrate
           image: shijie85/argus-backend:latest
