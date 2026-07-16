@@ -1,0 +1,100 @@
+# Task 8：argus-kali-runner image 的不可變 digest 推廣管線。
+#
+# 觸發：main 上動到 kali-runner/、本 workflow、推廣腳本/測試，或 workflow_dispatch。
+# 與 build-backend / build-frontend 共用 argus-gitops-cd concurrency group，
+# 序列化 GitOps write-back，避免同時改 k8s/ 時撞在一起。
+#
+# 推廣目標固定為 shijie85/argus-kali-runner（admission repository 尚未遷移，
+# 其他 Docker Hub 帳號會在鎖定步驟被拒）。
+name: Build & Push Kali Runner Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kali-runner/**"
+      - ".github/workflows/build-kali-runner.yml"
+      - "scripts/promote_kali_image.py"
+      - "tests/test_kali_image_promotion.py"
+  workflow_dispatch: {} # 允許在 Actions 頁面手動觸發
+
+concurrency:
+  group: argus-gitops-cd
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitOps write-back 需要 push 回 main
+    steps:
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # rebase 需要 main 完整歷史
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.17"
+
+      - name: 鎖定 Docker Hub 帳號為 shijie85
+        run: |
+          if [ "${{ vars.DOCKERHUB_USERNAME }}" != "shijie85" ]; then
+            echo "DOCKERHUB_USERNAME 必須為 shijie85（admission repository 尚未遷移）" >&2
+            exit 1
+          fi
+
+      - name: runner 單元測試（純 Python，不需 Docker）
+        run: |
+          uv sync --frozen
+          uv run python -m unittest discover -s kali-runner/tests
+
+      # 推送前先 local build + smoke test：read-only --self-test 與 sqlmap --version。
+      # 與 brief Step 6 的驗證命令一致，確保 image 可在 restricted PSA 下啟動。
+      - name: 預 build + smoke test
+        run: |
+          docker build -t argus-kali-runner:pretest ./kali-runner
+          docker run --rm --read-only --user 65532:65532 --tmpfs /tmp:rw,nosuid,nodev,size=1g argus-kali-runner:pretest --self-test
+          docker run --rm --user 65532:65532 --entrypoint /usr/local/bin/python argus-kali-runner:pretest /opt/sqlmap/sqlmap.py --version
+
+      - name: 設定 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登入 Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build 並推送不可變 runner
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./kali-runner
+          file: ./kali-runner/Dockerfile
+          # PVE k8s 節點為 x86，只 build amd64
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ vars.DOCKERHUB_USERNAME }}/argus-kali-runner:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 把 build-push-action 輸出的 digest（sha256:<hex>）推廣進兩份 GitOps 契約；
+      # rebase origin/main 避免 concurrency 交錯，最後 bot 身份 push 回 main。
+      - name: 把新 digest 推廣進 GitOps 契約
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          IMAGE="${{ vars.DOCKERHUB_USERNAME }}/argus-kali-runner@${IMAGE_DIGEST}"
+          uv run python scripts/promote_kali_image.py --image "${IMAGE}"
+          uv run python scripts/promote_kali_image.py --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git add k8s/01-namespace-config.yaml k8s/11-kali-admission.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "ci(cd): promote argus-kali-runner digest"
+          git push origin HEAD:main

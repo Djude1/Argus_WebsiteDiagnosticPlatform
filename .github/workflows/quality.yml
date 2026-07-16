@@ -42,6 +42,8 @@ jobs:
         run: uv run python -m unittest discover -s tests
       - name: 後端完整測試
         run: uv run python backend/manage.py test apps
+      - name: Kali runner digest 推廣一致性
+        run: uv run python scripts/promote_kali_image.py --check
 
   frontend:
     runs-on: ubuntu-latest
@@ -84,6 +86,8 @@ jobs:
       - uses: azure/setup-kubectl@v5.1.0
         with:
           version: v1.32.2
+      - name: Kali runner digest 推廣一致性
+        run: python3 scripts/promote_kali_image.py --check
       - name: Render Kustomize manifests
         run: |
           kubectl kustomize k8s > "$RUNNER_TEMP/argus-rendered.yaml"
@@ -110,3 +114,13 @@ jobs:
           grep -q 'cidr: 172.16.2.122/32' "$RUNNER_TEMP/argus-rendered.yaml"
           # Kali disabled sentinel 必須在 admission 與 ConfigMap 同時出現
           grep -q 'shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$RUNNER_TEMP/argus-rendered.yaml"
+
+  runner-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: kali-runner 單元測試（純 Python，不需 Docker）
+        run: python -m unittest discover -s kali-runner/tests
