@@ -32,7 +32,7 @@ from apps.scans.services import (
 from .findings import persist_agent_issues, persist_agent_security_findings
 from .loop import AgentRunResult, HermesAgent
 from .providers import ProviderChain, build_default_chain
-from .tools import ToolExecutor
+from .tools import ToolExecutor, build_tool_schemas
 
 DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開啟頁面 {url}。
 請執行以下測試：
@@ -157,7 +157,13 @@ async def run_agent_for_scan(
             executor = ToolExecutor(
                 page=page, screenshot_dir=str(media_dir), scan_job=scan_job
             )
-            agent = HermesAgent(scan_job=scan_job, executor=executor, chain=chain)
+            # Task 6：只在 deep_mode（active + authorized）才把 probe_sql_injection 暴露給 LLM
+            agent = HermesAgent(
+                scan_job=scan_job,
+                executor=executor,
+                chain=chain,
+                tool_schemas=build_tool_schemas(deep_mode),
+            )
             result = await agent.run(task_prompt=prompt)
         finally:
             await browser.close()

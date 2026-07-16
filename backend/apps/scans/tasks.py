@@ -279,28 +279,6 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             Finding.objects.create(scan_job=scan_job, page=None, **finding)
         all_findings.extend(katana_findings + nuclei_findings)
 
-        # === Kali 主動驗證（攻擊鏈，純加法、三重授權鎖、silent-fail）===
-        # 僅 deep_mode（active + authorized）才嘗試；ARGUS_KALI_ENABLED 等其餘 gating
-        # 由 validate_findings_with_kali → run_sqlmap 的三重鎖負責，預設完全 inert。
-        if deep_mode:
-            try:
-                kali_findings = validate_findings_with_kali(scan_job_id, crawled_urls)
-            except Exception as exc:  # noqa: BLE001
-                append_log(
-                    scan_job_id,
-                    f"Kali 主動驗證略過（{exc.__class__.__name__}）",
-                    level="warn",
-                )
-                kali_findings = []
-            for finding in kali_findings:
-                Finding.objects.create(scan_job=scan_job, page=None, **finding)
-            all_findings.extend(kali_findings)
-            if kali_findings:
-                append_log(
-                    scan_job_id,
-                    f"Kali 主動驗證確認 {len(kali_findings)} 項可利用漏洞",
-                )
-
         # === 深度被動安全掃描（security/ sub-package，純加法、silent-fail）===
         host = urlparse(scan_job.normalized_url).hostname or ""
         root_page = next((p for p in crawled_pages if p.get("headers")), None)
@@ -387,7 +365,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
 
         # Phase 2：可選的 Hermes-Agent 動態 UX 測試
         # 預設 ARGUS_AGENT_ENABLED=False；只在使用者明確啟用時才跑，避免每次掃描都消耗 LLM token。
+        # Task 6：Agent 在 Kali fallback 之前執行；agent 確認的 security finding 餵進 scoring。
         agent_meta = {}
+        agent_result = None
         if settings.ARGUS_AGENT_ENABLED:
             raise_if_cancelled(scan_job_id)
             agent_phase_started = timezone.now().isoformat()
@@ -428,6 +408,37 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         )
             except Exception as exc:  # noqa: BLE001 — agent 失敗不應讓整個掃描失敗
                 agent_meta = {"status": "error", "error": exc.__class__.__name__}
+
+        # Task 6：Agent 確認的 security finding 餵進 scoring（DB 落地由 runner 負責）
+        if agent_result:
+            all_findings.extend(agent_result.security_findings)
+
+        # === Kali 主動驗證 fallback（agent 之後、scoring 之前）===
+        # 僅 deep_mode（active + authorized）才嘗試；ARGUS_KALI_ENABLED 等其餘 gating
+        # 由 validate_findings_with_kali → run_sqlmap 的三重鎖負責，預設完全 inert。
+        # Redis fingerprints 讓 fallback 只處理 agent 沒驗證過的獨特 target（一次 batch）。
+        # ScanCancelled 必須原樣重拋，讓合作式取消傳遞到 cancelled/refund 分支。
+        if deep_mode:
+            raise_if_cancelled(scan_job_id)
+            try:
+                kali_findings = validate_findings_with_kali(scan_job_id, crawled_urls)
+            except ScanCancelled:
+                raise
+            except Exception as exc:  # noqa: BLE001 — 非 cancel 的基礎設施失敗只 silent-fail
+                append_log(
+                    scan_job_id,
+                    f"Kali 主動驗證略過（{exc.__class__.__name__}）",
+                    level="warn",
+                )
+                kali_findings = []
+            for finding in kali_findings:
+                Finding.objects.create(scan_job=scan_job, page=None, **finding)
+            all_findings.extend(kali_findings)
+            if kali_findings:
+                append_log(
+                    scan_job_id,
+                    f"Kali 主動驗證確認 {len(kali_findings)} 項可利用漏洞",
+                )
 
         overall_score, category_scores, top_actions = calculate_scores(all_findings)
         append_log(
