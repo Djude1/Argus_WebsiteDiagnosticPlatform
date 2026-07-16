@@ -23,6 +23,36 @@
 
 ---
 
+## 未開工 Future Backlog（Task 10 交付時保留，**皆未實作**）
+
+下列項目是 K8s Kali SQLmap 鏈（Task 1–10）之外的明確延伸方向；全部列為未開工，
+不應被理解為已交付或正在進行。每一項都需要獨立設計／授權／測試，不得直接併入
+現有 `ARGUS_KALI_*` 啟用流程。
+
+- [ ] **Metasploit K8s runner**：目前 `kali_tools.run_metasploit` 在 K8s backend 一律
+      回 `tool_not_supported_by_backend`；如需在 K8s 內跑 msfconsole，需另設計 runner
+      image、資源配額（msfconsole 重量級）與對應的 admission 契約。
+- [ ] **Nmap runner**：在 `argus-kali` 內以受限 Job 跑 Nmap 服務列舉；需考慮 port
+      scan 的 egress 邊界（目前 runner 只放行 80/443）與授權範圍擴展。
+- [ ] **Dedicated controller**：以獨立 controller service（非 Celery worker）協調
+      Kali Job 生命週期，讓 worker 不再直接持有跨 ns RBAC；目前由 worker 內
+      `KubernetesSqlmapExecutor` 直接操作。
+- [ ] **Multi-Job scheduler**：放寬「同一時間整個 ns 最多 1 個 Job/Pod」的單 runner
+      ResourceQuota；需配套 global concurrency上限、優先序與公平排程。
+- [ ] **Async ScanJob continuation**：把 Kali 驗證從主掃描 sync 流程抽成可恢復的
+      async 階段，避免 worker 長時間等 watch；目前 watch 上限為 `min(deadline+30, 420)` 秒。
+- [ ] **SIEM / Prometheus alerts**：把 Kali `scan_log` 的 safe audit codes
+      （`kali_disabled` / `job_deadline_exceeded` / `runner_failed` / `invalid_result` 等）
+      匯出到 SIEM 或 Prometheus Alertmanager，建立異常預算／告警規則。
+- [ ] **Automatic encryption-key rotation**：自動化
+      [`runbooks/kubernetes-secret-at-rest-encryption.md`](runbooks/kubernetes-secret-at-rest-encryption.md)
+      §6 的手動輪替流程；目前只啟用單一 key，輪替為純 manual。
+- [ ] **Compose-only Docker CLI image split**：把 Docker CLI 從 backend image 拆出成
+      `docker-compose.attack.yml` 專用的 demo image，正式 backend image 不再裝 docker CLI
+      （目前 backend image 仍內建 Docker CLI 27.3.1）。
+
+---
+
 ## 決策摘要
 
 | 決策項目 | 結論 |

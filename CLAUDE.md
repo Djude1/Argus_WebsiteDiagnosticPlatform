@@ -88,6 +88,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 - **正式 backend runtime 契約**：migrate、web、worker、initContainer 與 worker probe 一律使用 `/app/.venv/bin/...` 絕對路徑，不可改回 `uv run` 或依賴 image `PATH`；契約由 root `tests/` 鎖定。
 - **Secret 除錯不印值**：若 Django 啟動因必要設定中止，只確認 Secret 是否存在對應 key；禁止把 Secret 值、臨時登入資訊或機器專屬 SSH 金鑰路徑寫入 log／commit。
 - **本地／CI 綠燈不取代實機驗證**：部署相關修復必須持續追到正式叢集，並明列尚未完成的 CNI 封包、Celery 任務、完整掃描、密碼重設與公開網域 smoke test。完整流程與驗證矩陣見 [`k8s/README.md`](k8s/README.md)。
+- **K8s Kali SQLmap 攻擊鏈目前 disabled**：`ARGUS_KALI_ENABLED=false`、`ARGUS_KALI_BACKEND=disabled`、runner image 為 disabled sentinel digest（`…@sha256:0000…`）。軟體已 merge 但啟用是 Task 11 手動控制平面 gate——必須先完成 Secret 靜態加密、實機 RBAC/Admission/Network 檢查與授權 positive test，嚴禁未經 runbook 切換旗標。新增相依 `kubernetes>=35.0,<36`（Task 4）與 `ARGUS_KALI_*` settings（Task 1，全預設停用）。Operator 手冊見 [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) 與 [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md)；掃描層契約見 [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md)。
 
 ---
 
@@ -127,4 +128,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
 | OpenCode CLI subagent 委派、監工與驗收 | [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) |
+| K8s Secret 靜態加密啟用（Task 11 前置） | [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) |
+| K8s Kali SQLmap 攻擊鏈啟用／回滾（Task 11） | [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md) |
 | 子目錄 CLAUDE.md 索引、SKILL 索引 | [`專案導覽.md`](專案導覽.md) |

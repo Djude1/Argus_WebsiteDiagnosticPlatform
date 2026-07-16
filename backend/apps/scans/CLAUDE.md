@@ -27,7 +27,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `tasks.py` | Celery task 入口、狀態機推進、呼叫 billing | 直接執行爬蟲邏輯 |
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面 | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
-| `cancellation.py` | CancellationToken，供 worker 輪詢是否要終止 | 直接終止 worker process |
+| `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
 | `nuclei_scanner.py` | Nuclei binary 封裝；fast/deep 雙模式；JSONL 解析；Finding mapping | 在 passive mode 執行（已由 deep 旗標控制） |
 | `security/` | 深度主動式資安檢查（SSL/TLS、Cookie、CORS、CSP 品質、敏感檔外洩探測、硬編碼秘鑰偵測、OWASP 對映、Kali 工具）| 修改 ScanJob.status、呼叫 billing |
@@ -64,10 +64,13 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 
 ## 合作式取消機制（Cancellation）
 
-取消流程：
-1. 使用者呼叫 Cancel API → 在 Redis 設置取消旗標
-2. `CancellationToken.is_cancelled()` 在 worker 每處理幾頁時輪詢
-3. Worker 偵測到取消 → 停止爬蟲 → 呼叫 `refund_full_for_scan(scan)` → 狀態設為 `cancelled`
+實作在 `cancellation.py`，**完全 DB-status-based**（沒有 Redis 旗標）：
+
+1. 使用者呼叫 Cancel API → `views.py` 把 `ScanJob.status` 直接 update 成 `CANCELLED` 後立即回應。
+2. `is_cancelled(scan_job_id)` 用 `ScanJob.objects.filter(id=..., status=CANCELLED).exists()` 即時查 DB（**不**用 ORM 物件快取、**不**經 Redis）；`raise_if_cancelled(scan_job_id)` 在檢查點呼叫它，命中就 raise `ScanCancelled`。
+3. Worker 各階段（爬蟲每頁、scanners、agent、Kali fallback、Kubernetes executor 的 watch / Pod list / log I/O 前後）透過 `raise_if_cancelled` 主動輪詢；偵測到取消 → 停止當前工作 → `tasks.py` 主迴圈的 try/except 收到 `ScanCancelled` 後走 cancelled/refund 分支。
+
+選擇 DB-status 而非 Celery `revoke(terminate=True)` 或 Redis 旗標的理由見 `cancellation.py` 模組 docstring：terminate 會送 SIGTERM 給 worker process 可能波及同 worker 其他 task；DB-status 讓 worker 在「安全點」停下，DB 不會留下半完成狀態。
 
 重要：Cancel API 也會呼叫 `refund_full_for_scan`，兩邊都呼叫是安全的（冪等）。
 

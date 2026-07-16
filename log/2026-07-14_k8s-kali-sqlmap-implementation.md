@@ -336,3 +336,153 @@ finding 拆成 Fix 1、2A、2B、3A、3B、3C，由 OpenCode 逐一先寫有限 
 Task 1–4 regression `apps.scans.tests_kali_contracts apps.scans.tests_kali_policy apps.scans.tests_kali_tools apps.scans.tests_kali_kubernetes`
 共 123 tests in 16.741s 全綠；四個變更檔 Ruff 全綠；`uv lock --check --offline --no-cache` 通過；Django check 無問題。
 未 push、未部署、未啟用正式 Kali；Task 5 等待 reviewer amended-commit 重審。
+
+## Task 5：Pinned SQLmap runner image
+
+### 變更內容
+
+- 新增 `kali-runner/`：`runner.py`（純標準庫）在受限 Pod 內執行 SQLmap 並輸出符合 `kali_contracts.parse_runner_result` 的 ≤ 16384 bytes compact JSON；base image 為 `python:3.12.11-slim-bookworm` 固定 digest，SQLmap pinned commit `ea8c6bd…`（1.10 系列），`USER 65532:65532`、`HOME=/tmp`、唯讀 root filesystem。
+- Runner 自驗七層深層檢查：URL 可解析、scheme、顯式 port（80/443）、無 userinfo、帶 query、所有 DNS 解析皆為公網可路由、整批同源；任一失敗回固定錯誤碼。
+- 新增 `kali-runner/tests/`（38 tests）覆蓋命令形狀、sqlmap stdout 解析、run_target（timeout/例外/非零 returncode）、validate_batch（所有錯誤碼）、main()、`--self-test`、16384-byte size guard；test_runner.py 頂端插 `sys.path` 讓 `python -m unittest discover -s kali-runner/tests` 從 repo root 也能跑（commit `18f8bb6`）。
+- `Dockerfile` build 時 `apt install` sqlmap（pinned commit），**啟動時不執行 apt install / 更新**；image 不裝 Metasploit / Nmap / kubectl / Docker CLI。
+
+### 原因
+
+Task 4 的 K8s executor 需要一個不可變、可被 CEL `approvedImage` 鎖定的 runner image；runner 同時是「深層防禦第二層」，在上層 policy 已驗證後再驗一次，避免任何繞過上層的惡意 input 打到內網。
+
+### 影響範圍
+
+- Image 為 disabled sentinel digest（`…@sha256:0000…`）， CEL admission 連合約內 Job 都會擋下；正式啟用前需 `scripts/promote_kali_image.py` 推廣為真實 digest。
+- Runner stdout schema 與 `kali_contracts.parse_runner_result` 共用；schema 不一致時 parse 端會以 `invalid_result` 拒絕。
+
+### 驗證方式
+
+- 單元：`uv run python -m unittest discover -s kali-runner/tests` → 38 tests 全部通過。
+- Ruff：`uv run ruff check kali-runner` → All checks passed。
+- Image smoke（CI 覆蓋，本機 Docker cred-helper 壞掉無法跑）：`docker build` + `--self-test` + `sqlmap --version`；runs in `build-kali-runner.yml`。
+
+## Task 6：AI-first tool exposure 與 confirmed-Finding scoring
+
+### 變更內容
+
+- `agent/tools.py` 新增 `build_tool_schemas(allow_sqlmap)`：非 `deep_mode`（即非 active + authorized）掃描**完全排除** `probe_sql_injection` schema（深拷貝，避免 LLM 看到能力）；`redact_tool_arguments` / `redact_tool_result` 在持久化 AgentStep 前遮罩 `probe_sql_injection` 的 URL 與 raw 結果。
+- `agent/loop.py`：`HermesAgent` 依 `deep_mode` 傳入 `allow_sqlmap`；收集 `security_findings`（probe 確認的 SQLi）放進 `AgentRunResult`。
+- `agent/runner.py`：`SECURITY_FIRST_PROMPT` 僅在 `deep_mode` 注入；agent 確認的 security findings 經 `persist_agent_security_findings` 落地。
+- `scans/tasks.py`：順序固定為 scanner → **Hermes-Agent（先）** → **Kali fallback（後）** → scoring；Agent 確認的 `security_findings` 餵進 scoring；Redis 指紋讓 fallback 只處理 agent 沒驗證過的獨特 target。
+
+### 原因
+
+原本 Agent 與 Kali fallback 是兩條獨立鏈，且 `probe_sql_injection` 在非授權掃描也會出現在 LLM 的 tool 清單，造成提示層與授權層不一致。Task 6 把 Agent 提前到 fallback 之前、確認的 finding 餵進 scoring，並在 schema 層把未授權的 SQLi 能力完全隱藏。
+
+### 影響範圍
+
+- 僅 Agent 啟用（`ARGUS_AGENT_ENABLED=true`）的掃描會受到提示層與 schema 變更影響；Agent 預設關閉，向下相容。
+- `scans.tasks` 的 Kali fallback 順序固定後，Redis 指紋去重可避免 agent 已驗證的 target 被重打一次。
+- 不變：Docker demo、其他 scanner、billing。
+
+### 驗證方式
+
+- Agent 全 suite：`apps.agent` → 30 tests 通過（含新增 schema gate / redaction 測試）。
+- Task 1–6 regression：`apps.scans.tests_kali_contracts apps.scans.tests_kali_policy apps.scans.tests_kali_tools apps.scans.tests_kali_kubernetes apps.agent` 全綠。
+- Ruff：`uv run ruff check backend` → All checks passed。
+
+## Task 7：Namespace 隔離 + least-privilege RBAC + 單 runner 配額 + 精確 /32 egress + fail-closed admission
+
+### 變更內容
+
+- `k8s/10-kali-runtime.yaml`：新增 `argus-kali` namespace（PSA `restricted:v1.35` + `argus.io/kali-runner=true` label）；worker SA `argus-worker-kali-orchestrator`（在 argus ns）+ tokenless runner SA `kali-runner`；least-privilege Role（jobs create/get/list/watch/delete、secrets create/delete、pods get/list/watch、pods/log get）；ResourceQuota 鎖死整個 ns 最多 1 Pod + 1 Job 且資源量與 runner 一致；LimitRange 補 per-container max。
+- `k8s/11-kali-admission.yaml`：cluster-scoped `ValidatingAdmissionPolicy`（CEL，13 條契約）+ Binding 用 `namespaceSelector argus.io/kali-runner=true` 綁本 namespace；`failurePolicy: Fail` + `validationActions: [Deny]`；`approvedImage` 變數綁 disabled sentinel digest。
+- `k8s/07-network-policies.yaml`：worker 對 Kubernetes API 僅允許 Service clusterIP 與 endpoint 兩個精確 /32（不擴大 private CIDR）；新增 `argus-kali-default-deny`（全拒 ingress+egress）與 `argus-kali-runner-egress`（CoreDNS 53 + 公網 IPv4/IPv6 80/443，排除所有 private/reserved/metadata 網段；不開 587）。
+- `04-backend.yaml`：worker 掛 `serviceAccountName: argus-worker-kali-orchestrator`。
+- `tests/test_kali_k8s_contract.py`：鎖定 manifest 的 namespace label、RBAC verbs、quota、admission expression、NetworkPolicy 等不漂移。
+
+### 原因
+
+Runner 在 argus-kali 跑時雖然 tokenless，仍需防止 worker 被拿來橫向移動；Task 7 以「namespace label → quota → CEL」三層契約＋精確 /32 API egress 把 worker 與 runner 的能力都收最小。
+
+### 影響範圍
+
+- 新增 namespace 與 cluster-scoped VAP；正式啟用前必須在目標叢集實機驗證 RBAC / admission / Network 三層（見 runbook）。
+- Disabled sentinel image 让 CEL 連合約內 Job 都會被拒，是 fail-closed 設計。
+
+### 驗證方式
+
+- 契約測試：`uv run python -m unittest discover -s tests` 全綠（含 `test_kali_k8s_contract`）。
+- `kubectl kustomize k8s` 成功渲染；`--dry-run=server` 與 `kubectl auth can-i` 須在目標叢集驗證（Task 11）。
+
+## Task 8：Immutable image promotion script + CI build/write-back workflow + quality gate
+
+### 變更內容
+
+- `scripts/promote_kali_image.py`：純 regex 替換，把 `shijie85/argus-kali-runner@sha256:<64 hex>` 原子寫入 `k8s/01-namespace-config.yaml` 的 ConfigMap `ARGUS_KALI_RUNNER_IMAGE` 與 `k8s/11-kali-admission.yaml` 的 CEL `approvedImage`；只接受錨定格式（拒絕 tag）；兩份 manifest 各必須恰恰一個 digest 符記（零或多個 → `ValueError`）；`--check` 比對兩份一致。
+- `.github/workflows/build-kali-runner.yml`：觸發 `kali-runner/**`、`scripts/promote_kali_image.py`、測試異動；序列化 GitOps concurrency group；鎖定 Docker Hub 帳號為 `shijie85`；pre-build smoke + `docker buildx` 推 image + 自動呼叫推廣腳本 write-back。
+- `.github/workflows/quality.yml`：新增 Kali 推廣與 manifest 契約的 quality gate；CI 內 `promote_kali_image.py --check` 與 `kubectl kustomize` 納入閘門。
+- `tests/test_kali_image_promotion.py`：鎖定推廣腳本的拒絕條件與冪等行為。
+
+### 原因
+
+Runner image 必須是不可變 digest（不接受 tag），且 ConfigMap 與 VAP 必須同時換成同一 digest 才能保持 CEL 與 worker 讀到的 image 一致；任何漂移都會讓合約內 Job 被擋或 worker 拉到錯 image。
+
+### 影響範圍
+
+- CI workflow 自動把新 build 的 digest 寫回 repo；本機不應手動改 ConfigMap / VAP 的 digest。
+- 推廣腳本是啟用 runbook §1 的唯一入口。
+
+### 驗證方式
+
+- `uv run python scripts/promote_kali_image.py --check` → exit 0（兩份 manifest 一致）。
+- `uv run python -m unittest discover -s tests` 全綠（含 `test_kali_image_promotion`）。
+- CI run 在 push 後自動跑（本機 Docker build 仍 CI-deferred）。
+
+## Task 9：Isolated Calico 整合測試 CODE（kind + 真實 runner build + scoring）
+
+### 變更內容
+
+- `tests/integration/`：`kind-config.yaml`（kind v1.35 + Calico v3.32 manifest）、`kali-fixture/`（repo-owned vulnerable Flask fixture，固定 `93.184.216.34` externalIP + CoreDNS patch + `/etc/hosts` 在 CI 本機路由，不觸及任何第三方）、`test_kali_job.py`（端對端覆蓋 `_probe_sql_injection → run_sqlmap → KubernetesSqlmapExecutor → 真實 Job/Secret/Watch → parse_runner_result → persist_agent_security_findings → calculate_scores`，含並發 / 取消 / 資源清零驗證）。
+- `.github/workflows/kali-integration.yml`：`workflow_dispatch` 或 path trigger；CI 本機起 kind + Calico + 真實 runner build；嚴格 containment（fixture 可達 + 另一公網 IP 被 NetworkPolicy 擋下，任一失敗即 exit 1）；最後一步必刪 kind 叢集 + local registry。
+- `tests/integration/kali-fixture/app.py` 與 fixture YAML 的 containment 註解（commit `8810409` 修正：`93.184.216.34` 是 example.com 的真實公網 IP，containment 來自 kube-proxy externalIPs interception + runner NetworkPolicy，而非 TEST-NET-3 不可路由）。
+
+### 原因
+
+單元測試只能 mock K8s API；Task 9 補一條在 CI 本機 kind + Calico + 真實 image build 的整鏈驗證，確保 Task 4–7 的契約在真實 Kubernetes + CNI enforcement 下成立。整合 run **不**在本地跑（kind 未裝），由 `gh workflow run kali-integration.yml` 在 CI 內執行。
+
+### 影響範圍
+
+- 新增測試資源與 workflow；不改變正式參集狀態（仍 disabled）。
+- 整合測試以 skipUnless 包裝，單元測試 runner 不會啟動真實叢集。
+
+### 驗證方式
+
+- 本機單元測試：`uv run python -m unittest discover -s tests` + `kali-runner/tests` + `apps` 全綠。
+- CI 整合 run：`gh workflow run kali-integration.yml`（Task 11 控制平面 gate 才會在目標叢集正式跑）。
+
+## Task 10：Documentation synchronization and disabled software release
+
+### 變更內容
+
+- 新增 `docs/runbooks/kubernetes-secret-at-rest-encryption.md`（backup → key custody → apiserver manifest → sentinel raw-etcd verification → secret rewrite → health → recovery；頂部維護窗口警示）。
+- 新增 `docs/runbooks/kali-sqlmap-rollout.md`（digest promotion → server dry-run → RBAC/admission/network 實機檢查 → disabled smoke → enablement → authorized positive test → rollback；同樣維護窗口警示）。
+- 修改 `CLAUDE.md`（根）：新增 K8s Kali disabled-state 條目與兩份 runbook 在「特定操作指南」表的索引。
+- 修改 `ONBOARDING.md`：tech-stack 表新增 `kubernetes>=35.0,<36` 列；§2.3 環境範例新增 `ARGUS_KALI_*` settings（預設全 false / disabled）。
+- 修改 `backend/apps/scans/CLAUDE.md`：修正「合作式取消機制」段落的錯誤（**DB-status-based**，非 Redis 旗標）並更新 `cancellation.py` 表格列。
+- 修改 `backend/apps/scans/security/CLAUDE.md`：重寫「Kali Tools 設計原則」對齊 Task 1–9 的實際架構（contracts / policy / facade / K8s executor / AI-first 接線 / disabled 狀態與 runbook 連結）。
+- 修改 `backend/apps/agent/CLAUDE.md`：補 `build_tool_schemas` schema gate、`redact_tool_arguments` / `redact_tool_result` 遮罩、Hermes-before-fallback 順序、disabled 狀態與 runbook 連結。
+- 修改 `k8s/README.md`：檔案表新增 10/11 manifest；新增「K8s Kali SQLmap 攻擊鏈（disabled，Task 10 交付）」章節；更新 2026-07-14 驗證表的 Kali row 與待辦第 2 項，反映軟體已完成但仍 disabled。
+- 修改 `docs/capstone-roadmap.md`：新增「未開工 Future Backlog」section（8 項皆未實作：Metasploit K8s runner、Nmap runner、dedicated controller、multi-Job scheduler、async ScanJob continuation、SIEM/Prometheus alerts、automatic encryption-key rotation、Compose-only Docker CLI image split）。
+- APPEND 本份 Task 5–10 summary 到 implementation log（不重寫既有 Task 1–4 entry）。
+
+### 原因
+
+程式碼是唯一事實來源，文件漂移視同 bug。Task 1–9 完成後必須同步所有受影響文件並交付 operator 啟用手冊，讓 Task 11 的 cluster-admin 能照 runbook 安全啟用；同時明確標示 DONE vs DEFERRED 與 backlog，避免被誤解為已上線。
+
+### 影響範圍
+
+- 純文件變更；不改變任何程式碼、migration、套件、billing、前端或既有 scanner 行為。
+- 不新增 / 修改任何 live Secret、encryption key、SSH path、machine-specific value；runbook 範例一律 placeholder。
+
+### 驗證方式
+
+- 完整驗證套件（brief Step 5，扣除本機 Docker 壞掉的兩條 image smoke）：`uv sync --frozen` / `ruff check backend scripts tests kali-runner` / `manage.py check` / `manage.py makemigrations --check --dry-run`（無變更）/ `unittest discover -s tests` / `unittest discover -s kali-runner/tests` / `manage.py test apps` / `promote_kali_image.py --check` / `kubectl kustomize k8s` / `git diff --check` 全部通過。
+- 文件與 secret 衛生 greps（brief Step 6）：sensitive-pattern scan 只見刻意 test literals 與 doc warnings，無 real credential。
+- 本機 Docker image build / self-test smoke 與 kind+Calico 整合 run 因 local Docker cred-helper 壞掉 / kind 未裝而 CI-deferred，列為 Task 11 前置驗證。
+- `kubectl apply --dry-run=server` + `kubectl auth can-i` RBAC 實機檢查 + Secret 靜態加密 + 正式 enablement 全為 Task 11 手動控制平面 gate。
