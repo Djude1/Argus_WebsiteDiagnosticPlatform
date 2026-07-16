@@ -1,0 +1,73 @@
+# Task 9：刻意脆弱的 SQLi 靶機 Deployment + Service（brief Step 1）。
+#
+# 重要 containment 規則：
+#   * 1 replica；**沒有**任何 public Ingress / LoadBalancer Service。
+#   * Service type=ClusterIP，刻意加 externalIPs=[93.184.216.34]：93.184.216.34 屬
+#     TEST-NET-3 (RFC 5737)，在真實網際網路不會被路由；路由完全發生在 CI kind 叢集
+#     內，由 kube-proxy externalIPs interception 攔截後導向本 Service。
+#   * 放在 default namespace，**避開** k8s/10-kali-runtime.yaml 在 argus-kali 設定
+#     的 ResourceQuota（pods=1、jobs=1）；該配額保留給 SQLmap runner，靶機不能佔用。
+#   * image 由 workflow 以 `docker build -t argus-kali-fixture:local` 在 CI 本機建好
+#     後 `kind load docker-image` 進 kind，不對外發佈。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kali-fixture
+  namespace: default
+  labels:
+    app: kali-fixture
+    argus.io/component: integration-fixture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kali-fixture
+  template:
+    metadata:
+      labels:
+        app: kali-fixture
+        argus.io/component: integration-fixture
+    spec:
+      # 整合靶機不需要任何 service account token；tokenless 以縮小爆破半徑。
+      automountServiceAccountToken: false
+      containers:
+        - name: fixture
+          image: argus-kali-fixture:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          # 最低資源配額；避免與 argus-kali 的 quota 衝突（不同 namespace）。
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "192Mi"
+          # 故意不開 readiness/liveness——靶機就是要盡量單純，probe 由 workflow 在
+          # 外層以 kubectl run curl 確認（brief Step 2）。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kali-fixture
+  namespace: default
+  labels:
+    app: kali-fixture
+    argus.io/component: integration-fixture
+spec:
+  type: ClusterIP
+  selector:
+    app: kali-fixture
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  # brief Step 1：刻意用 externalIPs 而非 Ingress。CI 的 CoreDNS 會把
+  # fixture.argus.test 指到這個 IP，kube-proxy 攔截後導向本 Service。
+  # 93.184.216.34 是 IANA TEST-NET-3，不會在真實網際網路被廣播。
+  externalIPs:
+    - 93.184.216.34

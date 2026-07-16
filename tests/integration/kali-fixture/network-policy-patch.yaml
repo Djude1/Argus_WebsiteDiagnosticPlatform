@@ -1,0 +1,61 @@
+# Task 9：整合測試專屬的 argus-kali NetworkPolicy（brief Step 2 containment）。
+#
+# 與 k8s/07-network-policies.yaml 的 prod 策略相比，本檔案**更嚴格**——runner
+# (label app=kali-sqlmap) 的 egress 只允許：
+#   1. kube-dns（UDP/TCP 53）：DNS 解析 fixture.argus.test。
+#   2. 93.184.216.34/32 TCP 80：唯一允許的攻擊目標（fixture Service 的 externalIP）。
+#
+# 任何其他公網 IP（例如 192.0.2.1 屬 TEST-NET-1）都會被擋下；workflow 在跑攻擊前會
+# 用 kubectl run 一個 app=kali-sqlmap 的 probe pod 驗證這點（brief Step 2）。若驗證
+# 失敗，workflow 會立即停止，不讓 sqlmap 落到網際網路。
+#
+# 本檔案是 standalone NetworkPolicy 定義（不是對 07-network-policies.yaml 的 strategic
+# merge patch）；workflow 只套用本檔案 + 10-kali-runtime.yaml，prod 的 07 不會進到
+# 整合測試叢集。
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argus-kali-default-deny
+  namespace: argus-kali
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argus-kali-runner-egress
+  namespace: argus-kali
+spec:
+  podSelector:
+    matchLabels:
+      app: kali-sqlmap
+  policyTypes:
+    - Egress
+  egress:
+    # DNS：允許對 kube-system/kube-dns 的 53/udp+tcp，讓 runner 解析 fixture.argus.test。
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 唯一允許的攻擊目標：fixture Service 的 externalIP。不同於 prod 的
+    # 0.0.0.0/0 except private ranges，這裡只放行單一 /32，讓任何其他公網 IP 都被拒絕。
+    - to:
+        - ipBlock:
+            cidr: 93.184.216.34/32
+      ports:
+        - protocol: TCP
+          port: 80
