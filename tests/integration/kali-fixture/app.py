@@ -6,9 +6,11 @@
   * 永遠不得與真實資料庫或任何 production 系統連線；本程式使用 sqlite3 在記憶體以外的
     /tmp 內建立一次性資料表。
   * 永遠不得放在公開 Ingress 後面——fixture.yaml 的 Service 一律走 ClusterIP +
-    externalIPs=[93.184.216.34]，且 93.184.216.34 屬 TEST-NET-3 (RFC 5737)，
-    不會在真實網際網路被路由；路由完全由 kube-proxy externalIPs interception 與
-    CoreDNS patch 在 CI 叢集內部完成。
+    externalIPs=[93.184.216.34]。注意：93.184.216.34 是 example.com 真實可路由的
+    公網 IP（IANA 文檔用，並非 RFC 5737 TEST-NET），故意挑它讓 runner 的「公網目標」
+    檢查通過；真正的 containment 是 kube-proxy externalIPs interception 把 runner 對
+    93.184.216.34:80 的流量攔截導向本 fixture Service，加上 runner NetworkPolicy 擋下
+    任何其他公網 IP，因此流量永遠不會離開 CI kind 叢集。
 
 為什麼要刻意脆弱：
   Argus 的 kali-runner image 會用 sqlmap 對本靶機發動授權範圍內的 SQL injection

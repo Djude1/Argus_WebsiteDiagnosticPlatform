@@ -2,9 +2,11 @@
 #
 # 重要 containment 規則：
 #   * 1 replica；**沒有**任何 public Ingress / LoadBalancer Service。
-#   * Service type=ClusterIP，刻意加 externalIPs=[93.184.216.34]：93.184.216.34 屬
-#     TEST-NET-3 (RFC 5737)，在真實網際網路不會被路由；路由完全發生在 CI kind 叢集
-#     內，由 kube-proxy externalIPs interception 攔截後導向本 Service。
+#   * Service type=ClusterIP，刻意加 externalIPs=[93.184.216.34]。注意：93.184.216.34
+#     是 example.com 真實可路由的公網 IP（IANA 文檔用，並非 RFC 5737 TEST-NET），故意
+#     挑它讓 runner 的公網目標檢查通過；containment 來自 kube-proxy externalIPs
+#     interception 在 CI kind 叢集內攔截後導向本 Service，加上 runner NetworkPolicy
+#     擋下其他公網 IP，流量不會離開叢集。
 #   * 放在 default namespace，**避開** k8s/10-kali-runtime.yaml 在 argus-kali 設定
 #     的 ResourceQuota（pods=1、jobs=1）；該配額保留給 SQLmap runner，靶機不能佔用。
 #   * image 由 workflow 以 `docker build -t argus-kali-fixture:local` 在 CI 本機建好
@@ -68,6 +70,7 @@ spec:
       protocol: TCP
   # brief Step 1：刻意用 externalIPs 而非 Ingress。CI 的 CoreDNS 會把
   # fixture.argus.test 指到這個 IP，kube-proxy 攔截後導向本 Service。
-  # 93.184.216.34 是 IANA TEST-NET-3，不會在真實網際網路被廣播。
+  # 93.184.216.34 是 example.com 真實可路由的公網 IP；安全靠 externalIPs interception
+  # + runner NetworkPolicy（擋其他公網 IP），不是靠該 IP 不可路由。
   externalIPs:
     - 93.184.216.34
