@@ -43,6 +43,17 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
+## 團隊 Repo 與單機設定邊界（commit 前必查）
+
+- **可提交到團隊 repo**：所有協作者都適用的專案規則、架構事實、CI/CD 流程、可重現的問題與驗證／回滾方式。
+- **不得當成團隊前提提交**：單機工具是否安裝、固定磁碟或使用者路徑、SSH alias／金鑰、私人拓樸、暫時 Git／worktree 狀態，以及個人 Agent 的偏好或進度。
+- RTK 等非專案依賴工具只能是**選用輔助**：使用前先偵測是否存在；未安裝時直接使用原生命令，不得要求組員安裝，也不得讓任務或 CI 因缺少它而失敗。
+- repo 內的 `.agents/`、`.claude/` 或其他工具規則，只有在內容確實屬於專案共同規範時才可修改；個人工作方式放在不提交的本機／使用者層設定。
+- 使用者提出新規則、決策或地雷時，先判斷適用範圍：專案級內容當次寫入共用文件；單機或個人內容只留本機。不確定時預設不提交，先詢問。
+- stage 規則或文件前，逐項確認其他組員在乾淨環境讀到後仍能得到正確結論；不能只做密碼／Token 字串掃描。
+
+---
+
 ## 禁止事項清單（Prohibited Actions）
 
 以下操作**在任何情況下都禁止**，違反可能導致資料損毀、安全漏洞或計費錯誤。
@@ -54,7 +65,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 | 在程式碼中硬編碼 API Key / Token / 密碼 | 機密外洩，且一旦推上 git 無法徹底清除 | 放 `.env`，用 `python-dotenv` 讀取 |
 | `playwright install` 不加 `PLAYWRIGHT_BROWSERS_PATH` | 污染 `%USERPROFILE%\AppData\Local\ms-playwright` 全域路徑 | `$env:PLAYWRIGHT_BROWSERS_PATH=".ms-playwright"; uv run playwright install chromium` |
 | `pip install` 全域安裝 Python 套件 | 污染全域 Python 環境 | `uv add 套件名` |
-| 全域 `npm install -g` | 污染全域 Node 環境 | `D:\node22\npm.cmd install 套件名` |
+| 全域 `npm install -g` | 污染全域 Node 環境 | 使用專案既有的 `frontend/build-node22.ps1` 與區域套件 |
 | 修改或刪除已存在的 `CoinTransaction` 紀錄 | 破壞計費稽核軌跡 | 新增 `kind=admin_adjust` 的補正交易 |
 | 刪除 `AdminAuditLog` 紀錄 | 破壞合規稽核軌跡 | 禁止刪除，僅可查詢 |
 | 在 `scanners.py` / `crawler.py` 直接修改 `ScanJob.status` | 繞過狀態機，導致不一致狀態 | 只在 `tasks.py` 推進狀態 |
@@ -89,8 +100,8 @@ MD 修改後必執行核對清單：[`docs/md-checklist.md`](docs/md-checklist.m
 uv run python backend/manage.py runserver 127.0.0.1:8000
 
 # 前端 build（先 build 才能讓 Django serve）
-# ⚠️ 本機 Node v24 在 Windows 上會讓 Rollup STATUS_STACK_BUFFER_OVERRUN，
-# 一律用 D:\node22 portable Node，已寫成 helper script：
+# ⚠️ Node v24 在 Windows 上可能讓 Rollup STATUS_STACK_BUFFER_OVERRUN，
+# 一律透過 helper script 自動偵測可用的 portable Node 22：
 cd frontend ; .\build-node22.ps1 ; cd ..
 
 # 套用 migration
@@ -135,7 +146,7 @@ docker compose up -d --build frontend
 開發時不需要另開 Vite dev server，Django `runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**必須先 build 前端**，改了 React code 要重 build 才會生效。
 
 ### Node 22 portable（build 必用）
-⚠ 系統 Node v24 + Rollup 4.x 在 Windows 會 crash，build 一律用 `frontend/build-node22.ps1`（D:\node22，v22.22.3）。詳細說明見 [`docs/node22-guide.md`](docs/node22-guide.md)。
+⚠ 系統 Node v24 + Rollup 4.x 在 Windows 可能 crash，build 一律用 `frontend/build-node22.ps1` 自動偵測可用的 portable Node 22。不得在團隊文件寫死單機安裝位置；詳細說明見 [`docs/node22-guide.md`](docs/node22-guide.md)。
 
 ---
 
@@ -264,7 +275,7 @@ docker compose up -d --build frontend
 | 場景 | 文件 |
 |---|---|
 | cloudflared ingress 設定、跨 zone DNS | [`docs/cloudflared-guide.md`](docs/cloudflared-guide.md) |
-| RTK 使用規則（token 壓縮） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |
+| RTK 選用規則（需先偵測；未安裝用原生命令） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |
 | MD / 文件修改核對清單 | [`docs/md-checklist.md`](docs/md-checklist.md) |
 | 文件同步詳細規則 A/B/C | [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md) |
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |

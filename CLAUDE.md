@@ -15,6 +15,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 團隊 Repo 與單機設定邊界（commit 前必查）
+
+- **可提交到團隊 repo**：所有協作者都適用的專案規則、架構事實、CI/CD 流程、可重現的問題與驗證／回滾方式。
+- **不得當成團隊前提提交**：單機工具是否安裝、固定磁碟或使用者路徑、SSH alias／金鑰、私人拓樸、暫時 Git／worktree 狀態，以及個人 Agent 的偏好或進度。
+- RTK 等非專案依賴工具只能是**選用輔助**：使用前先偵測是否存在；未安裝時直接使用原生命令，不得要求組員安裝，也不得讓任務或 CI 因缺少它而失敗。
+- repo 內的 `.agents/`、`.claude/` 或其他工具規則，只有在內容確實屬於專案共同規範時才可修改；個人工作方式放在不提交的本機／使用者層設定。
+- 使用者提出新規則、決策或地雷時，先判斷適用範圍：專案級內容當次寫入共用文件；單機或個人內容只留本機。不確定時預設不提交，先詢問。
+- stage 規則或文件前，逐項確認其他組員在乾淨環境讀到後仍能得到正確結論；不能只做密碼／Token 字串掃描。
+
+---
+
 ## 禁止事項清單（Prohibited Actions）
 
 以下操作**在任何情況下都禁止**，違反可能導致資料損毀、安全漏洞或計費錯誤。
@@ -104,7 +115,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 |---|---|
 | 行為準則完整展開版 + 驗證方式對照表 | [`docs/behavior-guidelines.md`](docs/behavior-guidelines.md) |
 | cloudflared ingress 設定、跨 zone DNS | [`docs/cloudflared-guide.md`](docs/cloudflared-guide.md) |
-| RTK 使用規則（token 壓縮） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |
+| RTK 選用規則（需先偵測；未安裝用原生命令） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |
 | MD / 文件修改核對清單 | [`docs/md-checklist.md`](docs/md-checklist.md) |
 | 文件同步詳細規則 A/B/C + CLAUDE.md 跨層同步 | [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md) |
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |

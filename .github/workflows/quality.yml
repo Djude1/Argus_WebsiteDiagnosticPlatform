@@ -63,6 +63,21 @@ jobs:
               if path.suffix.lower() in suffixes:
                   path.read_text(encoding="utf-8")
           PY
+      - name: 驗證 GitOps build workflow 保留完整排隊
+        run: |
+          python - <<'PY'
+          import pathlib
+
+          workflows = (
+              pathlib.Path(".github/workflows/build-backend.yml"),
+              pathlib.Path(".github/workflows/build-frontend.yml"),
+          )
+          for path in workflows:
+              text = path.read_text(encoding="utf-8")
+              assert "group: argus-gitops-cd" in text, f"{path} 缺少共用 GitOps concurrency group"
+              assert "queue: max" in text, f"{path} 未保留完整 pending queue"
+              assert "cancel-in-progress: true" not in text, f"{path} 不得取消執行中的 image build"
+          PY
 
   kubernetes-manifests:
     runs-on: ubuntu-latest

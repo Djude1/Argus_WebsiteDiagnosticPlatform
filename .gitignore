@@ -44,3 +44,6 @@ backend/dev_emails/*.log
 
 # 資料庫備份（pg_dump 含真實使用者個資，絕不可推上公開 repo）
 backups/
+
+# 本機部署維運紀錄含私有環境資料，禁止進版控。
+infra/

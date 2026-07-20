@@ -12,10 +12,10 @@ on:
   workflow_dispatch: {} # 允許在 Actions 頁面手動觸發
 
 # 序列化 GitOps write-back：兩個 workflow 共用同一個 group → 同時只有一個在跑，
-# 避免兩者同時改 k8s/kustomization.yaml 撞在一起（cancel-in-progress:false = 排隊不取消）
+# queue:max 會保留排隊中的 runs，避免密集 push 時較早的 pending run 被後來者取代。
 concurrency:
   group: argus-gitops-cd
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
