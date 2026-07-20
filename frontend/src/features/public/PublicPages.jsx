@@ -665,86 +665,59 @@ function RiskLevelBadge({ level }) {
   );
 }
 
+function useInsightTool(endpoint) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const run = async (payload, fallbackMessage) => {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const res = await api.post(endpoint, payload);
+      setResult(res.data);
+    } catch (err) {
+      setError(apiErrorMessage(err, fallbackMessage));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { loading, result, error, run };
+}
+
 function FreeToolsPage() {
   const [speedForm, setSpeedForm] = useState({
     url: "",
     authorization_confirmed: false,
   });
-  const [speedLoading, setSpeedLoading] = useState(false);
-  const [speedResult, setSpeedResult] = useState(null);
-  const [speedError, setSpeedError] = useState("");
   const [urlValue, setUrlValue] = useState("");
-  const [urlLoading, setUrlLoading] = useState(false);
-  const [urlResult, setUrlResult] = useState(null);
-  const [urlError, setUrlError] = useState("");
   const [emailValue, setEmailValue] = useState("");
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailResult, setEmailResult] = useState(null);
-  const [emailError, setEmailError] = useState("");
   const [quickForm, setQuickForm] = useState({ url: "", authorization_confirmed: false });
-  const [quickLoading, setQuickLoading] = useState(false);
-  const [quickResult, setQuickResult] = useState(null);
-  const [quickError, setQuickError] = useState("");
   const [tool, setTool] = useState("scan"); // 免費工具分頁：scan / speed / phish
 
-  const runSpeedTest = async (event) => {
+  const speed = useInsightTool("/insights/speed-test/");
+  const quick = useInsightTool("/insights/quick-scan/");
+  const urlCheck = useInsightTool("/insights/phishing-url/");
+  const emailCheck = useInsightTool("/insights/phishing-email/");
+
+  const runSpeedTest = (event) => {
     event.preventDefault();
-    setSpeedLoading(true);
-    setSpeedError("");
-    setSpeedResult(null);
-    try {
-      const res = await api.post("/insights/speed-test/", speedForm);
-      setSpeedResult(res.data);
-    } catch (err) {
-      setSpeedError(apiErrorMessage(err, "測速失敗，請確認網址可公開連線。"));
-    } finally {
-      setSpeedLoading(false);
-    }
+    speed.run(speedForm, "測速失敗，請確認網址可公開連線。");
   };
 
-  const runQuickScan = async (event) => {
+  const runQuickScan = (event) => {
     event.preventDefault();
-    setQuickLoading(true);
-    setQuickError("");
-    setQuickResult(null);
-    try {
-      const res = await api.post("/insights/quick-scan/", quickForm);
-      setQuickResult(res.data);
-    } catch (err) {
-      setQuickError(apiErrorMessage(err, "單頁快速檢查失敗，請確認網址可公開連線。"));
-    } finally {
-      setQuickLoading(false);
-    }
+    quick.run(quickForm, "單頁快速檢查失敗，請確認網址可公開連線。");
   };
 
-  const runUrlCheck = async (event) => {
+  const runUrlCheck = (event) => {
     event.preventDefault();
-    setUrlLoading(true);
-    setUrlError("");
-    setUrlResult(null);
-    try {
-      const res = await api.post("/insights/phishing-url/", { url: urlValue });
-      setUrlResult(res.data);
-    } catch (err) {
-      setUrlError(apiErrorMessage(err, "URL 風險分析失敗。"));
-    } finally {
-      setUrlLoading(false);
-    }
+    urlCheck.run({ url: urlValue }, "URL 風險分析失敗。");
   };
 
-  const runEmailCheck = async (event) => {
+  const runEmailCheck = (event) => {
     event.preventDefault();
-    setEmailLoading(true);
-    setEmailError("");
-    setEmailResult(null);
-    try {
-      const res = await api.post("/insights/phishing-email/", { raw_email: emailValue });
-      setEmailResult(res.data);
-    } catch (err) {
-      setEmailError(apiErrorMessage(err, "郵件風險分析失敗。"));
-    } finally {
-      setEmailLoading(false);
-    }
+    emailCheck.run({ raw_email: emailValue }, "郵件風險分析失敗。");
   };
 
   return (
@@ -799,14 +772,14 @@ function FreeToolsPage() {
               />
               <span>我確認此頁面可公開檢測，或我擁有分析授權。</span>
             </label>
-            {quickError && <div className="insight-error">{quickError}</div>}
-            <button type="submit" className="public-cta-primary" disabled={quickLoading}>
-              {quickLoading ? "檢查中..." : "開始單頁檢查"}
+            {quick.error && <div className="insight-error">{quick.error}</div>}
+            <button type="submit" className="public-cta-primary" disabled={quick.loading}>
+              {quick.loading ? "檢查中..." : "開始單頁檢查"}
             </button>
           </form>
 
           <div className="insight-result-card">
-            {!quickResult ? (
+            {!quick.result ? (
               <div className="insight-empty">
                 <strong>會輸出哪些結果</strong>
                 <span>整體分數 + SEO / 資安 / AEO·GEO 三維單頁分數與重點問題清單。</span>
@@ -814,22 +787,22 @@ function FreeToolsPage() {
             ) : (
               <>
                 <div className="insight-score-row">
-                  <div className={`insight-score score-${quickResult.grade}`}>
-                    {quickResult.overall_score}
+                  <div className={`insight-score score-${quick.result.grade}`}>
+                    {quick.result.overall_score}
                   </div>
                   <div>
-                    <div className="insight-result-title">{quickResult.final_url}</div>
+                    <div className="insight-result-title">{quick.result.final_url}</div>
                     <div className="insight-result-sub">單頁快速檢查（不含多頁爬蟲 / Playwright）</div>
                   </div>
                 </div>
                 <div className="insight-metrics-grid">
-                  {quickResult.categories.map((c) => (
+                  {quick.result.categories.map((c) => (
                     <div key={c.key}><span>{c.label}</span><strong>{c.score}</strong></div>
                   ))}
                 </div>
-                {quickResult.findings.length > 0 ? (
+                {quick.result.findings.length > 0 ? (
                   <ul className="insight-finding-list">
-                    {quickResult.findings.map((f, idx) => (
+                    {quick.result.findings.map((f, idx) => (
                       <li key={`${f.title}-${idx}`}>
                         <strong>{f.title}</strong>
                         <span>{f.detail}</span>
@@ -839,7 +812,7 @@ function FreeToolsPage() {
                 ) : (
                   <div className="insight-success">單頁檢查未發現明顯問題。</div>
                 )}
-                <p className="insight-note">{quickResult.note}</p>
+                <p className="insight-note">{quick.result.note}</p>
               </>
             )}
           </div>
@@ -872,14 +845,14 @@ function FreeToolsPage() {
               />
               <span>我確認此頁面可公開測速，或我擁有分析授權。</span>
             </label>
-            {speedError && <div className="insight-error">{speedError}</div>}
-            <button type="submit" className="public-cta-primary" disabled={speedLoading}>
-              {speedLoading ? "測速中..." : "開始測速"}
+            {speed.error && <div className="insight-error">{speed.error}</div>}
+            <button type="submit" className="public-cta-primary" disabled={speed.loading}>
+              {speed.loading ? "測速中..." : "開始測速"}
             </button>
           </form>
 
           <div className="insight-result-card">
-            {!speedResult ? (
+            {!speed.result ? (
               <div className="insight-empty">
                 <strong>會輸出哪些結果</strong>
                 <span>分數、TTFB、傳輸量、阻塞 script、圖片 lazy loading、快取與壓縮建議。</span>
@@ -887,24 +860,24 @@ function FreeToolsPage() {
             ) : (
               <>
                 <div className="insight-score-row">
-                  <div className={`insight-score score-${speedResult.grade}`}>
-                    {speedResult.score}
+                  <div className={`insight-score score-${speed.result.grade}`}>
+                    {speed.result.score}
                   </div>
                   <div>
-                    <div className="insight-result-title">{speedResult.final_url}</div>
-                    <div className="insight-result-sub">{speedResult.source}</div>
+                    <div className="insight-result-title">{speed.result.final_url}</div>
+                    <div className="insight-result-sub">{speed.result.source}</div>
                   </div>
                 </div>
                 <div className="insight-metrics-grid">
-                  <div><span>TTFB</span><strong>{speedResult.metrics.ttfb_ms} ms</strong></div>
-                  <div><span>傳輸量</span><strong>{speedResult.metrics.transfer_kb} KB</strong></div>
-                  <div><span>阻塞 script</span><strong>{speedResult.metrics.blocking_scripts}</strong></div>
-                  <div><span>圖片</span><strong>{speedResult.metrics.images}</strong></div>
+                  <div><span>TTFB</span><strong>{speed.result.metrics.ttfb_ms} ms</strong></div>
+                  <div><span>傳輸量</span><strong>{speed.result.metrics.transfer_kb} KB</strong></div>
+                  <div><span>阻塞 script</span><strong>{speed.result.metrics.blocking_scripts}</strong></div>
+                  <div><span>圖片</span><strong>{speed.result.metrics.images}</strong></div>
                 </div>
-                <p className="insight-note">{speedResult.core_web_vitals_note}</p>
-                {speedResult.findings.length > 0 ? (
+                <p className="insight-note">{speed.result.core_web_vitals_note}</p>
+                {speed.result.findings.length > 0 ? (
                   <ul className="insight-finding-list">
-                    {speedResult.findings.map((f, idx) => (
+                    {speed.result.findings.map((f, idx) => (
                       <li key={`${f.title}-${idx}`}>
                         <strong>{f.title}</strong>
                         <span>{f.description}</span>
@@ -939,19 +912,19 @@ function FreeToolsPage() {
                 required
               />
             </label>
-            {urlError && <div className="insight-error">{urlError}</div>}
-            <button type="submit" className="public-cta-primary" disabled={urlLoading}>
-              {urlLoading ? "分析中..." : "分析 URL"}
+            {urlCheck.error && <div className="insight-error">{urlCheck.error}</div>}
+            <button type="submit" className="public-cta-primary" disabled={urlCheck.loading}>
+              {urlCheck.loading ? "分析中..." : "分析 URL"}
             </button>
-            {urlResult && (
+            {urlCheck.result && (
               <div className="insight-risk-result">
                 <div className="insight-risk-head">
-                  <strong>{urlResult.risk_score}/100</strong>
-                  <RiskLevelBadge level={urlResult.risk_level} />
+                  <strong>{urlCheck.result.risk_score}/100</strong>
+                  <RiskLevelBadge level={urlCheck.result.risk_level} />
                 </div>
-                <p>{urlResult.recommendation}</p>
+                <p>{urlCheck.result.recommendation}</p>
                 <ul className="insight-feature-list">
-                  {urlResult.features.slice(0, 5).map((f, idx) => (
+                  {urlCheck.result.features.slice(0, 5).map((f, idx) => (
                     <li key={`${f.title}-${idx}`}>
                       <strong>{f.title}</strong>
                       <span>{f.evidence}</span>
@@ -974,23 +947,23 @@ function FreeToolsPage() {
                 required
               />
             </label>
-            {emailError && <div className="insight-error">{emailError}</div>}
-            <button type="submit" className="public-cta-primary" disabled={emailLoading}>
-              {emailLoading ? "分析中..." : "分析郵件"}
+            {emailCheck.error && <div className="insight-error">{emailCheck.error}</div>}
+            <button type="submit" className="public-cta-primary" disabled={emailCheck.loading}>
+              {emailCheck.loading ? "分析中..." : "分析郵件"}
             </button>
-            {emailResult && (
+            {emailCheck.result && (
               <div className="insight-risk-result">
                 <div className="insight-risk-head">
-                  <strong>{emailResult.risk_score}/100</strong>
-                  <RiskLevelBadge level={emailResult.risk_level} />
+                  <strong>{emailCheck.result.risk_score}/100</strong>
+                  <RiskLevelBadge level={emailCheck.result.risk_level} />
                 </div>
-                <p>{emailResult.recommendation}</p>
+                <p>{emailCheck.result.recommendation}</p>
                 <div className="insight-email-meta">
-                  <span>From: {emailResult.from_domain || "未解析"}</span>
-                  <span>連結數: {emailResult.url_count}</span>
+                  <span>From: {emailCheck.result.from_domain || "未解析"}</span>
+                  <span>連結數: {emailCheck.result.url_count}</span>
                 </div>
                 <ul className="insight-feature-list">
-                  {emailResult.features.slice(0, 5).map((f, idx) => (
+                  {emailCheck.result.features.slice(0, 5).map((f, idx) => (
                     <li key={`${f.title}-${idx}`}>
                       <strong>{f.title}</strong>
                       <span>{f.evidence}</span>

@@ -2704,6 +2704,7 @@
     @apply grid gap-4;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
+  .admin-stat-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
   .admin-stat-card {
     @apply rounded-2xl p-5;
     background: #ffffff;
@@ -2788,6 +2789,8 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+  .admin-table thead th.col-actions { width: 120px; }
+  .admin-cell-mono { width: 280px; font-family: monospace; color: #94a3b8; }
   .admin-table tbody td {
     @apply px-3 py-2.5;
     color: #334155;
@@ -2813,6 +2816,9 @@
     @apply text-xs;
     color: #94a3b8;
   }
+  .admin-log-payload { margin-top: 4px; }
+  .admin-log-payload summary { cursor: pointer; color: #0e7490; font-size: 11px; }
+  .admin-log-payload pre { font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
   .admin-coin {
     @apply font-bold;
     color: #0e7490;
@@ -2884,6 +2890,10 @@
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.32);
   }
   .admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .admin-btn.small { padding: 4px 10px; font-size: 12px; }
+  .admin-btn.small + .admin-btn.small { margin-left: 4px; }
+  .admin-btn.danger { color: #dc2626; border-color: #fecaca; }
+  .admin-icon-lg { font-size: 22px; }
 
   .admin-search-bar {
     @apply flex flex-wrap gap-2;
@@ -2915,6 +2925,7 @@
     color: #0e7490;
   }
   .admin-balance-big span { @apply ml-1 text-base; color: #64748b; }
+  .admin-balance-big.tight { margin-bottom: 0; }
 
   /* --- Adjust form --- */
   .admin-adjust-form .admin-adjust-row {
@@ -3198,6 +3209,9 @@
     height: 10px;
     border-radius: 999px;
   }
+  .admin-chart-legend i.tone-cyan { background: #06b6d4; }
+  .admin-chart-legend i.tone-indigo { background: #6366f1; }
+  .admin-chart-legend i.tone-amber { background: #f59e0b; }
   .admin-mini-chart { display: block; }
 
   .admin-provider-bars {
@@ -5306,6 +5320,8 @@
   border-radius: 16px; max-width: 520px; width: 100%;
   max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;
 }
+.ann-modal.sm { max-width: 480px; }
+.ann-modal.lg { max-width: 560px; }
 .ann-modal-header {
   padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,.08);
   display: flex; align-items: center; justify-content: space-between; gap: .75rem;
@@ -5319,11 +5335,16 @@
 .ann-modal-body {
   padding: 1.25rem 1.5rem; overflow-y: auto; color: #cbd5e1;
   font-size: .925rem; line-height: 1.7; flex: 1;
+  display: flex; flex-direction: column; gap: .75rem;
 }
 .ann-modal-footer {
   padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,.08);
   display: flex; justify-content: flex-end; gap: .75rem;
 }
+.ann-form-row { display: flex; gap: .75rem; }
+.ann-form-row .input { flex: 1; }
+.ann-form-radio-group { display: flex; gap: 1rem; align-items: center; }
+.ann-input-days { width: 80px; }
 .ann-btn-dismiss {
   padding: .5rem 1rem; border: 1px solid rgba(255,255,255,.15);
   border-radius: 8px; background: transparent; color: #94a3b8; cursor: pointer;
@@ -5332,6 +5353,7 @@
   padding: .5rem 1.25rem; background: #6366f1; border: none;
   border-radius: 8px; color: #fff; font-weight: 600; cursor: pointer;
 }
+.ann-btn-confirm.danger { background: #dc2626; }
 
 /* ===== AdminAnnouncementsPage ===== */
 .admin-add-btn { padding: .5rem 1rem; background: #0891b2; border: none; border-radius: 8px; color: #fff; cursor: pointer; font-weight: 600; }

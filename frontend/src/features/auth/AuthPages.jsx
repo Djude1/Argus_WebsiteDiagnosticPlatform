@@ -22,14 +22,6 @@ function RequireAuth({ children }) {
   return <Navigate to={`/login?next=${next}`} replace />;
 }
 
-// ScanLayout 改為 parent route + Outlet：sidebar（表單 + 列表）只 mount 一次，
-// `/scans` ↔ `/scans/:id` 切換只重渲染右側 Outlet，避免每次按「建立掃描」
-// 版面整個 unmount 再 remount 造成的跳動。
-//
-// 兩種模式：
-//   list-mode（/scans）：sidebar inline 在左邊，固定 360px。
-//   detail-mode（/scans/:id）：sidebar 縮為 drawer overlay，主內容拿到全寬讓截圖變大。
-
 function LoginPage({ googleOAuthEnabled }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

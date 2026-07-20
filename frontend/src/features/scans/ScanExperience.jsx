@@ -29,6 +29,7 @@ import {
   isInProgress,
   SeverityBarChart,
   StackedBar,
+  useConfirmDialogs,
 } from "../../shared/AppShared.jsx";
 
 const SCAN_POLL_INTERVAL_MS = 2000;
@@ -1024,16 +1025,17 @@ function FindingsWorkspace({ scan }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [cancelBusy, setCancelBusy] = useState(false);
+  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
   async function handleCancel() {
-    if (!window.confirm("確定要終止此掃描嗎？已收集的部分仍會保留。")) return;
+    if (!(await confirmDialog("確定要終止此掃描嗎？已收集的部分仍會保留。", { danger: true }))) return;
     setCancelBusy(true);
     try {
       await api.post(`/scans/${scan.id}/cancel/`);
       // 等下次 polling 拿到新 status 切換 UI
     } catch (err) {
       const detail = err?.response?.data?.detail || err?.message || "未知錯誤";
-      alert("終止失敗：" + detail);
+      notifyDialog("終止失敗：" + detail);
     } finally {
       setCancelBusy(false);
     }
@@ -1041,15 +1043,24 @@ function FindingsWorkspace({ scan }) {
 
   // findings 與 pages 在 scan 物件更新時跟著刷新（polling 改變 scan 後 findings_count 變動會觸發）
   useEffect(() => {
+    let cancelled = false;
     async function loadDetails() {
-      const [findingsResponse, pagesResponse] = await Promise.all([
-        api.get(`/findings/?scan_id=${scan.id}`),
-        api.get(`/pages/?scan_id=${scan.id}`),
-      ]);
-      setFindings(findingsResponse.data.results || findingsResponse.data);
-      setPages(pagesResponse.data.results || pagesResponse.data);
+      try {
+        const [findingsResponse, pagesResponse] = await Promise.all([
+          api.get(`/findings/?scan_id=${scan.id}`),
+          api.get(`/pages/?scan_id=${scan.id}`),
+        ]);
+        if (cancelled) return;
+        setFindings(findingsResponse.data.results || findingsResponse.data);
+        setPages(pagesResponse.data.results || pagesResponse.data);
+      } catch {
+        // polling 會在下一輪重試，這裡不需額外處理
+      }
     }
     loadDetails();
+    return () => {
+      cancelled = true;
+    };
   }, [scan.id, scan.findings_count, scan.pages_count, scan.status]);
 
   // 選中的 finding 由 URL search param 決定，F5 後仍能還原
@@ -1151,6 +1162,7 @@ function FindingsWorkspace({ scan }) {
   const completed = scan.status === "completed";
 
   return (
+    <>
     <section className="panel lg:col-span-2">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
@@ -1382,12 +1394,22 @@ function FindingsWorkspace({ scan }) {
         </div>
       </div>
     </section>
+    {dialogHost}
+    </>
   );
 }
 
 // ============================================================
 // 路由保護與版面
 // ============================================================
+
+// ScanLayout 改為 parent route + Outlet：sidebar（表單 + 列表）只 mount 一次，
+// `/scans` ↔ `/scans/:id` 切換只重渲染右側 Outlet，避免每次按「建立掃描」
+// 版面整個 unmount 再 remount 造成的跳動。
+//
+// 兩種模式：
+//   list-mode（/scans）：sidebar inline 在左邊，固定 360px。
+//   detail-mode（/scans/:id）：sidebar 縮為 drawer overlay，主內容拿到全寬讓截圖變大。
 
 function ScanLayout() {
   const navigate = useNavigate();

@@ -130,6 +130,60 @@ function useDialogFocus(isOpen, onClose) {
   return dialogRef;
 }
 
+// 取代 window.confirm() / window.alert()，維持科技風玻璃擬態視覺語言一致。
+// confirmDialog(message) 回傳 Promise<boolean>；notifyDialog(message) 為單按鈕提示，無需 await。
+// 使用方式：const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs(); 並在 JSX 中 render {dialogHost}。
+function useConfirmDialogs() {
+  const [dialog, setDialog] = useState(null);
+  const dialogRef = useDialogFocus(Boolean(dialog), () => closeDialog(false));
+
+  function closeDialog(result) {
+    setDialog((current) => {
+      if (current?.kind === "confirm") current.resolve(Boolean(result));
+      return null;
+    });
+  }
+
+  function confirmDialog(message, { danger = false } = {}) {
+    return new Promise((resolve) => setDialog({ kind: "confirm", message, danger, resolve }));
+  }
+
+  function notifyDialog(message) {
+    setDialog({ kind: "notice", message });
+  }
+
+  const dialogHost = dialog ? (
+    <div className="ann-backdrop" onClick={() => closeDialog(false)}>
+      <div
+        ref={dialogRef}
+        className="ann-modal sm"
+        role="alertdialog"
+        aria-modal="true"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="ann-modal-body">
+          <p>{dialog.message}</p>
+        </div>
+        <footer className="ann-modal-footer">
+          {dialog.kind === "confirm" && (
+            <button type="button" className="ann-btn-dismiss" onClick={() => closeDialog(false)}>取消</button>
+          )}
+          <button
+            type="button"
+            className={`ann-btn-confirm${dialog.kind === "confirm" && dialog.danger ? " danger" : ""}`}
+            onClick={() => closeDialog(true)}
+          >
+            {dialog.kind === "confirm" ? "確定" : "知道了"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirmDialog, notifyDialog, dialogHost };
+}
+
 // 數字遞增動畫（適可而止：300ms 線性 ease-out）
 function CountUp({ value, duration = 600, suffix = "" }) {
   const [display, setDisplay] = useState(0);
@@ -430,6 +484,7 @@ export {
   CATEGORY_LABELS,
   apiErrorMessage,
   useDialogFocus,
+  useConfirmDialogs,
   CountUp,
   StackedBar,
   SeverityBarChart,

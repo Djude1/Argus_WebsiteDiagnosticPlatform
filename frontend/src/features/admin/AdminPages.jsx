@@ -11,7 +11,7 @@ import {
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
-import { STATUS_LABELS, useDialogFocus } from "../../shared/AppShared.jsx";
+import { STATUS_LABELS, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
 
 const ADMIN_NAV_ITEMS = [
   { to: "/admin/overview", label: "概覽", emoji: "📊" },
@@ -331,9 +331,9 @@ function AdminOverviewPage() {
         <div className="admin-panel-head-row">
           <h3>最近 14 天活動</h3>
           <div className="admin-chart-legend">
-            <span><i style={{ background: "#06b6d4" }} />AI tokens</span>
-            <span><i style={{ background: "#6366f1" }} />訂單金額</span>
-            <span><i style={{ background: "#f59e0b" }} />掃描數</span>
+            <span><i className="tone-cyan" />AI tokens</span>
+            <span><i className="tone-indigo" />訂單金額</span>
+            <span><i className="tone-amber" />掃描數</span>
           </div>
         </div>
         <AdminMiniChart
@@ -471,7 +471,7 @@ function AdminUsersPage() {
     setData(response.data);
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -566,7 +566,7 @@ function AdminUserDetailPage() {
       setError("找不到此使用者");
     }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [userId]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [userId]);
 
   async function handleAdjust(e) {
     e.preventDefault();
@@ -680,13 +680,13 @@ function AdminUserDetailPage() {
           <div className="admin-ai-summary">
             <div>
               <div className="admin-stat-label">總 Tokens</div>
-              <div className="admin-balance-big" style={{ marginBottom: 0 }}>
+              <div className="admin-balance-big tight">
                 {user.ai_usage.total_tokens.toLocaleString()}
               </div>
             </div>
             <div>
               <div className="admin-stat-label">Sessions</div>
-              <div className="admin-balance-big" style={{ marginBottom: 0 }}>
+              <div className="admin-balance-big tight">
                 {user.ai_usage.total_sessions}
               </div>
             </div>
@@ -750,7 +750,7 @@ function AdminTransactionsPage({ embedded }) {
     });
     setData(response.data);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page, kind]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, kind]);
 
   const KIND_OPTIONS = [
     { v: "", label: "全部類型" },
@@ -827,6 +827,7 @@ function AdminReviewsPage() {
   const [page, setPage] = useState(1);
   const [onlyPending, setOnlyPending] = useState(false);
   const [draftReplies, setDraftReplies] = useState({});
+  const { notifyDialog, dialogHost } = useConfirmDialogs();
 
   async function load() {
     const response = await api.get("/admin/reviews/", {
@@ -840,7 +841,7 @@ function AdminReviewsPage() {
     }
     setDraftReplies(initial);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page, onlyPending]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, onlyPending]);
 
   async function handleReply(reviewId) {
     try {
@@ -849,7 +850,7 @@ function AdminReviewsPage() {
       });
       await load();
     } catch {
-      alert("回覆失敗");
+      notifyDialog("回覆失敗");
     }
   }
 
@@ -861,7 +862,7 @@ function AdminReviewsPage() {
       </header>
 
       {data && (
-        <div className="admin-stat-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+        <div className="admin-stat-grid cols-3">
           <AdminStatCard label="總評論數" value={data.total} tone="cyan" />
           <AdminStatCard label="平均評分" value={data.avg_rating ? `${data.avg_rating} ★` : "—"} tone="green" />
           <AdminStatCard label="待回覆" value={data.pending_count} tone={data.pending_count > 0 ? "yellow" : "good"} />
@@ -927,6 +928,7 @@ function AdminReviewsPage() {
         <div className="admin-empty admin-panel">沒有符合的評論</div>
       )}
       {data && <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />}
+      {dialogHost}
     </div>
   );
 }
@@ -944,7 +946,7 @@ function AdminScansPage({ embedded }) {
     });
     setData(response.data);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page, statusFilter]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, statusFilter]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -1121,12 +1123,13 @@ function AdminCmsManager({ schema }) {
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   const dialogRef = useDialogFocus(Boolean(editing), cancel);
+  const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   async function load() {
     const r = await api.get(schema.endpoint);
     setItems(r.data.items || []);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [schema.endpoint]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [schema.endpoint]);
 
   function startNew() {
     const blank = {};
@@ -1187,12 +1190,14 @@ function AdminCmsManager({ schema }) {
   }
 
   async function remove(item) {
-    if (!window.confirm(`確定刪除「${item[schema.titleField || "name"] || "#" + item.id}」？`)) return;
+    const label = item[schema.titleField || "name"] || "#" + item.id;
+    if (!(await confirmDialog(`確定刪除「${label}」？`, { danger: true }))) return;
     await api.delete(`${schema.endpoint}${item.id}/`);
     await load();
   }
 
   return (
+    <>
     <section className="admin-panel">
       <div className="admin-panel-head-row">
         <h3>{schema.title}（{items.length}）</h3>
@@ -1222,7 +1227,7 @@ function AdminCmsManager({ schema }) {
             {schema.displayFields.map((f) => (
               <th key={f.key} className={f.num ? "num" : ""}>{f.label}</th>
             ))}
-            <th style={{ width: 120 }}>操作</th>
+            <th className="col-actions">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -1234,10 +1239,8 @@ function AdminCmsManager({ schema }) {
                 </td>
               ))}
               <td>
-                <button type="button" className="admin-btn" onClick={() => startEdit(item)}
-                  style={{ padding: "4px 10px", fontSize: 12, marginRight: 4 }}>編輯</button>
-                <button type="button" className="admin-btn" onClick={() => remove(item)}
-                  style={{ padding: "4px 10px", fontSize: 12, color: "#dc2626", borderColor: "#fecaca" }}>刪</button>
+                <button type="button" className="admin-btn small" onClick={() => startEdit(item)}>編輯</button>
+                <button type="button" className="admin-btn small danger" onClick={() => remove(item)}>刪</button>
               </td>
             </tr>
           ))}
@@ -1335,6 +1338,8 @@ function AdminCmsManager({ schema }) {
         </div>
       )}
     </section>
+    {dialogHost}
+    </>
   );
 }
 
@@ -1353,7 +1358,7 @@ const FEATURE_SCHEMA = {
   ],
   displayFields: [
     { key: "sort_order", label: "順序", num: true },
-    { key: "icon", label: "圖示", render: (i) => <span style={{ fontSize: 22 }}>{i.icon}</span> },
+    { key: "icon", label: "圖示", render: (i) => <span className="admin-icon-lg">{i.icon}</span> },
     { key: "title", label: "標題" },
     { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
   ],
@@ -1379,7 +1384,7 @@ const TEAM_SCHEMA = {
   ],
   displayFields: [
     { key: "sort_order", label: "順序", num: true },
-    { key: "avatar_emoji", label: "頭像", render: (i) => <span style={{ fontSize: 22 }}>{i.avatar_emoji}</span> },
+    { key: "avatar_emoji", label: "頭像", render: (i) => <span className="admin-icon-lg">{i.avatar_emoji}</span> },
     { key: "name", label: "姓名" },
     { key: "student_id", label: "學號" },
     { key: "role", label: "角色" },
@@ -1520,7 +1525,7 @@ function AdminSettingsPage() {
             else display = String(v);
             return (
               <tr key={k}>
-                <td style={{ width: 280, fontFamily: "monospace", color: "#94a3b8" }}>{k}</td>
+                <td className="admin-cell-mono">{k}</td>
                 <td>{display}</td>
               </tr>
             );
@@ -1554,6 +1559,7 @@ function AdminPlansPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const dialogRef = useDialogFocus(Boolean(editing), () => setEditing(null));
+  const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   useEffect(() => {
     api.get("/admin/cms/plans/").then((r) => setPlans(r.data.items || [])).catch(() => {});
@@ -1578,7 +1584,7 @@ function AdminPlansPage() {
     setPlans(r.data.items || []);
   }
   async function handleDelete(id) {
-    if (!window.confirm("確定刪除此方案？")) return;
+    if (!(await confirmDialog("確定刪除此方案？", { danger: true }))) return;
     await api.delete(`/admin/cms/plans/${id}/`);
     const r = await api.get("/admin/cms/plans/");
     setPlans(r.data.items || []);
@@ -1637,22 +1643,21 @@ function AdminPlansPage() {
         <div className="ann-backdrop" onClick={() => setEditing(null)}>
           <div
             ref={dialogRef}
-            className="ann-modal"
+            className="ann-modal sm"
             role="dialog"
             aria-modal="true"
             aria-label={editing === "new" ? "新增方案" : "編輯方案"}
             tabIndex={-1}
-            style={{ maxWidth: 480 }}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="ann-modal-header">
               <h2 className="ann-modal-title">{editing === "new" ? "新增方案" : "編輯方案"}</h2>
             </header>
-            <div className="ann-modal-body" style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+            <div className="ann-modal-body">
               <input className="input" placeholder="名稱" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <div style={{ display: "flex", gap: ".75rem" }}>
-                <input className="input" type="number" placeholder="價格 NT$" value={form.price_ntd || 0} onChange={(e) => setForm({ ...form, price_ntd: Number(e.target.value) })} style={{ width: "50%" }} />
-                <input className="input" type="number" placeholder="Coin 數" value={form.coin_amount || 0} onChange={(e) => setForm({ ...form, coin_amount: Number(e.target.value) })} style={{ width: "50%" }} />
+              <div className="ann-form-row">
+                <input className="input" type="number" placeholder="價格 NT$" value={form.price_ntd || 0} onChange={(e) => setForm({ ...form, price_ntd: Number(e.target.value) })} />
+                <input className="input" type="number" placeholder="Coin 數" value={form.coin_amount || 0} onChange={(e) => setForm({ ...form, coin_amount: Number(e.target.value) })} />
               </div>
               <input className="input" placeholder="徽章（選填）" value={form.badge || ""} onChange={(e) => setForm({ ...form, badge: e.target.value })} />
               <textarea className="input" rows={3} placeholder="描述" value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -1674,6 +1679,7 @@ function AdminPlansPage() {
           </div>
         </div>
       )}
+      {dialogHost}
     </div>
   );
 }
@@ -1696,6 +1702,7 @@ function AdminAnnouncementsPage() {
   const [form, setForm] = useState({ title: "", content: "", type: "temporary", active_days: 7, is_active: true });
   const me = useArgusStore((s) => s.me);
   const dialogRef = useDialogFocus(Boolean(editing), () => setEditing(null));
+  const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   function loadList() {
     setLoading(true);
@@ -1727,7 +1734,7 @@ function AdminAnnouncementsPage() {
     loadList();
   }
   async function handleDelete(id) {
-    if (!window.confirm("確定刪除此公告？")) return;
+    if (!(await confirmDialog("確定刪除此公告？", { danger: true }))) return;
     await api.delete(`/admin/announcements/${id}/`);
     loadList();
   }
@@ -1767,26 +1774,25 @@ function AdminAnnouncementsPage() {
         <div className="ann-backdrop" onClick={() => setEditing(null)}>
           <div
             ref={dialogRef}
-            className="ann-modal"
+            className="ann-modal lg"
             role="dialog"
             aria-modal="true"
             aria-label={editing === "new" ? "新增公告" : "編輯公告"}
             tabIndex={-1}
-            style={{ maxWidth: 560 }}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="ann-modal-header">
               <h2 className="ann-modal-title">{editing === "new" ? "新增公告" : "編輯公告"}</h2>
             </header>
-            <div className="ann-modal-body" style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+            <div className="ann-modal-body">
               <input className="input" placeholder="標題" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               <textarea className="input" rows={6} placeholder="內容" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
-              <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+              <div className="ann-form-radio-group">
                 <label><input type="radio" name="type" checked={form.type === "temporary"} onChange={() => setForm({ ...form, type: "temporary" })} /> 臨時公告</label>
                 <label><input type="radio" name="type" checked={form.type === "permanent"} onChange={() => setForm({ ...form, type: "permanent" })} /> 常駐公告</label>
               </div>
               {form.type === "temporary" && (
-                <label>顯示天數：<input className="input" type="number" min={1} max={365} value={form.active_days} onChange={(e) => setForm({ ...form, active_days: Number(e.target.value) })} style={{ width: 80 }} /></label>
+                <label>顯示天數：<input className="input ann-input-days" type="number" min={1} max={365} value={form.active_days} onChange={(e) => setForm({ ...form, active_days: Number(e.target.value) })} /></label>
               )}
               <label><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用</label>
             </div>
@@ -1797,6 +1803,7 @@ function AdminAnnouncementsPage() {
           </div>
         </div>
       )}
+      {dialogHost}
     </div>
   );
 }
@@ -1854,7 +1861,7 @@ function AuditLogTab() {
     });
     setData(r.data);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page, action]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, action]);
 
   return (
     <>
@@ -1894,9 +1901,9 @@ function AuditLogTab() {
                   <td className="admin-cell-secondary">
                     {log.target_object_repr}
                     {Object.keys(log.payload || {}).length > 0 && (
-                      <details style={{ marginTop: 4 }}>
-                        <summary style={{ cursor: "pointer", color: "#0e7490", fontSize: 11 }}>payload</summary>
-                        <pre style={{ fontSize: 11, margin: "4px 0 0", whiteSpace: "pre-wrap" }}>
+                      <details className="admin-log-payload">
+                        <summary>payload</summary>
+                        <pre>
                           {JSON.stringify(log.payload, null, 2)}
                         </pre>
                       </details>

@@ -14,6 +14,7 @@ import {
   SeverityBarChart,
   StackedBar,
   apiErrorMessage,
+  useConfirmDialogs,
   useDialogFocus,
 } from "../../shared/AppShared.jsx";
 
@@ -136,8 +137,6 @@ function StatTile({ label, value, hint, tone = "neutral", animateValue, onClick 
   }
   return <div className={`stat-tile tone-${tone}`}>{inner}</div>;
 }
-
-// formatRelativeTime 在下方 L3690 已定義，這裡不重複。
 
 // Dashboard 公告一律採非阻塞 toast；法律授權保留在建立掃描流程內。
 function AnnouncementToast({ announcements, onDismiss }) {
@@ -604,6 +603,9 @@ function BillingPage() {
       setPlans(r.data.plans || []);
       setPaymentMode(r.data.purchase_enabled ? r.data.payment_mode : "disabled");
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!wallet) fetchWallet();
     if (!me) fetchMe();
   }, [wallet, fetchWallet, me, fetchMe]);
@@ -1592,6 +1594,7 @@ function SettingsPage() {
   const wallet = useArgusStore((s) => s.wallet);
   const setToken = useArgusStore((s) => s.setToken);
   const [data, setData] = useState(null);
+  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -1712,15 +1715,16 @@ function SettingsPage() {
         <button
           className="settings-danger-btn"
           type="button"
-          onClick={() => {
-            if (window.confirm("確定要刪除帳號嗎？此操作無法復原。")) {
-              alert("請聯絡管理員協助刪除帳號。");
+          onClick={async () => {
+            if (await confirmDialog("確定要刪除帳號嗎？此操作無法復原。", { danger: true })) {
+              notifyDialog("請聯絡管理員協助刪除帳號。");
             }
           }}
         >
           刪除帳號
         </button>
       </section>
+      {dialogHost}
     </div>
   );
 }
