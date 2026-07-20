@@ -14,6 +14,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
+from docx import Document
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -27,13 +28,14 @@ from apps.scans.crawler import (
     compute_min_interval,
 )
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
-from apps.scans.reports import build_scan_report, get_severity_display
+from apps.scans.reports import build_scan_report, get_severity_display, mask_pii_evidence
 from apps.scans.scanners import (
     PageAnalysisInput,
     analyze_aeo,
     analyze_data_exposure,
     analyze_geo_fast,
     analyze_page,
+    analyze_security_site_level,
     analyze_site_signals,
     calculate_scores,
     detect_faq_structure,
@@ -104,7 +106,74 @@ class StaticScannerTests(APITestCase):
         self.assertIn("security", categories)
         self.assertIn("Meta title 長度不理想", titles)
         self.assertIn("可補充 JSON-LD 結構化資料", titles)
+        # HTTPS/HSTS/CSP 等站台層級標頭檢查已搬到 analyze_security_site_level()
+        # （見下方測試），analyze_page() 只保留逐頁各自判斷的 CSRF 檢查。
+        self.assertIn("表單可能缺少 CSRF token", titles)
+
+    def test_analyze_security_site_level_flags_missing_https_and_headers(self):
+        pages = [
+            {
+                "final_url": "http://example.com/",
+                "url": "http://example.com/",
+                "headers": {"content-type": "text/html"},
+            }
+        ]
+
+        findings = analyze_security_site_level(pages)
+        titles = {finding["title"] for finding in findings}
+
         self.assertIn("頁面未使用 HTTPS", titles)
+        self.assertIn("缺少 HSTS", titles)
+        self.assertIn("缺少 CSP", titles)
+
+    def test_analyze_security_site_level_only_evaluates_first_page_with_headers(self):
+        # 第一頁 headers 為空（爬蟲可能因逾時等原因沒抓到），應跳過改看下一頁；
+        # 找到的頁面若已具備全部必要標頭，就不該產生任何 finding——
+        # 驗證「整批頁面只評估一次」而非逐頁重複判斷。
+        pages = [
+            {"final_url": "https://example.com/a", "url": "https://example.com/a", "headers": {}},
+            {
+                "final_url": "https://example.com/b",
+                "url": "https://example.com/b",
+                "headers": {
+                    "strict-transport-security": "max-age=1",
+                    "content-security-policy": "default-src 'self'",
+                    "x-frame-options": "DENY",
+                    "x-content-type-options": "nosniff",
+                },
+            },
+        ]
+
+        findings = analyze_security_site_level(pages)
+
+        self.assertEqual(findings, [])
+
+    def test_analyze_security_site_level_skips_blocked_pages(self):
+        # 第一頁被標記 blocked_reason（例如跨網域導向、CF challenge）：它的 headers
+        # 來自不受信任的來源，不能代表使用者自己網站的設定，必須跳過改看下一頁。
+        pages = [
+            {
+                "final_url": "https://third-party.example/",
+                "url": "https://example.com/",
+                "headers": {"content-type": "text/html"},
+                "blocked_reason": "跨網域導向，超出授權範圍",
+            },
+            {
+                "final_url": "https://example.com/b",
+                "url": "https://example.com/b",
+                "headers": {
+                    "strict-transport-security": "max-age=1",
+                    "content-security-policy": "default-src 'self'",
+                    "x-frame-options": "DENY",
+                    "x-content-type-options": "nosniff",
+                },
+                "blocked_reason": "",
+            },
+        ]
+
+        findings = analyze_security_site_level(pages)
+
+        self.assertEqual(findings, [])
 
     def test_calculate_scores_returns_top_actions_without_code(self):
         findings = [
@@ -202,6 +271,83 @@ class StaticScannerTests(APITestCase):
 
         self.assertEqual(get_severity_display("warning"), "warning")
         self.assertTrue(build_scan_report(scan_job).endswith(".docx"))
+
+    def test_report_masks_pii_evidence_even_when_truncated(self):
+        # 60 筆信用卡號串接，總長度超過報告的 1000 字截斷點，最後一筆極可能被
+        # 切在數字中間；遮罩必須在完整字串上跑完才截斷，順序顛倒的話殘缺數字
+        # 長度不足以命中 regex，會以明文殘留在 .docx 裡。
+        user = get_user_model().objects.create_user(
+            username="pii-report-user",
+            email="pii-report@example.com",
+            password="safe-test-password",
+        )
+        scan_job = ScanJob.objects.create(
+            user=user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            status=ScanJob.Status.COMPLETED,
+        )
+        card_numbers = [f"41111111{i:08d}" for i in range(60)]
+        evidence = "信用卡號（60 筆）：" + ", ".join(card_numbers)
+        finding_payload = make_finding(
+            category=Finding.Category.SECURITY,
+            severity=Finding.Severity.HIGH,
+            title="頁面外洩個人資料 (PII)",
+            description="測試用",
+            remediation="測試用",
+            evidence=evidence,
+        )
+        Finding.objects.create(scan_job=scan_job, **finding_payload)
+
+        output_path = build_scan_report(scan_job)
+        document = Document(output_path)
+        full_text = "\n".join(p.text for p in document.paragraphs)
+
+        for card in card_numbers:
+            self.assertNotIn(card, full_text)
+
+    def test_report_masks_pii_from_exposure_scanner_findings_too(self):
+        # security/exposure_scanner.py 產生的敏感檔案外洩 finding 用不同的 rule_id
+        # （不是 SECURITY_PII_* 前綴），但 evidence 的「檔案內容片段」一樣可能含
+        # 原始個資；遮罩不能只靠 rule_id 白名單判斷是不是 PII finding。
+        user = get_user_model().objects.create_user(
+            username="exposure-report-user",
+            email="exposure-report@example.com",
+            password="safe-test-password",
+        )
+        scan_job = ScanJob.objects.create(
+            user=user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            status=ScanJob.Status.COMPLETED,
+        )
+        finding_payload = make_finding(
+            category=Finding.Category.SECURITY,
+            severity=Finding.Severity.HIGH,
+            rule_id="exposure-env-file",
+            title="敏感檔案外洩：環境變數檔",
+            description="測試用",
+            remediation="測試用",
+            evidence="檔案內容片段：\nADMIN_EMAIL=admin@example.com\nADMIN_PHONE=0912345678",
+        )
+        Finding.objects.create(scan_job=scan_job, **finding_payload)
+
+        output_path = build_scan_report(scan_job)
+        document = Document(output_path)
+        full_text = "\n".join(p.text for p in document.paragraphs)
+
+        self.assertNotIn("admin@example.com", full_text)
+        self.assertNotIn("0912345678", full_text)
+
+    def test_mask_pii_evidence_keeps_edges_only(self):
+        masked = mask_pii_evidence("聯絡信箱：service@example.com，電話：0987654321")
+
+        self.assertIn("se*****@example.com", masked)
+        self.assertIn("09******21", masked)
+        self.assertNotIn("service@example.com", masked)
+        self.assertNotIn("0987654321", masked)
 
 
 @override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
@@ -931,12 +1077,15 @@ class PageTypeRoutingTests(APITestCase):
         self.assertIn("表單可能缺少 CSRF token", security_titles)
 
     def test_analyze_page_only_runs_security_for_binary_resource(self):
-        # APK 連結沒有 HTML 內容，不該被加上 H1/JSON-LD/FAQPage 等建議
+        # APK 連結沒有 HTML 內容，不該被加上 H1/JSON-LD/FAQPage 等建議。
+        # HTTPS/HSTS/CSP 等站台層級標頭檢查已搬到 analyze_security_site_level()
+        # （對整批頁面只評估一次），這裡改用一個帶表單的頁面驗證 analyze_page()
+        # 仍會執行 per-page 的 CSRF 檢查（屬各頁面自己的問題，不能去重站台層級）。
         page_input = PageAnalysisInput(
             url="https://example.com/downloads/app.apk",
             final_url="https://example.com/downloads/app.apk",
             title="",
-            html="",
+            html="<form><input name='q'></form>",
             headers={},
             element_boxes={},
         )
@@ -947,7 +1096,6 @@ class PageTypeRoutingTests(APITestCase):
         self.assertNotIn("seo", categories)
         self.assertNotIn("aeo", categories)
         self.assertNotIn("geo", categories)
-        # HSTS/CSP 等安全頭部對檔案下載仍有效益，因此 security 仍會出現
         self.assertIn("security", categories)
 
 

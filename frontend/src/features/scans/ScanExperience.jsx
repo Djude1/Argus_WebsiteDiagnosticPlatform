@@ -891,7 +891,10 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [scan, targetPage]);
+    // scan 只認 id：ScanDetailPage 每 2 秒 polling 會產生全新的 scan 物件參考，
+    // 若把整個 scan 物件放進依賴陣列，即使內容沒變也會每次重新清空/重抓截圖，畫面閃爍。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan?.id, targetPage]);
 
   function syncScale() {
     const image = imageRef.current;

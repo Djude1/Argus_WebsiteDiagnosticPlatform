@@ -123,12 +123,21 @@ def normalize_crawl_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.hostname}{port}{path}{query}"
 
 
-def same_origin(url: str, origin: str) -> bool:
+def url_origin(url: str) -> str:
     parsed = urlparse(url)
-    target_origin = f"{parsed.scheme}://{parsed.hostname}"
+    hostname = parsed.hostname or ""
+    # IPv6 主機需用中括號包起來，比照 services.py::_host_for_url() 產生 ScanJob.origin
+    # 時的格式；否則 urlparse().hostname 對 IPv6 回傳不含中括號的裸位址，會跟
+    # ScanJob.origin 永遠對不上，讓 IPv6 目標的每一頁都被誤判成跨網域導向。
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    target_origin = f"{parsed.scheme}://{host}"
     if parsed.port:
         target_origin = f"{target_origin}:{parsed.port}"
-    return target_origin == origin
+    return target_origin
+
+
+def same_origin(url: str, origin: str) -> bool:
+    return url_origin(url) == origin
 
 
 def load_robot_parser(origin: str) -> RobotFileParser:
@@ -199,25 +208,40 @@ async def extract_links(page, base_url: str, origin: str) -> list[str]:
 
 
 async def scroll_to_bottom(page) -> None:
-    await page.evaluate(
-        """
-        async () => {
-            await new Promise((resolve) => {
-                let totalHeight = 0;
-                const distance = 600;
-                const timer = setInterval(() => {
-                    window.scrollBy(0, distance);
-                    totalHeight += distance;
-                    if (totalHeight >= document.body.scrollHeight) {
-                        clearInterval(timer);
-                        resolve();
-                    }
-                }, 80);
-            });
-            window.scrollTo(0, 0);
-        }
-        """
-    )
+    try:
+        await asyncio.wait_for(
+            page.evaluate(
+                """
+                async () => {
+                    await new Promise((resolve) => {
+                        let totalHeight = 0;
+                        let iterations = 0;
+                        // 無限捲動頁面（電商列表/社群 feed）的 scrollHeight 會隨捲動持續增長，
+                        // 永遠追不上就永遠不會 resolve；上限 100 次（約 60,000px）保底跳出。
+                        const maxIterations = 100;
+                        const distance = 600;
+                        const timer = setInterval(() => {
+                            window.scrollBy(0, distance);
+                            totalHeight += distance;
+                            iterations += 1;
+                            const done = totalHeight >= document.body.scrollHeight
+                                || iterations >= maxIterations;
+                            if (done) {
+                                clearInterval(timer);
+                                resolve();
+                            }
+                        }, 80);
+                    });
+                    window.scrollTo(0, 0);
+                }
+                """
+            ),
+            timeout=15,
+        )
+    except TimeoutError:
+        # 極端狀況（例如捲動中觸發頁面重新導向）evaluate 本身卡住：放棄捲動，
+        # 用目前畫面繼續截圖/分析，不讓單頁拖垮整個掃描。
+        pass
 
 
 _CONTEXT_RECYCLE_EVERY = 15
@@ -314,19 +338,30 @@ async def crawl_site(
                     await asyncio.sleep(wait_seconds)
                 last_request_at = time.perf_counter()
 
-                page = await context.new_page()
+                page = None
                 started_at = time.perf_counter()
+                context_broken = False
                 try:
-                    response = await page.goto(url, wait_until="networkidle", timeout=30000)
+                    # new_page() 納入 try：context/browser 偶發損壞時只讓這一頁失敗，
+                    # 不會讓例外冒出迴圈外、害已爬到的所有頁面全部遺失。
+                    page = await context.new_page()
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    try:
+                        # networkidle 常被分析工具/線上客服 widget 等背景長連線卡到 30 秒逾時上限。
+                        # 改成 domcontentloaded 立即返回 + 短暫 best-effort 等待 JS 渲染穩定，
+                        # 等不到就直接用目前已渲染的內容繼續，不讓單頁拖累整個掃描。
+                        await page.wait_for_load_state("networkidle", timeout=5000)
+                    except PlaywrightTimeoutError:
+                        pass
                     headers = await response.all_headers() if response else {}
                     status_code = response.status if response else None
                     final_url = normalize_crawl_url(assert_public_http_url(page.url))
+                    final_url_origin = url_origin(final_url) if final_url else origin
 
-                    # 早期 Content-Length 檢查：超大回應（PDF/影片/gzip bomb）跳過 scroll/
-                    # content/screenshot 等耗記憶體操作，防止 worker 被單頁撐爆
-                    oversized_reason = classify_oversized(headers)
-                    if oversized_reason:
-                        blocked_reason = oversized_reason
+                    if final_url_origin != origin:
+                        # 伺服器端 redirect 導去公開但非授權的網域：不分析其內容，
+                        # 也不能把它標記成屬於使用者授權的網站（origin 欄位另見下方）。
+                        blocked_reason = "跨網域導向，超出授權範圍"
                         title = ""
                         html = ""
                         html_only = ""
@@ -334,37 +369,88 @@ async def crawl_site(
                         element_boxes = {}
                         screenshot_path = None
                     else:
-                        await scroll_to_bottom(page)
-                        title = await page.title()
-                        html = await page.content()
+                        # 從這裡到內容擷取完成為止，若頁面被延遲觸發的 JS 導轉
+                        # （setTimeout、meta refresh）帶去其他網域，framenavigated 事件
+                        # 會即時標記；只在剛剛 goto 完成時檢查一次 page.url 沒辦法涵蓋
+                        # 之後 scroll/title/content/screenshot 這段期間才發生的導轉
+                        # （TOCTOU：檢查當下同源，擷取當下已經不同源）。
+                        navigated_off_origin = {"flag": False}
+
+                        def _on_frame_navigated(
+                            frame, _page=page, _origin=origin, _flag=navigated_off_origin
+                        ):
+                            if frame != _page.main_frame:
+                                return
+                            try:
+                                if frame.url and url_origin(frame.url) != _origin:
+                                    _flag["flag"] = True
+                            except Exception:
+                                pass
+
+                        page.on("framenavigated", _on_frame_navigated)
                         try:
-                            html_only = await response.text() if response else ""
-                        except Exception:
+                            # 早期 Content-Length 檢查：超大回應（PDF/影片/gzip bomb）
+                            # 跳過 scroll/content/screenshot 等耗記憶體操作，防止 worker
+                            # 被單頁撐爆
+                            oversized_reason = classify_oversized(headers)
+                            if oversized_reason:
+                                blocked_reason = oversized_reason
+                                title = ""
+                                html = ""
+                                html_only = ""
+                                links = []
+                                element_boxes = {}
+                                screenshot_path = None
+                            else:
+                                await scroll_to_bottom(page)
+                                title = await page.title()
+                                html = await page.content()
+                                try:
+                                    html_only = await response.text() if response else ""
+                                except Exception:
+                                    html_only = ""
+                                # 二次檢查：無 Content-Length 時用實際 body 大小 fallback
+                                # 再看 body 是否為 CF challenge——CF 常回 200 但 body 是
+                                # 攔截頁，必須在 status code 判斷之前先攔下，否則 scanners
+                                # 會誤判為真實內容。
+                                blocked_reason = (
+                                    classify_oversized(None, html)
+                                    or classify_cf_challenge(html)
+                                    or classify_blocked(status_code)
+                                )
+                                screenshot_path = (
+                                    screenshot_dir / f"page-{len(pages) + 1}.png"
+                                )
+                                # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
+                                await page.screenshot(
+                                    path=str(screenshot_path), full_page=True
+                                )
+                                # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
+                                links = (
+                                    []
+                                    if blocked_reason
+                                    else await extract_links(page, final_url, origin)
+                                )
+                                element_boxes = await collect_element_boxes(page)
+                        finally:
+                            page.remove_listener("framenavigated", _on_frame_navigated)
+
+                        if navigated_off_origin["flag"] and not blocked_reason:
+                            blocked_reason = "跨網域導向，超出授權範圍"
+                            title = ""
+                            html = ""
                             html_only = ""
-                        # 二次檢查：無 Content-Length 時用實際 body 大小 fallback
-                        # 再看 body 是否為 CF challenge——CF 常回 200 但 body 是攔截頁，
-                        # 必須在 status code 判斷之前先攔下，否則 scanners 會誤判為真實內容。
-                        blocked_reason = (
-                            classify_oversized(None, html)
-                            or classify_cf_challenge(html)
-                            or classify_blocked(status_code)
-                        )
-                        screenshot_path = screenshot_dir / f"page-{len(pages) + 1}.png"
-                        # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
-                        await page.screenshot(path=str(screenshot_path), full_page=True)
-                        # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
-                        links = (
-                            []
-                            if blocked_reason
-                            else await extract_links(page, final_url, origin)
-                        )
-                        element_boxes = await collect_element_boxes(page)
+                            links = []
+                            element_boxes = {}
+                            if screenshot_path is not None:
+                                screenshot_path.unlink(missing_ok=True)
+                                screenshot_path = None
                     load_time_ms = round((time.perf_counter() - started_at) * 1000)
                     pages.append(
                         {
                             "url": url,
                             "final_url": final_url,
-                            "origin": origin,
+                            "origin": final_url_origin,
                             "status_code": status_code,
                             "title": title,
                             "html": html,
@@ -393,13 +479,27 @@ async def crawl_site(
                 except Exception as exc:
                     warnings["failed_urls"].append({"url": url, "reason": exc.__class__.__name__})
                 finally:
-                    await page.close()
+                    if page is not None:
+                        await page.close()
                     pages_in_context += 1
                     if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
-                        await context.close()
-                        context = await _make_context(browser)
-                        pages_in_context = 0
-                    if progress_callback is not None:
+                        try:
+                            await context.close()
+                            context = await _make_context(browser)
+                            pages_in_context = 0
+                        except Exception as exc:
+                            # browser process 本身可能已經死亡，開不出新 context 就沒辦法
+                            # 再爬下一頁；記警告、用目前已收集的 pages 正常結束，不要讓
+                            # 例外冒出 while 迴圈外害已爬到的頁面全部遺失（同一類問題，
+                            # 見上面 context.new_page() 移進 try 區塊的修正）。
+                            warnings["failed_urls"].append(
+                                {
+                                    "url": url,
+                                    "reason": f"context_recycle_failed:{exc.__class__.__name__}",
+                                }
+                            )
+                            context_broken = True
+                    if not context_broken and progress_callback is not None:
                         done = len(visited)
                         total = min(len(visited) + len(queue), max_pages)
                         try:
@@ -410,6 +510,13 @@ async def crawl_site(
                         except Exception:
                             # 其他 callback 錯誤不影響爬蟲本身
                             pass
+                # break 特意放在 finally 區塊外：ruff B012 禁止在 finally 裡 break，
+                # 因為若當時有例外正在傳遞，finally 裡的 break 會把它悄悄吞掉；
+                # 這裡的 context_broken 只在 finally 內部自己的 try/except 已經
+                # 完整處理過例外後才會是 True，不存在還有未處理例外要傳遞的情況，
+                # 但仍照 lint 規則把 break 移到 try/finally 區塊外以避免歧義。
+                if context_broken:
+                    break
         finally:
             await context.close()
             await browser.close()

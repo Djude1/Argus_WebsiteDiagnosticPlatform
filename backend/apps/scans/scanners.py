@@ -670,9 +670,56 @@ def analyze_geo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list
 
 
 def analyze_security(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:
+    """頁面層級安全檢查：CSRF token（依各頁面自己的表單而定，本來就該逐頁各自判斷）。
+
+    HTTPS / HSTS / CSP / X-Frame-Options / X-Content-Type-Options 屬伺服器設定，
+    對整站幾乎一致，已搬到 analyze_security_site_level()（由 tasks.py 對整批
+    crawled_pages 只呼叫一次），避免多頁站台把同一個問題重複扣好幾倍分數。
+    """
     findings: list[dict] = []
-    parsed = urlparse(page_input.final_url)
-    headers = {key.lower(): value for key, value in page_input.headers.items()}
+    if parser.form_without_csrf:
+        findings.append(
+            make_finding(
+                category=Finding.Category.SECURITY,
+                severity=Finding.Severity.MEDIUM,
+                title="表單可能缺少 CSRF token",
+                description=(
+                    "偵測到表單可能缺少 CSRF token。若此表單會改變登入狀態、個人資料、"
+                    "訂單或後台設定，可能造成使用者在不知情下提交非預期請求。"
+                ),
+                remediation="確認會改變狀態的表單都具備 CSRF token 或等效防護。",
+                evidence=(
+                    f"form_count={parser.form_count}, "
+                    f"form_without_csrf={parser.form_without_csrf}"
+                ),
+                selector="form",
+                bounding_box=page_input.element_boxes.get("form"),
+                impact_area="csrf",
+                priority_score=64,
+            )
+        )
+    return findings
+
+
+def analyze_security_site_level(pages: list[dict]) -> list[dict]:
+    """HTTPS / HSTS / CSP / X-Frame-Options / X-Content-Type-Options：只評估一次。
+
+    取第一個有 headers 的頁面（比照 security/header_scanner.py::analyze_headers()
+    的去重模式），因為這些是伺服器設定，逐頁重複檢查只會產生一堆內容相同的 finding，
+    還會把 SECURITY 分數不成比例地往下拖。
+
+    排除 blocked_reason 非空的頁面（例如跨網域導向、CF challenge、oversized）：
+    這些頁面的 headers 可能來自第三方網域或錯誤頁，不能代表使用者自己網站的設定。
+    """
+    findings: list[dict] = []
+    page = next(
+        (p for p in pages if p.get("headers") and not p.get("blocked_reason")), None
+    )
+    if not page:
+        return findings
+    final_url = page.get("final_url") or page.get("url") or ""
+    parsed = urlparse(final_url)
+    headers = {key.lower(): value for key, value in (page.get("headers") or {}).items()}
     if parsed.scheme != "https":
         findings.append(
             make_finding(
@@ -706,27 +753,6 @@ def analyze_security(page_input: PageAnalysisInput, parser: HtmlSignalParser) ->
                     priority_score=55 if severity == Finding.Severity.MEDIUM else 25,
                 )
             )
-    if parser.form_without_csrf:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SECURITY,
-                severity=Finding.Severity.MEDIUM,
-                title="表單可能缺少 CSRF token",
-                description=(
-                    "偵測到表單可能缺少 CSRF token。若此表單會改變登入狀態、個人資料、"
-                    "訂單或後台設定，可能造成使用者在不知情下提交非預期請求。"
-                ),
-                remediation="確認會改變狀態的表單都具備 CSRF token 或等效防護。",
-                evidence=(
-                    f"form_count={parser.form_count}, "
-                    f"form_without_csrf={parser.form_without_csrf}"
-                ),
-                selector="form",
-                bounding_box=page_input.element_boxes.get("form"),
-                impact_area="csrf",
-                priority_score=64,
-            )
-        )
     return findings
 
 
@@ -952,7 +978,18 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
     return findings
 
 
-def calculate_scores(findings: list[dict]) -> tuple[int, dict[str, int], list[dict]]:
+def calculate_scores(
+    findings: list[dict], *, tested_categories: set[str] | None = None
+) -> tuple[int, dict[str, int], list[dict]]:
+    """算各分類分數與 overall_score。
+
+    tested_categories：實際有執行檢查的分類集合。UX 只有 Hermes-Agent 啟用且真的
+    跑過才算「有測」；停用時（預設）完全沒有 UX finding 來源，若仍把
+    category_scores["ux"]（此時必為 100）計入 overall_score 平均，等於把「沒測」
+    誤當「零問題」灌高總分。傳 None 時視為全部類別皆已測試（相容舊呼叫）；
+    category_scores 仍回傳全部 5 個分類（供前端/報告顯示），只有 overall_score
+    的平均會排除未測試的分類。
+    """
     categories = [
         Finding.Category.SEO,
         Finding.Category.AEO,
@@ -975,7 +1012,16 @@ def calculate_scores(findings: list[dict]) -> tuple[int, dict[str, int], list[di
             if finding["category"] == category
         )
         category_scores[category] = max(0, 100 - penalty)
-    overall_score = round(sum(category_scores.values()) / len(category_scores))
+    scored_categories = (
+        [c for c in categories if c in tested_categories]
+        if tested_categories is not None
+        else categories
+    )
+    overall_score = (
+        round(sum(category_scores[c] for c in scored_categories) / len(scored_categories))
+        if scored_categories
+        else 0
+    )
     top_actions = [
         {
             "title": finding["title"],

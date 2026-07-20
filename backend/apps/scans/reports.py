@@ -1,9 +1,17 @@
+import re
+from collections import OrderedDict
 from pathlib import Path
 
 from django.conf import settings
 from docx import Document
 
 from apps.scans.models import ScanJob
+from apps.scans.scanners import (
+    CREDIT_CARD_PATTERN,
+    EMAIL_PATTERN,
+    TW_MOBILE_PATTERN,
+    TW_NATIONAL_ID_PATTERN,
+)
 
 
 def get_severity_display(severity: str) -> str:
@@ -21,13 +29,61 @@ def get_finding_description_label(severity: str) -> str:
         return "風險描述"
     elif severity == "medium":
         return "改善重點"
-    return "建議優化" 
+    return "建議優化"
 
 
 def get_remediation_label(severity: str) -> str:
     if severity in {"critical", "high"}:
         return "修補方向"
     return "建議修補"
+
+
+def _mask_email(match: re.Match) -> str:
+    email = match.group(0)
+    local, _, domain = email.partition("@")
+    visible = local[:2]
+    return f"{visible}{'*' * max(len(local) - len(visible), 1)}@{domain}"
+
+
+def _mask_digits(match: re.Match, keep_start: int, keep_end: int) -> str:
+    digits = re.sub(r"\D", "", match.group(0))
+    if len(digits) <= keep_start + keep_end:
+        return "*" * len(digits)
+    return digits[:keep_start] + "*" * (len(digits) - keep_start - keep_end) + digits[-keep_end:]
+
+
+def mask_pii_evidence(text: str) -> str:
+    """報告展示層遮罩：evidence 含原始個資（email/手機/身分證/信用卡）就地遮罩，
+    這份 .docx 會被下載、轉寄、存檔，直接印出原始內容有明確合規風險。只保留頭尾供
+    人工比對，不修改 DB 內的原始 Finding 記錄。
+
+    對「所有」finding 的 evidence 都套用（不靠 rule_id 前綴判斷是否為 PII finding）：
+    除了 scanners.py::analyze_data_exposure() 產生的 SECURITY_PII_* finding，
+    security/exposure_scanner.py 的敏感檔案外洩 finding 也會把命中檔案的原始內容
+    片段放進 evidence，一樣可能含未遮罩個資，用 rule_id 白名單很容易漏掉這類來源；
+    正則對不含 PII 樣式的文字（如 header 名稱、URL）是無操作，不會誤傷正常內容。"""
+    if not text:
+        return text
+    masked = EMAIL_PATTERN.sub(_mask_email, text)
+    masked = TW_MOBILE_PATTERN.sub(lambda m: _mask_digits(m, 2, 2), masked)
+    masked = TW_NATIONAL_ID_PATTERN.sub(lambda m: m.group(0)[0] + "*" * 8, masked)
+    masked = CREDIT_CARD_PATTERN.sub(lambda m: _mask_digits(m, 4, 4), masked)
+    return masked
+
+
+def _group_findings_for_report(findings) -> list[dict]:
+    """同一個 rule_id + evidence 完全相同的 finding（例如同一份 PII 或同一組缺 header
+    的問題出現在多個頁面）合併成一筆，受影響頁面收斂成清單。只影響 .docx 呈現順序與
+    分組，不改資料庫裡的原始 Finding 記錄。"""
+    groups: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    for finding in findings:
+        key = (finding.rule_id or "", finding.evidence or "")
+        group = groups.get(key)
+        if group is None:
+            group = {"finding": finding, "pages": []}
+            groups[key] = group
+        group["pages"].append(finding.page.final_url if finding.page else "站台層級")
+    return list(groups.values())
 
 
 def build_scan_report(scan_job: ScanJob) -> str:
@@ -39,6 +95,10 @@ def build_scan_report(scan_job: ScanJob) -> str:
     document.add_heading("Argus 網站健檢報告", 0)
     document.add_paragraph(f"掃描網址：{scan_job.normalized_url}")
     document.add_paragraph(f"掃描狀態：{scan_job.get_status_display()}")
+    if scan_job.completed_at:
+        document.add_paragraph(
+            f"掃描完成時間：{scan_job.completed_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
     overall_score = scan_job.overall_score if scan_job.overall_score is not None else "尚未產生"
     document.add_paragraph(f"整體分數：{overall_score}")
 
@@ -57,27 +117,34 @@ def build_scan_report(scan_job: ScanJob) -> str:
         )
 
     document.add_heading("發現項目", level=1)
-    for finding in scan_job.findings.select_related("page").all():
+    grouped_findings = _group_findings_for_report(
+        scan_job.findings.select_related("page").all()
+    )
+    for item in grouped_findings:
+        finding = item["finding"]
+        pages = item["pages"]
         severity_display = get_severity_display(finding.severity)
 
         document.add_heading(finding.title, level=2)
-        document.add_paragraph(f"分類：{finding.category} / 嚴重度：{severity_display}")
+        document.add_paragraph(
+            f"分類：{finding.category.upper()} / 嚴重度：{severity_display}"
+        )
         document.add_paragraph(f"規則 ID：{finding.rule_id or '未標示'}")
         if finding.owasp_category or finding.cwe_id:
             owasp = finding.owasp_category or "—"
             cwe = finding.cwe_id or "—"
             document.add_paragraph(f"OWASP：{owasp} / CWE：{cwe}")
 
-        if finding.page:
-            document.add_paragraph(f"頁面：{finding.page.final_url}")
+        if len(pages) > 1:
+            document.add_paragraph(f"受影響頁面（共 {len(pages)} 處）：{'、'.join(pages)}")
         else:
-            document.add_paragraph("頁面：站台層級")
+            document.add_paragraph(f"頁面：{pages[0]}")
 
         document.add_paragraph(get_finding_description_label(finding.severity))
-        document.add_paragraph(finding.description)
+        document.add_paragraph(finding.description or "（無）")
 
         document.add_paragraph(get_remediation_label(finding.severity))
-        document.add_paragraph(finding.remediation)
+        document.add_paragraph(finding.remediation or "（無）")
 
         if finding.evidence:
             document.add_paragraph("Deterministic Evidence")
@@ -85,7 +152,16 @@ def build_scan_report(scan_job: ScanJob) -> str:
                 document.add_paragraph(f"證據來源：{finding.evidence_source}")
             if finding.evidence_type:
                 document.add_paragraph(f"證據型態：{finding.evidence_type}")
-            document.add_paragraph(finding.evidence[:1000])
+            # 先在完整字串上遮罩、再截斷顯示長度：反過來做的話，PII 數值可能剛好被
+            # 1000 字截斷點切一半，殘缺數字長度不足以命中 regex，反而以明文殘留。
+            masked_evidence = mask_pii_evidence(finding.evidence)
+            if masked_evidence != finding.evidence:
+                document.add_paragraph(
+                    "⚠️ 以下內容為偵測到之敏感樣本部分遮罩後的結果，請依個資法妥善保管本報告。"
+                )
+            evidence_text = masked_evidence[:1000]
+            truncated_note = "…（證據過長已截斷）" if len(masked_evidence) > 1000 else ""
+            document.add_paragraph(f"{evidence_text}{truncated_note}")
 
         if finding.ai_explanation or finding.ai_remediation:
             document.add_paragraph("AI 解釋與改善建議")

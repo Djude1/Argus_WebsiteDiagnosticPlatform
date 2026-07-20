@@ -18,6 +18,7 @@ from apps.scans.scan_logger import append_log
 from apps.scans.scanners import (
     PageAnalysisInput,
     analyze_page,
+    analyze_security_site_level,
     analyze_site_signals,
     calculate_scores,
 )
@@ -190,6 +191,26 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             )
             raise_if_cancelled(scan_job_id)
 
+        # HTTPS/HSTS/CSP/X-Frame-Options/X-Content-Type-Options 是伺服器設定，整站幾乎一致；
+        # 對每頁各自呼叫 analyze_security() 只會得到同一組問題的多份複本，且會把 SECURITY
+        # 分數依頁數不成比例地往下拖。改為對整批頁面只評估一次、page=None 的站台層級 finding。
+        site_level_security_findings = analyze_security_site_level(crawled_pages)
+        for finding in site_level_security_findings:
+            Finding.objects.create(scan_job=scan_job, page=None, **finding)
+        all_findings.extend(site_level_security_findings)
+        if site_level_security_findings:
+            append_log(
+                scan_job_id,
+                "站台層級安全檢查（HTTPS/HSTS/CSP 等）："
+                f"{len(site_level_security_findings)} 項發現",
+            )
+
+        # Katana/Nuclei/Kali/深度被動掃描/exposure probe 這幾個階段合計常常耗時數十秒到數分鐘，
+        # 但過去完全不寫 progress，使用者會看到進度條卡在「scanning 100%」不動、誤以為當機。
+        # 沿用 phase="scanning"（progress 格式契約只允許 crawling/scanning/agent_testing 三值），
+        # 用延伸的 done/total 讓進度條在這段期間持續往前走。
+        deep_scan_total = scanning_total + 4
+
         # 並行執行 Katana（JS 秘鑰 / 技術棧）+ Nuclei（資安掃描）
         raise_if_cancelled(scan_job_id)
         deep_mode = (
@@ -232,6 +253,13 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         except Exception as exc:  # noqa: BLE001
             append_log(scan_job_id, f"Nuclei 略過（{exc.__class__.__name__}）", level="warn")
             nuclei_findings = []
+        _write_progress(
+            scan_job.id,
+            phase="scanning",
+            done=scanning_total + 1,
+            total=deep_scan_total,
+            phase_started_at=scan_phase_started,
+        )
 
         # 若 Nuclei 無發現，且 Katana 偵測到已知 WAF / CDN，
         # 新增 info finding 向使用者說明探針遭攔截、保護機制有效
@@ -300,6 +328,13 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                     scan_job_id,
                     f"Kali 主動驗證確認 {len(kali_findings)} 項可利用漏洞",
                 )
+        _write_progress(
+            scan_job.id,
+            phase="scanning",
+            done=scanning_total + 2,
+            total=deep_scan_total,
+            phase_started_at=scan_phase_started,
+        )
 
         # === 深度被動安全掃描（security/ sub-package，純加法、silent-fail）===
         host = urlparse(scan_job.normalized_url).hostname or ""
@@ -325,6 +360,13 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         append_log(
             scan_job_id,
             f"深度被動安全掃描完成：{len(deep_security_findings)} 項發現",
+        )
+        _write_progress(
+            scan_job.id,
+            phase="scanning",
+            done=scanning_total + 3,
+            total=deep_scan_total,
+            phase_started_at=scan_phase_started,
         )
 
         # === robots.txt 敏感路徑洩露（被動，任何模式都產出）===
@@ -370,6 +412,13 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             updated_warnings["tech_stack"] = katana_tech
             scan_job.warning_summary = updated_warnings
             scan_job.save(update_fields=["warning_summary", "updated_at"])
+        _write_progress(
+            scan_job.id,
+            phase="scanning",
+            done=deep_scan_total,
+            total=deep_scan_total,
+            phase_started_at=scan_phase_started,
+        )
 
         append_log(
             scan_job_id,
@@ -424,12 +473,25 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                                 "category": "ux",
                                 "severity": issue.get("severity", "low"),
                                 "title": issue.get("title", ""),
+                                # 與 apps/agent/findings.py::persist_agent_issues 寫入 DB 時
+                                # 用的 default_priority 對齊，否則這裡沒帶 priority_score
+                                # 會讓 agent 回報的 critical/high UX 問題在 top_actions 排序
+                                # 時輸給 priority_score 15~40 的瑣碎 SEO 項目。
+                                "priority_score": 50.0,
                             }
                         )
             except Exception as exc:  # noqa: BLE001 — agent 失敗不應讓整個掃描失敗
                 agent_meta = {"status": "error", "error": exc.__class__.__name__}
 
-        overall_score, category_scores, top_actions = calculate_scores(all_findings)
+        # UX 只有 Hermes-Agent 實際跑過才算「有測」（agent_meta 只在啟用且跑完/出錯後才會有值，
+        # 見上方 if settings.ARGUS_AGENT_ENABLED 區塊）；未啟用時 category_scores["ux"] 必為
+        # 100（因為完全沒有 UX finding），不該把這個「沒測」的滿分計入 overall_score 平均。
+        tested_categories = {"seo", "aeo", "geo", "security"}
+        if agent_meta:
+            tested_categories.add("ux")
+        overall_score, category_scores, top_actions = calculate_scores(
+            all_findings, tested_categories=tested_categories
+        )
         append_log(
             scan_job_id,
             f"掃描完成 — 總分 {overall_score}，共 {len(all_findings)} 項發現",
