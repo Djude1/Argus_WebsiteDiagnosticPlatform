@@ -26,6 +26,7 @@ import {
   CATEGORY_LABELS,
   SEVERITY_FILTERS,
   apiErrorMessage,
+  isInProgress,
   SeverityBarChart,
   StackedBar,
 } from "../../shared/AppShared.jsx";
