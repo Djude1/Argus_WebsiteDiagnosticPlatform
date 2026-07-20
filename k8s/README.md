@@ -140,6 +140,11 @@ kubectl apply -f 04-backend.yaml
 kubectl -n argus rollout restart deploy/web deploy/worker deploy/frontend
 ```
 
+### 獲取資料庫密碼
+```bash
+kubectl get secret argus-secret -n argus -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d; echo
+```
+
 > 目前用 `:latest`。要可回滾改用 CI 產的 `sha-xxxxxxx` tag（把 04/05 的 image tag 換掉再 apply）。
 
 ## 尚未處理的待辦
