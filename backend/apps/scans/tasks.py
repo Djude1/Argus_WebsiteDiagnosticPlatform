@@ -483,11 +483,13 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             except Exception as exc:  # noqa: BLE001 — agent 失敗不應讓整個掃描失敗
                 agent_meta = {"status": "error", "error": exc.__class__.__name__}
 
-        # UX 只有 Hermes-Agent 實際跑過才算「有測」（agent_meta 只在啟用且跑完/出錯後才會有值，
-        # 見上方 if settings.ARGUS_AGENT_ENABLED 區塊）；未啟用時 category_scores["ux"] 必為
-        # 100（因為完全沒有 UX finding），不該把這個「沒測」的滿分計入 overall_score 平均。
+        # UX 只有 Hermes-Agent 實際「跑完」才算「有測」；未啟用時 agent_meta 為空 dict
+        # （falsy），跑完/出錯時都會有值。但單純「有值」不夠精準：agent 拋例外時
+        # agent_meta 也會是 {"status": "error", ...}（仍是 truthy），此時 UX 根本沒被
+        # 真正測過，category_scores["ux"] 只是恰好維持在 100（因為沒有 UX finding），
+        # 若也算「有測」計入平均，等於把「測到一半就掛掉」誤當「測過了、乾淨」。
         tested_categories = {"seo", "aeo", "geo", "security"}
-        if agent_meta:
+        if agent_meta and agent_meta.get("status") != "error":
             tested_categories.add("ux")
         overall_score, category_scores, top_actions = calculate_scores(
             all_findings, tested_categories=tested_categories

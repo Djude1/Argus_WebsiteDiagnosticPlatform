@@ -26,6 +26,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyyaml>=6.0,<7",
     "ruff>=0.8,<1",
 ]
 
