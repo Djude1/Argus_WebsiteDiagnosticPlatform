@@ -8351,7 +8351,7 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   max-width: none;
   margin: 0;
   color: var(--review-next-text);
-  font-size: clamp(2.7rem, 4vw, 3.9rem);
+  font-size: clamp(2.7rem, 4vw, 3.15rem);
   font-weight: 750;
   line-height: 1.08;
   letter-spacing: -0.055em;

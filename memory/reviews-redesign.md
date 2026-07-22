@@ -38,4 +38,4 @@
 - 後端：全 `apps` 測試、ruff、Django system check、migration drift check。
 - 前端：使用 `frontend/build-node22.ps1` production build。
 - 瀏覽器：桌機與 320px、深淺色、分布篩選/排序、撰寫表單語意、公開卡片、官方回覆、管理後台唯讀評分與治理控制；console 必須無錯誤。
-- 正式夜間版：`/reviews` 在 1280px、768px、390px 與 320px 無水平溢位；單行標題、逐則按讚／檢舉、篩選／排序、寫評論／掃描資格入口、本人評論分區與品牌圖裁切都需正確；`/reviews-next` 必須轉址到 `/reviews`。
+- 正式夜間版：`/reviews` 必須涵蓋 2560px、1920px、1440px、1280px、768px、390px 與 320px，並同時檢查 0 則與有評論狀態；不得有標題／評分卡重疊或水平溢位。單行標題、逐則按讚／檢舉、篩選／排序、寫評論／掃描資格入口、本人評論分區與品牌圖裁切都需正確；`/reviews-next` 必須轉址到 `/reviews`。
