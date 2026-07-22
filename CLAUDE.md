@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 四層串接（不覆蓋）：`~/.claude/CLAUDE.md`（使用者層）→ 本檔（專案層）→ 子目錄層（`frontend/`、`backend/`、`backend/apps/*/` 的 CLAUDE.md，進該目錄工作時自動載入）→ `CLAUDE.local.md`（本機覆寫，不提交）。
 
 - **修改任何子系統前，先讀該目錄的 CLAUDE.md**；子目錄索引與 SKILL 地圖見 [`專案導覽.md`](專案導覽.md)
-- 任一層 CLAUDE.md 異動時的跨層同步規則（強制）見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)
+- 所有 Agent 都應遵守的專案規則，必須同次同步根目錄 `AGENTS.md`、本檔與對應 `docs/` 共用文件；完整跨層同步規則見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)
 
 ---
 
@@ -23,6 +23,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - repo 內的 `.agents/`、`.claude/` 或其他工具規則，只有在內容確實屬於專案共同規範時才可修改；個人工作方式放在不提交的本機／使用者層設定。
 - 使用者提出新規則、決策或地雷時，先判斷適用範圍：專案級內容當次寫入共用文件；單機或個人內容只留本機。不確定時預設不提交，先詢問。
 - stage 規則或文件前，逐項確認其他組員在乾淨環境讀到後仍能得到正確結論；不能只做密碼／Token 字串掃描。
+
+---
+
+## 環境啟動與掃描診斷閘門（強制）
+
+凡涉及啟動 server、API 驗證、掃描功能、背景任務或「掃描卡住」診斷，**動手前必須先讀並執行 [`docs/environment-preflight.md`](docs/environment-preflight.md)**。
+
+- `.env` 存在不代表設定完整；至少要讓 `uv run python backend/manage.py check` 通過，且不得輸出 `.env` 內容或任何機密值。
+- 比對本機與 K8s 設定時只回報鍵集合及布林結果；環境型設定與安全密鑰本來就應隔離，bootstrap 超級帳密還必須對正式 DB 執行帳號旗標與 `check_password()` 驗證，詳細規則見 preflight。
+- 必須明確區分本機 `runserver`、本機 eager smoke test、Docker 完整整合三種模式；`8000` 可開或 health endpoint 回 200，不能證明 Redis、Celery worker 與掃描鏈路正常。
+- 修改 `.env` 後必須重啟 Django、Celery 或相關容器；既有 `queued` 資料列不會因設定修正而自動補送 Celery 訊息。
+- 在判定為程式 BUG 或 CI/CD 問題前，先依 preflight 順序確認有效設定、migration、前端 build、Playwright、Redis／worker 與實際 `ScanJob` 狀態。
 
 ---
 
@@ -48,7 +60,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用命令
 
 ```powershell
-# 啟動（Django 同時 serve 前端 dist，一個命令就能用整個 App）
+# 啟動 UI/API（Django 同時 serve 前端 dist；掃描整合仍須依 environment preflight 選擇模式）
 uv run python backend/manage.py runserver 127.0.0.1:8000
 
 # 前端 build（先 build 才能讓 Django serve；禁用 npm run build，原因見禁止事項表）
@@ -113,6 +125,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 | 場景 | 文件 |
 |---|---|
+| 啟動 server、API／掃描驗證、掃描卡住診斷 | [`docs/environment-preflight.md`](docs/environment-preflight.md) |
 | 行為準則完整展開版 + 驗證方式對照表 | [`docs/behavior-guidelines.md`](docs/behavior-guidelines.md) |
 | cloudflared ingress 設定、跨 zone DNS | [`docs/cloudflared-guide.md`](docs/cloudflared-guide.md) |
 | RTK 選用規則（需先偵測；未安裝用原生命令） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |

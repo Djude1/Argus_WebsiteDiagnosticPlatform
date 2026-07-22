@@ -31,7 +31,7 @@ from apps.scans.serializers import (
     ScanJobStatusSerializer,
 )
 from apps.scans.services import PublicScanTargetError, assert_public_http_url, get_client_ip
-from apps.scans.tasks import run_scan_job
+from apps.scans.tasks import fail_scan_job_before_start, run_scan_job
 
 
 def _truthy(value):
@@ -66,6 +66,7 @@ class ScansPagination(PageNumberPagination):
 class ScanJobViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ScansPagination
+    permission_classes = [IsAuthenticated]
 
     def get_throttles(self):
         """僅在 create action 加上 ScanCreateThrottle，其他 action 使用預設 user throttle。"""
@@ -131,7 +132,17 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         scan_job = serializer.save()
         if settings.ARGUS_AUTO_QUEUE_SCANS:
-            run_scan_job.delay(scan_job.id)
+            try:
+                run_scan_job.delay(scan_job.id)
+            except Exception:  # noqa: BLE001
+                if fail_scan_job_before_start(scan_job.id):
+                    return Response(
+                        {"detail": "掃描任務暫時無法啟動，預扣 coin 已退回。"},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+                scan_job.refresh_from_db()
+            if settings.CELERY_TASK_ALWAYS_EAGER:
+                scan_job.refresh_from_db()
         output_serializer = ScanJobSerializer(scan_job, context=self.get_serializer_context())
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 

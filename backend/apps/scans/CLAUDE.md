@@ -105,13 +105,17 @@ refund_full_for_scan(scan)  ← 全退（冪等）
 
 `tasks.py` 負責在適當時機呼叫這三個 `billing/services.py` 函式。
 
+若 `run_scan_job.delay()` 在 worker 取件前失敗，`views.py` 必須呼叫
+`tasks.fail_scan_job_before_start()`，以同一筆資料庫交易把 `queued` 改為
+`failed` 並執行冪等全額退款；API 回 503，不得留下孤兒工作或回傳 broker 例外細節。
+
 ---
 
 ## 整合測試規則（必讀）
 
-**掃描功能整合測試一律使用 Docker 環境（`localhost:8080`），禁止用本機 runserver 測試。**
+**完整掃描整合測試一律使用 Docker 環境（`localhost:8080`）。本機 runserver 僅能用 eager 模式做 smoke test。**
 
-原因：本機 runserver 缺少 Redis（Celery broker 無法運作）、Celery worker、正確前端 dist，繞過這些限制需要大量額外工作且驗證不完整。
+原因：本機 eager 可快速驗證單一程序的排程與掃描結果，但不包含 Redis、Celery worker 與 PostgreSQL，不能代表完整背景任務鏈路。環境選擇與前置檢查以 [`../../../docs/environment-preflight.md`](../../../docs/environment-preflight.md) 為準。
 
 ```powershell
 # 標準整合測試流程
@@ -147,4 +151,4 @@ docker exec argus-worker-1 katana -version
 | `playwright install` 不加 `PLAYWRIGHT_BROWSERS_PATH` | 污染全域路徑 |
 | Nuclei deep mode 需 `scan_mode=active AND active_testing_authorized` | 未授權的主動測試 |
 | 直接 `ScanJob.objects.filter(...).update(status=...)` | 繞過 signal，狀態不一致 |
-| 用本機 `runserver` 做掃描整合測試 | 缺少 Redis/Celery，驗證不完整 |
+| 把本機 eager smoke test 當成完整掃描整合 | 未涵蓋 Redis／worker／PostgreSQL，驗證不完整 |

@@ -6,6 +6,7 @@ from asgiref.sync import sync_to_async
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.billing.services import refund_full_for_scan, settle_scan_actual
@@ -46,6 +47,29 @@ def _write_progress(
             "phase_started_at": phase_started_at,
         }
     )
+
+
+@transaction.atomic
+def fail_scan_job_before_start(scan_job_id: int) -> bool:
+    """排程尚未交給 worker 就失敗時，結束任務並退回預扣 coin。"""
+    now = timezone.now()
+    updated = ScanJob.objects.filter(
+        id=scan_job_id,
+        status=ScanJob.Status.QUEUED,
+    ).update(
+        status=ScanJob.Status.FAILED,
+        completed_at=now,
+        progress={},
+        error_message="掃描任務排程失敗。",
+        updated_at=now,
+    )
+    if not updated:
+        return False
+
+    scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
+    append_log(scan_job_id, "掃描任務排程失敗", level="error")
+    refund_full_for_scan(scan_job.user, scan_job, reason="排程失敗")
+    return True
 
 
 @shared_task(bind=True)
@@ -550,7 +574,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             refund_full_for_scan(scan_job.user, scan_job, reason="取消")
         except Exception as exc:  # noqa: BLE001
             append_log(scan_job_id, f"取消退款失敗：{exc.__class__.__name__}", level="error")
-            raise
+            raise RuntimeError("掃描取消退款未完成。") from None
         return {"status": "cancelled"}
     except SoftTimeLimitExceeded:
         soft_limit_min = settings.CELERY_TASK_SOFT_TIME_LIMIT // 60
@@ -566,9 +590,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             refund_full_for_scan(scan_job.user, scan_job, reason="超時")
         except Exception as exc:  # noqa: BLE001
             append_log(scan_job_id, f"超時退款失敗：{exc.__class__.__name__}", level="error")
-            raise
+            raise RuntimeError("掃描超時退款未完成。") from None
         return {"status": "timeout"}
-    except Exception as exc:
+    except Exception:
         if is_cancelled(scan_job_id):
             append_log(scan_job_id, "掃描已被使用者終止", level="warn")
             try:
@@ -579,17 +603,11 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                     f"取消退款失敗：{refund_exc.__class__.__name__}",
                     level="error",
                 )
-                raise
+                raise RuntimeError("掃描取消退款未完成。") from None
             return {"status": "cancelled"}
-        detail = str(exc).strip()[:500]
-        class_name = exc.__class__.__name__
-        append_log(
-            scan_job_id,
-            f"掃描失敗：{class_name}: {detail}" if detail else f"掃描失敗：{class_name}",
-            level="error",
-        )
+        append_log(scan_job_id, "掃描執行失敗", level="error")
         scan_job.status = ScanJob.Status.FAILED
-        scan_job.error_message = f"{class_name}: {detail}" if detail else class_name
+        scan_job.error_message = "掃描執行失敗。"
         scan_job.completed_at = timezone.now()
         scan_job.progress = {}
         scan_job.save(
@@ -606,5 +624,5 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 f"失敗退款失敗：{refund_exc.__class__.__name__}",
                 level="error",
             )
-            raise refund_exc from exc
-        raise
+            raise RuntimeError("掃描失敗退款未完成。") from None
+        raise RuntimeError("掃描執行失敗。") from None

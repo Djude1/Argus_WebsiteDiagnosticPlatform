@@ -4,42 +4,39 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
-## 多層 AGENTS.md 架構
+## 專案規則分層（跨 Agent）
 
-本專案採用四層結構，各層規則**串接（不覆蓋）**，避免跨層寫矛盾規則：
+目前沒有單一檔名能保證被所有 Agent 執行器自動載入，因此本專案採「成對入口 + 共用事實來源」：Codex／AGENTS 相容工具讀本檔，Claude 讀根目錄 `CLAUDE.md`；較長的專案共用規則集中在 `docs/`，再由兩個根入口共同連結。
 
 | 層 | 路徑 | 用途 | git 追蹤 |
 |---|---|---|---|
-| 使用者層 | `~/.Codex/AGENTS.md` | 個人偏好、OMC 設定 | 不提交 |
-| 專案層 | `AGENTS.md`（本檔） | 團隊共用規範、架構、禁止事項 | ✅ 提交 |
-| 子目錄層 | `frontend/AGENTS.md` 等 | 各模組的具體規則（越深越具體） | ✅ 提交 |
-| 個人覆寫層 | `Codex.local.md` | 本機個人微調，不影響他人 | 不提交 |
+| Codex 使用者層 | `~/.Codex/AGENTS.md` | 個人偏好、工具規則 | 不提交 |
+| AGENTS 專案入口 | `AGENTS.md`（本檔） | Codex／AGENTS 相容工具的團隊規則入口 | ✅ 提交 |
+| Claude 專案入口 | `CLAUDE.md` | Claude 的團隊規則入口 | ✅ 提交 |
+| 模組規則 | `frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/*/CLAUDE.md` | 各模組具體規則；修改前主動讀取 | ✅ 提交 |
+| 共用詳細規則 | `docs/*.md` | 跨 Agent 的單一事實來源，由兩個根入口連結 | ✅ 提交 |
+| 個人覆寫層 | `Codex.local.md`、`CLAUDE.local.md` | 本機個人微調，不影響他人 | 不提交 |
 
-**子目錄 AGENTS.md 位置**（完整地圖＋ SKILL 索引見 [`專案導覽.md`](專案導覽.md)）：
-- [`frontend/AGENTS.md`](frontend/AGENTS.md) — React/Vite build、App.jsx 操作規範
-- [`backend/AGENTS.md`](backend/AGENTS.md) — API 路由地圖、Model 速查、App 職責
-- [`backend/apps/accounts/AGENTS.md`](backend/apps/accounts/AGENTS.md) — User / JWT / Google 登入，不簽發 staff
-- [`backend/apps/scans/AGENTS.md`](backend/apps/scans/AGENTS.md) — ScanJob 狀態機、Playwright、取消機制
-- [`backend/apps/scans/security/AGENTS.md`](backend/apps/scans/security/AGENTS.md) — 深度資安掃描、Kali 工具呼叫、OWASP 對映
-- [`backend/apps/agent/AGENTS.md`](backend/apps/agent/AGENTS.md) — Hermes-Agent（預設關閉）、禁印 key、same-origin
-- [`backend/apps/billing/AGENTS.md`](backend/apps/billing/AGENTS.md) — 點數系統唯一入口規則
-- [`backend/apps/reviews/AGENTS.md`](backend/apps/reviews/AGENTS.md) — 評論（一人一則 + thread + 圖片）
-- [`backend/apps/admin_api/AGENTS.md`](backend/apps/admin_api/AGENTS.md) — 後台 API + AdminAuditLog 稽核
-- [`backend/apps/content/AGENTS.md`](backend/apps/content/AGENTS.md) — 公開 CMS 讀取（寫入走 admin_api/cms）
-- [`backend/apps/insights/AGENTS.md`](backend/apps/insights/AGENTS.md) — 免費工具 `/free-tools`（SSRF 防護）
+**目前實際存在的模組規則**（完整地圖＋ SKILL 索引見 [`專案導覽.md`](專案導覽.md)）：
+- [`frontend/CLAUDE.md`](frontend/CLAUDE.md) — React/Vite build、App.jsx 操作規範
+- [`backend/CLAUDE.md`](backend/CLAUDE.md) — API 路由地圖、Model 速查、App 職責
+- [`backend/apps/accounts/CLAUDE.md`](backend/apps/accounts/CLAUDE.md) — User / JWT / Google 登入，不簽發 staff
+- [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md) — ScanJob 狀態機、Playwright、取消機制
+- [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) — 深度資安掃描、Kali 工具呼叫、OWASP 對映
+- [`backend/apps/agent/CLAUDE.md`](backend/apps/agent/CLAUDE.md) — Hermes-Agent（預設關閉）、禁印 key、same-origin
+- [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) — 點數系統唯一入口規則
+- [`backend/apps/reviews/CLAUDE.md`](backend/apps/reviews/CLAUDE.md) — 評論（一人一則 + thread + 圖片）
+- [`backend/apps/admin_api/CLAUDE.md`](backend/apps/admin_api/CLAUDE.md) — 後台 API + AdminAuditLog 稽核
+- [`backend/apps/content/CLAUDE.md`](backend/apps/content/CLAUDE.md) — 公開 CMS 讀取（寫入走 admin_api/cms）
+- [`backend/apps/insights/CLAUDE.md`](backend/apps/insights/CLAUDE.md) — 免費工具 `/free-tools`（SSRF 防護）
 
-### AGENTS.md 跨層同步規則（強制）
+### 跨 Agent 與模組規則同步（強制）
 
-**任何一層的 AGENTS.md 有內容異動，必須在同一次 commit 內同步所有受影響的層。**
+- 新增或修改所有 Agent 都應遵守的專案規則時，必須在同一次 commit 同步 `AGENTS.md`、`CLAUDE.md` 與對應的 `docs/` 共用文件。
+- 修改模組規則時，必須檢查對應子目錄 `CLAUDE.md`、根入口摘要與 `專案導覽.md` 索引是否仍一致。
+- 不得連結或宣稱存在實際不存在的規則檔；完整同步方式見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)。
 
-| 你改了哪一層 | 必須同時檢查並同步 |
-|---|---|
-| 本檔（專案層） | 所有相關子目錄 AGENTS.md（規則是否矛盾、索引連結是否仍正確） |
-| 任一子目錄 AGENTS.md | 本檔索引表（涵蓋內容欄位是否需要更新） + 兄弟層（同模組其他 AGENTS.md）|
-| 新增子目錄 AGENTS.md | 本檔「子目錄 AGENTS.md 位置」清單與「子模組詳細資訊」索引表 |
-| 刪除或移動 AGENTS.md | 本檔及所有引用它的 AGENTS.md 的連結必須同步移除或改路徑 |
-
-**檢查方式**：改完後執行 `grep -r "對應關鍵字" */AGENTS.md`，確認跨檔描述一致、無殘留舊事實。
+**檢查方式**：改完後以 `rg -n "對應關鍵字" AGENTS.md CLAUDE.md frontend backend docs` 掃描，確認跨檔描述一致、無殘留舊事實。
 
 ---
 
@@ -51,6 +48,18 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 - repo 內的 `.agents/`、`.claude/` 或其他工具規則，只有在內容確實屬於專案共同規範時才可修改；個人工作方式放在不提交的本機／使用者層設定。
 - 使用者提出新規則、決策或地雷時，先判斷適用範圍：專案級內容當次寫入共用文件；單機或個人內容只留本機。不確定時預設不提交，先詢問。
 - stage 規則或文件前，逐項確認其他組員在乾淨環境讀到後仍能得到正確結論；不能只做密碼／Token 字串掃描。
+
+---
+
+## 環境啟動與掃描診斷閘門（強制）
+
+凡涉及啟動 server、API 驗證、掃描功能、背景任務或「掃描卡住」診斷，**動手前必須先讀並執行 [`docs/environment-preflight.md`](docs/environment-preflight.md)**。
+
+- `.env` 存在不代表設定完整；至少要讓 `uv run python backend/manage.py check` 通過，且不得輸出 `.env` 內容或任何機密值。
+- 比對本機與 K8s 設定時只回報鍵集合及布林結果；環境型設定與安全密鑰本來就應隔離，bootstrap 超級帳密還必須對正式 DB 執行帳號旗標與 `check_password()` 驗證，詳細規則見 preflight。
+- 必須明確區分本機 `runserver`、本機 eager smoke test、Docker 完整整合三種模式；`8000` 可開或 health endpoint 回 200，不能證明 Redis、Celery worker 與掃描鏈路正常。
+- 修改 `.env` 後必須重啟 Django、Celery 或相關容器；既有 `queued` 資料列不會因設定修正而自動補送 Celery 訊息。
+- 在判定為程式 BUG 或 CI/CD 問題前，先依 preflight 順序確認有效設定、migration、前端 build、Playwright、Redis／worker 與實際 `ScanJob` 狀態。
 
 ---
 
@@ -96,7 +105,7 @@ MD 修改後必執行核對清單：[`docs/md-checklist.md`](docs/md-checklist.m
 ## 常用命令
 
 ```powershell
-# 啟動（Django 同時 serve 前端 dist，一個命令就能用整個 App）
+# 啟動 UI/API（Django 同時 serve 前端 dist；掃描整合仍須依 environment preflight 選擇模式）
 uv run python backend/manage.py runserver 127.0.0.1:8000
 
 # 前端 build（先 build 才能讓 Django serve）
@@ -136,11 +145,11 @@ docker compose up -d --build frontend
 
 | 模組 | 涵蓋內容 | 文件 |
 |---|---|---|
-| 前端 | 路由地圖、核心檔案、元件/樣式規範 | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
-| 後端整體 | API 路由地圖、Model 速查、App 職責、管理介面 | [`backend/AGENTS.md`](backend/AGENTS.md) |
-| 掃描引擎 | ScanJob 狀態機、Playwright、取消機制、Coin 扣點 | [`backend/apps/scans/AGENTS.md`](backend/apps/scans/AGENTS.md) |
-| 深度資安掃描 | SSL/TLS、Cookie 旗標、CORS/CSP 品質、OWASP 對映、Kali 工具 | [`backend/apps/scans/security/AGENTS.md`](backend/apps/scans/security/AGENTS.md) |
-| 計費系統 | services.py 函式、冪等機制、kind 枚舉 | [`backend/apps/billing/AGENTS.md`](backend/apps/billing/AGENTS.md) |
+| 前端 | 路由地圖、核心檔案、元件/樣式規範 | [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| 後端整體 | API 路由地圖、Model 速查、App 職責、管理介面 | [`backend/CLAUDE.md`](backend/CLAUDE.md) |
+| 掃描引擎 | ScanJob 狀態機、Playwright、取消機制、Coin 扣點 | [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md) |
+| 深度資安掃描 | SSL/TLS、Cookie 旗標、CORS/CSP 品質、OWASP 對映、Kali 工具 | [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) |
+| 計費系統 | services.py 函式、冪等機制、kind 枚舉 | [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) |
 
 ### Django 直接 serve 前端
 開發時不需要另開 Vite dev server，Django `runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**必須先 build 前端**，改了 React code 要重 build 才會生效。
@@ -274,6 +283,7 @@ docker compose up -d --build frontend
 
 | 場景 | 文件 |
 |---|---|
+| 啟動 server、API／掃描驗證、掃描卡住診斷 | [`docs/environment-preflight.md`](docs/environment-preflight.md) |
 | cloudflared ingress 設定、跨 zone DNS | [`docs/cloudflared-guide.md`](docs/cloudflared-guide.md) |
 | RTK 選用規則（需先偵測；未安裝用原生命令） | [`docs/rtk-guide.md`](docs/rtk-guide.md) |
 | MD / 文件修改核對清單 | [`docs/md-checklist.md`](docs/md-checklist.md) |

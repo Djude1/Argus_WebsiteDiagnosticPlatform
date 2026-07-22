@@ -2,18 +2,21 @@
 
 > **此規則的存在原因（真實事故）**：2026-06 發現 `ONBOARDING.md` 與 `CLAUDE.md` 同時嚴重漂移——新增了 `insights` app（第 8 個）、`/free-tools` 公開頁、`/api/insights/*` 端點、`/api/content/milestones/`，且 W4 已移除 jazzmin、測試數已增長，但兩份接手文件全部沒同步，仍寫「7 個 app / Jazzmin / 192 測試」。**過時的接手文件會讓下一個接手者（人或 Claude）依錯誤事實操作、甚至寫出錯誤的專題文件。**
 
-## CLAUDE.md 跨層同步規則（強制）
+## 跨 Agent 與 CLAUDE.md 跨層同步規則（強制）
 
-本專案的 CLAUDE.md 採四層串接架構（使用者層 → 專案層 → 子目錄層 → `CLAUDE.local.md`；各層載入時機見 [`專案導覽.md`](../專案導覽.md) 第一節）。**任何一層的 CLAUDE.md 有內容異動，必須在同一次 commit 內同步所有受影響的層。**
+沒有單一規則檔能保證由所有 Agent 執行器自動載入。Codex／AGENTS 相容工具以根目錄 `AGENTS.md` 為入口，Claude 以根目錄 `CLAUDE.md` 為入口；較長的共用規則應集中在 `docs/` 作為單一事實來源，再由兩個入口共同連結。Claude 另採使用者層 → 專案層 → 子目錄層 → `CLAUDE.local.md` 的串接架構（載入時機見 [`專案導覽.md`](../專案導覽.md) 第一節）。
+
+**任何專案共用規則或任一層 CLAUDE.md 有內容異動，必須在同一次 commit 內同步所有受影響的入口與層級。**
 
 | 你改了哪一層 | 必須同時檢查並同步 |
 |---|---|
+| 所有 Agent 都應遵守的專案規則 | 根目錄 `AGENTS.md`、根目錄 `CLAUDE.md`、對應 `docs/` 共用文件 |
 | 根層 `CLAUDE.md`（專案層） | 所有相關子目錄 CLAUDE.md（規則是否矛盾、索引連結是否仍正確） |
 | 任一子目錄 CLAUDE.md | `專案導覽.md` 第三節索引（涵蓋內容是否需要更新） + 兄弟層（同模組其他 CLAUDE.md）|
 | 新增子目錄 CLAUDE.md | `專案導覽.md` 第三節「子目錄 CLAUDE.md 索引」 |
 | 刪除或移動 CLAUDE.md | 根層 CLAUDE.md 及所有引用它的檔案的連結必須同步移除或改路徑 |
 
-**檢查方式**：改完後執行 `grep -r "對應關鍵字" */CLAUDE.md`，確認跨檔描述一致、無殘留舊事實。
+**檢查方式**：改完後執行 `rg -n "對應關鍵字" AGENTS.md CLAUDE.md frontend backend docs`，確認跨檔描述一致、無殘留舊事實，並驗證所有相對連結指向實際存在的檔案。
 
 ## 規則 A：改了程式 → 同次提交必須同步文件
 
@@ -41,6 +44,6 @@
 ## 接手文件清單（須長期與程式碼保持一致）
 
 - `ONBOARDING.md` — 快速接手流程（事實密度最高，最容易漂移）
-- `CLAUDE.md` — 架構表、API/路由地圖、Model 速查
+- `AGENTS.md`、`CLAUDE.md` — 跨 Agent 的專案規則入口
 - `frontend/CLAUDE.md`、`backend/apps/billing/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`
 - `Project_說明.md`、`開發計畫.md`
