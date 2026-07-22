@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 
 from apps.billing.models import CoinTransaction
 from apps.billing.services import purchase_plan
-from apps.reviews.models import PlatformReview
+from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 from apps.scans.models import ScanJob
 
 
@@ -172,9 +172,8 @@ class ReviewsEndpointTests(APITestCase):
         response = self.client.get(reverse("admin-reviews"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["pending_count"], 1)
-        # 新欄位：last_message_is_user 為 True 表示等待 admin 回覆
-        self.assertTrue(response.data["reviews"][0]["last_message_is_user"])
-        self.assertFalse(response.data["reviews"][0]["has_admin_reply"])
+        self.assertTrue(response.data["reviews"][0]["is_pending"])
+        self.assertIsNone(response.data["reviews"][0]["response"])
 
     def test_review_list_query_count_does_not_grow_per_review(self):
         with CaptureQueriesContext(connection) as one_review_queries:
@@ -189,20 +188,36 @@ class ReviewsEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(one_review_queries), len(many_review_queries))
 
-    def test_reply_creates_admin_review_message(self):
-        from apps.reviews.models import ReviewMessage
+    def test_reply_creates_single_official_response(self):
         response = self.client.post(
             reverse("admin-reply-review", args=[self.review.id]),
             {"reply": "謝謝你的回饋！"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        msg = ReviewMessage.objects.get(review=self.review)
-        self.assertTrue(msg.is_admin)
-        self.assertEqual(msg.author, self.admin)
-        self.assertEqual(msg.body, "謝謝你的回饋！")
+        official = ReviewResponse.objects.get(review=self.review)
+        self.assertEqual(official.author, self.admin)
+        self.assertEqual(official.body, "謝謝你的回饋！")
+        self.assertFalse(response.data["is_pending"])
 
-    def test_reply_can_also_override_rating(self):
+    def test_reply_updates_instead_of_creating_a_thread(self):
+        ReviewResponse.objects.create(
+            review=self.review,
+            author=self.admin,
+            body="舊回覆",
+        )
+        self.client.post(
+            reverse("admin-reply-review", args=[self.review.id]),
+            {"reply": "更新後回覆"},
+            format="json",
+        )
+        self.assertEqual(ReviewResponse.objects.filter(review=self.review).count(), 1)
+        self.assertEqual(
+            ReviewResponse.objects.get(review=self.review).body,
+            "更新後回覆",
+        )
+
+    def test_admin_reply_cannot_override_user_rating(self):
         response = self.client.post(
             reverse("admin-reply-review", args=[self.review.id]),
             {"reply": "已協助處理", "rating": 5},
@@ -210,7 +225,7 @@ class ReviewsEndpointTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.review.refresh_from_db()
-        self.assertEqual(self.review.rating, 5)
+        self.assertEqual(self.review.rating, 4)
 
     def test_reply_requires_at_least_reply_or_rating(self):
         response = self.client.post(
@@ -230,6 +245,73 @@ class ReviewsEndpointTests(APITestCase):
         log = AdminAuditLog.objects.get(action=AdminAuditLog.Action.REVIEW_REPLY)
         self.assertEqual(log.admin_actor, self.admin)
         self.assertEqual(log.target_user, self.user)
+
+    def test_reply_can_be_deleted_explicitly(self):
+        ReviewResponse.objects.create(
+            review=self.review,
+            author=self.admin,
+            body="準備刪除的回覆",
+        )
+        response = self.client.delete(
+            reverse("admin-reply-review", args=[self.review.id]),
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ReviewResponse.objects.filter(review=self.review).exists())
+
+    def test_moderation_hides_review_and_resolves_reports(self):
+        reporter = _make_user("reporter")
+        report = ReviewReport.objects.create(
+            review=self.review,
+            reporter=reporter,
+            reason=ReviewReport.Reason.PRIVACY,
+        )
+        response = self.client.patch(
+            reverse("admin-moderate-review", args=[self.review.id]),
+            {"status": PlatformReview.Status.HIDDEN},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.review.refresh_from_db()
+        report.refresh_from_db()
+        self.assertEqual(self.review.status, PlatformReview.Status.HIDDEN)
+        self.assertEqual(report.status, ReviewReport.Status.RESOLVED)
+        self.assertEqual(report.resolved_by, self.admin)
+
+    def test_moderation_does_not_resolve_official_response_reports(self):
+        reporter = _make_user("response-reporter")
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=self.admin,
+            body="Official response",
+        )
+        parent_report = ReviewReport.objects.create(
+            review=self.review,
+            reporter=reporter,
+            reason=ReviewReport.Reason.PRIVACY,
+        )
+        response_report = ReviewReport.objects.create(
+            review=self.review,
+            response=official_response,
+            reporter=reporter,
+            reason=ReviewReport.Reason.ABUSE,
+        )
+
+        listing = self.client.get(reverse("admin-reviews"))
+        item = listing.data["reviews"][0]
+        self.assertEqual(item["pending_report_count"], 1)
+        self.assertEqual(item["response_pending_report_count"], 1)
+
+        response = self.client.patch(
+            reverse("admin-moderate-review", args=[self.review.id]),
+            {"status": PlatformReview.Status.HIDDEN},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        parent_report.refresh_from_db()
+        response_report.refresh_from_db()
+        self.assertEqual(parent_report.status, ReviewReport.Status.RESOLVED)
+        self.assertEqual(response_report.status, ReviewReport.Status.PENDING)
 
 
 @override_settings(ARGUS_AUTO_QUEUE_SCANS=False)

@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.admin_api.models import AdminAuditLog, Announcement
 from apps.billing.models import CoinTransaction, CoinWallet, PurchaseOrder
-from apps.reviews.models import PlatformReview
+from apps.reviews.models import PlatformReview, ReviewResponse
 from apps.scans.models import ScanJob
 
 
@@ -100,18 +100,29 @@ class AdjustCoinSerializer(serializers.Serializer):
 class AdminReviewSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     full_name = serializers.SerializerMethodField()
-    message_count = serializers.SerializerMethodField()
-    has_admin_reply = serializers.SerializerMethodField()
-    last_message_at = serializers.SerializerMethodField()
-    last_message_is_user = serializers.SerializerMethodField()
+    response = serializers.SerializerMethodField()
+    report_count = serializers.IntegerField(source="report_count_annotated", read_only=True)
+    pending_report_count = serializers.IntegerField(
+        source="pending_report_count_annotated",
+        read_only=True,
+    )
+    response_report_count = serializers.IntegerField(
+        source="response_report_count_annotated",
+        read_only=True,
+    )
+    response_pending_report_count = serializers.IntegerField(
+        source="response_pending_report_count_annotated",
+        read_only=True,
+    )
+    is_pending = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = PlatformReview
         fields = [
             "id", "username", "full_name",
-            "rating", "comment",
-            "message_count", "has_admin_reply",
-            "last_message_at", "last_message_is_user",
+            "rating", "title", "comment", "display_name", "status",
+            "response", "report_count", "pending_report_count",
+            "response_report_count", "response_pending_report_count", "is_pending",
             "created_at", "updated_at",
         ]
 
@@ -119,41 +130,25 @@ class AdminReviewSerializer(serializers.ModelSerializer):
         u = obj.user
         return f"{u.first_name} {u.last_name}".strip() or u.username
 
-    def get_message_count(self, obj) -> int:
-        if hasattr(obj, "message_count_annotated"):
-            return obj.message_count_annotated
-        return obj.messages.count()
-
-    def get_has_admin_reply(self, obj) -> bool:
-        if hasattr(obj, "has_admin_reply_annotated"):
-            return obj.has_admin_reply_annotated
-        return obj.messages.filter(is_admin=True).exists()
-
-    def get_last_message_at(self, obj):
-        if hasattr(obj, "last_message_at_annotated"):
-            return obj.last_message_at_annotated
-        last = obj.messages.order_by("-created_at").first()
-        return last.created_at if last else None
-
-    def get_last_message_is_user(self, obj) -> bool:
-        """最後一則由非 admin 發 → 表示「正等管理員回覆」。"""
-        if hasattr(obj, "is_pending"):
-            return obj.is_pending
-        last = obj.messages.order_by("-created_at").first()
-        if not last:
-            return True  # 只有評分還沒任何 thread，視為待回覆
-        return not last.is_admin
+    def get_response(self, obj):
+        try:
+            response = obj.official_response
+        except ReviewResponse.DoesNotExist:
+            return None
+        return {
+            "body": response.body,
+            "created_at": response.created_at,
+            "updated_at": response.updated_at,
+            "author_username": response.author.username if response.author_id else None,
+        }
 
 
 class AdminReplyReviewSerializer(serializers.Serializer):
-    reply = serializers.CharField(max_length=2000, required=False, allow_blank=True)
-    rating = serializers.IntegerField(required=False, min_value=1, max_value=5)
-    # 允許 admin 同時：(1) 補上回覆訊息 (2) 校正 rating
+    reply = serializers.CharField(max_length=2000, allow_blank=False, trim_whitespace=True)
 
-    def validate(self, attrs):
-        if not attrs.get("reply") and "rating" not in attrs:
-            raise serializers.ValidationError("必須至少提供 reply 或 rating。")
-        return attrs
+
+class AdminModerateReviewSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=PlatformReview.Status.choices)
 
 
 class AdminScanJobSerializer(serializers.ModelSerializer):

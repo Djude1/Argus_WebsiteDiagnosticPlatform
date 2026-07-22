@@ -825,63 +825,121 @@ function AdminTransactionsPage({ embedded }) {
 function AdminReviewsPage() {
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
-  const [onlyPending, setOnlyPending] = useState(false);
+  const [filter, setFilter] = useState("all");
   const [draftReplies, setDraftReplies] = useState({});
-  const { notifyDialog, dialogHost } = useConfirmDialogs();
+  const [busyId, setBusyId] = useState(null);
+  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
   async function load() {
     const response = await api.get("/admin/reviews/", {
-      params: { page, pending: onlyPending ? "1" : undefined },
+      params: {
+        page,
+        pending: filter === "pending" ? "1" : undefined,
+        reported: filter === "reported" ? "1" : undefined,
+        status: filter === "hidden" ? "hidden" : undefined,
+      },
     });
     setData(response.data);
-    // 初始化每則的回覆草稿
-    const initial = {};
-    for (const r of response.data.reviews) {
-      initial[r.id] = r.admin_reply || "";
-    }
-    setDraftReplies(initial);
+    setDraftReplies(Object.fromEntries(
+      response.data.reviews.map((review) => [review.id, review.response?.body || ""]),
+    ));
   }
-  useEffect(() => { load(); /* eslint-disable-line */ }, [page, onlyPending]);
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, filter]);
 
-  async function handleReply(reviewId) {
+  async function handleReply(review) {
+    const reply = (draftReplies[review.id] || "").trim();
+    if (!reply) {
+      notifyDialog("請先輸入官方回覆；如要移除既有回覆，請使用「移除回覆」。");
+      return;
+    }
+    setBusyId(review.id);
     try {
-      await api.post(`/admin/reviews/${reviewId}/reply/`, {
-        reply: draftReplies[reviewId] || "",
+      await api.post(`/admin/reviews/${review.id}/reply/`, { reply });
+      await load();
+    } catch (error) {
+      notifyDialog(error.response?.data?.detail || "回覆儲存失敗");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeReply(review) {
+    if (!(await confirmDialog("確定移除這則官方回覆嗎？", { danger: true }))) return;
+    setBusyId(review.id);
+    try {
+      await api.delete(`/admin/reviews/${review.id}/reply/`);
+      await load();
+    } catch (error) {
+      notifyDialog(error.response?.data?.detail || "移除回覆失敗");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function toggleVisibility(review) {
+    const hiding = review.status === "published";
+    const message = hiding
+      ? "確定隱藏這則評論嗎？前台會立即停止顯示，相關待處理檢舉將標記為已處理。"
+      : "確定重新公開這則評論嗎？相關待處理檢舉將標記為不成立。";
+    if (!(await confirmDialog(message, { danger: hiding }))) return;
+    setBusyId(review.id);
+    try {
+      await api.patch(`/admin/reviews/${review.id}/moderate/`, {
+        status: hiding ? "hidden" : "published",
       });
       await load();
-    } catch {
-      notifyDialog("回覆失敗");
+    } catch (error) {
+      notifyDialog(error.response?.data?.detail || "審核狀態更新失敗");
+    } finally {
+      setBusyId(null);
     }
   }
 
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1>評論</h1>
-        <p>{data ? `共 ${data.total} 則，待回覆 ${data.pending_count}` : "載入中…"}</p>
+        <h1>評論治理</h1>
+        <p>官方回覆、內容檢舉與公開狀態；使用者評分和原文保持唯讀。</p>
       </header>
 
       {data && (
-        <div className="admin-stat-grid cols-3">
-          <AdminStatCard label="總評論數" value={data.total} tone="cyan" />
-          <AdminStatCard label="平均評分" value={data.avg_rating ? `${data.avg_rating} ★` : "—"} tone="green" />
+        <div className="admin-stat-grid">
+          <AdminStatCard label="總評論數" value={data.overall_total} tone="cyan" />
+          <AdminStatCard label="平均評分" value={data.avg_rating ? `${data.avg_rating} ★` : "—"} tone="good" />
           <AdminStatCard label="待回覆" value={data.pending_count} tone={data.pending_count > 0 ? "yellow" : "good"} />
+          <AdminStatCard label="待審檢舉" value={data.reported_count} tone={data.reported_count > 0 ? "rose" : "good"} />
         </div>
       )}
 
       <div className="admin-filter-bar">
-        <label className="admin-checkbox">
-          <input
-            type="checkbox"
-            checked={onlyPending}
-            onChange={(e) => { setOnlyPending(e.target.checked); setPage(1); }}
-          />
-          只看待回覆
+        <label>
+          <span className="sr-only">篩選評論</span>
+          <select
+            className="admin-input"
+            value={filter}
+            onChange={(event) => { setFilter(event.target.value); setPage(1); }}
+          >
+            <option value="all">全部評論</option>
+            <option value="pending">只看待回覆</option>
+            <option value="reported">只看待審檢舉</option>
+            <option value="hidden">只看已隱藏</option>
+          </select>
         </label>
+        {data && <span className="admin-cell-secondary">目前顯示 {data.total} 則 · 已隱藏 {data.hidden_count} 則</span>}
       </div>
 
       {data && data.reviews.map((review) => (
-        <article key={review.id} className={`admin-review ${review.is_pending ? "is-pending" : ""}`}>
+        <article
+          key={review.id}
+          className={[
+            "admin-review",
+            review.is_pending ? "is-pending" : "",
+            review.status === "hidden" ? "is-hidden" : "",
+            review.pending_report_count > 0 || review.response_pending_report_count > 0
+              ? "is-reported"
+              : "",
+          ].filter(Boolean).join(" ")}
+        >
           <header className="admin-review-head">
             <div>
               <div className="admin-review-user">
@@ -890,49 +948,103 @@ function AdminReviewsPage() {
               </div>
               <div className="admin-review-time">
                 {new Date(review.created_at).toLocaleString("zh-Hant")}
+                {review.updated_at !== review.created_at && " · 使用者已編輯"}
               </div>
             </div>
-            <div className="admin-review-rating">
+            <div className="admin-review-rating" aria-label={`${review.rating} 顆星`}>
               {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
               <span className="admin-cell-secondary"> ({review.rating})</span>
             </div>
           </header>
-          {review.comment && (
-            <p className="admin-review-body">{review.comment}</p>
-          )}
-          <div className="admin-review-reply-section">
-            <textarea
-              className="admin-input admin-reply-input"
-              placeholder="回覆使用者…（清空則移除回覆）"
-              rows={2}
-              value={draftReplies[review.id] ?? ""}
-              onChange={(e) => setDraftReplies({ ...draftReplies, [review.id]: e.target.value })}
-            />
-            <button
-              type="button"
-              className="admin-btn primary"
-              onClick={() => handleReply(review.id)}
-            >
-              {review.admin_reply ? "更新回覆" : "送出回覆"}
-            </button>
+
+          <div className="admin-review-status-row">
+            <span className={review.status === "published" ? "status-active" : "status-inactive"}>
+              {review.status === "published" ? "前台公開" : "已隱藏"}
+            </span>
+            {review.is_pending && <span className="admin-status">待回覆</span>}
+            {review.pending_report_count > 0 && (
+              <span className="admin-status failed">待審檢舉 {review.pending_report_count}</span>
+            )}
+            {review.response_pending_report_count > 0 && (
+              <span className="admin-status failed">
+                官方回覆待審 {review.response_pending_report_count}
+              </span>
+            )}
+            {review.report_count > review.pending_report_count && (
+              <span className="admin-cell-secondary">歷史檢舉 {review.report_count}</span>
+            )}
+            {review.response_report_count > review.response_pending_report_count && (
+              <span className="admin-cell-secondary">
+                官方回覆歷史檢舉 {review.response_report_count}
+              </span>
+            )}
           </div>
-          {review.admin_reply && (
+
+          {review.title && <h2 className="admin-review-title">{review.title}</h2>}
+          <p className="admin-review-body">{review.comment || "（舊版評論未填文字）"}</p>
+          <p className="admin-review-public-name">前台名稱：{review.display_name || "匿名已驗證使用者"}</p>
+
+          <div className="admin-review-reply-section">
+            <label className="admin-review-reply-field">
+              <span>ARGUS 團隊官方回覆</span>
+              <textarea
+                className="admin-input admin-reply-input"
+                placeholder="清楚回應使用者的具體意見…"
+                rows={3}
+                maxLength={2000}
+                value={draftReplies[review.id] ?? ""}
+                onChange={(event) => setDraftReplies({
+                  ...draftReplies,
+                  [review.id]: event.target.value,
+                })}
+              />
+            </label>
+            <div className="admin-review-actions">
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={busyId === review.id}
+                onClick={() => handleReply(review)}
+              >
+                {review.response ? "更新官方回覆" : "送出官方回覆"}
+              </button>
+              {review.response && (
+                <button
+                  type="button"
+                  className="admin-btn danger"
+                  disabled={busyId === review.id}
+                  onClick={() => removeReply(review)}
+                >
+                  移除回覆
+                </button>
+              )}
+              <button
+                type="button"
+                className={`admin-btn ${review.status === "published" ? "danger" : ""}`}
+                disabled={busyId === review.id}
+                onClick={() => toggleVisibility(review)}
+              >
+                {review.status === "published" ? "隱藏評論" : "重新公開"}
+              </button>
+            </div>
+          </div>
+
+          {review.response && (
             <div className="admin-review-existing-reply">
-              ✓ 已回覆 ({review.admin_replied_at ? new Date(review.admin_replied_at).toLocaleString("zh-Hant") : ""})
-              {review.admin_replied_by_username ? ` by ${review.admin_replied_by_username}` : ""}
+              ✓ 官方回覆最後更新於 {new Date(review.response.updated_at).toLocaleString("zh-Hant")}
+              {review.response.author_username ? ` · ${review.response.author_username}` : ""}
             </div>
           )}
         </article>
       ))}
       {data && data.reviews.length === 0 && (
-        <div className="admin-empty admin-panel">沒有符合的評論</div>
+        <div className="admin-empty admin-panel">沒有符合條件的評論</div>
       )}
       {data && <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />}
       {dialogHost}
     </div>
   );
 }
-
 function AdminScansPage({ embedded }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -1690,6 +1802,7 @@ const AUDIT_ACTION_OPTIONS = [
   { v: "", label: "全部動作" },
   { v: "coin_adjust", label: "調整點數" },
   { v: "review_reply", label: "回覆評論" },
+  { v: "review_moderate", label: "審核評論" },
   { v: "review_delete", label: "刪除評論" },
   { v: "user_toggle_staff", label: "切換管理員身份" },
   { v: "other", label: "其他" },

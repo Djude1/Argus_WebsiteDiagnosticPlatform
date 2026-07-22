@@ -10,6 +10,7 @@ function lazyNamed(loader, exportName) {
 const loadAuthPages = () => import("./features/auth/AuthPages.jsx");
 const loadScanExperience = () => import("./features/scans/ScanExperience.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
+const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 
@@ -25,7 +26,7 @@ const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
 const DashboardPage = lazyNamed(loadAuthenticatedPages, "DashboardPage");
 const HistoryPage = lazyNamed(loadAuthenticatedPages, "HistoryPage");
 const BillingPage = lazyNamed(loadAuthenticatedPages, "BillingPage");
-const ReviewsPage = lazyNamed(loadAuthenticatedPages, "ReviewsPage");
+const ReviewsPage = lazyNamed(loadReviewsPage, "ReviewsPage");
 const SettingsPage = lazyNamed(loadAuthenticatedPages, "SettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
 const ProjectPage = lazyNamed(loadPublicPages, "ProjectPage");
@@ -85,6 +86,7 @@ function AppShell({ googleOAuthEnabled }) {
           <Route path="/login" element={<LoginPage googleOAuthEnabled={googleOAuthEnabled} />} />
           <Route path="/password-reset" element={<PasswordResetRequestPage />} />
           <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
+          <Route path="/reviews-next" element={<Navigate to="/reviews" replace />} />
           <Route element={<PublicLayout />}>
             <Route path="/project" element={<ProjectPage />} />
             <Route path="/free-tools" element={<FreeToolsPage />} />

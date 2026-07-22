@@ -11,10 +11,7 @@ from django.db.models import (
     BooleanField,
     Case,
     Count,
-    Exists,
-    OuterRef,
     Q,
-    Subquery,
     Sum,
     Value,
     When,
@@ -31,6 +28,7 @@ from apps.admin_api.serializers import (
     AdjustCoinSerializer,
     AdminAuditLogSerializer,
     AdminCoinTransactionSerializer,
+    AdminModerateReviewSerializer,
     AdminPurchaseOrderSerializer,
     AdminReplyReviewSerializer,
     AdminReviewSerializer,
@@ -41,7 +39,7 @@ from apps.admin_api.serializers import (
 )
 from apps.billing.models import CoinTransaction, CoinWallet, PurchaseOrder
 from apps.billing.services import admin_adjust
-from apps.reviews.models import PlatformReview, ReviewMessage
+from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 from apps.scans.models import AgentSession, ScanJob
 
 PAGE_SIZE = 25
@@ -350,25 +348,41 @@ def transactions_list(request):
 
 
 def _reviews_with_status(queryset=None):
-    """在資料庫標註訊息統計與待回覆狀態，避免逐筆查詢。"""
+    """標註官方回覆與檢舉狀態，供後台列表與概覽共用。"""
     queryset = queryset if queryset is not None else PlatformReview.objects.all()
-    latest_message = ReviewMessage.objects.filter(review_id=OuterRef("pk")).order_by(
-        "-created_at",
-        "-pk",
-    )
-    return queryset.annotate(
-        message_count_annotated=Count("messages", distinct=True),
-        has_admin_reply_annotated=Exists(
-            ReviewMessage.objects.filter(review_id=OuterRef("pk"), is_admin=True)
-        ),
-        last_message_at_annotated=Subquery(latest_message.values("created_at")[:1]),
-        last_message_is_admin_annotated=Subquery(
-            latest_message.values("is_admin")[:1],
-            output_field=BooleanField(),
-        ),
+    return queryset.select_related(
+        "user",
+        "official_response",
+        "official_response__author",
     ).annotate(
+        report_count_annotated=Count(
+            "reports",
+            filter=Q(reports__response__isnull=True),
+            distinct=True,
+        ),
+        pending_report_count_annotated=Count(
+            "reports",
+            filter=Q(
+                reports__response__isnull=True,
+                reports__status=ReviewReport.Status.PENDING,
+            ),
+            distinct=True,
+        ),
+        response_report_count_annotated=Count(
+            "reports",
+            filter=Q(reports__response__isnull=False),
+            distinct=True,
+        ),
+        response_pending_report_count_annotated=Count(
+            "reports",
+            filter=Q(
+                reports__response__isnull=False,
+                reports__status=ReviewReport.Status.PENDING,
+            ),
+            distinct=True,
+        ),
         is_pending=Case(
-            When(last_message_is_admin_annotated=True, then=Value(False)),
+            When(official_response__isnull=False, then=Value(False)),
             default=Value(True),
             output_field=BooleanField(),
         )
@@ -378,47 +392,71 @@ def _reviews_with_status(queryset=None):
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def reviews_list(request):
-    qs = _reviews_with_status(PlatformReview.objects.select_related("user")).order_by("-created_at")
+    qs = _reviews_with_status().order_by("-created_at")
     only_pending = request.query_params.get("pending") in {"1", "true", "yes"}
     if only_pending:
         qs = qs.filter(is_pending=True)
+    review_status = request.query_params.get("status")
+    if review_status in PlatformReview.Status.values:
+        qs = qs.filter(status=review_status)
+    only_reported = request.query_params.get("reported") in {"1", "true", "yes"}
+    if only_reported:
+        qs = qs.filter(
+            Q(pending_report_count_annotated__gt=0)
+            | Q(response_pending_report_count_annotated__gt=0)
+        )
     pending_count = _reviews_with_status().filter(is_pending=True).count()
+    reported_count = ReviewReport.objects.filter(status=ReviewReport.Status.PENDING).count()
+    hidden_count = PlatformReview.objects.filter(status=PlatformReview.Status.HIDDEN).count()
+    review_totals = PlatformReview.objects.aggregate(total=Count("id"), rating_sum=Sum("rating"))
+    overall_total = review_totals["total"]
+    avg_rating = (
+        round(review_totals["rating_sum"] / overall_total, 2)
+        if overall_total else None
+    )
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "reviews": AdminReviewSerializer(items, many=True).data,
         "page": page,
         "total_pages": total_pages,
         "total": total,
+        "overall_total": overall_total,
+        "avg_rating": avg_rating,
         "pending_count": pending_count,
+        "reported_count": reported_count,
+        "hidden_count": hidden_count,
     })
 
 
-@api_view(["POST"])
+@api_view(["POST", "DELETE"])
 @permission_classes([permissions.IsAdminUser])
 def reply_review(request, review_id: int):
-    """管理員回覆：建立一筆 admin ReviewMessage；可選同時校正 rating。"""
+    """建立、更新或移除一則評論的單一官方回覆。"""
     review = get_object_or_404(PlatformReview, pk=review_id)
+
+    if request.method == "DELETE":
+        deleted, _ = ReviewResponse.objects.filter(review=review).delete()
+        if not deleted:
+            return Response(
+                {"detail": "這則評論尚無官方回覆。"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.REVIEW_REPLY,
+            target_user=review.user,
+            target_repr=f"Review #{review.id} ({review.user.username})",
+            payload={"review_id": review.id, "operation": "delete"},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     serializer = AdminReplyReviewSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-
-    reply_body = (serializer.validated_data.get("reply") or "").strip()
-    new_rating = serializer.validated_data.get("rating")
-
-    from apps.reviews.models import ReviewMessage
-    created_msg = None
-    if reply_body:
-        created_msg = ReviewMessage.objects.create(
-            review=review,
-            author=request.user,
-            is_admin=True,
-            body=reply_body,
-        )
-
-    rating_changed = False
-    if new_rating is not None and new_rating != review.rating:
-        review.rating = new_rating
-        review.save(update_fields=["rating", "updated_at"])
-        rating_changed = True
+    reply_body = serializer.validated_data["reply"]
+    response, created = ReviewResponse.objects.update_or_create(
+        review=review,
+        defaults={"author": request.user, "body": reply_body},
+    )
 
     log_admin_action(
         admin_actor=request.user,
@@ -428,10 +466,52 @@ def reply_review(request, review_id: int):
         payload={
             "review_id": review.id,
             "reply_excerpt": reply_body[:120],
-            "rating_override": new_rating if rating_changed else None,
-            "message_id": created_msg.id if created_msg else None,
+            "operation": "create" if created else "update",
+            "response_id": response.id,
         },
     )
+    review = _reviews_with_status(PlatformReview.objects.filter(pk=review.pk)).get()
+    return Response(AdminReviewSerializer(review).data)
+
+
+@api_view(["PATCH"])
+@permission_classes([permissions.IsAdminUser])
+def moderate_review(request, review_id: int):
+    """公開或隱藏評論，並同步結案尚未處理的檢舉。"""
+    review = get_object_or_404(PlatformReview, pk=review_id)
+    serializer = AdminModerateReviewSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    new_status = serializer.validated_data["status"]
+    old_status = review.status
+    if new_status != old_status:
+        review.status = new_status
+        review.save(update_fields=["status", "updated_at"])
+        report_status = (
+            ReviewReport.Status.RESOLVED
+            if new_status == PlatformReview.Status.HIDDEN
+            else ReviewReport.Status.DISMISSED
+        )
+        ReviewReport.objects.filter(
+            review=review,
+            response__isnull=True,
+            status=ReviewReport.Status.PENDING,
+        ).update(
+            status=report_status,
+            resolved_by=request.user,
+            resolved_at=timezone.now(),
+        )
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.REVIEW_MODERATE,
+            target_user=review.user,
+            target_repr=f"Review #{review.id} ({review.user.username})",
+            payload={
+                "review_id": review.id,
+                "from": old_status,
+                "to": new_status,
+            },
+        )
+    review = _reviews_with_status(PlatformReview.objects.filter(pk=review.pk)).get()
     return Response(AdminReviewSerializer(review).data)
 
 

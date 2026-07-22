@@ -530,14 +530,31 @@ class PurchaseOrder {
 class PlatformReview {
   +id
   +rating
-  +content
+  +title
+  +comment
+  +display_name
   +status
+  +experience_at
 }
 
-class ReviewMessage {
+class ReviewResponse {
   +id
-  +message
-  +is_staff_reply
+  +body
+  +created_at
+  +updated_at
+}
+
+class ReviewRevision {
+  +id
+  +rating
+  +title
+  +comment
+}
+
+class ReviewReport {
+  +id
+  +reason
+  +status
 }
 
 class AdminAuditLog {
@@ -551,8 +568,7 @@ class AdminAuditLog {
 
 User "1" -- "0..*" ScanJob : owns
 User "1" -- "1" CoinWallet : has
-User "1" -- "0..*" PlatformReview : writes
-User "1" -- "0..*" ReviewMessage : sends
+User "1" -- "0..1" PlatformReview : writes
 User "1" -- "0..*" AdminAuditLog : performs
 
 ScanJob "1" -- "1" AuthorizationConsent : requires
@@ -565,7 +581,9 @@ Page "1" -- "0..*" Finding : evidence on
 CoinWallet "1" -- "0..*" CoinTransaction : records
 PricingPlan "1" -- "0..*" PurchaseOrder : purchased as
 PurchaseOrder "1" -- "0..*" CoinTransaction : credits
-PlatformReview "1" -- "0..*" ReviewMessage : discussion
+PlatformReview "1" -- "0..1" ReviewResponse : official response
+PlatformReview "1" -- "0..*" ReviewRevision : revision history
+PlatformReview "1" -- "0..*" ReviewReport : reported as
 
 note right of AuthorizationConsent
 記錄授權聲明、掃描範圍、

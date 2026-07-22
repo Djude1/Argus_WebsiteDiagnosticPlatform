@@ -1,21 +1,29 @@
 from django.urls import path
 
 from apps.reviews.views import (
-    create_message,
     list_reviews,
     my_review,
-    toggle_message_helpful,
+    report_response,
+    report_review,
+    reviews_summary,
+    toggle_response_helpful,
     toggle_review_helpful,
 )
 
 urlpatterns = [
     path("", list_reviews, name="reviews-list"),
+    path("summary/", reviews_summary, name="reviews-summary"),
     path("mine/", my_review, name="reviews-mine"),
-    path("<int:review_id>/messages/", create_message, name="reviews-create-message"),
     path("<int:review_id>/helpful/", toggle_review_helpful, name="reviews-helpful"),
+    path("<int:review_id>/report/", report_review, name="reviews-report"),
     path(
-        "messages/<int:message_id>/helpful/",
-        toggle_message_helpful,
-        name="reviews-message-helpful",
+        "responses/<int:response_id>/helpful/",
+        toggle_response_helpful,
+        name="reviews-response-helpful",
+    ),
+    path(
+        "responses/<int:response_id>/report/",
+        report_response,
+        name="reviews-response-report",
     ),
 ]

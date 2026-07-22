@@ -11,7 +11,7 @@ Claude 操作 `backend/` 目錄時，本檔在專案層 `CLAUDE.md` 之後自動
 | `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/` |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/` |
-| `/api/reviews/` | `reviews` | `reviews/`（CRUD + thread） |
+| `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`、`transactions/`、`scans/`、`reviews/`、`orders/`、`audit-log/`、`announcements/*`、`cms/*` |
@@ -29,7 +29,7 @@ Claude 操作 `backend/` 目錄時，本檔在專案層 `CLAUDE.md` 之後自動
 | `scans` | **核心**：ScanJob 狀態機、Playwright 爬蟲、四維 scanner、Word 報告、合作式 cancel | `tasks.py` `crawler.py` `scanners.py` |
 | `agent` | Phase 2 Hermes-Agent：provider chain + tool calling loop（預設 `ARGUS_AGENT_ENABLED=false`） | `providers.py` `loop.py` `runner.py` |
 | `billing` | 點數錢包；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
-| `reviews` | 平台評論（一人一則 + thread + 圖片） | `models.py` `views.py` |
+| `reviews` | 已驗證平台評論（一人一則 + 本人編修/刪除 + 官方單一回覆 + 評論／回覆各自按讚與檢舉） | `models.py` `views.py` |
 | `admin_api` | React `/admin/*` 用的 REST API + AdminAuditLog | `views.py` `permissions.py` |
 | `content` | CMS（ProjectFeature / TeamMember / AppRelease），公開 API | `models.py` `admin.py` |
 | `insights` | 公開免費分析工具（測速 / 釣魚 URL / 釣魚郵件），AllowAny、不扣 coin；供公開頁 `/free-tools` 使用 | `views.py` `analyzers.py` |
@@ -74,17 +74,18 @@ scan_job FK（nullable）、plan FK（nullable）、admin_actor FK（nullable）
 **AdminAuditLog**（`apps/admin_api/models.py`）
 ```
 admin_actor FK（staff user）、target_user FK（nullable）、
-action（coin_adjust / review_reply / review_delete / user_toggle_staff / other）、
+action（coin_adjust / review_reply / review_moderate / review_delete / user_toggle_staff / other）、
 target_object_repr、payload（JSON）、created_at
 → 透過 log_admin_action() 集中寫入（調整點數、回覆評論等）
 ```
 
 **PlatformReview**（`apps/reviews/models.py`）
 ```
-user（一人一則，OneToOne）、rating（1-5）、comment（TextField）、is_featured
-→ thread 回覆是獨立 model ReviewMessage（review FK、author、is_admin、body、image）
-→ 沒有 content / images(JSON) / parent 欄位（勿沿用舊敘述）
-→ 「有幫助」標記：ReviewHelpful / ReviewMessageHelpful（per user 唯一）
+user（一人一則，OneToOne）、rating（1-5）、title、comment、display_name、
+status（published/hidden）、experience_at（完成掃描時間）
+→ 官方回覆是 OneToOne ReviewResponse；本人編修前版本寫入 ReviewRevision
+→ ReviewReport 保存檢舉與治理狀態；ReviewHelpful 為 per user 唯一
+→ ReviewMessage / ReviewMessageHelpful 僅保留舊資料相容，不再提供公開端點
 ```
 
 ---

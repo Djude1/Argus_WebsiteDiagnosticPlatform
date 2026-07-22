@@ -1,27 +1,25 @@
 import os
 import subprocess
 import sys
-from io import BytesIO
 from pathlib import Path
-from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
-from django.core.files.storage import InMemoryStorage, storages
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, override_settings
+from django.db import IntegrityError, transaction
+from django.test import SimpleTestCase
 from django.urls import reverse
-from PIL import Image
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.reviews.models import PlatformReview, ReviewMessage
-
-
-class RemoteMemoryStorage(InMemoryStorage):
-    """模擬可寫入、但 URL 位於獨立 media origin 的 object storage。"""
-
-    def url(self, name):
-        return f"https://media.invalid/{name}"
+from apps.reviews.models import (
+    PlatformReview,
+    ReviewHelpful,
+    ReviewReport,
+    ReviewResponse,
+    ReviewResponseHelpful,
+    ReviewRevision,
+)
+from apps.scans.models import ScanJob
 
 
 class MediaStorageSettingsTests(SimpleTestCase):
@@ -74,300 +72,387 @@ def _make_user(username, **extra):
     return get_user_model().objects.create_user(username=username, **defaults)
 
 
-def _png_bytes():
-    """產生 1x1 PNG bytes，給 ImageField 測試用。"""
-    img = Image.new("RGB", (1, 1), color="red")
-    buf = BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+def _complete_scan(user):
+    return ScanJob.objects.create(
+        user=user,
+        original_url="https://example.com",
+        normalized_url="https://example.com/",
+        origin="https://example.com",
+        status=ScanJob.Status.COMPLETED,
+        completed_at=timezone.now(),
+    )
 
 
-def _image_bytes(*, size=(1, 1), image_format="PNG", exif=None):
-    image = Image.new("RGB", size, color="red")
-    buffer = BytesIO()
-    save_kwargs = {"exif": exif} if exif is not None else {}
-    image.save(buffer, format=image_format, **save_kwargs)
-    return buffer.getvalue()
+def _review(user, *, rating=5, title="掃描結果很清楚", comment=None, **extra):
+    return PlatformReview.objects.create(
+        user=user,
+        rating=rating,
+        title=title,
+        comment=comment or "掃描結果清楚，修正建議也很容易照著執行。",
+        experience_at=timezone.now(),
+        **extra,
+    )
 
 
 class PlatformReviewModelTests(APITestCase):
     def test_one_review_per_user(self):
         user = _make_user("alice")
-        PlatformReview.objects.create(user=user, rating=5, comment="很棒！")
-        from django.db import IntegrityError, transaction
+        _review(user)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                PlatformReview.objects.create(user=user, rating=4)
+                _review(user, rating=4)
 
 
-class PlatformReviewAPITests(APITestCase):
+class ReviewLifecycleAPITests(APITestCase):
     def setUp(self):
-        self.user = _make_user("bob", first_name="鮑伯", last_name="王")
-
-    def test_create_review_via_post(self):
+        self.user = _make_user(
+            "reviewer",
+            first_name="不應公開",
+            last_name="真實姓名",
+        )
         self.client.force_authenticate(self.user)
+        self.url = reverse("reviews-mine")
+
+    def test_get_mine_returns_eligibility_without_using_404(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["review"])
+        self.assertFalse(response.data["eligibility"]["eligible"])
+
+    def test_completed_scan_is_required_to_create_review(self):
         response = self.client.post(
-            reverse("reviews-mine"),
-            {"rating": 5, "comment": "Argus 太強了"},
+            self.url,
+            {"rating": 5, "comment": "這段評論已有足夠長度，但尚未完成任何掃描。"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(PlatformReview.objects.filter(user=self.user).exists())
+
+    def test_create_review_is_verified_and_does_not_expose_identity(self):
+        scan = _complete_scan(self.user)
+        response = self.client.post(
+            self.url,
+            {
+                "rating": 5,
+                "title": "報告很容易理解",
+                "comment": "第一次使用就能看懂問題優先順序，修正建議也相當具體。",
+                "display_name": "網站經營者",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["user_display"], "網站經營者")
+        self.assertNotContains(response, self.user.email, status_code=status.HTTP_201_CREATED)
+        self.assertNotContains(
+            response,
+            self.user.first_name,
+            status_code=status.HTTP_201_CREATED,
+        )
         review = PlatformReview.objects.get(user=self.user)
-        self.assertEqual(review.rating, 5)
-        self.assertEqual(review.comment, "Argus 太強了")
+        self.assertEqual(review.experience_at, scan.completed_at)
 
-    def test_second_post_rejected_with_400(self):
-        """使用者只能評分一次；第二次 POST 回 400，引導改用 messages 補充。"""
-        self.client.force_authenticate(self.user)
-        self.client.post(
-            reverse("reviews-mine"), {"rating": 3, "comment": "還行"}, format="json",
-        )
-        response = self.client.post(
-            reverse("reviews-mine"), {"rating": 5, "comment": "改主意"}, format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        # rating 不變
-        review = PlatformReview.objects.get(user=self.user)
-        self.assertEqual(review.rating, 3)
-
-    def test_rating_must_be_within_range(self):
-        self.client.force_authenticate(self.user)
-        response = self.client.post(
-            reverse("reviews-mine"), {"rating": 10, "comment": "破表"}, format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_my_review_returns_404_when_not_yet_written(self):
-        self.client.force_authenticate(self.user)
-        response = self.client.get(reverse("reviews-mine"))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_list_reviews_is_public(self):
-        carol = _make_user("carol")
-        PlatformReview.objects.create(user=carol, rating=4, comment="不錯")
-        response = self.client.get(reverse("reviews-list"))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["reviews"]), 1)
-        self.assertFalse(response.data["reviews"][0]["is_mine"])
-
-    def test_is_mine_flag_correct_for_logged_in_user(self):
-        self.client.force_authenticate(self.user)
-        PlatformReview.objects.create(user=self.user, rating=5)
-        response = self.client.get(reverse("reviews-list"))
-        self.assertTrue(response.data["reviews"][0]["is_mine"])
-
-
-class ReviewMessageTests(APITestCase):
-    def setUp(self):
-        self.user = _make_user("eve")
-        self.review = PlatformReview.objects.create(user=self.user, rating=4)
-        self.client.force_authenticate(self.user)
-        self.url = reverse("reviews-create-message", args=[self.review.id])
-
-    def test_user_can_post_multiple_messages(self):
-        for i in range(3):
-            response = self.client.post(
-                self.url, {"body": f"留言 {i}"}, format="multipart",
-            )
-            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self.review.messages.count(), 3)
-
-    def test_message_requires_body_or_image(self):
-        response = self.client.post(self.url, {}, format="multipart")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_message_can_attach_image(self):
-        image = SimpleUploadedFile(
-            "issue.png", _png_bytes(), content_type="image/png",
-        )
+    def test_blank_display_name_is_anonymous(self):
+        _complete_scan(self.user)
         response = self.client.post(
             self.url,
-            {"body": "我遇到這個畫面", "image": image},
-            format="multipart",
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        msg = ReviewMessage.objects.get()
-        self.assertTrue(msg.image.name.startswith("review_images/"))
-        self.assertNotIn("issue", msg.image.name)
-        self.assertTrue(response.data["image_url"])
-        image_response = self.client.get(urlparse(response.data["image_url"]).path)
-        self.assertEqual(image_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(image_response["X-Content-Type-Options"], "nosniff")
-        self.assertIn("sandbox", image_response["Content-Security-Policy"])
-
-    @override_settings(
-        STORAGES={
-            "default": {"BACKEND": "apps.reviews.tests.RemoteMemoryStorage"},
-            "staticfiles": {
-                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            {
+                "rating": 4,
+                "comment": "掃描報告的分類完整，讓我能依照風險逐項安排修正。",
+                "display_name": "",
             },
-        }
-    )
-    def test_review_image_supports_configurable_non_filesystem_storage(self):
-        image = SimpleUploadedFile(
-            "external.png", _png_bytes(), content_type="image/png",
+            format="json",
         )
+        self.assertEqual(response.data["user_display"], "匿名已驗證使用者")
 
-        response = self.client.post(self.url, {"image": image}, format="multipart")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        message = ReviewMessage.objects.get()
-        self.assertEqual(storages["default"].__class__.__name__, "RemoteMemoryStorage")
-        self.assertTrue(storages["default"].exists(message.image.name))
-        self.assertEqual(
-            response.data["image_url"],
-            f"https://media.invalid/{message.image.name}",
-        )
-
-    def test_image_rejects_unsupported_mime_extension_and_oversized_file(self):
-        cases = (
-            SimpleUploadedFile("issue.png", _png_bytes(), content_type="text/html"),
-            SimpleUploadedFile("issue.png.php", _png_bytes(), content_type="image/png"),
-            SimpleUploadedFile(
-                "issue.png",
-                _png_bytes() + b"x" * (5 * 1024 * 1024),
-                content_type="image/png",
-            ),
-        )
-        for image in cases:
-            with self.subTest(name=image.name, content_type=image.content_type):
-                response = self.client.post(self.url, {"image": image}, format="multipart")
-                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_image_rejects_excessive_dimensions_and_truncated_content(self):
-        cases = (
-            SimpleUploadedFile(
-                "wide.png", _image_bytes(size=(4097, 1)), content_type="image/png",
-            ),
-            SimpleUploadedFile("broken.png", b"\x89PNG\r\n\x1a\n", content_type="image/png"),
-        )
-        for image in cases:
-            with self.subTest(name=image.name):
-                response = self.client.post(self.url, {"image": image}, format="multipart")
-                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_image_is_reencoded_without_original_metadata_or_trailing_content(self):
-        exif = Image.Exif()
-        exif[0x010E] = "不應保留的描述"
-        original = _image_bytes(image_format="JPEG", exif=exif) + b"TRAILING-PAYLOAD"
-        image = SimpleUploadedFile("same-name.jpg", original, content_type="image/jpeg")
-
-        response = self.client.post(self.url, {"image": image}, format="multipart")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        message = ReviewMessage.objects.get()
-        with message.image.open("rb") as stored:
-            stored_bytes = stored.read()
-            stored.seek(0)
-            with Image.open(stored) as decoded:
-                self.assertEqual(dict(decoded.getexif()), {})
-        self.assertNotIn(b"TRAILING-PAYLOAD", stored_bytes)
-        self.assertRegex(message.image.name, r"^review_images/[0-9a-f]{32}\.jpg$")
-
-    def test_staff_author_marked_is_admin(self):
-        admin = _make_user("admin1", is_staff=True)
-        self.client.force_authenticate(admin)
+    def test_email_cannot_be_used_as_public_display_name(self):
+        _complete_scan(self.user)
         response = self.client.post(
-            self.url, {"body": "官方回覆"}, format="multipart",
+            self.url,
+            {
+                "rating": 4,
+                "comment": "掃描報告的分類完整，讓我能依照風險逐項安排修正。",
+                "display_name": "private@example.com",
+            },
+            format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(response.data["is_admin"])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_messages_appear_in_review_list(self):
-        ReviewMessage.objects.create(
-            review=self.review, author=self.user, body="補充", is_admin=False,
+    def test_owner_can_update_rating_content_and_display_name_with_revision(self):
+        review = _review(self.user, rating=3, display_name="舊名稱")
+        response = self.client.patch(
+            self.url,
+            {
+                "rating": 5,
+                "title": "更新後的標題",
+                "comment": "重新使用新版功能後體驗改善很多，報告也比以前更容易操作。",
+                "display_name": "新名稱",
+            },
+            format="json",
         )
-        response = self.client.get(reverse("reviews-list"))
-        self.assertEqual(len(response.data["reviews"][0]["messages"]), 1)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        review.refresh_from_db()
+        self.assertEqual(review.rating, 5)
+        self.assertEqual(review.display_name, "新名稱")
+        revision = ReviewRevision.objects.get(review=review)
+        self.assertEqual(revision.rating, 3)
+        self.assertEqual(revision.display_name, "舊名稱")
+
+    def test_owner_can_delete_review(self):
+        _review(self.user)
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(PlatformReview.objects.filter(user=self.user).exists())
+
+    def test_staff_cannot_create_user_review(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        _complete_scan(self.user)
+        response = self.client.post(
+            self.url,
+            {"rating": 5, "comment": "管理員不應該以一般使用者身分發表平台評論。"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_comment_requires_meaningful_length(self):
+        _complete_scan(self.user)
+        response = self.client.post(
+            self.url,
+            {"rating": 5, "comment": "太短"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-class ReviewHelpfulTests(APITestCase):
-    """W3 新增的點讚 / 排序 / 精選 / 驗證購買功能。"""
-
+class PublicReviewListTests(APITestCase):
     def setUp(self):
-        self.alice = _make_user("alice")
-        self.bob = _make_user("bob")
-        self.review = PlatformReview.objects.create(user=self.alice, rating=5, comment="好用")
+        self.first = _review(_make_user("first"), rating=5)
+        self.second = _review(_make_user("second"), rating=4)
 
-    def test_toggle_review_helpful_creates_and_removes(self):
-        self.client.force_authenticate(self.bob)
-        url = reverse("reviews-helpful", args=[self.review.id])
-        # 第一次點 → 加 1
-        r1 = self.client.post(url)
-        self.assertEqual(r1.status_code, status.HTTP_200_OK)
-        self.assertEqual(r1.data["helpful_count"], 1)
-        self.assertTrue(r1.data["my_helpful"])
-        # 第二次點同一則 → 取消（toggle 回 0）
-        r2 = self.client.post(url)
-        self.assertEqual(r2.data["helpful_count"], 0)
-        self.assertFalse(r2.data["my_helpful"])
-
-    def test_helpful_appears_in_list(self):
-        from apps.reviews.models import ReviewHelpful
-        ReviewHelpful.objects.create(review=self.review, user=self.bob)
-        self.client.force_authenticate(self.bob)
+    def test_list_is_public_and_hides_non_public_reviews(self):
+        self.second.status = PlatformReview.Status.HIDDEN
+        self.second.save(update_fields=["status"])
         response = self.client.get(reverse("reviews-list"))
-        first = response.data["reviews"][0]
-        self.assertEqual(first["helpful_count"], 1)
-        self.assertTrue(first["my_helpful"])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total"], 1)
+        self.assertEqual(response.data["reviews"][0]["id"], self.first.id)
 
-    def test_sort_helpful_pushes_high_helpful_to_top(self):
-        # 多建一則少 helpful 的；alice 的有 helpful，應排前
-        review2 = PlatformReview.objects.create(user=self.bob, rating=3, comment="一般")
-        from apps.reviews.models import ReviewHelpful
-        ReviewHelpful.objects.create(review=self.review, user=self.bob)
-        response = self.client.get(reverse("reviews-list") + "?sort=helpful")
-        rids = [r["id"] for r in response.data["reviews"]]
-        self.assertEqual(rids[0], self.review.id)
-        self.assertIn(review2.id, rids)
+    def test_unverified_legacy_review_is_not_public_or_counted(self):
+        self.second.experience_at = None
+        self.second.save(update_fields=["experience_at"])
 
-    def test_featured_review_always_first(self):
-        review2 = PlatformReview.objects.create(
-            user=self.bob, rating=4, comment="OK", is_featured=True,
-        )
+        reviews = self.client.get(reverse("reviews-list"))
+        summary = self.client.get(reverse("reviews-summary"))
+
+        self.assertEqual(reviews.data["total"], 1)
+        self.assertEqual(reviews.data["reviews"][0]["id"], self.first.id)
+        self.assertEqual(summary.data["total"], 1)
+        self.assertEqual(summary.data["average"], 5.0)
+
+    def test_rating_distribution_summary_and_filter(self):
+        summary = self.client.get(reverse("reviews-summary"))
+        self.assertEqual(summary.data["total"], 2)
+        self.assertEqual(summary.data["average"], 4.5)
+        self.assertEqual(summary.data["distribution"]["5"], 1)
+
+        filtered = self.client.get(reverse("reviews-list"), {"rating": 4})
+        self.assertEqual(filtered.data["total"], 1)
+        self.assertEqual(filtered.data["reviews"][0]["rating"], 4)
+
+    def test_helpful_sort_uses_real_votes_without_featured_override(self):
+        self.first.is_featured = True
+        self.first.save(update_fields=["is_featured"])
+        voters = [_make_user(f"voter-{index}") for index in range(2)]
+        ReviewHelpful.objects.bulk_create([
+            ReviewHelpful(review=self.second, user=voter) for voter in voters
+        ])
+        response = self.client.get(reverse("reviews-list"), {"sort": "helpful"})
+        self.assertEqual(response.data["reviews"][0]["id"], self.second.id)
+
+    def test_list_is_paginated(self):
+        for index in range(7):
+            _review(_make_user(f"extra-{index}"))
         response = self.client.get(reverse("reviews-list"))
-        self.assertEqual(response.data["reviews"][0]["id"], review2.id)
-        self.assertTrue(response.data["reviews"][0]["is_featured"])
+        self.assertEqual(response.data["total"], 9)
+        self.assertEqual(response.data["total_pages"], 2)
+        self.assertEqual(len(response.data["reviews"]), 8)
 
-    def test_verified_buyer_flag(self):
-        from django.utils import timezone
 
-        from apps.billing.models import PricingPlan, PurchaseOrder
-        plan = PricingPlan.objects.get(code="starter")
-        PurchaseOrder.objects.create(
-            user=self.alice, plan=plan,
-            price_ntd=plan.price_ntd, coin_amount=plan.coin_amount,
-            buyer_name="A", buyer_email="a@x.com",
-            status=PurchaseOrder.Status.PAID,
-            paid_at=timezone.now(),
+class ReviewTrustActionsTests(APITestCase):
+    def setUp(self):
+        self.owner = _make_user("owner")
+        self.reader = _make_user("reader")
+        self.review = _review(self.owner)
+
+    def test_owner_cannot_mark_own_review_helpful(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            reverse("reviews-helpful", kwargs={"review_id": self.review.id}),
         )
-        response = self.client.get(reverse("reviews-list"))
-        first = [r for r in response.data["reviews"] if r["id"] == self.review.id][0]
-        self.assertTrue(first["verified_buyer"])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_message_helpful_toggle(self):
-        msg = ReviewMessage.objects.create(
-            review=self.review, author=self.alice, body="補充", is_admin=False,
+    def test_helpful_vote_toggles_for_another_user(self):
+        self.client.force_authenticate(self.reader)
+        url = reverse("reviews-helpful", kwargs={"review_id": self.review.id})
+        first = self.client.post(url)
+        second = self.client.post(url)
+        self.assertTrue(first.data["my_helpful"])
+        self.assertFalse(second.data["my_helpful"])
+
+    def test_official_response_has_its_own_helpful_state(self):
+        admin = _make_user("response-author", is_staff=True)
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=admin,
+            body="這是針對使用者回饋提供的官方處理說明。",
         )
-        self.client.force_authenticate(self.bob)
-        r = self.client.post(reverse("reviews-message-helpful", args=[msg.id]))
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(r.data["helpful_count"], 1)
-
-
-class ReviewMessageAuthorDisplayTests(APITestCase):
-    """admin 在 thread 顯示真名（不再統一寫「Argus 官方」），由前端用 is_admin 加 badge 區分。"""
-
-    def test_admin_display_uses_real_name_not_argus_official(self):
-        user = _make_user("u")
-        admin = _make_user("admin1", is_staff=True, first_name="王", last_name="管理員")
-        review = PlatformReview.objects.create(user=user, rating=5)
-        ReviewMessage.objects.create(
-            review=review, author=admin, body="官方回覆", is_admin=True,
+        self.client.force_authenticate(self.reader)
+        url = reverse(
+            "reviews-response-helpful",
+            kwargs={"response_id": official_response.id},
         )
-        response = self.client.get(reverse("reviews-list"))
-        msg = response.data["reviews"][0]["messages"][0]
-        self.assertEqual(msg["author_display"], "王 管理員")
-        self.assertTrue(msg["is_admin"])
-        # 不應該寫死「Argus 官方」字串
-        self.assertNotIn("Argus", msg["author_display"])
+
+        created = self.client.post(url)
+        listing = self.client.get(reverse("reviews-list"))
+        removed = self.client.post(url)
+
+        self.assertEqual(created.status_code, status.HTTP_200_OK)
+        self.assertTrue(created.data["my_helpful"])
+        self.assertEqual(created.data["helpful_count"], 1)
+        self.assertEqual(listing.data["reviews"][0]["response"]["id"], official_response.id)
+        self.assertEqual(listing.data["reviews"][0]["response"]["helpful_count"], 1)
+        self.assertTrue(listing.data["reviews"][0]["response"]["my_helpful"])
+        self.assertFalse(removed.data["my_helpful"])
+        self.assertFalse(ReviewResponseHelpful.objects.exists())
+
+    def test_official_response_author_cannot_like_own_response(self):
+        admin = _make_user("response-owner", is_staff=True)
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=admin,
+            body="官方回覆內容",
+        )
+        self.client.force_authenticate(admin)
+
+        response = self.client.post(reverse(
+            "reviews-response-helpful",
+            kwargs={"response_id": official_response.id},
+        ))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_report_is_unique_and_owner_cannot_report_self(self):
+        url = reverse("reviews-report", kwargs={"review_id": self.review.id})
+        self.client.force_authenticate(self.owner)
+        own = self.client.post(url, {"reason": ReviewReport.Reason.OTHER}, format="json")
+        self.assertEqual(own.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.force_authenticate(self.reader)
+        created = self.client.post(
+            url,
+            {"reason": ReviewReport.Reason.PRIVACY, "detail": "疑似含有個人資料"},
+            format="json",
+        )
+        duplicate = self.client.post(
+            url,
+            {"reason": ReviewReport.Reason.SPAM},
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ReviewReport.objects.filter(review=self.review).count(), 1)
+
+    def test_review_and_official_response_can_be_reported_separately(self):
+        admin = _make_user("reported-response-author", is_staff=True)
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=admin,
+            body="需要被獨立檢視的官方回覆內容",
+        )
+        self.client.force_authenticate(self.reader)
+
+        review_report = self.client.post(
+            reverse("reviews-report", kwargs={"review_id": self.review.id}),
+            {"reason": ReviewReport.Reason.OTHER},
+            format="json",
+        )
+        response_report = self.client.post(
+            reverse(
+                "reviews-response-report",
+                kwargs={"response_id": official_response.id},
+            ),
+            {"reason": ReviewReport.Reason.ABUSE},
+            format="json",
+        )
+        duplicate = self.client.post(
+            reverse(
+                "reviews-response-report",
+                kwargs={"response_id": official_response.id},
+            ),
+            {"reason": ReviewReport.Reason.SPAM},
+            format="json",
+        )
+
+        self.assertEqual(review_report.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response_report.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            ReviewReport.objects.filter(review=self.review, response__isnull=True).count(),
+            1,
+        )
+        self.assertEqual(
+            ReviewReport.objects.filter(review=self.review, response=official_response).count(),
+            1,
+        )
+
+    def test_unverified_review_and_response_cannot_be_interacted_with(self):
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=_make_user("legacy-response-author", is_staff=True),
+            body="Legacy response",
+        )
+        self.review.experience_at = None
+        self.review.save(update_fields=["experience_at"])
+        self.client.force_authenticate(self.reader)
+
+        requests = [
+            self.client.post(reverse("reviews-helpful", args=[self.review.id])),
+            self.client.post(
+                reverse("reviews-report", args=[self.review.id]),
+                {"reason": ReviewReport.Reason.OTHER},
+                format="json",
+            ),
+            self.client.post(reverse("reviews-response-helpful", args=[official_response.id])),
+            self.client.post(
+                reverse("reviews-response-report", args=[official_response.id]),
+                {"reason": ReviewReport.Reason.OTHER},
+                format="json",
+            ),
+        ]
+
+        self.assertTrue(all(
+            response.status_code == status.HTTP_404_NOT_FOUND
+            for response in requests
+        ))
+
+    def test_official_response_author_cannot_report_own_response(self):
+        admin = _make_user("self-reporting-response-author", is_staff=True)
+        official_response = ReviewResponse.objects.create(
+            review=self.review,
+            author=admin,
+            body="Official response",
+        )
+        self.client.force_authenticate(admin)
+
+        response = self.client.post(
+            reverse("reviews-response-report", args=[official_response.id]),
+            {"reason": ReviewReport.Reason.OTHER},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_legacy_public_message_routes_are_removed(self):
+        self.client.force_authenticate(self.reader)
+        response = self.client.post(f"/api/reviews/{self.review.id}/messages/", {})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

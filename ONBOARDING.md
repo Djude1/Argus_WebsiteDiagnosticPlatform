@@ -13,7 +13,7 @@
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
 - **後端數百項測試**（以 `manage.py test apps` 實跑為準）、ruff、frontend build 均由 CI quality gate 驗證
 - **兩個介面層**：
-  - 前台（使用者）：`/dashboard /scans /history /billing /reviews /settings` + 公開頁 `/project /team /purchase /download`（首次進站播粒子過場動畫）
+  - 前台（使用者）：`/dashboard /scans /history /billing /settings`；公開頁 `/project /free-tools /team /purchase /download /reviews`（首次進站播粒子過場動畫）
   - React 後台：`/admin/*`（**唯一後台**；dark cyan + 淺色內容；staff 可進、`📜 操作紀錄`/`📢 公告管理` 僅 superuser）
   - （django-admin 已於 2026-06 整併移除；管理員改走前台 email 登入）
 - **真實 PWA**：可一鍵安裝到桌面/手機主畫面
@@ -161,7 +161,7 @@ Argus/
 │       ├── scans/          ← 核心：ScanJob、Page、Finding、AgentSession、AgentStep、AuthorizationConsent、crawler、scanners、reports、nuclei_scanner、cancellation
 │       ├── agent/          ← Hermes-Agent：providers/tools/loop/runner/findings
 │       ├── billing/        ← CoinWallet、CoinTransaction、PricingPlan、PurchaseOrder + service 唯一寫入入口
-│       ├── reviews/        ← PlatformReview（OneToOne）+ ReviewMessage（thread）
+│       ├── reviews/        ← 已驗證 PlatformReview + 官方回覆 + 修訂/檢舉治理
 │       ├── admin_api/      ← React /admin 用的 API + AdminAuditLog model + IsSuperuser
 │       ├── content/        ← CMS：ProjectFeature、TeamMember、AppRelease
 │       └── insights/       ← 免費公開分析工具（測速 / 釣魚 URL / 釣魚郵件），AllowAny、不扣 coin
@@ -200,7 +200,7 @@ Argus/
 | `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`；Playwright BFS 爬蟲、四維 scanner、Word 報告、主動式資安 probe、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` |
 | `agent` | Phase 2 Hermes-Agent：MiniMax/GLM/Gemini provider chain + 8 個 tool schema + observe-think-act loop + token 安全閘；預設 `ARGUS_AGENT_ENABLED=false` 不啟用避免燒 token | `providers.py` `tools.py` `loop.py` `runner.py` |
 | `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點 | `ecpay.py` `models.py` `services.py` `views.py` |
-| `reviews` | 平台評論：`PlatformReview` OneToOne（一人一次評分，後端強制）+ `ReviewMessage` thread（multipart 含 image，staff 自動 `is_admin=True`）；admin reply 端點可同時 override rating | `models.py` `views.py` |
+| `reviews` | 已驗證平台評論：完成掃描才可發表、`PlatformReview` OneToOne、本人可編修/刪除；`ReviewResponse` 單一官方回覆、`ReviewRevision` 修訂稽核、`ReviewReport` 檢舉治理 | `models.py` `views.py` |
 | `admin_api` | React /admin 用的 API；`IsAdminUser` 保護（`/me` 是 `IsAuthenticated`）；`AdminAuditLog` model + `IsSuperuser` 權限 + audit-log endpoint；service hook 自動寫 audit | `views.py` `permissions.py` `models.py` |
 | `content` | CMS：`ProjectFeature` / `TeamMember` / `AppRelease`，公開 API 給公開頁用（features/team/releases/milestones）；React /admin 的 CMS 編輯後前台秒生效 | `models.py` `views.py` `admin.py` |
 | `insights` | 免費公開分析工具：`speed_test` / `phishing_url_check` / `phishing_email_check`，全 `AllowAny`、不需登入、不扣 coin；本機特徵分類器不呼叫大模型；測速端點阻擋 localhost/內網/保留 IP 防 SSRF；供公開頁 `/free-tools` 使用 | `views.py` `analyzers.py` `urls.py` |
@@ -219,7 +219,8 @@ Argus/
 | `/purchase` ★ | `PurchasePage` | marketing + 4 方案 + FAQ，CTA 跳 `/billing` |
 | `/download` ★ | `DownloadPage` | PWA 一鍵安裝 + 三平台步驟 |
 | `/login` ★ | `LoginPage` | Email 登入 / 新帳號註冊；有 Google Client ID 時才顯示 Google OAuth |
-| `/reviews` ★ | `ReviewsPage` | 評論列表（公開讀）+ thread + composer（登入後） |
+| `/reviews` ★ | `ReviewsPage`（`PublicLayout`） | 夜間科技評論頁；沿用公開 top bar／footer，提供星等分布／篩選、本人評論管理與評論／官方回覆的逐則按讚、檢舉 |
+| `/reviews-next` ★ | redirect | 比較階段舊網址，相容轉址到 `/reviews` |
 | `/dashboard` | `DashboardPage` | 個人總覽 |
 | `/scans` `/scans/:id` `/scans/:id/topology` | `ScanLayout` | 掃描列表/詳情/拓撲圖 |
 | `/history` | `HistoryPage` | 同網址歷次分數 |
@@ -232,7 +233,7 @@ Argus/
 | `/admin/overview` | staff（含 6 stat card + 14 天 SVG mini chart + AI provider 用量 + Top 10 AI 用戶） |
 | `/admin/users` `/admin/users/:id` | staff（含調 coin 表單） |
 | `/admin/transactions` | staff |
-| `/admin/reviews` | staff（thread 邏輯，待回覆=最後一則非 admin） |
+| `/admin/reviews` | staff（官方單一回覆、待回覆/檢舉/隱藏篩選與公開狀態治理） |
 | `/admin/scans` `/admin/scans/:id` | staff |
 | `/admin/content` | staff（**3 tab inline CRUD**：特色 / 成員 / 版本） |
 | `/admin/plans` | staff（**inline CRUD** 編輯 PricingPlan） |
@@ -325,10 +326,14 @@ Argus/
 ### 7.4 評論（reviews）
 | Method | 端點 | 權限 | request 參數 | 說明 |
 |---|---|---|---|---|
-| GET | `/api/reviews/` | open | query：`sort`=`helpful`(預設)/`newest` | 全部評論 + 每則 messages thread |
-| GET | `/api/reviews/mine/` | auth | — | 取我的評分 |
-| POST | `/api/reviews/mine/` | auth | body：`rating`（1-5，必填）、`comment?` | 建第一次評分（第二次 POST 回 400，rating 不可改） |
-| POST | `/api/reviews/{id}/messages/` | auth | multipart body：`body?`、`image?`（檔案）；至少一項 | 發訊息（staff 自動 `is_admin=True`） |
+| GET | `/api/reviews/` | open | query：`sort=helpful\|newest`、`rating=1..5`、`page?` | 公開且具 `experience_at` 的評論；每頁 8 則 |
+| GET | `/api/reviews/summary/` | open | — | 公開評論總數、平均分與 1–5 星分布 |
+| GET | `/api/reviews/mine/` | auth | — | 我的評論與是否完成掃描的發表資格 |
+| POST | `/api/reviews/mine/` | auth | body：`rating`、`title?`、`comment`、`display_name?` | 完成掃描的一般使用者建立評論；staff 禁止發表 |
+| PATCH | `/api/reviews/mine/` | auth | 同上，可部分更新 | 編修前建立 `ReviewRevision` |
+| DELETE | `/api/reviews/mine/` | auth | — | 本人刪除自己的評論 |
+| POST | `/api/reviews/{id}/helpful/` | auth | — | 切換「有幫助」；不可操作自己的評論 |
+| POST | `/api/reviews/{id}/report/` | auth | body：`reason`、`detail?` | 檢舉他人評論 |
 
 ### 7.5 公開內容 CMS
 | Method | 端點 | 權限 | 說明 |
@@ -350,8 +355,9 @@ Argus/
 | GET | `/api/admin/users/{id}/` | staff | path：`user_id` | 詳情含 wallet + 交易 + ai_usage |
 | POST | `/api/admin/users/{id}/adjust-coin/` | staff | body：`delta`（int，可正負）、`note?`（≤255） | 調 coin（會寫 audit） |
 | GET | `/api/admin/transactions/` | staff | query：`kind?`、`user_id?`、`page?` | 交易紀錄 |
-| GET | `/api/admin/reviews/` | staff | query：`pending?`（1/true/yes）、`page?` | 評論列表（pending=最後一則非 admin） |
-| POST | `/api/admin/reviews/{id}/reply/` | staff | body：`reply?`（≤2000）、`rating?`（1-5） | 回覆（建 admin ReviewMessage + 可選 rating override） |
+| GET | `/api/admin/reviews/` | staff | query：`pending?`、`reported?`、`status=published\|hidden`、`page?` | 評論治理清單與總數/平均/待回覆/待審檢舉統計 |
+| POST / DELETE | `/api/admin/reviews/{id}/reply/` | staff | POST body：`reply`（1–2000） | 新增、更新或移除單一 `ReviewResponse`；不得改原評分 |
+| PATCH | `/api/admin/reviews/{id}/moderate/` | staff | body：`status=published\|hidden` | 隱藏/重新公開並結案待處理檢舉，寫 audit |
 | GET | `/api/admin/scans/` | staff | query：`q?`、`status?`、`page?` | 掃描列表 |
 | GET | `/api/admin/scans/{id}/` | staff | path：`scan_id` | 掃描詳情 |
 | GET | `/api/admin/orders/` | staff | query：`q?`、`status?`、`invoice_type?`、`page?` | 訂單列表 |
@@ -374,12 +380,12 @@ Argus/
 | `active_days` | int | — | `7` | 臨時公告從建立日起顯示天數（常駐忽略） |
 | `is_active` | bool | — | `true` | 是否啟用 |
 
-### 7.7 點讚（W3 新增，Trustpilot 風）
+### 7.7 評論互動補充
 | Method | 端點 | 權限 | 說明 |
 |---|---|---|---|
 | POST | `/api/reviews/{id}/helpful/` | auth | 切換評論「有幫助」 |
-| POST | `/api/reviews/messages/{id}/helpful/` | auth | 切換訊息「有幫助」 |
-| GET | `/api/reviews/?sort=helpful\|newest` | open | 排序評論列表 |
+| POST | `/api/reviews/{id}/report/` | auth | 檢舉他人評論；每位使用者每則評論保留一筆 |
+| GET | `/api/reviews/?sort=helpful\|newest&rating=1..5` | open | 依 helpful/最新排序並可篩星等 |
 
 ### 7.8 免費分析工具（insights app，公開、不扣 coin）
 | Method | 端點 | 權限 | request 參數 | 說明 |
@@ -397,8 +403,11 @@ User (accounts.User，繼承 AbstractUser，沒加欄位)
  ├── coin_wallet → CoinWallet (OneToOne)
  │    └── transactions → CoinTransaction[]（審計不可改）
  ├── purchase_orders → PurchaseOrder[]
- ├── platform_review → PlatformReview (OneToOne)
- │    └── messages → ReviewMessage[]（含 image）
+ ├── platform_review → PlatformReview (OneToOne；完成掃描才可建立)
+ │    ├── official_response → ReviewResponse (OneToOne)
+ │    ├── revisions → ReviewRevision[]
+ │    ├── reports → ReviewReport[]
+ │    └── helpful_marks → ReviewHelpful[]
  ├── scan_jobs → ScanJob[]
  │    ├── pages → Page[] (UniqueConstraint scan_job+url)
  │    │    └── findings → Finding[]（含 bounding_box）
@@ -409,12 +418,11 @@ User (accounts.User，繼承 AbstractUser，沒加欄位)
  │    └── coin_transactions → CoinTransaction[]（透過 scan_job FK）
  ├── admin_audit_logs → AdminAuditLog[] (as actor)
  ├── admin_audit_logs_received → AdminAuditLog[] (as target)
- └── review_messages → ReviewMessage[] (as author)
 
 PricingPlan（4 個 seed：starter/standard/advanced/flagship）
 ProjectFeature / TeamMember / AppRelease / ProjectMilestone（CMS，公開頁用）
 Announcement（公告：type=permanent/temporary、active_days、is_active）
-ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per user 唯一）
+ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留，不再有公開端點）
 ```
 
 ### 重要欄位速查
@@ -424,9 +432,9 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled
 - `ScanJob.progress`（JSON）: `{pages_done, pages_total, phase, phase_started_at}`
 - `Finding`: severity (critical/high/medium/low/info)、category (seo/aeo/geo/security/ux)、bounding_box、ai_handoff_prompt
-- `PlatformReview`: rating（1-5）、comment（TextField，非 `content`）、is_featured（精選）；user OneToOne（一人一則）；thread 在獨立 model `ReviewMessage`，無 parent/images 欄位
-- `ReviewMessage`: is_admin（staff 發自動 True）、body、image（單一 ImageField，非 JSON）；review FK、author FK
-- `AdminAuditLog`: 欄位 `admin_actor`、`target_user`、`action`（coin_adjust / review_reply / review_delete / user_toggle_staff / other）、`target_object_repr`、`payload`（JSON，非 `detail`）
+- `PlatformReview`: user OneToOne、rating（1-5）、title、comment、display_name、status（published/hidden）、experience_at；`is_featured` 僅保留舊資料相容且不影響公開排序
+- `ReviewResponse`: review OneToOne、author、body；`ReviewRevision` 保存本人編修前版本；`ReviewReport` 保存檢舉與 pending/resolved/dismissed
+- `AdminAuditLog`: 欄位 `admin_actor`、`target_user`、`action`（coin_adjust / review_reply / review_moderate / review_delete / user_toggle_staff / other）、`target_object_repr`、`payload`（JSON，非 `detail`）
 
 ---
 
@@ -459,7 +467,7 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 | T13–T15 | Hermes-Agent / 主動式資安 / 拓撲圖 |
 | T16–T18 | Coin 點數制 + 評論 + Jazzmin 美化（後 W4 砍掉） |
 | T19–T21 | React /admin / 3 步驟結帳 wizard / AI 用量 dashboard |
-| T22–T26 | 公開頁 CMS / PWA / Audit log + 兩級權限 / Reviews thread + 圖片 |
+| T22–T26 | 公開頁 CMS / PWA / Audit log + 兩級權限 / Reviews 舊版 thread（後續已升級為已驗證評論治理） |
 | **W1** | TopNav 加下載 + /scans 範圍切換（單頁/整站）+ /billing 電子發票載具（手機條碼/自然人憑證） |
 | **W4** | 砍 django-jazzmin + React /admin 補 inline CRUD（content + plans） |
 | **W3** | /reviews 重做為 Trustpilot 風（點讚/精選/lightbox/admin 真名） |
@@ -497,9 +505,9 @@ ReviewHelpful / ReviewMessageHelpful（評論/訊息「有幫助」標記，per 
 ### 中等（半天 ~ 1 天）
 5. **AdminAuditLog 擴充**：訂單狀態變更、user toggle staff 也寫 log
 6. **前台 DashboardPage 加「我的 AI 用量」段**（目前只有 admin 看得到）
-7. **（已完成）ReviewMessage 待回覆狀態改 DB subquery/annotation**，避免列表 N+1
+7. **（已完成）評論治理狀態改 DB annotation**，待回覆與檢舉列表不產生 N+1
 8. **iOS Safari PWA 實機測試**（修補可能的 manifest 問題）
-9. **/reviews 加篩選**（按星等 / 按 thread 有無回覆 / 按 verified）
+9. **（已完成）/reviews 星等篩選、helpful/newest 排序與已驗證體驗限制**
 10. **/billing 載具表單** 改即時格式提示（輸入時 highlight 不合格字元）
 
 ### 較大（1+ 天）

@@ -13,6 +13,7 @@ class AdminAuditLog(models.Model):
     class Action(models.TextChoices):
         COIN_ADJUST = "coin_adjust", "調整點數"
         REVIEW_REPLY = "review_reply", "回覆評論"
+        REVIEW_MODERATE = "review_moderate", "審核評論"
         REVIEW_DELETE = "review_delete", "刪除評論"
         USER_TOGGLE_STAFF = "user_toggle_staff", "切換管理員身份"
         OTHER = "other", "其他"

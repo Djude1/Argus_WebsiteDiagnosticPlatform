@@ -99,13 +99,14 @@ D:\nodejs\npm.cmd install 套件名
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
-| `/reviews` | `ReviewsPage` | 平台評論 |
+| `/reviews` | `ReviewsPage`（`PublicLayout`） | 夜間科技評論頁；沿用公開 top bar／footer，提供星等篩選、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
+| `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 後台總覽 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理 |
 | `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 點數調整 |
 | `/admin/transactions` | `AdminTransactionsPage` | 交易紀錄 |
-| `/admin/reviews` | `AdminReviewsPage` | 評論管理（可回覆） |
+| `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理 |
 | `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
@@ -119,7 +120,8 @@ D:\nodejs\npm.cmd install 套件名
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
 | `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
 | `src/features/scans/ScanExperience.jsx` | 掃描建立、列表、詳情與拓樸頁 |
-| `src/features/account/AuthenticatedPages.jsx` | Dashboard、歷史、購點、評論、設定與登入後導覽 |
+| `src/features/account/AuthenticatedPages.jsx` | Dashboard、歷史、購點、設定與登入後導覽 |
+| `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉與夜間科技介面 |
 | `src/features/public/PublicPages.jsx` | 專案、免費工具、團隊、購買介紹與下載等公開頁 |
 | `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |

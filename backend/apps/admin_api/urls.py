@@ -21,6 +21,7 @@ urlpatterns = [
     path("transactions/", views.transactions_list, name="admin-transactions"),
     path("reviews/", views.reviews_list, name="admin-reviews"),
     path("reviews/<int:review_id>/reply/", views.reply_review, name="admin-reply-review"),
+    path("reviews/<int:review_id>/moderate/", views.moderate_review, name="admin-moderate-review"),
     path("scans/", views.scans_list, name="admin-scans"),
     path("scans/<int:scan_id>/", views.scan_detail, name="admin-scan-detail"),
     path("orders/", views.orders_list, name="admin-orders"),

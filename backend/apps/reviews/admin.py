@@ -1,7 +1,13 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from apps.reviews.models import PlatformReview, ReviewMessage
+from apps.reviews.models import (
+    PlatformReview,
+    ReviewMessage,
+    ReviewReport,
+    ReviewResponse,
+    ReviewRevision,
+)
 
 
 def _stars(rating: int) -> str:
@@ -37,15 +43,22 @@ class PlatformReviewAdmin(admin.ModelAdmin):
     list_display = [
         "user",
         "rating_display",
+        "status",
         "comment_short",
-        "message_count",
+        "has_response",
         "created_at",
     ]
-    list_filter = ["rating", "created_at"]
-    search_fields = ["user__username", "user__email", "comment"]
+    list_filter = ["status", "rating", "created_at"]
+    search_fields = ["user__username", "user__email", "title", "comment"]
     date_hierarchy = "created_at"
-    readonly_fields = ["user", "comment", "created_at", "updated_at"]
-    fields = ["user", "rating", "comment", "created_at", "updated_at"]
+    readonly_fields = [
+        "user", "rating", "title", "comment", "display_name", "status",
+        "experience_at", "created_at", "updated_at",
+    ]
+    fields = [
+        "user", "rating", "title", "comment", "display_name", "status",
+        "experience_at", "created_at", "updated_at",
+    ]
     inlines = [ReviewMessageInline]
 
     def has_add_permission(self, request):
@@ -67,9 +80,9 @@ class PlatformReviewAdmin(admin.ModelAdmin):
         text = (obj.comment or "").replace("\n", " ")
         return text[:60] + ("…" if len(text) > 60 else "")
 
-    @admin.display(description="訊息數")
-    def message_count(self, obj: PlatformReview) -> int:
-        return obj.messages.count()
+    @admin.display(description="官方回覆", boolean=True)
+    def has_response(self, obj: PlatformReview) -> bool:
+        return hasattr(obj, "official_response")
 
 
 @admin.register(ReviewMessage)
@@ -102,3 +115,46 @@ class ReviewMessageAdmin(admin.ModelAdmin):
     @admin.display(description="圖", boolean=True)
     def has_image(self, obj: ReviewMessage) -> bool:
         return bool(obj.image)
+
+
+@admin.register(ReviewResponse)
+class ReviewResponseAdmin(admin.ModelAdmin):
+    list_display = ["review", "author", "created_at", "updated_at"]
+    search_fields = ["review__user__username", "body"]
+    readonly_fields = ["review", "author", "body", "created_at", "updated_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReviewRevision)
+class ReviewRevisionAdmin(admin.ModelAdmin):
+    list_display = ["review", "rating", "created_at"]
+    readonly_fields = [
+        "review", "rating", "title", "comment", "display_name", "created_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReviewReport)
+class ReviewReportAdmin(admin.ModelAdmin):
+    list_display = ["review", "reporter", "reason", "status", "created_at"]
+    list_filter = ["status", "reason", "created_at"]
+    readonly_fields = [
+        "review", "reporter", "reason", "detail", "status",
+        "resolved_by", "created_at", "resolved_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

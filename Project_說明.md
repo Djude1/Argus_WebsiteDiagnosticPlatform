@@ -115,7 +115,7 @@ SaaS 級網站健檢工具。使用者輸入單一網址 → 系統執行:
 
 ### M5. 前台 / 後台分離
 - **前台(User Portal)**:Google OAuth 登入、新建掃描任務、查看互動報告、匯出、購買點數、撰寫評論
-- **後台(Admin)**:React `/admin/*` 為**唯一**管理介面(django-admin 已整併移除),管理員以前台 email 登入後進入,可管理使用者點數錢包、交易紀錄、評論回覆、掃描任務、CMS 內容、操作紀錄(superuser)
+- **後台(Admin)**:React `/admin/*` 為**唯一**管理介面(django-admin 已整併移除),管理員以前台 email 登入後進入,可管理使用者點數錢包、交易紀錄、評論官方回覆與檢舉治理、掃描任務、CMS 內容、操作紀錄(superuser)
 
 ### M6. 點數制度（取代月配額）
 - **錢包**：每使用者一個 `CoinWallet`（balance、累積購買、累積掃描）；建立帳號自動發 200 coin，之後每月登入時自動補發
@@ -124,9 +124,9 @@ SaaS 級網站健檢工具。使用者輸入單一網址 → 系統執行:
 - **退費**：僅 admin 在後台手動加減 coin（CoinWalletAdmin 自訂 adjust 頁面，可輸入任意金額 + 備註）
 
 ### M7. 平台評論
-- **一人一則**：`PlatformReview`（rating 1-5、comment、admin_reply）
-- **公開列表**：未登入也能讀；登入後可寫/更新自己的評論
-- **管理員回覆**：後台編輯 admin_reply 自動填入回覆時間與回覆者，前台公開顯示
+- **已驗證一人一則**：完成至少一次掃描的一般使用者才能建立 `PlatformReview`；公開作者只顯示自填名稱或匿名標籤
+- **完整本人控制**：登入後可建立、編修 rating/title/comment/display_name 或刪除；編修前版本留在 `ReviewRevision` 稽核
+- **透明治理**：公開列表可依星等與 helpful/newest 排序；登入使用者可 helpful／檢舉；管理員只能維護單一官方回覆與公開/隱藏狀態，不得改原評分或原文
 
 ---
 

@@ -32,3 +32,9 @@ React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意
 | 直接 `CoinWallet` / `CoinTransaction` `.save()` | 繞過冪等與原子交易 | `billing.services.admin_adjust` |
 | 在 `views` 直接 render 個資欄位 | 個資外洩 | 透過 serializer whitelist |
 | 敏感操作不寫 audit | 合規破口 | 呼叫 `log_admin_action` |
+
+## 評論檢舉治理
+
+- `AdminReviewSerializer` 必須將使用者評論與官方回覆的檢舉數分開輸出，前端不得合併成無法辨識目標的單一數字。
+- `moderate_review` 只處理 `response__isnull=True` 的父評論檢舉；隱藏或重新公開評論不得連帶結案官方回覆檢舉。
+- `reported=true` 篩選仍需涵蓋任一目標有待審檢舉的評論，避免官方回覆檢舉從治理清單消失。
