@@ -38,3 +38,11 @@ data:
   # Email：預設 filebased（寄出的信寫到 container 內 backend/dev_emails/*.log）
   # 要真寄信改成 django.core.mail.backends.smtp.EmailBackend 並把 EMAIL_* 放進 Secret
   DJANGO_EMAIL_BACKEND: "django.core.mail.backends.filebased.EmailBackend"
+  # Task 7：Kali SQLmap K8s chain 暫時停用——ConfigMap 與 11-kali-admission.yaml 的
+  # approvedImage 變數綁定同一個 disabled sentinel digest；argon worker 拿到這個值
+  # 後會把 ARGUS_KALI_BACKEND 當作 "disabled"，完全不發 Job。
+  # 啟用時（Task 11）：把 RUNNER_IMAGE 換成真 digest，並同時改 VAP variable。
+  ARGUS_KALI_ENABLED: "false"
+  ARGUS_KALI_BACKEND: "disabled"
+  ARGUS_KALI_NAMESPACE: "argus-kali"
+  ARGUS_KALI_RUNNER_IMAGE: "shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000"

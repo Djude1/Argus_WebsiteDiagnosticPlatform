@@ -1,0 +1,76 @@
+# Task 7：argus-kali Job 的 fail-closed admission policy（CEL）。
+#
+# 設計重點：
+#   - cluster-scoped：VAP/VAPBinding 是 cluster-scoped 資源；Binding 用 namespaceSelector
+#     限縮只對帶 argus.io/kali-runner=true 的 namespace 生效（目前僅 argus-kali）。
+#   - failurePolicy: Fail：API server 無法聯繫 policy 時，拒絕請求（fail-closed）。
+#   - approvedImage 變數綁定 disabled sentinel digest；Task 11 解禁時同時改這裡 + ConfigMap。
+#   - 13 條 CEL 完全比對 Task 4 KubernetesSqlmapExecutor.build_restricted_runner_pod
+#     與 _create_job 發射的 Job 形狀；任一欄位偏離即 Deny。
+#
+# 搭配 10-kali-runtime.yaml 的 PSA restricted:v1.35 與 ResourceQuota，
+# 形成「namespace 標籤 → quota → CEL」三層契約。
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: argus-kali-admission
+spec:
+  failurePolicy: Fail  # fail-closed：policy controller 不可達時拒絕寫入
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs"]
+  variables:
+    - name: approvedImage
+      expression: "'shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000'"
+  validations:
+    # ---- Job 結構（對齊 _create_job）----
+    - expression: "object.spec.parallelism == 1 && object.spec.completions == 1 && object.spec.backoffLimit == 0"
+      message: "Argus Kali Job 結構不符合契約"
+    - expression: "object.spec.ttlSecondsAfterFinished == 300 && object.spec.activeDeadlineSeconds >= 150 && object.spec.activeDeadlineSeconds <= 390"
+      message: "Argus Kali Job TTL/Deadline 不符合契約"
+    # ---- Pod template 基本屬性 ----
+    - expression: "object.spec.template.spec.serviceAccountName == 'kali-runner' && object.spec.template.spec.automountServiceAccountToken == false"
+      message: "Argus Kali Pod 必須使用 tokenless kali-runner ServiceAccount"
+    - expression: "object.spec.template.spec.containers.size() == 1 && object.spec.template.spec.containers[0].image == variables.approvedImage"
+      message: "Argus Kali Pod 只能執行 approved image"
+    - expression: "object.spec.template.spec.containers[0].command == ['/usr/local/bin/python'] && object.spec.template.spec.containers[0].args == ['/opt/argus/runner.py']"
+      message: "Argus Kali container command/args 不符合契約"
+    # ---- Job 名稱、host namespace、volumes ----
+    - expression: "object.metadata.name.matches('^argus-sqlmap-[a-f0-9]{10}-[a-f0-9]{12}$')"
+      message: "Argus Kali Job 名稱不符合契約"
+    - expression: "object.spec.template.spec.restartPolicy == 'Never' && (!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false) && (!has(object.spec.template.spec.hostPID) || object.spec.template.spec.hostPID == false) && (!has(object.spec.template.spec.hostIPC) || object.spec.template.spec.hostIPC == false)"
+      message: "Argus Kali Pod 不得使用 host namespace"
+    - expression: "object.spec.template.spec.volumes.size() == 2 && object.spec.template.spec.volumes.exists(v, v.name == 'targets' && has(v.secret) && v.secret.secretName.matches('^argus-targets-[a-f0-9]{10}-[a-f0-9]{12}$') && v.secret.defaultMode == 256) && object.spec.template.spec.volumes.exists(v, v.name == 'scratch' && has(v.emptyDir) && v.emptyDir.sizeLimit == quantity('1Gi')) && object.spec.template.spec.volumes.all(v, !has(v.hostPath))"
+      message: "Argus Kali volume 不符合契約"
+    # ---- Pod securityContext（對齊 build_restricted_runner_pod）----
+    - expression: "object.spec.template.spec.securityContext.runAsNonRoot == true && object.spec.template.spec.securityContext.runAsUser == 65532 && object.spec.template.spec.securityContext.runAsGroup == 65532 && object.spec.template.spec.securityContext.fsGroup == 65532 && object.spec.template.spec.securityContext.seccompProfile.type == 'RuntimeDefault'"
+      message: "Argus Kali Pod securityContext 不符合契約"
+    # ---- Container securityContext ----
+    - expression: "object.spec.template.spec.containers[0].securityContext.runAsNonRoot == true && object.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem == true && object.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false && object.spec.template.spec.containers[0].securityContext.capabilities.drop == ['ALL'] && (!has(object.spec.template.spec.containers[0].securityContext.privileged) || object.spec.template.spec.containers[0].securityContext.privileged == false)"
+      message: "Argus Kali container securityContext 不符合契約"
+    # ---- VolumeMounts（targets /run/argus-targets RO、scratch /tmp）----
+    - expression: "object.spec.template.spec.containers[0].volumeMounts.size() == 2 && object.spec.template.spec.containers[0].volumeMounts.exists(v, v.name == 'targets' && v.mountPath == '/run/argus-targets' && v.readOnly == true) && object.spec.template.spec.containers[0].volumeMounts.exists(v, v.name == 'scratch' && v.mountPath == '/tmp')"
+      message: "Argus Kali volumeMount 不符合契約"
+    # ---- Resources（與 ResourceQuota 完全對齊）----
+    - expression: "object.spec.template.spec.containers[0].resources.requests['cpu'] == quantity('250m') && object.spec.template.spec.containers[0].resources.requests['memory'] == quantity('256Mi') && object.spec.template.spec.containers[0].resources.requests['ephemeral-storage'] == quantity('256Mi') && object.spec.template.spec.containers[0].resources.limits['cpu'] == quantity('1') && object.spec.template.spec.containers[0].resources.limits['memory'] == quantity('768Mi') && object.spec.template.spec.containers[0].resources.limits['ephemeral-storage'] == quantity('1Gi')"
+      message: "Argus Kali resources 不符合契約"
+    # ---- 禁止 host port / application envFrom / env / ports ----
+    - expression: "(!has(object.spec.template.spec.containers[0].ports) || object.spec.template.spec.containers[0].ports.size() == 0) && (!has(object.spec.template.spec.containers[0].env) || object.spec.template.spec.containers[0].env.size() == 0) && (!has(object.spec.template.spec.containers[0].envFrom) || object.spec.template.spec.containers[0].envFrom.size() == 0)"
+      message: "Argus Kali runner 不得取得 host port 或 application envFrom"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: argus-kali-admission-binding
+spec:
+  policyName: argus-kali-admission
+  validationActions:
+    - Deny  # 不符合 → API server 直接拒絕；不依賴 audit/warn
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        argus.io/kali-runner: "true"  # 10-kali-runtime.yaml 的 Namespace label

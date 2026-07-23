@@ -294,11 +294,27 @@ ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 ARGUS_AGENT_STEP_TIMEOUT = int(os.getenv("ARGUS_AGENT_STEP_TIMEOUT", "30"))
 ARGUS_AGENT_ENABLED = env_bool("ARGUS_AGENT_ENABLED", default=False)
 
-# Phase 3 Kali 主動驗證工具（docker exec 呼叫 kali container 的 sqlmap/metasploit）
+# Phase 3 Kali 主動驗證工具
 # 預設關閉；即使開啟，仍需 scan_mode=active 且 active_testing_authorized=True 才會執行（三重鎖）
 ARGUS_KALI_ENABLED = env_bool("ARGUS_KALI_ENABLED", default=False)
+ARGUS_KALI_BACKEND = os.getenv("ARGUS_KALI_BACKEND", "disabled").strip().lower()
 ARGUS_KALI_CONTAINER = os.getenv("ARGUS_KALI_CONTAINER", "argus-kali-1")
-ARGUS_KALI_TIMEOUT = int(os.getenv("ARGUS_KALI_TIMEOUT", "120"))  # 單一工具 subprocess 超時（秒）
+ARGUS_KALI_NAMESPACE = os.getenv("ARGUS_KALI_NAMESPACE", "argus-kali")
+ARGUS_KALI_RUNNER_IMAGE = os.getenv("ARGUS_KALI_RUNNER_IMAGE", "").strip()
+ARGUS_KALI_SQLMAP_VERSION = os.getenv("ARGUS_KALI_SQLMAP_VERSION", "1.10")
+ARGUS_KALI_TIMEOUT = int(os.getenv("ARGUS_KALI_TIMEOUT", "120"))
+ARGUS_KALI_STARTUP_GRACE_SECONDS = 30
+ARGUS_KALI_MAX_TARGETS = 3
+ARGUS_KALI_LOCK_WAIT_SECONDS = 420
+ARGUS_KALI_LOCK_LEASE_SECONDS = 450
+ARGUS_KALI_SCAN_DEADLINE_SECONDS = 900
+ARGUS_KALI_STATE_TTL_SECONDS = 86400
+ARGUS_KALI_TTL_AFTER_FINISHED_SECONDS = 300
+ARGUS_KALI_RESULT_MAX_BYTES = 16384
+ARGUS_KALI_REDIS_URL = os.getenv(
+    "ARGUS_KALI_REDIS_URL",
+    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+)
 
 # Google OAuth Client ID（從 Google Cloud Console > Credentials 取得）
 # 一般使用者透過 Google 帳號登入時用於驗證 ID Token；空字串代表未啟用

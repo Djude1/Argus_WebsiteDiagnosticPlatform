@@ -1,0 +1,30 @@
+# Task 9：kind 整合測試叢集設定（brief Step 3）。
+#
+# 設計重點：
+#   - disableDefaultCNI: true——移除 kind 預設 CNI，workflow 接著安裝 Calico v3.32.0
+#     官方 manifest；NetworkPolicy 要生效必須有真正會執行 enforcement 的 CNI。
+#   - podSubnet: 192.168.0.0/16——對齊 Calico default IPPool（kubeadm's kind 預設
+#     10.244.0.0/16 會與 Calico manifest 的 CALICO_IPV4POOL_CIDR 衝突）。
+#   - 與 workflow 的 containerdConfigPatches 搭配，把 docker.io 鏡像到 local registry；
+#     讓 kind 節點能以 `shijie85/argus-kali-runner@sha256:<digest>` 形式拉到本地 built image。
+#
+# 搭配命令：
+#   kind create cluster --config tests/integration/kind-config.yaml \
+#       --image kindest/node:v1.35.0@sha256:<...>
+#   kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  # 關閉 kind 預設 CNI（kindest/net）；Calico v3.32.0 由 workflow 套用。
+  disableDefaultCNI: true
+  # 與 Calico default IPPool 對齊；任意變更會與 calico.yaml 內的 CIDR 衝突。
+  podSubnet: "192.168.0.0/16"
+# 讓 kind 節點內 containerd 優先從 host 的 local registry 拉 image；同時保留
+# docker.io 作為 fallback，避免測試外的 sidecar image 拉不到。
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+      endpoint = ["http://kind-registry:5000", "https://registry-1.docker.io"]
+nodes:
+  - role: control-plane
+  - role: worker

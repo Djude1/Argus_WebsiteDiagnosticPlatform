@@ -38,6 +38,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## OpenCode 程式實作委派
+
+當使用者明確強調「使用 OpenCode 作為 subagent」時，該任務的程式實作（新功能、bug 修、重構、跨檔改動）一律委派本機 OpenCode CLI；規格撰寫、背景執行、監工、空轉處置、續 session 與最終驗收均依 [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) 執行。OpenCode 的 DONE/exit 0 只代表自我回報，Claude Code 仍須親自重跑測試、審 diff 與確認範圍後才能接受。
+
+---
+
 ## 禁止事項清單（Prohibited Actions）
 
 以下操作**在任何情況下都禁止**，違反可能導致資料損毀、安全漏洞或計費錯誤。
@@ -97,6 +103,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 ---
 
+## K8s / GitOps 操作底線
+
+- **先按路徑判斷自動化**：`backend/**`（以及 backend image 相依檔）與 `frontend/**` 會分別觸發 image build；成功後 bot 才會回寫 `k8s/kustomization.yaml`。只有 `k8s/**` 的變更不會建新 image。
+- **push 不等於部署完成**：必須分開檢查 GitHub Quality Gate、image build、bot write-back commit、Argo CD Sync / Health / Auto Sync、正式 Job / Pod rollout；cloudflared 是另一層服務，Git push 不會修改其設定。
+- **`migrate` 是 Argo PreSync Job**：Argo 畫面的容器 `Terminated` 只代表程序已結束；必須看 reason、exit code 與 logs，`Completed / 0` 才是成功，非零才是失敗。
+- **正式 backend runtime 契約**：migrate、web、worker、initContainer 與 worker probe 一律使用 `/app/.venv/bin/...` 絕對路徑，不可改回 `uv run` 或依賴 image `PATH`；契約由 root `tests/` 鎖定。
+- **Secret 除錯不印值**：若 Django 啟動因必要設定中止，只確認 Secret 是否存在對應 key；禁止把 Secret 值、臨時登入資訊或機器專屬 SSH 金鑰路徑寫入 log／commit。
+- **本地／CI 綠燈不取代實機驗證**：部署相關修復必須持續追到正式叢集，並明列尚未完成的 CNI 封包、Celery 任務、完整掃描、密碼重設與公開網域 smoke test。完整流程與驗證矩陣見 [`k8s/README.md`](k8s/README.md)。
+- **K8s Kali SQLmap 攻擊鏈目前 disabled**：`ARGUS_KALI_ENABLED=false`、`ARGUS_KALI_BACKEND=disabled`、runner image 為 disabled sentinel digest（`…@sha256:0000…`）。軟體已 merge 但啟用是 Task 11 手動控制平面 gate——必須先完成 Secret 靜態加密、實機 RBAC/Admission/Network 檢查與授權 positive test，嚴禁未經 runbook 切換旗標。新增相依 `kubernetes>=35.0,<36`（Task 4）與 `ARGUS_KALI_*` settings（Task 1，全預設停用）。Operator 手冊見 [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) 與 [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md)；掃描層契約見 [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md)。
+
+---
+
 ## 必須遵守的規則
 
 - 所有回覆一律使用**繁體中文**，程式碼註釋也是
@@ -133,4 +151,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | 文件同步詳細規則 A/B/C + CLAUDE.md 跨層同步 | [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md) |
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
+| OpenCode CLI subagent 委派、監工與驗收 | [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) |
+| K8s Secret 靜態加密啟用（Task 11 前置） | [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) |
+| K8s Kali SQLmap 攻擊鏈啟用／回滾（Task 11） | [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md) |
 | 子目錄 CLAUDE.md 索引、SKILL 索引 | [`專案導覽.md`](專案導覽.md) |

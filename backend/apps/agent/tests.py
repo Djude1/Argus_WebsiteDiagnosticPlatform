@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -30,7 +31,14 @@ from apps.agent.runner import (
     _enforce_agent_websocket,
     _make_agent_context,
 )
-from apps.agent.tools import TOOL_SCHEMAS, ToolExecutor, ToolOutcome
+from apps.agent.tools import (
+    TOOL_SCHEMAS,
+    ToolExecutor,
+    ToolOutcome,
+    build_tool_schemas,
+    redact_tool_arguments,
+    redact_tool_result,
+)
 from apps.scans.models import AgentSession, AgentStep, Finding, Page, ScanJob
 from apps.scans.services import PublicScanTargetError
 
@@ -254,6 +262,22 @@ class ToolSchemaTests(TestCase):
         for field in ("severity", "title", "description"):
             self.assertIn(field, required)
 
+    def test_passive_schema_omits_sqlmap_tool(self):
+        names = {item["function"]["name"] for item in build_tool_schemas(False)}
+        self.assertNotIn("probe_sql_injection", names)
+
+    def test_authorized_active_schema_includes_sqlmap_tool(self):
+        names = {item["function"]["name"] for item in build_tool_schemas(True)}
+        self.assertIn("probe_sql_injection", names)
+
+    def test_build_tool_schemas_returns_deep_copy(self):
+        """build_tool_schemas 必須回傳獨立深拷貝，避免共用 mutable schema 被意外修改。"""
+        schemas = build_tool_schemas(True)
+        original = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "click")
+        copy_item = next(s for s in schemas if s["function"]["name"] == "click")
+        copy_item["function"]["name"] = "mutated"
+        self.assertNotEqual(original["function"]["name"], "mutated")
+
 
 class ToolExecutorTests(TestCase):
     def _make_executor(self):
@@ -307,6 +331,53 @@ class ToolExecutorTests(TestCase):
         self.assertTrue(outcome.finish)
 
 
+class RedactToolDataTests(TestCase):
+    """Step 5：probe_sql_injection 的 arguments 與 result 必須遮罩後才持久化。"""
+
+    def test_probe_arguments_redact_query_values(self):
+        clean = redact_tool_arguments(
+            "probe_sql_injection",
+            {"url": "https://example.com/search?q=secret&id=42"},
+        )
+        encoded = json.dumps(clean)
+        self.assertIn("%5BREDACTED%5D", encoded)
+        self.assertNotIn("secret", encoded)
+
+    def test_other_tool_arguments_pass_through(self):
+        """非 probe_sql_injection 的 tool 參數不應被遮罩。"""
+        original = {"selector": ".btn", "text": "hello"}
+        clean = redact_tool_arguments("click", dict(original))
+        self.assertEqual(clean, original)
+
+    def test_probe_result_removes_url_keeps_correlation(self):
+        """probe_sql_injection 的持久化 result 只保留 confirmed/blocked/error/correlation_id。"""
+        raw = {
+            "confirmed": True,
+            "correlation_id": "kali-sqlmap-sqli",
+            "url": "https://example.com/s?q=secret",
+            "note": "leaked note",
+        }
+        clean = redact_tool_result("probe_sql_injection", raw)
+        dumped = json.dumps(clean)
+        self.assertNotIn("secret", dumped)
+        self.assertNotIn("example.com", dumped)
+        self.assertNotIn("leaked note", dumped)
+        self.assertTrue(clean.get("confirmed"))
+        self.assertEqual(clean.get("correlation_id"), "kali-sqlmap-sqli")
+
+    def test_probe_result_keeps_blocked_and_error(self):
+        raw = {"confirmed": False, "blocked": "kali_disabled", "error": "", "url": "leak"}
+        clean = redact_tool_result("probe_sql_injection", raw)
+        self.assertFalse(clean.get("confirmed"))
+        self.assertEqual(clean.get("blocked"), "kali_disabled")
+        self.assertNotIn("leak", json.dumps(clean))
+
+    def test_other_tool_result_passes_through(self):
+        original = {"clicked": ".btn", "url_after": "https://example.com/page"}
+        clean = redact_tool_result("click", dict(original))
+        self.assertEqual(clean, original)
+
+
 class ProbeSqlInjectionTests(TestCase):
     """agent 的 probe_sql_injection tool：同源約束 + 授權鎖委派 + 確認才產 finding。"""
 
@@ -353,8 +424,15 @@ class ProbeSqlInjectionTests(TestCase):
         self.assertIsNone(outcome.security_finding)
 
     def test_not_vulnerable_produces_no_finding(self):
+        """Step 6：信任 confirmed=False，不再解析 stdout。"""
         executor = self._executor()
-        res = {"ok": True, "blocked_reason": "", "stdout": "do not appear to be injectable"}
+        res = {
+            "ok": True,
+            "blocked_reason": "",
+            "confirmed": False,
+            "stdout": "",
+            "evidence_summary": {},
+        }
         with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
             outcome = asyncio.run(
                 executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
@@ -364,11 +442,22 @@ class ProbeSqlInjectionTests(TestCase):
         self.assertIsNone(outcome.security_finding)
 
     def test_confirmed_produces_critical_security_finding(self):
+        """Step 6：信任 confirmed=True，不再解析 stdout；evidence 是 evidence_summary 的 JSON。"""
         executor = self._executor()
-        res = {"ok": True, "blocked_reason": "", "stdout": "GET parameter 'q' is vulnerable"}
+        res = {
+            "ok": True,
+            "blocked_reason": "",
+            "confirmed": True,
+            "stdout": "",
+            "evidence_summary": {
+                "parameter": "q",
+                "techniques": ["boolean-based blind"],
+                "dbms": "MySQL",
+            },
+        }
         with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
             outcome = asyncio.run(
-                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
+                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=secret"})
             )
         self.assertTrue(outcome.result["confirmed"])
         self.assertIsNotNone(outcome.security_finding)
@@ -376,6 +465,68 @@ class ProbeSqlInjectionTests(TestCase):
         self.assertEqual(f["category"], "security")
         self.assertEqual(f["severity"], "critical")
         self.assertEqual(f["rule_id"], "kali-sqlmap-sqli")
+
+    def test_confirmed_finding_description_uses_redacted_url(self):
+        """Finding description 必須使用遮罩後的 URL，query value 不可外洩。"""
+        executor = self._executor()
+        res = {
+            "ok": True,
+            "blocked_reason": "",
+            "confirmed": True,
+            "stdout": "",
+            "evidence_summary": {"parameter": "q"},
+        }
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
+            outcome = asyncio.run(
+                executor.run(
+                    "probe_sql_injection",
+                    {"url": "https://example.com/s?q=secret-value"},
+                )
+            )
+        description = outcome.security_finding["description"]
+        self.assertNotIn("secret-value", description)
+        self.assertIn("q", description)  # query key 保留
+
+    def test_confirmed_finding_evidence_is_json_dumps_of_summary(self):
+        """evidence 必須是 json.dumps(evidence_summary, sort_keys=True)，不放 raw stdout。"""
+        executor = self._executor()
+        evidence_summary = {"dbms": "MySQL", "parameter": "q", "techniques": ["error-based"]}
+        res = {
+            "ok": True,
+            "blocked_reason": "",
+            "confirmed": True,
+            "stdout": "raw should not leak",
+            "evidence_summary": evidence_summary,
+        }
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
+            outcome = asyncio.run(
+                executor.run("probe_sql_injection", {"url": "https://example.com/s?q=1"})
+            )
+        evidence = outcome.security_finding.get("evidence", "")
+        # evidence 是 sorted JSON string
+        self.assertEqual(evidence, json.dumps(evidence_summary, sort_keys=True))
+        self.assertNotIn("raw should not leak", evidence)
+
+    def test_confirmed_result_excludes_target_url(self):
+        """Step 5/6：ToolOutcome.result 不可帶 target URL。"""
+        executor = self._executor()
+        res = {
+            "ok": True,
+            "blocked_reason": "",
+            "confirmed": True,
+            "stdout": "",
+            "evidence_summary": {"parameter": "q"},
+        }
+        with patch("apps.scans.security.kali_tools.run_sqlmap", return_value=res):
+            outcome = asyncio.run(
+                executor.run(
+                    "probe_sql_injection",
+                    {"url": "https://example.com/s?q=secret"},
+                )
+            )
+        dumped = json.dumps(outcome.result)
+        self.assertNotIn("secret", dumped)
+        self.assertNotIn("https://example.com/s", dumped)
 
 
 class PersistAgentSecurityFindingsTests(TestCase):
@@ -513,6 +664,58 @@ class HermesAgentLoopTests(TransactionTestCase):
         self.assertEqual(len(steps), 2)
         self.assertEqual(steps[0].token_count, 40)
         self.assertEqual(steps[1].token_count, 0)
+
+    def test_probe_sql_injection_step_persists_redacted_data(self):
+        """Step 5：AgentStep 的 tool_arguments 與 tool_result 必須遮罩 query value、移除 URL。"""
+        probe_response = ChatResponse(
+            provider="fake",
+            model="fake-model",
+            content="",
+            tool_calls=[
+                ToolCall(
+                    id="c1",
+                    name="probe_sql_injection",
+                    arguments={"url": "https://example.com/search?q=secret&id=42"},
+                )
+            ],
+            total_tokens=20,
+            finish_reason="tool_calls",
+        )
+        chain = ProviderChain(
+            providers=[FakeProvider([probe_response, _chat_response_finish("done")])]
+        )
+        executor = FakeExecutor(
+            outcomes={
+                "probe_sql_injection": ToolOutcome(
+                    ok=True,
+                    result={
+                        "confirmed": True,
+                        "correlation_id": "kali-sqlmap-sqli",
+                        "url": "https://example.com/search?q=secret&id=42",
+                        "note": "leaked note",
+                    },
+                ),
+            }
+        )
+        agent = HermesAgent(self.scan_job, executor=executor, chain=chain)
+        result = self._run(agent)
+
+        step = AgentStep.objects.get(
+            session_id=result.session_id, tool_name="probe_sql_injection"
+        )
+        # tool_arguments：query value 必須被遮罩
+        args_json = json.dumps(step.tool_arguments)
+        self.assertNotIn("secret", args_json)
+        self.assertIn("%5BREDACTED%5D", args_json)
+        # tool_result：URL 與 note 必須被移除，confirmed / correlation_id 保留
+        result_json = json.dumps(step.tool_result)
+        self.assertNotIn("secret", result_json)
+        self.assertNotIn("example.com", result_json)
+        self.assertNotIn("leaked note", result_json)
+        self.assertTrue(step.tool_result.get("confirmed"))
+        self.assertEqual(
+            step.tool_result.get("correlation_id"), "kali-sqlmap-sqli"
+        )
 
 
 # ---------------- findings ----------------

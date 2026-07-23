@@ -15,6 +15,8 @@ services:
     environment:
       # 開啟 Kali 主動驗證總開關（仍受 per-scan active + authorized 二鎖）
       ARGUS_KALI_ENABLED: "true"
+      # 明確指定 docker backend；settings 預設為 "disabled"，未疊加本 override 不會啟用
+      ARGUS_KALI_BACKEND: "docker"
       ARGUS_KALI_CONTAINER: "argus-kali-1"
     volumes:
       # 掛載 host docker socket，讓 worker 能對 kali container 執行 docker exec

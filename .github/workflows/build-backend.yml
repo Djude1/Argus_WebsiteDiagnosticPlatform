@@ -46,6 +46,7 @@ jobs:
           uv run ruff check backend
           uv run python backend/manage.py check
           uv run python backend/manage.py makemigrations --check --dry-run
+          uv run python -m unittest discover -s tests
           uv run python backend/manage.py test apps
 
       # buildx：啟用 layer cache 與進階 build 功能

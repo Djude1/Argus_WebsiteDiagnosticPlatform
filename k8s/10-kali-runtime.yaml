@@ -1,0 +1,121 @@
+# Task 7：argus-kali 受限 runtime namespace（SQLmap Job 唯一落地點）。
+#
+# 设计目標：
+#   - Pod Security Admission 強制 restricted:v1.35，擋掉 privileged / hostPath / host* 等
+#   - 一個 worker orchestrator SA（在 argus ns）跨 ns 建作業；一個 tokenless runner SA
+#     給 Job pod（無 RoleBinding → 即使 image 被換掉也無法讀叢集）
+#   - ResourceQuota 鎖死「只能跑一個 Pod/Job + 精確資源量」；LimitRange 補 container 上限
+#
+# 配套：
+#   - 11-kali-admission.yaml 用 CEL 再驗證一次 Job 形狀（fail-closed）
+#   - 07-network-policies.yaml 的 argus-kali-* NetworkPolicy 收緊 east-west/egress
+#   - 04-backend.yaml 的 worker 掛 serviceAccountName: argus-worker-kali-orchestrator
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus-kali
+  labels:
+    # PSA：restricted 模式 + v1.35 版本基準（最新 pod-security 標籤寫法）。
+    # argus-kali 只收 runtime/runner 資源；PSA 擋在 API server 層，比 CEL 早生效。
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.35
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.35
+    # 11-kali-admission.yaml 的 ValidatingAdmissionPolicyBinding.namespaceSelector
+    # 用此 label 把 policy 綁到本 namespace（其它 ns 不受影響）。
+    argus.io/kali-runner: "true"
+---
+# worker（argus ns）用來跨 ns 操作 argus-kali 的 Job/Secret/Pod。
+# 對應 Task 4 KubernetesSqlmapExecutor：jobs create/get/list/watch/delete、
+# secrets create/delete（owner-reference 注入 targets.json 用，不讀回）、
+# pods get/list/watch、pods/log get。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argus-worker-kali-orchestrator
+  namespace: argus
+---
+# runner SA 給 Job 的 Pod 用；刻意 tokenless（automountServiceAccountToken=false）
+# 且不綁任何 RoleBinding → runner 即便被 RCE 也拿不到叢集 credential。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kali-runner
+  namespace: argus-kali
+automountServiceAccountToken: false
+---
+# Role：least-privilege，僅涵蓋 executor 實際呼叫的 API；secrets 只 create/delete，
+# 不得 get/list/watch（避免 worker 讀到其它掃描的 target）。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argus-kali-orchestrator
+  namespace: argus-kali
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+# RoleBinding：把 Role 綁到 argus ns 的 worker SA（跨 namespace subject）。
+# runner SA（kali-runner）刻意不在此綁定 → tokenless。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argus-kali-orchestrator-binding
+  namespace: argus-kali
+subjects:
+  - kind: ServiceAccount
+    name: argus-worker-kali-orchestrator
+    namespace: argus
+roleRef:
+  kind: Role
+  name: argus-kali-orchestrator
+  apiGroup: rbac.authorization.k8s.io
+---
+# ResourceQuota：整個 ns 同一時間最多 1 個 Pod + 1 個 Job，且資源量恰好等於
+# runner Pod 的 request/limit（build_restricted_runner_pod）。
+# 任何多餘或尺寸不同的 Pod 都會被 quota 擋下（第二步保險：CEL admission）。
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: argus-kali-single-runner
+  namespace: argus-kali
+spec:
+  hard:
+    pods: "1"
+    count/jobs.batch: "1"
+    requests.cpu: "250m"
+    requests.memory: "256Mi"
+    requests.ephemeral-storage: "256Mi"
+    limits.cpu: "1"
+    limits.memory: "768Mi"
+    limits.ephemeral-storage: "1Gi"
+---
+# LimitRange：container max 與 runner 的 limits 對齊；萬一 CEL 被繞過，
+# 任何進到 argus-kali 的 container 仍不得超過這個 per-container 上限。
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: argus-kali-runner-limits
+  namespace: argus-kali
+spec:
+  limits:
+    - type: Container
+      max:
+        cpu: "1"
+        memory: 768Mi
+        ephemeral-storage: 1Gi
+      maxLimitRequestRatio:
+        cpu: "4"

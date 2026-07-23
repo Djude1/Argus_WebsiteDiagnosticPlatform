@@ -1,0 +1,443 @@
+# Task 9：Isolated Calico + kind 整合攻擊鏈工作流程。
+#
+# 觸發：手動 workflow_dispatch（brief Step 6：`gh workflow run kali-integration.yml`），
+# 或 push 到 main 且動到 Task 9 的整合測試資源。
+#
+# 嚴格 containment：
+#   * 整條 pipeline 只在 CI runner 本機建立的臨時 kind 叢集內執行；
+#     不 push image 到公開 registry、不對真實 k8s 叢集 apply、不開任何對外 Ingress。
+#   * 唯一被測目標是 repo-owned fixture（tests/integration/kali-fixture/），
+#     透過 ClusterIP + externalIPs=[93.184.216.34] + CoreDNS patch + /etc/hosts 在 CI
+#     本機路由；不觸及任何第三方目標。
+#   * 跑攻擊前會先驗證「fixture 可達」與「另一個公網 IP 被 NetworkPolicy 擋下」，
+#     任一失敗都會立刻 exit 1，避免 sqlmap fall through 到網際網路。
+#   * 不論中間步驟成敗，最後一個 step 一定刪除 kind 叢集 + local registry。
+name: Kali SQLmap Integration (kind + Calico)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "tests/integration/**"
+      - "kali-runner/**"
+      - "k8s/10-kali-runtime.yaml"
+      - "k8s/11-kali-admission.yaml"
+      - ".github/workflows/kali-integration.yml"
+      - "scripts/promote_kali_image.py"
+
+concurrency:
+  group: kali-integration
+  cancel-in-progress: false
+
+env:
+  KIND_VERSION: "v0.27.0"
+  KIND_NODE_IMAGE: "kindest/node:v1.35.0@sha256:ed7f79a7c0534f5bcfa959acbd2f2ee92f0161bc63c1c14fbc79871b74b2f7c2"
+  CALICO_VERSION: "v3.32.0"
+  CALICO_MANIFEST: "https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml"
+  # 用 IANA TEST-NET-3 的 93.184.216.34（fixture.argus.test）；不會在網際網路被路由。
+  FIXTURE_IP: "93.184.216.34"
+  FIXTURE_HOST: "fixture.argus.test"
+  K8S_NAMESPACE: "argus-kali"
+  REGISTRY_NAME: "kind-registry"
+  REGISTRY_PORT: "5000"
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      # ────────────────────────────────────────────────────────────────
+      # 0. Checkout + 工具
+      # ────────────────────────────────────────────────────────────────
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.17"
+
+      - name: 安裝 kind
+        run: |
+          set -euo pipefail
+          curl -Lo ./kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind version
+
+      - name: 安裝 kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.35.0"
+
+      # ────────────────────────────────────────────────────────────────
+      # 1. 啟動 local registry（容器名固定為 kind-registry，與 kind-config.yaml
+      #    的 containerdConfigPatches 中 "kind-registry:5000" 對應）
+      # ────────────────────────────────────────────────────────────────
+      - name: 啟動 local registry
+        run: |
+          set -euo pipefail
+          docker run -d --restart=always -p "${REGISTRY_PORT}:5000" \
+            --name "${REGISTRY_NAME}" registry:2
+          echo "Local registry ${REGISTRY_NAME} 已啟動"
+
+      # ────────────────────────────────────────────────────────────────
+      # 2. 建立 kind 1.35 叢集
+      # ────────────────────────────────────────────────────────────────
+      - name: 建立 kind 叢集
+        run: |
+          set -euo pipefail
+          kind create cluster \
+            --config tests/integration/kind-config.yaml \
+            --image "${KIND_NODE_IMAGE}"
+          # 把 registry 接到 kind network，讓 containerd 的 mirror 指向它。
+          docker network connect kind "${REGISTRY_NAME}" || true
+          kubectl version --client
+          kubectl cluster-info
+
+      # ────────────────────────────────────────────────────────────────
+      # 3. 套用 Calico v3.32.0；等 calico-node DaemonSet Ready
+      # ────────────────────────────────────────────────────────────────
+      - name: 套用 Calico v3.32.0
+        run: |
+          set -euo pipefail
+          kubectl apply -f "${CALICO_MANIFEST}"
+          # podSubnet=192.168.0.0/16 必須與 calico.yaml 的 CALICO_IPV4POOL_CIDR 對齊；
+          # 若 calico 預設值不同會在這個 verify 失敗。
+          kubectl -n kube-system set env daemonset/calico-node \
+            CALICO_IPV4POOL_CIDR=192.168.0.0/16 || true
+          kubectl -n kube-system rollout status daemonset/calico-node \
+            --timeout=300s
+          kubectl get pods -n kube-system -l k8s-app=calico-node \
+            -o 'jsonpath={.items[*].status.phase}' && echo
+
+      # ────────────────────────────────────────────────────────────────
+      # 4. Build & load fixture + runner image 到 kind；
+      #    取得 runner sha256 digest 後跑 promote_kali_image.py（不 commit）。
+      # ────────────────────────────────────────────────────────────────
+      - name: Build & load fixture image
+        run: |
+          set -euo pipefail
+          docker build -t argus-kali-fixture:local ./tests/integration/kali-fixture
+          kind load docker-image argus-kali-fixture:local
+
+      - name: Build & 推 runner image 到 local registry；取得 sha256 digest
+        id: runner
+        run: |
+          set -euo pipefail
+          # 用 docker.io 帳號 shijie85 標記——promote_kali_image.py 只接受這個格式；
+          # 我們不會 push 到 docker.io，只是用同一個 name 在 local registry / kind 內複製。
+          IMAGE_NAME="shijie85/argus-kali-runner"
+          docker build -t "${IMAGE_NAME}:local" ./kali-runner
+          # 推到 local registry（ containerd mirror 會優先從此拉）；push 後會產生
+          # 完整 manifest digest（不是 config ID），符合 VAP CEL approvedImage 的預期格式。
+          docker tag "${IMAGE_NAME}:local" "localhost:${REGISTRY_PORT}/${IMAGE_NAME}:local"
+          docker push "localhost:${REGISTRY_PORT}/${IMAGE_NAME}:local"
+          DIGEST="$(
+            docker inspect --format='{{index .RepoDigests 0}}' \
+              "localhost:${REGISTRY_PORT}/${IMAGE_NAME}:local" \
+            | sed 's/.*@//'
+          )"
+          if [[ ! "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "无法取得合法 runner digest（got: ${DIGEST}）" >&2
+            exit 1
+          fi
+          IMAGE="${IMAGE_NAME}@${DIGEST}"
+          echo "Runner image = ${IMAGE}"
+          # 直接把本地 built image 載進 kind；mirror + 本地快取雙保險，確保 kubelet 不會
+          # 試圖去 docker.io 拉（會 pull error）。
+          kind load docker-image "${IMAGE_NAME}:local"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: 跑 promote_kali_image.py（更新 checkout 內的 YAML，不 commit）
+        env:
+          IMAGE: ${{ steps.runner.outputs.image }}
+        run: |
+          set -euo pipefail
+          # --image 規格要求 shijie85/argus-kali-runner@sha256:<64 hex>；本步驟只動
+          # checkout 工作區內的 k8s/01-namespace-config.yaml 與 k8s/11-kali-admission.yaml，
+          # 不 commit、不 push（brief Step 3 明確要求）。
+          uv run python scripts/promote_kali_image.py --image "${IMAGE}"
+          uv run python scripts/promote_kali_image.py --check
+          # 顯示推廣結果，方便 CI log 比對。
+          grep "ARGUS_KALI_RUNNER_IMAGE" k8s/01-namespace-config.yaml | head -1
+          grep -A1 "approvedImage" k8s/11-kali-admission.yaml | head -3
+
+      # ────────────────────────────────────────────────────────────────
+      # 5. 套用 minimal namespace/config + 10-kali-runtime + 11-kali-admission
+      #    + fixture + 整合用 NetworkPolicy
+      # ────────────────────────────────────────────────────────────────
+      - name: 建立 argus namespace（minimal，不含 prod config）
+        run: |
+          set -euo pipefail
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: argus
+          EOF
+
+      - name: 套用 k8s/10-kali-runtime.yaml
+        run: |
+          set -euo pipefail
+          kubectl apply -f k8s/10-kali-runtime.yaml
+          # 等 ServiceAccount / Role / ResourceQuota 套用好。
+          kubectl -n argus get sa argus-worker-kali-orchestrator
+          kubectl -n argus-kali get resourcequota argus-kali-single-runner
+
+      - name: 套用 k8s/11-kali-admission.yaml（VAP，CEL 內已更新 approvedImage）
+        run: |
+          set -euo pipefail
+          kubectl apply -f k8s/11-kali-admission.yaml
+          kubectl get vap argus-kali-admission -o jsonpath='{.spec.failurePolicy}' && echo
+
+      - name: 套用 fixture + NetworkPolicy
+        run: |
+          set -euo pipefail
+          kubectl apply -f tests/integration/kali-fixture/fixture.yaml
+          kubectl apply -f tests/integration/kali-fixture/network-policy-patch.yaml
+
+      # ────────────────────────────────────────────────────────────────
+      # 6. 路由設定：CoreDNS patch + CI /etc/hosts
+      # ────────────────────────────────────────────────────────────────
+      - name: Patch CoreDNS 讓 fixture.argus.test 指向 ${FIXTURE_IP}
+        env:
+          FIXTURE_IP: ${{ env.FIXTURE_IP }}
+          FIXTURE_HOST: ${{ env.FIXTURE_HOST }}
+        run: |
+          set -euo pipefail
+          # 在既有 Corefile 後面加一個獨立 server block，專責 argus.test zone。
+          # 用 python 構造 JSON merge patch 以避開 shell quoting / JSON escape 地雷。
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          ns = "kube-system"
+          fixture_ip = os.environ["FIXTURE_IP"]
+          fixture_host = os.environ["FIXTURE_HOST"]
+          corefile = subprocess.check_output(
+              ["kubectl", "-n", ns, "get", "cm", "coredns",
+               "-o", "jsonpath={.data.Corefile}"],
+              text=True,
+          )
+          extra = (
+              "\nargus.test:53 {\n"
+              "    hosts {\n"
+              f"        {fixture_ip} {fixture_host}\n"
+              "        fallthrough\n"
+              "    }\n"
+              "}\n"
+          )
+          new_corefile = corefile.rstrip() + "\n" + extra
+          patch = json.dumps({"data": {"Corefile": new_corefile}})
+          subprocess.run(
+              ["kubectl", "-n", ns, "patch", "cm", "coredns",
+               "--type=merge", "-p", patch],
+              check=True,
+          )
+          subprocess.run(
+              ["kubectl", "-n", ns, "rollout", "restart", "deployment/coredns"],
+              check=True,
+          )
+          subprocess.run(
+              ["kubectl", "-n", ns, "rollout", "status",
+               "deployment/coredns", "--timeout=120s"],
+              check=True,
+          )
+          PY
+
+      - name: 把 fixture host 加進 CI /etc/hosts
+        run: |
+          set -euo pipefail
+          echo "${FIXTURE_IP} ${FIXTURE_HOST}" | sudo tee -a /etc/hosts
+          getent hosts "${FIXTURE_HOST}" || true
+
+      # ────────────────────────────────────────────────────────────────
+      # 7. Containment 驗證：fixture 可達、且不同公網 IP 被 NetworkPolicy 擋下
+      #    brief Step 2：任一驗證失敗都必須 exit 1，不讓 sqlmap fall through。
+      # ────────────────────────────────────────────────────────────────
+      - name: 等 fixture Pod Ready
+        run: |
+          set -euo pipefail
+          kubectl -n default rollout status deployment/kali-fixture --timeout=180s
+
+      - name: Containment 預檢（fixture 可達；不同公網 IP 被擋）
+        env:
+          PROBE_IMAGE: ${{ steps.runner.outputs.image }}
+        run: |
+          set -euo pipefail
+          # 兩支 probe 都以 app=kali-sqlmap label 跑在 argus-kali，讓
+          # argus-kali-runner-egress + argus-kali-default-deny 都套用至此 Pod——
+          # 等於用「runner 視角」實際驗證 egress 邊界。
+          #
+          # image 用剛剛 kind load 進去的 runner（python:3.12-slim based，已是以
+          # UID 65532 啟動），覆寫 ENTRYPOINT 改跑 urllib；不需額外拉 image。
+          # ResourceQuota 限制 argus-kali 同一時間只能 1 Pod——兩支 probe 採序號
+          # 執行，且 each step 結束立即 delete，不會撞配額。
+          probe_phase() {
+            kubectl -n argus-kali get pod "$1" \
+              -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown"
+          }
+          wait_terminal() {
+            local name="$1" deadline=$(( $(date +%s) + 120 ))
+            while [ "$(date +%s)" -lt "$deadline" ]; do
+              local phase
+              phase="$(probe_phase "$name")"
+              case "$phase" in
+                Succeeded|Failed) return 0 ;;
+              esac
+              sleep 2
+            done
+            return 1
+          }
+
+          # ── Probe 1：fixture 必須可達 ──
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: probe-fixture
+            namespace: argus-kali
+            labels: {app: kali-sqlmap}
+          spec:
+            restartPolicy: Never
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              fsGroup: 65532
+              seccompProfile: {type: RuntimeDefault}
+            containers:
+              - name: probe
+                image: ${PROBE_IMAGE}
+                command: [/usr/local/bin/python, -c]
+                args:
+                  - |
+                    import sys, urllib.request
+                    try:
+                        resp = urllib.request.urlopen(
+                            "http://${FIXTURE_HOST}/?q=phone", timeout=10)
+                        sys.exit(0 if resp.status == 200 else 1)
+                    except Exception:
+                        sys.exit(1)
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 65532
+                  runAsGroup: 65532
+                  allowPrivilegeEscalation: false
+                  capabilities: {drop: ["ALL"]}
+          EOF
+          if ! wait_terminal probe-fixture ; then
+            echo "FAIL: probe-fixture 未在 120s 內進入終端狀態" >&2
+            kubectl -n argus-kali logs probe-fixture || true
+            kubectl -n argus-kali delete pod probe-fixture --ignore-not-found=true
+            exit 1
+          fi
+          if [ "$(probe_phase probe-fixture)" != "Succeeded" ]; then
+            echo "FAIL: fixture.argus.test 從 runner-egress 視角不可達——containment 已破" >&2
+            kubectl -n argus-kali logs probe-fixture || true
+            kubectl -n argus-kali delete pod probe-fixture --ignore-not-found=true
+            exit 1
+          fi
+          kubectl -n argus-kali delete pod probe-fixture --ignore-not-found=true
+
+          # ── Probe 2：192.0.2.1（IANA TEST-NET-1）必須被擋下 ──
+          # 192.0.2.0/24 在網際網路不被路由；即使 NetworkPolicy 失效，
+          # 連線也只會 timeout，不會 fall through 到真實第三方目標——這是
+          # 第二層保險。
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: probe-blocked
+            namespace: argus-kali
+            labels: {app: kali-sqlmap}
+          spec:
+            restartPolicy: Never
+            automountServiceAccountToken: false
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              fsGroup: 65532
+              seccompProfile: {type: RuntimeDefault}
+            containers:
+              - name: probe
+                image: ${PROBE_IMAGE}
+                command: [/usr/local/bin/python, -c]
+                args:
+                  - |
+                    import sys, urllib.request
+                    try:
+                        urllib.request.urlopen("http://192.0.2.1/", timeout=8)
+                        sys.exit(0)
+                    except Exception:
+                        sys.exit(1)
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 65532
+                  runAsGroup: 65532
+                  allowPrivilegeEscalation: false
+                  capabilities: {drop: ["ALL"]}
+          EOF
+          wait_terminal probe-blocked || true
+          phase="$(probe_phase probe-blocked)"
+          kubectl -n argus-kali logs probe-blocked || true
+          kubectl -n argus-kali delete pod probe-blocked --ignore-not-found=true
+          if [ "$phase" = "Succeeded" ]; then
+            echo "FAIL: 192.0.2.1 居然可達——runner egress policy 洩漏" >&2
+            exit 1
+          fi
+          echo "Containment 預檢通過：fixture 可達、192.0.2.1 被擋"
+
+      # ────────────────────────────────────────────────────────────────
+      # 8. 跑 Python 整合測試（tests/integration/test_kali_job.py）
+      # ────────────────────────────────────────────────────────────────
+      - name: 安裝 Python 依賴
+        run: |
+          set -euo pipefail
+          uv sync --frozen
+
+      - name: 啟動測試用 Redis
+        run: |
+          set -euo pipefail
+          docker run -d --restart=always -p 6390:6379 --name argus-integration-redis redis:7-alpine
+          # 等 Redis 接受連線。
+          for i in $(seq 1 30); do
+            if docker exec argus-integration-redis redis-cli PING | grep -q PONG; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec argus-integration-redis redis-cli PING
+
+      - name: 跑 tests/integration/test_kali_job.py
+        env:
+          KUBECONFIG: /home/runner/.kube/config
+          KALI_INTEGRATION_IMAGE: ${{ steps.runner.outputs.image }}
+          KALI_TEST_REDIS_URL: redis://127.0.0.1:6390/0
+          DJANGO_SETTINGS_MODULE: config.settings
+          PYTHONPATH: backend
+        run: |
+          set -euo pipefail
+          # 確認 kubeconfig 真的指向 kind 叢集（不是 host 預設）。
+          kubectl config current-context
+          uv run python tests/integration/test_kali_job.py -v
+
+      # ────────────────────────────────────────────────────────────────
+      # 9. 永遠的清理——刪 kind cluster + local registry + redis
+      # ────────────────────────────────────────────────────────────────
+      - name: 清理 kind cluster + local registry + redis
+        if: always()
+        run: |
+          set -x
+          # 不論前面 step 成敗，都嘗試刪除臨時資源；指令本身的失敗不中斷清理。
+          kind delete cluster || true
+          docker rm -f "${REGISTRY_NAME}" || true
+          docker rm -f argus-integration-redis || true
+          # 工作區內被 promote_kali_image.py 改過的 YAML 不會被 commit 回 main，
+          # 因此不需還原——下一個 checkout 會自動乾淨。

@@ -75,6 +75,16 @@ ARGUS_AGENT_ENABLED=false
 MINIMAX_API_KEY=
 GLM_API_KEY=
 GEMINI_API_KEY=
+# K8s Kali SQLmap 攻擊鏈（Task 1 新增；軟體已 merge 但預設完全停用，
+# 啟用須走 docs/runbooks/kubernetes-secret-at-rest-encryption.md 與
+# kali-sqlmap-rollout.md 的 Task 11 手動控制平面 gate，不可直接翻旗標）
+ARGUS_KALI_ENABLED=false
+ARGUS_KALI_BACKEND=disabled
+ARGUS_KALI_NAMESPACE=argus-kali
+ARGUS_KALI_RUNNER_IMAGE=
+ARGUS_KALI_SQLMAP_VERSION=1.10
+ARGUS_KALI_TIMEOUT=120
+ARGUS_KALI_REDIS_URL=redis://localhost:6379/0
 ```
 
 **永遠不要 commit**：`.env`、`GoogleCloud_ApiKey.json`、`client_secret_*.json`（已在 `.gitignore`）。
@@ -130,6 +140,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | DB | SQLite（dev）/ PostgreSQL（prod，via dj-database-url） |
 | AI | MiniMax / GLM（OpenAI-compatible）/ Gemini，Phase 2 用 tool calling |
 | 部署 | Docker Compose（web / worker / redis / db / nginx） |
+| K8s 攻擊鏈 | `kubernetes>=35.0,<36`（Task 4 新增，僅 K8s backend 啟用時使用；Docker demo 不需要）。**預設完全停用**（`ARGUS_KALI_ENABLED=false`、`ARGUS_KALI_BACKEND=disabled`）—軟體已 merge，正式啟用走 Task 11 手動控制平面 gate |
 | Lint | ruff（backend） |
 
 ---

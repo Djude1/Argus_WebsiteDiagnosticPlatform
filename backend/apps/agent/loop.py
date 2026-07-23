@@ -30,7 +30,13 @@ from django.utils import timezone
 from apps.scans.models import AgentSession, AgentStep, ScanJob
 
 from .providers import ChatResponse, ProviderChain, ProviderError
-from .tools import TOOL_SCHEMAS, ToolExecutor, ToolOutcome
+from .tools import (
+    TOOL_SCHEMAS,
+    ToolExecutor,
+    ToolOutcome,
+    redact_tool_arguments,
+    redact_tool_result,
+)
 
 DEFAULT_SYSTEM_PROMPT = """你是 Argus 平台的 Hermes 動態 UX 測試 Agent。
 你會以呼叫 tool 的方式操作真實瀏覽器（Playwright），完成使用者指派的測試任務。
@@ -72,6 +78,7 @@ class HermesAgent:
         max_steps: int | None = None,
         max_tokens: int | None = None,
         system_prompt: str | None = None,
+        tool_schemas: list[dict[str, Any]] | None = None,
     ):
         self.scan_job = scan_job
         self.executor = executor
@@ -79,6 +86,8 @@ class HermesAgent:
         self.max_steps = max_steps or settings.ARGUS_AGENT_MAX_STEPS
         self.max_tokens = max_tokens or settings.ARGUS_AGENT_MAX_TOKENS
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        # Task 6：依授權模式決定是否暴露 probe_sql_injection；預設全工具（向下相容）
+        self.tool_schemas = tool_schemas if tool_schemas is not None else TOOL_SCHEMAS
         self._messages: list[dict[str, Any]] = []
         self._issues: list[dict[str, Any]] = []
         self._security_findings: list[dict[str, Any]] = []
@@ -192,7 +201,7 @@ class HermesAgent:
     def _call_provider(self) -> ChatResponse:
         return self.chain.chat_with_tools(
             messages=self._messages,
-            tools=TOOL_SCHEMAS,
+            tools=self.tool_schemas,
             temperature=0.2,
             max_tokens=1024,
             tool_choice="auto",
@@ -226,14 +235,22 @@ class HermesAgent:
         is_first_in_round: bool,
     ) -> None:
         self._step_counter += 1
+        tool_name = tool_call.name if tool_call else ""
+        # Task 5：持久化前遮罩 query value / 移除 target URL，避免機密外洩到 AgentStep
+        safe_arguments = redact_tool_arguments(
+            tool_name, tool_call.arguments if tool_call else {}
+        )
+        safe_result = redact_tool_result(
+            tool_name, tool_outcome.result if tool_outcome else {}
+        )
         AgentStep.objects.create(
             session=session,
             step_number=self._step_counter,
             observation=(response.content or "")[:5000],
             thought_summary="",
-            tool_name=tool_call.name if tool_call else "",
-            tool_arguments=tool_call.arguments if tool_call else {},
-            tool_result=tool_outcome.result if tool_outcome else {},
+            tool_name=tool_name,
+            tool_arguments=safe_arguments,
+            tool_result=safe_result,
             # 同 round 的多筆 tool 共用 1 次 LLM 呼叫的 token，只記在第一筆避免重複
             token_count=response.total_tokens if is_first_in_round else 0,
         )

@@ -9,11 +9,22 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DJANGO_SECRET_KEY: ci-only-django-secret-key-at-least-32-bytes
       JWT_SECRET_KEY: ci-only-jwt-secret-key-at-least-32-bytes
       PASSWORD_RESET_TOKEN_PEPPER: ci-only-independent-reset-token-pepper
       DJANGO_DEBUG: "true"
+      KALI_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -27,8 +38,12 @@ jobs:
         run: |
           uv run python backend/manage.py check
           uv run python backend/manage.py makemigrations --check --dry-run
+      - name: 部署契約
+        run: uv run python -m unittest discover -s tests
       - name: 後端完整測試
         run: uv run python backend/manage.py test apps
+      - name: Kali runner digest 推廣一致性
+        run: uv run python scripts/promote_kali_image.py --check
 
   frontend:
     runs-on: ubuntu-latest
@@ -86,12 +101,16 @@ jobs:
       - uses: azure/setup-kubectl@v5.1.0
         with:
           version: v1.32.2
+      - name: Kali runner digest 推廣一致性
+        run: python3 scripts/promote_kali_image.py --check
       - name: Render Kustomize manifests
         run: |
           kubectl kustomize k8s > "$RUNNER_TEMP/argus-rendered.yaml"
-          test "$(grep -c '^kind: NetworkPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 7
+          test "$(grep -c '^kind: NetworkPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 9
           grep -q 'name: application-egress-boundary' "$RUNNER_TEMP/argus-rendered.yaml"
           grep -q 'name: data-deny-egress' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: argus-kali-default-deny' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: argus-kali-runner-egress' "$RUNNER_TEMP/argus-rendered.yaml"
           # ClientSettingsPolicy：對齊 frontend nginx client_max_body_size 6m
           test "$(grep -c '^kind: ClientSettingsPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 1
           grep -qE 'maxSize: ?"?6m"?' "$RUNNER_TEMP/argus-rendered.yaml"
@@ -100,3 +119,23 @@ jobs:
           grep -q 'cidr: 2000::/3' "$RUNNER_TEMP/argus-rendered.yaml"
           ! grep -q 'cidr: ::/0' "$RUNNER_TEMP/argus-rendered.yaml"
           ! grep -q -- '::ffff:0:0/96' "$RUNNER_TEMP/argus-rendered.yaml"
+          # Task 7：Kali namespace 隔離 + fail-closed admission + least-privilege RBAC
+          grep -q 'name: argus-kali$' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: argus-worker-kali-orchestrator' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: kali-runner' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'name: argus-kali-admission$' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'failurePolicy: Fail' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'cidr: 10.96.0.1/32' "$RUNNER_TEMP/argus-rendered.yaml"
+          grep -q 'cidr: 172.16.2.122/32' "$RUNNER_TEMP/argus-rendered.yaml"
+          # Kali disabled sentinel 必須在 admission 與 ConfigMap 同時出現
+          grep -q 'shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$RUNNER_TEMP/argus-rendered.yaml"
+
+  runner-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: kali-runner 單元測試（純 Python，不需 Docker）
+        run: python -m unittest discover -s kali-runner/tests

@@ -11,12 +11,16 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
+from apps.scans.security.kali_contracts import redact_url_query_values
 
 DEFAULT_ACTION_TIMEOUT_MS = 5000
 MAX_TEXT_BYTES = 4000
@@ -149,6 +153,53 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# Task 6：依授權模式動態組裝 tool schemas，並遮罩持久化的 tool 資料
+# ---------------------------------------------------------------------------
+def build_tool_schemas(allow_sqlmap: bool) -> list[dict[str, Any]]:
+    """依 deep_mode（active + authorized）決定是否把 probe_sql_injection 交給 LLM。
+
+    回傳獨立深拷貝，避免共用 mutable schema 被意外修改。被排除的 tool 不會
+    出現在 provider 的 tool_choice 清單，LLM 無法呼叫。
+    """
+    return [
+        copy.deepcopy(schema)
+        for schema in TOOL_SCHEMAS
+        if allow_sqlmap or schema["function"]["name"] != "probe_sql_injection"
+    ]
+
+
+def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """遮罩即將持久化到 AgentStep 的 tool arguments。
+
+    probe_sql_injection 的 url 參數值可能含敏感 query value（搜尋關鍵字、ID），
+    一律經 redact_url_query_values 遮罩；其他 tool 的參數原樣回傳（淺拷貝）。
+    """
+    clean = dict(arguments or {})
+    if tool_name == "probe_sql_injection" and "url" in clean:
+        clean["url"] = redact_url_query_values(str(clean["url"]))
+    return clean
+
+
+def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
+    """遮罩即將持久化到 AgentStep 的 tool result。
+
+    probe_sql_injection 的 result 只保留 confirmed / blocked / error / correlation_id，
+    移除 target URL 與任何額外欄位（note 等），避免 raw URL 或中介資料外洩。
+    """
+    if tool_name != "probe_sql_injection":
+        return dict(result or {})
+    raw = result or {}
+    safe: dict[str, Any] = {"confirmed": bool(raw.get("confirmed"))}
+    if raw.get("blocked"):
+        safe["blocked"] = raw["blocked"]
+    if raw.get("error"):
+        safe["error"] = raw["error"]
+    if raw.get("correlation_id"):
+        safe["correlation_id"] = raw["correlation_id"]
+    return safe
 
 
 @dataclass
@@ -326,6 +377,9 @@ class ToolExecutor:
         - 授權鎖完全交給 kali_tools.run_sqlmap 的三重鎖（ARGUS_KALI_ENABLED + active +
           authorized）；未授權時回 blocked，LLM 會知道無法執行。
         - subprocess 阻塞，包進 to_thread 避免卡住 event loop。
+
+        Task 6：直接信任 res["confirmed"]，不再解析 stdout（Task 3 讓 stdout 恆為 ""）。
+        result 不含 target URL；Finding 的 description 使用遮罩後的 URL。
         """
         if self.scan_job is None:
             return ToolOutcome(ok=False, result={"error": "no_scan_context"})
@@ -345,37 +399,39 @@ class ToolExecutor:
         if "?" not in url or "=" not in url:
             return ToolOutcome(ok=False, result={"error": "no_query_parameter"})
 
-        from apps.scans.security.kali_tools import _stdout_indicates_sqli, run_sqlmap
+        from apps.scans.security.kali_tools import run_sqlmap
 
         res = await asyncio.to_thread(run_sqlmap, url, self.scan_job.id)
         if res.get("blocked_reason"):
             return ToolOutcome(
-                ok=False, result={"confirmed": False, "blocked": res["blocked_reason"]}
+                ok=False,
+                result={"confirmed": False, "blocked": res["blocked_reason"]},
             )
-        if not res.get("ok"):
+        if not res.get("confirmed"):
             return ToolOutcome(
-                ok=True, result={"confirmed": False, "error": res.get("error", "")}
+                ok=True,
+                result={"confirmed": False, "error": res.get("error", "")},
             )
-        if not _stdout_indicates_sqli(res.get("stdout", "")):
-            return ToolOutcome(ok=True, result={"confirmed": False})
 
         # 確認可注入 → 產 security finding（欄位與 validate_findings_with_kali 一致）
         from apps.scans.scanners import make_finding
 
+        safe_url = redact_url_query_values(url)
+        evidence_summary = res.get("evidence_summary") or {}
         finding = make_finding(
             category="security",
             severity="critical",
             rule_id="kali-sqlmap-sqli",
             title="SQL Injection 已由 Hermes-Agent 觸發 sqlmap 主動驗證可利用",
             description=(
-                f"Hermes-Agent 在授權的主動測試中自主判斷並對 {url} 觸發 sqlmap，"
+                f"Hermes-Agent 在授權的主動測試中自主判斷並對 {safe_url} 觸發 sqlmap，"
                 "確認存在可被利用的 SQL injection 注入點。此為已驗證漏洞，非僅靜態判斷。"
             ),
             remediation=(
                 "使用參數化查詢（prepared statements）或 ORM，對所有使用者輸入做嚴格驗證與轉義，"
                 "並以最小權限資料庫帳號連線。"
             ),
-            evidence=res.get("stdout", "")[:1000],
+            evidence=json.dumps(evidence_summary, sort_keys=True),
             impact_area="vulnerability",
             confidence=1.0,
         )
@@ -383,8 +439,7 @@ class ToolExecutor:
             ok=True,
             result={
                 "confirmed": True,
-                "url": url,
-                "note": "已自動記錄為 critical 資安漏洞，無需再 report",
+                "correlation_id": "kali-sqlmap-sqli",
             },
             security_finding=finding,
         )

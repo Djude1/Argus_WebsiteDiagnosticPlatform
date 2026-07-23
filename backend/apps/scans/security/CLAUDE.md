@@ -28,7 +28,10 @@ Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` �
 | `owasp_mapper.py` | Finding 對映 OWASP Top 10（A01~A10）與 CWE 編號（`tag()` + `backfill()`） | 已建 |
 | `secret_scanner.py` | 硬編碼/外洩秘鑰偵測（AWS/Google/GitHub/Stripe/連線字串/私鑰/明文密碼）+ 遮罩 `redact_secrets_in_text` | 已建 |
 | `exposure_scanner.py` | 敏感檔案主動探測（content discovery）：robots/sitemap + 內建字典 → Playwright 探測 → 檔案分類 + 秘鑰/PII 解析 | 已建 |
-| `kali_tools.py` | 呼叫 Kali container 的主動驗證工具（`run_sqlmap` / `run_metasploit`） | 已建 |
+| `kali_tools.py` | Facade：`run_sqlmap` / `run_sqlmap_batch` / `validate_findings_with_kali` / `run_metasploit`；統一走 `reserve_sqlmap_targets` 預算 + backend dispatcher | 已建 |
+| `kali_contracts.py` | 安全結果契約：`KaliResult` / `ReservedSqlmapTarget` / `SqlmapExecutor` protocol / `parse_runner_result` / `redact_url_query_values` | 已建（Task 1） |
+| `kali_policy.py` | 原子授權 + Redis 三目標預算 + 900s deadline + SHA-256 去重：`reserve_sqlmap_targets()` | 已建（Task 2） |
+| `kali_kubernetes.py` | K8s Job executor：`KubernetesSqlmapExecutor`、Redis 單一 owner global lock、Job-first/Secret-second lifecycle、cancellation-aware watch | 已建（Task 4） |
 | `sri_scanner.py` | SRI 缺失偵測：外部跨來源 `<script>/<link>` 缺 `integrity` | 已建 |
 | `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
@@ -128,29 +131,108 @@ def analyze_js_libraries(pages: list[dict]) -> list[dict]:
 
 ## Kali Tools 設計原則
 
+架構由四個模組串接：`kali_contracts.py`（安全結果契約）→ `kali_policy.py`（原子授權 + Redis 預算）
+→ `kali_tools.py`（facade / dispatcher）→ `kali_kubernetes.py` 或 Docker executor（backend 實作）。
+
 ```python
-# kali_tools.py 的函式簽名
+# kali_tools.py 的對外 facade 簽名
 def run_sqlmap(target_url: str, scan_job_id: int) -> dict:
-    """docker exec argus-kali-1 sqlmap ...，回傳 stdout/returncode。"""
+    """單目標：一律先 reserve_sqlmap_targets(max_count=1) 再依 backend 派發。
+    回傳 dict（{ok, tool, blocked_reason, returncode, stdout, error, confirmed, evidence_summary}）
+    與 agent/tools.py 既有契約相容；stdout 固定為 ""。"""
+
+def run_sqlmap_batch(scan_job_id: int, candidate_urls: list[str], max_targets: int = 3) -> dict:
+    """批次：reserve max_count=min(max_targets, 3)；每個 admitted target 執行一次。
+    回傳 {blocked_reason, executions: tuple[SqlmapExecution, ...]}。"""
+
+def validate_findings_with_kali(scan_job_id: int, candidate_urls: list[str], max_targets: int = 3) -> list[dict]:
+    """tasks.py 編排層入口：先挑帶 query parameter 的候選，再跑 run_sqlmap_batch；
+    只信任 KaliResult.confirmed；產出 rule_id=kali-sqlmap-sqli (A03/CWE-89) critical Finding。"""
 
 def run_metasploit(module: str, options: dict, scan_job_id: int) -> dict:
-    """docker exec argus-kali-1 msfconsole -x ...，回傳執行結果。"""
+    """僅 docker backend 支援；kubernetes / 未知 backend 一律回
+    blocked_reason=tool_not_supported_by_backend，不會呼叫 docker。"""
 ```
 
-- **三重授權鎖**（任一不符即 blocked，不呼叫 docker）：`settings.ARGUS_KALI_ENABLED=True`
-  且 `scan_mode=active` 且 `active_testing_authorized=True`
-- 相關 settings：`ARGUS_KALI_ENABLED`（預設 False）/ `ARGUS_KALI_CONTAINER`（預設 `argus-kali-1`）
-  / `ARGUS_KALI_TIMEOUT`（預設 120 秒）
-- 任何例外 silent-fail，回傳結構化 dict（`{ok, tool, blocked_reason, returncode, stdout, error}`），不影響主掃描流程
-- 所有呼叫（含被擋）都記錄進 `scan_logger.append_log`
-- 呼叫前自動確認 container 運行中（`docker inspect -f {{.State.Running}}`），未運行回 `blocked_reason=container_not_running`
-- subprocess 一律 list 形式（非 shell=True）+ module/option/URL 輸入驗證，防命令注入
-- **已接進掃描流程**：`tasks.py` 在 nuclei 之後、僅 `deep_mode`（active+authorized）時呼叫
-  `validate_findings_with_kali(scan_job_id, crawled_urls)`（編排層）；該函式挑帶 query 參數的
-  URL 跑 `run_sqlmap`，確認可注入才產出 `kali-sqlmap-sqli`（A03/CWE-89）critical Finding
-- **攻擊鏈 infra 走 override**：worker 掛 docker.sock + 裝 docker CLI 的設定放
-  `docker-compose.attack.yml`（不在基礎 compose，避免公網生產 worker 取得 host root）。
-  demo：`docker compose -f docker-compose.yml -f docker-compose.attack.yml --profile attack up -d --build`
+### Backend dispatcher（Task 3 / Task 4）
+
+- `_executor_for_backend()` 依 `settings.ARGUS_KALI_BACKEND` 選擇 executor：
+  - `docker` → `DockerSqlmapExecutor`：raw stdout 只在 process 內解析，回 `KaliResult`（`stdout=""`），
+    `evidence_summary` 限 `parameter` / `techniques` / `dbms` / `ARGUS_KALI_SQLMAP_VERSION`。
+  - `kubernetes` → lazy import `KubernetesSqlmapExecutor`：見下方「Kubernetes executor」。
+  - `disabled` / 未知 → 回 `None`；facade 走 `backend_misconfigured` blocked 分支並寫 warn audit。
+- base `docker-compose.yml` **完全不掛** docker.sock、不裝 docker CLI；Docker demo 走獨立
+  `docker-compose.attack.yml` override（worker environment 加 `ARGUS_KALI_BACKEND: "docker"`）。
+  正式 K8s 參集則設 `ARGUS_KALI_BACKEND=kubernetes`，由 worker 透過 in-cluster config 操作叢集。
+
+### Settings（Task 1 新增，全預設停用）
+
+| Setting | 預設 | 說明 |
+|---|---|---|
+| `ARGUS_KALI_ENABLED` | `False` | 總開關；必須為 True 才會進一步 dispatch |
+| `ARGUS_KALI_BACKEND` | `"disabled"` | `disabled` / `docker` / `kubernetes` |
+| `ARGUS_KALI_CONTAINER` | `"argus-kali-1"` | 僅 Docker backend 使用 |
+| `ARGUS_KALI_NAMESPACE` | `"argus-kali"` | 僅 Kubernetes backend 使用 |
+| `ARGUS_KALI_RUNNER_IMAGE` | `""` | K8s runner image，正式啟用時為 `repository@sha256:<64 hex>` |
+| `ARGUS_KALI_SQLMAP_VERSION` | `"1.10"` | 寫進 evidence_summary 的版本標籤 |
+| `ARGUS_KALI_TIMEOUT` | `120` | 單一 target SQLmap timeout（秒） |
+| `ARGUS_KALI_MAX_TARGETS` | `3` | 每 scan 最多目標數（policy 強制上限） |
+| `ARGUS_KALI_LOCK_WAIT_SECONDS` | `420` | K8s global lock 等待上限 |
+| `ARGUS_KALI_SCAN_DEADLINE_SECONDS` | `900` | 每 scan Kali 總 deadline（policy 端） |
+| `ARGUS_KALI_STATE_TTL_SECONDS` | `86400` | Redis 去重 fingerprint TTL |
+| `ARGUS_KALI_RESULT_MAX_BYTES` | `16384` | runner stdout JSON 上限（contract 端） |
+| `ARGUS_KALI_REDIS_URL` | `redis://localhost:6379/0` | policy + K8s global lock 共用 Redis |
+
+### 共用授權與預算（kali_policy）
+
+`reserve_sqlmap_targets()` 是 docker / kubernetes / agent-tool-call / fallback **共用**的入口，
+依固定順序檢查：Kali 開關 → backend → ScanJob 存在 → cancel → active mode → 主動授權 → 公網 →
+同源 → query parameter；通過後才以 Redis Lua 原子套用 900s deadline、最多 3 個目標、SHA-256
+去重與 86400s TTL。Policy 不保存完整 target URL 或 query value（只用標準化後的 SHA-256 指紋）。
+
+### Kubernetes executor（kali_kubernetes.py，Task 4）
+
+- 僅 `config.load_incluster_config()`，無本機 kubeconfig fallback；worker 必須掛
+  `argus-worker-kali-orchestrator` SA（見 `k8s/10-kali-runtime.yaml`）。
+- 單一 owner global lock：`SET NX PX` + Lua compare-and-* ；mismatched token 無法續約或釋放。
+- Job-first / Secret-second：先建 Job 拿 UID，再建 owner-referenced Secret（只含 `targets.json`）；
+  worker 只 `create` / `delete` Secret，**不** get/list/read 回。
+- 動態 deadline = `min(active_deadline + 30, 420)`；watch 5s/片，每片 I/O 前後皆做 cancellation
+  + ownership checkpoint；`ScanCancelled` 原樣重拋，不遮蔽。
+- `append_log` 只記 `correlation_id` / phase / fixed safe error code（如 `job_deadline_exceeded`、
+  `runner_failed`、`invalid_result`），**不記** URL、query value、API exception body、raw log。
+- Cleanup 在 finally 必跑；NotFound 視為成功。
+
+### 掃描流程接線（AI-first，Task 6）
+
+`tasks.py` 的順序固定為：被動 + 主動 scanner → **Hermes-Agent（先）** → **Kali fallback（後）** → scoring。
+Agent 確認的 `security_findings` 會餵進 scoring（DB 落地由 `runner.persist_agent_security_findings`）；
+Redis 指紋讓 fallback 只處理 agent 沒驗證過的獨特 target（單一 batch）。`probe_sql_injection` 在
+agent 端額外有同源 + query parameter + deep_mode 三層閘，AgentStep 持久化前經
+`redact_tool_arguments` / `redact_tool_result` 遮罩 URL 與 raw 結果。
+
+### 不可放寬的硬性規則
+
+- **授權與預算一律經 `reserve_sqlmap_targets`**：facade / executor / agent 都不再自做 scan_mode /
+  active_testing_authorized 檢查；任何新增 backend 都必須接在同一個 policy 入口後。
+- **任何例外 silent-fail**，回結構化 `KaliResult` / dict，**不**影響主掃描流程；唯一例外是
+  `ScanCancelled` 必須原樣重拋讓取消流程傳遞。
+- **所有呼叫（含被擋）都記錄進 `scan_logger.append_log`**；helper `_log_kali_decision` 只記
+  fixed structured reason，嚴禁拼接 URL / query value / raw stdout / exception body。
+- **runner raw stdout 永不離開 executor process**：持久化內容必經 `KaliResult` schema 與
+  `redact_url_query_values`；Finding 的 `evidence_json` 只放 `evidence_summary`。
+- subprocess 一律 list 形式（非 shell=True）+ module/option/URL 輸入驗證，防命令注入。
+
+### 目前狀態與啟用
+
+軟體已 merge 並通過單元／合約測試，但正式叢集仍維持 disabled：`ARGUS_KALI_ENABLED=false`、
+`ARGUS_KALI_BACKEND=disabled`、runner image 為 disabled sentinel digest
+`shijie85/argus-kali-runner@sha256:0000…`（見 `k8s/01-namespace-config.yaml` 與
+`k8s/11-kali-admission.yaml`）。啟用流程（靜態加密 → digest 推廣 → dry-run → RBAC/Admission/
+Network 實機 → disabled smoke → enablement → 授權 positive test → rollback）見 operator runbook
+[`../../../docs/runbooks/kali-sqlmap-rollout.md`](../../../docs/runbooks/kali-sqlmap-rollout.md)；
+靜態加密前置見 [`../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md`](../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md)。
+Docker Compose demo（`docker-compose.attack.yml`，本機或隔離 demo 專用）維持原狀，不在本啟用鏈上。
 
 ---
 
