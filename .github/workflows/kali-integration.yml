@@ -31,8 +31,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  KIND_VERSION: "v0.27.0"
-  KIND_NODE_IMAGE: "kindest/node:v1.35.0@sha256:ed7f79a7c0534f5bcfa959acbd2f2ee92f0161bc63c1c14fbc79871b74b2f7c2"
+  # kind v0.31.0 才支援 v1.35 node image；先前 v0.27.0 + 不存在的 digest 導致
+  # docker pull / kind create cluster 失敗（manifest unknown）。digest 取自 kind
+  # v0.31.0 release notes 官方 pin 值。
+  KIND_VERSION: "v0.31.0"
+  KIND_NODE_IMAGE: "kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f"
   CALICO_VERSION: "v3.32.0"
   CALICO_MANIFEST: "https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml"
   # 用 IANA TEST-NET-3 的 93.184.216.34（fixture.argus.test）；不會在網際網路被路由。

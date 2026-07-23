@@ -10,7 +10,10 @@
   - write-back step（「把新 digest 推廣進 GitOps 契約」）：重排順序為 `fetch → reset --hard FETCH_HEAD → promote → add → commit → push`。原順序是 `promote → fetch → rebase origin/main`，**rebase 撞到 promote 產生的 unstaged changes 而失敗**。
   - 觸發條件：disabled 階段改為僅 `workflow_dispatch`（原含 push 到 main）。原因：write-back 修好後，push 會自動觸發本 workflow → promote 真實 digest 進 `k8s/01` + `k8s/11` → 撤除 VAP sentinel 防線（雙重 disabled → 單重）。disabled 階段不應由「修 CI bug」的 push 連帶撤防線，故改手動觸發；Task 11 啟用後恢復 push 觸發（paths：`kali-runner/**`、本 workflow、promote 腳本/測試）。
 - **`.github/workflows/kali-integration.yml`**（Task 9 kind 整合測試）
-  - 在「建立 kind 叢集」step 前新增「Docker 環境診斷」step：`docker version`、`docker info` 摘要、預先 `docker pull "${KIND_NODE_IMAGE}"`，把「image 拉取失敗」與「kind 叢集啟動失敗」分開，讓下次失敗有足夠 log 定根因。**未改 kind/node 版本**（無 CI log 前不盲改）。
+  - 新增「Docker 環境診斷」step：`docker version`、`docker info` 摘要、預先 `docker pull "${KIND_NODE_IMAGE}"`，把「image 拉取失敗」與「kind 叢集啟動失敗」分開。
+  - **根因已由 CI log 確認**（commit `2578a3d` push 後 Kali Integration run `30035066927`）：Docker 環境正常（28.0.4 / overlay2 / systemd / 16GB），失敗在 `docker pull` 報 `manifest for kindest/node@sha256:ed7f79a7c… not found: manifest unknown`——`KIND_NODE_IMAGE` digest 不存在，且 `kind v0.27.0` 不支援 v1.35 node image。診斷 step 達成設計目的（精準指向 image 拉取問題）。
+  - 修復：`KIND_VERSION` v0.27.0 → v0.31.0（支援 v1.35），`KIND_NODE_IMAGE` digest 換成 kind v0.31.0 release notes 官方 pin 值 `452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f`。診斷 step 保留供未來除錯。
+  - 殘餘風險：kind issue [#4085](https://github.com/kubernetes-sigs/kind/issues/4085)（v1.35.0 cluster creation 的 kubeadm patch 相容性）；本工作流 kind-config 用 `containerdConfigPatches`（非 kubeadm patch）應不踩，若重跑仍 fail 再升 v1.35.5。
 - **`.github/workflows/quality.yml`**
   - `repository-text` job 的「驗證 GitOps build workflow 保留完整排隊」測試，把 `build-kali-runner.yml` 納入檢查清單（原本只檢查 backend/frontend），防止未來 kali 再度漂移回 `cancel-in-progress`。
 
@@ -50,5 +53,5 @@ handoff `docs/handoff-2026-07-24-pentest-baseline-and-kali-disabled.md` §5 列�
 **未驗證（待 CI 實跑，需使用者觸發）**：
 
 - `build-kali-runner.yml` write-back 修復的實跑：根因是高把握度推論，仍需 CI log 確認 rebase 錯誤確實是失敗點。**disabled 階段改 workflow_dispatch-only 後，push 不會自動跑**；要驗證需在 Actions 頁手動觸發（注意：成功會 promote 真實 digest、撤 VAP 防線，建議留到 Task 11 啟用流程）。
-- `kali-integration.yml`：push 到 main 會自動觸發（`.github/workflows/kali-integration.yml` 在 paths 內），可觀察新「Docker 環境診斷」step 的輸出來定 kind 根因。
+- `kali-integration.yml`：首次 push（`2578a3d`）已由診斷 step 確認根因（digest 壞 + kind 版本太舊），已於本次修復；待修復 push 後 CI 重跑，驗證 kind 叢集能否建立、整合測試能否走完。
 - `quality.yml`：push 到 main 會自動跑 `repository-text` job，驗證 kali 的 queue:max 契約。
