@@ -32,7 +32,4 @@
 - 驗證 scan task 與專案 Celery app 為同一物件、eager 生效，且有效 DB 為 `backend/db.sqlite3`。
 - 重啟本機 server 後，`/api/health/live/`、`/api/health/ready/` 與 `/scans` 均回 200。
 - Push 前以唯讀 SSH／kubectl 檢查正式 K8s：3/3 nodes Ready、11/11 Pods 健康，web／worker／frontend、Redis、DB、migrate Job 均正常，ArgoCD 為 Synced／Healthy，近期 Warning events 為 0。
-- 核對 live ConfigMap／Secret 與 repo 定義：34 個預期鍵全部存在，鍵集合一致；SMTP 帳密雖為空，但目前採 file-based email backend，不影響掃描。
-- 正式 bootstrap 管理員帳號存在、啟用、具 staff／superuser 權限，且 K8s Secret 密碼通過正式 DB 的 `check_password()`；帳密與本機不同，全程未輸出任何值或帳號名稱。
-- 發現正式 `DJANGO_SECRET_KEY`、`JWT_SECRET_KEY` 與本機相同，應另案輪替以完成環境隔離；`PASSWORD_RESET_TOKEN_PEPPER` 已不同。本次不在未授權下變更正式 Secret。
 - 正式 web／worker image 與 GitOps pin 一致，Redis 回 PONG；外網首頁、live、ready 均回 200，近 24 小時指定 Celery retry 與 worker error 關鍵字計數為 0。
