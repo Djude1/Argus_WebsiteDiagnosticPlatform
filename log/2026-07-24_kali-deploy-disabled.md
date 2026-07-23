@@ -21,4 +21,5 @@
 - **本機**：`ruff check` 通過；`manage.py check` 0 issues；`apps.scans + apps.agent` 453 tests OK；root `tests/` 36 OK；`kali-runner/tests` 38 OK；`promote_kali_image.py --check` exit 0；`kubectl kustomize k8s` render OK。
 - **正式叢集（唯讀 kubectl）**：`argus-kali` 資源齊全；ConfigMap `ENABLED=false`/`BACKEND=disabled`；VAP `failurePolicy=Fail` + `approvedImage=sentinel`；RBAC `create jobs`=yes / `get secrets`=no / `create pods`=no；`kubectl apply --dry-run=server` 全 manifest 有效。
 - web/worker Running `sha-1340441`、0 restarts、migrate Completed。
-- **未驗證**（待辦）：基本滲透測試 smoke test（主要任務，見 `docs/handoff-2026-07-24-pentest-baseline-and-kali-disabled.md` §3）；Docker runner image smoke（本機 Docker 故障）；2 個 kali CI（Runner Image digest 推廣、kind Integration）。
+- **基本滲透測試 smoke test 通過**（2026-07-24）：建測試帳號 `argus.smoke.20260724@example.com`（admin_adjust 10000 coin）→ `POST /api/scans/` 掃 `aiglasses.qzz.io` passive max_pages=5 → scan id=18 `queued→scanning→completed` ~60s，score 92（ux/aeo/seo 100、geo 98、security 72），DB 5 findings（security: DNSSEC/DMARC/SPF/Nuclei-WAF；geo: robots AI 爬蟲）。Nuclei 偵測到 Cloudflare WAF 攔截、Katana 技術棧、深度被動安全掃描全跑。**完整鏈路（API→Celery→Playwright→Nuclei/Katana→scanners→scoring→findings）驗證通過**。
+- **未驗證**（待辦）：Docker runner image smoke（本機 Docker 故障）；2 個 kali CI（Runner Image digest 推廣、kind Integration）。
