@@ -1,6 +1,7 @@
 # Task 8：argus-kali-runner image 的不可變 digest 推廣管線。
 #
-# 觸發：main 上動到 kali-runner/、本 workflow、推廣腳本/測試，或 workflow_dispatch。
+# 觸發：disabled 階段僅 workflow_dispatch（避免 push 自動 promote 真實 digest 而撤 VAP
+#       sentinel 防線；詳見 on: 區塊）。Task 11 啟用後恢復 push 觸發。
 # 與 build-backend / build-frontend 共用 argus-gitops-cd concurrency group，
 # 序列化 GitOps write-back，避免同時改 k8s/ 時撞在一起。
 #
@@ -8,19 +9,20 @@
 # 其他 Docker Hub 帳號會在鎖定步驟被拒）。
 name: Build & Push Kali Runner Image
 
+# disabled 階段觸發策略（kali 雙重 disabled）：
+# 只允許 workflow_dispatch 手動觸發，避免 push 到 main 時自動 promote 真實 digest、
+# 撤除 k8s/11-kali-admission.yaml 的 VAP sentinel 防線（雙重 disabled → 單重）。
+# Task 11 啟用後（已完成 Secret 靜態加密 + 授權 positive test），把下方 on.push 區塊
+# 恢復：paths = kali-runner/**、本 workflow、scripts/promote_kali_image.py、tests/test_kali_image_promotion.py。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "kali-runner/**"
-      - ".github/workflows/build-kali-runner.yml"
-      - "scripts/promote_kali_image.py"
-      - "tests/test_kali_image_promotion.py"
-  workflow_dispatch: {} # 允許在 Actions 頁面手動觸發
+  workflow_dispatch: {}
 
+# 序列化 GitOps write-back：與 build-backend / build-frontend 共用同一個 group，
+# 同時只有一個 write-back 在跑；queue:max 保留排隊中的 runs，避免密集 push 時較早的
+# pending run 被後來者取代（對齊 quality.yml 的 queue:max 契約，禁用 cancel-in-progress）。
 concurrency:
   group: argus-gitops-cd
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
@@ -81,19 +83,24 @@ jobs:
           cache-to: type=gha,mode=max
 
       # 把 build-push-action 輸出的 digest（sha256:<hex>）推廣進兩份 GitOps 契約；
-      # rebase origin/main 避免 concurrency 交錯，最後 bot 身份 push 回 main。
+      # 與 build-backend / build-frontend 採同一個 write-back 模式：先抓 main 最新並
+      # reset 成乾淨工作區，再推廣 digest，最後 bot 身份 push 回 main。
+      # （先前版本先 promote 再 rebase，導致 rebase 撞 unstaged changes 而失敗。）
       - name: 把新 digest 推廣進 GitOps 契約
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # concurrency group argus-gitops-cd + queue:max 已序列化 write-back，
+          # 此時不會有另一個 write-back 同時跑，故 reset --hard 一次到位、不需重試迴圈。
+          git fetch origin main
+          git reset --hard FETCH_HEAD
+          # 在最新 main 基礎上推廣 digest（此時工作區乾淨，不會撞 rebase/commit）。
           IMAGE="${{ vars.DOCKERHUB_USERNAME }}/argus-kali-runner@${IMAGE_DIGEST}"
           uv run python scripts/promote_kali_image.py --image "${IMAGE}"
           uv run python scripts/promote_kali_image.py --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git rebase origin/main
           git add k8s/01-namespace-config.yaml k8s/11-kali-admission.yaml
           git diff --cached --quiet && exit 0
           git commit -m "ci(cd): promote argus-kali-runner digest"

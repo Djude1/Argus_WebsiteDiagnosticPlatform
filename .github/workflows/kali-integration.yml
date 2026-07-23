@@ -86,6 +86,15 @@ jobs:
       # ────────────────────────────────────────────────────────────────
       # 2. 建立 kind 1.35 叢集
       # ────────────────────────────────────────────────────────────────
+      - name: Docker 環境診斷（kind 起不來時區分根因用）
+        run: |
+          set -euo pipefail
+          docker version
+          docker info --format 'StorageDriver={{.Driver}} CgroupDriver={{.CgroupDriver}} Arch={{.Architecture}} MemTotal={{.MemTotal}}'
+          # 預先 pull kindest/node，把「image 拉取失敗」與「kind 叢集啟動失敗」分開；
+          # 若此步失敗，訊息會明確指向 image digest / registry / 網路問題。
+          docker pull "${KIND_NODE_IMAGE}"
+
       - name: 建立 kind 叢集
         run: |
           set -euo pipefail

@@ -86,6 +86,7 @@ jobs:
           workflows = (
               pathlib.Path(".github/workflows/build-backend.yml"),
               pathlib.Path(".github/workflows/build-frontend.yml"),
+              pathlib.Path(".github/workflows/build-kali-runner.yml"),
           )
           for path in workflows:
               text = path.read_text(encoding="utf-8")
