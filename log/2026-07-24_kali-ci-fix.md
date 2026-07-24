@@ -12,8 +12,11 @@
 - **`.github/workflows/kali-integration.yml`**（Task 9 kind 整合測試）
   - 新增「Docker 環境診斷」step：`docker version`、`docker info` 摘要、預先 `docker pull "${KIND_NODE_IMAGE}"`，把「image 拉取失敗」與「kind 叢集啟動失敗」分開。
   - **根因已由 CI log 確認**（commit `2578a3d` push 後 Kali Integration run `30035066927`）：Docker 環境正常（28.0.4 / overlay2 / systemd / 16GB），失敗在 `docker pull` 報 `manifest for kindest/node@sha256:ed7f79a7c… not found: manifest unknown`——`KIND_NODE_IMAGE` digest 不存在，且 `kind v0.27.0` 不支援 v1.35 node image。診斷 step 達成設計目的（精準指向 image 拉取問題）。
-  - 修復：`KIND_VERSION` v0.27.0 → v0.31.0（支援 v1.35），`KIND_NODE_IMAGE` digest 換成 kind v0.31.0 release notes 官方 pin 值 `452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f`。診斷 step 保留供未來除錯。
-  - 殘餘風險：kind issue [#4085](https://github.com/kubernetes-sigs/kind/issues/4085)（v1.35.0 cluster creation 的 kubeadm patch 相容性）；本工作流 kind-config 用 `containerdConfigPatches`（非 kubeadm patch）應不踩，若重跑仍 fail 再升 v1.35.5。
+  - **三層根因鏈（迭代修復）**：
+    1. `KIND_NODE_IMAGE` digest `ed7f79a7c…` 不存在（run `30035066927` Docker 診斷 step 確認 `manifest unknown`）。
+    2. `kind v0.27.0` 不支援 v1.35 node image → 升 `v0.31.0` + 換官方 digest `452d707d…`（run `30035717496` 確認 docker pull 通過、kubeadm 開始 init）。
+    3. **v1.35.0 node image 本身 containerd/CRI 相容性 bug（kind issue [#4085](https://github.com/kubernetes-sigs/kind/issues/4085)）**：run `30035717496` 在「建立 kind 叢集」4m29s 失敗，kubelet crash → `curl 127.0.0.1:10248/healthz` context deadline exceeded；官方 issue 已 Closed 但無明確修復版本。
+  - 最終修復：降 `KIND_NODE_IMAGE` 為 `kindest/node:v1.34.3@sha256:08497ee19eace7b4b5348db5c6a1591d7752b164530a36f855cb0f2bdcbadd48`（#4085 回報者實證可用、kind v0.31.0 release notes 官方 digest），`KIND_VERSION` 維持 v0.31.0。CI 測試版本（1.34）與正式叢集 1.35.6 有小差距，但 VAP CEL（1.30+ GA）/NetworkPolicy/PSA 在 1.34 皆適用；kind 修了 #4085 後可升回 v1.35.x。診斷 step 保留供未來除錯。
 - **`.github/workflows/quality.yml`**
   - `repository-text` job 的「驗證 GitOps build workflow 保留完整排隊」測試，把 `build-kali-runner.yml` 納入檢查清單（原本只檢查 backend/frontend），防止未來 kali 再度漂移回 `cancel-in-progress`。
 
@@ -53,5 +56,5 @@ handoff `docs/handoff-2026-07-24-pentest-baseline-and-kali-disabled.md` §5 列�
 **未驗證（待 CI 實跑，需使用者觸發）**：
 
 - `build-kali-runner.yml` write-back 修復的實跑：根因是高把握度推論，仍需 CI log 確認 rebase 錯誤確實是失敗點。**disabled 階段改 workflow_dispatch-only 後，push 不會自動跑**；要驗證需在 Actions 頁手動觸發（注意：成功會 promote 真實 digest、撤 VAP 防線，建議留到 Task 11 啟用流程）。
-- `kali-integration.yml`：首次 push（`2578a3d`）已由診斷 step 確認根因（digest 壞 + kind 版本太舊），已於本次修復；待修復 push 後 CI 重跑，驗證 kind 叢集能否建立、整合測試能否走完。
+- `kali-integration.yml`：三層根因已逐層修復（digest → kind 版本 → 降 v1.34.3 避 #4085）；待降版 push 後 CI 重跑，驗證 kind 叢集能否建立、整合測試能否走完整條鏈（若仍 fail 按結果再修）。
 - `quality.yml`：push 到 main 會自動跑 `repository-text` job，驗證 kali 的 queue:max 契約。
