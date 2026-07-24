@@ -21,6 +21,9 @@
   - **暫停決策（使用者同意）**：第四層超出 workflow yaml 範疇（修法是降 runner Docker / 換 runner / 追社群修復 / 改用 k3d/minikube），屬實驗性 debug。kali-integration 是純 CI 測試，不影響正式環境與 kali 雙重 disabled，暫時容許紅叉。`KIND_NODE_IMAGE` 維持 v1.34.3（image 本身正確、docker pull 已通過）。診斷 step 保留。
 - **`.github/workflows/quality.yml`**
   - `repository-text` job 的「驗證 GitOps build workflow 保留完整排隊」測試，把 `build-kali-runner.yml` 納入檢查清單（原本只檢查 backend/frontend），防止未來 kali 再度漂移回 `cancel-in-progress`。
+- **文件同步（doc-sync，因上述 CI 改動）**：
+  - `docs/handoff-2026-07-24-pentest-baseline-and-kali-disabled.md` §4/§5：kali CI 待辦狀態更新（build-kali-runner 已修、kali-integration 暫停於第四層環境問題）。
+  - `docs/runbooks/kali-sqlmap-rollout.md` §1.1：disabled 階段推廣方式更新（build-kali-runner 為 `workflow_dispatch`-only）。
 
 ## 原因
 

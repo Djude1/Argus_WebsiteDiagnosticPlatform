@@ -38,8 +38,12 @@
 fail-closed 機制。啟用前必須把 ConfigMap 與 VAP 的 digest **同時**換成真實 build。
 
 ```bash
-# 1.1 在擁有 write-back 權限的環境執行（一般是 CI workflow：
-#     .github/workflows/build-kali-runner.yml 完成後會自動寫回）。手動推廣：
+# 1.1 disabled 階段 build-kali-runner.yml 觸發為 workflow_dispatch-only（避免 push
+#     自動 promote 真實 digest、撤除 VAP sentinel 防線）。兩種方式擇一手動觸發推廣：
+#   (a) GitHub Actions 頁 → "Build & Push Kali Runner Image" → Run workflow
+#       （會 build image + 自動 write-back 把真實 digest 寫回兩份 manifest；
+#        write-back 根因已修：fetch→reset --hard→promote→commit→push）
+#   (b) 或本地/CI 手動跑 promote 腳本（只寫 manifest，不 build image）：
 uv run python scripts/promote_kali_image.py \
   --image shijie85/argus-kali-runner@sha256:<real-64-hex-digest>
 
