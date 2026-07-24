@@ -526,9 +526,28 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # agent_meta 也會是 {"status": "error", ...}（仍是 truthy），此時 UX 根本沒被
         # 真正測過，category_scores["ux"] 只是恰好維持在 100（因為沒有 UX finding），
         # 若也算「有測」計入平均，等於把「測到一半就掛掉」誤當「測過了、乾淨」。
-        tested_categories = {"seo", "aeo", "geo", "security"}
+        # 頁面內容類分類（seo/aeo）只來自 analyze_page（頁面層級）；爬蟲 0 頁（目標不可
+        # 達/全 timeout）時根本沒有頁面可分析，若仍計入 overall_score 平均，等於把「沒
+        # 測」誤當「零問題」灌高總分（與上方 UX 的把關同理）。security（DNS/SSL 站台
+        # 層級）與 geo（analyze_site_signals：llms.txt/robots）即使 0 頁仍有站台層級
+        # 檢查，故保留。正常掃描（有頁）行為與舊版完全一致。
+        tested_categories = {"security", "geo"}
+        if crawled_pages:
+            tested_categories.update({"seo", "aeo"})
         if agent_meta and agent_meta.get("status") != "error":
             tested_categories.add("ux")
+        # 0 頁是「掃描實質失效」的強信號：在 warning_summary 標記 + scan_log 警告，
+        # 避免 overall_score（此時只反映站台層級）被誤讀為「網站安全」。
+        if not crawled_pages:
+            _eff_warnings = dict(scan_job.warning_summary or {})
+            _eff_warnings["scan_effectiveness"] = "no_pages_crawled"
+            scan_job.warning_summary = _eff_warnings
+            append_log(
+                scan_job_id,
+                "掃描有效性警示：未抓到任何頁面（目標可能不可達或全 timeout）；"
+                "SEO/AEO 未評估，總分僅反映站台層級檢查，不應解讀為網站安全。",
+                level="warn",
+            )
         overall_score, category_scores, top_actions = calculate_scores(
             all_findings, tested_categories=tested_categories
         )

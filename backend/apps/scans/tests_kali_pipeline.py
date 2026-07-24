@@ -158,6 +158,90 @@ class KaliPipelineOrderingTests(TransactionTestCase):
         self.assertIn("SQL Injection (agent-confirmed)", titles)
 
     # ------------------------------------------------------------------
+    # 掃描有效性：爬蟲 0 頁（目標不可達/全 timeout）時 seo/aeo 不計入 overall_score
+    # ------------------------------------------------------------------
+    def test_zero_pages_excludes_seo_aeo_from_tested_categories(self):
+        """爬蟲 0 頁時，seo/aeo 只來自 analyze_page（頁面層級），根本沒頁面可分析；
+        若仍計入 overall_score 平均，等於把「沒測」誤當「零問題」灌高總分（與上方
+        UX 的 tested_categories 把關同理）。setUp 的 crawl_site 預設回 ([], {}, {})。
+        """
+        captured: dict = {}
+
+        def _capture(findings, tested_categories=None):
+            captured["tested"] = set(tested_categories or [])
+            return (100, {}, [])
+
+        with mock.patch(
+            "apps.agent.runner.run_agent_for_scan",
+            new=mock.AsyncMock(
+                return_value=AgentRunResult(
+                    session_id=0, status="completed", steps=1, total_tokens=10
+                )
+            ),
+        ), mock.patch(
+            "apps.scans.tasks.validate_findings_with_kali", return_value=[]
+        ), mock.patch(
+            "apps.scans.tasks.calculate_scores", side_effect=_capture
+        ):
+            run_scan_job.run(self.scan_job.id)
+
+        tested = captured["tested"]
+        self.assertNotIn("seo", tested, "0 頁時 seo 不該計入 overall（無頁面可分析）")
+        self.assertNotIn("aeo", tested, "0 頁時 aeo 不該計入 overall（無頁面可分析）")
+        # security/geo 有站台層級檢查（DNS/SSL/site_signals），ux 因 agent completed 納入
+        self.assertIn("security", tested)
+        self.assertIn("geo", tested)
+        self.assertIn("ux", tested)
+
+    def test_with_pages_includes_seo_aeo_in_tested_categories(self):
+        """正常掃描（有頁）時 seo/aeo 恢復計入 overall_score，行為與修復前一致。"""
+        captured: dict = {}
+
+        def _capture(findings, tested_categories=None):
+            captured["tested"] = set(tested_categories or [])
+            return (100, {}, [])
+
+        fake_pages = [{
+            "url": "https://example.com/",
+            "final_url": "https://example.com/",
+            "origin": "https://example.com",
+            "status_code": 200,
+            "title": "Example",
+            "html": "<html><body></body></html>",
+            "rendered_dom": "",
+            "html_only": "",
+            "screenshot_path": "",
+            "load_time_ms": 100,
+            "depth": 0,
+            "blocked_reason": "",
+            "outgoing_links": [],
+            "headers": {},
+            "element_boxes": [],
+        }]
+        with mock.patch(
+            "apps.scans.tasks.crawl_site",
+            new=mock.AsyncMock(return_value=(fake_pages, {}, {})),
+        ), mock.patch(
+            "apps.scans.tasks.analyze_page", return_value=[]
+        ), mock.patch(
+            "apps.agent.runner.run_agent_for_scan",
+            new=mock.AsyncMock(
+                return_value=AgentRunResult(
+                    session_id=0, status="completed", steps=1, total_tokens=10
+                )
+            ),
+        ), mock.patch(
+            "apps.scans.tasks.validate_findings_with_kali", return_value=[]
+        ), mock.patch(
+            "apps.scans.tasks.calculate_scores", side_effect=_capture
+        ):
+            run_scan_job.run(self.scan_job.id)
+
+        tested = captured["tested"]
+        self.assertIn("seo", tested)
+        self.assertIn("aeo", tested)
+
+    # ------------------------------------------------------------------
     # Step 7：fallback 在 Agent 停用時仍執行
     # ------------------------------------------------------------------
     @override_settings(ARGUS_AGENT_ENABLED=False)
