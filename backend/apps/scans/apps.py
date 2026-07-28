@@ -6,3 +6,6 @@ class ScansConfig(AppConfig):
     name = "apps.scans"
     label = "scans"
 
+    def ready(self):
+        from apps.scans import checks  # noqa: F401
+

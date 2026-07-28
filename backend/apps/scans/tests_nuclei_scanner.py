@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
+from apps.scans.cancellation import ScanCancelled
+
 
 class TestRunNuclei(TestCase):
     """run_nuclei 的單元測試。
@@ -26,7 +28,7 @@ class TestRunNuclei(TestCase):
     def test_fast_mode_includes_tags_flag(self):
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -36,12 +38,25 @@ class TestRunNuclei(TestCase):
         self.assertIn("-tags", cmd)
         idx = cmd.index("-tags")
         self.assertIn("cves", cmd[idx + 1])
-        self.assertEqual(cmd[cmd.index("-c") + 1], "25")
+        self.assertEqual(cmd[cmd.index("-c") + 1], "3")
+        self.assertEqual(cmd[cmd.index("-rl") + 1], "5")
+        self.assertIn("-no-stdin", cmd)
+        self.assertIn("-duc", cmd)
+        self.assertIn("-lna", cmd)
+        self.assertIn("-ni", cmd)
+        self.assertIn("-or", cmd)
+        self.assertEqual(cmd[cmd.index("-rsr") + 1], str(2 * 1024 * 1024))
+        self.assertEqual(cmd[cmd.index("-pt") + 1], "http")
+        self.assertEqual(
+            cmd[cmd.index("-H") + 1],
+            "User-Agent: SiteSense-AI-Scanner/1.0 (authorized-audit)",
+        )
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 60)
 
     def test_deep_mode_excludes_tags_flag(self):
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -49,7 +64,27 @@ class TestRunNuclei(TestCase):
             run_nuclei("https://example.com", scan_job_id=1, deep=True)
         cmd = mock_run.call_args[0][0]
         self.assertNotIn("-tags", cmd)
-        self.assertEqual(cmd[cmd.index("-c") + 1], "50")
+        self.assertEqual(cmd[cmd.index("-c") + 1], "5")
+        self.assertEqual(cmd[cmd.index("-rl") + 1], "2")
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 300)
+
+    def test_explicit_rate_limit_is_applied(self):
+        with (
+            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
+            patch("apps.scans.nuclei_scanner.append_log"),
+        ):
+            mock_run.return_value = MagicMock(stdout="", returncode=0)
+            from apps.scans.nuclei_scanner import run_nuclei
+            run_nuclei(
+                "https://example.com",
+                scan_job_id=1,
+                deep=True,
+                rate_limit=1,
+            )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("-rl") + 1], "1")
 
     def test_parses_nuclei_jsonl_output(self):
         record = {
@@ -66,7 +101,7 @@ class TestRunNuclei(TestCase):
         }
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout=json.dumps(record) + "\n", returncode=0)
@@ -84,6 +119,28 @@ class TestRunNuclei(TestCase):
         self.assertEqual(r["selector"], "")
         self.assertIsNone(r["bounding_box"])
         self.assertIn("ai_handoff_prompt", r)
+
+    def test_finding_redacts_query_values_and_extracted_results(self):
+        from apps.scans.nuclei_scanner import _build_finding
+
+        finding = _build_finding(
+            {
+                "template-id": "sensitive-output",
+                "info": {"name": "Sensitive output", "severity": "high", "tags": []},
+                "matched-at": (
+                    "https://example.com/api?token=super-secret-value"
+                    "&email=person@example.com"
+                ),
+                "extracted-results": ["raw-private-marker"],
+            }
+        )
+
+        serialized = json.dumps(finding, ensure_ascii=False)
+        self.assertNotIn("super-secret-value", serialized)
+        self.assertNotIn("person@example.com", serialized)
+        self.assertNotIn("raw-private-marker", serialized)
+        self.assertIn("REDACTED", finding["evidence"])
+        self.assertIn("1 筆", finding["evidence"])
 
     def test_severity_to_priority_score_mapping(self):
         from apps.scans.nuclei_scanner import _build_finding
@@ -117,7 +174,7 @@ class TestRunNuclei(TestCase):
         two_lines = record_json + "\n" + record_json + "\n"
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout=two_lines, returncode=0)
@@ -128,19 +185,33 @@ class TestRunNuclei(TestCase):
     def test_timeout_returns_empty_list(self):
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="nuclei", timeout=360)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="nuclei", timeout=60)
             from apps.scans.nuclei_scanner import run_nuclei
             results = run_nuclei("https://example.com", scan_job_id=1)
         self.assertEqual(results, [])
+
+    def test_scan_cancelled_is_not_silenced(self):
+        with (
+            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
+            patch(
+                "apps.scans.nuclei_scanner.run_cancellable_process",
+                side_effect=ScanCancelled,
+            ),
+            patch("apps.scans.nuclei_scanner.append_log"),
+        ):
+            from apps.scans.nuclei_scanner import run_nuclei
+
+            with self.assertRaises(ScanCancelled):
+                run_nuclei("https://example.com", scan_job_id=1)
 
     def test_single_url_uses_u_flag(self):
         """無 extra_urls 時應使用 -u 單一 URL 旗標。"""
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -165,7 +236,10 @@ class TestRunNuclei(TestCase):
 
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run", side_effect=fake_run),
+            patch(
+                "apps.scans.nuclei_scanner.run_cancellable_process",
+                side_effect=fake_run,
+            ),
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             from apps.scans.nuclei_scanner import run_nuclei
@@ -182,7 +256,7 @@ class TestRunNuclei(TestCase):
         """entry URL 已包含在 extra_urls 中時不應重複。"""
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -207,7 +281,7 @@ class TestRunNuclei(TestCase):
         mixed = "NOT_JSON\n" + good_record + "\n"
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.subprocess.run") as mock_run,
+            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
             mock_run.return_value = MagicMock(stdout=mixed, returncode=0)

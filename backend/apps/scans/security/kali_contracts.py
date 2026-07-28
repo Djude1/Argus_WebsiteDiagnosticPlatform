@@ -7,9 +7,12 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
+
+from apps.scans.security.redaction import (
+    redact_url_query_values as _redact_url_query_values,
+)
 
 MAX_RESULT_BYTES = 16_384
 _RESULT_KEYS = {
@@ -88,10 +91,8 @@ class SqlmapExecutor(Protocol):
 
 
 def redact_url_query_values(url: str) -> str:
-    parsed = urlsplit(url)
-    pairs = parse_qsl(parsed.query, keep_blank_values=True)
-    query = urlencode([(key, "[REDACTED]") for key, _value in pairs])
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, ""))
+    """相容既有匯入路徑，實作集中於共用 redaction 模組。"""
+    return _redact_url_query_values(url)
 
 
 def parse_runner_result(

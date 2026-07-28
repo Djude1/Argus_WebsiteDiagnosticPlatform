@@ -20,6 +20,7 @@ from rest_framework.test import APITestCase
 
 from apps.billing.models import CoinWallet
 from apps.scans.crawler import (
+    _close_playwright_resources,
     _enforce_public_request,
     _enforce_public_websocket,
     _make_context,
@@ -474,6 +475,19 @@ class ScanJobApiTests(APITestCase):
 
 
 class CrawlerHelperTests(APITestCase):
+    def test_playwright_cleanup_error_is_best_effort(self):
+        broken_context = Mock()
+        broken_context.close = AsyncMock(
+            side_effect=RuntimeError("test-only cleanup failure")
+        )
+        browser = Mock()
+        browser.close = AsyncMock()
+
+        asyncio.run(_close_playwright_resources(broken_context, browser))
+
+        broken_context.close.assert_awaited_once()
+        browser.close.assert_awaited_once()
+
     def test_compute_min_interval_active_enforces_rps_cap(self):
         # 主動模式 RPS=2，兩次請求至少間隔 0.5 秒
         interval = compute_min_interval("active", active_rps=2, passive_rps=5)
@@ -610,11 +624,48 @@ class ScanTargetPolicyTests(APITestCase):
         route.continue_.assert_awaited_once_with()
         route.abort.assert_not_awaited()
 
+    @patch(
+        "apps.scans.services.socket.getaddrinfo",
+        return_value=[(None, None, None, "", ("93.184.216.34", 0))],
+    )
+    async def test_playwright_route_blocks_cross_origin_main_navigation(
+        self,
+        _mock_getaddrinfo,
+    ):
+        route = AsyncMock()
+        page = Mock()
+        frame = Mock()
+        page.main_frame = frame
+        frame.page = page
+        request = Mock(url="https://other.example/redirected", frame=frame)
+        request.is_navigation_request.return_value = True
+
+        await _enforce_public_request(route, request, "https://example.com")
+
+        route.abort.assert_awaited_once_with("blockedbyclient")
+        route.continue_.assert_not_awaited()
+
     async def test_playwright_websocket_closes_private_target(self):
         websocket_route = Mock(url="ws://169.254.169.254/socket")
         websocket_route.close = AsyncMock()
 
         await _enforce_public_websocket(websocket_route)
+
+        websocket_route.close.assert_awaited_once()
+        websocket_route.connect_to_server.assert_not_called()
+
+    @patch(
+        "apps.scans.services.socket.getaddrinfo",
+        return_value=[(None, None, None, "", ("93.184.216.34", 0))],
+    )
+    async def test_playwright_websocket_closes_cross_origin_target(
+        self,
+        _mock_getaddrinfo,
+    ):
+        websocket_route = Mock(url="wss://other.example/socket")
+        websocket_route.close = AsyncMock()
+
+        await _enforce_public_websocket(websocket_route, "https://example.com")
 
         websocket_route.close.assert_awaited_once()
         websocket_route.connect_to_server.assert_not_called()
@@ -746,7 +797,7 @@ class TrustedProxyClientIPTests(APITestCase):
         browser = Mock()
         browser.new_context = AsyncMock(return_value=context)
 
-        created = asyncio.run(_make_context(browser))
+        created = asyncio.run(_make_context(browser, "https://example.com"))
 
         self.assertIs(created, context)
         browser.new_context.assert_awaited_once()
@@ -1215,4 +1266,41 @@ class EstimateScanTests(APITestCase):
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {self.token}",
         )
+        self.assertEqual(resp.status_code, 400)
+
+    @override_settings(ARGUS_COIN_PER_PAGE=7)
+    def test_estimate_uses_billing_coin_per_page_setting(self):
+        resp = self.client.post(
+            "/api/estimate/",
+            {"url": "https://example.com/", "max_pages": 2},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["estimated_pages"], 2)
+        self.assertEqual(resp.data["estimated_cost"], 14)
+        self.assertEqual(resp.data["confidence"], "maximum")
+        self.assertEqual(resp.data["method"], "billing_cap")
+
+    @patch("apps.scans.services.socket.getaddrinfo")
+    def test_estimate_does_not_resolve_dns_or_contact_target(self, getaddrinfo):
+        resp = self.client.post(
+            "/api/estimate/",
+            {"url": "https://example.com/", "max_pages": 50},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        getaddrinfo.assert_not_called()
+
+    def test_estimate_rejects_non_string_url_without_server_error(self):
+        resp = self.client.post(
+            "/api/estimate/",
+            {"url": {}, "max_pages": 50},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
         self.assertEqual(resp.status_code, 400)

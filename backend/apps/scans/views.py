@@ -1,11 +1,13 @@
-import re
+import subprocess
+import sys
+import threading
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
 
-import requests as http_requests
 from config.throttling import UserRateThrottle
 from django.conf import settings
+from django.db import close_old_connections, connections
 from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404
@@ -15,23 +17,39 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.billing.services import get_or_create_wallet, refund_full_for_scan
+from apps.billing.services import (
+    estimate_scan_cost,
+    get_or_create_wallet,
+    refund_full_for_scan,
+)
 from apps.scans.models import (
     AuthorizationConsent,
     Finding,
     Page,
     ScanJob,
 )
+from apps.scans.process_runner import _terminate_process_tree
 from apps.scans.reports import build_scan_report
 from apps.scans.serializers import (
     FindingSerializer,
     PageSerializer,
+    ScanEstimateSerializer,
     ScanJobCreateSerializer,
     ScanJobSerializer,
     ScanJobStatusSerializer,
 )
-from apps.scans.services import PublicScanTargetError, assert_public_http_url, get_client_ip
-from apps.scans.tasks import fail_scan_job_before_start, run_scan_job
+from apps.scans.services import get_client_ip
+from apps.scans.tasks import (
+    fail_scan_job_before_start,
+    reconcile_local_scan_process_exit,
+    run_scan_job,
+)
+
+_EAGER_SCAN_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="argus-eager-scan",
+)
+_EAGER_SCAN_SLOT = threading.BoundedSemaphore(value=1)
 
 
 def _truthy(value):
@@ -39,6 +57,65 @@ def _truthy(value):
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_eager_scan_in_background(scan_job_id: int) -> None:
+    """在獨立 Python 子程序執行本機 eager 掃描，避免 Playwright 跑在 web thread。"""
+    process = None
+    try:
+        close_old_connections()
+        command = [
+            sys.executable,
+            str(Path(settings.BASE_DIR) / "manage.py"),
+            "run_local_eager_scan",
+            str(scan_job_id),
+            "--no-color",
+        ]
+        process_options = {
+            "cwd": settings.BASE_DIR,
+            "close_fds": True,
+            "stdin": subprocess.DEVNULL,
+        }
+        if sys.platform == "win32":
+            process_options["creationflags"] = (
+                subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+        else:
+            process_options["start_new_session"] = True
+        process = subprocess.Popen(command, **process_options)
+        try:
+            returncode = process.wait(timeout=settings.CELERY_TASK_TIME_LIMIT + 30)
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(process)
+            raise
+        except Exception:  # noqa: BLE001
+            _terminate_process_tree(process)
+            raise
+        else:
+            if returncode != 0:
+                reconcile_local_scan_process_exit(scan_job_id)
+    except Exception:  # noqa: BLE001
+        reconcile_local_scan_process_exit(scan_job_id)
+    finally:
+        try:
+            connections.close_all()
+        finally:
+            _EAGER_SCAN_SLOT.release()
+
+
+def _submit_eager_scan(scan_job_id: int) -> bool:
+    """本機 eager 同時只允許一筆，避免 request 把工作無上限塞入記憶體。"""
+    if not settings.DEBUG or not _EAGER_SCAN_SLOT.acquire(blocking=False):
+        return False
+    try:
+        _EAGER_SCAN_EXECUTOR.submit(
+            _run_eager_scan_in_background,
+            scan_job_id,
+        )
+    except Exception:
+        _EAGER_SCAN_SLOT.release()
+        raise
+    return True
 
 
 class ScanCreateThrottle(UserRateThrottle):
@@ -133,15 +210,17 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         scan_job = serializer.save()
         if settings.ARGUS_AUTO_QUEUE_SCANS:
             try:
-                run_scan_job.delay(scan_job.id)
+                if settings.CELERY_TASK_ALWAYS_EAGER:
+                    if not _submit_eager_scan(scan_job.id):
+                        raise RuntimeError("本機 eager 背景執行器忙碌或未允許。")
+                else:
+                    run_scan_job.delay(scan_job.id)
             except Exception:  # noqa: BLE001
                 if fail_scan_job_before_start(scan_job.id):
                     return Response(
                         {"detail": "掃描任務暫時無法啟動，預扣 coin 已退回。"},
                         status=status.HTTP_503_SERVICE_UNAVAILABLE,
                     )
-                scan_job.refresh_from_db()
-            if settings.CELERY_TASK_ALWAYS_EAGER:
                 scan_job.refresh_from_db()
         output_serializer = ScanJobSerializer(scan_job, context=self.get_serializer_context())
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
@@ -511,88 +590,16 @@ def findings_by_category(request):
     return Response({"categories": result})
 
 
-def _count_links(html: str, base_url: str) -> int:
-    """計算 HTML 中同域 <a href> 數量（簡易正則）。"""
-    parsed_base = urlparse(base_url)
-    base_domain = parsed_base.netloc
-    hrefs = re.findall(r'href=["\']([^"\'#?]+)["\']', html, re.IGNORECASE)
-    same_domain = set()
-    for href in hrefs:
-        full = urljoin(base_url, href)
-        p = urlparse(full)
-        if p.netloc == base_domain and p.scheme in {"http", "https"}:
-            same_domain.add(full)
-    return len(same_domain)
-
-
-def _try_sitemap(base_url: str, timeout: int = 5) -> int | None:
-    """嘗試取得 sitemap.xml，回傳 <loc> 數量；失敗回傳 None。"""
-    sitemap_url = urljoin(base_url, "/sitemap.xml")
-    try:
-        sitemap_url = assert_public_http_url(sitemap_url)
-        # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
-        resp = http_requests.get(sitemap_url, timeout=timeout, allow_redirects=False)
-        if resp.status_code == 200 and "xml" in resp.headers.get("content-type", ""):
-            locs = re.findall(r"<loc>([^<]+)</loc>", resp.text, re.IGNORECASE)
-            return len(locs)
-    except Exception:
-        pass
-    return None
-
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def estimate_scan(request):
-    """快速估算目標網站的頁數與花費點數（不扣點）。
-
-    策略：
-    1. 嘗試取得 /sitemap.xml → 計算 <loc> 數
-    2. 若無 sitemap → 抓首頁計算同域 <a href> 數量
-    3. 上限採用 ARGUS_DEFAULT_MAX_PAGES，回傳估算結果
-    """
-    url = (request.data.get("url") or "").strip()
-    if not url:
-        return Response({"url": "請提供網址。"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        url = assert_public_http_url(url)
-    except PublicScanTargetError as exc:
-        return Response(
-            {"url": str(exc)},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    COIN_PER_PAGE = 10
-    MAX_PAGES = settings.ARGUS_DEFAULT_MAX_PAGES
-
-    sitemap_count = _try_sitemap(url)
-    if sitemap_count is not None:
-        estimated = min(sitemap_count, MAX_PAGES)
-        return Response({
-            "estimated_pages": estimated,
-            "estimated_cost": estimated * COIN_PER_PAGE,
-            "confidence": "high",
-            "method": "sitemap",
-        })
-
-    try:
-        url = assert_public_http_url(url)
-        # SSRF 防護：不跟隨 redirect，避免合法網址 302 到內網（與 insights/_safe_get 一致）
-        resp = http_requests.get(
-            url,
-            timeout=8,
-            allow_redirects=False,
-            headers={"User-Agent": "Argus-Estimator/1.0"},
-        )
-        count = _count_links(resp.text, url)
-        estimated = min(max(count, 1), MAX_PAGES)
-        confidence = "medium" if count > 0 else "low"
-    except Exception:
-        estimated = 20
-        confidence = "low"
-
+    """回傳掃描費用上限；不連線目標網站、不扣點。"""
+    serializer = ScanEstimateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    max_pages = serializer.validated_data["max_pages"]
     return Response({
-        "estimated_pages": estimated,
-        "estimated_cost": estimated * COIN_PER_PAGE,
-        "confidence": confidence,
-        "method": "crawl",
+        "estimated_pages": max_pages,
+        "estimated_cost": estimate_scan_cost(max_pages),
+        "confidence": "maximum",
+        "method": "billing_cap",
     })

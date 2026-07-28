@@ -27,7 +27,8 @@ Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` �
 | `header_scanner.py` | 資訊洩露標頭（Server/X-Powered-By）、CORS 設定、CSP 品質分析 | 已建 |
 | `owasp_mapper.py` | Finding 對映 OWASP Top 10（A01~A10）與 CWE 編號（`tag()` + `backfill()`） | 已建 |
 | `secret_scanner.py` | 硬編碼/外洩秘鑰偵測（AWS/Google/GitHub/Stripe/連線字串/私鑰/明文密碼）+ 遮罩 `redact_secrets_in_text` | 已建 |
-| `exposure_scanner.py` | 敏感檔案主動探測（content discovery）：robots/sitemap + 內建字典 → Playwright 探測 → 檔案分類 + 秘鑰/PII 解析 | 已建 |
+| `redaction.py` | 共用 finding/log 遮罩：URL query、PII、任意短 secret；持久化前使用 | 已建 |
+| `exposure_scanner.py` | 敏感檔案主動探測（content discovery）：重用 crawler 的 robots 結果 + 內建字典 → Playwright 探測 → 檔案分類 + 秘鑰/PII 解析 | 已建 |
 | `kali_tools.py` | Facade：`run_sqlmap` / `run_sqlmap_batch` / `validate_findings_with_kali` / `run_metasploit`；統一走 `reserve_sqlmap_targets` 預算 + backend dispatcher | 已建 |
 | `kali_contracts.py` | 安全結果契約：`KaliResult` / `ReservedSqlmapTarget` / `SqlmapExecutor` protocol / `parse_runner_result` / `redact_url_query_values` | 已建（Task 1） |
 | `kali_policy.py` | 原子授權 + Redis 三目標預算 + 900s deadline + SHA-256 去重：`reserve_sqlmap_targets()` | 已建（Task 2） |
@@ -42,7 +43,7 @@ Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` �
 
 - **所有 scanner 函式回傳 `list[dict]`**，格式與 `scanners.py` 的 `make_finding()` 相同
 - **不直接寫入 DB**：回傳 findings list，由 `tasks.py` 統一寫入
-- **呼叫點在 `tasks.py`**：在 Nuclei 掃描完成後，`tasks.py` 依序呼叫此 sub-package 的各 scanner
+- **呼叫點在 `tasks.py`**：在 Nuclei 掃描完成後，`tasks.py` 依 `scan_plan.py` 的範圍／授權閘門呼叫此 sub-package 的各 scanner
 - **Kali 工具呼叫順序**：Nuclei 偵測完成 → Hermes-Agent 判斷 → `kali_tools.py` 執行，不可與 Nuclei 同時對同一目標打
 
 ---
@@ -121,13 +122,14 @@ def analyze_js_libraries(pages: list[dict]) -> list[dict]:
 - **`secret_scanner.detect_secrets_in_text(text)`**：純函式，高訊號前綴 regex（避免誤報）；回傳遮罩後結果。
   - **被動使用**（任何模式）：`tasks.py` per-page 對已抓到的 HTML/inline script 偵測（零額外請求）。
   - `redact_secrets_in_text(text)` 用於把「檔案內容片段」當證據前遮罩，**一律遮罩**（不因 placeholder 子字串豁免，否則真密碼會二次外洩）。
-- **`exposure_scanner.probe_paths(...)`**：主動內容探測，**只在 `deep_mode`（`scan_mode==ACTIVE and active_testing_authorized`）由 tasks.py 呼叫**；被動模式不得發探測請求。
+- **`exposure_scanner.probe_paths(...)`**：整站主動內容探測，**只在全網站且 `scan_mode==ACTIVE and active_testing_authorized` 時由 tasks.py 呼叫**；單頁、被動或未授權模式不得發探測請求。
   - `build_probe_targets` 強制 **same-origin**（內建字典含 dotted/非 dotted/.txt 變體）。
   - `probe_paths` 的逐路徑 GET 用 `max_redirects=0`，避免目標站 open-redirect 把探針導向 metadata/外站。
-  - sitemap 解析前截 512KB，防 XML entity expansion。
-  - 每次請求前 `is_cancelled` 檢查 + active RPS 速率限制；任何例外 silent-fail。
+  - 優先重用 crawler 已取得的 `robots_disallow`，不再重抓 robots 或解析 sitemap，避免重複 I/O 與把公開頁面清單誤當敏感路徑。
+  - robots fallback、soft-404 baseline 與正式 probe 共用同一個 active RPS pacer；每次請求前檢查取消，`ScanCancelled` 不得被 silent-fail 吞掉。
+  - body 片段在寫 Finding 前依序遮罩 secret 與 PII；命中 URL 的 query value 也必須遮罩，不得把外洩資料二次複製進 DB。
 - **`analyze_robots_disclosure(disallow)`**：被動，robots.txt 列出 ≥3 條敏感路徑時報「以 Disallow 當地圖洩露」。
-- **已知待辦（產品層級）**：scans 目前不擋 private/loopback 目標（crawler 既有行為），主動探測會放大內網 SSRF 風險；是否加 SSRF 政策需產品層級決定，勿只在單一 scanner 片面封鎖。
+- 掃描入口、redirect、子資源與 WebSocket 均須通過 `services.py` 的 public HTTP policy；production 仍須用 egress proxy/firewall 補上 DNS rebinding 的解析／連線競態防護。
 
 ## Kali Tools 設計原則
 
@@ -208,7 +210,7 @@ def run_metasploit(module: str, options: dict, scan_job_id: int) -> dict:
 `tasks.py` 的順序固定為：被動 + 主動 scanner → **Hermes-Agent（先）** → **Kali fallback（後）** → scoring。
 Agent 確認的 `security_findings` 會餵進 scoring（DB 落地由 `runner.persist_agent_security_findings`）；
 Redis 指紋讓 fallback 只處理 agent 沒驗證過的獨特 target（單一 batch）。`probe_sql_injection` 在
-agent 端額外有同源 + query parameter + deep_mode 三層閘，AgentStep 持久化前經
+agent 端額外有同源 + query parameter + active 授權三層閘，AgentStep 持久化前經
 `redact_tool_arguments` / `redact_tool_result` 遮罩 URL 與 raw 結果。
 
 ### 不可放寬的硬性規則
@@ -230,8 +232,8 @@ agent 端額外有同源 + query parameter + deep_mode 三層閘，AgentStep 持
 `shijie85/argus-kali-runner@sha256:0000…`（見 `k8s/01-namespace-config.yaml` 與
 `k8s/11-kali-admission.yaml`）。啟用流程（靜態加密 → digest 推廣 → dry-run → RBAC/Admission/
 Network 實機 → disabled smoke → enablement → 授權 positive test → rollback）見 operator runbook
-[`../../../docs/runbooks/kali-sqlmap-rollout.md`](../../../docs/runbooks/kali-sqlmap-rollout.md)；
-靜態加密前置見 [`../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md`](../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md)。
+[`../../../../docs/runbooks/kali-sqlmap-rollout.md`](../../../../docs/runbooks/kali-sqlmap-rollout.md)；
+靜態加密前置見 [`../../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md`](../../../../docs/runbooks/kubernetes-secret-at-rest-encryption.md)。
 Docker Compose demo（`docker-compose.attack.yml`，本機或隔離 demo 專用）維持原狀，不在本啟用鏈上。
 
 ---

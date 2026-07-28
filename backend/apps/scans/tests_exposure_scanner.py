@@ -1,4 +1,6 @@
 """exposure_scanner 純函式單元測試。以靶機 CEKB 真實內容為輸入。"""
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from django.test import SimpleTestCase
 
 from apps.scans.security import exposure_scanner as exp
@@ -35,9 +37,6 @@ class TestRobotsParsing(SimpleTestCase):
         self.assertIn("/.env", paths)
         self.assertIn("/api/debug/users.json", paths)
         self.assertNotIn("/", paths)
-
-    def test_sitemap_parse_handles_garbage(self):
-        self.assertEqual(exp.parse_sitemap_urls("not xml"), [])
 
 
 class TestBuildTargets(SimpleTestCase):
@@ -102,6 +101,9 @@ class TestAnalyzeProbeResults(SimpleTestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn(findings[0]["severity"], ("high", "critical"))
         self.assertIn("個資", findings[0]["evidence"])
+        self.assertNotIn("a.lin@cekb.local", findings[0]["evidence"])
+        self.assertNotIn("0912-345-678", findings[0]["evidence"])
+        self.assertNotIn("A123456789", findings[0]["evidence"])
 
     def test_404_ignored(self):
         results = [{"url": "https://htb.example/.env", "status": 404, "body": ""}]
@@ -157,3 +159,47 @@ class TestRobotsDisclosure(SimpleTestCase):
 
     def test_no_finding_when_few(self):
         self.assertEqual(exp.analyze_robots_disclosure(["/private"]), [])
+
+
+class TestProbePacing(SimpleTestCase):
+    async def test_baselines_and_probe_share_one_rate_limiter(self):
+        response = MagicMock(status=404, ok=False, headers={})
+        request = MagicMock()
+        request.get = AsyncMock(return_value=response)
+        context = MagicMock(request=request)
+        context.close = AsyncMock()
+        browser = MagicMock()
+        browser.new_context = AsyncMock(return_value=context)
+        browser.close = AsyncMock()
+        playwright = MagicMock()
+        playwright.chromium.launch = AsyncMock(return_value=browser)
+        manager = MagicMock()
+        manager.__aenter__ = AsyncMock(return_value=playwright)
+        manager.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("playwright.async_api.async_playwright", return_value=manager),
+            patch(
+                "apps.scans.security.exposure_scanner.build_probe_targets",
+                return_value=["https://example.com/.env"],
+            ),
+            patch(
+                "apps.scans.security.exposure_scanner.assert_public_http_url",
+                side_effect=lambda value: value,
+            ),
+            patch("apps.scans.security.exposure_scanner.is_cancelled", return_value=False),
+            patch("apps.scans.security.exposure_scanner.time.perf_counter", return_value=100.0),
+            patch(
+                "apps.scans.security.exposure_scanner.asyncio.sleep",
+                new=AsyncMock(),
+            ) as sleep,
+        ):
+            await exp.probe_paths(
+                "https://example.com/",
+                "https://example.com",
+                1,
+                robots_disallow=[],
+            )
+
+        self.assertEqual(request.get.await_count, 3)
+        self.assertEqual(sleep.await_count, 2)

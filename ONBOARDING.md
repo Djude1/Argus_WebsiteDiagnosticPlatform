@@ -291,7 +291,7 @@ Argus/
 | GET | `/api/scans/{id}/topology/` | auth | — | 拓撲 nodes+edges |
 | GET | `/api/scans/{id}/report/` | auth | — | Word 報告 blob |
 | GET | `/api/scans/{id}/pages/{page_id}/screenshot/` | auth | path：`page_id` | 截圖 |
-| POST | `/api/estimate/` | auth | body：`url`（必填） | 估算頁數與所需 coin（不扣點；走 sitemap.xml 或首頁同域連結；擋 localhost/私有 IP） |
+| POST | `/api/estimate/` | auth | body：`url`、`max_pages`（1～系統上限） | 純計算掃描預扣上限（不扣點、不連線目標；完成後依實際頁數結算並退回差額） |
 | GET | `/api/pages/?scan_id=` | auth | query：`scan_id` | 頁面列表 |
 | GET | `/api/findings/?scan_id=` | auth | query：`scan_id` | findings 列表 |
 | GET | `/api/dashboard/` | auth | — | 個人總覽（含 wallet） |

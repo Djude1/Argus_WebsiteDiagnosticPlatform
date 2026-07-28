@@ -13,7 +13,7 @@
 |---|---|
 | **Playwright 爬蟲** | BFS 多頁爬取、JS 渲染後 HTML |
 | **Katana** | JS 端點挖掘、秘鑰偵測（API key/token/private key）、Tech stack 識別、Vite dev server 暴露 |
-| **Nuclei** | CVE、vulnerabilities、misconfigs、exposures、default-logins（fast/deep 雙模式） |
+| **Nuclei** | CVE、vulnerabilities、misconfigs、exposures、default-logins（僅 active+authorized；單頁只掃輸入頁，全網站掃已爬 URL） |
 | **Security（rule-based）** | HTTPS 檢查、HSTS/CSP 存在性/X-Frame-Options/X-Content-Type-Options、CSRF token、PII 偵測 |
 | **Security（深度，`security/`）** | SSL/TLS 深度、Cookie 旗標、資訊洩露標頭、CORS、CSP 品質、SRI 缺失、DNS/郵件（SPF/DMARC/DNSSEC）、敏感檔探測、硬編碼秘鑰、OWASP/CWE 對映、Nuclei→Kali sqlmap 攻擊鏈 |
 | **SEO** | meta title/description、H1、圖片 alt、canonical URL |

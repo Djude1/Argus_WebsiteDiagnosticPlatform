@@ -1,4 +1,6 @@
 import asyncio
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
@@ -16,6 +18,7 @@ from apps.scans.katana_scanner import run_katana
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.nuclei_scanner import run_nuclei
 from apps.scans.scan_logger import append_log
+from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.scanners import (
     PageAnalysisInput,
     analyze_page,
@@ -29,10 +32,38 @@ from apps.scans.security.dns_scanner import analyze_dns
 from apps.scans.security.header_scanner import analyze_headers
 from apps.scans.security.js_library_scanner import analyze_js_libraries
 from apps.scans.security.kali_tools import validate_findings_with_kali
+from apps.scans.security.redaction import (
+    redact_pii_in_text,
+    redact_url_query_values,
+    redact_warning_summary,
+)
 from apps.scans.security.secret_scanner import build_secret_finding, detect_secrets_in_text
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.services import assert_public_http_url
+
+
+def _new_event_loop_with_retry():
+    """Windows 偶發 WinError 10013 時，只重試尚未開始工作的 event loop 建立。"""
+    max_attempts = 3 if sys.platform == "win32" else 1
+    for attempt in range(max_attempts):
+        try:
+            return asyncio.new_event_loop()
+        except PermissionError as exc:
+            is_windows_socketpair_error = (
+                sys.platform == "win32"
+                and getattr(exc, "winerror", None) == 10013
+            )
+            if not is_windows_socketpair_error or attempt + 1 >= max_attempts:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+    raise RuntimeError("無法建立非同步事件迴圈。")
+
+
+def _run_async(coroutine_factory):
+    """用可重試的 loop factory 執行 async 工作，且延後建立 coroutine 避免未 await。"""
+    with asyncio.Runner(loop_factory=_new_event_loop_with_retry) as runner:
+        return runner.run(coroutine_factory())
 
 
 def _write_progress(
@@ -72,6 +103,34 @@ def fail_scan_job_before_start(scan_job_id: int) -> bool:
     return True
 
 
+@transaction.atomic
+def reconcile_local_scan_process_exit(scan_job_id: int) -> bool:
+    """本機子程序異常退出時，收斂所有非終態工作並冪等退款。"""
+    now = timezone.now()
+    updated = ScanJob.objects.filter(
+        id=scan_job_id,
+        status__in=[
+            ScanJob.Status.QUEUED,
+            ScanJob.Status.CRAWLING,
+            ScanJob.Status.SCANNING,
+            ScanJob.Status.AGENT_TESTING,
+        ],
+    ).update(
+        status=ScanJob.Status.FAILED,
+        completed_at=now,
+        progress={},
+        error_message="本機掃描程序異常結束。",
+        updated_at=now,
+    )
+    if not updated:
+        return False
+
+    scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
+    append_log(scan_job_id, "本機掃描程序異常結束", level="error")
+    refund_full_for_scan(scan_job.user, scan_job, reason="本機程序異常")
+    return True
+
+
 @shared_task(bind=True)
 def run_scan_job(self, scan_job_id: int) -> dict:
     now = timezone.now()
@@ -96,11 +155,16 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         current_status = ScanJob.objects.values_list("status", flat=True).get(id=scan_job_id)
         return {"status": current_status}
     scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
+    execution_plan = build_scan_execution_plan(scan_job)
+    scope_label = "單頁" if execution_plan.scope == "single" else "全網站"
     append_log(
         scan_job_id,
-        f"掃描任務啟動 — 目標：{scan_job.normalized_url}，模式：{scan_job.scan_mode}",
+        "掃描任務啟動 — 目標："
+        f"{redact_pii_in_text(redact_url_query_values(scan_job.normalized_url))}，"
+        f"範圍：{scope_label}，模式：{scan_job.scan_mode}",
     )
 
+    runtime_stage = "target_validation"
     try:
         assert_public_http_url(scan_job.normalized_url)
         # crawler callback：在 async loop 內透過 sync_to_async 寫 DB；
@@ -118,8 +182,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             scan_job_id,
             f"開始爬取，最大深度 {scan_job.max_depth}，最大頁數 {scan_job.max_pages}",
         )
-        crawled_pages, warnings, site_signals = asyncio.run(
-            crawl_site(
+        runtime_stage = "crawl"
+        crawled_pages, warnings, site_signals = _run_async(
+            lambda: crawl_site(
                 start_url=scan_job.normalized_url,
                 origin=scan_job.origin,
                 scan_job_id=scan_job.id,
@@ -130,7 +195,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 progress_callback=_crawl_progress,
             )
         )
+        warnings = redact_warning_summary(warnings)
         append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
+        runtime_stage = "analysis"
         if warnings:
             for k, v in warnings.items():
                 append_log(scan_job_id, f"爬取警告 [{k}]: {v}", level="warn")
@@ -210,7 +277,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             findings_count = len(page_findings) if not page_data["blocked_reason"] else 0
             append_log(
                 scan_job_id,
-                f"[{scanned_idx}/{scanning_total}] {page_data['url']} "
+                f"[{scanned_idx}/{scanning_total}] "
+                f"{redact_pii_in_text(redact_url_query_values(page_data['url']))} "
                 f"HTTP {page_data['status_code']} {blocked}→ {findings_count} 項問題",
             )
             raise_if_cancelled(scan_job_id)
@@ -235,17 +303,10 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # 用延伸的 done/total 讓進度條在這段期間持續往前走。
         deep_scan_total = scanning_total + 4
 
-        # 並行執行 Katana（JS 秘鑰 / 技術棧）+ Nuclei（資安掃描）
+        # 主動工具必須同時遵守「單頁／全網站」範圍與 active 授權。
+        # 被動模式不發 Nuclei/Katana 探針；單頁主動只讓 Nuclei 掃輸入頁，
+        # 不啟動 Katana 整站探索。
         raise_if_cancelled(scan_job_id)
-        deep_mode = (
-            scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
-            and scan_job.active_testing_authorized
-        )
-        append_log(
-            scan_job_id,
-            "資安補充掃描開始 — Katana（JS 秘鑰 / 技術棧）並行 Nuclei"
-            f"（{'深度付費' if deep_mode else '快速免費'}）",
-        )
         # 收集已爬取的頁面 URL（排除被阻擋的頁面），整批餵給 Nuclei
         crawled_urls = [
             assert_public_http_url(p["url"])
@@ -253,30 +314,119 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             if not p.get("blocked_reason")
         ]
         validated_target = assert_public_http_url(scan_job.normalized_url)
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f_katana = executor.submit(
-                run_katana,
-                validated_target,
-                scan_job.max_depth,
-                scan_job.max_pages,
-            )
-            f_nuclei = executor.submit(
-                run_nuclei,
-                validated_target,
+        katana_findings: list[dict] = []
+        katana_tech: list[str] = []
+        nuclei_findings: list[dict] = []
+
+        if execution_plan.run_katana:
+            append_log(
                 scan_job_id,
-                deep=deep_mode,
-                extra_urls=crawled_urls,
+                "全網站主動掃描：Katana 與 Nuclei 執行受控探測",
             )
-        try:
-            katana_findings, katana_tech = f_katana.result()
-        except Exception as exc:  # noqa: BLE001
-            append_log(scan_job_id, f"Katana 略過（{exc.__class__.__name__}）", level="warn")
-            katana_findings, katana_tech = [], []
-        try:
-            nuclei_findings = f_nuclei.result()
-        except Exception as exc:  # noqa: BLE001
-            append_log(scan_job_id, f"Nuclei 略過（{exc.__class__.__name__}）", level="warn")
-            nuclei_findings = []
+            active_rps = max(int(settings.ARGUS_ACTIVE_MAX_RPS), 1)
+            katana_rps = max(active_rps // 2, 1)
+            nuclei_rps = max(active_rps - katana_rps, 1)
+
+            if active_rps == 1:
+                # 只有 1 RPS 預算時不可並行兩個最低各 1 RPS 的工具，否則總流量會翻倍。
+                try:
+                    katana_findings, katana_tech = run_katana(
+                        validated_target,
+                        scan_job.max_depth,
+                        scan_job.max_pages,
+                        rate_limit=1,
+                        scan_job_id=scan_job_id,
+                    )
+                except ScanCancelled:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    append_log(
+                        scan_job_id,
+                        f"Katana 略過（{exc.__class__.__name__}）",
+                        level="warn",
+                    )
+                raise_if_cancelled(scan_job_id)
+                try:
+                    nuclei_findings = run_nuclei(
+                        validated_target,
+                        scan_job_id,
+                        deep=True,
+                        extra_urls=crawled_urls,
+                        rate_limit=1,
+                    )
+                except ScanCancelled:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    append_log(
+                        scan_job_id,
+                        f"Nuclei 略過（{exc.__class__.__name__}）",
+                        level="warn",
+                    )
+            else:
+                # 預算至少 2 RPS 才並行，兩個 process 的 RPS 合計不得超過總上限。
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    f_katana = executor.submit(
+                        run_katana,
+                        validated_target,
+                        scan_job.max_depth,
+                        scan_job.max_pages,
+                        rate_limit=katana_rps,
+                        scan_job_id=scan_job_id,
+                    )
+                    f_nuclei = executor.submit(
+                        run_nuclei,
+                        validated_target,
+                        scan_job_id,
+                        deep=True,
+                        extra_urls=crawled_urls,
+                        rate_limit=nuclei_rps,
+                    )
+                try:
+                    katana_findings, katana_tech = f_katana.result()
+                except ScanCancelled:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    append_log(
+                        scan_job_id,
+                        f"Katana 略過（{exc.__class__.__name__}）",
+                        level="warn",
+                    )
+                try:
+                    nuclei_findings = f_nuclei.result()
+                except ScanCancelled:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    append_log(
+                        scan_job_id,
+                        f"Nuclei 略過（{exc.__class__.__name__}）",
+                        level="warn",
+                    )
+        elif execution_plan.run_nuclei:
+            append_log(
+                scan_job_id,
+                "單頁主動掃描：Nuclei 僅掃描輸入頁，略過 Katana 整站探索",
+            )
+            try:
+                nuclei_findings = run_nuclei(
+                    validated_target,
+                    scan_job_id,
+                    deep=True,
+                    extra_urls=[],
+                    rate_limit=settings.ARGUS_ACTIVE_MAX_RPS,
+                )
+            except ScanCancelled:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                append_log(
+                    scan_job_id,
+                    f"Nuclei 略過（{exc.__class__.__name__}）",
+                    level="warn",
+                )
+        else:
+            append_log(
+                scan_job_id,
+                "被動模式：略過 Nuclei、Katana 與其他主動探測工具",
+            )
         _write_progress(
             scan_job.id,
             phase="scanning",
@@ -383,14 +533,17 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             Finding.objects.create(scan_job=scan_job, page=None, **tagged)
         all_findings.extend(robots_disclosure)
 
-        # === 敏感檔案外洩主動探測（content discovery，僅付費 active+authorized）===
-        if deep_mode:
+        # === 敏感檔案外洩主動探測（僅全網站 active+authorized）===
+        if execution_plan.run_exposure:
             raise_if_cancelled(scan_job_id)
             append_log(scan_job_id, "敏感檔案外洩探測開始（主動內容探測，繞連結直接探隱藏檔）")
             try:
-                probe_results = asyncio.run(
-                    exposure_scanner.probe_paths(
-                        scan_job.normalized_url, scan_job.origin, scan_job_id
+                probe_results = _run_async(
+                    lambda: exposure_scanner.probe_paths(
+                        scan_job.normalized_url,
+                        scan_job.origin,
+                        scan_job_id,
+                        robots_disallow=site_signals.get("robots_disallow") or [],
                     )
                 )
                 exposure_findings = [
@@ -405,12 +558,19 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                     f"敏感檔案外洩探測完成：探測 {len(probe_results)} 路徑，"
                     f"發現 {len(exposure_findings)} 項外洩",
                 )
+            except ScanCancelled:
+                raise
             except Exception as exc:  # noqa: BLE001 — 探測失敗不影響主掃描
                 append_log(
                     scan_job_id,
                     f"敏感檔案外洩探測略過（{exc.__class__.__name__}）",
                     level="warn",
                 )
+        elif execution_plan.active_authorized:
+            append_log(
+                scan_job_id,
+                "單頁範圍：略過整站敏感檔案路徑探測",
+            )
 
         if katana_tech:
             updated_warnings = dict(scan_job.warning_summary or {})
@@ -444,7 +604,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # Task 6：Agent 在 Kali fallback 之前執行；agent 確認的 security finding 餵進 scoring。
         agent_meta = {}
         agent_result = None
-        if settings.ARGUS_AGENT_ENABLED:
+        if settings.ARGUS_AGENT_ENABLED and execution_plan.run_agent:
             raise_if_cancelled(scan_job_id)
             agent_phase_started = timezone.now().isoformat()
             scan_job.status = ScanJob.Status.AGENT_TESTING
@@ -458,7 +618,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             try:
                 from apps.agent.runner import run_agent_for_scan
 
-                agent_result = asyncio.run(run_agent_for_scan(scan_job))
+                agent_result = _run_async(lambda: run_agent_for_scan(scan_job))
                 if agent_result:
                     agent_meta = {
                         "status": agent_result.status,
@@ -489,17 +649,22 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         )
             except Exception as exc:  # noqa: BLE001 — agent 失敗不應讓整個掃描失敗
                 agent_meta = {"status": "error", "error": exc.__class__.__name__}
+        elif settings.ARGUS_AGENT_ENABLED:
+            append_log(
+                scan_job_id,
+                "Agent 略過：僅全網站且已授權的主動掃描可執行",
+            )
 
         # Task 6：Agent 確認的 security finding 餵進 scoring（DB 落地由 runner 負責）
         if agent_result:
             all_findings.extend(agent_result.security_findings)
 
         # === Kali 主動驗證 fallback（agent 之後、scoring 之前）===
-        # 僅 deep_mode（active + authorized）才嘗試；ARGUS_KALI_ENABLED 等其餘 gating
+        # 僅 active + authorized 才嘗試；ARGUS_KALI_ENABLED 等其餘 gating
         # 由 validate_findings_with_kali → run_sqlmap 的三重鎖負責，預設完全 inert。
         # Redis fingerprints 讓 fallback 只處理 agent 沒驗證過的獨特 target（一次 batch）。
         # ScanCancelled 必須原樣重拋，讓合作式取消傳遞到 cancelled/refund 分支。
-        if deep_mode:
+        if execution_plan.run_kali:
             raise_if_cancelled(scan_job_id)
             try:
                 kali_findings = validate_findings_with_kali(scan_job_id, crawled_urls)
@@ -625,7 +790,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             append_log(scan_job_id, f"超時退款失敗：{exc.__class__.__name__}", level="error")
             raise RuntimeError("掃描超時退款未完成。") from None
         return {"status": "timeout"}
-    except Exception:
+    except Exception as exc:
         if is_cancelled(scan_job_id):
             append_log(scan_job_id, "掃描已被使用者終止", level="warn")
             try:
@@ -638,7 +803,11 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 )
                 raise RuntimeError("掃描取消退款未完成。") from None
             return {"status": "cancelled"}
-        append_log(scan_job_id, "掃描執行失敗", level="error")
+        append_log(
+            scan_job_id,
+            f"掃描執行失敗 [{runtime_stage}:{exc.__class__.__name__}]",
+            level="error",
+        )
         scan_job.status = ScanJob.Status.FAILED
         scan_job.error_message = "掃描執行失敗。"
         scan_job.completed_at = timezone.now()

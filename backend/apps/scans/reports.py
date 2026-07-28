@@ -1,4 +1,3 @@
-import re
 from collections import OrderedDict
 from pathlib import Path
 
@@ -6,12 +5,7 @@ from django.conf import settings
 from docx import Document
 
 from apps.scans.models import ScanJob
-from apps.scans.scanners import (
-    CREDIT_CARD_PATTERN,
-    EMAIL_PATTERN,
-    TW_MOBILE_PATTERN,
-    TW_NATIONAL_ID_PATTERN,
-)
+from apps.scans.security.redaction import redact_pii_in_text
 
 
 def get_severity_display(severity: str) -> str:
@@ -38,20 +32,6 @@ def get_remediation_label(severity: str) -> str:
     return "建議修補"
 
 
-def _mask_email(match: re.Match) -> str:
-    email = match.group(0)
-    local, _, domain = email.partition("@")
-    visible = local[:2]
-    return f"{visible}{'*' * max(len(local) - len(visible), 1)}@{domain}"
-
-
-def _mask_digits(match: re.Match, keep_start: int, keep_end: int) -> str:
-    digits = re.sub(r"\D", "", match.group(0))
-    if len(digits) <= keep_start + keep_end:
-        return "*" * len(digits)
-    return digits[:keep_start] + "*" * (len(digits) - keep_start - keep_end) + digits[-keep_end:]
-
-
 def mask_pii_evidence(text: str) -> str:
     """報告展示層遮罩：evidence 含原始個資（email/手機/身分證/信用卡）就地遮罩，
     這份 .docx 會被下載、轉寄、存檔，直接印出原始內容有明確合規風險。只保留頭尾供
@@ -62,13 +42,7 @@ def mask_pii_evidence(text: str) -> str:
     security/exposure_scanner.py 的敏感檔案外洩 finding 也會把命中檔案的原始內容
     片段放進 evidence，一樣可能含未遮罩個資，用 rule_id 白名單很容易漏掉這類來源；
     正則對不含 PII 樣式的文字（如 header 名稱、URL）是無操作，不會誤傷正常內容。"""
-    if not text:
-        return text
-    masked = EMAIL_PATTERN.sub(_mask_email, text)
-    masked = TW_MOBILE_PATTERN.sub(lambda m: _mask_digits(m, 2, 2), masked)
-    masked = TW_NATIONAL_ID_PATTERN.sub(lambda m: m.group(0)[0] + "*" * 8, masked)
-    masked = CREDIT_CARD_PATTERN.sub(lambda m: _mask_digits(m, 4, 4), masked)
-    return masked
+    return redact_pii_in_text(text)
 
 
 def _group_findings_for_report(findings) -> list[dict]:

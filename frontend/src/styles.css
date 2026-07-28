@@ -4503,22 +4503,26 @@
 }
 
 /* 掃描預估費用 */
-.scan-estimate-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
+.scan-estimate-row { display: flex; align-items: flex-start; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
 .scan-estimate-btn {
   padding: .4rem .9rem; border: 1px solid #6366f1; border-radius: 8px;
-  background: transparent; color: #818cf8; cursor: pointer; font-size: .85rem;
-  transition: background .15s;
+  background: #fff; color: #4f46e5; cursor: pointer; font-size: .85rem; font-weight: 600;
+  transition: background .15s, border-color .15s, box-shadow .15s;
 }
 .scan-estimate-btn:hover { background: rgba(99,102,241,.1); }
 .scan-estimate-btn:disabled { opacity: .5; cursor: default; }
-.scan-estimate-result {
-  display: flex; gap: .75rem; align-items: center; font-size: .875rem; color: #e2e8f0;
-  padding: .4rem .75rem; border-radius: 8px; background: rgba(255,255,255,.05);
+.scan-estimate-btn:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, .45);
+  outline-offset: 2px;
 }
-.scan-estimate-result.conf-high { border-left: 3px solid #22c55e; }
-.scan-estimate-result.conf-medium { border-left: 3px solid #eab308; }
-.scan-estimate-result.conf-low { border-left: 3px solid #ef4444; }
-.scan-estimate-conf { color: #64748b; font-size: .8rem; }
+.scan-estimate-result {
+  display: flex; width: 100%; gap: .5rem .75rem; align-items: center; flex-wrap: wrap;
+  font-size: .875rem; line-height: 1.5; color: #0f172a;
+  padding: .65rem .8rem; border: 1px solid #cbd5e1; border-radius: 8px;
+  background: #f8fafc;
+}
+.scan-estimate-result strong { color: #4338ca; }
+.scan-estimate-conf { color: #475569; font-size: .8rem; }
 
 /* ===== Responsive polish：收斂手機版密度與可點擊範圍 ===== */
 

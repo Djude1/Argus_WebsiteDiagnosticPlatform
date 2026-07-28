@@ -16,11 +16,21 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import shutil
 import subprocess
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.conf import settings
+
+from apps.scans.cancellation import ScanCancelled
+from apps.scans.process_runner import run_cancellable_process
+from apps.scans.security.redaction import (
+    mask_sensitive_value,
+    redact_pii_in_text,
+    redact_url_query_values,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,17 +95,26 @@ def run_katana(
     url: str,
     max_depth: int = 3,
     max_pages: int = 50,
+    *,
+    rate_limit: int = 1,
+    scan_job_id: int = 0,
 ) -> tuple[list[dict], list[str]]:
     """以本機 katana binary 執行並回傳 (findings, tech_stack)。
 
-    max_pages 保留於簽名供未來加入爬行頁數上限使用，目前由 katana 自行決定。
+    Katana 沒有精確頁數上限；max_pages 會換算成 1～45 秒的爬取預算，
+    並另外限制回應大小、query 去重、RPS 與 concurrency。
     任何錯誤（binary 不存在、timeout、parse 失敗）皆靜默回傳 ([], [])。
     """
     if not shutil.which("katana"):
         logger.warning("katana_scanner: katana binary 不存在，略過")
         return [], []
 
-    timeout = getattr(settings, "KATANA_TIMEOUT", 90)
+    timeout = min(getattr(settings, "KATANA_TIMEOUT", 60), 60)
+    crawl_duration_seconds = min(max(int(max_pages), 1), 45)
+    effective_rate_limit = max(int(rate_limit), 1)
+    parsed_target = urlsplit(url)
+    exact_origin = f"{parsed_target.scheme}://{parsed_target.netloc}"
+    exact_origin_scope = rf"^{re.escape(exact_origin)}(?:/|$)"
 
     cmd = [
         "katana",
@@ -108,17 +127,24 @@ def run_katana(
         "-j",
         "-silent",
         "-timeout", "10",
-        "-rl", "10",
-        "-c", "5",
+        "-ct", f"{crawl_duration_seconds}s",
+        "-mrs", str(2 * 1024 * 1024),
+        "-iqp",
+        "-cs", exact_origin_scope,
+        "-rl", str(effective_rate_limit),
+        "-c", "2",
+        "-H", f"User-Agent: {settings.ARGUS_SCANNER_USER_AGENT}",
+        "-duc",
     ]
 
     try:
-        result = subprocess.run(
+        result = run_cancellable_process(
             cmd,
-            capture_output=True,
-            text=True,
+            scan_job_id=scan_job_id,
             timeout=timeout,
         )
+    except ScanCancelled:
+        raise
     except subprocess.TimeoutExpired:
         logger.warning("katana_scanner: Katana 超時（%ds），略過", timeout)
         return [], []
@@ -128,9 +154,8 @@ def run_katana(
 
     if result.returncode != 0 and not result.stdout.strip():
         logger.warning(
-            "katana_scanner: exit=%d stderr=%s",
+            "katana_scanner: exit=%d，略過",
             result.returncode,
-            result.stderr[:200],
         )
         return [], []
 
@@ -236,10 +261,10 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
             severity = sev
             break
 
-    # 遮罩敏感值（只保留前 6 字元）
-    masked = (match_val[:6] + "…") if len(match_val) > 6 else match_val
+    safe_endpoint = redact_pii_in_text(redact_url_query_values(str(endpoint)))
+    masked = mask_sensitive_value(match_val)
 
-    evidence_parts = [f"來源：{endpoint}"]
+    evidence_parts = [f"來源：{safe_endpoint}"]
     if line_no:
         evidence_parts.append(f"行號：{line_no}")
     evidence_parts.append(f"比對值（遮罩）：{masked}")
@@ -249,13 +274,13 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
         "category": "security",
         "severity": severity,
         **_evidence_metadata(
-            _rule_id("KATANA_JS_SECRET", f"{endpoint}:{secret_type}:{line_no}"),
+            _rule_id("KATANA_JS_SECRET", f"{safe_endpoint}:{secret_type}:{line_no}"),
             evidence,
             "katana_jsluice",
         ),
         "title": f"JS 檔案含硬編碼秘鑰：{secret_type}",
         "description": (
-            f"在 {endpoint} 偵測到疑似硬編碼的 {secret_type}。"
+            f"在 {safe_endpoint} 偵測到疑似硬編碼的 {secret_type}。"
             "硬編碼秘鑰一旦被搜尋引擎或工具掃描到，攻擊者可直接利用，"
             "無需進一步滲透即可存取對應服務。"
         ),
@@ -273,7 +298,7 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
         "ai_handoff_prompt": (
             "我網站的前端 JS 檔案中偵測到硬編碼秘鑰，請協助分析風險與修復方向：\n"
             f"- 秘鑰類型：{secret_type}\n"
-            f"- 偵測位置：{endpoint}\n"
+            f"- 偵測位置：{safe_endpoint}\n"
             "請提供：1) 立即應對步驟 2) 長期防範架構建議 3) 如何確認秘鑰未被惡意使用。"
             "不要輸出完整修復程式碼。"
         ),
@@ -306,18 +331,19 @@ def _detect_vite_dev_exposure(record: dict[str, Any]) -> dict | None:
     if not (is_vite or is_source):
         return None
 
-    evidence = f"Katana 偵測：GET {endpoint} → HTTP {status_int}（應回傳 404）"
+    safe_endpoint = redact_pii_in_text(redact_url_query_values(str(endpoint)))
+    evidence = f"Katana 偵測：GET {safe_endpoint} → HTTP {status_int}（應回傳 404）"
     return {
         "category": "security",
         "severity": "critical",
         **_evidence_metadata(
-            _rule_id("KATANA_VITE_DEV_EXPOSURE", endpoint),
+            _rule_id("KATANA_VITE_DEV_EXPOSURE", safe_endpoint),
             evidence,
             "katana_tech_detection",
         ),
         "title": "生產環境暴露 Vite Dev Server 原始碼",
         "description": (
-            f"偵測到 {endpoint} 回傳 HTTP {status_int}，"
+            f"偵測到 {safe_endpoint} 回傳 HTTP {status_int}，"
             "這表示網站在生產環境中執行了 Vite/開發用伺服器，導致完整前端原始碼（.jsx/.tsx、"
             "node_modules 依賴快取）對外公開。攻擊者可直接讀取應用程式邏輯、路由結構、"
             "API 端點，大幅降低逆向工程的難度。"
@@ -335,7 +361,7 @@ def _detect_vite_dev_exposure(record: dict[str, Any]) -> dict | None:
         "priority_score": 95.0,
         "ai_handoff_prompt": (
             "我的網站在生產環境暴露了 Vite dev server 原始碼，請協助分析影響與修復：\n"
-            f"- 暴露端點範例：{endpoint}\n"
+            f"- 暴露端點範例：{safe_endpoint}\n"
             "請說明：1) 攻擊者能從原始碼中取得什麼資訊 "
             "2) 正確的生產部署流程 3) 如何確認修復後原始碼不再外洩。"
         ),
@@ -382,18 +408,23 @@ def _extract_endpoint_finding(record: dict[str, Any]) -> dict | None:
     if "/api/" not in low and not low.endswith("/api"):
         return None
 
-    evidence = f"Katana JS 解析：{endpoint} → HTTP {status_int}（來源：{source}）"
+    safe_endpoint = redact_pii_in_text(redact_url_query_values(str(endpoint)))
+    safe_source = redact_pii_in_text(redact_url_query_values(str(source)))
+    evidence = (
+        f"Katana JS 解析：{safe_endpoint} → HTTP {status_int}"
+        f"（來源：{safe_source}）"
+    )
     return {
         "category": "security",
         "severity": "medium",
         **_evidence_metadata(
-            _rule_id("KATANA_HIDDEN_API_ENDPOINT", f"{endpoint}:{source}"),
+            _rule_id("KATANA_HIDDEN_API_ENDPOINT", f"{safe_endpoint}:{safe_source}"),
             evidence,
             "katana_js_endpoint",
         ),
-        "title": f"JS 中發現隱藏 API 端點：{endpoint}",
+        "title": f"JS 中發現隱藏 API 端點：{safe_endpoint}",
         "description": (
-            f"Katana 從 JavaScript 原始碼中解析出 API 端點 {endpoint}，"
+            f"Katana 從 JavaScript 原始碼中解析出 API 端點 {safe_endpoint}，"
             f"且該端點回應 HTTP {status_int}。此類端點可能未在文件中公開，"
             "若缺乏適當的存取控制，可能成為攻擊面。"
         ),
@@ -409,7 +440,7 @@ def _extract_endpoint_finding(record: dict[str, Any]) -> dict | None:
         "priority_score": 60.0,
         "ai_handoff_prompt": (
             "我網站的 JS 檔案中發現隱藏 API 端點，請協助評估風險：\n"
-            f"- 端點：{endpoint}\n"
+            f"- 端點：{safe_endpoint}\n"
             f"- HTTP 狀態：{status_int}\n"
             "請說明此類端點的常見攻擊向量與防護方式。"
         ),

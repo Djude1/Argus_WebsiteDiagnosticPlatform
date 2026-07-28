@@ -1,8 +1,8 @@
 """Nuclei 資安掃描整合。
 
-以本機 nuclei binary 執行弱點掃描，支援兩種模式：
-- fast（免費）：精選模板 + 6 分鐘上限
-- deep（付費）：全部模板 + 12 分鐘上限
+以本機 nuclei binary 執行弱點掃描，支援兩種內部工具設定：
+- fast：精選模板 + 60 秒上限
+- deep：中風險以上模板 + 5 分鐘上限
 
 任何錯誤皆靜默回傳 []，不影響主掃描流程。
 """
@@ -14,7 +14,12 @@ import shutil
 import subprocess
 import tempfile
 
+from django.conf import settings
+
+from apps.scans.cancellation import ScanCancelled
+from apps.scans.process_runner import run_cancellable_process
 from apps.scans.scan_logger import append_log
+from apps.scans.security.redaction import redact_pii_in_text, redact_url_query_values
 
 _PRIORITY: dict[str, float] = {
     "critical": 90.0,
@@ -42,21 +47,27 @@ def run_nuclei(
     *,
     deep: bool = False,
     extra_urls: list[str] | None = None,
+    rate_limit: int | None = None,
 ) -> list[dict]:
     """執行 Nuclei 掃描並回傳 Finding dict 列表。
 
     deep=False：精選模板
-    （cves/vulnerabilities/misconfigurations/exposures/default-logins），6 分鐘硬限。
-    deep=True：全部模板，12 分鐘硬限。
+    （cves/vulnerabilities/misconfigurations/exposures/default-logins），60 秒硬限。
+    deep=True：中風險以上模板，5 分鐘硬限。
     extra_urls：額外的掃描目標（如已爬取的頁面列表），與 url 合併後整批掃描。
+    rate_limit：整個 Nuclei process 的每秒請求上限。
     binary 不存在或任何例外皆 silent-fail 回傳 []。
     """
     if not shutil.which("nuclei"):
         append_log(scan_job_id, "Nuclei binary 未安裝，略過", level="warn")
         return []
 
-    hard_timeout = 720 if deep else 360
-    mode_label = "深度（付費）" if deep else "快速（免費）"
+    hard_timeout = 300 if deep else 60
+    mode_label = "主動完整" if deep else "受限精選"
+    effective_rate_limit = max(
+        int(rate_limit if rate_limit is not None else (2 if deep else 5)),
+        1,
+    )
 
     # 合併並去重 URL 列表（保留插入順序，入口 URL 在最前）
     all_urls: list[str] = list(dict.fromkeys([url, *(extra_urls or [])]))
@@ -68,7 +79,7 @@ def run_nuclei(
     else:
         fd, url_file = tempfile.mkstemp(suffix=".txt", prefix="nuclei_urls_")
         os.close(fd)
-        with open(url_file, "w") as f:
+        with open(url_file, "w", encoding="utf-8") as f:
             f.write("\n".join(all_urls))
         target_args = ["-l", url_file]
 
@@ -77,20 +88,34 @@ def run_nuclei(
         *target_args,
         "-j",
         "-silent",
+        "-no-stdin",
+        "-duc",
+        "-lna",
+        "-ni",
         "-dr",
-        "-timeout", "30" if deep else "15",
-        "-c", "50" if deep else "25",
+        "-or",
+        "-H", f"User-Agent: {settings.ARGUS_SCANNER_USER_AGENT}",
+        "-timeout", "15" if deep else "10",
+        "-rl", str(effective_rate_limit),
+        "-bs", "5" if deep else "3",
+        "-c", "5" if deep else "3",
+        "-mhe", "20",
+        "-rsr", str(2 * 1024 * 1024),
+        "-pt", "http",
+        "-etags", "dos,fuzz,creds-stuffing,token-spray",
+        "-severity", "critical,high,medium",
     ]
     if not deep:
         cmd += ["-tags", "cves,vulnerabilities,misconfigurations,exposures,default-logins"]
 
     try:
-        result = subprocess.run(
+        result = run_cancellable_process(
             cmd,
-            capture_output=True,
-            text=True,
+            scan_job_id=scan_job_id,
             timeout=hard_timeout,
         )
+    except ScanCancelled:
+        raise
     except subprocess.TimeoutExpired:
         append_log(scan_job_id, f"Nuclei 超時（{hard_timeout}s），略過", level="warn")
         return []
@@ -148,11 +173,12 @@ def _build_finding(record: dict) -> dict:
     description = info.get("description") or f"Nuclei 模板 {template_id} 偵測到安全問題。"
     remediation = info.get("remediation") or "請參考官方修補建議或對應 CVE 詳情。"
     matched_at = record.get("matched-at") or record.get("host", "")
+    safe_matched_at = redact_pii_in_text(redact_url_query_values(str(matched_at)))
 
     extracted = record.get("extracted-results") or []
-    evidence_parts = [f"命中 URL：{matched_at}", f"Template：{template_id}"]
+    evidence_parts = [f"命中 URL：{safe_matched_at}", f"Template：{template_id}"]
     if extracted:
-        evidence_parts.append(f"提取結果：{'; '.join(str(r) for r in extracted[:3])}")
+        evidence_parts.append(f"提取結果：{len(extracted)} 筆（內容已遮罩）")
 
     raw_tags = info.get("tags") or []
     tags: list[str] = (
@@ -181,7 +207,7 @@ def _build_finding(record: dict) -> dict:
             f"Nuclei 在你的網站偵測到資安問題，請協助分析：\n"
             f"- 問題：{name}\n"
             f"- 嚴重度：{severity}\n"
-            f"- 命中位置：{matched_at}\n"
+            f"- 命中位置：{safe_matched_at}\n"
             f"請說明此問題的影響範圍、利用方式與修復優先順序。"
         ),
     }

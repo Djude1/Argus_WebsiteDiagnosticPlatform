@@ -2,11 +2,11 @@
 
 補上 Argus 最大缺口：crawler 只做連結跟隨 BFS，掃不到「沒有任何頁面連到」的
 隱藏敏感檔（.env / .git / 備份 / 後台 / actuator / debug API …）。本模組：
-1. 以 robots.txt Disallow + sitemap.xml + 內建高訊號字典組出探測清單。
+1. 以 robots.txt Disallow + 內建高訊號字典組出探測清單。
 2. 重用 Playwright（繞 CF）逐一 GET，套速率限制 + 取消檢查點（純讀取、不修改目標）。
 3. 對命中檔案做檔案型態分類 + 秘鑰偵測 + PII 偵測，產生新手易讀、含實際外洩片段的 Finding。
 
-僅在付費（active + authorized）模式由 tasks.py 呼叫。任何例外 silent-fail。
+僅在全網站且 active + authorized 模式由 tasks.py 呼叫。任何例外 silent-fail。
 純分析函式（parse/build/analyze）與 IO（probe_paths）分離，方便單元測試。
 """
 from __future__ import annotations
@@ -16,14 +16,14 @@ import re
 import time
 import uuid
 from urllib.parse import urljoin, urlparse
-from xml.etree import ElementTree
 
 from asgiref.sync import sync_to_async
 from config.egress import playwright_launch_kwargs
 from django.conf import settings
 
-from apps.scans.cancellation import is_cancelled
+from apps.scans.cancellation import ScanCancelled, is_cancelled
 from apps.scans.scanners import detect_pii_in_text, make_finding
+from apps.scans.security.redaction import redact_pii_in_text, redact_url_query_values
 from apps.scans.security.secret_scanner import (
     detect_secrets_in_text,
     redact_secrets_in_text,
@@ -94,22 +94,12 @@ def parse_robots_disallow(robots_text: str) -> list[str]:
     return paths
 
 
-def parse_sitemap_urls(sitemap_xml: str) -> list[str]:
-    """從 sitemap.xml 抽出 <loc> URL。空 / 例外回 []。"""
-    try:
-        root = ElementTree.fromstring(sitemap_xml)
-        return [el.text.strip() for el in root.iter() if el.tag.endswith("loc") and el.text]
-    except Exception:
-        return []
-
-
 def build_probe_targets(
     origin: str,
     *,
     robots_disallow: list[str] | None = None,
-    sitemap_urls: list[str] | None = None,
 ) -> list[str]:
-    """合併內建字典 + robots Disallow + sitemap，組出 same-origin 探測 URL（去重、上限）。"""
+    """合併內建字典 + robots Disallow，組出 same-origin 探測 URL（去重、上限）。"""
     targets: list[str] = []
     seen: set[str] = set()
 
@@ -131,8 +121,6 @@ def build_probe_targets(
         _add(path)
     for path in robots_disallow or []:
         _add(path)
-    for url in sitemap_urls or []:
-        _add(url)
     return targets[:MAX_PROBE_TARGETS]
 
 
@@ -266,6 +254,7 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
         if r.get("soft_404"):
             continue
         url = r.get("url") or ""
+        safe_url = redact_pii_in_text(redact_url_query_values(str(url)))
         body = r.get("body") or ""
         info = classify_exposure(url)
         if info is None:
@@ -300,9 +289,12 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             severity = "high"
 
         # 證據：命中位置 + body 片段 + 秘鑰摘要 + PII 摘要
-        evidence_parts = [f"命中：GET {url} → HTTP {status}"]
-        # 片段先遮罩秘鑰值，避免證據本身造成二次外洩
-        excerpt = redact_secrets_in_text(body).strip().replace("\r", "")
+        evidence_parts = [f"命中：GET {safe_url} → HTTP {status}"]
+        # 片段在寫 DB 前同時遮罩秘鑰與 PII，避免證據本身造成二次外洩。
+        excerpt = redact_pii_in_text(redact_secrets_in_text(body)).strip().replace(
+            "\r",
+            "",
+        )
         if excerpt:
             evidence_parts.append("檔案內容片段：\n" + excerpt[:400])
         if secrets:
@@ -313,7 +305,7 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             evidence_parts.append(f"偵測到疑似個資：{', '.join(pii_bits)}")
 
         description = (
-            f"發現可公開存取的{info['label']}：{url}。{info['why']}"
+            f"發現可公開存取的{info['label']}：{safe_url}。{info['why']}"
         )
         if secrets:
             description += f"\n⚠️ 此檔內含 {len(secrets)} 筆疑似秘鑰，風險已提升。"
@@ -348,6 +340,10 @@ def analyze_robots_disclosure(disallow: list[str]) -> list[dict]:
     ]
     if len(sensitive) < 3:
         return []
+    safe_sensitive = [
+        redact_pii_in_text(redact_url_query_values(path))
+        for path in sensitive[:30]
+    ]
     return [make_finding(
         category="security",
         severity="low",
@@ -362,7 +358,10 @@ def analyze_robots_disclosure(disallow: list[str]) -> list[dict]:
             "不要用 robots.txt 來「隱藏」敏感路徑。正確做法是讓這些檔案根本無法被 web 存取"
             "（移出根目錄或加認證），robots.txt 只列真正想控制索引的公開頁面。"
         ),
-        evidence="robots.txt 中的敏感 Disallow：\n" + "\n".join(f"• {p}" for p in sensitive[:30]),
+        evidence=(
+            "robots.txt 中的敏感 Disallow：\n"
+            + "\n".join(f"• {path}" for path in safe_sensitive)
+        ),
         evidence_source="rule_engine",
         impact_area="information_exposure",
         confidence=0.95,
@@ -370,10 +369,17 @@ def analyze_robots_disclosure(disallow: list[str]) -> list[dict]:
     )]
 
 
-async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> list[dict]:
+async def probe_paths(
+    normalized_url: str,
+    origin: str,
+    scan_job_id: int,
+    *,
+    robots_disallow: list[str] | None = None,
+) -> list[dict]:
     """重用 Playwright（繞 CF）探測敏感路徑，回傳 raw 結果。任何例外回 []（不影響主掃描）。
 
-    自行抓 robots.txt / sitemap.xml 補進目標；套用 active 模式速率限制與取消檢查點。
+    優先重用主爬蟲取得的 robots.txt Disallow；沒有傳入時才自行抓取。
+    套用 active 模式速率限制與取消檢查點。
     """
     from playwright.async_api import async_playwright  # 延遲匯入，避免無 worker 環境 import 失敗
 
@@ -392,35 +398,46 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                 user_agent=settings.ARGUS_SCANNER_USER_AGENT,
             )
             try:
-                # 先抓 robots / sitemap 補進目標
-                robots_disallow: list[str] = []
-                sitemap_urls: list[str] = []
-                try:
-                    robots_url = assert_public_http_url(f"{origin}/robots.txt")
-                    resp = await context.request.get(
-                        robots_url,
-                        timeout=10000,
+                async def _paced_get(raw_url: str, *, timeout: int):
+                    """所有 exposure HTTP 請求共用同一個取消檢查與 RPS 時鐘。"""
+                    nonlocal last_at
+                    cancelled = await sync_to_async(
+                        is_cancelled,
+                        thread_sensitive=True,
+                    )(scan_job_id)
+                    if cancelled:
+                        raise ScanCancelled()
+                    wait = min_interval - (time.perf_counter() - last_at)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                    last_at = time.perf_counter()
+                    return await context.request.get(
+                        assert_public_http_url(raw_url),
+                        timeout=timeout,
                         max_redirects=0,
                     )
-                    if resp.ok:
-                        robots_disallow = parse_robots_disallow(await resp.text())
-                except Exception:
-                    pass
-                try:
-                    sitemap_url = assert_public_http_url(f"{origin}/sitemap.xml")
-                    resp = await context.request.get(
-                        sitemap_url,
-                        timeout=10000,
-                        max_redirects=0,
-                    )
-                    if resp.ok:
-                        # 上限 512KB，避免惡意 sitemap 的 XML entity expansion 撐爆記憶體
-                        sitemap_urls = parse_sitemap_urls((await resp.text())[:512_000])
-                except Exception:
-                    pass
+
+                effective_robots_disallow = robots_disallow
+                if effective_robots_disallow is None:
+                    effective_robots_disallow = []
+                    try:
+                        robots_url = assert_public_http_url(f"{origin}/robots.txt")
+                        resp = await _paced_get(
+                            robots_url,
+                            timeout=10000,
+                        )
+                        if resp.ok:
+                            effective_robots_disallow = parse_robots_disallow(
+                                await resp.text()
+                            )
+                    except ScanCancelled:
+                        raise
+                    except Exception:
+                        pass
 
                 targets = build_probe_targets(
-                    origin, robots_disallow=robots_disallow, sitemap_urls=sitemap_urls
+                    origin,
+                    robots_disallow=effective_robots_disallow,
                 )
 
                 # soft-404 baseline：SPA / catch-all 會對任意路徑回 200 + 同一頁；
@@ -429,30 +446,24 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                 for _ in range(2):
                     rnd = f"{origin}/zz-nonexist-{uuid.uuid4().hex}"
                     try:
-                        bresp = await context.request.get(
-                            assert_public_http_url(rnd),
+                        bresp = await _paced_get(
+                            rnd,
                             timeout=12000,
-                            max_redirects=0,
                         )
                         if 200 <= bresp.status < 300:
                             baselines.append(_norm_body((await bresp.text())[:20000]))
+                    except ScanCancelled:
+                        raise
                     except Exception:
                         pass
 
                 for url in targets:
-                    if await sync_to_async(is_cancelled, thread_sensitive=True)(scan_job_id):
-                        break
-                    wait = min_interval - (time.perf_counter() - last_at)
-                    if wait > 0:
-                        await asyncio.sleep(wait)
-                    last_at = time.perf_counter()
                     try:
                         # max_redirects=0：不跟隨重定向，避免目標站的 open redirect
                         # 把探針導向雲端 metadata / 外站（任何重定向會丟例外 → 跳過該路徑）
-                        resp = await context.request.get(
-                            assert_public_http_url(url),
+                        resp = await _paced_get(
+                            url,
                             timeout=12000,
-                            max_redirects=0,
                         )
                         status = resp.status
                         ctype = (resp.headers or {}).get("content-type", "")
@@ -468,11 +479,15 @@ async def probe_paths(normalized_url: str, origin: str, scan_job_id: int) -> lis
                                 _is_soft_404(body, baselines) if 200 <= status < 300 else False
                             ),
                         })
+                    except ScanCancelled:
+                        raise
                     except Exception:
                         continue
             finally:
                 await context.close()
                 await browser.close()
+    except ScanCancelled:
+        raise
     except Exception:
         return results
     return results

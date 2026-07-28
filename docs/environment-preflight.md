@@ -32,10 +32,20 @@ uv run python backend/manage.py check
 | 模式 | 入口 | 必要條件 | 可驗證範圍 |
 |---|---|---|---|
 | 本機 UI／API | `http://127.0.0.1:8000` | `.env`、migration、`frontend/dist` | 頁面與同步 API；不能證明背景掃描鏈路正常 |
-| 本機 eager smoke test | `http://127.0.0.1:8000` | 上述條件，加上 `ARGUS_AUTO_QUEUE_SCANS=true`、`CELERY_TASK_ALWAYS_EAGER=true`、Playwright Chromium | 單一程序快速冒煙測試；不等同 Redis／worker 完整整合 |
+| 本機 eager smoke test | `http://127.0.0.1:8000` | 上述條件，加上 `ARGUS_AUTO_QUEUE_SCANS=true`、`CELERY_TASK_ALWAYS_EAGER=true`、Playwright Chromium | 建立 API 立即回 queued，背景 executor 管理獨立 Python 掃描程序；不等同 Redis／worker 完整整合 |
 | Docker 完整整合 | `http://localhost:8080` | Docker Desktop、完整 `.env`、PostgreSQL、Redis、web、worker、frontend | 掃描功能的標準整合驗證環境 |
 
 掃描功能的正式整合驗證一律使用 Docker 模式；本機 eager 只用於快速縮小問題範圍。
+為了維持 UI/API 的非同步契約，本機 eager 不會在 `POST /api/scans/` request 內跑完整
+掃描；端點建立並預扣成功後先回 `201` 與任務 ID，再由 runserver process 內的單一
+背景 executor 啟動獨立 Python 程序。這是為了避免 Windows Playwright 在 web thread
+建立事件迴圈時偶發 `WinError 10013`；程序有硬逾時、process-tree 清理與非終態任務
+退款收斂。關閉或重啟 runserver 仍可能中斷這類本機任務，所以不能拿它取代
+Redis/Celery 的持久佇列。
+
+本機 eager executor 同時只接受一筆 outstanding 掃描；已有工作時再送一筆會回
+503、將新建任務標記失敗並冪等全額退款。非 DEBUG 環境若誤開 eager，
+`uv run python backend/manage.py check --deploy` 會回報 `scans.E001`。
 
 ```powershell
 # 本機 UI／API 或 eager smoke test
@@ -58,6 +68,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
 | Playwright Chromium | `Test-Path .ms-playwright`；缺少時先設定 `PLAYWRIGHT_BROWSERS_PATH=.ms-playwright` 再安裝 | worker 已取件，但 crawler 啟動瀏覽器失敗 |
 | Redis／Celery worker | Docker `ps` 與 worker log，或本機明確使用 eager | 工作長時間停在 `queued` |
 | Celery app 初始化 | `config.celery_app`、`config.celery.app` 與 `run_scan_job.app` 必須是同一物件 | `.env` 顯示 eager，但 task 仍連線 Redis backend |
+| 建立 API 非同步契約 | eager 模式確認回應先帶 `queued + id`，再由背景 executor 更新狀態 | 表單停在「送出中」直到掃描結束 |
 | 資料庫模式 | 本機不設 `DATABASE_URL`，固定使用 `backend/db.sqlite3`；Docker 注入 PostgreSQL URL | 相對 SQLite URL 會產生另一套資料，誤判工作消失或狀態沒更新 |
 | 程序重啟 | `.env` 或 worker 設定異動後重啟 | 檔案內容正確，但執行中的程序仍使用舊設定 |
 

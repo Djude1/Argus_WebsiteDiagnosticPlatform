@@ -7,6 +7,7 @@ from urllib.robotparser import RobotFileParser
 
 from config.egress import playwright_launch_kwargs
 from django.conf import settings
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
@@ -245,37 +246,72 @@ async def scroll_to_bottom(page) -> None:
 
 
 _CONTEXT_RECYCLE_EVERY = 15
+_PAGE_RETRY_LIMIT = 1
 
 
-async def _enforce_public_request(route, request):
-    """在 Playwright 發出主文件、轉址或子資源請求前驗證目的地。"""
+async def _close_playwright_resources(*resources) -> None:
+    """盡力關閉故障的 Playwright 資源，不讓 cleanup 蓋掉原本狀態或重試。"""
+    for resource in resources:
+        if resource is None:
+            continue
+        try:
+            await resource.close()
+        except Exception:
+            pass
+
+
+async def _enforce_public_request(route, request, origin: str | None = None):
+    """在送出前阻擋非公開目標，以及主 frame 的跨 origin navigation。"""
     try:
-        assert_public_http_url(request.url)
+        target_url = assert_public_http_url(request.url)
     except PublicScanTargetError:
         await route.abort("blockedbyclient")
         return
+    if origin and request.is_navigation_request():
+        try:
+            is_main_frame = request.frame == request.frame.page.main_frame
+        except Exception:
+            is_main_frame = True
+        if is_main_frame and url_origin(target_url) != origin:
+            await route.abort("blockedbyclient")
+            return
     await route.continue_()
 
 
-async def _enforce_public_websocket(websocket_route):
-    """禁止頁面透過 WebSocket 連往內網或保留位址。"""
+async def _enforce_public_websocket(websocket_route, origin: str | None = None):
+    """禁止頁面透過 WebSocket 連往內網、保留位址或未授權 origin。"""
     try:
-        assert_public_websocket_url(websocket_route.url)
+        target_url = assert_public_websocket_url(websocket_route.url)
     except PublicScanTargetError:
         await websocket_route.close(code=1008, reason="Blocked by scan target policy")
         return
+    if origin:
+        parsed = urlparse(target_url)
+        http_scheme = "https" if parsed.scheme == "wss" else "http"
+        if url_origin(parsed._replace(scheme=http_scheme).geturl()) != origin:
+            await websocket_route.close(
+                code=1008,
+                reason="Blocked by scan origin policy",
+            )
+            return
     websocket_route.connect_to_server()
 
 
-async def _make_context(browser):
+async def _make_context(browser, origin: str):
     """建立標準 scanner 瀏覽器 context（user-agent + viewport）。"""
     context = await browser.new_context(
         user_agent=settings.ARGUS_SCANNER_USER_AGENT,
         viewport={"width": 1440, "height": 1000},
         service_workers="block",
     )
-    await context.route("**/*", _enforce_public_request)
-    await context.route_web_socket("**/*", _enforce_public_websocket)
+    async def _request_handler(route, request):
+        await _enforce_public_request(route, request, origin)
+
+    async def _websocket_handler(websocket_route):
+        await _enforce_public_websocket(websocket_route, origin)
+
+    await context.route("**/*", _request_handler)
+    await context.route_web_socket("**/*", _websocket_handler)
     return context
 
 
@@ -308,6 +344,7 @@ async def crawl_site(
         passive_rps=settings.ARGUS_PASSIVE_MAX_RPS,
     )
     last_request_at = 0.0
+    page_retry_counts: dict[str, int] = {}
     screenshot_dir = Path(settings.MEDIA_ROOT) / "scans" / str(scan_job_id)
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -316,7 +353,7 @@ async def crawl_site(
             headless=True,
             **playwright_launch_kwargs(),
         )
-        context = await _make_context(browser)
+        context = await _make_context(browser, origin)
         pages_in_context = 0
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
@@ -341,20 +378,20 @@ async def crawl_site(
                 page = None
                 started_at = time.perf_counter()
                 context_broken = False
+                page_stage = "new_page"
                 try:
                     # new_page() 納入 try：context/browser 偶發損壞時只讓這一頁失敗，
                     # 不會讓例外冒出迴圈外、害已爬到的所有頁面全部遺失。
                     page = await context.new_page()
+                    page_stage = "navigation"
                     response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                    try:
-                        # networkidle 常被分析工具/線上客服 widget 等背景長連線卡到 30 秒逾時上限。
-                        # 改成 domcontentloaded 立即返回 + 短暫 best-effort 等待 JS 渲染穩定，
-                        # 等不到就直接用目前已渲染的內容繼續，不讓單頁拖累整個掃描。
-                        await page.wait_for_load_state("networkidle", timeout=5000)
-                    except PlaywrightTimeoutError:
-                        pass
+                    # 不再等待 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠
+                    # 無法完全安靜。後續 scroll_to_bottom 本身會讓動態內容有時間渲染，
+                    # 因此直接使用 DOMContentLoaded 結果可避免每頁最多額外等待 5 秒。
+                    page_stage = "response_headers"
                     headers = await response.all_headers() if response else {}
                     status_code = response.status if response else None
+                    page_stage = "final_url"
                     final_url = normalize_crawl_url(assert_public_http_url(page.url))
                     final_url_origin = url_origin(final_url) if final_url else origin
 
@@ -402,6 +439,7 @@ async def crawl_site(
                                 element_boxes = {}
                                 screenshot_path = None
                             else:
+                                page_stage = "content"
                                 await scroll_to_bottom(page)
                                 title = await page.title()
                                 html = await page.content()
@@ -422,15 +460,18 @@ async def crawl_site(
                                     screenshot_dir / f"page-{len(pages) + 1}.png"
                                 )
                                 # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
+                                page_stage = "screenshot"
                                 await page.screenshot(
                                     path=str(screenshot_path), full_page=True
                                 )
                                 # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
+                                page_stage = "links"
                                 links = (
                                     []
                                     if blocked_reason
                                     else await extract_links(page, final_url, origin)
                                 )
+                                page_stage = "element_boxes"
                                 element_boxes = await collect_element_boxes(page)
                         finally:
                             page.remove_listener("framenavigated", _on_frame_navigated)
@@ -474,18 +515,30 @@ async def crawl_site(
                     for link in links:
                         if link not in visited and len(pages) + len(queue) < max_pages:
                             queue.append((link, depth + 1))
-                except PlaywrightTimeoutError:
-                    warnings["failed_urls"].append({"url": url, "reason": "timeout"})
+                except PlaywrightError as exc:
+                    retry_count = page_retry_counts.get(url, 0)
+                    if retry_count < _PAGE_RETRY_LIMIT:
+                        page_retry_counts[url] = retry_count + 1
+                        visited.discard(url)
+                        queue.appendleft((url, depth))
+                    else:
+                        reason = (
+                            "timeout"
+                            if isinstance(exc, PlaywrightTimeoutError)
+                            else f"{page_stage}:{exc.__class__.__name__}"
+                        )
+                        warnings["failed_urls"].append({"url": url, "reason": reason})
                 except Exception as exc:
-                    warnings["failed_urls"].append({"url": url, "reason": exc.__class__.__name__})
+                    warnings["failed_urls"].append(
+                        {"url": url, "reason": f"{page_stage}:{exc.__class__.__name__}"}
+                    )
                 finally:
-                    if page is not None:
-                        await page.close()
+                    await _close_playwright_resources(page)
                     pages_in_context += 1
                     if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
                         try:
                             await context.close()
-                            context = await _make_context(browser)
+                            context = await _make_context(browser, origin)
                             pages_in_context = 0
                         except Exception as exc:
                             # browser process 本身可能已經死亡，開不出新 context 就沒辦法
@@ -518,6 +571,5 @@ async def crawl_site(
                 if context_broken:
                     break
         finally:
-            await context.close()
-            await browser.close()
+            await _close_playwright_resources(context, browser)
     return pages, warnings, site_signals

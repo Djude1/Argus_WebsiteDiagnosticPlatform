@@ -304,10 +304,10 @@ function ScanJobForm({ onCreated }) {
     setEstimate(null);
     setError("");
     try {
-      const res = await api.post("/estimate/", { url });
+      const res = await api.post("/estimate/", { url, max_pages: effectivePages });
       setEstimate(res.data);
     } catch (err) {
-      setError(apiErrorMessage(err, "預估費用失敗，請確認網址格式正確、可公開連線。"));
+      setError(apiErrorMessage(err, "預估費用失敗，請確認網址格式正確。"));
       setEstimate(null);
     } finally {
       setEstimating(false);
@@ -370,23 +370,18 @@ function ScanJobForm({ onCreated }) {
               onClick={handleEstimate}
               disabled={estimating || !url}
             >
-              {estimating ? "估算中…" : "🔍 預估費用"}
+              {estimating ? "計算中…" : "計算費用上限"}
             </button>
             {estimate && (
-              <div className={`scan-estimate-result conf-${estimate.confidence}`}>
-                <span>預估約 <strong>{estimate.estimated_pages}</strong> 頁 ≈ <strong>{estimate.estimated_cost}</strong> coin</span>
+              <div
+                className="scan-estimate-result"
+                role="status"
+                aria-live="polite"
+              >
+                <span>最多 <strong>{estimate.estimated_pages}</strong> 頁，費用上限 <strong>{estimate.estimated_cost}</strong> coin</span>
                 <span className="scan-estimate-conf">
-                  {estimate.confidence === "high" ? "（sitemap 精準）" :
-                   estimate.confidence === "medium" ? "（連結計算，中等精確）" :
-                   "（估算，實際可能不同）"}
+                  （依掃描頁數上限計算，完成後退回未使用 coin）
                 </span>
-                {/* 避免使用者看到「10 coin」卻被預扣 500 coin 而誤以為 bug：明示預扣與結算機制 */}
-                {Number.isFinite(estimate.estimated_cost) && estimatedCost > estimate.estimated_cost && (
-                  <span className="scan-estimate-hold">
-                    ⓘ 系統先預扣 <strong>{estimatedCost.toLocaleString()}</strong> coin
-                    （上限 {effectivePages} 頁），結束後依實際爬到頁數退回差額。
-                  </span>
-                )}
               </div>
             )}
           </div>

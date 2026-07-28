@@ -1,3 +1,6 @@
+import ipaddress
+from urllib.parse import urlparse
+
 from django.conf import settings
 from django.db import transaction
 from rest_framework import serializers
@@ -14,7 +17,35 @@ from apps.scans.services import (
     get_hostname,
     get_origin,
     is_obvious_third_party,
+    normalize_url,
 )
+
+
+class ScanEstimateSerializer(serializers.Serializer):
+    """純計費估算；只做語法驗證，不解析 DNS、也不連線目標網站。"""
+
+    url = serializers.CharField(max_length=2048, trim_whitespace=True)
+    max_pages = serializers.IntegerField(
+        default=settings.ARGUS_DEFAULT_MAX_PAGES,
+        min_value=1,
+        max_value=settings.ARGUS_DEFAULT_MAX_PAGES,
+    )
+
+    def validate_url(self, value: str) -> str:
+        try:
+            normalized = normalize_url(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+        hostname = urlparse(normalized).hostname or ""
+        if "." not in hostname:
+            try:
+                ipaddress.ip_address(hostname)
+            except ValueError as exc:
+                raise serializers.ValidationError(
+                    "請輸入有效的 HTTP 或 HTTPS 網址。"
+                ) from exc
+        return normalized
 
 
 class ScanJobCreateSerializer(serializers.Serializer):
