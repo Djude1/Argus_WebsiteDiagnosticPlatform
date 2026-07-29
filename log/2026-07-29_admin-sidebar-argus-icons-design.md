@@ -29,3 +29,22 @@
   - 螢幕閱讀器測試 NavLink 文字正確讀出
   - Tab 鍵盤可達
   - Chrome / Safari / Firefox 視覺一致
+
+## 實作進度（2026-07-29）
+
+- [x] Task 1：新增 AdminIcons.jsx（10 個 components + IconShell helper）
+- [x] Task 2：AdminPages.jsx navItems 改用 Icon component（4 個區域 + 修 useEffect 缺 `}` bug）
+- [x] Task 3：styles.css 加 4 tokens + `.admin-nav-icon` 規則 + 移除 emoji filter
+- [x] Task 4：build 通過 + dist 內含 ⟡ icon code + CSS class
+
+## 驗證結果
+
+- `npm run build` 成功（2039 modules, 5.15s）
+- dist 內含 ⟡ base path（grep `M12 4c1.25 4.85` 命中 AdminPages chunk）
+- dist 內含 `.admin-nav-icon` CSS class
+
+## 修正過程備註
+
+Task 2 實作中 subagent 誤刪 `useEffect` 中 `handleKeyDown` 函數的 closing `}`，
+經 build 發現後由 controller 修復（原 subagent 自審與 review 都沒抓到
+此語法錯誤，因 JS 缺少 `}` 會自動往後尋找匹配，導致靜默解析為不同結構）。

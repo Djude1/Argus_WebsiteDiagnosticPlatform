@@ -119,6 +119,7 @@ function AdminLayout() {
           first.focus();
         }
     }
+    }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
