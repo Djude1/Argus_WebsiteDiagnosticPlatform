@@ -130,6 +130,12 @@
   --argus-cyan-glow: #67e8f9;
   --argus-cyan-dot: #0ea5e9;
   --argus-cyan-deep: #0c4a6e;
+
+  /* Admin sidebar icon tokens */
+  --argus-icon-base: #22d3ee;
+  --argus-icon-accent: #67e8f9;
+  --argus-icon-base-active: #ffffff;
+  --argus-icon-accent-active: rgba(255, 255, 255, 0.7);
   --argus-text-bright: #e0f2fe;
   --argus-text-white: #f0f9ff;
 
@@ -2240,11 +2246,24 @@
     box-shadow: 0 0 6px rgba(207, 250, 254, 0.7);
   }
   .admin-nav-emoji {
-    @apply text-base flex-shrink-0;
-    filter: grayscale(0.15) brightness(1.05);
+    /* legacy class kept for backward compat; new SVG icon uses .admin-nav-icon */
   }
-  .admin-nav-link.active .admin-nav-emoji {
-    filter: none;
+  .admin-nav-icon {
+    flex-shrink: 0;
+    color: var(--argus-icon-base);
+    transition: filter 0.15s ease;
+  }
+  .admin-nav-icon .accent {
+    color: var(--argus-icon-accent);
+  }
+  .admin-nav-link:hover .admin-nav-icon {
+    filter: brightness(1.18);
+  }
+  .admin-nav-link.active .admin-nav-icon {
+    color: var(--argus-icon-base-active);
+  }
+  .admin-nav-link.active .admin-nav-icon .accent {
+    color: var(--argus-icon-accent-active);
   }
 
   .admin-sidebar-footer {
