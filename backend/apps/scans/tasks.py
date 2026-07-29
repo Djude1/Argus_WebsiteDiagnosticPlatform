@@ -686,11 +686,17 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                     f"Kali 主動驗證確認 {len(kali_findings)} 項可利用漏洞",
                 )
 
-        # UX 只有 Hermes-Agent 實際「跑完」才算「有測」；未啟用時 agent_meta 為空 dict
-        # （falsy），跑完/出錯時都會有值。但單純「有值」不夠精準：agent 拋例外時
-        # agent_meta 也會是 {"status": "error", ...}（仍是 truthy），此時 UX 根本沒被
-        # 真正測過，category_scores["ux"] 只是恰好維持在 100（因為沒有 UX finding），
-        # 若也算「有測」計入平均，等於把「測到一半就掛掉」誤當「測過了、乾淨」。
+        # UX 只有 Hermes-Agent 實際「執行過至少一輪」才算「有測」。單純「status 不是
+        # error」不夠精準：agent_result.status 只會是 loop.py 的 completed/failed 兩種
+        # 終態，never "error"（"error" 只在 run_agent_for_scan() 本身於外層 except 拋例外
+        # 時才出現）；若第一輪呼叫 provider 就失敗（例如所有 provider API Key 同時失效／
+        # 逾時），status 會是 "failed" 且 steps=0——這種「完全沒跑」的情況若只檢查
+        # status != "error"，仍會被誤判為「已測且乾淨」（因為沒有 UX finding，
+        # category_scores["ux"] 恰好維持 100）而虛增 overall_score。改用 steps > 0 判斷：
+        # 只要曾經真正執行過任一輪（不論最終是 completed 乾淨結束，還是 failed 於
+        # max_steps_reached / token_budget_exceeded 中止），過程中若有發現真實問題就會
+        # 反映在 category_scores["ux"]，不應被排除在 overall_score 平均之外；只有
+        # steps=0（根本沒跑）或外層基礎設施例外（status="error"）才排除。
         # 頁面內容類分類（seo/aeo）只來自 analyze_page（頁面層級）；爬蟲 0 頁（目標不可
         # 達/全 timeout）時根本沒有頁面可分析，若仍計入 overall_score 平均，等於把「沒
         # 測」誤當「零問題」灌高總分（與上方 UX 的把關同理）。security（DNS/SSL 站台
@@ -699,7 +705,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         tested_categories = {"security", "geo"}
         if crawled_pages:
             tested_categories.update({"seo", "aeo"})
-        if agent_meta and agent_meta.get("status") != "error":
+        if agent_meta and agent_meta.get("status") != "error" and agent_meta.get("steps", 0) > 0:
             tested_categories.add("ux")
         # 0 頁是「掃描實質失效」的強信號：在 warning_summary 標記 + scan_log 警告，
         # 避免 overall_score（此時只反映站台層級）被誤讀為「網站安全」。
