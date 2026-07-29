@@ -1,7 +1,7 @@
 # 後台 Sidebar ⟡ SVG Icon 系統設計
 
 **日期**：2026-07-29
-**狀態**：待 user review
+**狀態**：已批准，待 writing-plans
 **範疇**：純設計文件，無程式碼變更
 
 ---
