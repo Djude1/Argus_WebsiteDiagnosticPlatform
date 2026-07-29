@@ -12,16 +12,28 @@ import { api } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
 import { STATUS_LABELS, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
+import {
+  AdminOverviewIcon,
+  AdminUsersIcon,
+  AdminScansIcon,
+  AdminTransactionsIcon,
+  AdminPlansIcon,
+  AdminContentIcon,
+  AdminReviewsIcon,
+  AdminSettingsIcon,
+  AdminAuditLogIcon,
+  AdminAnnouncementsIcon,
+} from "../../components/admin/AdminIcons.jsx";
 
 const ADMIN_NAV_ITEMS = [
-  { to: "/admin/overview", label: "概覽", emoji: "📊" },
-  { to: "/admin/users", label: "使用者", emoji: "👥" },
-  { to: "/admin/scans", label: "掃描", emoji: "🔍" },
-  { to: "/admin/transactions", label: "交易", emoji: "💳" },
-  { to: "/admin/plans", label: "方案", emoji: "💼" },
-  { to: "/admin/content", label: "內容", emoji: "📝" },
-  { to: "/admin/reviews", label: "評論", emoji: "⭐" },
-  { to: "/admin/settings", label: "設定", emoji: "⚙️" },
+  { to: "/admin/overview", label: "概覽", Icon: AdminOverviewIcon },
+  { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
+  { to: "/admin/scans", label: "掃描", Icon: AdminScansIcon },
+  { to: "/admin/transactions", label: "交易", Icon: AdminTransactionsIcon },
+  { to: "/admin/plans", label: "方案", Icon: AdminPlansIcon },
+  { to: "/admin/content", label: "內容", Icon: AdminContentIcon },
+  { to: "/admin/reviews", label: "評論", Icon: AdminReviewsIcon },
+  { to: "/admin/settings", label: "設定", Icon: AdminSettingsIcon },
 ];
 
 function activateAdminRow(event, action) {
@@ -106,7 +118,7 @@ function AdminLayout() {
           event.preventDefault();
           first.focus();
         }
-      }
+    }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -114,9 +126,9 @@ function AdminLayout() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [drawerOpen]);
-  // 超級管理員額外看到「📜 操作紀錄」分頁
+  // 超級管理員額外看到「操作日誌」分頁
   const navItems = me?.is_superuser
-    ? [...ADMIN_NAV_ITEMS, { to: "/admin/audit-log", label: "操作日誌", emoji: "📜" }, { to: "/admin/announcements", label: "公告管理", emoji: "📢" }]
+    ? [...ADMIN_NAV_ITEMS, { to: "/admin/audit-log", label: "操作日誌", Icon: AdminAuditLogIcon }, { to: "/admin/announcements", label: "公告管理", Icon: AdminAnnouncementsIcon }]
     : ADMIN_NAV_ITEMS;
   return (
     <div className="admin-shell">
@@ -163,7 +175,7 @@ function AdminLayout() {
               }
               onClick={closeDrawer}
             >
-              <span className="admin-nav-emoji" aria-hidden="true">{item.emoji}</span>
+              <item.Icon className="admin-nav-icon" />
               <span>{item.label}</span>
             </NavLink>
           ))}
