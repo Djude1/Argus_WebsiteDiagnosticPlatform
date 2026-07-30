@@ -340,7 +340,7 @@ Argus/
 | GET | `/api/reviews/` | open | query：`sort=helpful\|newest`、`rating=1..5`、`page?` | 公開且具 `experience_at` 的評論；每頁 8 則 |
 | GET | `/api/reviews/summary/` | open | — | 公開評論總數、平均分與 1–5 星分布 |
 | GET | `/api/reviews/mine/` | auth | — | 我的評論與是否完成掃描的發表資格 |
-| POST | `/api/reviews/mine/` | auth | body：`rating`、`title?`、`comment`、`display_name?` | 完成掃描的一般使用者建立評論；staff 禁止發表 |
+| POST | `/api/reviews/mine/` | auth | body：`rating`、`title?`、`comment`、`show_partial_email?` | 完成掃描的一般使用者建立評論；`show_partial_email` 預設為 `false`（完全匿名），staff 禁止發表 |
 | PATCH | `/api/reviews/mine/` | auth | 同上，可部分更新 | 編修前建立 `ReviewRevision` |
 | DELETE | `/api/reviews/mine/` | auth | — | 本人刪除自己的評論 |
 | POST | `/api/reviews/{id}/helpful/` | auth | — | 切換「有幫助」；不可操作自己的評論 |
@@ -443,7 +443,7 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled
 - `ScanJob.progress`（JSON）: `{pages_done, pages_total, phase, phase_started_at}`
 - `Finding`: severity (critical/high/medium/low/info)、category (seo/aeo/geo/security/ux)、bounding_box、ai_handoff_prompt
-- `PlatformReview`: user OneToOne、rating（1-5）、title、comment、display_name、status（published/hidden）、experience_at；`is_featured` 僅保留舊資料相容且不影響公開排序
+- `PlatformReview`: user OneToOne、rating（1-5）、title、comment、show_partial_email、status（published/hidden）、experience_at；`display_name` 與 `is_featured` 僅保留舊資料相容，公開作者只會顯示匿名標籤或後端產生的遮罩 Email
 - `ReviewResponse`: review OneToOne、author、body；`ReviewRevision` 保存本人編修前版本；`ReviewReport` 保存檢舉與 pending/resolved/dismissed
 - `AdminAuditLog`: 欄位 `admin_actor`、`target_user`、`action`（coin_adjust / review_reply / review_moderate / review_delete / user_toggle_staff / other）、`target_object_repr`、`payload`（JSON，非 `detail`）
 

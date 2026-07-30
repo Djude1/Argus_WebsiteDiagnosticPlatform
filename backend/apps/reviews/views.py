@@ -253,6 +253,7 @@ def my_review(request):
             title=review.title,
             comment=review.comment,
             display_name=review.display_name,
+            show_partial_email=review.show_partial_email,
         )
         review = serializer.save()
     return Response(

@@ -532,7 +532,7 @@ class PlatformReview {
   +rating
   +title
   +comment
-  +display_name
+  +show_partial_email
   +status
   +experience_at
 }

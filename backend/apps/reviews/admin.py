@@ -52,11 +52,11 @@ class PlatformReviewAdmin(admin.ModelAdmin):
     search_fields = ["user__username", "user__email", "title", "comment"]
     date_hierarchy = "created_at"
     readonly_fields = [
-        "user", "rating", "title", "comment", "display_name", "status",
+        "user", "rating", "title", "comment", "show_partial_email", "status",
         "experience_at", "created_at", "updated_at",
     ]
     fields = [
-        "user", "rating", "title", "comment", "display_name", "status",
+        "user", "rating", "title", "comment", "show_partial_email", "status",
         "experience_at", "created_at", "updated_at",
     ]
     inlines = [ReviewMessageInline]
@@ -134,7 +134,7 @@ class ReviewResponseAdmin(admin.ModelAdmin):
 class ReviewRevisionAdmin(admin.ModelAdmin):
     list_display = ["review", "rating", "created_at"]
     readonly_fields = [
-        "review", "rating", "title", "comment", "display_name", "created_at",
+        "review", "rating", "title", "comment", "show_partial_email", "created_at",
     ]
 
     def has_add_permission(self, request):

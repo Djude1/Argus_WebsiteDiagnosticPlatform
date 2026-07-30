@@ -23,7 +23,11 @@ class PlatformReview(models.Model):
     display_name = models.CharField(
         max_length=32,
         blank=True,
-        help_text="公開顯示名稱；留白時顯示為匿名已驗證使用者。",
+        help_text="舊版公開名稱，僅保留歷史資料相容。",
+    )
+    show_partial_email = models.BooleanField(
+        default=False,
+        help_text="公開評論是否顯示遮罩後的部分 Email。",
     )
     status = models.CharField(
         max_length=16,
@@ -128,6 +132,7 @@ class ReviewRevision(models.Model):
     title = models.CharField(max_length=120, blank=True)
     comment = models.TextField(blank=True)
     display_name = models.CharField(max_length=32, blank=True)
+    show_partial_email = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

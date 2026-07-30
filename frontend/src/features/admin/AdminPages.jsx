@@ -994,7 +994,9 @@ function AdminReviewsPage() {
 
           {review.title && <h2 className="admin-review-title">{review.title}</h2>}
           <p className="admin-review-body">{review.comment || "（舊版評論未填文字）"}</p>
-          <p className="admin-review-public-name">前台名稱：{review.display_name || "匿名已驗證使用者"}</p>
+          <p className="admin-review-public-name">
+            前台顯示：{review.show_partial_email ? "遮罩後的部分 Email" : "完全匿名"}
+          </p>
 
           <div className="admin-review-reply-section">
             <label className="admin-review-reply-field">

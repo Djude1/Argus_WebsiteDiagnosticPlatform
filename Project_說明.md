@@ -124,8 +124,8 @@ SaaS 級網站健檢工具。使用者輸入單一網址 → 系統執行:
 - **退費**：僅 admin 在後台手動加減 coin（CoinWalletAdmin 自訂 adjust 頁面，可輸入任意金額 + 備註）
 
 ### M7. 平台評論
-- **已驗證一人一則**：完成至少一次掃描的一般使用者才能建立 `PlatformReview`；公開作者只顯示自填名稱或匿名標籤
-- **完整本人控制**：登入後可建立、編修 rating/title/comment/display_name 或刪除；編修前版本留在 `ReviewRevision` 稽核
+- **已驗證一人一則**：完成至少一次掃描的一般使用者才能建立 `PlatformReview`；公開作者預設顯示匿名標籤，使用者可選擇顯示由後端產生的遮罩 Email
+- **完整本人控制**：登入後可建立、編修 rating/title/comment/show_partial_email 或刪除；編修前版本留在 `ReviewRevision` 稽核
 - **透明治理**：公開列表可依星等與 helpful/newest 排序；登入使用者可 helpful／檢舉；管理員只能維護單一官方回覆與公開/隱藏狀態，不得改原評分或原文
 
 ---

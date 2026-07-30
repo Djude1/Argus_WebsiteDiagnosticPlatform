@@ -99,7 +99,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
-| `/reviews` | `ReviewsPage`（`PublicLayout`） | 夜間科技評論頁；沿用公開 top bar／footer，提供星等篩選、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
+| `/reviews` | `ReviewsPage`（`PublicLayout`） | 夜間科技評論頁；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
 | `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 後台總覽 |

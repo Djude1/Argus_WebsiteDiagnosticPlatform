@@ -120,7 +120,7 @@ class AdminReviewSerializer(serializers.ModelSerializer):
         model = PlatformReview
         fields = [
             "id", "username", "full_name",
-            "rating", "title", "comment", "display_name", "status",
+            "rating", "title", "comment", "show_partial_email", "status",
             "response", "report_count", "pending_report_count",
             "response_report_count", "response_pending_report_count", "is_pending",
             "created_at", "updated_at",

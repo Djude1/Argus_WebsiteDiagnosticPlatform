@@ -10353,7 +10353,116 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   border-radius: 11px;
 }
 
+.review-next-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.review-next-night .review-next-rating-options .review-next-rating-star {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #718492;
+  background: transparent;
+  box-shadow: none;
+}
+
+.review-next-night .review-next-rating-options .review-next-rating-star:hover {
+  color: var(--review-next-amber);
+  background: transparent;
+  transform: translateY(-1px) scale(1.1);
+}
+
+.review-next-night .review-next-rating-options .review-next-rating-star svg {
+  width: 31px;
+  height: 31px;
+  transition: color 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+
+.review-next-night .review-next-rating-options .review-next-rating-star:hover svg,
+.review-next-night .review-next-rating-options .review-next-rating-star svg.is-filled {
+  filter: drop-shadow(0 0 8px rgba(255, 189, 74, 0.28));
+}
+
+.review-next-author-privacy {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-left: auto;
+  color: #b6c9d2;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.review-next-author-privacy input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.review-next-checkbox-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  border: 1px solid rgba(125, 158, 171, 0.72);
+  border-radius: 6px;
+  color: #04232a;
+  background: rgba(7, 17, 30, 0.88);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.review-next-checkbox-mark svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+  transform: scale(0.65);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.review-next-author-privacy:hover .review-next-checkbox-mark {
+  border-color: rgba(91, 231, 242, 0.72);
+}
+
+.review-next-author-privacy input:checked + .review-next-checkbox-mark {
+  border-color: #5be7f2;
+  background: #5be7f2;
+  box-shadow: 0 0 16px rgba(91, 231, 242, 0.22);
+}
+
+.review-next-author-privacy input:checked + .review-next-checkbox-mark svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.review-next-author-privacy input:focus-visible + .review-next-checkbox-mark {
+  outline: 3px solid rgba(73, 217, 236, 0.42);
+  outline-offset: 3px;
+}
+
 @media (max-width: 620px) {
+  .review-next-rating-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .review-next-author-privacy {
+    flex-basis: 100%;
+    margin: 2px 0 0;
+  }
+
   .review-next-hero h1 {
     font-size: clamp(1.6rem, 8vw, 1.95rem);
     line-height: 1.12;

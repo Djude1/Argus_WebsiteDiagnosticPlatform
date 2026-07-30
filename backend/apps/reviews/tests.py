@@ -19,6 +19,7 @@ from apps.reviews.models import (
     ReviewResponseHelpful,
     ReviewRevision,
 )
+from apps.reviews.serializers import mask_review_email
 from apps.scans.models import ScanJob
 
 
@@ -94,6 +95,26 @@ def _review(user, *, rating=5, title="掃描結果很清楚", comment=None, **ex
     )
 
 
+class ReviewEmailMaskTests(SimpleTestCase):
+    def test_mask_never_returns_the_complete_email(self):
+        cases = {
+            "a@example.test": "a***@example.test",
+            "ab@example.test": "a***@example.test",
+            "abc@example.test": "ab***@example.test",
+            "ab***@example.test": "匿名已驗證使用者",
+            "": "匿名已驗證使用者",
+            "missing-at.example.test": "匿名已驗證使用者",
+            "a@b@example.test": "匿名已驗證使用者",
+        }
+
+        for email, expected in cases.items():
+            with self.subTest(email=email):
+                masked = mask_review_email(email)
+                self.assertEqual(masked, expected)
+                if email:
+                    self.assertNotEqual(masked, email)
+
+
 class PlatformReviewModelTests(APITestCase):
     def test_one_review_per_user(self):
         user = _make_user("alice")
@@ -128,7 +149,7 @@ class ReviewLifecycleAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(PlatformReview.objects.filter(user=self.user).exists())
 
-    def test_create_review_is_verified_and_does_not_expose_identity(self):
+    def test_create_review_defaults_to_anonymous_and_ignores_display_name(self):
         scan = _complete_scan(self.user)
         response = self.client.post(
             self.url,
@@ -136,12 +157,14 @@ class ReviewLifecycleAPITests(APITestCase):
                 "rating": 5,
                 "title": "報告很容易理解",
                 "comment": "第一次使用就能看懂問題優先順序，修正建議也相當具體。",
-                "display_name": "網站經營者",
+                "display_name": "不應再接受的公開名稱",
             },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["user_display"], "網站經營者")
+        self.assertEqual(response.data["user_display"], "匿名已驗證使用者")
+        self.assertFalse(response.data["show_partial_email"])
+        self.assertNotIn("display_name", response.data)
         self.assertNotContains(response, self.user.email, status_code=status.HTTP_201_CREATED)
         self.assertNotContains(
             response,
@@ -149,53 +172,53 @@ class ReviewLifecycleAPITests(APITestCase):
             status_code=status.HTTP_201_CREATED,
         )
         review = PlatformReview.objects.get(user=self.user)
+        self.assertEqual(review.display_name, "")
         self.assertEqual(review.experience_at, scan.completed_at)
 
-    def test_blank_display_name_is_anonymous(self):
+    def test_user_can_opt_in_to_masked_email(self):
         _complete_scan(self.user)
         response = self.client.post(
             self.url,
             {
                 "rating": 4,
                 "comment": "掃描報告的分類完整，讓我能依照風險逐項安排修正。",
-                "display_name": "",
+                "show_partial_email": True,
             },
             format="json",
         )
-        self.assertEqual(response.data["user_display"], "匿名已驗證使用者")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["user_display"], "re***@example.com")
+        self.assertTrue(response.data["show_partial_email"])
+        self.assertNotContains(response, self.user.email, status_code=status.HTTP_201_CREATED)
 
-    def test_email_cannot_be_used_as_public_display_name(self):
-        _complete_scan(self.user)
-        response = self.client.post(
-            self.url,
-            {
-                "rating": 4,
-                "comment": "掃描報告的分類完整，讓我能依照風險逐項安排修正。",
-                "display_name": "private@example.com",
-            },
-            format="json",
+    def test_owner_can_update_privacy_choice_with_revision(self):
+        review = _review(
+            self.user,
+            rating=3,
+            display_name="舊版名稱",
+            show_partial_email=False,
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_owner_can_update_rating_content_and_display_name_with_revision(self):
-        review = _review(self.user, rating=3, display_name="舊名稱")
         response = self.client.patch(
             self.url,
             {
                 "rating": 5,
                 "title": "更新後的標題",
                 "comment": "重新使用新版功能後體驗改善很多，報告也比以前更容易操作。",
-                "display_name": "新名稱",
+                "display_name": "不應覆寫的名稱",
+                "show_partial_email": True,
             },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user_display"], "re***@example.com")
         review.refresh_from_db()
         self.assertEqual(review.rating, 5)
-        self.assertEqual(review.display_name, "新名稱")
+        self.assertTrue(review.show_partial_email)
+        self.assertEqual(review.display_name, "舊版名稱")
         revision = ReviewRevision.objects.get(review=review)
         self.assertEqual(revision.rating, 3)
-        self.assertEqual(revision.display_name, "舊名稱")
+        self.assertFalse(revision.show_partial_email)
+        self.assertEqual(revision.display_name, "舊版名稱")
 
     def test_owner_can_delete_review(self):
         _review(self.user)
@@ -236,6 +259,23 @@ class PublicReviewListTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total"], 1)
         self.assertEqual(response.data["reviews"][0]["id"], self.first.id)
+
+    def test_public_identity_uses_only_anonymous_or_masked_email(self):
+        self.first.display_name = "舊版公開名稱"
+        self.first.save(update_fields=["display_name"])
+        self.second.show_partial_email = True
+        self.second.save(update_fields=["show_partial_email"])
+
+        response = self.client.get(reverse("reviews-list"))
+        displays = {
+            review["id"]: review["user_display"]
+            for review in response.data["reviews"]
+        }
+
+        self.assertEqual(displays[self.first.id], "匿名已驗證使用者")
+        self.assertEqual(displays[self.second.id], "se***@example.com")
+        self.assertNotContains(response, self.first.user.email)
+        self.assertNotContains(response, self.second.user.email)
 
     def test_unverified_legacy_review_is_not_public_or_counted(self):
         self.second.experience_at = None

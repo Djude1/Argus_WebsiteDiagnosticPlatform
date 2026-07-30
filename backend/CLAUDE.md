@@ -81,8 +81,9 @@ target_object_repr、payload（JSON）、created_at
 
 **PlatformReview**（`apps/reviews/models.py`）
 ```
-user（一人一則，OneToOne）、rating（1-5）、title、comment、display_name、
+user（一人一則，OneToOne）、rating（1-5）、title、comment、show_partial_email、
 status（published/hidden）、experience_at（完成掃描時間）
+→ display_name 僅保留舊資料相容；公開作者只能是完全匿名或後端產生的遮罩 Email
 → 官方回覆是 OneToOne ReviewResponse；本人編修前版本寫入 ReviewRevision
 → ReviewReport 保存檢舉與治理狀態；ReviewHelpful 為 per user 唯一
 → ReviewMessage / ReviewMessageHelpful 僅保留舊資料相容，不再提供公開端點

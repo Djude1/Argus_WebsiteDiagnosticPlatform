@@ -71,31 +71,53 @@ function ReadonlyStars({ value, compact = false }) {
   );
 }
 
-function RatingInput({ value, onChange, idPrefix }) {
+function RatingInput({
+  value,
+  onChange,
+  idPrefix,
+  showPartialEmail,
+  onShowPartialEmailChange,
+}) {
   return (
     <fieldset className="review-next-rating-input">
       <legend>整體評分</legend>
-      <div className="review-next-rating-options">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <span key={star}>
-            <input
-              id={`${idPrefix}-${star}`}
-              name={`${idPrefix}-rating`}
-              type="radio"
-              value={star}
-              checked={value === star}
-              onChange={() => onChange(star)}
-              required
-            />
-            <label htmlFor={`${idPrefix}-${star}`} title={`${star} 星：${RATING_LABELS[star]}`}>
-              <Star aria-hidden="true" className={star <= value ? "is-filled" : ""} />
-              <span className="sr-only">{star} 星：{RATING_LABELS[star]}</span>
-            </label>
-          </span>
-        ))}
-        <output aria-live="polite">
-          {value ? `${value} 星 · ${RATING_LABELS[value]}` : "尚未評分"}
-        </output>
+      <div className="review-next-rating-row">
+        <div className="review-next-rating-options">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <span key={star}>
+              <input
+                id={`${idPrefix}-${star}`}
+                name={`${idPrefix}-rating`}
+                type="radio"
+                value={star}
+                checked={value === star}
+                onChange={() => onChange(star)}
+                required
+              />
+              <label
+                className="review-next-rating-star"
+                htmlFor={`${idPrefix}-${star}`}
+                title={`${star} 星：${RATING_LABELS[star]}`}
+              >
+                <Star aria-hidden="true" className={star <= value ? "is-filled" : ""} />
+                <span className="sr-only">{star} 星：{RATING_LABELS[star]}</span>
+              </label>
+            </span>
+          ))}
+          <output aria-live="polite">
+            {value ? `${value} 星 · ${RATING_LABELS[value]}` : "尚未評分"}
+          </output>
+        </div>
+
+        <label className="review-next-author-privacy">
+          <input
+            type="checkbox"
+            checked={showPartialEmail}
+            onChange={(event) => onShowPartialEmailChange(event.target.checked)}
+          />
+          <span className="review-next-checkbox-mark" aria-hidden="true"><Check /></span>
+          <span>顯示部分 Email</span>
+        </label>
       </div>
     </fieldset>
   );
@@ -104,8 +126,8 @@ function RatingInput({ value, onChange, idPrefix }) {
 function ReviewComposer({ review, busy, onCancel, onSave }) {
   const [rating, setRating] = useState(review?.rating || 0);
   const [comment, setComment] = useState(review?.comment || "");
-  const [displayName, setDisplayName] = useState(
-    review?.user_display === "匿名已驗證使用者" ? "" : review?.user_display || "",
+  const [showPartialEmail, setShowPartialEmail] = useState(
+    Boolean(review?.show_partial_email),
   );
   const [error, setError] = useState("");
 
@@ -123,7 +145,7 @@ function ReviewComposer({ review, busy, onCancel, onSave }) {
     onSave({
       rating,
       comment: comment.trim(),
-      display_name: displayName.trim(),
+      show_partial_email: showPartialEmail,
     });
   }
 
@@ -140,7 +162,13 @@ function ReviewComposer({ review, busy, onCancel, onSave }) {
       </div>
 
       <form className="review-next-composer" onSubmit={submit}>
-        <RatingInput value={rating} onChange={setRating} idPrefix={review ? "next-edit" : "next-new"} />
+        <RatingInput
+          value={rating}
+          onChange={setRating}
+          idPrefix={review ? "next-edit" : "next-new"}
+          showPartialEmail={showPartialEmail}
+          onShowPartialEmailChange={setShowPartialEmail}
+        />
 
         <label className="review-next-field" htmlFor="review-next-comment">
           <span>你的使用經驗 <small>至少 20 個字元</small></span>
@@ -154,18 +182,6 @@ function ReviewComposer({ review, busy, onCancel, onSave }) {
             required
           />
           <small>{comment.length} / 3000</small>
-        </label>
-
-        <label className="review-next-field" htmlFor="review-next-display-name">
-          <span>公開顯示名稱 <small>選填</small></span>
-          <input
-            id="review-next-display-name"
-            maxLength={32}
-            placeholder="留白會顯示為匿名已驗證使用者"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-          <small>{displayName.length} / 32</small>
         </label>
 
         <div className="review-next-privacy-note">

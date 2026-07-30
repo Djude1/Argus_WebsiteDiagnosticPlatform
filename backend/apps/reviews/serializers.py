@@ -3,6 +3,18 @@ from rest_framework import serializers
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 
 
+def mask_review_email(email: str) -> str:
+    normalized_email = (email or "").strip()
+    local, separator, domain = normalized_email.partition("@")
+    if normalized_email.count("@") != 1 or not separator or not local or not domain:
+        return "匿名已驗證使用者"
+    visible_count = 1 if len(local) < 3 else 2
+    masked_email = f"{local[:visible_count]}***@{domain}"
+    if masked_email == normalized_email:
+        return "匿名已驗證使用者"
+    return masked_email
+
+
 class ReviewResponseSerializer(serializers.ModelSerializer):
     helpful_count = serializers.SerializerMethodField()
     my_helpful = serializers.SerializerMethodField()
@@ -47,7 +59,7 @@ class PlatformReviewSerializer(serializers.ModelSerializer):
             "rating",
             "title",
             "comment",
-            "display_name",
+            "show_partial_email",
             "user_display",
             "is_mine",
             "verified_experience",
@@ -72,11 +84,12 @@ class PlatformReviewSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             "comment": {"required": True, "allow_blank": False},
-            "display_name": {"write_only": True, "required": False, "allow_blank": True},
         }
 
     def get_user_display(self, obj: PlatformReview) -> str:
-        return obj.display_name.strip() or "匿名已驗證使用者"
+        if not obj.show_partial_email:
+            return "匿名已驗證使用者"
+        return mask_review_email(obj.user.email)
 
     def get_is_mine(self, obj: PlatformReview) -> bool:
         request = self.context.get("request")
@@ -122,13 +135,6 @@ class PlatformReviewSerializer(serializers.ModelSerializer):
         if len(value) > 3000:
             raise serializers.ValidationError("評論內容不可超過 3000 個字元。")
         return value
-
-    def validate_display_name(self, value: str) -> str:
-        value = value.strip()
-        if "@" in value:
-            raise serializers.ValidationError("公開顯示名稱不可包含 Email。")
-        return value
-
 
 class ReviewReportSerializer(serializers.Serializer):
     reason = serializers.ChoiceField(choices=ReviewReport.Reason.choices)
