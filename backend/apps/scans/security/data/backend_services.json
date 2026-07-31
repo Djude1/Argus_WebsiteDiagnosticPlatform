@@ -1,0 +1,28 @@
+{
+  "nginx": {
+    "vulnerabilities": [
+      {
+        "atOrAbove": "0.5.6",
+        "below": "1.13.2",
+        "severity": "high",
+        "identifiers": {
+          "CVE": ["CVE-2017-7529"],
+          "summary": "Range filter 可因整數溢位導致敏感資訊外洩"
+        },
+        "cwe": ["CWE-190"],
+        "info": ["https://nvd.nist.gov/vuln/detail/CVE-2017-7529"]
+      },
+      {
+        "atOrAbove": "1.9.5",
+        "below": "1.17.3",
+        "severity": "high",
+        "identifiers": {
+          "CVE": ["CVE-2019-9511"],
+          "summary": "HTTP/2 data dribble，用戶端可誘發過量記憶體消耗"
+        },
+        "cwe": ["CWE-400"],
+        "info": ["https://nvd.nist.gov/vuln/detail/CVE-2019-9511"]
+      }
+    ]
+  }
+}
