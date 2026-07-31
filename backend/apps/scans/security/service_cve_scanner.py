@@ -1,15 +1,18 @@
 """後端服務指紋→CVE 偵測（OWASP A06 Vulnerable & Outdated Components）。
 
-被動偵測：解析爬蟲已抓到的 response `Server` 標頭，讀出 (產品, 版本)，用 vendored
-NVD 衍生 DB（data/backend_services.json）比對已知受影響版本區間。零額外 HTTP、零新
-第三方套件；任何例外 silent-fail 回 []。
+被動偵測：解析爬蟲已抓到的 response ``Server``／``X-Powered-By`` 標頭，讀出
+(產品, 版本)，用 vendored NVD 衍生 DB（``data/backend_services.json``）比對已知
+受影響版本區間。零額外 HTTP、零新第三方套件；任何例外 silent-fail 回 []。
 
 版本區間比對重用 ``js_library_scanner._is_vulnerable``（同 sub-package 的穩定純函式；
-DB 的 atOrAbove/below/atOrBelow 欄位格式與 jsrepository.json 一致），不重寫 matcher。
+DB 的 atOrAbove/below/atOrBelow 欄位與 jsrepository.json 一致），不重寫 matcher。
 
 版本暴露（rule_id=service-version-exposed）刻意**不依賴** CVE DB——即使 DB 缺失或損壞，
 只要偵測到版本就回報 LOW 暴露；如此才能完整接手 ``header_scanner`` 的 header-server-version
 職責而不造成回歸（過去該 rule 不需要任何 DB 即生效）。
+
+註：``X-Powered-By`` 的無版本值（如 ``Express``）由 ``header_scanner`` 的
+header-x-powered-by 報技術棧洩露；本 scanner 只處理「帶版本」的偵測，與之不衝突。
 """
 import json
 import re
@@ -19,8 +22,12 @@ from pathlib import Path
 from apps.scans.scanners import make_finding
 from apps.scans.security.js_library_scanner import _is_vulnerable
 
-# Server: <product>/<version>（版本以數字開頭）；後方可能帶 (Ubuntu) 等註記
+# Server / X-Powered-By：<product>/<version>（版本以數字開頭），後方可能帶 (Ubuntu) 等註記
 _SERVER_RE = re.compile(r"^\s*([A-Za-z][\w.\-]*)\s*/\s*(\d[\w.\-]*)")
+
+# 依序檢查的標頭與其顯示名稱（evidence 用）
+_HEADER_SOURCES: tuple[str, ...] = ("server", "x-powered-by")
+_HEADER_LABEL: dict[str, str] = {"server": "Server", "x-powered-by": "X-Powered-By"}
 
 _DB_PATH = Path(__file__).parent / "data" / "backend_services.json"
 
@@ -39,17 +46,19 @@ def _load_db() -> dict:
         return {}
 
 
-def _parse_server(server: str) -> tuple[str, str] | None:
-    """Server 標頭 → (product(小寫), version)；無可辨識版本回 None。"""
-    if not server:
+def _parse_server(value: str) -> tuple[str, str] | None:
+    """``product/version`` 字串 → (product(小寫), version)；無可辨識版本回 None。"""
+    if not value:
         return None
-    m = _SERVER_RE.match(str(server))
+    m = _SERVER_RE.match(str(value))
     if not m:
         return None
     return m.group(1).lower(), m.group(2)
 
 
-def _build_cve_finding(product: str, version: str, source: str, vulns: list[dict]) -> dict:
+def _build_cve_finding(
+    product: str, version: str, via: str, source: str, vulns: list[dict]
+) -> dict:
     """把命中的 vuln 聚合成單筆 CVE 等級 finding；per-CVE 細節進 evidence_json。"""
     cve_ids: list[str] = []
     detail: list[dict] = []
@@ -81,26 +90,26 @@ def _build_cve_finding(product: str, version: str, source: str, vulns: list[dict
             f"（{cve_list}）。攻擊者可利用對應漏洞對此服務發動攻擊。"
         ),
         remediation=f"將 {product} 升級至已修補的最新穩定版本，並建立定期更新流程。",
-        evidence=f"{product} {version}（來源：{source}）；命中：{cve_list}",
+        evidence=f"{product} {version}（{via}；來源：{source}）；命中：{cve_list}",
         evidence_json={
-            "product": product, "version": version, "detected_from": source,
+            "product": product, "version": version, "detected_from": source, "via": via,
             "vulnerabilities": detail,
         },
         impact_area="vulnerability",
     )
 
 
-def _exposure_finding(product: str, version: str, source: str) -> dict:
+def _exposure_finding(product: str, version: str, via: str, source: str) -> dict:
     """無 CVE 命中（或 DB 缺失）時的版本暴露 LOW finding。"""
     return make_finding(
         category="security", severity="low", rule_id="service-version-exposed",
         title=f"{product} {version} 版本資訊外洩",
         description=(
-            f"回應標頭 Server 洩露了 {product} {version}，攻擊者可據此比對已知漏洞。"
+            f"回應標頭 {via} 洩露了 {product} {version}，攻擊者可據此比對已知漏洞。"
             "目前雖比對不到已知 CVE，仍建議遮蔽以減少資訊暴露。"
         ),
-        remediation="移除或遮蔽 Server 標頭的版本字串。",
-        evidence=f"Server: {product}/{version}（來源：{source}）",
+        remediation=f"移除或遮蔽 {via} 標頭的版本字串。",
+        evidence=f"{via}: {product}/{version}（來源：{source}）",
         impact_area="vulnerability",
     )
 
@@ -108,8 +117,9 @@ def _exposure_finding(product: str, version: str, source: str) -> dict:
 def analyze_services(pages: list[dict]) -> list[dict]:
     """偵測後端服務版本並比對已知 CVE；任何例外 silent-fail 回 []。
 
-    版本暴露（LOW）不依賴 CVE DB：DB 缺失時仍回報暴露，僅缺 CVE 形成。以
-    (product, version) 去重，整個 scan 同一版本只開一張 finding。
+    依次檢查每頁的 ``Server`` 與 ``X-Powered-By``；版本暴露（LOW）不依賴 CVE DB：
+    DB 缺失時仍回報暴露，僅缺 CVE 形成。以 (product, version) 去重，整個 scan 同一
+    版本只開一張 finding。
     """
     try:
         db = _load_db()
@@ -119,23 +129,25 @@ def analyze_services(pages: list[dict]) -> list[dict]:
         out: list[dict] = []
         for page in pages:
             headers = (page or {}).get("headers") or {}
-            parsed = _parse_server(headers.get("server", ""))
-            if not parsed:
-                continue
-            product, version = parsed
-            if (product, version) in seen:
-                continue
             source = (page or {}).get("final_url") or (page or {}).get("url") or ""
-            comp = db.get(product)
-            matched = (
-                [v for v in (comp.get("vulnerabilities") or []) if _is_vulnerable(version, v)]
-                if isinstance(comp, dict) else []
-            )
-            seen.add((product, version))
-            out.append(
-                _build_cve_finding(product, version, source, matched) if matched
-                else _exposure_finding(product, version, source)
-            )
+            for hkey in _HEADER_SOURCES:
+                parsed = _parse_server(headers.get(hkey, ""))
+                if not parsed:
+                    continue
+                product, version = parsed
+                if (product, version) in seen:
+                    continue
+                comp = db.get(product)
+                matched = (
+                    [v for v in (comp.get("vulnerabilities") or []) if _is_vulnerable(version, v)]
+                    if isinstance(comp, dict) else []
+                )
+                seen.add((product, version))
+                label = _HEADER_LABEL[hkey]
+                out.append(
+                    _build_cve_finding(product, version, label, source, matched) if matched
+                    else _exposure_finding(product, version, label, source)
+                )
         return out
     except Exception:
         return []

@@ -42,6 +42,13 @@ class TestAnalyzeServices(TestCase):
                  "cwe": ["CWE-400"], "info": []},
             ],
         },
+        "php": {
+            "vulnerabilities": [
+                {"atOrAbove": "7.4.0", "below": "7.4.30", "severity": "high",
+                 "identifiers": {"CVE": ["CVE-2021-21708"], "summary": "php flaw"},
+                 "cwe": ["CWE-20"], "info": []},
+            ],
+        },
     }
 
     def setUp(self):
@@ -96,6 +103,25 @@ class TestAnalyzeServices(TestCase):
 
     def test_bad_input_returns_empty(self):
         self.assertEqual(scs.analyze_services(None), [])  # type: ignore[arg-type]
+
+    def test_php_from_x_powered_by_reports_cve(self):
+        pages = [{"headers": {"x-powered-by": "PHP/7.4.5"}, "final_url": "https://example.com/"}]
+        findings = scs.analyze_services(pages)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["rule_id"], "service-known-cve")
+        self.assertEqual(findings[0]["evidence_json"]["product"], "php")
+        self.assertEqual(findings[0]["evidence_json"]["via"], "X-Powered-By")
+
+    def test_x_powered_by_without_version_no_finding(self):
+        # 無版本的 X-Powered-By（如 Express）不開 finding；技術棧洩露由 header_scanner 報
+        pages = [{"headers": {"x-powered-by": "Express"}, "final_url": "https://example.com/"}]
+        self.assertEqual(scs.analyze_services(pages), [])
+
+    def test_server_and_x_powered_by_yield_distinct_findings(self):
+        pages = [{"headers": {"server": "nginx/1.12.0", "x-powered-by": "PHP/7.4.5"},
+                  "final_url": "https://example.com/"}]
+        products = {f["evidence_json"]["product"] for f in scs.analyze_services(pages)}
+        self.assertEqual(products, {"nginx", "php"})
 
     def test_missing_db_still_reports_exposure(self):
         # DB 缺失時 CVE 比對無作用，但版本暴露仍應回報（不回歸 header-server-version）
