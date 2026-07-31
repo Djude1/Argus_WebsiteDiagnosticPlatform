@@ -92,6 +92,7 @@
 | 敏感檔/路徑主動探測（content discovery） | `security/exposure_scanner.py` |
 | 硬編碼秘鑰偵測（API key/token/private key） | `security/secret_scanner.py` |
 | Nuclei→Kali sqlmap 主動驗證攻擊鏈 | `security/kali_tools.py`（三重授權鎖；端到端已實跑驗證 2026-07-07，worker→docker exec kali→sqlmap 對真實目標成功執行） |
+| 後端服務指紋→CVE（nginx/Apache/PHP 版本→CVE 比對） | `security/service_cve_scanner.py`（vendored NVD DB，2026-07-31；被動、每次掃描都跑） |
 
 ---
 
@@ -103,4 +104,4 @@
 > - **Argus 的獨特優勢**：SEO / AEO / GEO 三個維度是 Nessus 完全沒有的；外加 Nuclei→Kali AI 攻擊鏈主動驗證
 > - **Nessus 的明顯優勢**：網路層掃描、主機/OS 層稽核、合規性稽核（PCI/CIS/HIPAA）
 >
-> Web 應用層所有 gap 已全數補齊（SSL/Cookie/Header/CORS/CSP/SRI/DNS/OWASP 對映 + 敏感檔/秘鑰探測 + 第三方 JS 庫版本→CVE 對比），純 Web 掃描範疇已涵蓋 Nessus Web Plugin 的主要子集；**Web 層 gap 已全數補齊**。
+> Web 應用層所有 gap 已全數補齊（SSL/Cookie/Header/CORS/CSP/SRI/DNS/OWASP 對映 + 敏感檔/秘鑰探測 + 第三方 JS 庫版本→CVE 對比 + 後端服務版本→CVE 對比），純 Web 掃描範疇已涵蓋 Nessus Web Plugin 的主要子集；**Web 層 gap 已全數補齊**。

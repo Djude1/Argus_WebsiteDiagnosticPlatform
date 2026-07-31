@@ -148,10 +148,10 @@ class TestHeaderScanner(TestCase):
     def _page(self, headers):
         return [{"headers": headers, "final_url": "https://example.com", "url": "https://example.com"}]
 
-    def test_server_version_leak_is_low(self):
+    def test_server_version_not_emitted_by_header_scanner(self):
+        # Server 版本洩露已由 service_cve_scanner 接手；header_scanner 不再開此 rule。
         findings = header_scanner.analyze_headers(self._page({"server": "Apache/2.4.49"}))
-        rules = {f["rule_id"]: f for f in findings}
-        self.assertEqual(rules["header-server-version"]["severity"], "low")
+        self.assertNotIn("header-server-version", {f["rule_id"] for f in findings})
 
     def test_x_powered_by_is_low(self):
         findings = header_scanner.analyze_headers(self._page({"x-powered-by": "PHP/7.4.3"}))

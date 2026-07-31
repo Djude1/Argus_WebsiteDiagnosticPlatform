@@ -24,7 +24,7 @@ Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` �
 |---|---|---|
 | `ssl_scanner.py` | SSL/TLS 深度分析：憑證到期、弱 cipher、過期協議（TLS 1.0/1.1）| 已建 |
 | `cookie_scanner.py` | Cookie 安全旗標：Secure、HttpOnly、SameSite | 已建 |
-| `header_scanner.py` | 資訊洩露標頭（Server/X-Powered-By）、CORS 設定、CSP 品質分析 | 已建 |
+| `header_scanner.py` | 資訊洩露標頭（X-Powered-By 技術棧）、CORS 設定、CSP 品質分析；Server 版本→CVE 已移交 service_cve_scanner | 已建 |
 | `owasp_mapper.py` | Finding 對映 OWASP Top 10（A01~A10）與 CWE 編號（`tag()` + `backfill()`） | 已建 |
 | `secret_scanner.py` | 硬編碼/外洩秘鑰偵測（AWS/Google/GitHub/Stripe/連線字串/私鑰/明文密碼）+ 遮罩 `redact_secrets_in_text` | 已建 |
 | `redaction.py` | 共用 finding/log 遮罩：URL query、PII、任意短 secret；持久化前使用 | 已建 |
@@ -36,6 +36,8 @@ Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` �
 | `sri_scanner.py` | SRI 缺失偵測：外部跨來源 `<script>/<link>` 缺 `integrity` | 已建 |
 | `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
+| `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |
+| `nvd_db.py` | NVD CVE→backend_services.json 純函式轉換（CPE 過濾 + 版本區間），供 refresh 命令與單元測試 | 已建 |
 
 ---
 
@@ -114,6 +116,21 @@ def analyze_js_libraries(pages: list[dict]) -> list[dict]:
 - severity 沿用 Retire.js 值但 **critical 封頂 HIGH**（被動偵測未實機確認可利用）
 - 單一 rule_id `js-lib-known-vuln` → A06/CWE-1104；per-CVE 的具體 CWE/CVE/summary/連結進 `evidence_json`
 - 以 `(庫名, 版本)` 去重；規則庫 vendored 於 `data/jsrepository.json`（Apache-2.0），手動更新
+
+---
+
+## Service CVE Scanner 設計原則
+
+```python
+def analyze_services(pages: list[dict]) -> list[dict]:
+    """依序解析每頁 Server／X-Powered-By 的 (產品,版本)，比對 vendored NVD DB，回 Finding list。例外回 []。"""
+```
+
+- 被動、零額外 HTTP（只讀 `page["headers"]` 的 Server/X-Powered-By）；每次掃描都跑、**不掛任何 active/deep gate**
+- 版本區間比對**重用** `js_library_scanner._is_vulnerable`（DB 欄位格式與 jsrepository.json 一致），不重寫 matcher
+- 命中 → `service-known-cve`（severity 取命中 CVE 最高、critical 封頂 high、A06/CWE-1104；per-CVE 進 `evidence_json`）
+- 無命中（或 DB 缺失）→ LOW `service-version-exposed`（A05/CWE-200）；**版本暴露不依賴 DB**，以完整接手舊 `header-server-version` 而不回歸
+- 以 `(產品, 版本)` 去重；DB 為 `data/backend_services.json`（NVD public domain），以 `manage.py refresh_backend_cve_db` 手動更新；轉換純函式 `nvd_db.build_db_from_nvd` 的正確性由 `tests_nvd_db.py` 已知答案 fixture 鎖定
 
 ---
 

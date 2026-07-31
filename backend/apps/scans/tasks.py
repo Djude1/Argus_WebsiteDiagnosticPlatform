@@ -38,6 +38,7 @@ from apps.scans.security.redaction import (
     redact_warning_summary,
 )
 from apps.scans.security.secret_scanner import build_secret_finding, detect_secrets_in_text
+from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.services import assert_public_http_url
@@ -506,6 +507,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             + analyze_sri(crawled_pages)
             + analyze_dns(host)
             + analyze_js_libraries(crawled_pages)
+            + analyze_services(crawled_pages)
         )
         deep_security_findings = [owasp_mapper.tag(f) for f in deep_security_findings]
         for finding in deep_security_findings:
