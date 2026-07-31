@@ -4,15 +4,8 @@ from apps.scans.scanners import make_finding
 
 def _eval_headers(headers: dict, url: str) -> list[dict]:
     out: list[dict] = []
-    server = headers.get("server", "")
-    if server and any(ch.isdigit() for ch in server):
-        out.append(make_finding(
-            category="security", severity="low", rule_id="header-server-version",
-            title="Server 標頭洩露版本資訊",
-            description=f"回應標頭 Server 洩露了軟體版本：{server}",
-            remediation="移除或遮蔽 Server 標頭的版本字串。",
-            evidence=f"Server: {server}", impact_area="vulnerability",
-        ))
+    # Server 版本洩露已由 service_cve_scanner 接手（service-version-exposed /
+    # service-known-cve）；此處不再重複開 header-server-version。
     xpb = headers.get("x-powered-by", "")
     if xpb:
         out.append(make_finding(

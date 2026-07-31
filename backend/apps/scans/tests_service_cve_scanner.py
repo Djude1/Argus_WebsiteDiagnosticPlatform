@@ -7,6 +7,7 @@ import pathlib
 
 from django.test import TestCase
 
+from apps.scans.security import owasp_mapper
 from apps.scans.security import service_cve_scanner as scs
 
 
@@ -132,3 +133,15 @@ class TestRealSeedDb(TestCase):
         for vuln in db["nginx"]["vulnerabilities"]:
             self.assertIn("identifiers", vuln)
             self.assertIn(("CVE"), vuln["identifiers"])
+
+
+class TestServiceCveOwaspMapping(TestCase):
+    def test_known_cve_maps_to_a06_cwe1104(self):
+        tagged = owasp_mapper.tag({"category": "security", "rule_id": "service-known-cve"})
+        self.assertEqual(tagged["owasp_category"], "A06")
+        self.assertEqual(tagged["cwe_id"], "CWE-1104")
+
+    def test_version_exposed_maps_to_a05_cwe200(self):
+        tagged = owasp_mapper.tag({"category": "security", "rule_id": "service-version-exposed"})
+        self.assertEqual(tagged["owasp_category"], "A05")
+        self.assertEqual(tagged["cwe_id"], "CWE-200")

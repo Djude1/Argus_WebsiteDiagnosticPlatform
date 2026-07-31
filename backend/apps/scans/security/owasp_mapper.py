@@ -14,7 +14,6 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "cookie-no-httponly": ("A05", "CWE-1004"),
     "cookie-samesite-none": ("A05", "CWE-1275"),
     # Header / CORS / CSP（本套件新 scanner）
-    "header-server-version": ("A05", "CWE-200"),
     "header-x-powered-by": ("A05", "CWE-200"),
     "header-cors-wildcard": ("A05", "CWE-942"),
     "header-cors-credentials": ("A05", "CWE-942"),
@@ -29,6 +28,9 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "dns-dnssec-missing": ("A05", "CWE-345"),
     # 第三方 JS 庫已知漏洞（js_library_scanner）
     "js-lib-known-vuln": ("A06", "CWE-1104"),
+    # 後端服務指紋→CVE（service_cve_scanner）
+    "service-known-cve": ("A06", "CWE-1104"),
+    "service-version-exposed": ("A05", "CWE-200"),
     # Kali 主動驗證（kali_tools 攻擊鏈）
     "kali-sqlmap-sqli": ("A03", "CWE-89"),
     # 敏感檔案 / 路徑外洩（exposure_scanner）+ 硬編碼秘鑰（secret_scanner）
