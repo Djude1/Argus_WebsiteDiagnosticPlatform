@@ -99,7 +99,7 @@ TEAM_DATA = [
             {"title": "四維加權評分與取消", "desc": "0–100 綜合評分與合作式掃描取消機制"},
             {"title": "合規與主動探測", "desc": "robots／same-origin、katana 整合、主動探測模組"},
         ],
-        "github_url": "https://github.com/Z3N9",
+        "github_url": "https://github.com/ZengAnatoly",
         "sort_order": 3,
         "is_active": True,
     },

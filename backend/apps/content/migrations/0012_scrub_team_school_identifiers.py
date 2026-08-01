@@ -18,7 +18,7 @@ MEMBER_SCRUB = [
     {"name": "侯雨利", "github_url": "https://github.com/Djude1"},
     {"name": "羅建凱", "github_url": "https://github.com/SmallLoOwO"},
     {"name": "李仕傑", "github_url": "https://github.com/XiuJie2"},
-    {"name": "曾子睿", "github_url": "https://github.com/Z3N9"},
+    {"name": "曾子睿", "github_url": "https://github.com/ZengAnatoly"},
 ]
 
 
