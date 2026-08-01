@@ -9,7 +9,7 @@
 本機 / 部署機用法（密碼只存在於當下 shell 或 .env，不進 git）：
 
     uv run python backend/manage.py seed_admin \
-        --email 115401@gmail.com --password "<密碼>"
+        --email admin@example.com --password "<密碼>"
 
 或在 .env 設定 SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD 後直接：
 

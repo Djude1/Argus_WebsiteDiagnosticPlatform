@@ -76,19 +76,22 @@ class ContentAPITests(APITestCase):
             self.assertIsInstance(m["skill_levels"], list)
 
     def test_team_seeded_with_real_members(self):
-        """migration 0009：團隊頁應顯示真實組員、回傳學號，且不殘留佔位資料。"""
+        """migration 0009 / 0012：團隊頁應顯示核心成員、回傳 GitHub 連結，且不殘留佔位資料。"""
         response = self.client.get(reverse("content-team"))
         members = response.data["members"]
         names = [m["name"] for m in members]
-        # 真實組員存在
+        # 核心成員存在
         for real in ["侯雨利", "羅建凱", "李仕傑", "曾子睿"]:
             self.assertIn(real, names)
         # 佔位資料不殘留
         for placeholder in ["後端工程師", "前端工程師", "AI / Agent", "DevOps / QA", "組長A"]:
             self.assertNotIn(placeholder, names)
-        # 學號欄位有回傳且正確
+        # GitHub 連結有回傳
         leader = next(m for m in members if m["name"] == "侯雨利")
-        self.assertEqual(leader["student_id"], "11246034")
+        self.assertEqual(leader["github_url"], "https://github.com/Djude1")
+        # 學號 / email 不再對外公開輸出（避免暴露學校識別資訊）
+        self.assertNotIn("student_id", leader)
+        self.assertNotIn("email", leader)
 
     def test_milestones_seeded_real_timeline(self):
         """migration 0010：開發歷程應為手冊真實時程（跨 2025/12–2026/06），不殘留舊里程碑。"""

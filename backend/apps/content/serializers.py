@@ -12,10 +12,12 @@ class ProjectFeatureSerializer(serializers.ModelSerializer):
 class TeamMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamMember
+        # student_id / email 不對外公開輸出（避免暴露學校識別資訊）；
+        # 成員聯絡資訊改用 github_url（工程師標準公開身份）。
         fields = [
-            "id", "name", "role", "student_id", "avatar_emoji", "avatar_url", "bio",
+            "id", "name", "role", "avatar_emoji", "avatar_url", "bio",
             "skills", "skill_levels", "contributions",
-            "email", "github_url", "sort_order",
+            "github_url", "sort_order",
         ]
 
 

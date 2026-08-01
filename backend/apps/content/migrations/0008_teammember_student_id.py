@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='teammember',
             name='student_id',
-            field=models.CharField(blank=True, default='', help_text='學號（公開團隊頁顯示），例：11246034', max_length=20),
+            field=models.CharField(blank=True, default='', help_text='內部識別用，不對外公開顯示', max_length=20),
         ),
     ]

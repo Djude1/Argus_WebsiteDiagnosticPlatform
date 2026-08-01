@@ -26,7 +26,7 @@ class TeamMember(models.Model):
     role = models.CharField(max_length=64, help_text="例如：前端工程師、UX 設計師")
     student_id = models.CharField(
         max_length=20, blank=True, default="",
-        help_text="學號（公開團隊頁顯示），例：11246034",
+        help_text="內部識別用，不對外公開顯示",
     )
     avatar_emoji = models.CharField(
         max_length=8, blank=True,

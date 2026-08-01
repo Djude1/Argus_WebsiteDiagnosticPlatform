@@ -2,16 +2,16 @@ from django.core.management.base import BaseCommand
 
 from apps.content.models import TeamMember
 
-# 兩套已知佔位成員的 name（清除用，與 migration 0009 一致）
+# 兩套已知佔位成員的 name（清除用，與 migration 0009 / 0012 一致）
 PLACEHOLDER_NAMES = [
     "後端工程師", "前端工程師", "AI / Agent", "DevOps / QA",
     "組長A", "B同學", "C同學", "D同學",
 ]
 
-# 真實組員：與 migration 0009 同一份資料（手冊表 4-2-2 / 4-2-1，第115401組）
+# 四位核心成員：與 migration 0009 / 0012 同一份資料。
+# 聯絡資訊只用 GitHub（工程師標準公開身份），不含學校識別資訊。
 TEAM_DATA = [
     {
-        "student_id": "11246034",
         "name": "侯雨利",
         "role": "組長｜系統架構與後端整合",
         "avatar_emoji": "👑",
@@ -30,13 +30,11 @@ TEAM_DATA = [
             {"title": "Docker 部署與維運", "desc": "Compose 多服務容器化 + cloudflared 對外通道"},
             {"title": "報告產出與文件統籌", "desc": "Word 弱點報告、系統手冊統整與格式校對"},
         ],
-        "email": "11246034@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/Djude1",
         "sort_order": 0,
         "is_active": True,
     },
     {
-        "student_id": "11246001",
         "name": "羅建凱",
         "role": "組員｜前端開發與 UI/UX",
         "avatar_emoji": "🎨",
@@ -55,13 +53,11 @@ TEAM_DATA = [
             {"title": "全站 UI/UX 與互動", "desc": "配色、版面、動效與結帳 3 步驟精靈"},
             {"title": "API 規格與行銷頁", "desc": "RESTful 介面規格、產品介紹與團隊介紹頁"},
         ],
-        "email": "11246001@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/SmallLoOwO",
         "sort_order": 1,
         "is_active": True,
     },
     {
-        "student_id": "11246038",
         "name": "李仕傑",
         "role": "組員｜資料庫與計費後端",
         "avatar_emoji": "🗄️",
@@ -80,13 +76,11 @@ TEAM_DATA = [
             {"title": "Celery 非同步任務", "desc": "掃描工作佇列與進度追蹤"},
             {"title": "資料 API", "desc": "Findings／Dashboard 與掃描歷史／稽核 API"},
         ],
-        "email": "11246038@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/XiuJie2",
         "sort_order": 2,
         "is_active": True,
     },
     {
-        "student_id": "11246041",
         "name": "曾子睿",
         "role": "組員｜爬蟲與四維掃描引擎",
         "avatar_emoji": "🕷️",
@@ -105,8 +99,7 @@ TEAM_DATA = [
             {"title": "四維加權評分與取消", "desc": "0–100 綜合評分與合作式掃描取消機制"},
             {"title": "合規與主動探測", "desc": "robots／same-origin、katana 整合、主動探測模組"},
         ],
-        "email": "11246041@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/Z3N9",
         "sort_order": 3,
         "is_active": True,
     },
@@ -114,7 +107,7 @@ TEAM_DATA = [
 
 
 class Command(BaseCommand):
-    help = "Seed 四位真實組員資料（idempotent，以 student_id 為鍵，並清除舊佔位成員）"
+    help = "Seed 四位核心成員資料（idempotent，以 name 為鍵，並清除舊佔位成員）"
 
     def handle(self, *args, **options):
         removed, _ = TeamMember.objects.filter(name__in=PLACEHOLDER_NAMES).delete()
@@ -122,9 +115,9 @@ class Command(BaseCommand):
             self.stdout.write(f"  清除佔位成員：{removed} 筆")
         for data in TEAM_DATA:
             member, created = TeamMember.objects.update_or_create(
-                student_id=data["student_id"],
-                defaults={k: v for k, v in data.items() if k != "student_id"},
+                name=data["name"],
+                defaults={k: v for k, v in data.items() if k != "name"},
             )
             action = "建立" if created else "更新"
-            self.stdout.write(f"  {action}：{member.student_id} {member.name}（{member.role}）")
-        self.stdout.write(self.style.SUCCESS("[OK] 真實組員資料 seed 完成"))
+            self.stdout.write(f"  {action}：{member.name}（{member.role}）")
+        self.stdout.write(self.style.SUCCESS("[OK] 核心成員資料 seed 完成"))

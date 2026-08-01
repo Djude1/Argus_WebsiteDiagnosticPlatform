@@ -1576,7 +1576,6 @@ const TEAM_SCHEMA = {
   titleField: "name",
   fields: [
     { key: "name", label: "姓名", type: "text", required: true },
-    { key: "student_id", label: "學號", type: "text", hint: "例：11246034" },
     { key: "role", label: "角色", type: "text", required: true },
     { key: "avatar_emoji", label: "頭像 emoji", type: "text", hint: "例：🧑‍💻 🎨" },
     { key: "bio", label: "簡介", type: "textarea", rows: 3 },
@@ -1590,7 +1589,6 @@ const TEAM_SCHEMA = {
     { key: "sort_order", label: "順序", num: true },
     { key: "avatar_emoji", label: "頭像", render: (i) => <span className="admin-icon-lg">{i.avatar_emoji}</span> },
     { key: "name", label: "姓名" },
-    { key: "student_id", label: "學號" },
     { key: "role", label: "角色" },
     { key: "is_active", label: "啟用", render: (i) => i.is_active ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
   ],

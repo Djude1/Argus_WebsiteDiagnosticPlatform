@@ -1,11 +1,11 @@
-"""以系統手冊（第115401組）的真實組員，取代先前的佔位團隊資料。
+"""以四位核心成員的分工資料，取代先前的佔位團隊資料。
 
 先前的種子有兩套互不一致的佔位資料：
 - migration 0002 / 0004：name 是職稱（後端工程師 / 前端工程師 / AI / Agent / DevOps / QA）
 - seed_team 指令：name 是「組長A / B同學 / C同學 / D同學」
 
-本 migration 清除這兩套佔位成員，改以手冊「表 4-2-2 工作內容與貢獻度表」
-與「表 4-2-1 分工表」的真實 4 位組員建立，並以 student_id 為冪等鍵。
+本 migration 清除這兩套佔位成員，改建立四位核心成員，以 name 為冪等鍵。
+聯絡資訊只用 GitHub（工程師標準公開身份），不含學校識別資訊。
 reverse 時不刪除（避免回滾誤刪 staff 後台已編輯的真實資料）。
 """
 
@@ -17,10 +17,9 @@ PLACEHOLDER_NAMES = [
     "組長A", "B同學", "C同學", "D同學",  # seed_team（舊版）
 ]
 
-# 真實組員：bio 取自手冊表 4-2-2；contributions 取自表 4-2-1 的 ● 主責項目
+# 四位核心成員：貢獻度取自分工表；聯絡資訊只用 GitHub
 REAL_TEAM = [
     {
-        "student_id": "11246034",
         "name": "侯雨利",
         "role": "組長｜系統架構與後端整合",
         "avatar_emoji": "👑",
@@ -39,13 +38,11 @@ REAL_TEAM = [
             {"title": "Docker 部署與維運", "desc": "Compose 多服務容器化 + cloudflared 對外通道"},
             {"title": "報告產出與文件統籌", "desc": "Word 弱點報告、系統手冊統整與格式校對"},
         ],
-        "email": "11246034@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/Djude1",
         "sort_order": 0,
         "is_active": True,
     },
     {
-        "student_id": "11246001",
         "name": "羅建凱",
         "role": "組員｜前端開發與 UI/UX",
         "avatar_emoji": "🎨",
@@ -64,13 +61,11 @@ REAL_TEAM = [
             {"title": "全站 UI/UX 與互動", "desc": "配色、版面、動效與結帳 3 步驟精靈"},
             {"title": "API 規格與行銷頁", "desc": "RESTful 介面規格、產品介紹與團隊介紹頁"},
         ],
-        "email": "11246001@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/SmallLoOwO",
         "sort_order": 1,
         "is_active": True,
     },
     {
-        "student_id": "11246038",
         "name": "李仕傑",
         "role": "組員｜資料庫與計費後端",
         "avatar_emoji": "🗄️",
@@ -89,13 +84,11 @@ REAL_TEAM = [
             {"title": "Celery 非同步任務", "desc": "掃描工作佇列與進度追蹤"},
             {"title": "資料 API", "desc": "Findings／Dashboard 與掃描歷史／稽核 API"},
         ],
-        "email": "11246038@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/XiuJie2",
         "sort_order": 2,
         "is_active": True,
     },
     {
-        "student_id": "11246041",
         "name": "曾子睿",
         "role": "組員｜爬蟲與四維掃描引擎",
         "avatar_emoji": "🕷️",
@@ -114,8 +107,7 @@ REAL_TEAM = [
             {"title": "四維加權評分與取消", "desc": "0–100 綜合評分與合作式掃描取消機制"},
             {"title": "合規與主動探測", "desc": "robots／same-origin、katana 整合、主動探測模組"},
         ],
-        "email": "11246041@ntub.edu.tw",
-        "github_url": "",
+        "github_url": "https://github.com/Z3N9",
         "sort_order": 3,
         "is_active": True,
     },
@@ -126,11 +118,11 @@ def seed(apps, schema_editor):
     Member = apps.get_model("content", "TeamMember")
     # 清除兩套佔位成員
     Member.objects.filter(name__in=PLACEHOLDER_NAMES).delete()
-    # 以 student_id 為冪等鍵建立 / 更新真實組員
+    # 以 name 為冪等鍵建立 / 更新核心成員
     for data in REAL_TEAM:
         Member.objects.update_or_create(
-            student_id=data["student_id"],
-            defaults={k: v for k, v in data.items() if k != "student_id"},
+            name=data["name"],
+            defaults={k: v for k, v in data.items() if k != "name"},
         )
 
 
