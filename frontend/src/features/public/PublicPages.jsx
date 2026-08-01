@@ -21,62 +21,48 @@ function PublicNav() {
   const theme = useArgusStore((s) => s.theme);
   const toggleTheme = useArgusStore((s) => s.toggleTheme);
   const navigate = useNavigate();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   return (
-    <nav className={`public-nav ${mobileNavOpen ? "mobile-open" : ""}`}>
+    <nav className="public-nav">
       <div className="public-nav-inner">
         <button type="button" className="public-brand active" onClick={() => { replayIntro(); navigate("/project"); }} title="重播開場動畫" aria-label="重播 ARGUS 開場動畫">
           <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
           <span className="public-brand-sub">AI 網站健檢平台</span>
         </button>
-        <button
-          className="mobile-nav-toggle"
-          type="button"
-          aria-expanded={mobileNavOpen}
-          aria-controls="public-mobile-nav-panel"
-          onClick={() => setMobileNavOpen((open) => !open)}
-        >
-          <span aria-hidden="true">{mobileNavOpen ? "✕" : "☰"}</span>
-          <span className="sr-only">{mobileNavOpen ? "關閉導覽" : "開啟導覽"}</span>
-        </button>
-        <div className="mobile-nav-panel" id="public-mobile-nav-panel">
-          <div className="public-nav-links">
-            {PUBLIC_NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileNavOpen(false)}
-                className={({ isActive }) =>
-                  `public-nav-link ${isActive ? "active" : ""}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-          <div className="public-nav-cta">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={toggleTheme}
-              title="切換深色 / 淺色主題"
-              aria-label="切換深色 / 淺色主題"
+        <div className="public-nav-links">
+          {PUBLIC_NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `public-nav-link ${isActive ? "active" : ""}`
+              }
             >
-              <span className="theme-toggle-icon" aria-hidden="true">
-                {theme === "light" ? "☾" : "☀"}
-              </span>
-              <span>{theme === "light" ? "夜間" : "日間"}</span>
-            </button>
-            {accessToken ? (
-              <NavLink to="/dashboard" className="public-cta-primary">
-                進入 Dashboard
-              </NavLink>
-            ) : (
-              <NavLink to="/login" className="public-cta-primary">
-                登入 / 註冊
-              </NavLink>
-            )}
-          </div>
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+        <div className="public-nav-cta">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title="切換深色 / 淺色主題"
+            aria-label="切換深色 / 淺色主題"
+          >
+            <span className="theme-toggle-icon" aria-hidden="true">
+              {theme === "light" ? "☾" : "☀"}
+            </span>
+            <span>{theme === "light" ? "夜間" : "日間"}</span>
+          </button>
+          {accessToken ? (
+            <NavLink to="/dashboard" className="public-cta-primary">
+              進入 Dashboard
+            </NavLink>
+          ) : (
+            <NavLink to="/login" className="public-cta-primary">
+              登入 / 註冊
+            </NavLink>
+          )}
         </div>
       </div>
     </nav>
@@ -511,11 +497,11 @@ const PURCHASE_FAQ = [
   },
   {
     q: "支援哪些付款方式？",
-    a: "Argus 使用綠界全方位金流。結帳頁會清楚標示目前是正式或測試環境；只有綠界伺服器回呼通過簽章、商店、訂單與金額核對後才會入點。",
+    a: "目前為模擬付款（點選即入帳，供示範用）。正式上線後將串接綠界 / 藍新 / Stripe 等金流。",
   },
   {
     q: "可以退費嗎？",
-    a: "付款取消或退費需由客服依綠界交易狀態處理；掃描失敗或被取消時，只會自動退回該次掃描預扣的 Argus 點數。",
+    a: "如有特殊狀況請聯絡管理員，由 admin 在後台手動退費。掃描失敗或被取消時，系統會自動全額退回預扣的點數。",
   },
 ];
 
@@ -931,16 +917,14 @@ function FreeToolsPage() {
                   <RiskLevelBadge level={urlCheck.result.risk_level} />
                 </div>
                 <p>{urlCheck.result.recommendation}</p>
-                <p className="insight-note">判斷信心：{urlCheck.result.confidence || "medium"}</p>
                 <ul className="insight-feature-list">
-                  {urlCheck.result.features.slice(0, 8).map((f, idx) => (
+                  {urlCheck.result.features.slice(0, 5).map((f, idx) => (
                     <li key={`${f.title}-${idx}`}>
                       <strong>{f.title}</strong>
                       <span>{f.evidence}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="insight-note">限制：{urlCheck.result.limitations}</p>
               </div>
             )}
           </form>
@@ -968,20 +952,18 @@ function FreeToolsPage() {
                   <RiskLevelBadge level={emailCheck.result.risk_level} />
                 </div>
                 <p>{emailCheck.result.recommendation}</p>
-                <p className="insight-note">判斷信心：{emailCheck.result.confidence || "medium"}</p>
                 <div className="insight-email-meta">
                   <span>From: {emailCheck.result.from_domain || "未解析"}</span>
                   <span>連結數: {emailCheck.result.url_count}</span>
                 </div>
                 <ul className="insight-feature-list">
-                  {emailCheck.result.features.slice(0, 8).map((f, idx) => (
+                  {emailCheck.result.features.slice(0, 5).map((f, idx) => (
                     <li key={`${f.title}-${idx}`}>
                       <strong>{f.title}</strong>
                       <span>{f.evidence}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="insight-note">限制：{emailCheck.result.limitations}</p>
               </div>
             )}
           </form>
@@ -1012,8 +994,7 @@ function DownloadPage() {
             <span className="hero-grad">隨身</span>使用 Argus
           </h1>
           <p className="public-hero-sub">
-            Argus 是 PWA（漸進式網頁應用），不需 App Store 就能從瀏覽器安裝。
-            「安裝 App」與「離線報告」是兩個獨立功能：安裝不會自動把任何掃描資料留在裝置上。
+            Argus 是 PWA（漸進式網頁應用），無需透過 App Store — 直接從瀏覽器加到主畫面，像 App 一樣開啟，支援離線瀏覽既有報告。
           </p>
           <div className="public-hero-actions">
             {installed ? (
@@ -1034,7 +1015,7 @@ function DownloadPage() {
                   }
                 }}
               >
-                ⬇ 安裝 Argus PWA
+                ⬇ 點擊下載
               </button>
             )}
             {!installed && latest?.download_url && (
@@ -1043,45 +1024,6 @@ function DownloadPage() {
               </a>
             )}
           </div>
-        </div>
-      </section>
-
-      <section className="public-section">
-        <header className="public-section-head">
-          <h2>離線功能怎麼運作</h2>
-          <p>先安裝，再由你決定哪些完成報告可以留在這台裝置</p>
-        </header>
-        <div className="public-install-grid">
-          <div className="public-install-card">
-            <div className="public-install-icon">📲</div>
-            <div className="public-install-title">1. 安裝 App</div>
-            <ol>
-              <li>提供獨立視窗與主畫面捷徑</li>
-              <li>離線時仍可啟動 Argus 介面</li>
-              <li>不會自動快取 API 或掃描內容</li>
-            </ol>
-          </div>
-          <div className="public-install-card">
-            <div className="public-install-icon">📥</div>
-            <div className="public-install-title">2. 手動收藏報告</div>
-            <ol>
-              <li>完成掃描後按「離線收藏」</li>
-              <li>只保存分數、問題摘要與修正建議</li>
-              <li>不保存截圖、頁面網址與原始證據</li>
-            </ol>
-          </div>
-          <div className="public-install-card">
-            <div className="public-install-icon">🔒</div>
-            <div className="public-install-title">裝置端注意事項</div>
-            <ol>
-              <li>摘要綁定目前帳號；共用裝置使用完畢務必登出</li>
-              <li>可逐份刪除；登出時會全部清除</li>
-              <li>完整報告仍需登入並連線查看</li>
-            </ol>
-          </div>
-        </div>
-        <div className="public-hero-actions mt-5">
-          <NavLink className="public-cta-ghost" to="/offline-reports">查看這台裝置的離線報告 →</NavLink>
         </div>
       </section>
 
