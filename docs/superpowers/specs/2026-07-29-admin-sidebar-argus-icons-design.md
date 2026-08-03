@@ -288,7 +288,9 @@ export function AdminOverviewIcon({ className, "aria-hidden": ariaHidden = true,
 
 ## Out of Scope（後續可考慮）
 
-- CMS schema emoji 欄位 hint 改用品牌語彙（⟡ ◈ ◎⋯）
-- AdminAnnouncementsPage 標題移除 📢
-- Sidebar 加 ⟡ watermark（保留「克制」原則下的小品牌識別）
-- Dashboard / Scans 前台頁面 nav 也跟進改 ⟡ 系列
+> 2026-08-02 更新：「後台 GUI icon 去 AI 化」任務（見 `log/2026-08-02_admin-gui-icon-debrand.md`）已消化本清單部分項目，並額外完成掃描狀態徽章、爬蟲階段動畫、星等、布林勾號與 ☰ 選單鈕的品牌 glyph 化。
+
+- ~~AdminAnnouncementsPage 標題移除 📢~~ ✔ 2026-08-02 已完成
+- CMS schema emoji 欄位 hint 改用品牌語彙（⟡ ◈ ◎⋯）— 保留：屬資料層內容（欄位範例文字），非 UI chrome
+- Sidebar 加 ⟡ watermark（保留「克制」原則下的小品牌識別）— 未做
+- Dashboard / Scans 前台頁面 nav 也跟進改 ⟡ 系列 — 未做（`AuthenticatedPages.jsx` 的 `NAV_ITEMS` 仍為 emoji，掃描狀態徽章與爬蟲階段已於 2026-08-02 改為 `AppShared.jsx` 品牌 glyph）

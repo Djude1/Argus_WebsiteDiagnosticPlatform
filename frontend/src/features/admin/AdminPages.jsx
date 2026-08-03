@@ -11,7 +11,7 @@ import {
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
-import { STATUS_LABELS, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
+import { STATUS_LABELS, StatusDoneGlyph, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
 import {
   AdminOverviewIcon,
   AdminUsersIcon,
@@ -23,6 +23,12 @@ import {
   AdminSettingsIcon,
   AdminAuditLogIcon,
   AdminAnnouncementsIcon,
+  AdminMenuIcon,
+  AdminStarIcon,
+  AdminOrdersIcon,
+  AdminTokensIcon,
+  AdminTrendIcon,
+  AdminAlertIcon,
 } from "../../components/admin/AdminIcons.jsx";
 
 const ADMIN_NAV_ITEMS = [
@@ -142,7 +148,7 @@ function AdminLayout() {
           aria-label="開啟管理選單"
           onClick={() => setDrawerOpen(true)}
         >
-          ☰
+          <AdminMenuIcon />
         </button>
         <strong>ARGUS 管理後台</strong>
       </header>
@@ -200,13 +206,47 @@ function AdminLayout() {
   );
 }
 
-function AdminStatCard({ label, value, hint, tone = "cyan" }) {
+function AdminStatCard({ label, value, hint, tone = "cyan", icon: Icon, hero = false, spark }) {
   return (
-    <div className={`admin-stat-card tone-${tone}`}>
-      <div className="admin-stat-label">{label}</div>
+    <div className={`admin-stat-card tone-${tone}${hero ? " hero" : ""}`}>
+      <div className="admin-stat-head">
+        <div className="admin-stat-label">{label}</div>
+        {Icon && (
+          <span className="admin-stat-icon-chip">
+            <Icon />
+          </span>
+        )}
+      </div>
       <div className="admin-stat-value">{value}</div>
       {hint && <div className="admin-stat-hint">{hint}</div>}
+      {spark && <div className="admin-stat-spark">{spark}</div>}
     </div>
+  );
+}
+
+function AdminSparkline({ series, dataKey, color = "#0ea5e9", height = 40 }) {
+  if (!series || series.length < 2) return null;
+  const w = 240;
+  const values = series.map((row) => row[dataKey] || 0);
+  const maxV = Math.max(...values, 1);
+  const minV = Math.min(...values, 0);
+  const range = maxV - minV || 1;
+  const step = w / (series.length - 1);
+  const yFor = (v) => height - ((v - minV) / range) * height;
+  const linePoints = values.map((v, i) => `${i * step},${yFor(v)}`).join(" ");
+  const areaPoints = `0,${height} ${linePoints} ${w},${height}`;
+  const gradId = `admin-spark-${dataKey}`;
+  return (
+    <svg className="admin-stat-spark-svg" viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${gradId})`} stroke="none" />
+      <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -228,6 +268,14 @@ function AdminMiniChart({ series, keys, height = 110 }) {
 
   return (
     <svg className="admin-mini-chart" viewBox={`0 0 ${w} ${height}`} width="100%" height={height}>
+      <defs>
+        {keys.map((k) => (
+          <linearGradient key={k.key} id={`admin-chart-fill-${k.key}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={k.color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={k.color} stopOpacity="0" />
+          </linearGradient>
+        ))}
+      </defs>
       {yTicks.map((t) => (
         <g key={t}>
           <line
@@ -244,19 +292,33 @@ function AdminMiniChart({ series, keys, height = 110 }) {
         </g>
       ))}
       {keys.map((k) => {
-        const points = series
-          .map((row, i) => `${xFor(i)},${yFor(row[k.key] || 0)}`)
-          .join(" ");
+        const points = series.map((row, i) => [xFor(i), yFor(row[k.key] || 0)]);
+        const linePoints = points.map(([x, y]) => `${x},${y}`).join(" ");
+        const areaPoints = [
+          `${points[0][0]},${padding.top + plotH}`,
+          ...points.map(([x, y]) => `${x},${y}`),
+          `${points[points.length - 1][0]},${padding.top + plotH}`,
+        ].join(" ");
+        const [lastX, lastY] = points[points.length - 1];
         return (
-          <polyline
-            key={k.key}
-            points={points}
-            fill="none"
-            stroke={k.color}
-            strokeWidth="2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
+          <g key={k.key}>
+            <polygon points={areaPoints} fill={`url(#admin-chart-fill-${k.key})`} stroke="none" />
+            <polyline
+              points={linePoints}
+              fill="none"
+              stroke={k.color}
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            <circle
+              className="admin-mini-chart-dot"
+              cx={lastX}
+              cy={lastY}
+              r="3.5"
+              fill={k.color}
+            />
+          </g>
         );
       })}
       {series.length > 0 && (
@@ -295,64 +357,78 @@ function AdminOverviewPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1>概覽</h1>
-        <p>系統整體狀態與最近 14 天活動</p>
+        <div>
+          <h1>概覽</h1>
+          <p>系統整體狀態與最近 14 天活動</p>
+        </div>
+        <div className="admin-status-badge">
+          <span className="admin-status-dot" aria-hidden="true" />
+          Argus 即時監控中
+        </div>
       </header>
 
-      <div className="admin-stat-grid">
+      <div className="admin-stat-grid admin-stat-grid--bento">
+        <AdminStatCard
+          label="累計營收"
+          value={`NT$ ${t.revenue_ntd.toLocaleString()}`}
+          hint={`流通 coin ${t.coin_balance_total.toLocaleString()}`}
+          tone="cyan"
+          icon={AdminTransactionsIcon}
+          hero
+          spark={<AdminSparkline series={dash.series} dataKey="revenue_ntd" color="#0ea5e9" />}
+        />
         <AdminStatCard
           label="使用者總數"
           value={t.users.toLocaleString()}
           hint={`錢包 ${t.wallets.toLocaleString()} 個`}
           tone="cyan"
-        />
-        <AdminStatCard
-          label="累計營收"
-          value={`NT$ ${t.revenue_ntd.toLocaleString()}`}
-          hint={`流通 coin ${t.coin_balance_total.toLocaleString()}`}
-          tone="violet"
+          icon={AdminUsersIcon}
         />
         <AdminStatCard
           label="訂單"
           value={t.orders.toLocaleString()}
           hint={`本月 ${t.orders_this_month} / 已付 ${t.orders_paid}`}
           tone="good"
+          icon={AdminOrdersIcon}
         />
         <AdminStatCard
           label="掃描總數"
           value={t.scans.toLocaleString()}
           hint={`本月 ${t.scans_this_month.toLocaleString()}`}
-          tone="amber"
+          tone="cyan"
+          icon={AdminScansIcon}
         />
         <AdminStatCard
           label="AI Token 用量"
           value={t.ai_tokens_total.toLocaleString()}
           hint={`本月 ${t.ai_tokens_this_month.toLocaleString()} / Sessions ${t.ai_sessions_total}`}
-          tone="violet"
+          tone="cyan"
+          icon={AdminTokensIcon}
         />
         <AdminStatCard
           label="評論"
-          value={`${t.avg_rating ?? "—"} ★`}
+          value={<>{t.avg_rating ?? "—"} <AdminStarIcon className="admin-star-icon" /></>}
           hint={`共 ${t.reviews} 則 / 待回覆 ${t.reviews_pending}`}
-          tone={t.reviews_pending > 0 ? "rose" : "good"}
+          tone={t.reviews_pending > 0 ? "warn" : "good"}
+          icon={AdminReviewsIcon}
         />
       </div>
 
       {/* 14 天時序圖：3 條線（訂單、AI tokens、掃描） */}
       <section className="admin-panel">
         <div className="admin-panel-head-row">
-          <h3>最近 14 天活動</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>最近 14 天活動</h3>
           <div className="admin-chart-legend">
             <span><i className="tone-cyan" />AI tokens</span>
-            <span><i className="tone-indigo" />訂單金額</span>
+            <span><i className="tone-good" />訂單金額</span>
             <span><i className="tone-amber" />掃描數</span>
           </div>
         </div>
         <AdminMiniChart
           series={dash.series}
           keys={[
-            { key: "ai_tokens", color: "#06b6d4" },
-            { key: "revenue_ntd", color: "#6366f1" },
+            { key: "ai_tokens", color: "#0ea5e9" },
+            { key: "revenue_ntd", color: "#10b981" },
             { key: "scans", color: "#f59e0b" },
           ]}
           height={140}
@@ -361,7 +437,7 @@ function AdminOverviewPage() {
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
-          <h3>AI Provider 用量分佈</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTokensIcon /></span>AI Provider 用量分佈</h3>
           {dash.provider_breakdown.length === 0 ? (
             <p className="admin-empty">尚無 AI 使用紀錄</p>
           ) : (
@@ -389,7 +465,7 @@ function AdminOverviewPage() {
         </section>
 
         <section className="admin-panel">
-          <h3>Top 10 AI 用戶</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>Top 10 AI 用戶</h3>
           {dash.top_ai_users.length === 0 ? (
             <p className="admin-empty">尚無 AI 使用紀錄</p>
           ) : (
@@ -426,7 +502,7 @@ function AdminOverviewPage() {
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
-          <h3>最近購買</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>最近購買</h3>
           {data.recent_purchases.length === 0 ? (
             <p className="admin-empty">尚無購買紀錄</p>
           ) : (
@@ -627,7 +703,7 @@ function AdminUserDetailPage() {
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
-          <h3>基本資料</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>基本資料</h3>
           <dl className="admin-dl">
             <dt>狀態</dt><dd>{user.is_active ? "啟用" : "停用"} {user.is_staff && <span className="admin-staff-chip">staff</span>} {user.is_superuser && <span className="admin-super-chip">superuser</span>}</dd>
             <dt>註冊時間</dt><dd>{new Date(user.date_joined).toLocaleString("zh-Hant")}</dd>
@@ -636,7 +712,7 @@ function AdminUserDetailPage() {
         </section>
 
         <section className="admin-panel">
-          <h3>點數錢包</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTransactionsIcon /></span>點數錢包</h3>
           {w ? (
             <>
               <div className="admin-balance-big">
@@ -653,7 +729,7 @@ function AdminUserDetailPage() {
       </div>
 
       <section className="admin-panel">
-        <h3>調整點數</h3>
+        <h3><span className="admin-panel-icon-chip"><AdminSettingsIcon /></span>調整點數</h3>
         <form className="admin-adjust-form" onSubmit={handleAdjust}>
           <div className="admin-adjust-row">
             <input
@@ -688,7 +764,7 @@ function AdminUserDetailPage() {
 
       {user.ai_usage && (
         <section className="admin-panel">
-          <h3>AI 使用量</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTokensIcon /></span>AI 使用量</h3>
           <div className="admin-ai-summary">
             <div>
               <div className="admin-stat-label">總 Tokens</div>
@@ -724,7 +800,7 @@ function AdminUserDetailPage() {
       )}
 
       <section className="admin-panel">
-        <h3>最近 30 筆交易</h3>
+        <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>最近 30 筆交易</h3>
         <div className="admin-table-scroll">
           <table className="admin-table compact">
           <thead>
@@ -917,9 +993,9 @@ function AdminReviewsPage() {
       {data && (
         <div className="admin-stat-grid">
           <AdminStatCard label="總評論數" value={data.overall_total} tone="cyan" />
-          <AdminStatCard label="平均評分" value={data.avg_rating ? `${data.avg_rating} ★` : "—"} tone="good" />
-          <AdminStatCard label="待回覆" value={data.pending_count} tone={data.pending_count > 0 ? "yellow" : "good"} />
-          <AdminStatCard label="待審檢舉" value={data.reported_count} tone={data.reported_count > 0 ? "rose" : "good"} />
+          <AdminStatCard label="平均評分" value={data.avg_rating ? <>{data.avg_rating} <AdminStarIcon className="admin-star-icon" /></> : "—"} tone="good" />
+          <AdminStatCard label="待回覆" value={data.pending_count} tone={data.pending_count > 0 ? "warn" : "good"} />
+          <AdminStatCard label="待審檢舉" value={data.reported_count} tone={data.reported_count > 0 ? "warn" : "good"} />
         </div>
       )}
 
@@ -964,7 +1040,9 @@ function AdminReviewsPage() {
               </div>
             </div>
             <div className="admin-review-rating" aria-label={`${review.rating} 顆星`}>
-              {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+              {Array.from({ length: 5 }, (_, i) => (
+                <AdminStarIcon key={i} filled={i < review.rating} className="admin-star-icon" />
+              ))}
               <span className="admin-cell-secondary"> ({review.rating})</span>
             </div>
           </header>
@@ -1045,7 +1123,7 @@ function AdminReviewsPage() {
 
           {review.response && (
             <div className="admin-review-existing-reply">
-              ✓ 官方回覆最後更新於 {new Date(review.response.updated_at).toLocaleString("zh-Hant")}
+              <StatusDoneGlyph className="admin-inline-glyph" /> 官方回覆最後更新於 {new Date(review.response.updated_at).toLocaleString("zh-Hant")}
               {review.response.author_username ? ` · ${review.response.author_username}` : ""}
             </div>
           )}
@@ -1188,7 +1266,7 @@ function AdminScanDetailPage() {
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
-          <h3>狀態</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminScansIcon /></span>狀態</h3>
           <dl className="admin-dl">
             <dt>狀態</dt><dd><span className={`admin-status ${s.status}`}>{STATUS_LABELS[s.status]?.label || s.status}</span></dd>
             <dt>模式</dt><dd>{s.scan_mode === "active" ? "主動測試" : "被動偵測"}</dd>
@@ -1199,7 +1277,7 @@ function AdminScanDetailPage() {
         </section>
 
         <section className="admin-panel">
-          <h3>結果摘要</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>結果摘要</h3>
           <dl className="admin-dl">
             <dt>總分</dt><dd>{s.overall_score ?? "—"}</dd>
             <dt>頁數</dt><dd>{s.pages_count}</dd>
@@ -1211,7 +1289,7 @@ function AdminScanDetailPage() {
 
       {data.category_scores && Object.keys(data.category_scores).length > 0 && (
         <section className="admin-panel">
-          <h3>各類別分數</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>各類別分數</h3>
           <div className="admin-cat-scores">
             {Object.entries(data.category_scores).map(([cat, score]) => (
               <div key={cat} className="admin-cat-score-item">
@@ -1225,7 +1303,7 @@ function AdminScanDetailPage() {
 
       {data.error_message && (
         <section className="admin-panel admin-panel-danger">
-          <h3>錯誤訊息</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>錯誤訊息</h3>
           <pre className="admin-error-pre">{data.error_message}</pre>
         </section>
       )}
@@ -1326,7 +1404,7 @@ function AdminCmsManager({ schema }) {
     <>
     <section className="admin-panel">
       <div className="admin-panel-head-row">
-        <h3>{schema.title}（{items.length}）</h3>
+        <h3><span className="admin-panel-icon-chip"><AdminContentIcon /></span>{schema.title}（{items.length}）</h3>
         <div className="admin-panel-head-actions">
           {schema.previewPath && (
             <a
@@ -1486,7 +1564,7 @@ const FEATURE_SCHEMA = {
     { key: "sort_order", label: "順序", num: true },
     { key: "icon", label: "圖示", render: (i) => <span className="admin-icon-lg">{i.icon}</span> },
     { key: "title", label: "標題" },
-    { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
+    { key: "is_active", label: "啟用", render: (i) => i.is_active ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
   ],
 };
 
@@ -1514,7 +1592,7 @@ const TEAM_SCHEMA = {
     { key: "name", label: "姓名" },
     { key: "student_id", label: "學號" },
     { key: "role", label: "角色" },
-    { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
+    { key: "is_active", label: "啟用", render: (i) => i.is_active ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
   ],
 };
 
@@ -1543,8 +1621,8 @@ const RELEASE_SCHEMA = {
   displayFields: [
     { key: "version", label: "版本" },
     { key: "platform", label: "平台" },
-    { key: "is_latest", label: "最新", render: (i) => i.is_latest ? "✓" : "—" },
-    { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
+    { key: "is_latest", label: "最新", render: (i) => i.is_latest ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
+    { key: "is_active", label: "啟用", render: (i) => i.is_active ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
   ],
 };
 
@@ -1567,15 +1645,15 @@ const MILESTONE_SCHEMA = {
     { key: "icon", label: "圖示" },
     { key: "title", label: "標題" },
     { key: "date", label: "日期" },
-    { key: "is_active", label: "啟用", render: (i) => i.is_active ? "✓" : "—" },
+    { key: "is_active", label: "啟用", render: (i) => i.is_active ? <StatusDoneGlyph className="admin-bool-glyph" /> : "—" },
   ],
 };
 
 const CONTENT_TABS = [
-  { key: "features", label: "🎯 專案特色", schema: FEATURE_SCHEMA },
-  { key: "team", label: "👥 團隊成員", schema: TEAM_SCHEMA },
-  { key: "releases", label: "📱 APP / PWA 版本", schema: RELEASE_SCHEMA },
-  { key: "milestones", label: "🚀 開發里程碑", schema: MILESTONE_SCHEMA },
+  { key: "features", label: "專案特色", schema: FEATURE_SCHEMA },
+  { key: "team", label: "團隊成員", schema: TEAM_SCHEMA },
+  { key: "releases", label: "APP / PWA 版本", schema: RELEASE_SCHEMA },
+  { key: "milestones", label: "開發里程碑", schema: MILESTONE_SCHEMA },
 ];
 
 function AdminContentPage() {
@@ -1639,7 +1717,7 @@ function AdminSettingsPage() {
 
   const Section = ({ title, rows }) => (
     <section className="admin-panel">
-      <h3>{title}</h3>
+      <h3><span className="admin-panel-icon-chip"><AdminSettingsIcon /></span>{title}</h3>
       <div className="admin-table-scroll">
         <table className="admin-table compact">
         <tbody>
@@ -1869,7 +1947,7 @@ function AdminAnnouncementsPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1 className="admin-page-title">📢 公告管理</h1>
+        <h1 className="admin-page-title">公告管理</h1>
         <button className="admin-add-btn" onClick={openNew}>＋ 新增公告</button>
       </header>
 

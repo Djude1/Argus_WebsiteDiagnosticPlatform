@@ -29,6 +29,11 @@ import {
   isInProgress,
   SeverityBarChart,
   StackedBar,
+  StatusAgentGlyph,
+  StatusCrawlGlyph,
+  StatusDoneGlyph,
+  StatusQueuedGlyph,
+  StatusScanGlyph,
   useConfirmDialogs,
 } from "../../shared/AppShared.jsx";
 
@@ -45,10 +50,10 @@ const SCAN_DRAFT_KEY = "argus_scan_draft_v1";
 
 // 四階段進度條：等待 → 爬取 → 掃描 → Agent 測試 → 完成
 const CRAWL_PHASES = [
-  { key: "queued", label: "等待", emoji: "⏳" },
-  { key: "crawling", label: "爬取", emoji: "🕷️" },
-  { key: "scanning", label: "掃描", emoji: "🔍" },
-  { key: "agent_testing", label: "Agent", emoji: "🤖" },
+  { key: "queued", label: "等待", Icon: StatusQueuedGlyph },
+  { key: "crawling", label: "爬取", Icon: StatusCrawlGlyph },
+  { key: "scanning", label: "掃描", Icon: StatusScanGlyph },
+  { key: "agent_testing", label: "Agent", Icon: StatusAgentGlyph },
 ];
 
 function formatMMSS(totalSec) {
@@ -103,7 +108,7 @@ function CrawlingAnimation({
   return (
     <div className={`crawl-anim ${compact ? "is-compact" : ""}`}>
       <div className="crawl-anim-header">
-        <span className="crawl-anim-spider" aria-hidden="true">{current.emoji}</span>
+        <span className="crawl-anim-spider" aria-hidden="true"><current.Icon className="crawl-anim-glyph" /></span>
         <div className="crawl-anim-text">
           <div className="crawl-anim-title">{current.label}中...</div>
           {hint ? <div className="crawl-anim-hint">{hint}</div> : null}
@@ -159,7 +164,7 @@ function CrawlingAnimation({
             <li key={phase.key} className={`crawl-phase ${cls}`}>
               <span className="crawl-phase-dot" />
               <span className="crawl-phase-emoji" aria-hidden="true">
-                {idx < safeIdx ? "✓" : phase.emoji}
+                {idx < safeIdx ? <StatusDoneGlyph /> : <phase.Icon />}
               </span>
               <span className="crawl-phase-label">{phase.label}</span>
             </li>

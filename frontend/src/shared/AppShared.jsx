@@ -18,14 +18,121 @@ const SEVERITY_FILTERS = [
   { value: "info", label: "資訊" },
 ];
 
+// ---- 掃描狀態 glyph（取代 emoji：跨 OS 渲染一致，沿用 AdminIcons 的 stroke 線稿語言） ----
+
+function StatusGlyphShell({ className, ariaHidden = true, title, children }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden={ariaHidden}
+      role={title ? "img" : undefined}
+    >
+      {title && <title>{title}</title>}
+      {children}
+    </svg>
+  );
+}
+
+function StatusQueuedGlyph(props) {
+  // 時鐘：等待
+  return (
+    <StatusGlyphShell {...props}>
+      <circle cx="12" cy="12" r="7.5" />
+      <path d="M12 7.5V12l3 1.75" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusCrawlGlyph(props) {
+  // 站點拓樸：中心節點向外爬行（呼應拓樸圖功能）
+  return (
+    <StatusGlyphShell {...props}>
+      <circle cx="12" cy="13" r="2" />
+      <line x1="12" y1="11" x2="12" y2="6" />
+      <line x1="10.5" y1="14.5" x2="6.5" y2="17.5" />
+      <line x1="13.5" y1="14.5" x2="17.5" y2="17.5" />
+      <circle cx="12" cy="4.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="5.5" cy="18.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="18.5" r="1.4" fill="currentColor" stroke="none" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusScanGlyph(props) {
+  // 十字準星：呼應 sidebar AdminScansIcon 記號
+  return (
+    <StatusGlyphShell {...props}>
+      <circle cx="12" cy="12" r="6" />
+      <line x1="12" y1="3" x2="12" y2="6.5" />
+      <line x1="12" y1="17.5" x2="12" y2="21" />
+      <line x1="3" y1="12" x2="6.5" y2="12" />
+      <line x1="17.5" y1="12" x2="21" y2="12" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusAgentGlyph(props) {
+  // 晶片：AI Agent
+  return (
+    <StatusGlyphShell {...props}>
+      <rect x="8" y="8" width="8" height="8" rx="1.5" />
+      <line x1="10" y1="8" x2="10" y2="5" />
+      <line x1="14" y1="8" x2="14" y2="5" />
+      <line x1="10" y1="16" x2="10" y2="19" />
+      <line x1="14" y1="16" x2="14" y2="19" />
+      <line x1="8" y1="10" x2="5" y2="10" />
+      <line x1="8" y1="14" x2="5" y2="14" />
+      <line x1="16" y1="10" x2="19" y2="10" />
+      <line x1="16" y1="14" x2="19" y2="14" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusDoneGlyph(props) {
+  return (
+    <StatusGlyphShell {...props}>
+      <path d="M5.5 12.5l4 4L18.5 7.5" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusFailedGlyph(props) {
+  return (
+    <StatusGlyphShell {...props}>
+      <path d="M7 7l10 10M17 7L7 17" />
+    </StatusGlyphShell>
+  );
+}
+
+function StatusCancelledGlyph(props) {
+  // 斜線圓：終止
+  return (
+    <StatusGlyphShell {...props}>
+      <circle cx="12" cy="12" r="7.5" />
+      <line x1="6.8" y1="6.8" x2="17.2" y2="17.2" />
+    </StatusGlyphShell>
+  );
+}
+
 const STATUS_LABELS = {
-  queued: { label: "等待中", tone: "slate", emoji: "⏳" },
-  crawling: { label: "爬取中", tone: "blue", emoji: "🕷️" },
-  scanning: { label: "掃描中", tone: "blue", emoji: "🔍" },
-  agent_testing: { label: "Agent 測試中", tone: "blue", emoji: "🤖" },
-  completed: { label: "完成", tone: "emerald", emoji: "✓" },
-  failed: { label: "失敗", tone: "red", emoji: "✗" },
-  cancelled: { label: "已終止", tone: "slate", emoji: "✖" },
+  queued: { label: "等待中", tone: "slate", Icon: StatusQueuedGlyph },
+  crawling: { label: "爬取中", tone: "blue", Icon: StatusCrawlGlyph },
+  scanning: { label: "掃描中", tone: "blue", Icon: StatusScanGlyph },
+  agent_testing: { label: "Agent 測試中", tone: "blue", Icon: StatusAgentGlyph },
+  completed: { label: "完成", tone: "emerald", Icon: StatusDoneGlyph },
+  failed: { label: "失敗", tone: "red", Icon: StatusFailedGlyph },
+  cancelled: { label: "已終止", tone: "slate", Icon: StatusCancelledGlyph },
 };
 
 const IN_PROGRESS_STATUSES = ["queued", "crawling", "scanning", "agent_testing"];
@@ -475,6 +582,11 @@ export {
   CATEGORY_FILTERS,
   SEVERITY_FILTERS,
   STATUS_LABELS,
+  StatusQueuedGlyph,
+  StatusCrawlGlyph,
+  StatusScanGlyph,
+  StatusAgentGlyph,
+  StatusDoneGlyph,
   IN_PROGRESS_STATUSES,
   isInProgress,
   SEVERITY_ORDER,

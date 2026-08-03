@@ -1,11 +1,11 @@
 import { STATUS_LABELS, isInProgress } from "../../shared/AppShared.jsx";
 
 export function ScanStatusBadge({ status }) {
-  const meta = STATUS_LABELS[status] || { label: status, tone: "slate", emoji: "?" };
+  const meta = STATUS_LABELS[status] || { label: status, tone: "slate", Icon: null };
   const pulse = isInProgress(status) ? "animate-pulse" : "";
   return (
     <span className={`status-badge status-${meta.tone} ${pulse}`}>
-      <span aria-hidden="true">{meta.emoji}</span>
+      {meta.Icon ? <meta.Icon className="status-badge-icon" /> : null}
       <span>{meta.label}</span>
     </span>
   );
