@@ -55,6 +55,8 @@ spec:
     metadata:
       labels:
         app: web
+      annotations:
+        argus.io/config-revision: "ecpay-stage-2026-08-05"
     spec:
       # 等 migrate Job 完成後才啟動應用（migrate --check 有 pending 會回非零 → 迴圈等待）
       # 這也順帶等 DB 就緒；migrate 實際動作只由上面的 Job 執行一次，不會多 replica 撞車
@@ -128,6 +130,8 @@ spec:
     metadata:
       labels:
         app: worker
+      annotations:
+        argus.io/config-revision: "ecpay-stage-2026-08-05"
     spec:
       # Task 7：worker 用此 SA 跨 ns 操作 argus-kali Job（Role/RoleBinding 在 10-kali-runtime.yaml）。
       # Kali disabled 時 worker 不會發 Job，SA 只是預先接線，啟用時免再改 worker。

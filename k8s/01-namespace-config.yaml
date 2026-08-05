@@ -14,7 +14,12 @@ data:
   TRUST_PROXY_SSL_HEADER: "true"
   # 預設涵蓋常見 10.x Pod CIDR；若叢集 Pod CIDR 不同，部署前必須改成實際值。
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8"
-  ARGUS_PAYMENT_MODE: "disabled"
+  # 僅啟用綠界 Stage；正式金流模式會被 Django 啟動檢查拒絕。
+  # 推送前必須先在 live argus-secret 補齊 ECPAY_MERCHANT_ID / ECPAY_HASH_KEY / ECPAY_HASH_IV。
+  ARGUS_PAYMENT_MODE: "ecpay_test"
+  ECPAY_CHECKOUT_URL: "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
+  ECPAY_RETURN_URL: "https://xn--gst.tw/api/billing/ecpay/callback/"
+  ECPAY_CLIENT_BACK_URL: "https://xn--gst.tw/billing"
   # Host 白名單（比對用不含 port）。含三個節點 IP + 對外域名；換新域名這裡要加一筆。
   DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,172.16.2.122,172.16.2.123,172.16.2.124,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io,argus.clouda.dpdns.org"
   REDIS_URL: "redis://redis:6379/0"

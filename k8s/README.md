@@ -83,6 +83,19 @@ kubectl -n argus get clientsettingspolicies.gateway.nginx.org
 
 > ⚠ **不要用 `kubectl apply -f .` 套整個目錄**——那會把 `02-secret.example.yaml` 的佔位值一起套進去，蓋掉你真正的 `secret.yaml`。請照上面逐檔套用（web/worker 的 initContainer 會自動等 migrate Job 完成，套用順序不怕錯）。
 
+## 綠界 Stage 啟用與回滾
+
+`origin/main` 已包含建立訂單、Stage 結帳表單、ReturnURL 驗章及冪等入點流程。GitOps 啟用前必須先把 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV` 寫入 live `argus-secret`；不得把值寫進本 repo、命令輸出或 log。`01-namespace-config.yaml` 固定使用公開 Stage 端點與正式公開 HTTPS callback，不支援正式金流模式。
+
+啟用順序：
+
+1. 先更新 live `argus-secret`，只用布林方式確認三個鍵存在且非空。
+2. 再讓 Argo CD 同步本次 ConfigMap；`04-backend.yaml` 的 config revision annotation 會觸發 web／worker rollout，避免 Pod 繼續使用舊環境變數。
+3. 確認 PreSync migrate 為 `Completed / 0`、web／worker Pod Ready，且 `GET /api/billing/plans/` 回傳 `payment_mode=ecpay_test`、`purchase_enabled=true`。
+4. 從購點頁完成一筆 Stage 測試交易，確認 ReturnURL 後訂單從 pending 變 paid，重送相同通知不會重複入點。
+
+若 rollout 或付款驗證失敗，將 `ARGUS_PAYMENT_MODE` 改回 `disabled`，同步 ConfigMap 並再次更新 config revision annotation；確認購點 API 回到 503、既有 web／worker Pod Ready。切勿刪除訂單、`CoinTransaction` 或 `AdminAuditLog` 當作回滾。
+
 ## 對外存取（Gateway API）
 
 ```bash
