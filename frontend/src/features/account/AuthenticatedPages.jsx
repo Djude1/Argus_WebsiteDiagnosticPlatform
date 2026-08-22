@@ -547,15 +547,21 @@ const WIZARD_STEPS = [
 function WizardStepper({ current }) {
   return (
     <ol className="wizard-stepper" aria-label="購買流程">
-      {WIZARD_STEPS.map((step, idx) => {
+      {WIZARD_STEPS.map((step) => {
         const state = step.id < current ? "done" : step.id === current ? "active" : "pending";
         return (
-          <li key={step.id} className={`wizard-step ${state}`}>
-            <span className="wizard-step-circle">
+          <li
+            key={step.id}
+            className={`wizard-step ${state}`}
+            aria-current={state === "active" ? "step" : undefined}
+          >
+            <span className="wizard-step-circle" aria-hidden="true">
               {state === "done" ? "✓" : step.id}
             </span>
-            <span className="wizard-step-label">{step.label}</span>
-            {idx < WIZARD_STEPS.length - 1 && <span className="wizard-step-bar" />}
+            <span className="wizard-step-copy">
+              <span className="wizard-step-kicker">步驟 {step.id}</span>
+              <span className="wizard-step-label">{step.label}</span>
+            </span>
           </li>
         );
       })}
@@ -687,7 +693,7 @@ function BillingPage() {
       errs.buyer_email = "email 格式不正確";
     }
     if (buyer.invoice_type === "company") {
-      if (!buyer.company_name.trim()) errs.company_name = "公司發票須填公司抬頭";
+      if (!buyer.company_name.trim()) errs.company_name = "公司購買須填寫公司抬頭";
       if (!/^\d{8}$/.test(buyer.tax_id)) errs.tax_id = "統一編號需為 8 碼數字";
     } else {
       // 個人發票：驗證載具
@@ -701,7 +707,7 @@ function BillingPage() {
         }
       }
     }
-    if (!buyer.agree_terms) errs.agree_terms = "請勾選同意購買條款";
+    if (!buyer.agree_terms) errs.agree_terms = "請確認測試購買說明";
     return errs;
   }
 
@@ -765,10 +771,10 @@ function BillingPage() {
           <dl className="wizard-success-dl">
             <dt>訂單編號</dt><dd>#{completedOrder.id}</dd>
             <dt>方案</dt><dd>{completedOrder.plan_name}</dd>
-            <dt>金額</dt><dd>NT$ {completedOrder.price_ntd.toLocaleString()}</dd>
+            <dt>測試金額</dt><dd>NT$ {completedOrder.price_ntd.toLocaleString()}</dd>
             <dt>入帳點數</dt><dd>+{completedOrder.coin_amount.toLocaleString()} coin</dd>
             <dt>當前餘額</dt><dd className="hl-balance">{wallet?.balance?.toLocaleString()} coin</dd>
-            <dt>發票類型</dt><dd>{completedOrder.invoice_type_label}{completedOrder.invoice_type === "company" ? `（${completedOrder.company_name} / ${completedOrder.tax_id}）` : ""}</dd>
+            <dt>憑證偏好</dt><dd>{completedOrder.invoice_type_label}{completedOrder.invoice_type === "company" ? `（${completedOrder.company_name} / ${completedOrder.tax_id}）` : ""}</dd>
             {completedOrder.invoice_type === "personal" && completedOrder.carrier_type !== "cloud" && (
               <>
                 <dt>載具</dt>
@@ -791,32 +797,40 @@ function BillingPage() {
   }
 
   return (
-    <section className="panel space-y-4">
-      <div>
-        <p className="eyebrow">點數商店</p>
-        <h2 className="section-title">購買 Argus 點數</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          每爬一頁需 {wallet?.coin_per_page ?? 10} coin；目前餘額 <strong>{wallet?.balance?.toLocaleString() ?? "—"}</strong> coin。
-        </p>
-        {paymentMode === "ecpay_test" ? (
-          <div className="billing-test-banner" role="status">
-            <span className="billing-test-chip">ECPAY TEST</span>
-            <span>
-              目前使用<strong>綠界測試環境</strong>，不會真的扣款；只有簽章、訂單與金額驗證通過後才會入點。
-            </span>
-          </div>
-        ) : (
-          <div className="billing-test-banner" role="status">
-            <span className="billing-test-chip">暫停購點</span>
-            <span>綠界測試付款尚未啟用，目前不接受訂單，也不會直接入點。</span>
-          </div>
-        )}
-      </div>
+    <section className="panel billing-checkout">
+      <header className="billing-checkout-header">
+        <div className="billing-checkout-heading">
+          <p className="billing-checkout-eyebrow">ARGUS SECURE CHECKOUT</p>
+          <h2 className="billing-checkout-title">購買 Argus 點數</h2>
+          <p className="billing-checkout-subtitle">
+            每爬一頁使用 {wallet?.coin_per_page ?? 10} coin，依序完成方案、資料與訂單確認。
+          </p>
+        </div>
+        <div className="billing-wallet-summary" aria-label={`目前餘額 ${wallet?.balance?.toLocaleString() ?? "載入中"} coin`}>
+          <span>目前可用</span>
+          <strong>{wallet?.balance?.toLocaleString() ?? "—"}</strong>
+          <span>coin</span>
+        </div>
+      </header>
+
+      {paymentMode === "ecpay_test" ? (
+        <div className="billing-environment-notice tone-test" role="status">
+          <span className="billing-environment-chip">STAGE</span>
+          <span>
+            <strong>安全測試模式</strong>・不會實際扣款，也不開立正式電子發票；付款回呼驗證成功後才會入點。
+          </span>
+        </div>
+      ) : (
+        <div className="billing-environment-notice tone-paused" role="status">
+          <span className="billing-environment-chip">PAUSED</span>
+          <span><strong>購點服務暫停</strong>・目前不接受訂單，也不會直接入點。</span>
+        </div>
+      )}
 
       <WizardStepper current={step} />
 
       {step === 1 && (
-        <div className="billing-plan-grid">
+        <div className="billing-plan-grid billing-step-content">
           {plans.map((plan) => {
             const isRecommended = plan.code === "advanced";
             return (
@@ -848,165 +862,259 @@ function BillingPage() {
       )}
 
       {step === 2 && selectedPlan && (
-        <div className="wizard-form-wrap">
-          <div className="wizard-summary-mini">
-            <span>已選方案</span>
-            <strong>{selectedPlan.name}</strong>
-            <span className="wizard-summary-price">
-              NT$ {selectedPlan.price_ntd.toLocaleString()} ／ {selectedPlan.coin_amount} coin
-            </span>
-          </div>
-
-          <div className="wizard-form">
-            <div className="wizard-field">
-              <label htmlFor="buyer_name">姓名 *</label>
-              <input
-                id="buyer_name"
-                className="input"
-                placeholder="王小明"
-                value={buyer.buyer_name}
-                onChange={(e) => setBuyer({ ...buyer, buyer_name: e.target.value })}
-              />
-              {errors.buyer_name && <p className="wizard-field-error">{errors.buyer_name}</p>}
+        <form
+          className="wizard-checkout-grid"
+          onSubmit={(event) => {
+            event.preventDefault();
+            goToConfirm();
+          }}
+          noValidate
+        >
+          <div className="wizard-form-panel">
+            <div className="wizard-form-intro">
+              <p className="wizard-form-kicker">購買資料</p>
+              <h3>填寫聯絡與憑證偏好</h3>
+              <p>所有必填欄位皆以「必填」標示；送出前還會有一次訂單確認。</p>
             </div>
 
-            <div className="wizard-field">
-              <label htmlFor="buyer_email">收據寄送 email *</label>
-              <input
-                id="buyer_email"
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={buyer.buyer_email}
-                onChange={(e) => setBuyer({ ...buyer, buyer_email: e.target.value })}
-              />
-              {errors.buyer_email && <p className="wizard-field-error">{errors.buyer_email}</p>}
-            </div>
+            <fieldset className="billing-form-section">
+              <legend className="billing-form-legend">
+                <span className="billing-form-index">1</span>
+                <span>聯絡資料</span>
+              </legend>
+              <p className="billing-form-description">用於辨識訂單並寄送測試購買收據。</p>
+              <div className="billing-field-grid">
+                <div className="wizard-field">
+                  <label htmlFor="buyer_name">姓名 <span>必填</span></label>
+                  <input
+                    id="buyer_name"
+                    className={`input ${errors.buyer_name ? "is-error" : ""}`}
+                    autoComplete="name"
+                    placeholder="例如：王小明"
+                    value={buyer.buyer_name}
+                    aria-invalid={Boolean(errors.buyer_name)}
+                    aria-describedby={errors.buyer_name ? "buyer_name_error" : undefined}
+                    onChange={(e) => setBuyer({ ...buyer, buyer_name: e.target.value })}
+                  />
+                  {errors.buyer_name && <p id="buyer_name_error" className="wizard-field-error" role="alert">{errors.buyer_name}</p>}
+                </div>
 
-            {/* 發票設定 */}
-            <div className="billing-invoice-section">
-              <h4 className="billing-section-title">發票設定</h4>
+                <div className="wizard-field">
+                  <label htmlFor="buyer_email">收據通知信箱 <span>必填</span></label>
+                  <input
+                    id="buyer_email"
+                    className={`input ${errors.buyer_email ? "is-error" : ""}`}
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    placeholder="you@example.com"
+                    value={buyer.buyer_email}
+                    aria-invalid={Boolean(errors.buyer_email)}
+                    aria-describedby={errors.buyer_email ? "buyer_email_error" : "buyer_email_hint"}
+                    onChange={(e) => setBuyer({ ...buyer, buyer_email: e.target.value })}
+                  />
+                  <p id="buyer_email_hint" className="wizard-field-hint">付款結果與測試收據會寄到這個信箱。</p>
+                  {errors.buyer_email && <p id="buyer_email_error" className="wizard-field-error" role="alert">{errors.buyer_email}</p>}
+                </div>
+              </div>
+            </fieldset>
 
-              {/* 發票類型 */}
-              <div className="billing-radio-group">
-                <label className="billing-radio-label">
+            <fieldset className="billing-form-section">
+              <legend className="billing-form-legend">
+                <span className="billing-form-index">2</span>
+                <span>收據與發票偏好</span>
+              </legend>
+              <p className="billing-form-description">
+                此欄位只記錄測試訂單偏好；Stage 環境不會開立正式電子發票。
+              </p>
+
+              <div className="billing-choice-grid" role="group" aria-label="購買身分">
+                <label className="billing-choice-card">
                   <input
                     type="radio"
                     name="invoice_type"
                     checked={buyer.invoice_type === "personal"}
                     onChange={() => setBuyer({ ...buyer, invoice_type: "personal", carrier_type: "cloud", carrier_id: "" })}
                   />
-                  個人電子發票
+                  <span className="billing-choice-copy">
+                    <strong>個人購買</strong>
+                    <small>可選擇是否記錄載具</small>
+                  </span>
                 </label>
-                <label className="billing-radio-label">
+                <label className="billing-choice-card">
                   <input
                     type="radio"
                     name="invoice_type"
                     checked={buyer.invoice_type === "company"}
                     onChange={() => setBuyer({ ...buyer, invoice_type: "company", carrier_type: "cloud", carrier_id: "" })}
                   />
-                  公司統一發票
+                  <span className="billing-choice-copy">
+                    <strong>公司購買</strong>
+                    <small>需填寫公司抬頭與統編</small>
+                  </span>
                 </label>
               </div>
 
-              {/* 個人：載具選擇 */}
               {buyer.invoice_type === "personal" && (
-                <div className="billing-carrier-section">
-                  <div className="billing-radio-group">
-                    <label className="billing-radio-label">
+                <div className="billing-form-subsection" role="group" aria-labelledby="carrier_preference_label">
+                  <div className="billing-subsection-heading" id="carrier_preference_label">載具偏好</div>
+                  <div className="billing-carrier-grid">
+                    <label className="billing-choice-card is-compact">
                       <input
                         type="radio"
                         name="carrier_type"
                         checked={buyer.carrier_type === "cloud"}
                         onChange={() => setBuyer({ ...buyer, carrier_type: "cloud", carrier_id: "" })}
                       />
-                      雲端發票（自動歸戶，不需載具）
+                      <span className="billing-choice-copy">
+                        <strong>不使用載具</strong>
+                        <small>收據寄送至通知信箱</small>
+                      </span>
                     </label>
-                    <label className="billing-radio-label">
+                    <label className="billing-choice-card is-compact">
                       <input
                         type="radio"
                         name="carrier_type"
                         checked={buyer.carrier_type === "mobile_barcode"}
                         onChange={() => setBuyer({ ...buyer, carrier_type: "mobile_barcode", carrier_id: "" })}
                       />
-                      手機條碼載具
+                      <span className="billing-choice-copy">
+                        <strong>手機條碼</strong>
+                        <small>／開頭加 7 碼英數</small>
+                      </span>
                     </label>
-                    <label className="billing-radio-label">
+                    <label className="billing-choice-card is-compact">
                       <input
                         type="radio"
                         name="carrier_type"
                         checked={buyer.carrier_type === "citizen_digital"}
                         onChange={() => setBuyer({ ...buyer, carrier_type: "citizen_digital", carrier_id: "" })}
                       />
-                      自然人憑證載具
+                      <span className="billing-choice-copy">
+                        <strong>自然人憑證</strong>
+                        <small>2 碼英文加 14 碼數字</small>
+                      </span>
                     </label>
                   </div>
                   {buyer.carrier_type !== "cloud" && (
-                    <input
-                      className={`input ${errors.carrier_id ? "is-error" : ""}`}
-                      type="text"
-                      placeholder={buyer.carrier_type === "mobile_barcode" ? "/XXXXXXX（手機條碼）" : "AB12345678901234（自然人憑證）"}
-                      value={buyer.carrier_id}
-                      onChange={(e) => setBuyer({ ...buyer, carrier_id: e.target.value.toUpperCase() })}
-                    />
+                    <div className="wizard-field billing-conditional-field">
+                      <label htmlFor="carrier_id">
+                        {buyer.carrier_type === "mobile_barcode" ? "手機條碼" : "自然人憑證條碼"} <span>必填</span>
+                      </label>
+                      <input
+                        id="carrier_id"
+                        className={`input ${errors.carrier_id ? "is-error" : ""}`}
+                        type="text"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        placeholder={buyer.carrier_type === "mobile_barcode" ? "/AB12CDE" : "AB12345678901234"}
+                        value={buyer.carrier_id}
+                        aria-invalid={Boolean(errors.carrier_id)}
+                        aria-describedby={errors.carrier_id ? "carrier_id_error" : undefined}
+                        onChange={(e) => setBuyer({ ...buyer, carrier_id: e.target.value.toUpperCase() })}
+                      />
+                      {errors.carrier_id && <p id="carrier_id_error" className="wizard-field-error" role="alert">{errors.carrier_id}</p>}
+                    </div>
                   )}
-                  {errors.carrier_id && <p className="billing-error">{errors.carrier_id}</p>}
                 </div>
               )}
 
-              {/* 公司：公司名稱 + 統一編號 */}
               {buyer.invoice_type === "company" && (
-                <div className="billing-company-section">
-                  <input
-                    className={`input ${errors.company_name ? "is-error" : ""}`}
-                    type="text"
-                    placeholder="公司名稱"
-                    value={buyer.company_name || ""}
-                    onChange={(e) => setBuyer({ ...buyer, company_name: e.target.value })}
-                  />
-                  {errors.company_name && <p className="billing-error">{errors.company_name}</p>}
-                  <input
-                    className={`input ${errors.tax_id ? "is-error" : ""}`}
-                    type="text"
-                    placeholder="統一編號（8 碼數字）"
-                    value={buyer.tax_id || ""}
-                    onChange={(e) => setBuyer({ ...buyer, tax_id: e.target.value.replace(/\D/g, "") })}
-                    maxLength={8}
-                  />
-                  {errors.tax_id && <p className="billing-error">{errors.tax_id}</p>}
+                <div className="billing-form-subsection billing-company-section">
+                  <div className="billing-field-grid">
+                    <div className="wizard-field">
+                      <label htmlFor="company_name">公司抬頭 <span>必填</span></label>
+                      <input
+                        id="company_name"
+                        className={`input ${errors.company_name ? "is-error" : ""}`}
+                        type="text"
+                        autoComplete="organization"
+                        placeholder="例如：Argus 科技股份有限公司"
+                        value={buyer.company_name || ""}
+                        aria-invalid={Boolean(errors.company_name)}
+                        aria-describedby={errors.company_name ? "company_name_error" : undefined}
+                        onChange={(e) => setBuyer({ ...buyer, company_name: e.target.value })}
+                      />
+                      {errors.company_name && <p id="company_name_error" className="wizard-field-error" role="alert">{errors.company_name}</p>}
+                    </div>
+                    <div className="wizard-field">
+                      <label htmlFor="tax_id">統一編號 <span>必填・8 碼</span></label>
+                      <input
+                        id="tax_id"
+                        className={`input ${errors.tax_id ? "is-error" : ""}`}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="12345678"
+                        value={buyer.tax_id || ""}
+                        aria-invalid={Boolean(errors.tax_id)}
+                        aria-describedby={errors.tax_id ? "tax_id_error" : undefined}
+                        onChange={(e) => setBuyer({ ...buyer, tax_id: e.target.value.replace(/\D/g, "") })}
+                        maxLength={8}
+                      />
+                      {errors.tax_id && <p id="tax_id_error" className="wizard-field-error" role="alert">{errors.tax_id}</p>}
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
+            </fieldset>
 
-            <div className="wizard-field">
+            <div className={`wizard-acknowledgement ${errors.agree_terms ? "is-error" : ""}`}>
               <label className="wizard-checkbox">
                 <input
                   type="checkbox"
                   checked={buyer.agree_terms}
+                  aria-invalid={Boolean(errors.agree_terms)}
+                  aria-describedby={errors.agree_terms ? "agree_terms_error" : undefined}
                   onChange={(e) => setBuyer({ ...buyer, agree_terms: e.target.checked })}
                 />
                 <span>
-                  我已閱讀並同意<strong>購買條款</strong>：點數一經入帳不可退費（如需退費請聯絡管理員），
-                  並理解本系統使用綠界測試環境，不會產生真實扣款。
+                  <strong>我確認資料正確並了解測試流程</strong>
+                  <small>不會實際扣款、不開立正式電子發票；點數只在付款回呼驗證成功後入帳。</small>
                 </span>
               </label>
-              {errors.agree_terms && <p className="wizard-field-error">{errors.agree_terms}</p>}
+              {errors.agree_terms && <p id="agree_terms_error" className="wizard-field-error" role="alert">{errors.agree_terms}</p>}
+            </div>
+
+            <div className="wizard-nav">
+              <button className="secondary-button" type="button" onClick={() => setStep(1)}>
+                ← 返回選擇方案
+              </button>
+              <button className="primary-button" type="submit">
+                檢查並確認訂單 →
+              </button>
             </div>
           </div>
 
-          <div className="wizard-nav">
-            <button className="secondary-button" type="button" onClick={() => setStep(1)}>
-              ← 上一步
-            </button>
-            <button className="primary-button" type="button" onClick={goToConfirm}>
-              下一步：確認訂購 →
-            </button>
-          </div>
-        </div>
+          <aside className="wizard-order-summary" aria-label="訂單摘要">
+            <div className="wizard-order-summary-head">
+              <span>訂單摘要</span>
+              <span className="wizard-order-stage">STAGE</span>
+            </div>
+            <div className="wizard-order-plan">
+              <span>{selectedPlan.name}</span>
+              <strong>{selectedPlan.coin_amount.toLocaleString()} <small>coin</small></strong>
+            </div>
+            <dl className="wizard-order-details">
+              <div><dt>方案價格</dt><dd>NT$ {selectedPlan.price_ntd.toLocaleString()}</dd></div>
+              <div><dt>目前餘額</dt><dd>{wallet?.balance?.toLocaleString() ?? "—"} coin</dd></div>
+              <div><dt>測試入帳後</dt><dd>{typeof wallet?.balance === "number" ? (wallet.balance + selectedPlan.coin_amount).toLocaleString() : "—"} coin</dd></div>
+            </dl>
+            <div className="wizard-order-total">
+              <span>測試金額</span>
+              <strong>NT$ {selectedPlan.price_ntd.toLocaleString()}</strong>
+            </div>
+            <ul className="wizard-order-assurances">
+              <li>不會產生真實扣款</li>
+              <li>簽章、訂單與金額驗證後才入點</li>
+              <li>付款結果與收據寄至通知信箱</li>
+            </ul>
+          </aside>
+        </form>
       )}
 
       {step === 3 && selectedPlan && (
-        <div className="wizard-confirm">
+        <div className="wizard-confirm billing-step-content">
           <h3 className="wizard-confirm-title">請確認以下訂單資訊</h3>
 
           <div className="wizard-confirm-card">
@@ -1021,21 +1129,21 @@ function BillingPage() {
           </div>
 
           <div className="wizard-confirm-card">
-            <h4>買家資訊</h4>
+            <h4>購買資料</h4>
             <dl className="wizard-confirm-dl">
               <dt>姓名</dt><dd>{buyer.buyer_name}</dd>
-              <dt>email</dt><dd>{buyer.buyer_email}</dd>
-              <dt>發票</dt>
+              <dt>通知信箱</dt><dd>{buyer.buyer_email}</dd>
+              <dt>憑證偏好</dt>
               <dd>
                 {buyer.invoice_type === "company"
-                  ? `公司發票（${buyer.company_name} / 統編 ${buyer.tax_id}）`
-                  : "個人電子發票"}
+                  ? `公司購買（${buyer.company_name} / 統編 ${buyer.tax_id}）`
+                  : "個人購買"}
               </dd>
               {buyer.invoice_type === "personal" && (
                 <>
                   <dt>載具</dt>
                   <dd>
-                    {buyer.carrier_type === "cloud" && "雲端發票（寄 email）"}
+                    {buyer.carrier_type === "cloud" && "不使用載具（收據寄至通知信箱）"}
                     {buyer.carrier_type === "mobile_barcode" && `手機條碼 ${buyer.carrier_id}`}
                     {buyer.carrier_type === "citizen_digital" && `自然人憑證 ${buyer.carrier_id}`}
                   </dd>
@@ -1045,7 +1153,7 @@ function BillingPage() {
           </div>
 
           <div className="wizard-confirm-total">
-            <span>應付金額</span>
+            <span>測試金額</span>
             <span className="wizard-confirm-total-value">NT$ {selectedPlan.price_ntd.toLocaleString()}</span>
           </div>
           {(() => {
@@ -1075,7 +1183,7 @@ function BillingPage() {
               ← 修改資料
             </button>
             <button className="primary-button" type="button" onClick={submitOrder} disabled={submitting}>
-              {submitting ? "前往綠界測試環境…" : "前往綠界測試付款"}
+              {submitting ? "前往綠界 Stage…" : "前往綠界 Stage"}
             </button>
           </div>
         </div>
