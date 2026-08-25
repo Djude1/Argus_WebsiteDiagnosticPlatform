@@ -135,8 +135,8 @@ services:
         # 從專案根 .env 讀（docker compose 預設會載入），讓 Vite build 時帶入
         GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
     ports:
-      # 主機 8080 → container 80（避開 aiglasses 與其他可能佔 80 的服務）
-      - "8080:80"
+      # 主機 8081 → container 80（避開 aiglasses 與其他可能佔 80 的服務）
+      - "8081:80"
     depends_on:
       web:
         condition: service_healthy
