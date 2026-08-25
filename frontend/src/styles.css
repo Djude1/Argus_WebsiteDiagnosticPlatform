@@ -51,8 +51,12 @@
 .public-cta-ghost,
 .public-plan-cta { font-size: 1.05rem !important; padding: 0.8rem 1.7rem !important; }
 
-/* tech chip 與 install 卡片 */
-.public-tech-chip { font-size: 1rem !important; padding: 0.4rem 0.9rem; }
+/* tech stack tile 與 install 卡片 */
+.tech-tile-label { font-size: 0.8125rem !important; }
+/* 並排但欄位很窄的區段，字級要跟著降，否則長標籤會撐爆欄寬 */
+@media (max-width: 639px), (min-width: 768px) and (max-width: 1023px) {
+  .tech-tile-label { font-size: 0.6875rem !important; }
+}
 .public-install-icon { font-size: 2.75rem !important; }
 .public-install-title { font-size: 1.25rem !important; }
 .public-install-card ol { font-size: 1rem !important; }
@@ -103,6 +107,29 @@
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+@keyframes tech-marquee-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes tech-marquee-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+
+/* 偏好減少動態者：改成不捲動的靜態網格，並隱藏用來無縫循環的複製區塊 */
+@media (prefers-reduced-motion: reduce) {
+  .tech-marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .tech-marquee-col {
+    height: auto;
+    overflow: visible;
+  }
+  .tech-marquee-track { animation: none; }
+  .tech-marquee-group.is-clone { display: none; }
 }
 
 @keyframes shimmer {
@@ -3868,16 +3895,118 @@
     line-height: 1.7;
   }
 
-  /* --- Tech chips --- */
-  .public-tech-chips {
-    @apply flex flex-wrap gap-2;
+  /* --- Tech stack：敘述與商標牆共用同一張玻璃面板 --- */
+  .project-stack {
+    @apply relative flex flex-col gap-8 overflow-hidden rounded-2xl p-6;
+    /* 半屏（約 900–1280px）也要維持並排，所以 md 就啟用橫排；
+       關鍵在下面兩個 flex 項目都可縮，而不是靠拉高斷點 */
+    @apply md:flex-row md:items-center md:justify-between md:gap-8 md:p-8;
+    @apply lg:gap-12 lg:p-10;
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.85), rgba(8, 14, 28, 0.7));
+    border: 1px solid rgba(148, 163, 184, 0.12);
   }
-  .public-tech-chip {
-    @apply inline-flex items-center rounded-full border bg-transparent px-3 py-1 text-sm font-medium;
-    color: var(--chip-color, #67e8f9);
-    transition: transform 0.2s;
+  .project-stack-intro {
+    /* min-width:0 是關鍵：沒有它 flex 項目不會縮到內容寬度以下 */
+    @apply md:flex-1 xl:max-w-lg;
+    min-width: 0;
   }
-  .public-tech-chip:hover { transform: translateY(-2px); }
+  .project-stack-eyebrow {
+    @apply text-xs font-medium;
+    letter-spacing: 0.15em;
+    color: #67e8f9;
+  }
+  .project-stack-title {
+    @apply mt-4 text-3xl font-bold;
+    color: #f1f5f9;
+    letter-spacing: 0.01em;
+  }
+  .project-stack-points {
+    @apply mt-10 space-y-3;
+  }
+  .project-stack-points li {
+    @apply flex items-start gap-3;
+  }
+  /* 條列在窄寬度會折行，破折號固定對齊第一行的中線 */
+  .project-stack-dash {
+    @apply mt-2.5 h-px w-4 shrink-0;
+    background: #22d3ee;
+  }
+  .project-stack-points p {
+    @apply text-sm;
+    color: #cbd5e1;
+  }
+
+  .tech-marquee {
+    /* 固定 4 欄：欄數改變會讓第 4 欄折到第二列，版面直接壞掉 */
+    @apply relative grid grid-cols-4 gap-2 sm:gap-3 lg:gap-4;
+    /* 與文字欄各分一半可用寬度並且可縮；不再用 shrink-0 + 固定寬度把文字擠爛 */
+    @apply mx-auto md:mx-0 md:flex-1;
+    width: 100%;
+    max-width: 40rem;
+    min-width: 0;
+    /* 上下淡出，取代 reference 用實色漸層疊層的做法，深淺主題都不用改 */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  }
+  .tech-marquee-col {
+    height: 24rem;
+    overflow: hidden;
+  }
+  .tech-marquee-track {
+    animation: tech-marquee-up var(--marquee-duration, 50s) linear infinite;
+    will-change: transform;
+  }
+  .tech-marquee-col.is-reverse .tech-marquee-track {
+    animation-name: tech-marquee-down;
+  }
+  /* 只暫停滑鼠所在的那一欄，其他三欄照常捲動 */
+  .tech-marquee-col:hover .tech-marquee-track {
+    animation-play-state: paused;
+  }
+  .tech-marquee-group {
+    @apply space-y-3 pb-3 sm:space-y-4 sm:pb-4;
+  }
+
+  .tech-tile {
+    @apply flex flex-col items-center justify-center gap-2 px-1 py-3 text-center;
+    min-height: 5.5rem;
+  }
+  /* 全彩商標：深色與淺色 logo 混在一起，統一放在近白底板上才不會糊掉 */
+  .tech-tile-mark {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full p-2.5;
+    background: rgba(226, 232, 240, 0.95);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+    transition: box-shadow 0.25s, transform 0.25s;
+  }
+  .tech-tile-mark svg {
+    @apply h-full w-full;
+  }
+  .tech-tile:hover .tech-tile-mark {
+    transform: scale(1.06);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 0 16px rgba(34, 211, 238, 0.4);
+  }
+  .tech-tile-label {
+    @apply text-[11px] font-medium leading-tight;
+    color: #cbd5e1;
+    /* PostgreSQL、GitHub Actions 這種長字在窄欄位要斷行，不然會蓋到隔壁欄 */
+    overflow-wrap: anywhere;
+  }
+
+  /* 並排但空間有限（半屏）時，徽章縮一級，讓 4 欄仍放得下 */
+  @media (min-width: 768px) and (max-width: 1279px) {
+    .tech-tile { @apply gap-1.5 px-0.5 py-2.5; }
+    .tech-tile-mark { @apply h-10 w-10 p-2; }
+  }
+
+  @media (max-width: 639px) {
+    .tech-marquee-col { height: 20rem; }
+    .tech-marquee-group { @apply space-y-2 pb-2; }
+    .tech-tile {
+      @apply gap-1.5 py-2.5;
+      min-height: 4.75rem;
+    }
+    .tech-tile-mark { @apply h-9 w-9 p-2; }
+  }
 
   /* --- Team Page Pro 版（橫長卡片 + skill bar + contributions） --- */
   .public-team-stats {
@@ -6550,11 +6679,22 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   color: #BE185D;
   text-shadow: none;
 }
-:root[data-theme="light"] .public-tech-chip {
-  color: #334155;
-  border-color: rgba(15, 23, 42, 0.12);
+:root[data-theme="light"] .project-stack {
   background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.12);
 }
+:root[data-theme="light"] .project-stack-eyebrow { color: #0369A1; }
+:root[data-theme="light"] .project-stack-title { color: #0F172A; }
+:root[data-theme="light"] .project-stack-points p { color: #334155; }
+:root[data-theme="light"] .project-stack-dash { background: #0284C7; }
+:root[data-theme="light"] .tech-tile-mark {
+  background: rgba(248, 250, 252, 1);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .tech-tile:hover .tech-tile-mark {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 16px rgba(2, 132, 199, 0.25);
+}
+:root[data-theme="light"] .tech-tile-label { color: #334155; }
 :root[data-theme="light"] .insight-risk-badge.risk-minimal {
   color: #047857;
   background: rgba(4, 120, 87, 0.10);

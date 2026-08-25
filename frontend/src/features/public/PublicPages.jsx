@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
+import TechMarquee from "../../components/public/TechMarquee.jsx";
 
 const PUBLIC_NAV_ITEMS = [
   { to: "/project", label: "專案介紹" },
@@ -104,18 +105,10 @@ function PublicLayout() {
   );
 }
 
-const TECH_STACK_CHIPS = [
-  { label: "React 18", colour: "#06b6d4" },
-  { label: "Vite", colour: "#a855f7" },
-  { label: "Tailwind", colour: "#22d3ee" },
-  { label: "Zustand", colour: "#f97316" },
-  { label: "Django 5", colour: "#0ea5e9" },
-  { label: "DRF", colour: "#dc2626" },
-  { label: "Celery", colour: "#10b981" },
-  { label: "Playwright", colour: "#84cc16" },
-  { label: "PostgreSQL", colour: "#3b82f6" },
-  { label: "Docker", colour: "#0284c7" },
-  { label: "PWA", colour: "#6366f1" },
+const PROJECT_STACK_POINTS = [
+  "前端 React 18 + Vite，後端 Django 5 + DRF",
+  "Celery + Redis 排程，Playwright 驅動真實瀏覽器",
+  "Docker 容器化，Argo CD 部署到 Kubernetes",
 ];
 
 const PROJECT_PLATFORM_STATS = [
@@ -217,7 +210,7 @@ function ProjectPage() {
           </p>
           <div className="public-hero-actions">
             <NavLink to="/login" className="public-cta-primary">登入進行詳細檢查 →</NavLink>
-            <NavLink to="/download" className="public-cta-ghost">下載 PWA</NavLink>
+            <NavLink to="/free-tools" className="public-cta-ghost">免登入先試單頁檢查</NavLink>
           </div>
         </div>
       </section>
@@ -329,20 +322,20 @@ function ProjectPage() {
         </section>
       )}
 
-      <section className="public-section">
-        <header className="public-section-head">
-          <h2>技術棧</h2>
-          <p>不偷工，全棧現代化選型</p>
-        </header>
-        <div className="public-tech-chips">
-          {TECH_STACK_CHIPS.map((t) => (
-            <span
-              key={t.label}
-              className="public-tech-chip"
-              style={{ borderColor: t.colour + "60", "--chip-color": t.colour }}
-            >{t.label}</span>
-          ))}
+      <section className="project-stack">
+        <div className="project-stack-intro">
+          <p className="project-stack-eyebrow">技術棧</p>
+          <h2 className="project-stack-title">全棧現代化選型</h2>
+          <ul className="project-stack-points">
+            {PROJECT_STACK_POINTS.map((point) => (
+              <li key={point}>
+                <span className="project-stack-dash" aria-hidden="true" />
+                <p>{point}</p>
+              </li>
+            ))}
+          </ul>
         </div>
+        <TechMarquee />
       </section>
 
       <section className="public-section public-final-cta-wrap">
