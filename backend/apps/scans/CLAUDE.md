@@ -126,6 +126,12 @@ refund_full_for_scan(scan)  ← 全退（冪等）
 
 `tasks.py` 負責在適當時機呼叫這三個 `billing/services.py` 函式。
 
+`settle_scan_actual` 在 `ScanJob` 已寫成 `completed` 之後才執行，因此它的例外
+**不得往上拋**：拋出去會落到 `run_scan_job` 的通用 `except`，把已完成的掃描改成
+`failed` 並執行**全額**退款（頁面與 findings 仍在 DB，狀態卻是失敗，退的也不是
+差額）。結算失敗必須保留 `completed`，在 `warning_summary["settlement_error"]`
+與 `scan_log` 留下記錄供後續補結算。
+
 若 `run_scan_job.delay()` 在 worker 取件前失敗，`views.py` 必須呼叫
 `tasks.fail_scan_job_before_start()`，以同一筆資料庫交易把 `queued` 改為
 `failed` 並執行冪等全額退款；API 回 503，不得留下孤兒工作或回傳 broker 例外細節。

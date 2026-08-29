@@ -751,16 +751,29 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             raise ScanCancelled()
         scan_job.refresh_from_db()
         # 點數結算：依實際爬到的頁數退回未使用的 coin（max_pages - actual_pages）× 單價
+        # 結算失敗不可往上拋：拋出去會落到下面的通用 except，把已經寫進 DB 的
+        # completed 掃描改成 failed 並「全額」退款——頁面與 findings 都還在，狀態卻
+        # 變成失敗，退的也不是差額。這裡改成保留掃描結果，只記錄待補結算。
+        settlement_error = None
         try:
             settle_scan_actual(scan_job.user, scan_job, len(crawled_pages))
         except Exception as exc:  # noqa: BLE001
-            append_log(scan_job_id, f"點數結算失敗：{exc.__class__.__name__}", level="error")
-            raise
+            settlement_error = exc.__class__.__name__
+            append_log(
+                scan_job_id,
+                f"點數結算失敗（掃描結果保留，待補結算）：{settlement_error}",
+                level="error",
+            )
+            warning_summary = dict(scan_job.warning_summary or {})
+            warning_summary["settlement_error"] = settlement_error
+            ScanJob.objects.filter(id=scan_job_id).update(warning_summary=warning_summary)
+            scan_job.warning_summary = warning_summary
         return {
             "status": scan_job.status,
             "pages": len(crawled_pages),
             "findings": len(all_findings),
             "agent": agent_meta,
+            "settlement_error": settlement_error,
         }
     except ScanCancelled:
         append_log(scan_job_id, "掃描已被使用者終止", level="warn")
