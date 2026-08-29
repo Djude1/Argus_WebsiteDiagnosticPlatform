@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -14,6 +15,11 @@ from apps.accounts.models import PasswordResetToken
 @override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
 class GoogleLoginTests(APITestCase):
     def setUp(self):
+        # DRF 的 ScopedRateThrottle 把計數放在 default cache（LocMemCache），
+        # 而 login scope 只有 10/min，且 Google 與 email 兩個登入端點共用同一個
+        # bucket。測試程序內 cache 不會自動清空，累積後會讓後面的測試回 429，
+        # 失敗與否取決於執行順序與機器速度。每個測試開頭清乾淨才穩定。
+        cache.clear()
         self.url = reverse("google-login")
 
     @patch("apps.accounts.views.id_token.verify_oauth2_token")
@@ -84,6 +90,9 @@ class GoogleLoginTests(APITestCase):
 
 
 class GoogleLoginConfigTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
     @override_settings(GOOGLE_OAUTH_CLIENT_ID="")
     def test_returns_503_when_client_id_missing(self):
         response = self.client.post(
@@ -98,6 +107,7 @@ class GoogleLoginConfigTests(APITestCase):
 @override_settings(PASSWORD_RESET_TOKEN_PEPPER="independent-test-pepper")
 class PasswordResetTokenTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.user = get_user_model().objects.create_user(
             username="reset@example.com",
             email="reset@example.com",
@@ -155,6 +165,7 @@ class PasswordResetTokenTests(APITestCase):
 
 class EmailAuthTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = Client()
 
     def test_dev_login_route_is_removed(self):
@@ -301,6 +312,15 @@ class EmailAuthTests(TestCase):
         resp = self.client.post(
             "/api/auth/email-login/",
             {"email": "badpw@example.com", "password": "wrong"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_email_login_missing_field_is_bad_request_not_unauthorized(self):
+        """欄位缺漏是請求格式問題（400），與帳密錯誤（401）必須分得開。"""
+        resp = self.client.post(
+            "/api/auth/email-login/",
+            {"email": "nofields@example.com"},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)

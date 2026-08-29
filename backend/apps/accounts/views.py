@@ -173,7 +173,12 @@ class EmailLoginView(views.APIView):
 
         user = django_authenticate(request, username=email, password=password)
         if not user:
-            return Response({"detail": "Email 或密碼錯誤。"}, status=status.HTTP_400_BAD_REQUEST)
+            # 認證失敗回 401 而非 400：400 與 DisallowedHost、CSRF 等設定層錯誤同碼，
+            # 排查時無法從狀態碼分辨是「帳密錯」還是「環境壞了」。欄位缺漏才是 400。
+            return Response(
+                {"detail": "Email 或密碼錯誤。"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])

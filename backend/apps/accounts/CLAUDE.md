@@ -22,6 +22,10 @@ Claude 操作 `backend/apps/accounts/` 時，本檔在專案層 `CLAUDE.md` 之�
 - 每次登入都呼叫 `billing.services.grant_monthly_bonus_if_needed`（本月未領則補 200 coin）。
 - `auth_provider` 由 `has_usable_password()` 推斷（`google` / `email`）。
 - dev-login 後門已移除，勿復活。
+- `email-login/` 的狀態碼必須分開：**帳密錯誤回 401**，**欄位缺漏回 400**。
+  兩者都回 400 會與 `DisallowedHost`、CSRF 等設定層錯誤同碼，線上排查時無法從
+  狀態碼分辨「帳密錯」與「環境壞了」。前端 `api.js` 的 401 攔截器以
+  `url.startsWith("/auth/")` 排除認證端點，故 401 不會觸發 refresh 或導向迴圈。
 
 ## 禁止事項
 | 禁止 | 原因 | 正確做法 |
