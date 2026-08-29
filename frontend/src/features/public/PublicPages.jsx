@@ -16,6 +16,22 @@ const PUBLIC_NAV_ITEMS = [
   { to: "/reviews", label: "評論" },
 ];
 
+function ThemeToggleIcon({ theme }) {
+  if (theme === "light") {
+    return (
+      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M20.4 15.1A8.2 8.2 0 0 1 8.9 3.6 8.3 8.3 0 1 0 20.4 15.1Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
 function PublicNav() {
   const accessToken = useArgusStore((s) => s.accessToken);
   const replayIntro = useArgusStore((s) => s.replayIntro);
@@ -47,11 +63,11 @@ function PublicNav() {
             type="button"
             className="theme-toggle"
             onClick={toggleTheme}
-            title="切換深色 / 淺色主題"
-            aria-label="切換深色 / 淺色主題"
+            title={theme === "light" ? "切換至夜間模式" : "切換至日間模式"}
+            aria-label={theme === "light" ? "切換至夜間模式" : "切換至日間模式"}
           >
             <span className="theme-toggle-icon" aria-hidden="true">
-              {theme === "light" ? "☾" : "☀"}
+              <ThemeToggleIcon theme={theme} />
             </span>
             <span>{theme === "light" ? "夜間" : "日間"}</span>
           </button>

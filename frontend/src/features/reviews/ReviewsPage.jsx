@@ -345,6 +345,7 @@ function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions 
 
 function ReviewsPage() {
   const accessToken = useArgusStore((state) => state.accessToken);
+  const theme = useArgusStore((state) => state.theme);
   const [summary, setSummary] = useState({ total: 0, average: null, distribution: {} });
   const [listData, setListData] = useState({ reviews: [], total: 0, total_pages: 1, page: 1 });
   const [mineInfo, setMineInfo] = useState(null);
@@ -521,7 +522,7 @@ function ReviewsPage() {
   }
 
   return (
-    <div className="review-next-page review-next-night">
+    <div className={`review-next-page ${theme === "dark" ? "review-next-night" : "review-next-day"}`}>
       <div className="review-next-main">
         <section className="review-next-hero" aria-labelledby="review-next-title">
           <div className="review-next-hero-copy">
