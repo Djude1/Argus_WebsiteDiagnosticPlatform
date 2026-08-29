@@ -207,13 +207,13 @@ kubectl get secret argus-secret -n argus -o jsonpath='{.data.POSTGRES_PASSWORD}'
 
 ### 可能受影響、但本輪尚未完成正式實機測試
 
-- **完整掃描主流程**：尚未用測試帳號與獲授權目標執行 `POST /api/scans/` → coin hold → Celery → Playwright / scanners → findings → completed / refund 的完整鏈路。
+- **完整掃描主流程**：**2026-08-29 已於正式站驗證被動鏈**（scan 26：測試帳號掃自有靶機 `aiglasses.qzz.io`，passive、10 頁——201+queued → coin hold 100 → Celery 立即取件 → Playwright 爬 10 頁 → 逐頁分析 → findings 44 筆 → completed（全程約 2.5 分鐘）→ 依實際頁數結算正確；證據見 `log/2026-08-29_production-scan-smoke-test.md`）。邊界：active／Kali 鏈維持 disabled 未驗證；取消、失敗退款與多 worker 併發路徑本次未觸發。
 - **Celery worker 長時間狀態**：尚未觀察新 image 的 worker liveness、任務重試、取消、失敗回收與多 worker 併發。
 - **實際 CNI egress enforcement**：尚未執行本文件的 CoreDNS、PostgreSQL、Redis、公開 IPv4 / IPv6 allow，以及 Kubernetes API、metadata、外部 DNS、節點私網 deny 矩陣。
 - **密碼重設正式流程**：尚未驗證真實寄信、cloudflared / proxy 產生的 HTTPS link、token pepper 驗證與密碼更新。
 - **新 backend image 的 GitOps 鏈**：尚未確認 Docker Hub push、bot write-back、Argo 新 revision Sync、PreSync migrate 與 web / worker 滾動更新。
 - **Kali 主動攻擊鏈**：Task 1–9 軟體已 merge；K8s 路徑走 `argus-kali` namespace 的受限 Job（見 `10-kali-runtime.yaml` + `11-kali-admission.yaml`），**不再需要** host Docker socket。Docker Compose demo 走獨立 `docker-compose.attack.yml` override，不在正式啟用鏈上。啟用步驟見 [`../docs/runbooks/kali-sqlmap-rollout.md`](../docs/runbooks/kali-sqlmap-rollout.md)（靜態加密前置見 [`../docs/runbooks/kubernetes-secret-at-rest-encryption.md`](../docs/runbooks/kubernetes-secret-at-rest-encryption.md)）；目前仍 disabled，啟用屬 Task 11 手動 gate。
-- **公開入口 smoke test**：新版本上線後仍需對三個公開網域執行首頁、`/api/health/live/`、`/api/health/ready/` 與 `/favicon.svg` 的 GET；HEAD 不能取代 GET。
+- **公開入口 smoke test**：**2026-08-29 已驗證**：`argus.clouda.dpdns.org` 與 `xn--gst.tw` 的首頁、`/api/health/live/`、`/api/health/ready/`、`/favicon.svg` GET 皆 200；`argus6.qzz.io` DNS 已無法解析（公共 DNS 查無紀錄，`01-namespace-config.yaml` 的 ALLOWED_HOSTS／CORS／CSRF 仍列有該網域，待團隊確認補 DNS 或移除）。後續新版本上線仍需重跑同組 GET；HEAD 不能取代 GET。
 
 ## 尚未處理的待辦
 
