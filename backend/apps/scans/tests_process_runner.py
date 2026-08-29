@@ -125,13 +125,24 @@ class CancellableProcessTests(SimpleTestCase):
 
             child_pid = int(child_pid_path.read_text(encoding="utf-8"))
             proc_stat_path = Path(f"/proc/{child_pid}/stat")
-            deadline = time.monotonic() + 2
-            while proc_stat_path.exists() and time.monotonic() < deadline:
-                state = proc_stat_path.read_text(encoding="utf-8").split()[2]
-                if state == "Z":
-                    break
-                time.sleep(0.05)
 
-            if proc_stat_path.exists():
-                state = proc_stat_path.read_text(encoding="utf-8").split()[2]
+            def read_proc_state():
+                """回 None 代表 /proc 項目已消失。
+
+                子程序是孤兒，由 init／subreaper 回收；回收隨時可能發生在
+                exists() 與 read_text() 之間。已被回收比 zombie 更徹底，
+                同樣代表 _terminate_process_tree 成功，不該當成測試失敗。
+                """
+                try:
+                    return proc_stat_path.read_text(encoding="utf-8").split()[2]
+                except (FileNotFoundError, ProcessLookupError):
+                    return None
+
+            deadline = time.monotonic() + 2
+            state = read_proc_state()
+            while state is not None and state != "Z" and time.monotonic() < deadline:
+                time.sleep(0.05)
+                state = read_proc_state()
+
+            if state is not None:
                 self.assertEqual(state, "Z")
