@@ -127,6 +127,7 @@ D:\nodejs\npm.cmd install 套件名
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
+| `src/components/navigation/PublicTopBar.jsx` | 六個公開頁共用的 Top bar、公開導覽、主題切換與登入入口 |
 | `src/components/navigation/NavActions.jsx` | 登入後導覽列的通知與帳號操作 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.js` | Axios instance，統一處理 base URL 與 CSRF token |

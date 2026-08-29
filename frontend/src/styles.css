@@ -61,7 +61,7 @@
 .public-install-title { font-size: 1.25rem !important; }
 .public-install-card ol { font-size: 1rem !important; }
 
-/* PublicNav 與 footer */
+/* PublicTopBar 與 footer */
 .public-brand-title { font-size: 1.25rem !important; }
 .public-nav-link {
   font-size: 1.05rem !important;
@@ -6356,6 +6356,40 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.public-menu-toggle {
+  display: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  border-radius: 999px;
+  background: rgba(8, 20, 40, 0.62);
+  color: #67e8f9;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(8, 20, 40, 0.28);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.public-menu-toggle:hover {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(103, 232, 249, 0.72);
+  transform: translateY(-1px);
+}
+.public-menu-toggle:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+.public-menu-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.public-auth-label-compact { display: none; }
 
 /* ── 1. Shell & Nav ── */
 :root[data-theme="light"] .argus-app.is-public-mode {
@@ -6411,6 +6445,17 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
 :root[data-theme="light"] .theme-toggle-icon {
   background: #dff7ff;
   color: #0369a1;
+}
+:root[data-theme="light"] .public-menu-toggle {
+  border-color: rgba(29, 78, 216, 0.2);
+  color: #173e79;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 1px 0 #ffffff, 0 10px 20px -17px rgba(15, 46, 96, 0.62);
+}
+:root[data-theme="light"] .public-menu-toggle:hover {
+  color: #0b2854;
+  border-color: rgba(29, 78, 216, 0.38);
+  background: #eef5ff;
 }
 :root[data-theme="light"] .public-cta-primary {
   background: linear-gradient(135deg, #0e7490 0%, #2563eb 100%);
@@ -6879,44 +6924,13 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   box-shadow: 0 14px 38px -28px rgba(15, 46, 96, 0.46);
 }
 
-:root[data-theme="light"] .public-nav-inner {
-  width: 100%;
-  max-width: 1440px;
-  margin-inline: auto;
-  padding-block: 0.7rem;
-}
-
-:root[data-theme="light"] .public-brand {
-  flex: 0 0 auto;
-  gap: 0.65rem;
-}
-
-:root[data-theme="light"] .public-brand-logo {
-  height: 52px;
-}
-
 :root[data-theme="light"] .public-brand-sub {
   color: var(--public-day-muted);
-  font-size: 0.82rem !important;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  word-break: keep-all;
-}
-
-:root[data-theme="light"] .public-nav-links {
-  flex-wrap: nowrap;
-  gap: 0.2rem;
 }
 
 :root[data-theme="light"] .public-nav-link {
-  position: relative;
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
   color: #24344d;
   text-shadow: none;
-  white-space: nowrap;
 }
 
 :root[data-theme="light"] .public-nav-link:hover {
@@ -6934,7 +6948,6 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
 }
 
 :root[data-theme="light"] .theme-toggle {
-  min-height: 2.75rem;
   border-color: rgba(29, 78, 216, 0.2);
   color: #173e79;
   background: rgba(255, 255, 255, 0.82);
@@ -6954,7 +6967,6 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
 }
 
 :root[data-theme="light"] .public-cta-primary {
-  min-height: 2.75rem;
   background: linear-gradient(135deg, #087ea4 0%, #1d4ed8 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 14px 26px -17px rgba(29, 78, 216, 0.9);
 }
@@ -7116,27 +7128,45 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
     gap: 0.8rem;
   }
 
+  .public-brand,
+  .public-nav-cta {
+    flex: 0 0 auto;
+  }
+
   .public-brand-sub {
     display: none;
   }
 
   .public-nav-links {
+    flex: 1 1 0;
+    min-width: 0;
     margin-left: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .public-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .public-nav-link {
+    flex: 0 0 auto;
+    padding-inline: 0.5rem !important;
+    white-space: nowrap;
   }
 }
 
 @media (max-width: 920px) {
   .public-nav-inner {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.55rem 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
     padding: 0.65rem 1rem;
   }
 
   .public-brand {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
+    flex: 0 0 auto;
   }
 
   .public-brand-logo {
@@ -7144,16 +7174,15 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   }
 
   .public-nav-cta {
-    grid-column: 2;
-    grid-row: 1;
     margin-left: 0;
+    flex: 0 0 auto;
   }
 
   .public-nav-links {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    justify-content: flex-start;
     overflow-x: auto;
     padding-bottom: 0.1rem;
     scrollbar-width: none;
@@ -7182,6 +7211,68 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   .public-nav-cta {
     gap: 0.5rem;
   }
+}
+
+@media (max-width: 780px) {
+  .public-nav-inner {
+    position: relative;
+  }
+
+  .public-menu-toggle {
+    display: inline-flex;
+  }
+
+  .public-nav-cta {
+    margin-left: auto;
+  }
+
+  .public-nav-links {
+    display: none;
+  }
+
+  .public-nav-links.is-open {
+    position: absolute;
+    top: calc(100% - 0.1rem);
+    left: 0.75rem;
+    right: 0.75rem;
+    z-index: 2;
+    display: flex;
+    width: auto;
+    max-height: calc(100vh - 6rem);
+    margin: 0;
+    padding: 0.6rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.2rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid rgba(103, 232, 249, 0.24);
+    border-radius: 0.9rem;
+    background: rgba(5, 10, 24, 0.97);
+    box-shadow: 0 20px 44px rgba(2, 6, 23, 0.42);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .public-nav-links.is-open .public-nav-link {
+    display: flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0.65rem 0.8rem !important;
+  }
+
+  :root[data-theme="light"] .public-nav-links.is-open {
+    border-color: rgba(29, 78, 216, 0.16);
+    background: rgba(247, 251, 255, 0.98);
+    box-shadow: 0 20px 44px rgba(15, 46, 96, 0.2);
+  }
+}
+
+@media (max-width: 400px) {
+  .public-auth-label-full { display: none; }
+  .public-auth-label-compact { display: inline; }
 }
 
 /* Reviews Next：獨立比較版，不繼承公開頁視覺語言 */

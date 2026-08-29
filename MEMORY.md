@@ -1,5 +1,6 @@
 # 專案記憶索引
 
+- [2026-08 公開 Top bar 主題對稱與共用元件](memory/public-topbar-theme-parity.md) — 六個公開頁共用單一 Top bar、日夜模式不再改變幾何尺寸，並維持各自主題色盤。
 - [2026-08 日間主題光學反相重設計](memory/daylight-theme-redesign.md) — 日／夜角色對稱、Logo 呈現、公開導覽斷點、SVG 主題圖示與視覺 QA 決策。
 - [2026-08 `/billing` 結帳頁重設計](memory/billing-checkout-redesign.md) — Stage 金流能力邊界、結帳資訊架構、無障礙表單與桌機／手機 QA 決策。
 - [2026-07 全專案稽核修復](memory/full-audit-remediation.md) — 21 項設計/安全/部署/UI 稽核的落地決策、驗證與外部阻擋。

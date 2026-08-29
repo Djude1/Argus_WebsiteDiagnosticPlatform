@@ -17,7 +17,7 @@
 - `ReviewMessage` / `ReviewMessageHelpful` 只保留舊資料與 migration 相容，不再暴露公開端點；migration 會把舊版最後一則管理員訊息搬到 `ReviewResponse`。
 - 公開頁獨立放在 `frontend/src/features/reviews/ReviewsPage.jsx` 並由路由 lazy load，避免再把評論流程塞回帳戶頁集合。
 - 夜間科技版已正式接管 `/reviews` 與 `ReviewsPage.jsx`；舊版元件及專用 CSS 移除，`/reviews-next` 只保留到 `/reviews` 的相容轉址，不再維護第二套頁面。
-- `/reviews` 必須掛在共用 `PublicLayout` 內，沿用全站唯一的 `PublicNav` 與 `PublicFooter`；評論元件本身不得再建立頁面級 header 或 footer。
+- `/reviews` 必須掛在共用 `PublicLayout` 內，沿用全站唯一的 `PublicTopBar` 與 `PublicFooter`；評論元件本身不得再建立頁面級 header 或 footer。
 - 正式版將官方回覆標示為「Argus 官方回覆」；這是公開品牌身分，不是登入帳號名稱。品牌小圖以既有 `brand-logo.webp` 裁切顯示，只保留眼睛圖形且不加正方形外框。
 - `BrandEye` 的小尺寸裁切框固定為 42×27px、圖片固定為 60px，桌面與手機皆維持 0.7 的水平可視比例；外層回覆排版不得覆寫元件尺寸。
 - 正式版採單欄社群討論流；helpful 只顯示按讚圖示與數字，排序文字使用「熱門／最新」。
