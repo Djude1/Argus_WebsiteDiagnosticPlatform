@@ -131,6 +131,21 @@ class CalculateScoresTests(TestCase):
         self.assertEqual(set(titles), {"PII", "JS_RENDER"})
 
 
+    def test_info_findings_never_enter_top_actions(self):
+        """「優先改善建議」不該列出不需要動作的項目。
+
+        info 多半是正向或純資訊（「偵測到 WAF 保護」的建議修補就是「無需修復」），
+        放進優先改善建議會讓使用者以為那是待辦事項。
+        """
+        findings = [
+            _finding("security", "info", "WAF_DETECTED"),
+            _finding("seo", "low", "META_TITLE"),
+        ]
+        _, _, top_actions = calculate_scores(findings, tested_categories={"security", "seo"})
+
+        self.assertEqual([a["title"] for a in top_actions], ["META_TITLE"])
+
+
 class MakeFindingPriorityScoreTests(TestCase):
     def test_priority_score_defaults_from_severity(self):
         """未指定 priority_score 時依 severity 給預設，不留 None。

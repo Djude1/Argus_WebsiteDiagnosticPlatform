@@ -66,13 +66,33 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 2026-08-30 依 [`docs/scan-report-quality-audit-2026-08-30.md`](../../../docs/scan-report-quality-audit-2026-08-30.md) 修正，四條規則都有測試鎖定（`tests_scoring_and_report_grouping.py`）：
 
 1. **同一分類內同一 `rule_id` 只扣一次分**。一個問題出現在幾頁是「廣度」不是「嚴重度」；報告本來就把它們合併成一筆顯示，計分不跟著去重會讓使用者看到一項卻被扣了 N 次。
-2. **`info` 不扣分**。info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF 攔截，代表防護有效」）。
+2. **`info` 不扣分**。info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF 攔截，代表防護有效」）。**同理 `info` 不進 `top_actions`**——它對應的建議修補是「無需修復」，列進「優先改善建議」會被當成待辦。
 3. **指數衰減 `100 * exp(-penalty / SCORE_DECAY_CONSTANT)`**，不是 `max(0, 100 - penalty)`。舊公式累積 100 分懲罰後永遠是 0，無法分辨「4 個高風險」與「40 個高風險」。`SCORE_DECAY_CONSTANT` 是可調的產品參數，不是演算法細節。
 4. **未評估的分類不寫進 `category_scores`，缺鍵即代表未評估**。`category_scores` **不保證含全部 5 個分類，取值一律用 `.get()`**。這同時保證「報告列出的分數」與「`overall_score` 平均的分母」是同一組，使用者算得出總分。
 
 `Finding.Meta.ordering` 一併鎖定兩件事：`priority_score` 必須明確 `nulls_last=True`（PostgreSQL 的 `DESC` 預設 NULLS FIRST、SQLite 是 NULLS LAST，不指定的話同一份報告在本機與正式站排序相反），`severity` 必須用 `Case/When` 的風險序（CharField 直接排是字母序 `critical < high < info < low < medium`，info 會插到 low 與 medium 前面）。
 
 `make_finding()` 在呼叫端沒傳 `priority_score` 時，依 severity 給預設值——`security/` 子套件的 scanner 全都不傳，留 `None` 會被 PostgreSQL 頂到報告最前面。
+
+---
+
+## 報告內容契約（`reports.py`）
+
+`.docx` 會被下載、轉寄、存檔給第三方，內容邊界是硬規則：
+
+| 必須有 | 為什麼 |
+|---|---|
+| 掃描範圍（範圍／模式／頁數上限／實際頁數／robots） | 收件者要能判斷涵蓋範圍，「沒發現問題」才有意義 |
+| 掃描授權聲明（`AuthorizationConsent`） | Argus 是授權式掃描平台，報告沒有授權依據等於放棄核心合規主張；查無紀錄要明講，不能讓章節消失 |
+| 掃描警示（`scan_effectiveness` / 略過與失敗頁數） | 爬 0 頁的掃描會產出看起來正常的報告，分數只反映站台層級檢查 |
+
+| 絕對不能寫進報告 | 為什麼 |
+|---|---|
+| `AuthorizationConsent.ip_address`、`user_agent`、授權帳號 | 個資與瀏覽器指紋，對收件者零價值只增加外洩面；稽核走 DB 與 `AdminAuditLog` |
+| `warning_summary["settlement_error"]`、`agent` 的 token 用量 | 內部運維／計費資訊，不是客戶要看的東西 |
+| 未實作功能的描述 | 附錄曾聲稱「交由 AI 進行自然語言解釋」，但 `ai_explanation` / `ai_remediation` 全 backend 只被寫入空字串——對外文件的不實陳述 |
+
+**`Finding.ai_explanation` / `ai_remediation` / `llm_model` / `llm_generated_at` 目前是死欄位**（無任何寫入點）。要嘛實作、要嘛移除，但在那之前報告不得聲稱有 AI 解釋。
 
 ---
 

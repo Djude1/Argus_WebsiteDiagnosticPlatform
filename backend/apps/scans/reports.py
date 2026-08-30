@@ -5,6 +5,7 @@ from django.conf import settings
 from docx import Document
 
 from apps.scans.models import Finding, ScanJob
+from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.redaction import redact_pii_in_text
 
 
@@ -70,6 +71,88 @@ def _group_findings_for_report(findings) -> list[dict]:
     return list(groups.values())
 
 
+def _add_scan_scope_section(document, scan_job: ScanJob) -> None:
+    """掃描範圍。收件者要能判斷這份報告涵蓋了什麼，「沒發現問題」才有意義。
+
+    scope 一律取自 scan_plan.build_scan_execution_plan()，不要在這裡重複
+    「max_pages==1 代表單頁」的慣例，避免兩邊漂移。
+    """
+    document.add_heading("掃描範圍", level=1)
+    scope_label = "單頁" if build_scan_execution_plan(scan_job).scope == "single" else "全網站"
+    document.add_paragraph(f"掃描範圍：{scope_label}")
+    document.add_paragraph(f"探測模式：{scan_job.get_scan_mode_display()}")
+    document.add_paragraph(f"頁數上限：{scan_job.max_pages}　連結深度上限：{scan_job.max_depth}")
+    document.add_paragraph(f"實際掃描頁數：{scan_job.pages.count()}")
+    document.add_paragraph(
+        f"遵守 robots.txt：{'是' if scan_job.respect_robots else '否'}"
+    )
+
+
+def _add_scan_warnings_section(document, scan_job: ScanJob) -> None:
+    """掃描過程的警示。
+
+    只挑對收件者有意義的項目：爬 0 頁（分數只反映站台層級檢查，不能解讀成
+    網站安全）、被 robots 略過與擷取失敗的頁數、偵測到的技術棧。內部運維資訊
+    （settlement_error 的計費結算、agent 的 token 用量）刻意不寫進對外報告。
+    """
+    warnings = scan_job.warning_summary or {}
+    lines: list[str] = []
+
+    if warnings.get("scan_effectiveness") == "no_pages_crawled":
+        lines.append(
+            "掃描有效性警示：本次未抓到任何頁面（目標可能不可達或全部逾時）。"
+            "SEO 與 AEO 未評估，分數僅反映站台層級檢查，不應解讀為「網站沒有問題」。"
+        )
+
+    blocked = warnings.get("blocked_urls") or []
+    if isinstance(blocked, list) and blocked:
+        lines.append(f"依 robots.txt 或掃描範圍限制，略過 {len(blocked)} 個頁面未檢查。")
+
+    failed = warnings.get("failed_urls") or []
+    if isinstance(failed, list) and failed:
+        lines.append(f"有 {len(failed)} 個頁面擷取失敗（逾時或回應異常），未納入本次分析。")
+
+    tech_stack = warnings.get("tech_stack") or []
+    if isinstance(tech_stack, list) and tech_stack:
+        lines.append(f"偵測到的技術棧：{'、'.join(str(t) for t in tech_stack)}")
+
+    if not lines:
+        return
+    document.add_heading("掃描警示", level=1)
+    for line in lines:
+        document.add_paragraph(line, style="List Bullet")
+
+
+def _add_authorization_section(document, scan_job: ScanJob) -> None:
+    """掃描授權聲明。
+
+    Argus 是授權式掃描平台，一份對外的資安報告必須記載這次掃描的授權依據，
+    否則等於放棄本專案最核心的合規主張。
+
+    刻意不寫入 AuthorizationConsent 的 ip_address 與 user_agent，也不寫授權
+    帳號：這份 .docx 會被下載、轉寄、存檔給第三方，授權人的 IP 與瀏覽器指紋
+    是個資，寫進去沒有任何對收件者的價值，只增加外洩面。需要稽核時查 DB 與
+    AdminAuditLog。
+    """
+    document.add_heading("掃描授權聲明", level=2)
+    consent = getattr(scan_job, "authorization_consent", None)
+    if consent is None:
+        document.add_paragraph(
+            "查無授權紀錄：本次掃描在資料庫中沒有對應的授權同意紀錄。"
+            "若這份報告要作為稽核依據，請先確認授權來源。"
+        )
+        return
+    document.add_paragraph(f"授權網域：{consent.authorized_domain}")
+    document.add_paragraph(
+        f"授權時間：{consent.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    document.add_paragraph(
+        f"主動測試授權：{'是' if consent.active_testing_authorized else '否（僅被動偵測）'}"
+    )
+    document.add_paragraph("授權聲明內容：")
+    document.add_paragraph(consent.statement)
+
+
 def build_scan_report(scan_job: ScanJob) -> str:
     report_dir = Path(settings.MEDIA_ROOT) / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -85,6 +168,8 @@ def build_scan_report(scan_job: ScanJob) -> str:
         )
     overall_score = scan_job.overall_score if scan_job.overall_score is not None else "尚未產生"
     document.add_paragraph(f"整體分數：{overall_score}")
+
+    _add_scan_scope_section(document, scan_job)
 
     document.add_heading("摘要", level=1)
     # 逐一列出全部 5 個分類，缺鍵的顯示「未評估」而非略過。calculate_scores() 只把
@@ -103,6 +188,8 @@ def build_scan_report(scan_job: ScanJob) -> str:
             document.add_paragraph(f"{category.upper()}：{score}")
         else:
             document.add_paragraph(f"{category.upper()}：未評估（本次掃描未執行此項檢查）")
+
+    _add_scan_warnings_section(document, scan_job)
 
     document.add_heading("優先改善建議（依影響程度排序）", level=1)
     for action in scan_job.top_actions or []:
@@ -171,10 +258,15 @@ def build_scan_report(scan_job: ScanJob) -> str:
                 document.add_paragraph(finding.ai_remediation)
 
     document.add_heading("附錄", level=1)
+    _add_authorization_section(document, scan_job)
+    document.add_heading("本報告如何產生", level=2)
+    # 原文寫「再交由 AI 進行自然語言解釋與改善建議撰寫」，但 Finding.ai_explanation
+    # 與 ai_remediation 在整個 backend 只被寫入空字串，該功能從未實作——這是一份
+    # 對外交付文件裡的不實陳述。改為只描述實際做到的事。
     document.add_paragraph(
-        "本報告採 Evidence-first 原則：SEO、AEO、GEO 與資安建議均先由爬蟲與規則引擎"
-        "產生可驗證之 Deterministic Evidence，再交由 AI 進行自然語言解釋與改善建議撰寫。"
-        "AI 不直接判斷網站好壞，也不得新增未被掃描器驗證的證據。"
+        "本報告採 Evidence-first 原則：SEO、AEO、GEO 與資安判斷全部來自爬蟲與規則引擎"
+        "產生的可驗證證據，每一項發現都附上當下實際觀測到的內容。"
+        "報告產生過程不使用 AI 改寫或推論結論，因此不會出現無法追溯到掃描證據的說法。"
     )
     document.save(output_path)
     return str(output_path)

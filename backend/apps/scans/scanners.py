@@ -1084,6 +1084,13 @@ def calculate_scores(
         if category_scores
         else 0
     )
+    # info 不進優先改善建議：它多半是正向或純資訊（例如「偵測到 WAF 保護」，
+    # 對應的建議修補就是「無需修復」），列進待辦會誤導使用者。
+    actionable = [
+        finding
+        for finding in deduped
+        if finding["severity"] != Finding.Severity.INFO
+    ]
     top_actions = [
         {
             "title": finding["title"],
@@ -1092,7 +1099,7 @@ def calculate_scores(
             "priority_score": finding.get("priority_score") or 0,
         }
         for finding in sorted(
-            deduped,
+            actionable,
             key=lambda item: item.get("priority_score") or 0,
             reverse=True,
         )[:5]
