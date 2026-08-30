@@ -691,8 +691,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # UX 只有 Hermes-Agent 實際「跑完」才算「有測」；未啟用時 agent_meta 為空 dict
         # （falsy），跑完/出錯時都會有值。但單純「有值」不夠精準：agent 拋例外時
         # agent_meta 也會是 {"status": "error", ...}（仍是 truthy），此時 UX 根本沒被
-        # 真正測過，category_scores["ux"] 只是恰好維持在 100（因為沒有 UX finding），
-        # 若也算「有測」計入平均，等於把「測到一半就掛掉」誤當「測過了、乾淨」。
+        # 真正測過，若也算「有測」，等於把「測到一半就掛掉」誤當「測過了、乾淨」。
+        # 沒列進 tested_categories 的分類不會出現在 category_scores（缺鍵＝未評估），
+        # 報告會顯示「未評估」而不是滿分，見 scanners.calculate_scores()。
         # 頁面內容類分類（seo/aeo）只來自 analyze_page（頁面層級）；爬蟲 0 頁（目標不可
         # 達/全 timeout）時根本沒有頁面可分析，若仍計入 overall_score 平均，等於把「沒
         # 測」誤當「零問題」灌高總分（與上方 UX 的把關同理）。security（DNS/SSL 站台

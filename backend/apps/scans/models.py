@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Case, F, IntegerField, Value, When
 
 
 class ScanJob(models.Model):
@@ -204,7 +205,25 @@ class Finding(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        ordering = ["-priority_score", "severity", "category", "-created_at"]
+        # priority_score 明確指定 nulls_last：PostgreSQL 的 DESC 預設是 NULLS
+        # FIRST、SQLite 是 NULLS LAST，不指定的話同一份報告在本機與正式站的
+        # 排序完全相反（舊資料仍可能有 NULL；新資料由 make_finding 補預設）。
+        # severity 是 CharField，直接排會變字母序（critical < high < info < low
+        # < medium），info 會插到 low 與 medium 前面，所以改用明確的風險序。
+        ordering = [
+            F("priority_score").desc(nulls_last=True),
+            Case(
+                When(severity="critical", then=Value(0)),
+                When(severity="high", then=Value(1)),
+                When(severity="medium", then=Value(2)),
+                When(severity="low", then=Value(3)),
+                When(severity="info", then=Value(4)),
+                default=Value(5),
+                output_field=IntegerField(),
+            ),
+            "category",
+            "-created_at",
+        ]
         indexes = [
             models.Index(fields=["scan_job", "category", "severity"]),
             models.Index(fields=["page", "category"]),

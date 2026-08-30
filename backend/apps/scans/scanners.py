@@ -1,4 +1,5 @@
 import hashlib
+import math
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -326,6 +327,19 @@ def _normalize_rule_token(value: str) -> str:
     return token[:80] or "GENERAL"
 
 
+# security/ 子套件的 7 個 scanner 都沒有傳 priority_score，留 None 會讓
+# PostgreSQL 的 DESC NULLS FIRST 把這些 finding 排到報告最前面（SQLite 的 DESC
+# 是 NULLS LAST，所以本機開發複現不出來）。沒有更細的排序依據時就以 severity
+# 當預設；呼叫端仍可傳明確值覆寫。
+_SEVERITY_DEFAULT_PRIORITY = {
+    "critical": 90.0,
+    "high": 75.0,
+    "medium": 50.0,
+    "low": 25.0,
+    "info": 10.0,
+}
+
+
 def _default_rule_id(category: str, title: str) -> str:
     digest = hashlib.sha1(title.encode("utf-8")).hexdigest()[:10].upper()
     return f"{_normalize_rule_token(str(category))}_{_normalize_rule_token(title)}_{digest}"
@@ -370,6 +384,11 @@ def make_finding(
     evidence_source: str = "",
 ) -> dict:
     resolved_rule_id = rule_id or _default_rule_id(str(category), title)
+    resolved_priority_score = (
+        priority_score
+        if priority_score is not None
+        else _SEVERITY_DEFAULT_PRIORITY.get(str(severity), 10.0)
+    )
     resolved_evidence_type = evidence_type or "text"
     resolved_evidence_source = evidence_source or "rule_engine"
     resolved_evidence_json = evidence_json or _default_evidence_json(
@@ -396,7 +415,7 @@ def make_finding(
         "llm_generated_at": None,
         "selector": selector,
         "bounding_box": bounding_box,
-        "priority_score": priority_score,
+        "priority_score": resolved_priority_score,
         "impact_area": impact_area,
         "confidence": confidence,
         "ai_handoff_prompt": build_ai_handoff_prompt(
@@ -978,17 +997,59 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
     return findings
 
 
+# 分數衰減常數：category_score = 100 * exp(-penalty / SCORE_DECAY_CONSTANT)。
+# 這是刻意可調的產品參數，不是演算法細節。目前值讓：
+#   1 個低風險(6)   -> 89 分      1 個中風險(14)  -> 76 分
+#   1 個高風險(25)  -> 61 分      1 個嚴重(35)    -> 50 分
+#   累積 100 分懲罰 -> 14 分      累積 200 分懲罰 -> 2 分
+# 調小 = 更嚴格（分數掉更快），調大 = 更寬鬆。
+SCORE_DECAY_CONSTANT = 50.0
+
+
+def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
+    """同一分類內同一個 rule_id 只保留第一筆。
+
+    一個問題出現在幾頁是「廣度」不是「嚴重度」，不該讓扣分翻倍——報告本來就用
+    reports._group_findings_for_report() 把它們合併成一筆顯示，計分卻沒有，於是
+    使用者看到報告只列一項 PII，分數卻是被扣三次的結果。rule_id 缺漏時（例如
+    agent 直接組出的 UX finding）退回 title 當鍵。
+    """
+    seen: set[tuple[str, str]] = set()
+    deduped: list[dict] = []
+    for finding in findings:
+        key = (
+            str(finding.get("category") or ""),
+            str(finding.get("rule_id") or finding.get("title") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finding)
+    return deduped
+
+
 def calculate_scores(
     findings: list[dict], *, tested_categories: set[str] | None = None
 ) -> tuple[int, dict[str, int], list[dict]]:
     """算各分類分數與 overall_score。
 
-    tested_categories：實際有執行檢查的分類集合。UX 只有 Hermes-Agent 啟用且真的
-    跑過才算「有測」；停用時（預設）完全沒有 UX finding 來源，若仍把
-    category_scores["ux"]（此時必為 100）計入 overall_score 平均，等於把「沒測」
-    誤當「零問題」灌高總分。傳 None 時視為全部類別皆已測試（相容舊呼叫）；
-    category_scores 仍回傳全部 5 個分類（供前端/報告顯示），只有 overall_score
-    的平均會排除未測試的分類。
+    分數模型（2026-08-30 修正，成因見
+    docs/scan-report-quality-audit-2026-08-30.md）：
+
+    - **同一分類內同一 rule_id 只扣一次**：見 _dedupe_findings_for_scoring()。
+    - **info 不扣分**：info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF
+      攔截，代表防護有效」），舊版讓這種好消息倒扣 2 分。
+    - **指數衰減取代線性扣減**：舊版 max(0, 100 - penalty) 累積 100 分懲罰後就
+      固定歸零，4 個高風險與 40 個高風險看起來一樣，而且對只是缺幾個 header 的
+      網站宣告「資安 0 分」並不成立。衰減讓分數在整個區間都保有解析度。
+    - **未評估的分類不寫進 category_scores**：缺鍵即代表「未評估」。舊版一律回
+      傳 ux=100，報告直接印「UX：100」，但 Agent 預設停用、UX 根本沒測，使用者
+      會解讀成「UX 完美」。同時這讓「報告列出的分數」與「overall 平均的分母」
+      一致——舊版列 5 個卻只平均 4 個，使用者怎麼算都對不出總分。
+
+    tested_categories 傳 None 時視為全部類別皆已測試（相容舊呼叫）。
+
+    呼叫端注意：category_scores 不再保證含全部 5 個分類，取值請用 .get()。
     """
     categories = [
         Finding.Category.SEO,
@@ -1002,24 +1063,25 @@ def calculate_scores(
         Finding.Severity.HIGH: 25,
         Finding.Severity.MEDIUM: 14,
         Finding.Severity.LOW: 6,
-        Finding.Severity.INFO: 2,
+        Finding.Severity.INFO: 0,
     }
+    deduped = _dedupe_findings_for_scoring(findings)
+    scored_categories = [
+        category
+        for category in categories
+        if tested_categories is None or category in tested_categories
+    ]
     category_scores: dict[str, int] = {}
-    for category in categories:
+    for category in scored_categories:
         penalty = sum(
             severity_penalty.get(finding["severity"], 0)
-            for finding in findings
+            for finding in deduped
             if finding["category"] == category
         )
-        category_scores[category] = max(0, 100 - penalty)
-    scored_categories = (
-        [c for c in categories if c in tested_categories]
-        if tested_categories is not None
-        else categories
-    )
+        category_scores[category] = round(100 * math.exp(-penalty / SCORE_DECAY_CONSTANT))
     overall_score = (
-        round(sum(category_scores[c] for c in scored_categories) / len(scored_categories))
-        if scored_categories
+        round(sum(category_scores.values()) / len(category_scores))
+        if category_scores
         else 0
     )
     top_actions = [
@@ -1030,7 +1092,7 @@ def calculate_scores(
             "priority_score": finding.get("priority_score") or 0,
         }
         for finding in sorted(
-            findings,
+            deduped,
             key=lambda item: item.get("priority_score") or 0,
             reverse=True,
         )[:5]

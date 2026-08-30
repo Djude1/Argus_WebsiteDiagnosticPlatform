@@ -61,6 +61,21 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 
 ---
 
+## 分數計算契約（`scanners.py::calculate_scores`）
+
+2026-08-30 依 [`docs/scan-report-quality-audit-2026-08-30.md`](../../../docs/scan-report-quality-audit-2026-08-30.md) 修正，四條規則都有測試鎖定（`tests_scoring_and_report_grouping.py`）：
+
+1. **同一分類內同一 `rule_id` 只扣一次分**。一個問題出現在幾頁是「廣度」不是「嚴重度」；報告本來就把它們合併成一筆顯示，計分不跟著去重會讓使用者看到一項卻被扣了 N 次。
+2. **`info` 不扣分**。info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF 攔截，代表防護有效」）。
+3. **指數衰減 `100 * exp(-penalty / SCORE_DECAY_CONSTANT)`**，不是 `max(0, 100 - penalty)`。舊公式累積 100 分懲罰後永遠是 0，無法分辨「4 個高風險」與「40 個高風險」。`SCORE_DECAY_CONSTANT` 是可調的產品參數，不是演算法細節。
+4. **未評估的分類不寫進 `category_scores`，缺鍵即代表未評估**。`category_scores` **不保證含全部 5 個分類，取值一律用 `.get()`**。這同時保證「報告列出的分數」與「`overall_score` 平均的分母」是同一組，使用者算得出總分。
+
+`Finding.Meta.ordering` 一併鎖定兩件事：`priority_score` 必須明確 `nulls_last=True`（PostgreSQL 的 `DESC` 預設 NULLS FIRST、SQLite 是 NULLS LAST，不指定的話同一份報告在本機與正式站排序相反），`severity` 必須用 `Case/When` 的風險序（CharField 直接排是字母序 `critical < high < info < low < medium`，info 會插到 low 與 medium 前面）。
+
+`make_finding()` 在呼叫端沒傳 `priority_score` 時，依 severity 給預設值——`security/` 子套件的 scanner 全都不傳，留 `None` 會被 PostgreSQL 頂到報告最前面。
+
+---
+
 ## ScanJob.progress 格式
 
 Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條：

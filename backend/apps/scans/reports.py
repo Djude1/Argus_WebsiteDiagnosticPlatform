@@ -4,7 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from docx import Document
 
-from apps.scans.models import ScanJob
+from apps.scans.models import Finding, ScanJob
 from apps.scans.security.redaction import redact_pii_in_text
 
 
@@ -46,17 +46,27 @@ def mask_pii_evidence(text: str) -> str:
 
 
 def _group_findings_for_report(findings) -> list[dict]:
-    """同一個 rule_id + evidence 完全相同的 finding（例如同一份 PII 或同一組缺 header
-    的問題出現在多個頁面）合併成一筆，受影響頁面收斂成清單。只影響 .docx 呈現順序與
-    分組，不改資料庫裡的原始 Finding 記錄。"""
-    groups: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    """同一個 rule_id 的 finding 合併成一筆，受影響頁面收斂成清單。
+
+    合併鍵只用 rule_id。rule_id 由 scanners._default_rule_id() 從 category + title
+    的雜湊產生，同一種問題不論出現在哪一頁都一致。舊版把 evidence 也放進鍵裡，
+    但 evidence 帶的是該頁專屬內容（例如那一頁實際的 title 文字），於是同一個問題
+    出現在 N 頁就被拆成 N 筆顯示——scan 25 的報告因此把「Meta title 長度不理想」
+    列了 4 次、「核心內容高度依賴 JavaScript 渲染」列了 3 次。
+
+    rule_id 為空時退回 finding.pk，避免不同問題只因為「都沒有 rule_id」被錯誤
+    合併成一筆。只影響 .docx 呈現順序與分組，不改資料庫裡的原始 Finding 記錄。
+    """
+    groups: OrderedDict[str, dict] = OrderedDict()
     for finding in findings:
-        key = (finding.rule_id or "", finding.evidence or "")
+        key = finding.rule_id or f"_finding:{finding.pk}"
         group = groups.get(key)
         if group is None:
             group = {"finding": finding, "pages": []}
             groups[key] = group
-        group["pages"].append(finding.page.final_url if finding.page else "站台層級")
+        page_label = finding.page.final_url if finding.page else "站台層級"
+        if page_label not in group["pages"]:
+            group["pages"].append(page_label)
     return list(groups.values())
 
 
@@ -77,8 +87,22 @@ def build_scan_report(scan_job: ScanJob) -> str:
     document.add_paragraph(f"整體分數：{overall_score}")
 
     document.add_heading("摘要", level=1)
-    for category, score in (scan_job.category_scores or {}).items():
-        document.add_paragraph(f"{category.upper()}：{score}")
+    # 逐一列出全部 5 個分類，缺鍵的顯示「未評估」而非略過。calculate_scores() 只把
+    # 實際執行過檢查的分類寫進 category_scores，缺鍵即代表沒測（例如 Hermes-Agent
+    # 停用時的 UX）。舊版一律回傳 100，報告印出「UX：100」會被讀成「UX 完美」。
+    # 同時說明整體分數的算法：舊版列 5 個分數卻只平均其中 4 個，使用者對不出總分。
+    document.add_paragraph(
+        "整體分數為下列「已評估」分類分數的平均，標示「未評估」的分類不納入計算。"
+        "同一個問題出現在多個頁面只扣一次分；資訊提示（例如「偵測到 WAF 保護」）"
+        "屬正向或中性訊息，不扣分。"
+    )
+    category_scores = scan_job.category_scores or {}
+    for category in Finding.Category.values:
+        score = category_scores.get(category)
+        if isinstance(score, (int, float)):
+            document.add_paragraph(f"{category.upper()}：{score}")
+        else:
+            document.add_paragraph(f"{category.upper()}：未評估（本次掃描未執行此項檢查）")
 
     document.add_heading("優先改善建議（依影響程度排序）", level=1)
     for action in scan_job.top_actions or []:
