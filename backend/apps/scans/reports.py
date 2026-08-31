@@ -135,6 +135,179 @@ CATEGORY_VERIFY = {
     "ux": "修補後重新執行一次 Argus 掃描確認此項目消失，並請實際操作一次該流程。",
 }
 
+# 「為什麼要在意」按 rule_id 客製：給出具體後果（會被怎樣、影響誰、花多少成本），
+# 而不是只用 CATEGORY_IMPACT 那套通用模板。rule_id 為空或沒列在這裡時退回
+# CATEGORY_IMPACT，再退回 generic。report.py 2026-08-30 後新增。
+RULE_IMPACT = {
+    # --- security ---
+    "SECURITY_PII_8B24BB8B28":
+        "這類個資外洩通常會登上新聞。依台灣《個資法》第 27 條與第 29 條，"
+        "未盡安全維護義務可處新台幣 5 萬至 50 萬元罰鍰；若個資被盜用，"
+        "還可能面對每位當事人 500 至 30,000 元的團體訴訟賠償（消保法第 51 條，"
+        "可乘以消費者人數）。品牌信任流失的長期成本更難量化。",
+    "SECURITY_CSRF_TOKEN_1BC47D8B6C":
+        "CSRF 漏洞可讓攻擊者在你不知情下，用你的身份在已登入狀態執行操作——"
+        "例如變更密碼、修改收件地址、下單、或在後台發文。常見情境是攻擊者誘導"
+        "管理員點一個連結，就在後台新增了一個管理員帳號。",
+    "SECURITY_CSP_BD010B5BE0":
+        "沒有 CSP 等同於網頁被植入惡意腳本時（XSS 攻擊成功後），瀏覽器不會"
+        "擋下任何外連請求。攻擊者可把你的使用者資料送到自己的伺服器，"
+        "或在他們控制的頁面重新顯示你的內容做釣魚。",
+    "SECURITY_HSTS_6A08D9EE20":
+        "使用者第一次用 HTTP 連到你的網站（被人偷偷改 DNS、在咖啡廳 wifi 被"
+        "劫持、或點了一個寫錯協定的舊連結），就可能被導向假網站並輸入密碼。"
+        "HSTS 強迫瀏覽器之後一律走 HTTPS，消掉這個窗口。",
+    "dns-spf-missing":
+        "沒設 SPF 等於公開邀請別人用你的網域寄詐騙信。攻擊者註冊一台主機、"
+        "用你的網域當寄件者，銀行、PayPal、客戶收到的「釣魚信」看起來就像"
+        "你公司寄的。常見後果：客戶被騙後提告、你的網域被各大郵件商列入黑名單，"
+        "連正常信件都送不到客戶信箱。",
+    "dns-dnssec-missing":
+        "沒有 DNSSEC，DNS 回應可以被中間人竄改——使用者輸入你的網址，"
+        "卻被導向攻擊者的假網站。雖然目前 ISP 多半還沒全面支援 DNSSEC 驗證，"
+        "但攻擊者只挑沒驗證的網站下手時你不會知道。",
+    "dns-dmarc-policy-weak":
+        "DMARC p=none 等於只記錄、不執行的稽核日誌。收件端看到冒名信時不會"
+        "擋，照樣送進使用者信箱。建議至少 p=quarantine 進垃圾信件匣。",
+    "SECURITY_X_FRAME_OPTIONS_A7A326FEA9":
+        "沒有 X-Frame-Options（或 frame-ancestors CSP），你的頁面可以被任意"
+        "嵌入 iframe 做「點擊劫持」——使用者以為在點按鈕，實際點到 iframe 裡"
+        "攻擊者的隱形按鈕。常見情境：使用者被誘導在你的網站上「按同意」"
+        "轉帳或刪除資料。",
+    "SECURITY_X_CONTENT_TYPE_OPTIONS_89053405E6":
+        "少了這個 header，舊版 IE 會主動「猜測」副檔名——例如把上傳的圖片"
+        "當 JavaScript 執行。現代瀏覽器大多有預設保護，但仍建議明確加上。",
+
+    # --- seo ---
+    "SEO_H1_48F33C13CC":
+        "Google 會把第一個 H1 視為頁面主題的主要訊號。多個 H1 或沒有 H1 都會"
+        "降低搜尋引擎對「這頁在講什麼」的信心，自然排序會略低於同業。",
+    "SEO_META_TITLE_0D9B1FE9E2":
+        "title 太短（<10 字）浪費了 SEO 訊號，太長（>65 字）在搜尋結果會被截斷。"
+        "中文常見最佳長度是 20-30 字。會直接影響點擊率——使用者看搜尋結果時，"
+        "看得到但不吸引人的 title 會被跳過。",
+    "SEO_META_DESCRIPTION_3ABE67FCFF":
+        "Google 不會把 meta description 當排名因素，但會直接拿來當搜尋結果的"
+        "說明文字。缺這段時 Google 會從頁面自動抓一段，常抓得不理想（會出現"
+        "導航文字、亂碼）。直接影響搜尋結果的點擊率。",
+    "SEO_CANONICAL_URL_A7D2F47ED2":
+        "沒有 canonical 時，同一份內容若有多個網址（HTTP/HTTPS、含/不含 www、"
+        "加上 UTM 參數等），Google 會各自收錄並互相競爭排名。設定後 Google"
+        "只把搜尋權重集中到指定的那個網址。",
+
+    # --- geo / aeo ---
+    "GEO_JAVASCRIPT_EEE24E55B4":
+        "ChatGPT Search、Perplexity、Google AI Overview 等生成式搜尋引擎"
+        "不會執行 JavaScript——它們只看伺服器回傳的初始 HTML。你的核心內容"
+        "如果只在 JavaScript 渲染後才出現，等於在新的搜尋入口上完全隱形。"
+        "目前的客戶若改用 AI 搜尋，你的網站就搜不到。",
+    "GEO_JSON_LD_8B386F956C":
+        "沒有結構化資料時，AI 搜尋引擎只能用「猜的」方式理解你的頁面主題。"
+        "加上 JSON-LD 後，AI 能精準辨識 Organization、Product、FAQ 等實體，"
+        "回答使用者問題時更可能引用你。",
+    "GEO_GENERAL_0576832FB5":
+        "沒有 <main> 等語意標籤時，AI 與螢幕閱讀器只能看到整頁文字流，"
+        "難以分辨「這段是導航」「那段是內容」。加上後，你的核心內容會更"
+        "容易被擷取為引用片段。",
+    "GEO_GENERAL_A8C8023032":
+        "AI 引用內容時偏好「可獨立成立的段落」——有明確主題、定義、數據來源。"
+        "段落太短（< 50 字）或只有一句話時，AI 會跳過不引用。",
+    "GEO_ROBOTS_TXT_AI_AFFA24D778":
+        "robots.txt 阻擋了 GPTBot / ClaudeBot / Google-Extended，代表這些"
+        "AI 系統不會抓你的內容做訓練與引用——會大幅降低你在 AI 回答中的"
+        "曝光。如果你希望被 AI 引用，需要把這些 User-Agent 從 robots 移除"
+        "或在 /llms.txt 提供可引用範圍。",
+}
+
+# 「修好了怎麼確認」按 rule_id 客製：給出具體可執行的驗收指令（curl、瀏覽器、開發者工具），
+# 而不是叫使用者「再掃一次 Argus」。
+RULE_VERIFY = {
+    "SECURITY_PII_8B24BB8B28":
+        "在終端機執行 curl -s https://你的網域 | grep -E \"@|09[0-9]{8}\"，"
+        "應找不到明文個資。或用瀏覽器開發者工具搜尋頁面原始碼，確認電話、"
+        "Email、身分證字號都已遮罩或移除。",
+    "SECURITY_CSRF_TOKEN_1BC47D8B6C":
+        "檢視表單 HTML（瀏覽器右鍵 → 檢視原始碼）：每個 method=POST 的表單"
+        "都應該有隱藏欄位如 csrfmiddlewaretoken 或 _csrf_token，"
+        "且值會隨 session 更新。或用 Burp Suite 攔截請求確認。",
+    "SECURITY_CSP_BD010B5BE0":
+        "在終端機執行 curl -I https://你的網域 | grep -i content-security-policy，"
+        "應看到 CSP header。或開瀏覽器開發者工具 → Network → 點首頁 → 看 Response Headers。",
+    "SECURITY_HSTS_6A08D9EE20":
+        "在終端機執行 curl -I https://你的網域 | grep -i strict-transport-security，"
+        "應看到 max-age=31536000 之類的設定。或到 https://hstspreload.org 查詢你的網域。",
+    "dns-spf-missing":
+        "在終端機執行 dig TXT 你的網域，應看到 v=spf1 ... -all 的記錄。"
+        "再到 https://mxtoolbox.com/spf.aspx 線上驗證語法正確性。",
+    "dns-dnssec-missing":
+        "在終端機執行 dig DNSKEY 你的網域，應有 DNSKEY 記錄。"
+        "或到 https://dnssec-analyzer.verisignlabs.com 線上查驗。",
+    "dns-dmarc-policy-weak":
+        "在終端機執行 dig TXT _dmarc.你的網域，應看到 v=DMARC1; p=quarantine 或 p=reject。"
+        "再到 https://mxtoolbox.com/dmarc.aspx 線上驗證。",
+    "SECURITY_X_FRAME_OPTIONS_A7A326FEA9":
+        "在終端機執行 curl -I https://你的網域 | grep -i x-frame-options，"
+        "應看到 DENY 或 SAMEORIGIN。CSP 的 frame-ancestors 也算合格。",
+    "SECURITY_X_CONTENT_TYPE_OPTIONS_89053405E6":
+        "在終端機執行 curl -I https://你的網域 | grep -i x-content-type-options，"
+        "應看到 nosniff。",
+    "SEO_H1_48F33C13CC":
+        "在每個頁面的 HTML 中應該只有一個 <h1> 標籤。用瀏覽器開發者工具的"
+        "Elements 面板搜尋 <h1，確認數量 = 1。",
+    "SEO_META_TITLE_0D9B1FE9E2":
+        "用瀏覽器開發者工具看每頁 <title> 的字元數（含空白），應在 20-60 字元。"
+        "或在 https://www.seoreviewtools.com/serp-preview/ 預覽 Google 顯示效果。",
+    "SEO_META_DESCRIPTION_3ABE67FCFF":
+        "用瀏覽器開發者工具看每頁 <meta name=description> 內容，"
+        "應在 50-160 字元之間且與頁面主題相關。",
+    "SEO_CANONICAL_URL_A7D2F47ED2":
+        "用瀏覽器開發者工具看每頁 HTML 應有 <link rel=canonical href=...>。"
+        "或在 https://search.google.com/search-console 提交 sitemap 觀察索引狀態。",
+    "GEO_JAVASCRIPT_EEE24E55B4":
+        "在終端機執行 curl -s https://你的網域 | wc -m，數字應接近「用瀏覽器"
+        "開啟後可見到的文字量」（差異 < 30%）。若 curl 看到的字數明顯少於"
+        "瀏覽器看到的，代表核心內容依賴 JavaScript。",
+    "GEO_JSON_LD_8B386F956C":
+        "用瀏覽器開發者工具的 Elements 面板搜尋 application/ld+json，"
+        "應至少有一個 JSON-LD 腳本。到 https://validator.schema.org 驗證語法。",
+    "GEO_GENERAL_0576832FB5":
+        "用瀏覽器開發者工具的 Elements 面板搜尋 <main，應該找到一個 "
+        "（且只有一個）。或到 https://wave.webaim.org 跑無障礙檢查。",
+    "GEO_GENERAL_A8C8023032":
+        "每個頁面至少要有 3 段以上、每段 50 字以上的文字內容（不含導航、"
+        "選單、頁尾）。可在開發者工具 Console 執行 document.querySelectorAll('p').length "
+        "看段落數量。",
+    "GEO_ROBOTS_TXT_AI_AFFA24D778":
+        "在終端機執行 curl -s https://你的網域/robots.txt，"
+        "應不再有 Disallow: / 對 GPTBot、ClaudeBot、Google-Extended。"
+        "或到 https://support.google.com/webmasters/answer/6062596 測試 robots 規則。",
+}
+
+
+def _impact_for(finding) -> str:
+    """依 rule_id 找客製文案，找不到退回 CATEGORY_IMPACT，再退回通用字串。
+
+    順序：RULE_IMPACT[rule_id] → CATEGORY_IMPACT[category] → "請依你的業務情境評估影響。"
+    """
+    rule_id = (finding.rule_id or "").strip()
+    if rule_id in RULE_IMPACT:
+        return RULE_IMPACT[rule_id]
+    category = (finding.category or "").lower()
+    if category in CATEGORY_IMPACT:
+        return CATEGORY_IMPACT[category]
+    return "請依你的業務情境評估影響。"
+
+
+def _verify_for(finding) -> str:
+    """同 _impact_for，但用於「修好了怎麼確認」段落。"""
+    rule_id = (finding.rule_id or "").strip()
+    if rule_id in RULE_VERIFY:
+        return RULE_VERIFY[rule_id]
+    category = (finding.category or "").lower()
+    if category in CATEGORY_VERIFY:
+        return CATEGORY_VERIFY[category]
+    return "修補後重新執行一次 Argus 掃描確認此項目消失。"
+
 DISCLAIMER = (
     "免責聲明：本報告僅反映掃描當下、從網際網路可觀測到的外部特徵，"
     "不等同完整滲透測試或原始碼稽核，也不構成法律或合規意見。"
@@ -301,25 +474,31 @@ def _score_band(score) -> tuple[str, str]:
 
 
 def _add_cover(document, scan_job: ScanJob, report_number: str) -> None:
-    # 有 PNG 就放圖，沒有就用字標。刻意不引入 SVG 轉檔套件（cairosvg 有系統函式庫
-    # 相依，會拖累 CI 與 Docker build），把 frontend/public/argus-logo.png 放進去
-    # 就會自動生效。
-    logo_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-logo.png"
-    if logo_path.exists():
-        logo_paragraph = document.add_paragraph()
-        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        logo_paragraph.add_run().add_picture(str(logo_path), width=Inches(1.4))
+    # 有預渲染的藝術字 PNG 就用圖（含 logo 點綴 + 漸層 + 陰影），沒有就用純文字。
+    # 為了避免 cairosvg 系統函式庫相依，這個 PNG 由 scripts/render_argus_brand.py 用 Pillow 生成。
+    title_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-title.png"
+    if title_path.exists():
+        title_paragraph = document.add_paragraph()
+        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_paragraph.add_run().add_picture(str(title_path), width=Inches(5.5))
     else:
-        for _ in range(3):
-            document.add_paragraph()
+        # fallback：純文字標題
+        logo_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-logo.png"
+        if logo_path.exists():
+            logo_paragraph = document.add_paragraph()
+            logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            logo_paragraph.add_run().add_picture(str(logo_path), width=Inches(1.4))
+        else:
+            for _ in range(3):
+                document.add_paragraph()
 
-    title = document.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(title, "ARGUS", size=44, bold=True, color=ARGUS_NAVY)
+        title = document.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _styled_run(title, "ARGUS", size=44, bold=True, color=ARGUS_NAVY)
 
-    subtitle = document.add_paragraph()
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(subtitle, "網站健檢報告", size=22, bold=True, color=ARGUS_CYAN_DEEP)
+        subtitle = document.add_paragraph()
+        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _styled_run(subtitle, "網站健檢報告", size=22, bold=True, color=ARGUS_CYAN_DEEP)
 
     _accent_rule(document)
     document.add_paragraph()
@@ -627,13 +806,17 @@ def _add_scan_scope(document, scan_job: ScanJob) -> None:
 def _add_entry_screenshot(document, scan_job: ScanJob) -> None:
     """入口頁截圖。
 
-    刻意只放這一張：全頁截圖體積大，把 50 頁的掃描全塞進去會讓 .docx 失控，
-    而 header / DNS / meta 這類發現本來就沒有視覺佐證價值。放一張的用途是讓
-    收件者一眼確認「這份報告講的確實是我的網站」。
+    策略：只放一張縮圖（最寬 1200px），不嵌原始的全頁截圖。
+    全頁截圖可能 2-5 MB、6198×1440，直接 embed 會讓 .docx 肥 73 倍（41KB → 3MB）
+    而對「讓收件者一眼確認這是我的網站」這個用途根本不需要那個解析度。
 
     路徑慣例與 views.py 的 screenshot action 一致：screenshot_path 相對於
     BASE_DIR。檔案不在（保留期限、換機器、S3 模式）就整段略過，不影響報告。
+
+    需要完整原始截圖者可從 Argus 平台下載（連結放在下方）。
     """
+    from PIL import Image  # Pillow 已在 pyproject.toml 內
+
     entry_page = (
         scan_job.pages.exclude(screenshot_path="")
         .order_by("depth", "id")
@@ -644,19 +827,50 @@ def _add_entry_screenshot(document, scan_job: ScanJob) -> None:
     screenshot = Path(settings.BASE_DIR) / entry_page.screenshot_path
     if not screenshot.exists():
         return
+
+    # 用 Pillow 縮成 thumbnail 並寫入 reports/ 旁的 cache 目錄。文件名加 .thumb.png 避免
+    # 未來覆蓋。縮圖失敗就整段略過（不讓截圖問題炸掉整份報告）。
+    thumb_dir = screenshot.parent.parent / "report_thumbs"
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    thumb_path = thumb_dir / f"{screenshot.stem}.thumb.png"
+    try:
+        if not thumb_path.exists() or thumb_path.stat().st_mtime < screenshot.stat().st_mtime:
+            with Image.open(screenshot) as img:
+                # 限制最寬 1200px，保持比例。有原始截圖不會被覆蓋。
+                img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+                # 轉 RGB（原始截圖可能是 RGBA，Word 對 RGBA PNG 處理不一致）
+                if img.mode == "RGBA":
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    img = bg
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+                img.save(thumb_path, "PNG", optimize=True)
+    except Exception:  # noqa: BLE001
+        return
+
     _heading(document, "掃描當下的網站畫面", level=2)
     try:
         paragraph = document.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.add_run().add_picture(str(screenshot), width=Inches(5.2))
+        paragraph.add_run().add_picture(str(thumb_path), width=Inches(5.2))
     except Exception:  # noqa: BLE001 — 截圖損毀不該讓整份報告產不出來
         return
     caption = document.add_paragraph()
     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _styled_run(
         caption,
-        f"{entry_page.final_url or entry_page.url}（掃描當下擷取）",
+        f"{entry_page.final_url or entry_page.url}（掃描當下擷取，顯示為縮圖）",
         size=9, color=ARGUS_MUTED,
+    )
+    # 完整檔下載指引。考慮到一份 docx 會被轉寄、列印，原始截圖另存為獨立檔比較實用。
+    note = document.add_paragraph()
+    note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _styled_run(
+        note,
+        f"完整原圖（{screenshot.stat().st_size // 1024} KB）保留於 Argus 平台，"
+        "可至掃描詳情頁下載。",
+        size=8, color=ARGUS_MUTED,
     )
 
 
@@ -816,8 +1030,14 @@ def _add_findings(document, grouped_findings) -> None:
         if finding.severity == Finding.Severity.INFO:
             _styled_run(document.add_paragraph(), INFO_NOTE, size=9, color=ARGUS_MUTED)
 
+        _heading(document, "為什麼要在意", level=3)
+        _styled_run(document.add_paragraph(), _impact_for(finding))
+
         _heading(document, "怎麼修", level=3)
         _styled_run(document.add_paragraph(), finding.remediation or "（無）")
+
+        _heading(document, "修好了怎麼確認", level=3)
+        _styled_run(document.add_paragraph(), _verify_for(finding))
 
         if finding.evidence:
             _heading(document, "檢測依據", level=3)
