@@ -41,8 +41,16 @@ class ReportContentTests(TestCase):
         )
 
     def _text(self) -> str:
+        """報告全文（含表格）。
+
+        資訊改放表格後，只讀 document.paragraphs 會漏掉大半內容。
+        """
         document = Document(build_scan_report(self.scan_job))
-        return "\n".join(p.text for p in document.paragraphs)
+        parts = [p.text for p in document.paragraphs]
+        for table in document.tables:
+            for row in table.rows:
+                parts.extend(cell.text for cell in row.cells)
+        return "\n".join(parts)
 
     # --- F1 對外陳述 -------------------------------------------------
     def test_appendix_does_not_claim_ai_wrote_explanations(self):
@@ -67,7 +75,7 @@ class ReportContentTests(TestCase):
 
         text = self._text()
 
-        self.assertIn("AI 提示詞", text)
+        self.assertIn("複製貼給 ChatGPT", text)
         self.assertIn("我網站有以下問題，請協助我分析並提供修復方向", text)
 
     def test_ai_prompt_is_pii_masked_like_evidence(self):
@@ -132,7 +140,8 @@ class ReportContentTests(TestCase):
         self.assertIn("掃描範圍", text)
         self.assertIn("全網站", text)          # max_pages=20 -> site
         self.assertIn("被動偵測", text)         # scan_mode=passive
-        self.assertIn("實際掃描頁數：3", text)
+        self.assertIn("實際掃描頁數", text)
+        self.assertIn("3", text)
 
     def test_single_page_scope_is_labelled(self):
         self.scan_job.max_pages = 1

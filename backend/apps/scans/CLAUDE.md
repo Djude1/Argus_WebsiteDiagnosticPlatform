@@ -92,6 +92,22 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 | `warning_summary["settlement_error"]`、`agent` 的 token 用量 | 內部運維／計費資訊，不是客戶要看的東西 |
 | 未實作功能的描述 | 附錄曾聲稱「交由 AI 進行自然語言解釋」，但 `ai_explanation` / `ai_remediation` 全 backend 只被寫入空字串——對外文件的不實陳述 |
 
+### 報告的讀者是網站主，不是資安工程師
+
+| 規則 | 為什麼 |
+|---|---|
+| 內部識別碼（`rule_id`、`evidence_source`、`evidence_type`）不進正文 | 對讀者零意義。`rule_id` / OWASP / CWE 收進附錄「技術索引」供工程師與稽核查用 |
+| 每筆發現固定四段：問題是什麼 / 為什麼要在意 / 怎麼修 / 修好了怎麼確認 | 舊版依 severity 給同一個結構三種標題（風險描述／改善重點／建議優化），讀者會以為是三種不同的東西 |
+| **`info` 走不同結構**（這代表什麼，且沒有「怎麼修」） | info 常是正向指標。實際產出報告時發現「Nuclei 探針受 WAF 攔截」（代表防護有效）底下寫著「這類問題會被攻擊者利用」——與該項意義完全相反，還叫讀者去修一個沒壞的東西 |
+| 「修好了怎麼確認」不得假設問題型態 | 舊文字寫「用 curl -I 檢查回應標頭」，但頁面外洩個資這類問題根本不是標頭問題 |
+| 名詞解釋只列這份報告真的出現過的術語 | 貼固定清單會塞進一堆與本次無關的名詞 |
+
+排版下限：**必須有**封面、目錄、章節分頁、表格、頁首頁尾與頁碼 field、嚴重度顏色。舊版是 328 段純文字流（其中 293 段 Normal、0 表格、0 分頁），有 `tests_report_layout.py` 鎖定。
+
+中文字型要同時設 `run.font.name` 與 `w:eastAsia`（`_styled_run()` 已封裝），只設前者 Word 會對中文退回預設字型。
+
+`styles.css` 的 `--argus-cyan (#38bdf8)` 是為深色背景設計的，**印在白紙上對比不足**；報告標題用 `--argus-cyan-deep (#0c4a6e)`，cyan 只當強調線。
+
 **`Finding.ai_explanation` / `ai_remediation` / `llm_model` / `llm_generated_at` 目前無任何寫入點**，報告不得聲稱有 AI 解釋。
 
 報告改為輸出 **`ai_handoff_prompt`**（`scanners.build_ai_handoff_prompt()` 產生，每筆 finding 都有值）——使用者可直接貼進 ChatGPT / Claude 取得深入說明。**這段必須跟 `evidence` 一樣套 `mask_pii_evidence()`**：提示詞內嵌了原始 evidence，不遮罩等於從後門把個資漏回這份會被轉寄的報告。
