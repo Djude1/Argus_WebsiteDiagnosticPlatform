@@ -413,6 +413,8 @@ def _add_summary(document, scan_job: ScanJob, grouped_findings) -> None:
 
     _add_previous_scan_comparison(document, scan_job, grouped_findings)
 
+    _add_category_impact(document, grouped_findings)
+
     _heading(document, "分數怎麼看", level=2)
     band_table = document.add_table(rows=len(SCORE_BANDS) + 1, cols=3)
     band_table.style = "Table Grid"
@@ -566,6 +568,40 @@ def _add_page_list(document, scan_job: ScanJob, counter) -> None:
         _styled_run(cells[3].paragraphs[0], str(page.depth), size=8)
 
 
+def _add_category_impact(document, grouped_findings) -> None:
+    """各分類「為什麼重要」——講一次。
+
+    舊版把這段掛在每一項發現底下，scan 38 的實測是出現 14 次卻只有 6 種內容，
+    讀者一路看到同樣的話重複十幾次，結構看起來有了、讀起來仍是灌水。
+    只列本次真的有發現的分類，沒發現的不佔版面。
+    """
+    # 只列「有需要處理的項目」的分類：某分類若只有正向的資訊提示（例如只偵測到
+    # WAF 保護），卻在這裡寫「這類問題會被攻擊者利用」，就是把好消息說成威脅。
+    present = []
+    for item in grouped_findings:
+        finding = item["finding"]
+        if finding.severity == Finding.Severity.INFO:
+            continue
+        if finding.category not in present:
+            present.append(finding.category)
+    if not present:
+        return
+    _heading(document, "這些分類為什麼重要", level=2)
+    table = document.add_table(rows=len(present) + 1, cols=2)
+    table.style = "Table Grid"
+    _header_row(table, ["分類", "沒處理的話會怎樣"])
+    for index, category in enumerate(present, start=1):
+        cells = table.rows[index].cells
+        _styled_run(
+            cells[0].paragraphs[0],
+            CATEGORY_DISPLAY.get(category, category.upper()), bold=True,
+        )
+        _styled_run(
+            cells[1].paragraphs[0],
+            CATEGORY_IMPACT.get(category, "請依你的業務情境評估影響。"),
+        )
+
+
 def _add_scan_scope(document, scan_job: ScanJob) -> None:
     """掃描範圍。收件者要能判斷這份報告涵蓋了什麼，「沒發現問題」才有意義。
 
@@ -701,6 +737,18 @@ def _add_top_actions(document, scan_job: ScanJob) -> None:
     document.add_page_break()
 
 
+# 受影響頁面最多列這麼多個，其餘收成「…另 N 處」。完整清單在附錄的頁面清單。
+_MAX_LISTED_PAGES = 5
+# 證據顯示上限。舊值 1000 字讓單一項目就能吃掉大半頁。
+_MAX_EVIDENCE_CHARS = 300
+
+
+def _pages_label(pages: list[str]) -> str:
+    if len(pages) == 1:
+        return pages[0]
+    return f"影響 {len(pages)} 個頁面"
+
+
 def _description_for_report(finding) -> str:
     """去掉 description 開頭與報告行為矛盾的警語。
 
@@ -725,6 +773,13 @@ def _add_findings(document, grouped_findings) -> None:
         document.add_page_break()
         return
 
+    _styled_run(
+        document.add_paragraph(),
+        "每一項只列屬於它自己的內容。各分類「為什麼重要」見第 1 章，"
+        "修補後如何驗證見附錄。",
+        size=9, color=ARGUS_MUTED,
+    )
+
     for index, item in enumerate(grouped_findings, start=1):
         finding = item["finding"]
         pages = item["pages"]
@@ -733,42 +788,36 @@ def _add_findings(document, grouped_findings) -> None:
         heading = document.add_heading(level=2)
         _styled_run(heading, f"4.{index}　{finding.title}", bold=True, color=severity_color)
 
-        _kv_table(document, [
-            ("嚴重度", get_severity_display(finding.severity)),
-            ("分類", CATEGORY_DISPLAY.get(finding.category, finding.category.upper())),
-            (
-                "受影響頁面",
-                f"共 {len(pages)} 處" if len(pages) > 1 else pages[0],
-            ),
-        ])
+        # 中繼資料壓成一行。舊版每項一張三列表格，在 Word 裡非常吃垂直空間，
+        # 19 項就是 19 張表。
+        meta = document.add_paragraph()
+        _styled_run(
+            meta, get_severity_display(finding.severity), bold=True, color=severity_color,
+        )
+        _styled_run(
+            meta,
+            f"　·　{CATEGORY_DISPLAY.get(finding.category, finding.category.upper())}"
+            f"　·　{_pages_label(pages)}",
+            size=9, color=ARGUS_MUTED,
+        )
         if len(pages) > 1:
-            for page_url in pages:
-                _styled_run(document.add_paragraph(style="List Bullet"), page_url, size=9)
+            shown = pages[:_MAX_LISTED_PAGES]
+            suffix = (
+                f"　…另 {len(pages) - _MAX_LISTED_PAGES} 處"
+                if len(pages) > _MAX_LISTED_PAGES else ""
+            )
+            _styled_run(
+                document.add_paragraph(), "、".join(shown) + suffix,
+                size=8, color=ARGUS_MUTED,
+            )
 
         _heading(document, "問題是什麼", level=3)
         _styled_run(document.add_paragraph(), _description_for_report(finding))
-
-        is_info = finding.severity == Finding.Severity.INFO
-        if is_info:
-            _heading(document, "這代表什麼", level=3)
-            _styled_run(document.add_paragraph(), INFO_NOTE)
-        else:
-            _heading(document, "為什麼要在意", level=3)
-            impact = CATEGORY_IMPACT.get(finding.category, "請依你的業務情境評估影響。")
-            urgency = SEVERITY_URGENCY.get(finding.severity, "")
-            _styled_run(document.add_paragraph(), f"{impact}{urgency}")
+        if finding.severity == Finding.Severity.INFO:
+            _styled_run(document.add_paragraph(), INFO_NOTE, size=9, color=ARGUS_MUTED)
 
         _heading(document, "怎麼修", level=3)
         _styled_run(document.add_paragraph(), finding.remediation or "（無）")
-
-        if not is_info:
-            # info 項目不會在下次掃描「消失」（正向指標本來就該留著，小問題也未必
-            # 值得專程複驗），叫讀者去確認它不見了只會造成困惑。
-            _heading(document, "修好了怎麼確認", level=3)
-            _styled_run(
-                document.add_paragraph(),
-                CATEGORY_VERIFY.get(finding.category, "修補後重新執行一次 Argus 掃描確認。"),
-            )
 
         if finding.evidence:
             _heading(document, "檢測依據", level=3)
@@ -778,33 +827,15 @@ def _add_findings(document, grouped_findings) -> None:
             if masked_evidence != finding.evidence:
                 _styled_run(
                     document.add_paragraph(),
-                    "⚠️ 以下內容為偵測到之敏感樣本部分遮罩後的結果，"
-                    "請依個資法妥善保管本報告。",
+                    "⚠️ 以下為敏感樣本部分遮罩後的結果，請依個資法妥善保管本報告。",
                     bold=True, color=SEVERITY_COLOR["high"],
                 )
-            evidence_text = masked_evidence[:1000]
-            truncated = "…（證據過長已截斷）" if len(masked_evidence) > 1000 else ""
+            evidence_text = masked_evidence[:_MAX_EVIDENCE_CHARS]
+            truncated = (
+                "…（已截斷）" if len(masked_evidence) > _MAX_EVIDENCE_CHARS else ""
+            )
             _styled_run(document.add_paragraph(), f"{evidence_text}{truncated}", size=9)
 
-        if finding.ai_handoff_prompt:
-            # 報告不做 AI 解釋（ai_explanation 從未被實作），但每筆 finding 都已經有
-            # 一段組好的提示詞，使用者可以直接貼進 ChatGPT / Claude 取得深入說明。
-            # 必須跟 evidence 一樣遮罩：build_ai_handoff_prompt() 內嵌了原始 evidence，
-            # 不遮罩等於從後門把個資漏回這份會被轉寄的報告。
-            _heading(document, "想更深入了解？", level=3)
-            _styled_run(
-                document.add_paragraph(),
-                "把下面這段文字複製貼給 ChatGPT、Claude 等 AI 助手，可取得更詳細的說明：",
-            )
-            masked_prompt = mask_pii_evidence(finding.ai_handoff_prompt)
-            prompt_text = masked_prompt[:1500]
-            prompt_note = "…（提示詞過長已截斷）" if len(masked_prompt) > 1500 else ""
-            _styled_run(
-                document.add_paragraph(), f"{prompt_text}{prompt_note}",
-                size=9, color=ARGUS_MUTED,
-            )
-
-        document.add_paragraph()
     document.add_page_break()
 
 
@@ -912,6 +943,26 @@ def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
     _add_glossary(document, grouped_findings, counter)
     _add_technical_index(document, grouped_findings, counter)
     _add_page_list(document, scan_job, counter)
+
+    _heading(document, f"{counter.next()}　修補後如何驗證", level=2)
+    _styled_run(
+        document.add_paragraph(),
+        "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；"
+        "下一份報告的摘要會列出這次解決了哪些項目。"
+        "若要立即自行確認，請你的網站維護人員依各項的「怎麼修」逐步檢查。",
+    )
+
+    _heading(document, f"{counter.next()}　想更深入了解某一項", level=2)
+    # 舊版在每一項發現底下都印一段完整的 AI 提示詞，佔了發現項目 43% 的字數，
+    # 而內容就是把上方「問題是什麼／檢測依據／怎麼修」原封不動再抄一遍。
+    # 改成在這裡說明一次怎麼用，資訊沒有少，重複沒有了。
+    _styled_run(
+        document.add_paragraph(),
+        "把任何一項發現的「問題是什麼」「檢測依據」「怎麼修」三段文字複製起來，"
+        "貼給 ChatGPT、Claude 等 AI 助手並補上一句「請說明這個問題的影響與具體修復步驟」，"
+        "就能取得更詳細的說明。本報告的內容全部可追溯至掃描證據，"
+        "交給 AI 解讀時請以報告內容為準。",
+    )
 
     _heading(document, f"{counter.next()}　免責聲明", level=2)
     _styled_run(document.add_paragraph(), DISCLAIMER)

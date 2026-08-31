@@ -57,26 +57,11 @@ class ReportContentTests(TestCase):
         """ai_explanation / ai_remediation 從未被填值，不能聲稱 AI 寫了解釋。"""
         self.assertNotIn("交由 AI 進行自然語言解釋", self._text())
 
-    def test_finding_carries_a_pasteable_ai_prompt(self):
-        """報告要給使用者可直接貼進 AI 工具的提示詞。
-
-        ai_handoff_prompt 每筆 Finding 都已經有值（scanners.build_ai_handoff_prompt），
-        但舊報告完全沒用它——等於既沒有 AI 解釋、也沒把現成的替代方案交出去。
-        """
-        Finding.objects.create(
-            scan_job=self.scan_job, page=None, severity="medium",
-            category=Finding.Category.SECURITY, title="缺少 CSP",
-            description="未設定 Content-Security-Policy。", remediation="加上 CSP header。",
-            ai_handoff_prompt=(
-                "我網站有以下問題，請協助我分析並提供修復方向：\n- 問題類型：security"
-            ),
-            rule_id="header-csp-missing", priority_score=50.0,
-        )
-
-        text = self._text()
-
-        self.assertIn("複製貼給 ChatGPT", text)
-        self.assertIn("我網站有以下問題，請協助我分析並提供修復方向", text)
+    # 原本這裡有 test_finding_carries_a_pasteable_ai_prompt，鎖定「每一項發現底下
+    # 都印出完整 AI 提示詞」。scan 38 實測那佔了發現項目 43% 的字數，而內容是把
+    # 上方三段原封不動再抄一遍。需求本身仍在（報告要告訴讀者怎麼用 AI 深入了解），
+    # 改由 tests_report_compactness.py::test_report_still_tells_the_reader_how_to_use_ai
+    # 鎖定「說明一次、不重複」。
 
     def test_ai_prompt_is_pii_masked_like_evidence(self):
         """ai_handoff_prompt 內嵌了原始 evidence，不遮罩等於從後門把個資漏回報告。"""

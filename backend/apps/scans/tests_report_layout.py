@@ -117,12 +117,20 @@ class ReportLayoutTests(TestCase):
         self.assertNotIn("Deterministic Evidence", self._text())
         self.assertIn("檢測依據", self._text())
 
-    def test_each_finding_answers_why_it_matters_and_how_to_verify(self):
+    def test_report_answers_what_why_how_and_verification(self):
+        """報告必須回答這四個問題——但只講一次。
+
+        原本的要求是「每一項發現都要有這四段」。scan 38 的實測顯示那造成大量重複
+        （「為什麼要在意」出現 14 次卻只有 6 種內容），34 頁裡有一大半是樣板。
+        所以要求改成：屬於分類的講一次（摘要）、屬於流程的講一次（附錄）、
+        屬於這一項的才逐項列（見 tests_report_compactness.py）。
+        """
         text = self._text()
-        self.assertIn("問題是什麼", text)
-        self.assertIn("為什麼要在意", text)
-        self.assertIn("怎麼修", text)
-        self.assertIn("修好了怎麼確認", text)
+
+        self.assertIn("問題是什麼", text)       # 逐項
+        self.assertIn("怎麼修", text)           # 逐項
+        self.assertIn("這些分類為什麼重要", text)  # 摘要，講一次
+        self.assertIn("修補後如何驗證", text)      # 附錄，講一次
 
     def test_positive_info_finding_is_not_described_as_a_threat(self):
         """info 常是正向指標，不能套用「會被攻擊者利用」那套說法。
