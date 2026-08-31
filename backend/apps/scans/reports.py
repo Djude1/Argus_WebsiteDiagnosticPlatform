@@ -647,6 +647,14 @@ def _add_scan_warnings(document, scan_job: ScanJob) -> None:
     if isinstance(failed, list) and failed:
         lines.append(f"有 {len(failed)} 個頁面擷取失敗（逾時或回應異常），未納入本次分析。")
 
+    screenshot_failures = warnings.get("screenshot_failures") or []
+    if isinstance(screenshot_failures, list) and screenshot_failures:
+        # 措辭要和「頁面擷取失敗」分開：那一頁其實有抓到也分析過了，只是沒有圖。
+        lines.append(
+            f"有 {len(screenshot_failures)} 個頁面的截圖未能保存"
+            "（不影響該頁的檢測結果，僅少了畫面佐證）。"
+        )
+
     tech_stack = warnings.get("tech_stack") or []
     if isinstance(tech_stack, list) and tech_stack:
         lines.append(f"偵測到的技術棧：{'、'.join(str(item) for item in tech_stack)}")

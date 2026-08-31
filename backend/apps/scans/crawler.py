@@ -315,6 +315,43 @@ async def _make_context(browser, origin: str):
     return context
 
 
+def _prepare_screenshot_dir(screenshot_dir: Path, warnings: dict) -> Path | None:
+    """建立截圖目錄；失敗回 None 而不是往上拋。
+
+    磁碟寫滿或唯讀掛載時，舊版會讓 mkdir 的例外冒出 crawl_site，整次掃描在
+    還沒爬第一頁就失敗。截圖是輔助資料，不該有這種殺傷力。
+    """
+    try:
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
+        return screenshot_dir
+    except Exception as exc:  # noqa: BLE001
+        warnings.setdefault("screenshot_failures", []).append(
+            {"url": "(screenshot_dir)", "reason": exc.__class__.__name__}
+        )
+        return None
+
+
+async def _capture_screenshot(page, target: Path, url: str, warnings: dict) -> Path | None:
+    """拍頁面截圖；失敗回 None 而不是往上拋。
+
+    這一步在 pages.append() **之前**執行；舊版讓例外冒出去會被外層的
+    except Exception 接住，整頁被丟進 failed_urls——連帶 Page 紀錄與該頁的
+    SEO/AEO 分析一起消失。磁碟寫滿時整次掃描會變成「0 頁」，使用者看到的是
+    「截圖空白、SEO 分析也不見」（2026-08-31 正式站事故）。
+
+    失敗記進 screenshot_failures 而不是 failed_urls：那一頁其實抓到了，
+    記進 failed_urls 會讓報告誤報成「頁面擷取失敗」。
+    """
+    try:
+        await page.screenshot(path=str(target), full_page=True)
+        return target
+    except Exception as exc:  # noqa: BLE001
+        warnings.setdefault("screenshot_failures", []).append(
+            {"url": url, "reason": exc.__class__.__name__}
+        )
+        return None
+
+
 async def crawl_site(
     *,
     start_url: str,
@@ -345,8 +382,9 @@ async def crawl_site(
     )
     last_request_at = 0.0
     page_retry_counts: dict[str, int] = {}
-    screenshot_dir = Path(settings.MEDIA_ROOT) / "scans" / str(scan_job_id)
-    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    screenshot_dir = _prepare_screenshot_dir(
+        Path(settings.MEDIA_ROOT) / "scans" / str(scan_job_id), warnings
+    )
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -456,13 +494,18 @@ async def crawl_site(
                                     or classify_cf_challenge(html)
                                     or classify_blocked(status_code)
                                 )
-                                screenshot_path = (
-                                    screenshot_dir / f"page-{len(pages) + 1}.png"
-                                )
                                 # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
+                                # 截圖失敗只讓這一頁沒有圖，不影響這一頁其餘的分析。
                                 page_stage = "screenshot"
-                                await page.screenshot(
-                                    path=str(screenshot_path), full_page=True
+                                screenshot_path = (
+                                    await _capture_screenshot(
+                                        page,
+                                        screenshot_dir / f"page-{len(pages) + 1}.png",
+                                        url,
+                                        warnings,
+                                    )
+                                    if screenshot_dir is not None
+                                    else None
                                 )
                                 # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
                                 page_stage = "links"

@@ -114,6 +114,23 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 
 ---
 
+## 截圖失敗不得讓整頁分析作廢（2026-08-31 事故）
+
+`page.screenshot()` 在 `crawler.py` 裡是在 **`pages.append()` 之前**執行的。
+舊版讓它的例外直接冒出去，會被外層的 `except Exception` 接住，**整頁被丟進 `failed_urls`**——連帶該頁的 `Page` 紀錄與 SEO/AEO finding 一起消失。
+
+**SEO 與 AEO finding 只由 `analyze_page()` 逐頁產生**，所以「爬到 0 頁」＝這兩類完全沒有結果。正式站的實際症狀是：掃描顯示完成，但畫面截圖空白、SEO 分析整個不見，只剩站台層級的 DNS/SSL/header 檢查。
+
+| 規則 | 為什麼 |
+|---|---|
+| 截圖一律走 `_capture_screenshot()`，**不得直接 `await page.screenshot()`** | 截圖是輔助資料，不該有讓整頁作廢的殺傷力 |
+| 建目錄一律走 `_prepare_screenshot_dir()` | 磁碟寫滿／唯讀掛載時，`mkdir` 的例外會讓整次掃描在爬第一頁前就失敗 |
+| 失敗記進 `warning_summary["screenshot_failures"]`，**不是 `failed_urls`** | 那一頁其實抓到也分析過了，記進 `failed_urls` 會讓報告誤報成「頁面擷取失敗」 |
+
+截圖有保留期限：`manage.py cleanup_screenshots --older-than-days N`（預設 90，支援 `--dry-run`）。`media/scans/<掃描id>/page-N.png` 是全頁擷取、體積遠大於報告，**是 media volume 上真正無限成長的那一塊**；磁碟寫滿正是上述事故最可能的觸發原因。
+
+---
+
 ## 報告防偽與快取（`ReportVerification`）
 
 每次 `build_scan_report()` 完成時寫入一列 `ReportVerification`：報告編號、檔案內容 SHA-256、產生時間。

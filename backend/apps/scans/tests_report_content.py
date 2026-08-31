@@ -175,6 +175,25 @@ class ReportContentTests(TestCase):
         self.assertIn("略過 1 個頁面", text)
         self.assertIn("2 個頁面擷取失敗", text)
 
+    def test_screenshot_failures_are_reported_without_implying_page_failure(self):
+        """截圖存不下來要講，但不能說成「頁面擷取失敗」——那一頁其實有分析到。
+
+        2026-08-31 事故：截圖寫入失敗會把整頁丟進 failed_urls，掃描變成 0 頁、
+        SEO 分析整個消失。修正後截圖失敗獨立記錄，頁面照常保留。
+        """
+        self.scan_job.warning_summary = {
+            "screenshot_failures": [
+                {"url": "https://example.com/a", "reason": "OSError"},
+                {"url": "https://example.com/b", "reason": "OSError"},
+            ]
+        }
+        self.scan_job.save(update_fields=["warning_summary"])
+
+        text = self._text()
+
+        self.assertIn("2 個頁面的截圖", text)
+        self.assertNotIn("擷取失敗", text)
+
     def test_internal_billing_error_is_not_exposed_to_the_customer(self):
         """settlement_error 是內部計費問題，不該出現在給客戶的報告裡。"""
         self.scan_job.warning_summary = {"settlement_error": "CoinWalletDoesNotExist"}
