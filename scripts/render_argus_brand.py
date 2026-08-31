@@ -36,7 +36,12 @@ NAVY_800 = (0x0A, 0x15, 0x35)
 WHITE = (0xFF, 0xFF, 0xFF)
 
 
-def _star_polygon(size: int, points: int = 4, outer: float = 0.96, inner: float = 0.30) -> list[tuple[float, float]]:
+def _star_polygon(
+    size: int,
+    points: int = 4,
+    outer: float = 0.96,
+    inner: float = 0.30,
+) -> list[tuple[float, float]]:
     """N 角星的多邊形座標（內凹版）。
 
     size：邊框像素。
@@ -66,7 +71,9 @@ def _smoothed_star_polygon(size: int) -> list[tuple[float, float]]:
     return _star_polygon(size, points=4, outer=0.46, inner=0.16)
 
 
-def _linear_gradient(size: int, top: tuple[int, int, int], bottom: tuple[int, int, int]) -> Image.Image:
+def _linear_gradient(
+    size: int, top: tuple[int, int, int], bottom: tuple[int, int, int],
+) -> Image.Image:
     """從左上到右下的線性漸層（仿 favicon.svg 的 x1=8 y1=8 → x2=56 y2=56 對角線）。"""
     img = Image.new("RGB", (size, size), top)
     pixels = img.load()
@@ -80,12 +87,16 @@ def _linear_gradient(size: int, top: tuple[int, int, int], bottom: tuple[int, in
     return img
 
 
-def _radial_glow(size: int, center: tuple[float, float], radius: float, color: tuple[int, int, int]) -> Image.Image:
+def _radial_glow(
+    size: int,
+    center: tuple[float, float],
+    radius: float,
+    color: tuple[int, int, int],
+) -> Image.Image:
     """徑向 alpha 漸層（用於 favicon 的 glow 圓，背景透明）。"""
     cx, cy = center
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     pixels = img.load()
-    r_int = int(radius)
     for y in range(size):
         for x in range(size):
             d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
@@ -149,8 +160,14 @@ def render_watermark() -> Path:
     return out
 
 
-def _fit_font(text: str, max_width: int, max_height: int, *,
-              family_candidates: list[str], min_size: int = 24) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
+def _fit_font(
+    text: str,
+    max_width: int,
+    max_height: int,
+    *,
+    family_candidates: list[str],
+    min_size: int = 24,
+) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, int]:
     """挑一個能放得下 text 的最大字型大小。"""
     for family in family_candidates:
         for size in range(min_size, 200):

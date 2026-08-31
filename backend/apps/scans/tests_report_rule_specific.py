@@ -14,13 +14,11 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from docx import Document
 
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.reports import (
-    RULE_IMPACT,
-    RULE_VERIFY,
     _impact_for,
     _verify_for,
     build_scan_report,
@@ -222,9 +220,9 @@ class ReportThumbnailScreenshotTests(TestCase):
 
     def setUp(self):
         # 建一個假截圖（PIL.Image 6000x1500 模擬 scan-25 的全頁截圖）
-        from PIL import Image
         import tempfile
-        from django.conf import settings
+
+        from PIL import Image
 
         self.tmp = tempfile.mkdtemp()
         self.scan_img_path = Path(self.tmp) / "scan-test-page.png"
@@ -235,7 +233,6 @@ class ReportThumbnailScreenshotTests(TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_thumbnail_is_smaller_than_original(self):
-        from PIL import Image
         from django.contrib.auth import get_user_model
         User = get_user_model()
         user = User.objects.create_user(
@@ -248,8 +245,9 @@ class ReportThumbnailScreenshotTests(TestCase):
             origin="example.com",
             status=ScanJob.Status.COMPLETED,
         )
-        # 讓 Page.screenshot_path 指向我們建的測試截圖
-        page = Page.objects.create(
+        # 讓 Page.screenshot_path 指向我們建的測試截圖。Page 不需要參考：
+        # _add_entry_screenshot 會用 scan_job.pages 查詢，自己找到這個 entry page。
+        Page.objects.create(
             scan_job=scan,
             url="https://example.com",
             final_url="https://example.com",
