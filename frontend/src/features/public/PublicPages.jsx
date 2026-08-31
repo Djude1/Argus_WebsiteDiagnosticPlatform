@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
@@ -100,6 +100,7 @@ function PublicFooter() {
           <NavLink to="/purchase">購買</NavLink>
           <NavLink to="/download">下載 PWA</NavLink>
           <NavLink to="/reviews">評論</NavLink>
+          <NavLink to="/verify">報告查驗</NavLink>
         </div>
         <div className="public-footer-copy">
           © Argus · 僅供授權測試的網站健檢工具
@@ -983,6 +984,152 @@ function FreeToolsPage() {
   );
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+
+function VerifyReportPage() {
+  // 讀者可能是「收到 .docx 的第三方」而不是 Argus 使用者：網址帶編號就直接查，
+  // 沒帶就給輸入框讓他照著報告封面上的編號輸入。
+  const { reportNumber: routeNumber } = useParams();
+  const [input, setInput] = useState(routeNumber || "");
+  const [state, setState] = useState({ loading: false, data: null, error: "" });
+
+  const lookup = useCallback(async (number) => {
+    const trimmed = (number || "").trim().toUpperCase();
+    if (!trimmed) return;
+    setState({ loading: true, data: null, error: "" });
+    try {
+      const res = await api.get(`/verify/${encodeURIComponent(trimmed)}/`);
+      setState({ loading: false, data: res.data, error: "" });
+    } catch (err) {
+      setState({
+        loading: false,
+        data: null,
+        error: apiErrorMessage(err, "查驗失敗，請稍後再試。"),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (routeNumber) lookup(routeNumber);
+  }, [routeNumber, lookup]);
+
+  return (
+    <div className="public-page">
+      <section className="public-hero">
+        <div className="public-hero-bg" aria-hidden="true">
+          <span className="hero-orb hero-orb-1" />
+          <span className="hero-orb hero-orb-2" />
+        </div>
+        <div className="public-hero-content">
+          <span className="public-hero-eyebrow">VERIFY · 報告查驗</span>
+          <h1 className="public-hero-title">
+            核對<span className="hero-grad">報告真偽</span>
+          </h1>
+          <p className="public-hero-sub">
+            收到一份 Argus 網站健檢報告？輸入封面上的報告編號，即可核對它確實由 Argus
+            出具，以及當初掃描的目標與時間。查驗不需要登入。
+          </p>
+        </div>
+      </section>
+
+      <section className="public-section">
+        <div className="verify-layout">
+          <form
+            className="insight-tool-card"
+            onSubmit={(e) => {
+              e.preventDefault();
+              lookup(input);
+            }}
+          >
+            <h3 className="insight-card-title">輸入報告編號</h3>
+            <label className="insight-field">
+              <span>報告編號（在報告封面與每頁頁尾）</span>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="ARGUS-28-20260831-A1B2"
+                autoComplete="off"
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              className="public-cta-primary"
+              disabled={state.loading}
+            >
+              {state.loading ? "查驗中…" : "查驗報告"}
+            </button>
+
+            {state.error && (
+              <div className="verify-result verify-result-fail">
+                <div className="verify-result-head">查無此編號</div>
+                <p>{state.error}</p>
+                <p className="verify-result-note">
+                  這份報告可能不是由 Argus 出具，或編號輸入有誤。請對照報告封面重新輸入。
+                </p>
+              </div>
+            )}
+
+            {state.data && (
+              <div className="verify-result verify-result-pass">
+                <div className="verify-result-head">✓ 這是一份由 Argus 出具的報告</div>
+                <dl className="verify-facts">
+                  <dt>報告編號</dt>
+                  <dd>{state.data.report_number}</dd>
+                  <dt>掃描目標</dt>
+                  <dd>{state.data.scan_target}</dd>
+                  <dt>掃描完成</dt>
+                  <dd>{formatDateTime(state.data.scanned_at)}</dd>
+                  <dt>報告產生</dt>
+                  <dd>{formatDateTime(state.data.generated_at)}</dd>
+                  <dt>整體分數</dt>
+                  <dd>
+                    {state.data.overall_score === null
+                      ? "尚未產生"
+                      : `${state.data.overall_score} / 100`}
+                  </dd>
+                </dl>
+                <p className="verify-result-note">
+                  請核對上列資訊與你手上的報告是否一致。若要進一步確認檔案未被竄改，
+                  可自行計算該 .docx 的 SHA-256 並與下方指紋比對。
+                </p>
+                <code className="verify-fingerprint">{state.data.content_sha256}</code>
+              </div>
+            )}
+          </form>
+
+          <aside className="verify-aside">
+            <h3 className="insight-card-title">查驗能證明什麼</h3>
+            <ul className="verify-aside-list">
+              <li>
+                <strong>編號存在</strong>
+                <span>代表 Argus 確實為這個網站產生過報告。</span>
+              </li>
+              <li>
+                <strong>目標與時間</strong>
+                <span>核對報告封面寫的網址與掃描時間是否被改過。</span>
+              </li>
+              <li>
+                <strong>內容指紋</strong>
+                <span>比對 SHA-256 可確認整份檔案一個字都沒被動過。</span>
+              </li>
+            </ul>
+            <p className="verify-aside-note">
+              查驗結果不會顯示是誰執行的掃描。
+            </p>
+          </aside>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+
 function DownloadPage() {
   const [releases, setReleases] = useState([]);
   const { canInstall, installed, trigger } = useInstallPrompt();
@@ -1125,4 +1272,5 @@ export {
   PurchasePage,
   FreeToolsPage,
   DownloadPage,
+  VerifyReportPage,
 };

@@ -114,6 +114,23 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 
 ---
 
+## 報告防偽與快取（`ReportVerification`）
+
+每次 `build_scan_report()` 完成時寫入一列 `ReportVerification`：報告編號、檔案內容 SHA-256、產生時間。
+
+| 規則 | 為什麼 |
+|---|---|
+| **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
+| **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
+| **`views.py` 的 report action 必須用快取** | 重新產生會改變內容雜湊，讓已交付的副本在查驗頁對不上。必須「檔案存在 **且** 有防偽紀錄」才視為可重用——舊版留在磁碟上、沒有編號的報告要重產 |
+| **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊 |
+
+封面 logo 走「有就用、沒有就用字標」：偵測 `frontend/public/argus-logo.png`，存在才 `add_picture`。**刻意不引入 SVG 轉檔套件**（`cairosvg` 有系統函式庫相依，會拖累 CI 與 Docker build）。
+
+前端查驗頁在 `frontend/src/features/public/PublicPages.jsx::VerifyReportPage`，路由 `/verify` 與 `/verify/:reportNumber`。
+
+---
+
 ## ScanJob.progress 格式
 
 Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條：

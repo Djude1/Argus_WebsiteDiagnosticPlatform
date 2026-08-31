@@ -5,7 +5,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 # Argus 前端 UI/UX 準則
 
-本 skill 是 Argus 前端的**唯一視覺與互動規範**。動手改任何畫面前先讀完「鐵則摘要」，再翻對應章節。本檔只談「設計怎麼做」；技術硬限制（單檔架構、build 工具等）以 [`frontend/CLAUDE.md`](../../../frontend/CLAUDE.md) 為準，兩者衝突時硬限制優先。
+本 skill 是 Argus 前端的**唯一視覺與互動規範**。動手改任何畫面前先讀完「鐵則摘要」，再翻對應章節。本檔只談「設計怎麼做」；技術硬限制（檔案架構、build 工具等）以 [`frontend/CLAUDE.md`](../../../frontend/CLAUDE.md) 為準，兩者衝突時硬限制優先。
 
 ---
 
@@ -129,8 +129,8 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 ## 實作硬限制（來自 `frontend/CLAUDE.md`，不可違反）
 
-- `App.jsx` 是 6500+ 行單檔：改前**先 grep 定位**，禁止從頭瀏覽；路由在底部 `<Routes>` 區（約第 6460 行）。
-- **禁止新增獨立 `.jsx` / `.tsx` 元件檔**（單檔架構）。
+- `App.jsx` 只負責根路由、權限 wrapper 與 `React.lazy` 載入（約 170 行）；**頁面實作依 domain 放在 `src/features/<domain>/`**，共用 UI / hook 放 `src/components/` 或 `src/shared/`。
+- 新頁面放進對應的 `features/<domain>/` 檔案，新路由在 `App.jsx` 用 `lazyNamed()` 掛載以維持 route-level code splitting；**不得把頁面塞回 `App.jsx`**。
 - 樣式只寫 `styles.css`，BEM-like 命名，**禁止 inline style**（動態值除外）。
 - build 一律 `cd frontend ; .\build-node22.ps1`，**禁止 `npm run build`**（Node 24 + Rollup crash）。
 - API 走 `api.js` 的 axios instance，**禁止元件內直接 `fetch` / `axios`**。

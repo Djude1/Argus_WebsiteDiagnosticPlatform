@@ -1,3 +1,4 @@
+from apps.scans.verify_views import verify_report
 from django.conf import settings
 from django.db import connection
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
@@ -120,6 +121,14 @@ urlpatterns = [
         r"^media/review_images/(?P<path>[0-9a-f]{32}\.(?:jpg|png))$",
         serve_review_image,
         name="review-image",
+    ),
+
+
+    # 報告查驗（公開端點：收件者用報告編號核對真偽，不需登入）
+    path(
+        "api/verify/<str:report_number>/",
+        verify_report,
+        name="report-verify",
     ),
 
 

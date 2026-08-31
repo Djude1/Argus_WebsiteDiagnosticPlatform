@@ -14,7 +14,9 @@
 內容邊界（哪些欄位不得寫進報告）見 backend/apps/scans/CLAUDE.md「報告內容契約」。
 """
 
+import hmac
 from collections import OrderedDict
+from hashlib import sha256
 from pathlib import Path
 
 from django.conf import settings
@@ -23,9 +25,9 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 
-from apps.scans.models import Finding, ScanJob
+from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.redaction import redact_pii_in_text
 
@@ -133,7 +135,31 @@ CATEGORY_VERIFY = {
     "ux": "修補後重新執行一次 Argus 掃描確認此項目消失，並請實際操作一次該流程。",
 }
 
+DISCLAIMER = (
+    "免責聲明：本報告僅反映掃描當下、從網際網路可觀測到的外部特徵，"
+    "不等同完整滲透測試或原始碼稽核，也不構成法律或合規意見。"
+    "未列出的項目不代表不存在風險。實際修補請由具備權限的維運人員評估後執行。"
+)
+
 _CJK_FONT = "Microsoft JhengHei"
+
+
+def build_report_number(scan_job: ScanJob) -> str:
+    """產生對外揭露的報告編號：ARGUS-{掃描編號}-{日期}-{4 碼驗證碼}。
+
+    驗證碼用 SECRET_KEY 做 HMAC，讓編號無法被憑空捏造出「看起來合理」的值；
+    只取 4 碼是因為它防的是隨手偽造，真正的比對靠查驗端點與內容雜湊。
+
+    刻意只用 scan_job 的固定欄位（不含產生時間），所以**重新產生報告時編號不變**
+    ——報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效。
+    """
+    issued = scan_job.completed_at or scan_job.created_at or timezone.now()
+    token = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        f"argus-report:{scan_job.pk}".encode(),
+        sha256,
+    ).hexdigest()[:4].upper()
+    return f"ARGUS-{scan_job.pk}-{issued.strftime('%Y%m%d')}-{token}"
 
 
 def get_severity_display(severity: str) -> str:
@@ -231,7 +257,7 @@ def _header_row(table, labels: list[str]):
         _styled_run(cell.paragraphs[0], label, bold=True, color=ARGUS_CYAN_DEEP)
 
 
-def _add_header_footer(document, scan_job: ScanJob) -> None:
+def _add_header_footer(document, scan_job: ScanJob, report_number: str) -> None:
     section = document.sections[0]
 
     header_paragraph = section.header.paragraphs[0]
@@ -257,7 +283,9 @@ def _add_header_footer(document, scan_job: ScanJob) -> None:
     run._r.append(begin)
     run._r.append(instr)
     run._r.append(end)
-    _styled_run(footer_paragraph, " 頁", size=9, color=ARGUS_MUTED)
+    _styled_run(
+        footer_paragraph, f" 頁　|　{report_number}", size=9, color=ARGUS_MUTED,
+    )
 
 
 def _score_band(score) -> tuple[str, str]:
@@ -272,9 +300,18 @@ def _score_band(score) -> tuple[str, str]:
 # --- 章節 -------------------------------------------------------------
 
 
-def _add_cover(document, scan_job: ScanJob) -> None:
-    for _ in range(3):
-        document.add_paragraph()
+def _add_cover(document, scan_job: ScanJob, report_number: str) -> None:
+    # 有 PNG 就放圖，沒有就用字標。刻意不引入 SVG 轉檔套件（cairosvg 有系統函式庫
+    # 相依，會拖累 CI 與 Docker build），把 frontend/public/argus-logo.png 放進去
+    # 就會自動生效。
+    logo_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-logo.png"
+    if logo_path.exists():
+        logo_paragraph = document.add_paragraph()
+        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        logo_paragraph.add_run().add_picture(str(logo_path), width=Inches(1.4))
+    else:
+        for _ in range(3):
+            document.add_paragraph()
 
     title = document.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -313,6 +350,18 @@ def _add_cover(document, scan_job: ScanJob) -> None:
         f"掃描完成：{completed}\n"
         f"報告產生：{timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
         size=10, color=ARGUS_MUTED,
+    )
+
+    document.add_paragraph()
+    number_paragraph = document.add_paragraph()
+    number_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _styled_run(number_paragraph, f"報告編號　{report_number}", size=11, bold=True)
+    verify_paragraph = document.add_paragraph()
+    verify_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _styled_run(
+        verify_paragraph,
+        "可至 Argus 網站的「報告查驗」頁（/verify）輸入上方編號，核對本報告的真偽與內容指紋。",
+        size=9, color=ARGUS_MUTED,
     )
     document.add_page_break()
 
@@ -690,7 +739,10 @@ def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
     _add_glossary(document, grouped_findings)
     _add_technical_index(document, grouped_findings)
 
-    _heading(document, "5.4　本報告如何產生", level=2)
+    _heading(document, "5.4　免責聲明", level=2)
+    _styled_run(document.add_paragraph(), DISCLAIMER)
+
+    _heading(document, "5.5　本報告如何產生", level=2)
     # 舊版寫「再交由 AI 進行自然語言解釋與改善建議撰寫」，但 Finding.ai_explanation
     # 與 ai_remediation 在整個 backend 只被寫入空字串，該功能從未實作——這是一份
     # 對外交付文件裡的不實陳述。改為只描述實際做到的事。
@@ -703,18 +755,25 @@ def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
     )
 
 
+def report_output_path(scan_job: ScanJob) -> Path:
+    """報告檔案位置。views.py 判斷快取時也用這支，避免兩邊各寫一次檔名慣例。"""
+    return Path(settings.MEDIA_ROOT) / "reports" / f"scan-{scan_job.id}-report.docx"
+
+
 def build_scan_report(scan_job: ScanJob) -> str:
-    report_dir = Path(settings.MEDIA_ROOT) / "reports"
-    report_dir.mkdir(parents=True, exist_ok=True)
-    output_path = report_dir / f"scan-{scan_job.id}-report.docx"
+    output_path = report_output_path(scan_job)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     grouped_findings = _group_findings_for_report(
         scan_job.findings.select_related("page").all()
     )
 
+    report_number = build_report_number(scan_job)
+    generated_at = timezone.now()
+
     document = Document()
-    _add_header_footer(document, scan_job)
-    _add_cover(document, scan_job)
+    _add_header_footer(document, scan_job, report_number)
+    _add_cover(document, scan_job, report_number)
     _add_table_of_contents(document, grouped_findings)
     _add_summary(document, scan_job, grouped_findings)
     _add_scan_scope(document, scan_job)
@@ -722,4 +781,15 @@ def build_scan_report(scan_job: ScanJob) -> str:
     _add_findings(document, grouped_findings)
     _add_appendix(document, scan_job, grouped_findings)
     document.save(output_path)
+
+    # 雜湊算完才寫防偽紀錄：報告本身不印雜湊（印了就循環相依——雜湊要涵蓋整份
+    # 檔案，而檔案裡又要有雜湊），收件者拿編號到查驗頁取得雜湊自行比對。
+    ReportVerification.objects.update_or_create(
+        scan_job=scan_job,
+        defaults={
+            "report_number": report_number,
+            "content_sha256": sha256(output_path.read_bytes()).hexdigest(),
+            "generated_at": generated_at,
+        },
+    )
     return str(output_path)

@@ -26,10 +26,11 @@ from apps.scans.models import (
     AuthorizationConsent,
     Finding,
     Page,
+    ReportVerification,
     ScanJob,
 )
 from apps.scans.process_runner import _terminate_process_tree
-from apps.scans.reports import build_scan_report
+from apps.scans.reports import build_scan_report, report_output_path
 from apps.scans.serializers import (
     FindingSerializer,
     PageSerializer,
@@ -245,7 +246,13 @@ class ScanJobViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def report(self, request, pk=None):
         scan_job = self.get_object()
-        report_path = Path(build_scan_report(scan_job))
+        # 已產生過就直接送既有檔案，不重跑產生器。重新產生會改變內容雜湊，讓已經
+        # 交付出去的副本在查驗頁對不上；順帶省下每次下載的 IO 與 CPU。必須同時有
+        # 檔案與防偽紀錄才算數：舊版留在磁碟上、沒有編號的報告要重新產生。
+        report_path = report_output_path(scan_job)
+        has_verification = ReportVerification.objects.filter(scan_job=scan_job).exists()
+        if not (has_verification and report_path.exists()):
+            report_path = Path(build_scan_report(scan_job))
         return FileResponse(
             report_path.open("rb"),
             as_attachment=True,

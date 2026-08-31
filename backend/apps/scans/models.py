@@ -233,6 +233,32 @@ class Finding(models.Model):
         return f"{self.category}:{self.severity}:{self.title}"
 
 
+class ReportVerification(models.Model):
+    """報告防偽紀錄：每次產生 .docx 時寫入，供公開查驗端點比對。
+
+    report_number 對外揭露且**跨重新產生保持不變**——報告一旦交付出去就可能被
+    轉寄存檔，重新產生時換編號會讓已流出的副本失效。content_sha256 是檔案內容
+    的雜湊，收件者可自行 sha256sum 比對；報告本身不印雜湊（會造成循環相依），
+    只印編號，雜湊由查驗頁提供。
+    """
+
+    scan_job = models.OneToOneField(
+        ScanJob,
+        on_delete=models.CASCADE,
+        related_name="report_verification",
+    )
+    report_number = models.CharField(max_length=40, unique=True, db_index=True)
+    content_sha256 = models.CharField(max_length=64)
+    generated_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-generated_at"]
+
+    def __str__(self) -> str:
+        return self.report_number
+
+
 class AgentSession(models.Model):
     class Status(models.TextChoices):
         QUEUED = "queued", "等待中"

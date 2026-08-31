@@ -4728,6 +4728,113 @@
     padding: 1rem 2rem !important;
   }
 
+  /* --- 報告查驗（公開頁，收件者核對 .docx 真偽）--- */
+  .verify-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 1rem;
+    align-items: start;
+  }
+  .verify-aside {
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.55);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .verify-aside-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .verify-aside-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid rgba(56, 189, 248, 0.45);
+  }
+  .verify-aside-list strong {
+    color: #e2e8f0;
+    font-size: 0.95rem;
+  }
+  .verify-aside-list span,
+  .verify-aside-note {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .verify-aside-note {
+    margin: 0;
+  }
+  .verify-result {
+    border-radius: 14px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .verify-result-pass {
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    background: rgba(8, 47, 73, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.12);
+  }
+  .verify-result-fail {
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    background: rgba(69, 10, 10, 0.4);
+  }
+  .verify-result-head {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #f1f5f9;
+  }
+  .verify-result-pass .verify-result-head {
+    color: #67e8f9;
+  }
+  .verify-result-fail .verify-result-head {
+    color: #fca5a5;
+  }
+  .verify-result p {
+    margin: 0;
+    color: #cbd5f5;
+    line-height: 1.7;
+  }
+  .verify-result-note {
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
+  .verify-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.4rem 1rem;
+    margin: 0;
+  }
+  .verify-facts dt {
+    color: #94a3b8;
+    font-size: 0.85rem;
+  }
+  .verify-facts dd {
+    margin: 0;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    word-break: break-all;
+  }
+  .verify-fingerprint {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+    color: #7dd3fc;
+    background: rgba(2, 6, 23, 0.55);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    word-break: break-all;
+  }
+
   /* --- Free tools / insights --- */
   .free-tools-page {
     padding-bottom: 1rem;
@@ -5703,6 +5810,7 @@
   }
 
   .insight-tool-layout,
+  .verify-layout,
   .insight-two-col,
   .insight-metrics-grid {
     grid-template-columns: 1fr;
@@ -6474,11 +6582,35 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
 :root[data-theme="light"] .project-stat-card,
 :root[data-theme="light"] .insight-tool-card,
 :root[data-theme="light"] .insight-result-card,
+:root[data-theme="light"] .verify-aside,
 :root[data-theme="light"] .public-install-card {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
   color: #132033;
+}
+
+:root[data-theme="light"] .verify-result-pass {
+  background: rgba(236, 254, 255, 0.9);
+  border-color: rgba(14, 165, 233, 0.35);
+}
+:root[data-theme="light"] .verify-result-fail {
+  background: rgba(254, 242, 242, 0.9);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+:root[data-theme="light"] .verify-result-head,
+:root[data-theme="light"] .verify-facts dd,
+:root[data-theme="light"] .verify-aside-list strong { color: #132033; }
+:root[data-theme="light"] .verify-result-pass .verify-result-head { color: #0c4a6e; }
+:root[data-theme="light"] .verify-result-fail .verify-result-head { color: #991b1b; }
+:root[data-theme="light"] .verify-result p,
+:root[data-theme="light"] .verify-facts dt,
+:root[data-theme="light"] .verify-result-note,
+:root[data-theme="light"] .verify-aside-list span,
+:root[data-theme="light"] .verify-aside-note { color: #475569; }
+:root[data-theme="light"] .verify-fingerprint {
+  background: rgba(15, 23, 42, 0.06);
+  color: #0c4a6e;
 }
 
 :root[data-theme="light"] .public-feature-title,

@@ -34,6 +34,7 @@ const TeamPage = lazyNamed(loadPublicPages, "TeamPage");
 const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
 const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
 const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
+const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
 const AdminOverviewPage = lazyNamed(loadAdminPages, "AdminOverviewPage");
@@ -57,7 +58,9 @@ function AppShell({ googleOAuthEnabled }) {
   const restoreSession = useArgusStore((state) => state.restoreSession);
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
-  const isPublic = ["/project", "/free-tools", "/team", "/purchase", "/download", "/reviews"].some((p) =>
+  const isPublic = [
+    "/project", "/free-tools", "/team", "/purchase", "/download", "/reviews", "/verify",
+  ].some((p) =>
     location.pathname.startsWith(p),
   );
   const showTopNav = !isAdmin && !isPublic;
@@ -93,6 +96,8 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/team" element={<TeamPage />} />
             <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/download" element={<DownloadPage />} />
+            <Route path="/verify" element={<VerifyReportPage />} />
+            <Route path="/verify/:reportNumber" element={<VerifyReportPage />} />
             <Route path="/reviews" element={<ReviewsPage />} />
           </Route>
           <Route
