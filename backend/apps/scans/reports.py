@@ -411,6 +411,8 @@ def _add_summary(document, scan_job: ScanJob, grouped_findings) -> None:
                 cells[1].paragraphs[0], "未評估（本次未執行此項檢查）", color=ARGUS_MUTED
             )
 
+    _add_previous_scan_comparison(document, scan_job, grouped_findings)
+
     _heading(document, "分數怎麼看", level=2)
     band_table = document.add_table(rows=len(SCORE_BANDS) + 1, cols=3)
     band_table.style = "Table Grid"
@@ -441,6 +443,129 @@ def _add_summary(document, scan_job: ScanJob, grouped_findings) -> None:
     document.add_page_break()
 
 
+class _SectionNumber:
+    """附錄小節的流水號。章節會依資料有無而出現或消失，號碼不能寫死。"""
+
+    def __init__(self, prefix: str) -> None:
+        self._prefix = prefix
+        self._index = 0
+
+    def next(self) -> str:
+        self._index += 1
+        return f"{self._prefix}.{self._index}"
+
+
+def _previous_completed_scan(scan_job: ScanJob):
+    """同一位使用者、同一個 origin 的上一次完成掃描。
+
+    只看本人的掃描：同一個網址可能被不同使用者掃過，拿別人的結果當「前次」
+    既不合理也會洩漏他人的掃描存在。未完成或沒有分數的掃描不算。
+    """
+    if scan_job.completed_at is None:
+        return None
+    return (
+        ScanJob.objects.filter(
+            user_id=scan_job.user_id,
+            origin=scan_job.origin,
+            status=ScanJob.Status.COMPLETED,
+            overall_score__isnull=False,
+            completed_at__lt=scan_job.completed_at,
+        )
+        .exclude(pk=scan_job.pk)
+        .order_by("-completed_at")
+        .first()
+    )
+
+
+def _add_previous_scan_comparison(document, scan_job: ScanJob, grouped_findings) -> None:
+    """與前次掃描比較。第一次掃描這個網站時整段不出現。
+
+    「上次 39 分、這次 65 分，修好了 3 項」是回訪使用者最想看到的東西，
+    資料早就在 DB 裡（同 origin 的歷史掃描），舊版報告一個字都沒用。
+    """
+    previous = _previous_completed_scan(scan_job)
+    if previous is None:
+        return
+
+    _heading(document, "與前次掃描比較", level=2)
+    current_score = scan_job.overall_score
+    delta_text = "—"
+    if isinstance(current_score, int) and isinstance(previous.overall_score, int):
+        delta = current_score - previous.overall_score
+        delta_text = f"{delta:+d} 分" if delta else "持平"
+    _kv_table(document, [
+        (
+            "前次掃描",
+            f"{previous.completed_at.strftime('%Y-%m-%d')}　{previous.overall_score} 分",
+        ),
+        ("本次掃描", f"{current_score if current_score is not None else '—'} 分"),
+        ("變化", delta_text),
+    ])
+
+    previous_rules = {
+        rule for rule in previous.findings.values_list("rule_id", flat=True) if rule
+    }
+    current_map = {
+        item["finding"].rule_id: item["finding"].title
+        for item in grouped_findings
+        if item["finding"].rule_id
+    }
+    previous_titles = {
+        rule: title
+        for rule, title in previous.findings.values_list("rule_id", "title")
+        if rule
+    }
+
+    resolved = sorted(previous_rules - set(current_map))
+    appeared = sorted(set(current_map) - previous_rules)
+
+    if resolved:
+        _styled_run(
+            document.add_paragraph(), f"已解決（{len(resolved)} 項）：", bold=True,
+        )
+        for rule in resolved:
+            _styled_run(
+                document.add_paragraph(style="List Bullet"),
+                previous_titles.get(rule, rule),
+            )
+    if appeared:
+        _styled_run(
+            document.add_paragraph(), f"新出現（{len(appeared)} 項）：", bold=True,
+        )
+        for rule in appeared:
+            _styled_run(document.add_paragraph(style="List Bullet"), current_map[rule])
+    if not resolved and not appeared:
+        _styled_run(document.add_paragraph(), "發現項目與前次相同，沒有新增或解決。")
+
+
+def _add_page_list(document, scan_job: ScanJob, counter) -> None:
+    """掃描頁面清單。讓收件者知道報告到底看過哪些頁面。"""
+    pages = list(
+        scan_job.pages.all()
+        .only("url", "final_url", "title", "status_code", "depth", "blocked_reason")
+        .order_by("depth", "url")
+    )
+    if not pages:
+        return
+    _heading(document, f"{counter.next()}　掃描頁面清單", level=2)
+    _styled_run(
+        document.add_paragraph(),
+        f"本次共擷取 {len(pages)} 個頁面。標示「已略過」的頁面未納入分析。",
+    )
+    table = document.add_table(rows=len(pages) + 1, cols=4)
+    table.style = "Table Grid"
+    _header_row(table, ["網址", "頁面標題", "狀態", "深度"])
+    for index, page in enumerate(pages, start=1):
+        cells = table.rows[index].cells
+        _styled_run(cells[0].paragraphs[0], page.final_url or page.url, size=8)
+        _styled_run(cells[1].paragraphs[0], page.title or "（無標題）", size=8)
+        status = str(page.status_code or "—")
+        if page.blocked_reason:
+            status = f"{status}　已略過：{page.blocked_reason}"
+        _styled_run(cells[2].paragraphs[0], status, size=8)
+        _styled_run(cells[3].paragraphs[0], str(page.depth), size=8)
+
+
 def _add_scan_scope(document, scan_job: ScanJob) -> None:
     """掃描範圍。收件者要能判斷這份報告涵蓋了什麼，「沒發現問題」才有意義。
 
@@ -458,8 +583,45 @@ def _add_scan_scope(document, scan_job: ScanJob) -> None:
         ("實際掃描頁數", str(scan_job.pages.count())),
         ("遵守 robots.txt", "是" if scan_job.respect_robots else "否"),
     ])
+    _add_entry_screenshot(document, scan_job)
     _add_scan_warnings(document, scan_job)
     document.add_page_break()
+
+
+def _add_entry_screenshot(document, scan_job: ScanJob) -> None:
+    """入口頁截圖。
+
+    刻意只放這一張：全頁截圖體積大，把 50 頁的掃描全塞進去會讓 .docx 失控，
+    而 header / DNS / meta 這類發現本來就沒有視覺佐證價值。放一張的用途是讓
+    收件者一眼確認「這份報告講的確實是我的網站」。
+
+    路徑慣例與 views.py 的 screenshot action 一致：screenshot_path 相對於
+    BASE_DIR。檔案不在（保留期限、換機器、S3 模式）就整段略過，不影響報告。
+    """
+    entry_page = (
+        scan_job.pages.exclude(screenshot_path="")
+        .order_by("depth", "id")
+        .first()
+    )
+    if entry_page is None:
+        return
+    screenshot = Path(settings.BASE_DIR) / entry_page.screenshot_path
+    if not screenshot.exists():
+        return
+    _heading(document, "掃描當下的網站畫面", level=2)
+    try:
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.add_run().add_picture(str(screenshot), width=Inches(5.2))
+    except Exception:  # noqa: BLE001 — 截圖損毀不該讓整份報告產不出來
+        return
+    caption = document.add_paragraph()
+    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _styled_run(
+        caption,
+        f"{entry_page.final_url or entry_page.url}（掃描當下擷取）",
+        size=9, color=ARGUS_MUTED,
+    )
 
 
 def _add_scan_warnings(document, scan_job: ScanJob) -> None:
@@ -638,7 +800,7 @@ def _add_findings(document, grouped_findings) -> None:
     document.add_page_break()
 
 
-def _add_authorization(document, scan_job: ScanJob) -> None:
+def _add_authorization(document, scan_job: ScanJob, section_number: str) -> None:
     """掃描授權聲明。
 
     Argus 是授權式掃描平台，一份對外的資安報告必須記載這次掃描的授權依據，
@@ -649,7 +811,7 @@ def _add_authorization(document, scan_job: ScanJob) -> None:
     是個資，寫進去沒有任何對收件者的價值，只增加外洩面。需要稽核時查 DB 與
     AdminAuditLog。
     """
-    _heading(document, "5.1　掃描授權聲明", level=2)
+    _heading(document, f"{section_number}　掃描授權聲明", level=2)
     consent = getattr(scan_job, "authorization_consent", None)
     if consent is None:
         _styled_run(
@@ -688,11 +850,11 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     ]
 
 
-def _add_glossary(document, grouped_findings) -> None:
+def _add_glossary(document, grouped_findings, counter) -> None:
     terms = _collect_glossary_terms(grouped_findings)
     if not terms:
         return
-    _heading(document, "5.2　名詞解釋", level=2)
+    _heading(document, f"{counter.next()}　名詞解釋", level=2)
     _styled_run(
         document.add_paragraph(),
         "以下是本報告中出現的專有名詞。只列出這次真的用到的，方便你對照閱讀。",
@@ -706,14 +868,14 @@ def _add_glossary(document, grouped_findings) -> None:
         _styled_run(cells[1].paragraphs[0], explanation)
 
 
-def _add_technical_index(document, grouped_findings) -> None:
+def _add_technical_index(document, grouped_findings, counter) -> None:
     """技術索引：rule_id / OWASP / CWE 收在這裡，不混進正文。
 
     這些識別碼對網站主沒有意義，但工程師與稽核需要，所以保留但下放到附錄。
     """
     if not grouped_findings:
         return
-    _heading(document, "5.3　技術索引", level=2)
+    _heading(document, f"{counter.next()}　技術索引", level=2)
     _styled_run(
         document.add_paragraph(),
         "供工程師與稽核人員對照使用。OWASP 是國際公認的網站安全風險分類，"
@@ -735,14 +897,18 @@ def _add_technical_index(document, grouped_findings) -> None:
 
 def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
     _heading(document, "5　附錄", level=1)
-    _add_authorization(document, scan_job)
-    _add_glossary(document, grouped_findings)
-    _add_technical_index(document, grouped_findings)
+    # 小節編號動態產生：名詞解釋與技術索引在沒有 finding 時會整段消失，頁面清單
+    # 在爬 0 頁時也不出現，寫死號碼會出現「5.2 之後接 5.4」這種跳號。
+    counter = _SectionNumber("5")
+    _add_authorization(document, scan_job, counter.next())
+    _add_glossary(document, grouped_findings, counter)
+    _add_technical_index(document, grouped_findings, counter)
+    _add_page_list(document, scan_job, counter)
 
-    _heading(document, "5.4　免責聲明", level=2)
+    _heading(document, f"{counter.next()}　免責聲明", level=2)
     _styled_run(document.add_paragraph(), DISCLAIMER)
 
-    _heading(document, "5.5　本報告如何產生", level=2)
+    _heading(document, f"{counter.next()}　本報告如何產生", level=2)
     # 舊版寫「再交由 AI 進行自然語言解釋與改善建議撰寫」，但 Finding.ai_explanation
     # 與 ai_remediation 在整個 backend 只被寫入空字串，該功能從未實作——這是一份
     # 對外交付文件裡的不實陳述。改為只描述實際做到的事。

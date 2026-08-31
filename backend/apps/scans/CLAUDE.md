@@ -125,6 +125,14 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 | **`views.py` 的 report action 必須用快取** | 重新產生會改變內容雜湊，讓已交付的副本在查驗頁對不上。必須「檔案存在 **且** 有防偽紀錄」才視為可重用——舊版留在磁碟上、沒有編號的報告要重產 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊 |
 
+報告檔案有保留期限：`manage.py cleanup_reports --older-than-days N`（預設 180，支援 `--dry-run`）。**只刪檔案、不刪 `ReportVerification`**——收件者手上的報告不會因為伺服器清檔就失效，編號必須繼續查得到。代價是清掉後若重新下載會產生新的一版、指紋隨之更新，所以保留期限要設得比「使用者還可能拿舊報告來對」的時間長。
+
+附錄小節用 `_SectionNumber` 動態編號：名詞解釋、技術索引、頁面清單都會在沒資料時整段消失，寫死號碼會跳號。
+
+入口頁截圖**刻意只放一張**：全頁截圖體積大，50 頁的掃描全塞進去會讓 `.docx` 失控，而 header / DNS / meta 這類發現本來就沒有視覺佐證價值。
+
+與前次掃描比較**只比對同一位使用者的掃描**：同一個網址可能被不同人掃過，拿別人的當「前次」既不合理也會洩漏他人掃描的存在。
+
 封面 logo 走「有就用、沒有就用字標」：偵測 `frontend/public/argus-logo.png`，存在才 `add_picture`。**刻意不引入 SVG 轉檔套件**（`cairosvg` 有系統函式庫相依，會拖累 CI 與 Docker build）。
 
 前端查驗頁在 `frontend/src/features/public/PublicPages.jsx::VerifyReportPage`，路由 `/verify` 與 `/verify/:reportNumber`。
