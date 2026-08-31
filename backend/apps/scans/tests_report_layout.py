@@ -144,19 +144,62 @@ class ReportLayoutTests(TestCase):
         self.assertNotIn("會被攻擊者利用", text)
         self.assertNotIn("導致網站被入侵", text)
 
-    def test_info_finding_does_not_ask_the_reader_to_fix_and_reverify(self):
-        """不需要修的項目不該有「怎麼修」與「修好了怎麼確認」。"""
+    def test_info_finding_does_not_promise_re_scan_verification(self):
+        """info 項目不會在下次掃描「消失」，不該叫讀者去確認它不見了。"""
+        self.scan_job.findings.all().delete()
         Finding.objects.create(
             scan_job=self.scan_job, page=None, severity="info",
             category=Finding.Category.SECURITY, title="Nuclei 探針受 WAF 攔截",
             description="偵測到 Cloudflare 保護。", remediation="無需修復。",
             rule_id="waf-detected", ai_handoff_prompt="p", priority_score=10.0,
         )
-        self.scan_job.findings.exclude(rule_id="waf-detected").delete()
+
+        self.assertNotIn("修好了怎麼確認", self._text())
+
+    def test_actionable_info_finding_still_shows_how_to_fix(self):
+        """info 不全是正向指標。
+
+        scan 28 的 5 個 info 項目裡只有 1 個是正向（WAF 攔截），其餘 4 個
+        （缺 X-Content-Type-Options、缺 canonical…）都是可以改的小問題。
+        對它們宣告「不需要採取任何修補動作」再印出修補方式，是自相矛盾。
+        """
+        self.scan_job.findings.all().delete()
+        Finding.objects.create(
+            scan_job=self.scan_job, page=None, severity="info",
+            category=Finding.Category.SECURITY, title="缺少 X-Content-Type-Options",
+            description="回應標頭缺少 x-content-type-options。",
+            remediation="設定 x-content-type-options: nosniff。",
+            rule_id="header-xcto", ai_handoff_prompt="p", priority_score=10.0,
+        )
 
         text = self._text()
 
-        self.assertNotIn("修好了怎麼確認", text)
+        self.assertNotIn("不需要採取任何修補動作", text)
+        self.assertIn("怎麼修", text)
+        self.assertIn("設定 x-content-type-options: nosniff。", text)
+
+    def test_report_drops_description_warnings_that_contradict_its_masking(self):
+        """scanner 的 description 帶著「此項目顯示原始個資」，但報告會遮罩。
+
+        那句對前端（依使用者要求顯示原始個資）成立，搬進有遮罩的報告就是假話；
+        報告本來就會在「檢測依據」下輸出自己那句正確的遮罩提示。
+        """
+        self.scan_job.findings.all().delete()
+        Finding.objects.create(
+            scan_job=self.scan_job, page=None, severity="high",
+            category=Finding.Category.SECURITY, title="頁面外洩個人資料 (PII)",
+            description=(
+                "⚠️ 此項目顯示原始個資，請依個資法妥善處理本報告。\n"
+                "在頁面內容中偵測到 1 筆疑似個資。"
+            ),
+            remediation="下架該頁。", evidence="台灣手機：0912345678",
+            rule_id="pii", ai_handoff_prompt="p", priority_score=75.0,
+        )
+
+        text = self._text()
+
+        self.assertNotIn("此項目顯示原始個資", text)
+        self.assertIn("在頁面內容中偵測到 1 筆疑似個資。", text)
 
     def test_security_verification_advice_is_not_header_specific(self):
         """並非所有資安問題都靠檢查回應標頭驗證（例如頁面外洩個資）。"""

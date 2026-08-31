@@ -106,11 +106,14 @@ CATEGORY_IMPACT = {
           "直接反映在跳出率與轉換率上。",
 }
 
-# info 多半是正向或純狀態說明（例如「探針被 WAF 擋下，代表防護有效」）。
-# 套 CATEGORY_IMPACT 那套「會被攻擊者利用」的說法會與該項的意義完全相反。
+# info 有兩種：正向指標（「探針被 WAF 擋下，代表防護有效」）與可改的小問題
+# （缺 X-Content-Type-Options、缺 canonical）。scan 28 的 5 個 info 裡只有 1 個
+# 是正向。所以這段文字兩者都要成立——既不能套 CATEGORY_IMPACT 那套「會被攻擊者
+# 利用」（對正向指標完全相反），也不能宣告「不需要任何修補動作」（對另外 4 個
+# 是叫人別管一個其實可以改的東西，而且下一行就印出修補方式，自相矛盾）。
 INFO_NOTE = (
-    "這是一項資訊提示，不代表你的網站有問題。列出來是讓你了解目前的狀態，"
-    "不需要採取任何修補動作。"
+    "這是一項影響較小的觀察項目，不屬於需要立即處理的風險。"
+    "若下方列有修補方式，可視情況安排。"
 )
 
 SEVERITY_URGENCY = {
@@ -479,6 +482,23 @@ def _add_top_actions(document, scan_job: ScanJob) -> None:
     document.add_page_break()
 
 
+def _description_for_report(finding) -> str:
+    """去掉 description 開頭與報告行為矛盾的警語。
+
+    scanners.py 的 PII finding 在 description 開頭寫「⚠️ 此項目顯示原始個資，
+    請依個資法妥善處理本報告。」——那句對前端成立（依使用者要求，API/畫面顯示
+    未遮罩的 evidence），但報告會遮罩（09******90），照搬進來就是假話。報告本來
+    就會在「檢測依據」下輸出自己那句正確的遮罩提示，不需要這一句。
+
+    規則故意寫得寬鬆（剝掉開頭所有 ⚠️ 起始行）而不是比對特定字串：警語措辭改了
+    也不會漏掉，而 description 的實質內容不會以 ⚠️ 開頭。
+    """
+    lines = (finding.description or "").splitlines()
+    while lines and lines[0].lstrip().startswith("⚠️"):
+        lines.pop(0)
+    return "\n".join(lines).strip() or "（無）"
+
+
 def _add_findings(document, grouped_findings) -> None:
     _heading(document, "4　發現項目", level=1)
     if not grouped_findings:
@@ -507,24 +527,24 @@ def _add_findings(document, grouped_findings) -> None:
                 _styled_run(document.add_paragraph(style="List Bullet"), page_url, size=9)
 
         _heading(document, "問題是什麼", level=3)
-        _styled_run(document.add_paragraph(), finding.description or "（無）")
+        _styled_run(document.add_paragraph(), _description_for_report(finding))
 
-        if finding.severity == Finding.Severity.INFO:
-            # 資訊提示不需要修，硬套「怎麼修 / 修好了怎麼確認」會叫讀者去修一個
-            # 根本沒壞的東西（例如叫他把 WAF 保護「修掉」）。
+        is_info = finding.severity == Finding.Severity.INFO
+        if is_info:
             _heading(document, "這代表什麼", level=3)
             _styled_run(document.add_paragraph(), INFO_NOTE)
-            if finding.remediation:
-                _styled_run(document.add_paragraph(), finding.remediation)
         else:
             _heading(document, "為什麼要在意", level=3)
             impact = CATEGORY_IMPACT.get(finding.category, "請依你的業務情境評估影響。")
             urgency = SEVERITY_URGENCY.get(finding.severity, "")
             _styled_run(document.add_paragraph(), f"{impact}{urgency}")
 
-            _heading(document, "怎麼修", level=3)
-            _styled_run(document.add_paragraph(), finding.remediation or "（無）")
+        _heading(document, "怎麼修", level=3)
+        _styled_run(document.add_paragraph(), finding.remediation or "（無）")
 
+        if not is_info:
+            # info 項目不會在下次掃描「消失」（正向指標本來就該留著，小問題也未必
+            # 值得專程複驗），叫讀者去確認它不見了只會造成困惑。
             _heading(document, "修好了怎麼確認", level=3)
             _styled_run(
                 document.add_paragraph(),
