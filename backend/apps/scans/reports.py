@@ -248,6 +248,17 @@ def build_scan_report(scan_job: ScanJob) -> str:
             truncated_note = "…（證據過長已截斷）" if len(masked_evidence) > 1000 else ""
             document.add_paragraph(f"{evidence_text}{truncated_note}")
 
+        if finding.ai_handoff_prompt:
+            # 報告不做 AI 解釋（ai_explanation 從未被實作），但每筆 finding 都已經有
+            # 一段組好的提示詞，使用者可以直接貼進 ChatGPT / Claude 取得深入說明。
+            # 必須跟 evidence 一樣遮罩：build_ai_handoff_prompt() 內嵌了原始 evidence，
+            # 不遮罩等於從後門把個資漏回這份會被轉寄的報告。
+            document.add_paragraph("AI 提示詞（可直接複製貼給 AI 助手取得進一步說明）")
+            masked_prompt = mask_pii_evidence(finding.ai_handoff_prompt)
+            prompt_text = masked_prompt[:1500]
+            prompt_note = "…（提示詞過長已截斷）" if len(masked_prompt) > 1500 else ""
+            document.add_paragraph(f"{prompt_text}{prompt_note}")
+
         if finding.ai_explanation or finding.ai_remediation:
             document.add_paragraph("AI 解釋與改善建議")
             if finding.llm_model:

@@ -92,7 +92,9 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 | `warning_summary["settlement_error"]`、`agent` 的 token 用量 | 內部運維／計費資訊，不是客戶要看的東西 |
 | 未實作功能的描述 | 附錄曾聲稱「交由 AI 進行自然語言解釋」，但 `ai_explanation` / `ai_remediation` 全 backend 只被寫入空字串——對外文件的不實陳述 |
 
-**`Finding.ai_explanation` / `ai_remediation` / `llm_model` / `llm_generated_at` 目前是死欄位**（無任何寫入點）。要嘛實作、要嘛移除，但在那之前報告不得聲稱有 AI 解釋。
+**`Finding.ai_explanation` / `ai_remediation` / `llm_model` / `llm_generated_at` 目前無任何寫入點**，報告不得聲稱有 AI 解釋。
+
+報告改為輸出 **`ai_handoff_prompt`**（`scanners.build_ai_handoff_prompt()` 產生，每筆 finding 都有值）——使用者可直接貼進 ChatGPT / Claude 取得深入說明。**這段必須跟 `evidence` 一樣套 `mask_pii_evidence()`**：提示詞內嵌了原始 evidence，不遮罩等於從後門把個資漏回這份會被轉寄的報告。
 
 ---
 

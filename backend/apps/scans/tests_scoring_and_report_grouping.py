@@ -98,23 +98,41 @@ class CalculateScoresTests(TestCase):
         expected = round(sum(category_scores.values()) / len(category_scores))
         self.assertEqual(overall, expected)
 
-    def test_many_problems_do_not_collapse_to_zero(self):
-        """分數必須保有解析度：問題再多也要能分出「很糟」與「更糟」。
+    def test_score_keeps_resolution_in_the_realistic_range(self):
+        """在真實網站落點的區間內，分數必須分得出「有幾個問題」。
 
-        舊的 max(0, 100-penalty) 在累積 100 分懲罰後就永遠是 0，
-        4 個高風險和 40 個高風險看起來一樣。
+        舊的 max(0, 100-penalty) 累積 100 分懲罰就永遠是 0，而 100 分懲罰用
+        體質問題就湊得到（4 個高風險），於是一堆普通網站全擠在 0 分。
         """
-        ten = calculate_scores(
-            [_finding("security", "high", f"R{i}") for i in range(10)],
+        few = calculate_scores(
+            [_finding("security", "medium", f"R{i}") for i in range(3)],
             tested_categories={"security"},
         )[1]["security"]
-        thirty = calculate_scores(
-            [_finding("security", "high", f"R{i}") for i in range(30)],
+        many = calculate_scores(
+            [_finding("security", "medium", f"R{i}") for i in range(8)],
             tested_categories={"security"},
         )[1]["security"]
 
-        self.assertGreater(ten, 0)
-        self.assertLess(thirty, ten)
+        self.assertGreater(many, 0)
+        self.assertLess(many, few)
+        self.assertGreater(few, 30)
+
+    def test_severity_outweighs_volume(self):
+        """一個嚴重漏洞必須比一堆瑣碎問題扣得更兇。
+
+        舊權重 35/25/14/6 讓 1 個 critical（50 分）約等於 6 個 low（49 分），
+        等於宣告六個缺 canonical URL 和一個嚴重漏洞一樣糟。
+        """
+        one_critical = calculate_scores(
+            [_finding("security", "critical", "C")],
+            tested_categories={"security"},
+        )[1]["security"]
+        six_low = calculate_scores(
+            [_finding("security", "low", f"L{i}") for i in range(6)],
+            tested_categories={"security"},
+        )[1]["security"]
+
+        self.assertLess(one_critical, six_low)
 
     def test_top_actions_are_deduplicated(self):
         """優先改善建議 5 個名額不該被同一個問題佔滿。

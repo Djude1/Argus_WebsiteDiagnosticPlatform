@@ -999,9 +999,9 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
 
 # 分數衰減常數：category_score = 100 * exp(-penalty / SCORE_DECAY_CONSTANT)。
 # 這是刻意可調的產品參數，不是演算法細節。目前值讓：
-#   1 個低風險(6)   -> 89 分      1 個中風險(14)  -> 76 分
-#   1 個高風險(25)  -> 61 分      1 個嚴重(35)    -> 50 分
-#   累積 100 分懲罰 -> 14 分      累積 200 分懲罰 -> 2 分
+#   1 個低風險(4)   -> 92 分      1 個中風險(12)  -> 79 分
+#   1 個高風險(35)  -> 50 分      1 個嚴重(60)    -> 30 分
+#   典型中小企業體質(2 中 4 低 = 40) -> 45 分
 # 調小 = 更嚴格（分數掉更快），調大 = 更寬鬆。
 SCORE_DECAY_CONSTANT = 50.0
 
@@ -1058,11 +1058,15 @@ def calculate_scores(
         Finding.Category.SECURITY,
         Finding.Category.UX,
     ]
+    # 嚴重度必須壓過數量。舊比例 35/25/14/6 讓「1 個 critical」(50 分) 約等於
+    # 「6 個 low」(49 分)——六個缺 canonical URL 等於一個嚴重漏洞，站不住腳。
+    # 拉開比例後 1 個 critical 是 30 分、6 個 low 是 62 分，數量只能在同一嚴重度
+    # 帶內移動分數，不能把嚴重度洗掉。
     severity_penalty = {
-        Finding.Severity.CRITICAL: 35,
-        Finding.Severity.HIGH: 25,
-        Finding.Severity.MEDIUM: 14,
-        Finding.Severity.LOW: 6,
+        Finding.Severity.CRITICAL: 60,
+        Finding.Severity.HIGH: 35,
+        Finding.Severity.MEDIUM: 12,
+        Finding.Severity.LOW: 4,
         Finding.Severity.INFO: 0,
     }
     deduped = _dedupe_findings_for_scoring(findings)
