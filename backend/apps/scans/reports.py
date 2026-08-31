@@ -753,32 +753,43 @@ def _add_category_impact(document, grouped_findings) -> None:
     舊版把這段掛在每一項發現底下，scan 38 的實測是出現 14 次卻只有 6 種內容，
     讀者一路看到同樣的話重複十幾次，結構看起來有了、讀起來仍是灌水。
     只列本次真的有發現的分類，沒發現的不佔版面。
+
+    per-rule 客製文案（2026-08-31 後）：用該 category 中最嚴重 finding 的 rule_id
+    查 RULE_IMPACT，找不到才退回 CATEGORY_IMPACT。這樣既有 test_category_impact
+    _is_stated_once_not_per_finding 保留（講一次），又為有對應 rule 的類別
+    換成更具體的敘述（如 SECURITY_PII 含個資法罰鍰金額）。
     """
     # 只列「有需要處理的項目」的分類：某分類若只有正向的資訊提示（例如只偵測到
     # WAF 保護），卻在這裡寫「這類問題會被攻擊者利用」，就是把好消息說成威脅。
-    present = []
+    severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    by_category: dict[str, list] = {}
     for item in grouped_findings:
         finding = item["finding"]
         if finding.severity == Finding.Severity.INFO:
             continue
-        if finding.category not in present:
-            present.append(finding.category)
-    if not present:
+        by_category.setdefault(finding.category, []).append(finding)
+    if not by_category:
         return
     _heading(document, "這些分類為什麼重要", level=2)
-    table = document.add_table(rows=len(present) + 1, cols=2)
+    table = document.add_table(rows=len(by_category) + 1, cols=2)
     table.style = "Table Grid"
     _header_row(table, ["分類", "沒處理的話會怎樣"])
-    for index, category in enumerate(present, start=1):
+    for index, (category, findings) in enumerate(by_category.items(), start=1):
+        # 挑最嚴重的 finding 的 rule_id，用 RULE_IMPACT。找不到退回 CATEGORY_IMPACT。
+        findings_sorted = sorted(
+            findings, key=lambda f: severity_rank.get(f.severity, 0), reverse=True,
+        )
+        rep_rule_id = (findings_sorted[0].rule_id or "").strip()
+        impact_text = RULE_IMPACT.get(
+            rep_rule_id,
+            CATEGORY_IMPACT.get(category, "請依你的業務情境評估影響。"),
+        )
         cells = table.rows[index].cells
         _styled_run(
             cells[0].paragraphs[0],
             CATEGORY_DISPLAY.get(category, category.upper()), bold=True,
         )
-        _styled_run(
-            cells[1].paragraphs[0],
-            CATEGORY_IMPACT.get(category, "請依你的業務情境評估影響。"),
-        )
+        _styled_run(cells[1].paragraphs[0], impact_text)
 
 
 def _add_scan_scope(document, scan_job: ScanJob) -> None:
@@ -1030,14 +1041,14 @@ def _add_findings(document, grouped_findings) -> None:
         if finding.severity == Finding.Severity.INFO:
             _styled_run(document.add_paragraph(), INFO_NOTE, size=9, color=ARGUS_MUTED)
 
-        _heading(document, "為什麼要在意", level=3)
-        _styled_run(document.add_paragraph(), _impact_for(finding))
-
         _heading(document, "怎麼修", level=3)
         _styled_run(document.add_paragraph(), finding.remediation or "（無）")
 
-        _heading(document, "修好了怎麼確認", level=3)
-        _styled_run(document.add_paragraph(), _verify_for(finding))
+        # 「為什麼要在意」與「修好了怎麼確認」不放在個別 finding，避免重複。
+        # 這兩類文字會在 summary 與附錄以「該 category 最具體的一個 rule_id」
+        # 的版本呈現一次（見 _add_category_impacts / _add_verification_advice）。
+        # info 級別排除——常是正向指標，不該被說成攻擊威脅（既有 layout 測試
+        # test_positive_info_finding_is_not_described_as_a_threat 保護這點）。
 
         if finding.evidence:
             _heading(document, "檢測依據", level=3)
@@ -1171,6 +1182,39 @@ def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
         "下一份報告的摘要會列出這次解決了哪些項目。"
         "若要立即自行確認，請你的網站維護人員依各項的「怎麼修」逐步檢查。",
     )
+    # per-rule 客製驗收指令（2026-08-31 後）：列出所有有 RULE_VERIFY 的 rule_id
+    # 的驗收指令。同一 category 可能有多個不同 rule（例如 security 同時有 PII 與 CSP），
+    # 全部列出來才不會漏。rule_id 不同不會產生「重複」問題。
+    by_category: dict[str, list] = {}
+    for item in grouped_findings:
+        finding = item["finding"]
+        if finding.severity == Finding.Severity.INFO:
+            continue  # info 級別不視為「修了才能驗證」，排除（既有 layout 測試）
+        rule_id = (finding.rule_id or "").strip()
+        if not rule_id or rule_id not in RULE_VERIFY:
+            continue
+        by_category.setdefault(finding.category, []).append(rule_id)
+    if by_category:
+        _styled_run(
+            document.add_paragraph(),
+            "各分類的具體驗收指令（依 rule_id 列出，有對應客製才出現）：",
+            bold=True,
+        )
+        for category, rule_ids in by_category.items():
+            # 去重（同 category 多個相同 rule_id 也只列一次）
+            for rule_id in sorted(set(rule_ids)):
+                paragraph = document.add_paragraph(style="List Bullet")
+                _styled_run(
+                    paragraph,
+                    f"[{rule_id}] ",
+                    bold=True, size=9, color=ARGUS_CYAN_DEEP,
+                )
+                _styled_run(
+                    paragraph,
+                    f"{CATEGORY_DISPLAY.get(category, category.upper())}：",
+                    bold=True,
+                )
+                _styled_run(paragraph, RULE_VERIFY[rule_id])
 
     _heading(document, f"{counter.next()}　想更深入了解某一項", level=2)
     # 舊版在每一項發現底下都印一段完整的 AI 提示詞，佔了發現項目 43% 的字數，

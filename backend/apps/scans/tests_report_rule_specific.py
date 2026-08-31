@@ -15,7 +15,6 @@ import zipfile
 from pathlib import Path
 
 from django.test import TestCase
-from docx import Document
 
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.reports import (
@@ -116,11 +115,35 @@ class RuleVerifyTests(TestCase):
         self.assertIn("Argus", _verify_for(finding))
 
 
+def _full_doc_text(path: str) -> str:
+    """讀 .docx 全部文字（含 tables 與 header/footer）。
+
+    python-docx 的 doc.paragraphs 不含 table cells，但 per-rule 客製文案是寫在
+    summary 表格與附錄列表中的，這裡手動遞迴讀完整個 document tree。
+    """
+    from docx import Document as _Doc
+    doc = _Doc(path)
+    chunks = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                chunks.append(cell.text)
+    return "\n".join(chunks)
+
+
 class ReportHasRuleSpecificSectionsTests(TestCase):
-    """docx 內每個 finding 都應有「為什麼要在意」「修好了怎麼確認」標題與客製內容。"""
+    """驗證 per-rule 客製文案進到正確位置（2026-08-31 後設計）：
+
+    - 「為什麼要在意」：在 summary 的「這些分類為什麼重要」表格（講一次），
+      用該 category 最嚴重 finding 的 rule_id 查 RULE_IMPACT。
+    - 「修補後如何驗證」：在附錄的「修補後如何驗證」小節（講一次通用模板 +
+      per-category 代表驗收指令），用 RULE_VERIFY。
+    - 不再每個 finding 都重複這些段落（既有 compactness 測試保護）。
+    """
 
     def _make_scan(self) -> ScanJob:
         from django.contrib.auth import get_user_model
+        from django.utils import timezone
         User = get_user_model()
         user = User.objects.create_user(
             username="rule-tester", email="t@x.com", password="p",
@@ -131,6 +154,9 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
             normalized_url="https://example.com",
             origin="example.com",
             status=ScanJob.Status.COMPLETED,
+            overall_score=50,
+            category_scores={"security": 50, "seo": 80, "aeo": 100, "geo": 70, "ux": 100},
+            completed_at=timezone.now(),
         )
         page = Page.objects.create(
             scan_job=scan,
@@ -140,7 +166,8 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
         )
         return scan, page
 
-    def test_report_includes_per_finding_impact_and_verify(self):
+    def test_summary_uses_per_rule_impact(self):
+        """summary 表格裡 security category 應包含 per-rule 客製文案（個資法罰鍰）。"""
         scan, page = self._make_scan()
         Finding.objects.create(
             scan_job=scan, page=page,
@@ -163,33 +190,67 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
             priority_score=50.0,
         )
         path = build_scan_report(scan)
-        doc = Document(path)
-        all_text = "\n".join(p.text for p in doc.paragraphs)
-        # 兩段標題必須出現
-        self.assertIn("為什麼要在意", all_text)
-        self.assertIn("修好了怎麼確認", all_text)
-        # PII 客製文案（個資法 + 罰鍰）
+        all_text = _full_doc_text(path)
+
+        # summary 表格區段：包含「這些分類為什麼重要」標題與 per-rule 客製文案。
+        self.assertIn("這些分類為什麼重要", all_text)
+        # SECURITY_PII 的 RULE_IMPACT 含「個資法」「罰鍰」
         self.assertIn("個資法", all_text)
         self.assertIn("罰鍰", all_text)
-        # CSP 客製驗收指令（curl + header 名）
+        # security category 講一次（既有 compactness 測試保留）
+        self.assertEqual(all_text.count("個資法"), 1)
+
+    def test_appendix_uses_per_rule_verify(self):
+        """附錄「修補後如何驗證」應包含 per-category per-rule 驗收指令。"""
+        scan, page = self._make_scan()
+        Finding.objects.create(
+            scan_job=scan, page=page,
+            severity="medium", category=Finding.Category.SECURITY,
+            title="缺少 CSP",
+            description="Response header 缺 CSP",
+            remediation="加上 CSP header",
+            ai_handoff_prompt="p",
+            rule_id="SECURITY_CSP_BD010B5BE0",
+            priority_score=50.0,
+        )
+        path = build_scan_report(scan)
+        all_text = _full_doc_text(path)
+
+        # 附錄「修補後如何驗證」小節：通用模板 + per-category 驗收指令
+        self.assertIn("修補後如何驗證", all_text)
+        self.assertIn("重新執行一次 Argus 掃描", all_text)  # 通用模板
+        # per-rule 驗收指令（curl + header 名）
         self.assertIn("curl", all_text)
         self.assertIn("content-security-policy", all_text)
-        # 不應該出現「修補後重新執行一次 Argus」通用模板（客製文案已覆蓋）
-        pii_section_idx = all_text.find("頁面外洩個資")
-        csp_section_idx = all_text.find("缺少 CSP")
-        # 兩個 finding 之後的 修好了怎麼確認 區段都不該只有通用模板
-        for start_idx in (pii_section_idx, csp_section_idx):
-            verify_idx = all_text.find("修好了怎麼確認", start_idx)
-            next_finding_idx = min(
-                (i for i in (pii_section_idx, csp_section_idx) if i > verify_idx),
-                default=len(all_text),
+
+    def test_findings_do_not_each_carry_impact_and_verify(self):
+        """個別 finding 不再重複印「為什麼要在意」「修好了怎麼確認」（避免重複）。"""
+        scan, page = self._make_scan()
+        # 建兩個 finding，跨兩個不同 rule_id（需 5 個 finding 才會拉平到 N=1 兩次但
+        # 這裡只 2 個，要驗證「任何單一 finding 區段內都沒有這兩類標題」即可。
+        for title, rid, sev in [
+            ("頁面外洩個資", "SECURITY_PII_8B24BB8B28", "high"),
+            ("缺少 CSP", "SECURITY_CSP_BD010B5BE0", "medium"),
+        ]:
+            Finding.objects.create(
+                scan_job=scan, page=page,
+                severity=sev, category=Finding.Category.SECURITY,
+                title=title, description="d", remediation="r",
+                ai_handoff_prompt="p", rule_id=rid,
+                priority_score=75.0,
             )
-            section = all_text[verify_idx:next_finding_idx]
-            # 客製驗收指令應該含 curl 或 dig 或 grep
-            self.assertTrue(
-                "curl" in section or "dig" in section or "瀏覽器" in section,
-                f"finding 區段沒客製驗收指令：{section[:200]}",
-            )
+        path = build_scan_report(scan)
+        all_text = _full_doc_text(path)
+
+        # per-rule 客製各在 summary/附錄出現 1 次（不重複）
+        self.assertEqual(all_text.count("個資法"), 1)
+        self.assertEqual(all_text.count("content-security-policy"), 1)
+        # 個別 finding 區段（從第一個 finding 開始到附錄前）不該含這兩個標題
+        finding_idx = all_text.find("頁面外洩個資")
+        appendix_idx = all_text.find("附錄")
+        findings_section = all_text[finding_idx:appendix_idx]
+        self.assertNotIn("為什麼要在意", findings_section)
+        self.assertNotIn("修好了怎麼確認", findings_section)
 
 
 class ReportHasTitleImageTests(TestCase):

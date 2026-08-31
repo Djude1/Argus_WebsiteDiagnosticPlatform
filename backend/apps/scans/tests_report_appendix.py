@@ -157,10 +157,16 @@ class ReportScreenshotTests(TestCase):
             screenshot_path=self._make_png("media/test_shots/entry.png"),
         )
 
-        self.assertEqual(self._image_count(), 1)
+        # 2026-08-31 後：封面用 argus-title.png + 入口截圖縮圖 = 2 張圖。
+        # 變更原因：加入品牌識別。詳見 audit supplement N15 與 feat(brand) commit。
+        self.assertEqual(self._image_count(), 2)
 
     def test_only_the_entry_page_screenshot_is_embedded(self):
-        """不是每頁都塞圖——那會讓報告體積失控。"""
+        """不是每頁都塞圖——那會讓報告體積失控。
+
+        2026-08-31 後：封面 title PNG 是固定的 1 張，截圖縮圖限制只放 1 張，
+        所以多頁截圖都還是只嵌 1 張（其餘不進 docx）。總圖片數 = 2。
+        """
         for index in range(3):
             Page.objects.create(
                 scan_job=self.scan_job, url=f"https://example.com/p{index}",
@@ -169,7 +175,8 @@ class ReportScreenshotTests(TestCase):
                 screenshot_path=self._make_png(f"media/test_shots/p{index}.png"),
             )
 
-        self.assertEqual(self._image_count(), 1)
+        # 封面 1 + 入口截圖縮圖 1 = 2
+        self.assertEqual(self._image_count(), 2)
 
     def test_missing_screenshot_file_does_not_break_the_report(self):
         Page.objects.create(
@@ -178,4 +185,5 @@ class ReportScreenshotTests(TestCase):
             screenshot_path="media/test_shots/does-not-exist.png",
         )
 
-        self.assertEqual(self._image_count(), 0)
+        # 2026-08-31 後：截圖缺檔只會略過截圖，封面 title PNG 仍會嵌。
+        self.assertEqual(self._image_count(), 1)
