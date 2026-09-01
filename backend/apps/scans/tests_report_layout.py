@@ -63,15 +63,31 @@ class ReportLayoutTests(TestCase):
         """全文用段落堆疊，資訊沒有結構可掃讀。"""
         self.assertGreater(len(self._doc().tables), 0)
 
-    def test_report_has_page_breaks_between_sections(self):
-        doc = self._doc()
-        breaks = sum(1 for p in doc.paragraphs if "w:br" in p._p.xml and 'type="page"' in p._p.xml)
-        self.assertGreaterEqual(breaks, 3)
+    def test_report_is_visually_structured_with_charts(self):
+        """報告要有視覺結構，不能是一條純文字流。
 
-    def test_report_has_cover_and_table_of_contents(self):
+        舊版用分頁數當代理指標（因為當時只有段落可用）。report_render 改用
+        程式繪製的圖表 + 卡片式版面，分頁由內容長度自然決定，數分頁已無意義；
+        改鎖「有圖表」——那才是這次採用新排版真正要拿到的東西。
+        """
+        doc = self._doc()
+
+        # 分數環圈、分類長條、嚴重度分佈至少三張
+        self.assertGreaterEqual(len(doc.inline_shapes), 3)
+        self.assertGreater(len(doc.tables), 0)
+
+    def test_report_has_a_branded_cover_and_a_summary_first_page(self):
+        """封面要有品牌，第一章要能 30 秒看懂整體狀況。
+
+        2026-09-01 起排版交給 report_render。舊版的「目錄」章節被「一頁摘要」
+        取代——後者對網站主更有用（目錄只是導航，摘要直接回答「我的網站現在
+        怎麼樣」），且與使用者提供的範本一致。
+        """
         text = self._text()
+
         self.assertIn("ARGUS", text)
-        self.assertIn("目錄", text)
+        self.assertIn("一頁摘要", text)
+        self.assertIn("整體分數", text)
 
     def test_report_has_header_and_footer_with_page_number(self):
         section = self._doc().sections[0]

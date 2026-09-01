@@ -92,6 +92,31 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 | `warning_summary["settlement_error"]`、`agent` 的 token 用量 | 內部運維／計費資訊，不是客戶要看的東西 |
 | 未實作功能的描述 | 附錄曾聲稱「交由 AI 進行自然語言解釋」，但 `ai_explanation` / `ai_remediation` 全 backend 只被寫入空字串——對外文件的不實陳述 |
 
+## 報告的資料層與排版層分離（2026-09-01）
+
+排版由 vendored 的 `report_render/` 負責（使用者提供的 module，原樣搬入 `backend/apps/scans/`）。`reports.py` 的職責變成**只產生 payload**：
+
+```
+reports.build_report_payload(scan_job) -> dict   # 資料層：去重、評分、比較、遮罩、per-rule 文案
+report_render.generate_report(payload, path)     # 排版層：版面、配色、圖表、浮水印
+```
+
+| 規則 | 為什麼 |
+|---|---|
+| payload 必須通過 `report_render/schema.json` | 不符合時錯誤會在排版階段以難懂的 KeyError 爆出來。`tests_report_payload.py` 直接對 schema 驗證 |
+| 嚴重度一律走 `_render_severity()` | `report_render` 會拿它查色塊與排序，**值不在 theme.SEVERITY 表裡就 KeyError、整份報告產不出來**。未知等級退回「資訊提示」 |
+| finding 先依嚴重度排序才編號 | `report_render` 依嚴重度分組顯示，不先排好編號就不連續 |
+| 未評估分類送 `null` 而非 `0` | 送 0 會被畫成一條紅色滿分條，把「沒測」說成「很糟」 |
+| **不要改 `report_render/` 的程式碼** | 它是 vendored 第三方 module，已在 ruff `extend-exclude`。唯一的在地修改是 `theme.py` 的字型解析，有註解說明 |
+
+**字型是硬需求**：圖表由 matplotlib 繪製，缺 CJK 字型時 `theme.py` 直接 `RuntimeError`（刻意大聲失敗——退回預設字型的話中文會變成一整排 □，報告照樣寄給客戶）。Dockerfile 已裝 `fonts-noto-cjk`，另可用 `ARGUS_REPORT_FONT_REGULAR` / `_BOLD` 覆寫。
+
+**報告用的圖檔放 `backend/apps/scans/report_assets/`**，不可放 `frontend/public/`——backend image 只有 `COPY backend ./backend`。
+
+schema 沒有的東西（掃描頁面清單、已解決項目清單）不要硬塞：頁面清單已移除（與範本一致，掃描範圍表仍有頁數）；已解決數量收進 `summary.headline`。
+
+---
+
 ### 報告要短：樣板只講一次（scan 38 事後修正）
 
 scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明顯」。實測分布：發現項目佔全文 78.9%，其中

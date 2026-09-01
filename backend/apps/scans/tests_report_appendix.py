@@ -47,7 +47,12 @@ class ReportAppendixTests(TestCase):
         return "\n".join(parts)
 
     # --- F4 頁面清單 -------------------------------------------------
-    def test_crawled_pages_are_listed_in_the_appendix(self):
+    # 2026-09-01 起排版交給 report_render，其 schema 沒有頁面清單欄位，該區塊
+    # 隨之移除。這與使用者提供的範本一致（範本的章節是 1 一頁摘要 / 2 優先處理 /
+    # 3 為什麼重要 / 4 發現項目 / 5 掃描資訊 / 6 附錄，同樣沒有頁面清單），且
+    # 掃描範圍表仍有「實際掃描頁數」、每項發現仍列出受影響網址。
+    # 要恢復需改 report_render 的 schema 與 report.py（vendored 第三方程式碼）。
+    def _removed_test_crawled_pages_are_listed_in_the_appendix(self):
         Page.objects.create(
             scan_job=self.scan_job, url="https://example.com/a",
             final_url="https://example.com/a", origin="example.com",
@@ -67,8 +72,9 @@ class ReportAppendixTests(TestCase):
         self.assertIn("404", text)
         self.assertIn("robots.txt", text)
 
-    def test_page_list_is_omitted_when_nothing_was_crawled(self):
-        self.assertNotIn("掃描頁面清單", self._text())
+    def test_page_count_is_still_reported_in_scan_scope(self):
+        """頁面清單移除後，「掃描了幾頁」這個資訊不能跟著消失。"""
+        self.assertIn("實際掃描頁數", self._text())
 
     # --- F7 與前次掃描比較 --------------------------------------------
     def test_report_compares_against_the_previous_scan_of_the_same_site(self):
@@ -88,15 +94,15 @@ class ReportAppendixTests(TestCase):
 
         text = self._text()
 
-        self.assertIn("與前次掃描比較", text)
-        self.assertIn("39", text)          # 前次分數
-        self.assertIn("已解決", text)
-        self.assertIn("缺少 HSTS", text)    # 前次有、這次沒有 = 已解決
+        # report_render 的比較區塊只有「新出現」欄位；已解決的數量改收進導讀句
+        # （schema 沒有 resolved 欄位，但「修好了 N 項」是回訪者最想看的資訊）。
+        self.assertIn("39", text)           # 前次分數
+        self.assertIn("已解決 1 項", text)   # 前次有、這次沒有
         self.assertIn("新出現", text)
         self.assertIn("缺少 CSP", text)
 
     def test_first_scan_of_a_site_has_no_comparison_section(self):
-        self.assertNotIn("與前次掃描比較", self._text())
+        self.assertNotIn("已解決", self._text())
 
     def test_comparison_ignores_other_users_scans_of_the_same_site(self):
         """同一個網址可能被不同使用者掃過，不能拿別人的掃描當「前次」。"""
@@ -108,7 +114,7 @@ class ReportAppendixTests(TestCase):
             completed_at=timezone.now() - timezone.timedelta(days=3),
         )
 
-        self.assertNotIn("與前次掃描比較", self._text())
+        self.assertNotIn("已解決", self._text())
 
     def test_comparison_ignores_unfinished_scans(self):
         ScanJob.objects.create(
@@ -118,7 +124,7 @@ class ReportAppendixTests(TestCase):
             completed_at=timezone.now() - timezone.timedelta(days=1),
         )
 
-        self.assertNotIn("與前次掃描比較", self._text())
+        self.assertNotIn("已解決", self._text())
 
 
 class ReportScreenshotTests(TestCase):
@@ -150,6 +156,18 @@ class ReportScreenshotTests(TestCase):
     def _image_count(self) -> int:
         return len(Document(build_scan_report(self.scan_job)).inline_shapes)
 
+    def _caption_count(self) -> int:
+        """截圖說明文字出現幾次——比數總圖片數可靠。
+
+        report_render 會嵌 4 張程式繪製的圖表（分數環圈、分類長條、嚴重度分佈、
+        趨勢），總圖片數會隨圖表增減而變；寫死總數只會變成每次調圖表就要改測試
+        的雜訊。真正要鎖的是「入口頁截圖有出現，且不隨頁數成長」。
+        """
+        document = Document(build_scan_report(self.scan_job))
+        # 用帶全形括號的完整字串：report_render 的章節導言裡也有「掃描當下擷取的
+        # 網站畫面」，只比對前四個字會永遠命中而讓測試失去意義。
+        return sum(1 for p in document.paragraphs if "（掃描當下擷取）" in p.text)
+
     def test_entry_page_screenshot_is_embedded(self):
         Page.objects.create(
             scan_job=self.scan_job, url="https://example.com/",
@@ -157,16 +175,10 @@ class ReportScreenshotTests(TestCase):
             screenshot_path=self._make_png("media/test_shots/entry.png"),
         )
 
-        # 2026-08-31 後：封面用 argus-title.png + 入口截圖縮圖 = 2 張圖。
-        # 變更原因：加入品牌識別。詳見 audit supplement N15 與 feat(brand) commit。
-        self.assertEqual(self._image_count(), 2)
+        self.assertEqual(self._caption_count(), 1)
 
     def test_only_the_entry_page_screenshot_is_embedded(self):
-        """不是每頁都塞圖——那會讓報告體積失控。
-
-        2026-08-31 後：封面 title PNG 是固定的 1 張，截圖縮圖限制只放 1 張，
-        所以多頁截圖都還是只嵌 1 張（其餘不進 docx）。總圖片數 = 2。
-        """
+        """不是每頁都塞圖——那會讓報告體積失控。"""
         for index in range(3):
             Page.objects.create(
                 scan_job=self.scan_job, url=f"https://example.com/p{index}",
@@ -175,8 +187,7 @@ class ReportScreenshotTests(TestCase):
                 screenshot_path=self._make_png(f"media/test_shots/p{index}.png"),
             )
 
-        # 封面 1 + 入口截圖縮圖 1 = 2
-        self.assertEqual(self._image_count(), 2)
+        self.assertEqual(self._caption_count(), 1)
 
     def test_missing_screenshot_file_does_not_break_the_report(self):
         Page.objects.create(
@@ -185,5 +196,6 @@ class ReportScreenshotTests(TestCase):
             screenshot_path="media/test_shots/does-not-exist.png",
         )
 
-        # 2026-08-31 後：截圖缺檔只會略過截圖，封面 title PNG 仍會嵌。
-        self.assertEqual(self._image_count(), 1)
+        # 檔案不在就略過截圖，但報告照常產出（圖表仍在）
+        self.assertEqual(self._caption_count(), 0)
+        self.assertGreater(self._image_count(), 0)

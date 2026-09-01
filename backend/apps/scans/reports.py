@@ -21,13 +21,9 @@ from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
 
 from apps.scans.models import Finding, ReportVerification, ScanJob
+from apps.scans.report_render import generate_report
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.redaction import redact_pii_in_text
 
@@ -345,6 +341,17 @@ def get_severity_display(severity: str) -> str:
     return SEVERITY_DISPLAY.get(severity, severity or "未知")
 
 
+def _render_severity(severity: str) -> str:
+    """給 report_render 用的嚴重度標籤。
+
+    必須是 report_render/theme.py SEVERITY 表裡的值——它會直接拿去查色塊與排序，
+    查不到就 KeyError、整份報告產不出來。未知等級退回「資訊提示」：報告少一格
+    顏色，好過因為某個 scanner 寫了新等級就整份掛掉。
+    """
+    label = get_severity_display(severity)
+    return label if label in SEVERITY_DISPLAY.values() else "資訊提示"
+
+
 def mask_pii_evidence(text: str) -> str:
     """報告展示層遮罩：evidence 含原始個資（email/手機/身分證/信用卡）就地遮罩。
 
@@ -388,260 +395,6 @@ def _group_findings_for_report(findings) -> list[dict]:
 # --- 低階排版工具 -----------------------------------------------------
 
 
-def _styled_run(paragraph, text: str, *, size=None, bold=False, color=None):
-    """加一段文字並設好中文字型。
-
-    python-docx 的 run.font.name 只設拉丁字型，中文字要另外設 w:eastAsia，
-    否則 Word 會退回預設字型，中英文混排看起來會不一致。
-    """
-    run = paragraph.add_run(text)
-    run.font.name = _CJK_FONT
-    run._element.rPr.rFonts.set(qn("w:eastAsia"), _CJK_FONT)
-    if size is not None:
-        run.font.size = Pt(size)
-    run.bold = bold
-    if color is not None:
-        run.font.color.rgb = RGBColor.from_string(color)
-    return run
-
-
-def _heading(document, text: str, level: int):
-    """章節標題。用 Heading 樣式維持 Word 的大綱結構，但改成品牌色。"""
-    heading = document.add_heading(level=level)
-    _styled_run(heading, text, bold=True, color=ARGUS_CYAN_DEEP)
-    return heading
-
-
-def _accent_rule(document):
-    """一條 cyan 強調線，用來分隔封面區塊。"""
-    paragraph = document.add_paragraph()
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(paragraph, "━" * 24, color=ARGUS_CYAN)
-    return paragraph
-
-
-def _kv_table(document, rows: list[tuple[str, str]]):
-    """兩欄的「項目 / 內容」表格。"""
-    table = document.add_table(rows=len(rows), cols=2)
-    table.style = "Table Grid"
-    for index, (label, value) in enumerate(rows):
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], label, bold=True)
-        _styled_run(cells[1].paragraphs[0], value)
-    return table
-
-
-def _header_row(table, labels: list[str]):
-    for cell, label in zip(table.rows[0].cells, labels, strict=False):
-        _styled_run(cell.paragraphs[0], label, bold=True, color=ARGUS_CYAN_DEEP)
-
-
-def _add_header_footer(document, scan_job: ScanJob, report_number: str) -> None:
-    section = document.sections[0]
-
-    header_paragraph = section.header.paragraphs[0]
-    header_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(
-        header_paragraph,
-        f"ARGUS 網站健檢報告　|　{scan_job.origin}",
-        size=9, color=ARGUS_MUTED,
-    )
-
-    footer_paragraph = section.footer.paragraphs[0]
-    footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(footer_paragraph, "Argus 授權式網站健檢　|　第 ", size=9, color=ARGUS_MUTED)
-    # 頁碼要用 Word 的 field code，寫死數字會在分頁變動時失準
-    run = footer_paragraph.add_run()
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = "PAGE"
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    run._r.append(begin)
-    run._r.append(instr)
-    run._r.append(end)
-    _styled_run(
-        footer_paragraph, f" 頁　|　{report_number}", size=9, color=ARGUS_MUTED,
-    )
-
-
-def _score_band(score) -> tuple[str, str]:
-    if not isinstance(score, (int, float)):
-        return "尚未產生", ""
-    for threshold, label, advice in SCORE_BANDS:
-        if score >= threshold:
-            return label, advice
-    return "需優先處理", ""
-
-
-# --- 章節 -------------------------------------------------------------
-
-
-def _add_cover(document, scan_job: ScanJob, report_number: str) -> None:
-    # 有預渲染的藝術字 PNG 就用圖（含 logo 點綴 + 漸層 + 陰影），沒有就用純文字。
-    # 為了避免 cairosvg 系統函式庫相依，這個 PNG 由 scripts/render_argus_brand.py 用 Pillow 生成。
-    title_path = _REPORT_ASSETS / "argus-title.png"
-    if title_path.exists():
-        title_paragraph = document.add_paragraph()
-        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_paragraph.add_run().add_picture(str(title_path), width=Inches(5.5))
-    else:
-        # fallback：純文字標題
-        logo_path = _REPORT_ASSETS / "argus-logo.png"
-        if logo_path.exists():
-            logo_paragraph = document.add_paragraph()
-            logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            logo_paragraph.add_run().add_picture(str(logo_path), width=Inches(1.4))
-        else:
-            for _ in range(3):
-                document.add_paragraph()
-
-        title = document.add_paragraph()
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _styled_run(title, "ARGUS", size=44, bold=True, color=ARGUS_NAVY)
-
-        subtitle = document.add_paragraph()
-        subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _styled_run(subtitle, "網站健檢報告", size=22, bold=True, color=ARGUS_CYAN_DEEP)
-
-    _accent_rule(document)
-    document.add_paragraph()
-
-    target = document.add_paragraph()
-    target.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(target, scan_job.normalized_url, size=13, bold=True)
-
-    band, _ = _score_band(scan_job.overall_score)
-    score_paragraph = document.add_paragraph()
-    score_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    score_text = (
-        f"整體分數 {scan_job.overall_score} / 100　（{band}）"
-        if scan_job.overall_score is not None
-        else "整體分數：尚未產生"
-    )
-    _styled_run(score_paragraph, score_text, size=15, bold=True, color=ARGUS_CYAN_DEEP)
-
-    document.add_paragraph()
-    completed = (
-        scan_job.completed_at.strftime("%Y-%m-%d %H:%M:%S")
-        if scan_job.completed_at else "—"
-    )
-    meta = document.add_paragraph()
-    meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(
-        meta,
-        f"掃描完成：{completed}\n"
-        f"報告產生：{timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')}",
-        size=10, color=ARGUS_MUTED,
-    )
-
-    document.add_paragraph()
-    number_paragraph = document.add_paragraph()
-    number_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(number_paragraph, f"報告編號　{report_number}", size=11, bold=True)
-    verify_paragraph = document.add_paragraph()
-    verify_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(
-        verify_paragraph,
-        "可至 Argus 網站的「報告查驗」頁（/verify）輸入上方編號，核對本報告的真偽與內容指紋。",
-        size=9, color=ARGUS_MUTED,
-    )
-    document.add_page_break()
-
-
-def _add_table_of_contents(document, grouped_findings) -> None:
-    _heading(document, "目錄", level=1)
-    sections = [
-        ("1", "摘要", "整體分數、各分類分數與發現項目統計"),
-        ("2", "掃描範圍", "這份報告涵蓋了什麼、沒涵蓋什麼"),
-        ("3", "優先改善建議", "最值得先處理的項目"),
-        ("4", "發現項目", f"逐項說明，共 {len(grouped_findings)} 項"),
-        ("5", "附錄", "授權聲明、名詞解釋、技術索引"),
-    ]
-    table = document.add_table(rows=len(sections) + 1, cols=3)
-    table.style = "Table Grid"
-    _header_row(table, ["", "章節", "內容"])
-    for index, (number, name, desc) in enumerate(sections, start=1):
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], number, bold=True)
-        _styled_run(cells[1].paragraphs[0], name, bold=True)
-        _styled_run(cells[2].paragraphs[0], desc)
-    document.add_page_break()
-
-
-def _add_summary(document, scan_job: ScanJob, grouped_findings) -> None:
-    _heading(document, "1　摘要", level=1)
-    document.add_paragraph()
-    _styled_run(
-        document.add_paragraph(),
-        "整體分數是下列「已評估」分類分數的平均，標示「未評估」的分類不納入計算。"
-        "同一個問題出現在多個頁面只扣一次分；資訊提示屬正向或中性訊息，不扣分。",
-    )
-
-    _heading(document, "各分類分數", level=2)
-    category_scores = scan_job.category_scores or {}
-    table = document.add_table(rows=len(Finding.Category.values) + 1, cols=2)
-    table.style = "Table Grid"
-    _header_row(table, ["分類", "分數"])
-    for index, category in enumerate(Finding.Category.values, start=1):
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], CATEGORY_DISPLAY.get(category, category.upper()))
-        score = category_scores.get(category)
-        if isinstance(score, (int, float)):
-            _styled_run(cells[1].paragraphs[0], f"{score} 分", bold=True)
-        else:
-            _styled_run(
-                cells[1].paragraphs[0], "未評估（本次未執行此項檢查）", color=ARGUS_MUTED
-            )
-
-    _add_previous_scan_comparison(document, scan_job, grouped_findings)
-
-    _add_category_impact(document, grouped_findings)
-
-    _heading(document, "分數怎麼看", level=2)
-    band_table = document.add_table(rows=len(SCORE_BANDS) + 1, cols=3)
-    band_table.style = "Table Grid"
-    _header_row(band_table, ["分數", "評級", "建議"])
-    ranges = ["80 - 100", "60 - 79", "40 - 59", "0 - 39"]
-    for index, ((_, label, advice), score_range) in enumerate(
-        zip(SCORE_BANDS, ranges, strict=True), start=1
-    ):
-        cells = band_table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], score_range)
-        _styled_run(cells[1].paragraphs[0], label, bold=True)
-        _styled_run(cells[2].paragraphs[0], advice)
-
-    _heading(document, "發現項目統計", level=2)
-    counts = {severity: 0 for severity in SEVERITY_DISPLAY}
-    for item in grouped_findings:
-        counts[item["finding"].severity] = counts.get(item["finding"].severity, 0) + 1
-    stat_table = document.add_table(rows=len(SEVERITY_DISPLAY) + 1, cols=2)
-    stat_table.style = "Table Grid"
-    _header_row(stat_table, ["嚴重度", "項目數"])
-    for index, severity in enumerate(SEVERITY_DISPLAY, start=1):
-        cells = stat_table.rows[index].cells
-        _styled_run(
-            cells[0].paragraphs[0], get_severity_display(severity),
-            bold=True, color=SEVERITY_COLOR[severity],
-        )
-        _styled_run(cells[1].paragraphs[0], str(counts.get(severity, 0)))
-    document.add_page_break()
-
-
-class _SectionNumber:
-    """附錄小節的流水號。章節會依資料有無而出現或消失，號碼不能寫死。"""
-
-    def __init__(self, prefix: str) -> None:
-        self._prefix = prefix
-        self._index = 0
-
-    def next(self) -> str:
-        self._index += 1
-        return f"{self._prefix}.{self._index}"
-
-
 def _previous_completed_scan(scan_job: ScanJob):
     """同一位使用者、同一個 origin 的上一次完成掃描。
 
@@ -664,313 +417,9 @@ def _previous_completed_scan(scan_job: ScanJob):
     )
 
 
-def _add_previous_scan_comparison(document, scan_job: ScanJob, grouped_findings) -> None:
-    """與前次掃描比較。第一次掃描這個網站時整段不出現。
-
-    「上次 39 分、這次 65 分，修好了 3 項」是回訪使用者最想看到的東西，
-    資料早就在 DB 裡（同 origin 的歷史掃描），舊版報告一個字都沒用。
-    """
-    previous = _previous_completed_scan(scan_job)
-    if previous is None:
-        return
-
-    _heading(document, "與前次掃描比較", level=2)
-    current_score = scan_job.overall_score
-    delta_text = "—"
-    if isinstance(current_score, int) and isinstance(previous.overall_score, int):
-        delta = current_score - previous.overall_score
-        delta_text = f"{delta:+d} 分" if delta else "持平"
-    _kv_table(document, [
-        (
-            "前次掃描",
-            f"{previous.completed_at.strftime('%Y-%m-%d')}　{previous.overall_score} 分",
-        ),
-        ("本次掃描", f"{current_score if current_score is not None else '—'} 分"),
-        ("變化", delta_text),
-    ])
-
-    previous_rules = {
-        rule for rule in previous.findings.values_list("rule_id", flat=True) if rule
-    }
-    current_map = {
-        item["finding"].rule_id: item["finding"].title
-        for item in grouped_findings
-        if item["finding"].rule_id
-    }
-    previous_titles = {
-        rule: title
-        for rule, title in previous.findings.values_list("rule_id", "title")
-        if rule
-    }
-
-    resolved = sorted(previous_rules - set(current_map))
-    appeared = sorted(set(current_map) - previous_rules)
-
-    if resolved:
-        _styled_run(
-            document.add_paragraph(), f"已解決（{len(resolved)} 項）：", bold=True,
-        )
-        for rule in resolved:
-            _styled_run(
-                document.add_paragraph(style="List Bullet"),
-                previous_titles.get(rule, rule),
-            )
-    if appeared:
-        _styled_run(
-            document.add_paragraph(), f"新出現（{len(appeared)} 項）：", bold=True,
-        )
-        for rule in appeared:
-            _styled_run(document.add_paragraph(style="List Bullet"), current_map[rule])
-    if not resolved and not appeared:
-        _styled_run(document.add_paragraph(), "發現項目與前次相同，沒有新增或解決。")
-
-
-def _add_page_list(document, scan_job: ScanJob, counter) -> None:
-    """掃描頁面清單。讓收件者知道報告到底看過哪些頁面。"""
-    pages = list(
-        scan_job.pages.all()
-        .only("url", "final_url", "title", "status_code", "depth", "blocked_reason")
-        .order_by("depth", "url")
-    )
-    if not pages:
-        return
-    _heading(document, f"{counter.next()}　掃描頁面清單", level=2)
-    _styled_run(
-        document.add_paragraph(),
-        f"本次共擷取 {len(pages)} 個頁面。標示「已略過」的頁面未納入分析。",
-    )
-    table = document.add_table(rows=len(pages) + 1, cols=4)
-    table.style = "Table Grid"
-    _header_row(table, ["網址", "頁面標題", "狀態", "深度"])
-    for index, page in enumerate(pages, start=1):
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], page.final_url or page.url, size=8)
-        _styled_run(cells[1].paragraphs[0], page.title or "（無標題）", size=8)
-        status = str(page.status_code or "—")
-        if page.blocked_reason:
-            status = f"{status}　已略過：{page.blocked_reason}"
-        _styled_run(cells[2].paragraphs[0], status, size=8)
-        _styled_run(cells[3].paragraphs[0], str(page.depth), size=8)
-
-
-def _add_category_impact(document, grouped_findings) -> None:
-    """各分類「為什麼重要」——講一次。
-
-    舊版把這段掛在每一項發現底下，scan 38 的實測是出現 14 次卻只有 6 種內容，
-    讀者一路看到同樣的話重複十幾次，結構看起來有了、讀起來仍是灌水。
-    只列本次真的有發現的分類，沒發現的不佔版面。
-
-    per-rule 客製文案（2026-08-31 後）：用該 category 中最嚴重 finding 的 rule_id
-    查 RULE_IMPACT，找不到才退回 CATEGORY_IMPACT。這樣既有 test_category_impact
-    _is_stated_once_not_per_finding 保留（講一次），又為有對應 rule 的類別
-    換成更具體的敘述（如 SECURITY_PII 含個資法罰鍰金額）。
-    """
-    # 只列「有需要處理的項目」的分類：某分類若只有正向的資訊提示（例如只偵測到
-    # WAF 保護），卻在這裡寫「這類問題會被攻擊者利用」，就是把好消息說成威脅。
-    severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-    by_category: dict[str, list] = {}
-    for item in grouped_findings:
-        finding = item["finding"]
-        if finding.severity == Finding.Severity.INFO:
-            continue
-        by_category.setdefault(finding.category, []).append(finding)
-    if not by_category:
-        return
-    _heading(document, "這些分類為什麼重要", level=2)
-    table = document.add_table(rows=len(by_category) + 1, cols=2)
-    table.style = "Table Grid"
-    _header_row(table, ["分類", "沒處理的話會怎樣"])
-    for index, (category, findings) in enumerate(by_category.items(), start=1):
-        # 挑最嚴重的 finding 的 rule_id，用 RULE_IMPACT。找不到退回 CATEGORY_IMPACT。
-        findings_sorted = sorted(
-            findings, key=lambda f: severity_rank.get(f.severity, 0), reverse=True,
-        )
-        rep_rule_id = (findings_sorted[0].rule_id or "").strip()
-        impact_text = RULE_IMPACT.get(
-            rep_rule_id,
-            CATEGORY_IMPACT.get(category, "請依你的業務情境評估影響。"),
-        )
-        cells = table.rows[index].cells
-        _styled_run(
-            cells[0].paragraphs[0],
-            CATEGORY_DISPLAY.get(category, category.upper()), bold=True,
-        )
-        _styled_run(cells[1].paragraphs[0], impact_text)
-
-
-def _add_scan_scope(document, scan_job: ScanJob) -> None:
-    """掃描範圍。收件者要能判斷這份報告涵蓋了什麼，「沒發現問題」才有意義。
-
-    scope 一律取自 scan_plan.build_scan_execution_plan()，不要在這裡重複
-    「max_pages==1 代表單頁」的慣例，避免兩邊漂移。
-    """
-    _heading(document, "2　掃描範圍", level=1)
-    document.add_paragraph()
-    scope_label = "單頁" if build_scan_execution_plan(scan_job).scope == "single" else "全網站"
-    _kv_table(document, [
-        ("掃描範圍", scope_label),
-        ("探測模式", scan_job.get_scan_mode_display()),
-        ("頁數上限", str(scan_job.max_pages)),
-        ("連結深度上限", str(scan_job.max_depth)),
-        ("實際掃描頁數", str(scan_job.pages.count())),
-        ("遵守 robots.txt", "是" if scan_job.respect_robots else "否"),
-    ])
-    _add_entry_screenshot(document, scan_job)
-    _add_scan_warnings(document, scan_job)
-    document.add_page_break()
-
-
-def _add_entry_screenshot(document, scan_job: ScanJob) -> None:
-    """入口頁截圖。
-
-    策略：只放一張縮圖（最寬 1200px），不嵌原始的全頁截圖。
-    全頁截圖可能 2-5 MB、6198×1440，直接 embed 會讓 .docx 肥 73 倍（41KB → 3MB）
-    而對「讓收件者一眼確認這是我的網站」這個用途根本不需要那個解析度。
-
-    路徑慣例與 views.py 的 screenshot action 一致：screenshot_path 相對於
-    BASE_DIR。檔案不在（保留期限、換機器、S3 模式）就整段略過，不影響報告。
-
-    需要完整原始截圖者可從 Argus 平台下載（連結放在下方）。
-    """
-    from PIL import Image  # Pillow 已在 pyproject.toml 內
-
-    entry_page = (
-        scan_job.pages.exclude(screenshot_path="")
-        .order_by("depth", "id")
-        .first()
-    )
-    if entry_page is None:
-        return
-    screenshot = Path(settings.BASE_DIR) / entry_page.screenshot_path
-    if not screenshot.exists():
-        return
-
-    # 用 Pillow 縮成 thumbnail 並寫入 reports/ 旁的 cache 目錄。文件名加 .thumb.png 避免
-    # 未來覆蓋。縮圖失敗就整段略過（不讓截圖問題炸掉整份報告）。
-    thumb_dir = screenshot.parent.parent / "report_thumbs"
-    thumb_dir.mkdir(parents=True, exist_ok=True)
-    thumb_path = thumb_dir / f"{screenshot.stem}.thumb.png"
-    try:
-        if not thumb_path.exists() or thumb_path.stat().st_mtime < screenshot.stat().st_mtime:
-            with Image.open(screenshot) as img:
-                # 限制最寬 1200px，保持比例。有原始截圖不會被覆蓋。
-                img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
-                # 轉 RGB（原始截圖可能是 RGBA，Word 對 RGBA PNG 處理不一致）
-                if img.mode == "RGBA":
-                    bg = Image.new("RGB", img.size, (255, 255, 255))
-                    bg.paste(img, mask=img.split()[3])
-                    img = bg
-                elif img.mode != "RGB":
-                    img = img.convert("RGB")
-                img.save(thumb_path, "PNG", optimize=True)
-    except Exception:  # noqa: BLE001
-        return
-
-    _heading(document, "掃描當下的網站畫面", level=2)
-    try:
-        paragraph = document.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.add_run().add_picture(str(thumb_path), width=Inches(5.2))
-    except Exception:  # noqa: BLE001 — 截圖損毀不該讓整份報告產不出來
-        return
-    caption = document.add_paragraph()
-    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(
-        caption,
-        f"{entry_page.final_url or entry_page.url}（掃描當下擷取，顯示為縮圖）",
-        size=9, color=ARGUS_MUTED,
-    )
-    # 完整檔下載指引。考慮到一份 docx 會被轉寄、列印，原始截圖另存為獨立檔比較實用。
-    note = document.add_paragraph()
-    note.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _styled_run(
-        note,
-        f"完整原圖（{screenshot.stat().st_size // 1024} KB）保留於 Argus 平台，"
-        "可至掃描詳情頁下載。",
-        size=8, color=ARGUS_MUTED,
-    )
-
-
-def _add_scan_warnings(document, scan_job: ScanJob) -> None:
-    """掃描過程的警示。
-
-    只挑對收件者有意義的項目。內部運維資訊（settlement_error 的計費結算、
-    agent 的 token 用量）刻意不寫進對外報告。
-    """
-    warnings = scan_job.warning_summary or {}
-    lines: list[str] = []
-
-    if warnings.get("scan_effectiveness") == "no_pages_crawled":
-        lines.append(
-            "掃描有效性警示：本次未抓到任何頁面（目標可能不可達或全部逾時）。"
-            "SEO 與 AEO 未評估，分數僅反映站台層級檢查，不應解讀為「網站沒有問題」。"
-        )
-
-    blocked = warnings.get("blocked_urls") or []
-    if isinstance(blocked, list) and blocked:
-        lines.append(f"依 robots.txt 或掃描範圍限制，略過 {len(blocked)} 個頁面未檢查。")
-
-    failed = warnings.get("failed_urls") or []
-    if isinstance(failed, list) and failed:
-        lines.append(f"有 {len(failed)} 個頁面擷取失敗（逾時或回應異常），未納入本次分析。")
-
-    screenshot_failures = warnings.get("screenshot_failures") or []
-    if isinstance(screenshot_failures, list) and screenshot_failures:
-        # 措辭要和「頁面擷取失敗」分開：那一頁其實有抓到也分析過了，只是沒有圖。
-        lines.append(
-            f"有 {len(screenshot_failures)} 個頁面的截圖未能保存"
-            "（不影響該頁的檢測結果，僅少了畫面佐證）。"
-        )
-
-    tech_stack = warnings.get("tech_stack") or []
-    if isinstance(tech_stack, list) and tech_stack:
-        lines.append(f"偵測到的技術棧：{'、'.join(str(item) for item in tech_stack)}")
-
-    if not lines:
-        return
-    _heading(document, "掃描警示", level=2)
-    for line in lines:
-        _styled_run(document.add_paragraph(style="List Bullet"), line)
-
-
-def _add_top_actions(document, scan_job: ScanJob) -> None:
-    _heading(document, "3　優先改善建議", level=1)
-    document.add_paragraph()
-    actions = scan_job.top_actions or []
-    if not actions:
-        _styled_run(
-            document.add_paragraph(),
-            "本次掃描沒有需要優先處理的項目。",
-        )
-        document.add_page_break()
-        return
-    _styled_run(
-        document.add_paragraph(),
-        "以下是本次掃描中最值得先處理的項目，依影響程度排序。"
-        "詳細說明請見第 4 章對應的發現項目。",
-    )
-    table = document.add_table(rows=len(actions) + 1, cols=3)
-    table.style = "Table Grid"
-    _header_row(table, ["順序", "嚴重度", "問題"])
-    for index, action in enumerate(actions, start=1):
-        cells = table.rows[index].cells
-        severity = action.get("severity", "")
-        _styled_run(cells[0].paragraphs[0], str(index), bold=True)
-        _styled_run(
-            cells[1].paragraphs[0], get_severity_display(severity),
-            bold=True, color=SEVERITY_COLOR.get(severity, "000000"),
-        )
-        _styled_run(
-            cells[2].paragraphs[0],
-            f"{action.get('title', '')}"
-            f"（{CATEGORY_DISPLAY.get(action.get('category', ''), '')}）",
-        )
-    document.add_page_break()
-
-
-# 受影響頁面最多列這麼多個，其餘收成「…另 N 處」。完整清單在附錄的頁面清單。
+# 受影響頁面最多列這麼多個，其餘收成「等，另 N 處」。完整清單見掃描頁面清單。
 _MAX_LISTED_PAGES = 5
-# 證據顯示上限。舊值 1000 字讓單一項目就能吃掉大半頁。
+# 證據顯示上限。放寬的話單一項目就能吃掉大半頁。
 _MAX_EVIDENCE_CHARS = 300
 
 
@@ -997,117 +446,6 @@ def _description_for_report(finding) -> str:
     return "\n".join(lines).strip() or "（無）"
 
 
-def _add_findings(document, grouped_findings) -> None:
-    _heading(document, "4　發現項目", level=1)
-    if not grouped_findings:
-        _styled_run(document.add_paragraph(), "本次掃描沒有發現需要記錄的項目。")
-        document.add_page_break()
-        return
-
-    _styled_run(
-        document.add_paragraph(),
-        "每一項只列屬於它自己的內容。各分類「為什麼重要」見第 1 章，"
-        "修補後如何驗證見附錄。",
-        size=9, color=ARGUS_MUTED,
-    )
-
-    for index, item in enumerate(grouped_findings, start=1):
-        finding = item["finding"]
-        pages = item["pages"]
-        severity_color = SEVERITY_COLOR.get(finding.severity, "000000")
-
-        heading = document.add_heading(level=2)
-        _styled_run(heading, f"4.{index}　{finding.title}", bold=True, color=severity_color)
-
-        # 中繼資料壓成一行。舊版每項一張三列表格，在 Word 裡非常吃垂直空間，
-        # 19 項就是 19 張表。
-        meta = document.add_paragraph()
-        _styled_run(
-            meta, get_severity_display(finding.severity), bold=True, color=severity_color,
-        )
-        _styled_run(
-            meta,
-            f"　·　{CATEGORY_DISPLAY.get(finding.category, finding.category.upper())}"
-            f"　·　{_pages_label(pages)}",
-            size=9, color=ARGUS_MUTED,
-        )
-        if len(pages) > 1:
-            shown = pages[:_MAX_LISTED_PAGES]
-            suffix = (
-                f"　…另 {len(pages) - _MAX_LISTED_PAGES} 處"
-                if len(pages) > _MAX_LISTED_PAGES else ""
-            )
-            _styled_run(
-                document.add_paragraph(), "、".join(shown) + suffix,
-                size=8, color=ARGUS_MUTED,
-            )
-
-        _heading(document, "問題是什麼", level=3)
-        _styled_run(document.add_paragraph(), _description_for_report(finding))
-        if finding.severity == Finding.Severity.INFO:
-            _styled_run(document.add_paragraph(), INFO_NOTE, size=9, color=ARGUS_MUTED)
-
-        _heading(document, "怎麼修", level=3)
-        _styled_run(document.add_paragraph(), finding.remediation or "（無）")
-
-        # 「為什麼要在意」與「修好了怎麼確認」不放在個別 finding，避免重複。
-        # 這兩類文字會在 summary 與附錄以「該 category 最具體的一個 rule_id」
-        # 的版本呈現一次（見 _add_category_impacts / _add_verification_advice）。
-        # info 級別排除——常是正向指標，不該被說成攻擊威脅（既有 layout 測試
-        # test_positive_info_finding_is_not_described_as_a_threat 保護這點）。
-
-        if finding.evidence:
-            _heading(document, "檢測依據", level=3)
-            # 先在完整字串上遮罩、再截斷顯示長度：反過來做的話，PII 數值可能剛好被
-            # 截斷點切一半，殘缺數字長度不足以命中 regex，反而以明文殘留。
-            masked_evidence = mask_pii_evidence(finding.evidence)
-            if masked_evidence != finding.evidence:
-                _styled_run(
-                    document.add_paragraph(),
-                    "⚠️ 以下為敏感樣本部分遮罩後的結果，請依個資法妥善保管本報告。",
-                    bold=True, color=SEVERITY_COLOR["high"],
-                )
-            evidence_text = masked_evidence[:_MAX_EVIDENCE_CHARS]
-            truncated = (
-                "…（已截斷）" if len(masked_evidence) > _MAX_EVIDENCE_CHARS else ""
-            )
-            _styled_run(document.add_paragraph(), f"{evidence_text}{truncated}", size=9)
-
-    document.add_page_break()
-
-
-def _add_authorization(document, scan_job: ScanJob, section_number: str) -> None:
-    """掃描授權聲明。
-
-    Argus 是授權式掃描平台，一份對外的資安報告必須記載這次掃描的授權依據，
-    否則等於放棄本專案最核心的合規主張。
-
-    刻意不寫入 AuthorizationConsent 的 ip_address 與 user_agent，也不寫授權
-    帳號：這份 .docx 會被下載、轉寄、存檔給第三方，授權人的 IP 與瀏覽器指紋
-    是個資，寫進去沒有任何對收件者的價值，只增加外洩面。需要稽核時查 DB 與
-    AdminAuditLog。
-    """
-    _heading(document, f"{section_number}　掃描授權聲明", level=2)
-    consent = getattr(scan_job, "authorization_consent", None)
-    if consent is None:
-        _styled_run(
-            document.add_paragraph(),
-            "查無授權紀錄：本次掃描在資料庫中沒有對應的授權同意紀錄。"
-            "若這份報告要作為稽核依據，請先確認授權來源。",
-        )
-        return
-    _kv_table(document, [
-        ("授權網域", consent.authorized_domain),
-        ("授權時間", consent.created_at.strftime("%Y-%m-%d %H:%M:%S")),
-        (
-            "主動測試授權",
-            "是" if consent.active_testing_authorized else "否（僅被動偵測）",
-        ),
-    ])
-    _styled_run(document.add_paragraph(), "授權聲明內容：", bold=True)
-    _styled_run(document.add_paragraph(), consent.statement)
-
-
 def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     """只挑這份報告裡真的出現過的術語，不是貼一份固定清單。"""
     corpus_parts: list[str] = []
@@ -1126,128 +464,294 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     ]
 
 
-def _add_glossary(document, grouped_findings, counter) -> None:
-    terms = _collect_glossary_terms(grouped_findings)
-    if not terms:
-        return
-    _heading(document, f"{counter.next()}　名詞解釋", level=2)
-    _styled_run(
-        document.add_paragraph(),
-        "以下是本報告中出現的專有名詞。只列出這次真的用到的，方便你對照閱讀。",
-    )
-    table = document.add_table(rows=len(terms) + 1, cols=2)
-    table.style = "Table Grid"
-    _header_row(table, ["名詞", "白話說明"])
-    for index, (term, explanation) in enumerate(terms, start=1):
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], term, bold=True)
-        _styled_run(cells[1].paragraphs[0], explanation)
+def _scan_scope_rows(scan_job: ScanJob) -> dict:
+    """掃描範圍。scope 一律取自 scan_plan，不在這裡重複「max_pages==1 代表單頁」。"""
+    scope = "單頁" if build_scan_execution_plan(scan_job).scope == "single" else "全網站"
+    return {
+        "掃描範圍": scope,
+        "探測模式": scan_job.get_scan_mode_display(),
+        "頁數上限": str(scan_job.max_pages),
+        "連結深度上限": str(scan_job.max_depth),
+        "實際掃描頁數": str(scan_job.pages.count()),
+        "遵守 robots.txt": "是" if scan_job.respect_robots else "否",
+    }
 
 
-def _add_technical_index(document, grouped_findings, counter) -> None:
-    """技術索引：rule_id / OWASP / CWE 收在這裡，不混進正文。
+def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
+    """對收件者有意義的掃描警示。
 
-    這些識別碼對網站主沒有意義，但工程師與稽核需要，所以保留但下放到附錄。
+    內部運維資訊（settlement_error 的計費結算、agent 的 token 用量）刻意不輸出。
+    截圖失敗與「頁面擷取失敗」措辭必須分開：截圖失敗的那一頁其實有抓到也分析過。
     """
-    if not grouped_findings:
-        return
-    _heading(document, f"{counter.next()}　技術索引", level=2)
-    _styled_run(
-        document.add_paragraph(),
-        "供工程師與稽核人員對照使用。OWASP 是國際公認的網站安全風險分類，"
-        "CWE 是通用的軟體弱點編號；一般讀者可略過本節。",
-    )
-    table = document.add_table(rows=len(grouped_findings) + 1, cols=4)
-    table.style = "Table Grid"
-    _header_row(table, ["項次", "問題", "規則 ID", "OWASP / CWE"])
-    for index, item in enumerate(grouped_findings, start=1):
-        finding = item["finding"]
-        cells = table.rows[index].cells
-        _styled_run(cells[0].paragraphs[0], f"4.{index}", size=9)
-        _styled_run(cells[1].paragraphs[0], finding.title, size=9)
-        _styled_run(cells[2].paragraphs[0], finding.rule_id or "—", size=9)
-        owasp = finding.owasp_category or "—"
-        cwe = finding.cwe_id or "—"
-        _styled_run(cells[3].paragraphs[0], f"{owasp} / {cwe}", size=9)
-
-
-def _add_appendix(document, scan_job: ScanJob, grouped_findings) -> None:
-    _heading(document, "5　附錄", level=1)
-    # 小節編號動態產生：名詞解釋與技術索引在沒有 finding 時會整段消失，頁面清單
-    # 在爬 0 頁時也不出現，寫死號碼會出現「5.2 之後接 5.4」這種跳號。
-    counter = _SectionNumber("5")
-    _add_authorization(document, scan_job, counter.next())
-    _add_glossary(document, grouped_findings, counter)
-    _add_technical_index(document, grouped_findings, counter)
-    _add_page_list(document, scan_job, counter)
-
-    _heading(document, f"{counter.next()}　修補後如何驗證", level=2)
-    _styled_run(
-        document.add_paragraph(),
-        "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；"
-        "下一份報告的摘要會列出這次解決了哪些項目。"
-        "若要立即自行確認，請你的網站維護人員依各項的「怎麼修」逐步檢查。",
-    )
-    # per-rule 客製驗收指令（2026-08-31 後）：列出所有有 RULE_VERIFY 的 rule_id
-    # 的驗收指令。同一 category 可能有多個不同 rule（例如 security 同時有 PII 與 CSP），
-    # 全部列出來才不會漏。rule_id 不同不會產生「重複」問題。
-    by_category: dict[str, list] = {}
-    for item in grouped_findings:
-        finding = item["finding"]
-        if finding.severity == Finding.Severity.INFO:
-            continue  # info 級別不視為「修了才能驗證」，排除（既有 layout 測試）
-        rule_id = (finding.rule_id or "").strip()
-        if not rule_id or rule_id not in RULE_VERIFY:
-            continue
-        by_category.setdefault(finding.category, []).append(rule_id)
-    if by_category:
-        _styled_run(
-            document.add_paragraph(),
-            "各分類的具體驗收指令（依 rule_id 列出，有對應客製才出現）：",
-            bold=True,
+    warnings = scan_job.warning_summary or {}
+    lines: list[str] = []
+    if warnings.get("scan_effectiveness") == "no_pages_crawled":
+        lines.append(
+            "掃描有效性警示：本次未抓到任何頁面（目標可能不可達或全部逾時）。"
+            "SEO 與 AEO 未評估，分數僅反映站台層級檢查，不應解讀為「網站沒有問題」。"
         )
-        for category, rule_ids in by_category.items():
-            # 去重（同 category 多個相同 rule_id 也只列一次）
-            for rule_id in sorted(set(rule_ids)):
-                paragraph = document.add_paragraph(style="List Bullet")
-                _styled_run(
-                    paragraph,
-                    f"[{rule_id}] ",
-                    bold=True, size=9, color=ARGUS_CYAN_DEEP,
-                )
-                _styled_run(
-                    paragraph,
-                    f"{CATEGORY_DISPLAY.get(category, category.upper())}：",
-                    bold=True,
-                )
-                _styled_run(paragraph, RULE_VERIFY[rule_id])
+    for key, template in (
+        ("blocked_urls", "依 robots.txt 或掃描範圍限制，略過 {n} 個頁面未檢查。"),
+        ("failed_urls", "有 {n} 個頁面擷取失敗（逾時或回應異常），未納入本次分析。"),
+        (
+            "screenshot_failures",
+            "有 {n} 個頁面的截圖未能保存（不影響該頁的檢測結果，僅少了畫面佐證）。",
+        ),
+    ):
+        value = warnings.get(key) or []
+        if isinstance(value, list) and value:
+            lines.append(template.format(n=len(value)))
+    tech_stack = warnings.get("tech_stack") or []
+    if isinstance(tech_stack, list) and tech_stack:
+        lines.append(f"偵測到的技術棧：{'、'.join(str(item) for item in tech_stack)}")
+    return lines
 
-    _heading(document, f"{counter.next()}　想更深入了解某一項", level=2)
-    # 舊版在每一項發現底下都印一段完整的 AI 提示詞，佔了發現項目 43% 的字數，
-    # 而內容就是把上方「問題是什麼／檢測依據／怎麼修」原封不動再抄一遍。
-    # 改成在這裡說明一次怎麼用，資訊沒有少，重複沒有了。
-    _styled_run(
-        document.add_paragraph(),
-        "把任何一項發現的「問題是什麼」「檢測依據」「怎麼修」三段文字複製起來，"
-        "貼給 ChatGPT、Claude 等 AI 助手並補上一句「請說明這個問題的影響與具體修復步驟」，"
-        "就能取得更詳細的說明。本報告的內容全部可追溯至掃描證據，"
-        "交給 AI 解讀時請以報告內容為準。",
+
+def _entry_screenshot(scan_job: ScanJob) -> Path | None:
+    """入口頁截圖。只放一張——全頁截圖體積大，整份塞進去會讓 .docx 失控。
+
+    路徑慣例與 views.py 的 screenshot action 一致：相對於 BASE_DIR。
+    """
+    entry = scan_job.pages.exclude(screenshot_path="").order_by("depth", "id").first()
+    if entry is None:
+        return None
+    path = Path(settings.BASE_DIR) / entry.screenshot_path
+    return path if path.exists() else None
+
+
+def _severity_rank(severity: str) -> int:
+    order = ["critical", "high", "medium", "low", "info"]
+    return order.index(severity) if severity in order else len(order)
+
+
+def _resolved_since(previous, grouped) -> list[str]:
+    """前次有、這次沒有的項目＝已解決。"""
+    if previous is None:
+        return []
+    current = {item["finding"].rule_id for item in grouped if item["finding"].rule_id}
+    return [
+        title
+        for rule, title in previous.findings.values_list("rule_id", "title")
+        if rule and rule not in current
+    ]
+
+
+def _headline(scan_job: ScanJob, previous, category_scores: dict, resolved=()) -> str:
+    """一頁摘要的導讀句。只陳述資料本身，不加沒有根據的評價。"""
+    score = scan_job.overall_score
+    parts = []
+    if isinstance(score, int):
+        parts.append(f"分數落在「{_score_band_label(score)}」區間")
+    if previous is not None and isinstance(score, int):
+        delta = score - previous.overall_score
+        if delta > 0:
+            parts.append(f"較前次進步 {delta} 分")
+        elif delta < 0:
+            parts.append(f"較前次下降 {abs(delta)} 分")
+        else:
+            parts.append("與前次持平")
+    # schema 沒有 resolved 欄位，但「修好了 N 項」是回訪使用者最想看到的資訊，
+    # 收進導讀句而不是讓它消失。
+    if resolved:
+        parts.append(f"已解決 {len(resolved)} 項")
+    weakest = sorted(
+        ((name, value) for name, value in category_scores.items() if isinstance(value, int)),
+        key=lambda item: item[1],
+    )[:2]
+    if weakest:
+        names = "與".join(CATEGORY_DISPLAY.get(c, c.upper()).split()[0] for c, _ in weakest)
+        parts.append(f"主要待補強的是{names}")
+    return "這一頁讓你 30 秒掌握整體狀況：" + "；".join(parts) + "。細節見後續章節。"
+
+
+def _score_band_label(score: int) -> str:
+    for threshold, label, _ in SCORE_BANDS:
+        if score >= threshold:
+            return label
+    return "需優先處理"
+
+
+def build_report_payload(scan_job: ScanJob) -> dict:
+    """把一次掃描轉成 report_render 的輸入 JSON（契約見 report_render/schema.json）。
+
+    這裡是報告的「資料層」：去重分組、評分、與前次比較、術語過濾、per-rule 文案、
+    PII 遮罩全部發生在這一支，排版完全交給 report_render。分開的好處是排版可以整套
+    抽換（本次就是），而這些領域規則與它們的測試一行都不用動。
+    """
+    grouped = _group_findings_for_report(scan_job.findings.select_related("page").all())
+    # 依嚴重度排序後才編號：report_render 會依嚴重度分組顯示，先排好編號才會連續。
+    grouped.sort(key=lambda item: _severity_rank(item["finding"].severity))
+
+    category_scores = scan_job.category_scores or {}
+    previous = _previous_completed_scan(scan_job)
+    scan_date = (scan_job.completed_at or scan_job.created_at or timezone.now()).strftime(
+        "%Y-%m-%d"
     )
 
-    _heading(document, f"{counter.next()}　免責聲明", level=2)
-    _styled_run(document.add_paragraph(), DISCLAIMER)
+    findings_payload = []
+    ref_by_rule: dict[str, str] = {}
+    for index, item in enumerate(grouped, start=1):
+        finding = item["finding"]
+        pages = item["pages"]
+        ref = f"4.{index}"
+        if finding.rule_id:
+            ref_by_rule[finding.rule_id] = ref
+        entry = {
+            "id": ref,
+            "title": finding.title,
+            "severity": _render_severity(finding.severity),
+            "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
+            "scope": _pages_label(pages),
+            "problem": _description_for_report(finding),
+            "fix": finding.remediation or "（無）",
+            # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
+            # 殘缺數字命不中 regex，反而以明文殘留。
+            "evidence": mask_pii_evidence(finding.evidence or "")[:_MAX_EVIDENCE_CHARS],
+        }
+        if len(pages) > 1:
+            shown = "、".join(pages[:_MAX_LISTED_PAGES])
+            if len(pages) > _MAX_LISTED_PAGES:
+                shown += f" 等，另 {len(pages) - _MAX_LISTED_PAGES} 處"
+            entry["urls"] = shown
+        findings_payload.append(entry)
 
-    _heading(document, f"{counter.next()}　本報告如何產生", level=2)
-    # 舊版寫「再交由 AI 進行自然語言解釋與改善建議撰寫」，但 Finding.ai_explanation
-    # 與 ai_remediation 在整個 backend 只被寫入空字串，該功能從未實作——這是一份
-    # 對外交付文件裡的不實陳述。改為只描述實際做到的事。
-    _styled_run(
-        document.add_paragraph(),
-        "本報告採 Evidence-first 原則：SEO、AEO、GEO 與資安判斷全部來自爬蟲與規則引擎"
-        "產生的可驗證證據，每一項發現都附上當下實際觀測到的內容。"
-        "報告產生過程不使用 AI 改寫或推論結論，因此不會出現無法追溯到掃描證據的說法。"
-        "每一項發現另附一段可直接貼給 AI 助手的提示詞，方便你取得更深入的說明。",
-    )
+    payload: dict = {
+        "meta": {
+            "site_url": scan_job.normalized_url,
+            "report_id": build_report_number(scan_job),
+            "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "summary": {
+            "overall_score": scan_job.overall_score or 0,
+            "scan_date": scan_date,
+            "headline": _headline(
+                scan_job, previous, category_scores, _resolved_since(previous, grouped)
+            ),
+            # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
+            # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。
+            "categories": [
+                {
+                    "name": CATEGORY_DISPLAY.get(category, category.upper()),
+                    "score": category_scores.get(category),
+                }
+                for category in Finding.Category.values
+            ],
+        },
+        "findings": findings_payload,
+    }
+
+    if previous is not None:
+        payload["summary"]["previous"] = {
+            "date": previous.completed_at.strftime("%m-%d"),
+            "score": previous.overall_score,
+        }
+        previous_rules = {
+            rule for rule in previous.findings.values_list("rule_id", flat=True) if rule
+        }
+        appeared = [
+            item["finding"].title
+            for item in grouped
+            if item["finding"].rule_id and item["finding"].rule_id not in previous_rules
+        ]
+        if appeared:
+            payload["summary"]["new_findings"] = appeared
+
+    priorities = []
+    for action in scan_job.top_actions or []:
+        priorities.append({
+            "severity": _render_severity(action.get("severity", "")),
+            "problem": action.get("title", ""),
+            "category": CATEGORY_DISPLAY.get(
+                action.get("category", ""), str(action.get("category", "")).upper()
+            ),
+            "ref": next(
+                (f["id"] for f in findings_payload if f["title"] == action.get("title")), ""
+            ),
+        })
+    if priorities:
+        payload["priorities"] = priorities
+
+    # 分類的「沒處理會怎樣」講一次；只列有非 info 發現的分類——某分類若只有正向的
+    # 資訊提示（例如只偵測到 WAF 保護），寫「會被攻擊者利用」就是把好消息說成威脅。
+    why_matters = []
+    seen_categories: set[str] = set()
+    for item in grouped:
+        finding = item["finding"]
+        if finding.severity == Finding.Severity.INFO or finding.category in seen_categories:
+            continue
+        seen_categories.add(finding.category)
+        why_matters.append({
+            "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
+            "consequence": _impact_for(finding),
+        })
+    if why_matters:
+        payload["why_matters"] = why_matters
+
+    scan_info: dict = {"scope": _scan_scope_rows(scan_job)}
+    warning_lines = _scan_warning_lines(scan_job)
+    if warning_lines:
+        scan_info["warnings"] = warning_lines
+    screenshot = _entry_screenshot(scan_job)
+    if screenshot is not None:
+        scan_info["screenshot"] = str(screenshot)
+        entry_page = scan_job.pages.exclude(screenshot_path="").order_by("depth", "id").first()
+        scan_info["screenshot_caption"] = (
+            f"{entry_page.final_url or entry_page.url}（掃描當下擷取）"
+        )
+    payload["scan_info"] = scan_info
+
+    appendix: dict = {}
+    glossary = _collect_glossary_terms(grouped)
+    if glossary:
+        appendix["glossary"] = [
+            {"term": term, "explanation": explanation} for term, explanation in glossary
+        ]
+    if grouped:
+        appendix["tech_index"] = [
+            {
+                "ref": item_ref,
+                "rule_id": item["finding"].rule_id or "—",
+                "owasp_cwe": (
+                    f"{item['finding'].owasp_category or '—'} / {item['finding'].cwe_id or '—'}"
+                ),
+            }
+            for item_ref, item in zip(
+                [f["id"] for f in findings_payload], grouped, strict=True
+            )
+        ]
+    # 通用說明與 AI 用法一定要在，per-rule 驗收指令是補充而不是取代——只給
+    # per-rule 的話，沒有對應 rule 的發現就完全沒有驗證指引，AI 用法也整段消失。
+    verify_notes = [
+        "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；"
+        "下一份報告的摘要會列出這次解決了哪些項目。",
+        "想更深入了解任何一項：把該項的「問題是什麼」「怎麼修」「檢測依據」"
+        "三段文字複製起來，貼給 ChatGPT、Claude 等 AI 助手並補一句"
+        "「請說明這個問題的影響與具體修復步驟」即可。",
+    ]
+    # 只取真正的 per-rule 驗收指令，不用 _verify_for()——它在沒有對應規則時會退回
+    # CATEGORY_VERIFY，而那段文字本來就含「重新執行一次 Argus 掃描」，會與上面的
+    # 通用說明重複。per-rule 是補充，通用說明已經涵蓋沒有對應規則的情況。
+    for item in grouped:
+        note = RULE_VERIFY.get(item["finding"].rule_id or "")
+        if note and note not in verify_notes:
+            verify_notes.append(note)
+    appendix["verify_note"] = " ".join(verify_notes)
+    consent = getattr(scan_job, "authorization_consent", None)
+    if consent is not None:
+        # 刻意不寫 ip_address / user_agent / 授權帳號：報告會被下載轉寄給第三方，
+        # 授權人的 IP 與瀏覽器指紋是個資，對收件者零價值只增加外洩面。
+        appendix["authorization"] = {
+            "授權網域": consent.authorized_domain,
+            "授權時間": consent.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "主動測試授權": "是" if consent.active_testing_authorized else "否（僅被動偵測）",
+            "授權聲明": consent.statement,
+        }
+    else:
+        appendix["authorization"] = {
+            "授權紀錄": "查無授權紀錄。若這份報告要作為稽核依據，請先確認授權來源。"
+        }
+    payload["appendix"] = appendix
+    return payload
 
 
 def report_output_path(scan_job: ScanJob) -> Path:
@@ -1256,33 +760,25 @@ def report_output_path(scan_job: ScanJob) -> Path:
 
 
 def build_scan_report(scan_job: ScanJob) -> str:
+    """產生 Word 報告。
+
+    資料層與排版層分離：本模組只負責把掃描結果整理成 report_render 的輸入
+    （build_report_payload），版面、配色、圖表、浮水印全部由 report_render 決定。
+    分開的好處是排版可以整套抽換，而領域規則與它們的測試一行都不用動。
+    """
     output_path = report_output_path(scan_job)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    grouped_findings = _group_findings_for_report(
-        scan_job.findings.select_related("page").all()
-    )
-
-    report_number = build_report_number(scan_job)
+    payload = build_report_payload(scan_job)
     generated_at = timezone.now()
-
-    document = Document()
-    _add_header_footer(document, scan_job, report_number)
-    _add_cover(document, scan_job, report_number)
-    _add_table_of_contents(document, grouped_findings)
-    _add_summary(document, scan_job, grouped_findings)
-    _add_scan_scope(document, scan_job)
-    _add_top_actions(document, scan_job)
-    _add_findings(document, grouped_findings)
-    _add_appendix(document, scan_job, grouped_findings)
-    document.save(output_path)
+    generate_report(payload, str(output_path))
 
     # 雜湊算完才寫防偽紀錄：報告本身不印雜湊（印了就循環相依——雜湊要涵蓋整份
     # 檔案，而檔案裡又要有雜湊），收件者拿編號到查驗頁取得雜湊自行比對。
     ReportVerification.objects.update_or_create(
         scan_job=scan_job,
         defaults={
-            "report_number": report_number,
+            "report_number": payload["meta"]["report_id"],
             "content_sha256": sha256(output_path.read_bytes()).hexdigest(),
             "generated_at": generated_at,
         },
