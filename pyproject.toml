@@ -16,6 +16,7 @@ dependencies = [
     "google-auth>=2.53.0",
     "gunicorn>=23,<24",
     "kubernetes>=35.0,<36",
+    "matplotlib>=3.11.1",
     "pillow>=12.2.0",
     "playwright>=1.48,<2",
     "psycopg[binary]>=3.2,<4",
@@ -37,7 +38,11 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["**/migrations/*.py"]
+# report_render/ 是使用者提供的報告產生 module，原樣 vendor 進來。
+# 不套專案 lint 規則：為了過 lint 去重排第三方程式碼，日後更新 module 會變成
+# 逐行手動合併。唯一的在地修改是 theme.py 的字型解析（原版寫死路徑且註釋與
+# 實作不符），該處有註解說明。
+extend-exclude = ["**/migrations/*.py", "backend/apps/scans/report_render/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

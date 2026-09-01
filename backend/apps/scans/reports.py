@@ -335,6 +335,12 @@ def build_report_number(scan_job: ScanJob) -> str:
     return f"ARGUS-{scan_job.pk}-{issued.strftime('%Y%m%d')}-{token}"
 
 
+# 報告用的品牌圖檔必須放在 backend/ 之內：backend image 只有 COPY backend ./backend，
+# 不含 frontend/。放在 frontend/public/ 時 exists() 一律為 False，封面會靜默退回
+# 純文字——本機與測試都看不出來，只有正式站的報告少了藝術字。
+_REPORT_ASSETS = Path(__file__).resolve().parent / "report_assets"
+
+
 def get_severity_display(severity: str) -> str:
     return SEVERITY_DISPLAY.get(severity, severity or "未知")
 
@@ -476,14 +482,14 @@ def _score_band(score) -> tuple[str, str]:
 def _add_cover(document, scan_job: ScanJob, report_number: str) -> None:
     # 有預渲染的藝術字 PNG 就用圖（含 logo 點綴 + 漸層 + 陰影），沒有就用純文字。
     # 為了避免 cairosvg 系統函式庫相依，這個 PNG 由 scripts/render_argus_brand.py 用 Pillow 生成。
-    title_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-title.png"
+    title_path = _REPORT_ASSETS / "argus-title.png"
     if title_path.exists():
         title_paragraph = document.add_paragraph()
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         title_paragraph.add_run().add_picture(str(title_path), width=Inches(5.5))
     else:
         # fallback：純文字標題
-        logo_path = Path(settings.PROJECT_ROOT) / "frontend" / "public" / "argus-logo.png"
+        logo_path = _REPORT_ASSETS / "argus-logo.png"
         if logo_path.exists():
             logo_paragraph = document.add_paragraph()
             logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER

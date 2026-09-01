@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Argus report input",
+  "type": "object",
+  "required": ["meta", "summary", "findings"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["site_url", "report_id"],
+      "properties": {
+        "site_url":     {"type": "string", "description": "受檢網址，顯示於封面/頁首"},
+        "report_id":    {"type": "string", "description": "報告編號，顯示於封面/頁尾"},
+        "generated_at": {"type": "string", "description": "報告產生時間"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["overall_score", "scan_date", "categories"],
+      "properties": {
+        "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "scan_date":     {"type": "string"},
+        "headline":      {"type": "string", "description": "一頁摘要導讀句（選填）"},
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "score"],
+            "properties": {
+              "name":  {"type": "string"},
+              "score": {"type": ["integer", "null"], "description": "null = 未評估"}
+            }
+          }
+        },
+        "previous": {
+          "type": "object",
+          "description": "前次掃描（選填，有才畫趨勢圖）",
+          "required": ["date", "score"],
+          "properties": {
+            "date":  {"type": "string"},
+            "score": {"type": "integer"}
+          }
+        },
+        "new_findings":  {"type": "array", "items": {"type": "string"}},
+        "priority_note": {"type": "string"}
+      }
+    },
+    "priorities": {
+      "type": "array",
+      "description": "優先處理清單（選填）",
+      "items": {
+        "type": "object",
+        "required": ["severity", "problem"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["嚴重風險", "高風險", "中風險", "低風險", "資訊提示"]},
+          "problem":  {"type": "string"},
+          "category": {"type": "string"},
+          "ref":      {"type": "string", "description": "對應發現項目編號，例 4.1"}
+        }
+      }
+    },
+    "why_matters": {
+      "type": "array",
+      "description": "這些分類為什麼重要（選填）",
+      "items": {
+        "type": "object",
+        "required": ["category", "consequence"],
+        "properties": {
+          "category":    {"type": "string"},
+          "consequence": {"type": "string"}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "發現項目；依 severity 自動分組，不需預先排序",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "severity", "category", "scope", "problem", "fix", "evidence"],
+        "properties": {
+          "id":       {"type": "string", "description": "編號，例 4.1"},
+          "title":    {"type": "string"},
+          "severity": {"type": "string", "enum": ["嚴重風險", "高風險", "中風險", "低風險", "資訊提示"]},
+          "category": {"type": "string"},
+          "scope":    {"type": "string", "description": "影響範圍，例「影響 N 個頁面」或「站台層級」"},
+          "urls":     {"type": "string", "description": "受影響網址（選填）"},
+          "problem":  {"type": "string"},
+          "fix":      {"type": "string"},
+          "evidence": {"type": "string", "description": "檢測依據原始數據，等寬字呈現"}
+        }
+      }
+    },
+    "scan_info": {
+      "type": "object",
+      "properties": {
+        "scope":              {"type": "object", "description": "項目->設定 的鍵值對"},
+        "warnings":           {"type": "array", "items": {"type": "string"}},
+        "screenshot":         {"type": "string", "description": "截圖檔路徑（選填）"},
+        "screenshot_caption": {"type": "string"}
+      }
+    },
+    "appendix": {
+      "type": "object",
+      "properties": {
+        "glossary": {
+          "type": "array",
+          "items": {"type": "object", "required": ["term", "explanation"],
+                    "properties": {"term": {"type": "string"}, "explanation": {"type": "string"}}}
+        },
+        "tech_index": {
+          "type": "array",
+          "items": {"type": "object", "required": ["ref", "rule_id"],
+                    "properties": {"ref": {"type": "string"}, "rule_id": {"type": "string"},
+                                   "owasp_cwe": {"type": "string"}}}
+        },
+        "verify_note":   {"type": "string"},
+        "authorization": {"type": "object", "description": "項目->內容 的鍵值對"}
+      }
+    }
+  }
+}
