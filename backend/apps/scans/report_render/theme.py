@@ -33,7 +33,14 @@ _FONT_CANDIDATES = (
 )
 
 
-def _resolve_cjk_fonts() -> tuple[str, str]:
+def _resolve_cjk_fonts() -> tuple[str | None, str | None]:
+    """找出可用的 CJK 字型；找不到回 (None, None)，**不在此拋例外**。
+
+    這支是 module import 時執行的。早期版本在找不到字型時直接 raise，結果
+    reports.py -> report_render 的 import 鏈讓整個 Django 在沒有字型的環境
+    （CI runner）啟動失敗——連 `manage.py check` 都跑不起來。字型只有畫圖才
+    需要，失敗就該發生在畫圖時，見 require_cjk_fonts()。
+    """
     import os
 
     override_regular = os.getenv("ARGUS_REPORT_FONT_REGULAR")
@@ -44,16 +51,26 @@ def _resolve_cjk_fonts() -> tuple[str, str]:
     for regular, bold in _FONT_CANDIDATES:
         if os.path.exists(regular) and os.path.exists(bold):
             return regular, bold
+    return None, None
 
+
+MPL_FONT_REGULAR, MPL_FONT_BOLD = _resolve_cjk_fonts()
+
+
+def require_cjk_fonts() -> tuple[str, str]:
+    """畫圖前取得字型路徑；缺字型時在這裡失敗。
+
+    刻意大聲失敗而不是退回預設字型：退回的話圖表中文會變成一整排 □，報告照樣
+    產出、照樣寄給客戶，沒有人會發現。
+    """
+    if MPL_FONT_REGULAR and MPL_FONT_BOLD:
+        return MPL_FONT_REGULAR, MPL_FONT_BOLD
     raise RuntimeError(
         "報告圖表需要 CJK 字型，但找不到任何一組。"
         "容器請安裝 fonts-noto-cjk（Debian/Ubuntu：apt-get install -y fonts-noto-cjk），"
         "或以環境變數 ARGUS_REPORT_FONT_REGULAR / ARGUS_REPORT_FONT_BOLD 指定路徑。"
         f"已嘗試：{[c[0] for c in _FONT_CANDIDATES]}"
     )
-
-
-MPL_FONT_REGULAR, MPL_FONT_BOLD = _resolve_cjk_fonts()
 
 # Severity levels: label -> chip fill / text colour + ordering weight
 SEVERITY = {

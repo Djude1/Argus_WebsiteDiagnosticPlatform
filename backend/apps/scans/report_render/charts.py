@@ -12,8 +12,18 @@ import numpy as np
 
 from . import theme as T
 
-_reg = fm.FontProperties(fname=T.MPL_FONT_REGULAR)
-_bold = fm.FontProperties(fname=T.MPL_FONT_BOLD)
+# 字型延後建立：module import 時解析會讓沒有 CJK 字型的環境（CI runner）連
+# Django 都啟動不了。改由 build_all() 在真的要畫圖時呼叫 _ensure_fonts()。
+_reg = None
+_bold = None
+
+
+def _ensure_fonts():
+    global _reg, _bold
+    if _reg is None or _bold is None:
+        regular_path, bold_path = T.require_cjk_fonts()
+        _reg = fm.FontProperties(fname=regular_path)
+        _bold = fm.FontProperties(fname=bold_path)
 
 
 def _hex(c):  # matplotlib wants leading '#'
@@ -118,6 +128,7 @@ def trend_line(prev, curr, out):
 
 def build_all(data, workdir):
     """Generate every chart the report needs; return a dict of paths."""
+    _ensure_fonts()
     os.makedirs(workdir, exist_ok=True)
     p = lambda n: os.path.join(workdir, n)
     summary = data["summary"]

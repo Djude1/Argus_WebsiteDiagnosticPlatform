@@ -32,6 +32,10 @@ jobs:
           version: "0.9.17"
       - name: 同步鎖定依賴
         run: uv sync --frozen
+      - name: 安裝報告圖表所需的 CJK 字型
+        # 報告測試會實際產生 .docx（含 matplotlib 圖表），缺字型會在畫圖時
+        # RuntimeError。與 Dockerfile 裝的是同一個套件。
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Ruff
         run: uv run ruff check backend
       - name: Django 設定與 migration 漂移
