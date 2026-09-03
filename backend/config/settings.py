@@ -206,6 +206,48 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
 # ============================================================
+# Logging
+# ============================================================
+# 之前完全沒有 LOGGING 設定：掃描失敗時 DB 只留下例外的類別名（例如
+# 「掃描執行失敗 [analysis:AttributeError]」），沒有 stack，線上排查只能靠猜。
+#
+# 輸出到 stdout 就好——K8s 與 docker compose 都從 stdout 收 log，寫檔反而要處理
+# 輪替與磁碟。等級用環境變數控制，預設 INFO。
+#
+# 注意：這裡只設輸出管道。**任何 log 都不得印出 Secret、Token、密碼或 .env 內容**，
+# 呼叫端請只記錄鍵名與布林結果（見 docs/environment-preflight.md）。
+LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "loggers": {
+        # 專案自己的程式一律吃 LOG_LEVEL
+        "apps": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        # Django 的 request logger 預設會把 4xx 也記成 warning，維持預設即可
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # SQL 查詢只在明確要 debug 時才開，否則會把 log 淹掉
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_SQL_LOG_LEVEL", "WARNING").upper(),
+            "propagate": False,
+        },
+    },
+}
+
+# ============================================================
 # Cache（DRF throttle 依賴此後端儲存 rate limit 計數）
 # ============================================================
 # 預設 LocMemCache：per-process 記憶體，dev/test 夠用；production 多 worker 應設

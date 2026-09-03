@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from urllib.parse import urlparse
 
 from asgiref.sync import sync_to_async
@@ -9,6 +11,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.billing.services import refund_full_for_scan, settle_scan_actual
@@ -42,6 +45,8 @@ from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.services import assert_public_http_url
+
+logger = logging.getLogger(__name__)
 
 
 def _new_event_loop_with_retry():
@@ -129,6 +134,75 @@ def reconcile_local_scan_process_exit(scan_job_id: int) -> bool:
     scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
     append_log(scan_job_id, "本機掃描程序異常結束", level="error")
     refund_full_for_scan(scan_job.user, scan_job, reason="本機程序異常")
+    return True
+
+
+def reap_stale_scans() -> int:
+    """把「worker 已經不在了」的掃描收斂成 failed 並冪等退款，回傳處理筆數。
+
+    為什麼需要這支：worker pod 被 rollout／OOM／節點驅逐砍掉時，run_scan_job 的
+    三個 except（ScanCancelled／SoftTimeLimitExceeded／一般例外）都跑不到——那些
+    handler 需要 Python 還活著。被 SIGKILL 時什麼都不會執行，於是 ScanJob 永遠停在
+    crawling／scanning，hold_for_scan 扣的 coin 永遠不退。
+
+    也不能靠 Celery 的 acks_late 重投解決：run_scan_job 入口的 CAS 是
+    filter(status=QUEUED).update(...)，重投時狀態已是 crawling，只會直接 return。
+    冪等保護反而讓重試變成空轉，所以必須有外部回收。
+
+    判斷依據是「開始多久了」而不是「有沒有心跳」：超過硬性 time limit 還在非終態，
+    代表連 Celery 的 hard limit 都沒能把它殺掉，任務必然已經不在了。用 started_at，
+    沒有 started_at（從未被取件）則退回 created_at。
+    """
+    cutoff = timezone.now() - timedelta(seconds=settings.CELERY_TASK_TIME_LIMIT)
+    stale = ScanJob.objects.filter(
+        status__in=[
+            ScanJob.Status.QUEUED,
+            ScanJob.Status.CRAWLING,
+            ScanJob.Status.SCANNING,
+            ScanJob.Status.AGENT_TESTING,
+        ],
+    ).filter(
+        Q(started_at__lt=cutoff) | Q(started_at__isnull=True, created_at__lt=cutoff)
+    )
+
+    reaped = 0
+    for scan_job_id in list(stale.values_list("id", flat=True)):
+        # 一筆失敗不能讓其餘卡住的掃描繼續卡著——這是批次維護作業。
+        try:
+            if _fail_and_refund_stale_scan(scan_job_id):
+                reaped += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("回收卡住的掃描失敗 scan_job_id=%s", scan_job_id)
+    return reaped
+
+
+@transaction.atomic
+def _fail_and_refund_stale_scan(scan_job_id: int) -> bool:
+    """單筆收斂。用 CAS 更新，萬一與還活著的 worker 撞上，只有一邊會贏。"""
+    now = timezone.now()
+    updated = ScanJob.objects.filter(
+        id=scan_job_id,
+        status__in=[
+            ScanJob.Status.QUEUED,
+            ScanJob.Status.CRAWLING,
+            ScanJob.Status.SCANNING,
+            ScanJob.Status.AGENT_TESTING,
+        ],
+    ).update(
+        status=ScanJob.Status.FAILED,
+        completed_at=now,
+        progress={},
+        error_message="掃描執行期間中斷（可能因伺服器重啟或資源不足），已自動退回預扣點數。",
+        updated_at=now,
+    )
+    if not updated:
+        return False
+
+    scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
+    append_log(scan_job_id, "掃描執行期間中斷，已自動回收並退款", level="error")
+    # refund_full_for_scan 本身冪等（淨扣為 0 時回 None），重跑不會重複退款。
+    refund_full_for_scan(scan_job.user, scan_job, reason="執行中斷")
+    logger.warning("回收卡住的掃描 scan_job_id=%s", scan_job_id)
     return True
 
 
@@ -341,6 +415,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 except ScanCancelled:
                     raise
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                     append_log(
                         scan_job_id,
                         f"Katana 略過（{exc.__class__.__name__}）",
@@ -358,6 +433,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 except ScanCancelled:
                     raise
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                     append_log(
                         scan_job_id,
                         f"Nuclei 略過（{exc.__class__.__name__}）",
@@ -387,6 +463,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 except ScanCancelled:
                     raise
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                     append_log(
                         scan_job_id,
                         f"Katana 略過（{exc.__class__.__name__}）",
@@ -397,6 +474,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 except ScanCancelled:
                     raise
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                     append_log(
                         scan_job_id,
                         f"Nuclei 略過（{exc.__class__.__name__}）",
@@ -418,6 +496,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             except ScanCancelled:
                 raise
             except Exception as exc:  # noqa: BLE001
+                logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                 append_log(
                     scan_job_id,
                     f"Nuclei 略過（{exc.__class__.__name__}）",
@@ -563,6 +642,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             except ScanCancelled:
                 raise
             except Exception as exc:  # noqa: BLE001 — 探測失敗不影響主掃描
+                logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                 append_log(
                     scan_job_id,
                     f"敏感檔案外洩探測略過（{exc.__class__.__name__}）",
@@ -650,6 +730,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                             }
                         )
             except Exception as exc:  # noqa: BLE001 — agent 失敗不應讓整個掃描失敗
+                logger.exception("Agent 執行失敗 scan_job_id=%s", scan_job_id)
                 agent_meta = {"status": "error", "error": exc.__class__.__name__}
         elif settings.ARGUS_AGENT_ENABLED:
             append_log(
@@ -673,6 +754,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             except ScanCancelled:
                 raise
             except Exception as exc:  # noqa: BLE001 — 非 cancel 的基礎設施失敗只 silent-fail
+                logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
                 append_log(
                     scan_job_id,
                     f"Kali 主動驗證略過（{exc.__class__.__name__}）",
@@ -787,6 +869,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         try:
             refund_full_for_scan(scan_job.user, scan_job, reason="取消")
         except Exception as exc:  # noqa: BLE001
+            logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
             append_log(scan_job_id, f"取消退款失敗：{exc.__class__.__name__}", level="error")
             raise RuntimeError("掃描取消退款未完成。") from None
         return {"status": "cancelled"}
@@ -803,6 +886,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         try:
             refund_full_for_scan(scan_job.user, scan_job, reason="超時")
         except Exception as exc:  # noqa: BLE001
+            logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
             append_log(scan_job_id, f"超時退款失敗：{exc.__class__.__name__}", level="error")
             raise RuntimeError("掃描超時退款未完成。") from None
         return {"status": "timeout"}

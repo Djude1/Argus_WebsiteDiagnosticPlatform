@@ -177,7 +177,55 @@ spec:
             limits:
               cpu: "2"
               memory: 3Gi # Playwright + Chromium 吃記憶體，給寬一點
+      # 預設只有 30 秒：Celery 收到 SIGTERM 會等當前任務跑完（warm shutdown），
+      # 但一次掃描要好幾分鐘，30 秒後就被 SIGKILL——那時 run_scan_job 的 except
+      # 都跑不到，ScanJob 永遠停在 scanning、預扣的 coin 永遠不退。
+      # 給到與 CELERY_TASK_TIME_LIMIT 同級，讓滾動更新不會砍掉進行中的掃描。
+      terminationGracePeriodSeconds: 3600
       volumes:
         - name: media
           persistentVolumeClaim:
             claimName: media
+---
+# 定期回收「worker 已經不在了」的掃描。
+#
+# 為什麼要有：worker pod 被 SIGKILL 時（節點驅逐、OOM、grace period 用盡），
+# run_scan_job 的任何 except 都跑不到，ScanJob 會永遠停在 crawling／scanning，
+# 預扣的 coin 永遠不退。terminationGracePeriodSeconds 讓正常 rollout 不再觸發，
+# 但擋不住 OOM 與節點故障，所以仍需要這道回收。
+#
+# 用 CronJob 而不是 Celery beat：專案沒有 beat，為一支維護作業多開常駐程序不划算；
+# 而且 worker 全掛時 CronJob 仍跑得動——正好是最需要它的時候。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reap-stale-scans
+  namespace: argus
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reap
+              image: shijie85/argus-backend:latest
+              command:
+                ["/app/.venv/bin/python", "manage.py", "reap_stale_scans"]
+              envFrom:
+                - configMapRef:
+                    name: argus-config
+                - secretRef:
+                    name: argus-secret
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
