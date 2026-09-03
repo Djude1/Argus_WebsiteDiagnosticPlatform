@@ -390,6 +390,21 @@ def _summary(doc, data, ch):
             chip_run(p, r[1])
         else:
             add_run(p, **r)
+    # 分類佔比：回答「問題集中在哪一類」，與上方「各分類分數」的「這一類做得多好」
+    # 互補。圖上只標得下較寬的分段，數量一律由下方文字圖例補齊。
+    if "category_share" in ch:
+        h2(doc, "問題集中在哪些分類")
+        add_image(doc, ch["category_share"], 5.5)
+        cat_counts = {}
+        for f in data["findings"]:
+            cat_counts[f["category"]] = cat_counts.get(f["category"], 0) + 1
+        legend = add_para(doc, after=8)
+        for name, n in [(c["name"], cat_counts.get(c["name"], 0)) for c in s["categories"]]:
+            if not n:
+                continue
+            add_run(legend, "■ ", size=9, color=T.category_color(name))
+            add_run(legend, f"{name} {n} 項　", size=9, color=T.GREY)
+
     # trend
     if s.get("previous") and "trend" in ch:
         h2(doc, "與前次掃描比較")

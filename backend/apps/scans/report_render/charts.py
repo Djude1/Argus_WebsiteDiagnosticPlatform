@@ -100,6 +100,33 @@ def severity_bar(counts, out):
     return out
 
 
+def category_share(ordered_counts, out):
+    """ordered_counts: [(顯示名稱, 數量), ...]，畫成單一條堆疊佔比。
+
+    回答的是「問題集中在哪一類」，與上方「各分類分數」的「這一類做得多好」互補。
+    佔比小的分段塞不下數字，數量由 report.py 在圖下方以文字圖例呈現。
+    """
+    fig, ax = plt.subplots(figsize=(5.6, 0.78), dpi=300)
+    total = sum(n for _, n in ordered_counts) or 1
+    left = 0
+    for name, n in ordered_counts:
+        if n == 0:
+            continue
+        ax.barh(0, n, left=left, color=_hex(T.category_color(name)),
+                height=0.6, edgecolor="white", linewidth=2)
+        if n / total >= 0.08:      # 太窄的分段放不下字，留白比擠成一團好讀
+            ax.text(left + n / 2, 0, f"{n}", ha="center", va="center",
+                    fontproperties=_bold, fontsize=13, color="white")
+        left += n
+    ax.set_xlim(0, total)
+    ax.set_ylim(-0.5, 0.5)
+    ax.axis("off")
+    plt.tight_layout(pad=0.1)
+    plt.savefig(out, transparent=True, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+    return out
+
+
 def trend_line(prev, curr, out):
     """prev/curr: {date, score}. Draws a 2-point sparkline."""
     fig, ax = plt.subplots(figsize=(2.4, 1.5), dpi=300)
@@ -140,6 +167,17 @@ def build_all(data, workdir):
         "categories": category_bars(summary["categories"], p("chart_categories.png")),
         "severity": severity_bar(counts, p("chart_severity.png")),
     }
+    # 分類佔比同樣由 findings 推導，不必擴充 schema。順序沿用 summary.categories，
+    # 與上方的分類分數長條對齊，讀者兩張圖之間不用重新找對應。
+    cat_counts = {}
+    for f in data["findings"]:
+        cat_counts[f["category"]] = cat_counts.get(f["category"], 0) + 1
+    ordered = [(c["name"], cat_counts.get(c["name"], 0)) for c in summary["categories"]]
+    for name, n in sorted(cat_counts.items()):     # findings 帶了但 summary 沒有的分類
+        if not any(name == existing for existing, _ in ordered):
+            ordered.append((name, n))
+    if any(n for _, n in ordered):
+        paths["category_share"] = category_share(ordered, p("chart_cat_share.png"))
     if summary.get("previous"):
         paths["trend"] = trend_line(
             summary["previous"],

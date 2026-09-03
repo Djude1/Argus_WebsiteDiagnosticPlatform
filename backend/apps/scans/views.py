@@ -243,6 +243,36 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             raise Http404("截圖檔案不存在。")
         return FileResponse(screenshot_path.open("rb"), content_type="image/png")
 
+    @action(detail=True, methods=["get"], url_path="finding-stats")
+    def finding_stats(self, request, pk=None):
+        """該掃描的 finding 計數（依分類與嚴重度）。
+
+        前端的「各類別 finding 佔比」與嚴重度長條原本是用 /findings/ 抓回來的清單
+        自己數的，但那個端點有分頁（預設 100 筆）。findings 一多就只算到第一頁：
+        NTUB 那種 37 頁的站，前 100 筆幾乎被高 priority 的 SEO 佔滿，排序靠後的
+        AEO 直接從圖上消失，而顯示的百分比其實是「前 100 筆的佔比」而非全體。
+
+        計數必須由 DB 算。撈更多筆只是把上限往後推（max_page_size 是 500），
+        而且把整份 finding 送到前端只為了數數量本來就浪費。
+        """
+        scan_job = self.get_object()
+        findings = Finding.objects.filter(scan_job=scan_job)
+
+        def _counts(field: str) -> dict:
+            # order_by() 清掉 Meta.ordering：帶著排序做 values().annotate() 在部分
+            # Django 版本會把排序欄位帶進 GROUP BY，讓每列自成一組。
+            return {
+                row[field]: row["n"]
+                for row in findings.order_by().values(field).annotate(n=Count("id"))
+            }
+
+        return Response({
+            "total": findings.count(),
+            "by_category": _counts("category"),
+            "by_severity": _counts("severity"),
+        })
+
+
     @action(detail=True, methods=["get"])
     def report(self, request, pk=None):
         scan_job = self.get_object()

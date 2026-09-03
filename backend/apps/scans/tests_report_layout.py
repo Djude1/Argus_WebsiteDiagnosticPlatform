@@ -112,6 +112,34 @@ class ReportLayoutTests(TestCase):
                     ]
         self.assertGreater(len(coloured), 0)
 
+    def test_report_shows_which_categories_the_problems_cluster_in(self):
+        """報告要能回答「問題集中在哪一類」，不只是「哪一類做得多好」。
+
+        前端一直有這張佔比圖，報告沒有。兩張圖互補：分類分數看體質，
+        佔比看問題分佈。
+        """
+        for index in range(3):
+            Finding.objects.create(
+                scan_job=self.scan_job, page=None, severity="low",
+                category=Finding.Category.SEO, title=f"SEO 問題 {index}",
+                description="d", remediation="r", rule_id=f"seo-{index}",
+                ai_handoff_prompt="p", priority_score=25.0,
+            )
+
+        text = self._text()
+
+        self.assertIn("問題集中在哪些分類", text)
+        self.assertIn("SEO 搜尋引擎最佳化 3 項", text)
+
+    def test_category_share_uses_the_same_colours_as_the_dashboard(self):
+        """同一份掃描在畫面與報告上，分類顏色必須一致。"""
+        from apps.scans.report_render import theme
+
+        self.assertEqual(theme.category_color("SEO 搜尋引擎最佳化"), "6366F1")
+        self.assertEqual(theme.category_color("資訊安全"), "EF4444")
+        # 未知分類不得炸掉，退回中性灰
+        self.assertEqual(theme.category_color("未來的新分類"), theme.GREY)
+
     # --- C 可讀性與術語 -----------------------------------------------
     def test_internal_identifiers_are_not_shown_in_the_findings_body(self):
         """rule_engine / text 這種內部欄位值對使用者零意義。"""

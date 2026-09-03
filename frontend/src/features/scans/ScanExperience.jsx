@@ -1024,6 +1024,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
 function FindingsWorkspace({ scan }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [findings, setFindings] = useState([]);
+  const [findingStats, setFindingStats] = useState(null);
   const [pages, setPages] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -1049,13 +1050,15 @@ function FindingsWorkspace({ scan }) {
     let cancelled = false;
     async function loadDetails() {
       try {
-        const [findingsResponse, pagesResponse] = await Promise.all([
+        const [findingsResponse, pagesResponse, statsResponse] = await Promise.all([
           api.get(`/findings/?scan_id=${scan.id}`),
           api.get(`/pages/?scan_id=${scan.id}`),
+          api.get(`/scans/${scan.id}/finding-stats/`),
         ]);
         if (cancelled) return;
         setFindings(findingsResponse.data.results || findingsResponse.data);
         setPages(pagesResponse.data.results || pagesResponse.data);
+        setFindingStats(statsResponse.data);
       } catch {
         // polling 會在下一輪重試，這裡不需額外處理
       }
@@ -1144,23 +1147,31 @@ function FindingsWorkspace({ scan }) {
     return { perPage: counts, siteLevel };
   }, [findings]);
 
-  // 嚴重度統計（給長條圖）
+  // 嚴重度與分類統計一律用後端算好的真實計數。
+  //
+  // 不能用 findings 陣列自己數：那是 /findings/ 的第一頁（預設 100 筆）。掃描中
+  // 總數 < 100 時看起來正常，完成後 findings 一多就只算到第一頁——NTUB 那種 37 頁
+  // 的站，前 100 筆幾乎被高 priority 的 SEO 佔滿，AEO 直接從圖上消失，而顯示的
+  // 百分比其實是「前 100 筆的佔比」而非全體。
+  //
+  // 計數尚未載回時退回本地計算，讓圖表在第一次 render 就有東西，不閃空白。
   const severityTotals = useMemo(() => {
+    if (findingStats?.by_severity) return findingStats.by_severity;
     const totals = {};
     for (const f of findings) {
       totals[f.severity] = (totals[f.severity] || 0) + 1;
     }
     return totals;
-  }, [findings]);
+  }, [findingStats, findings]);
 
-  // 各類別 finding 數（給 Top Actions 堆疊比例條）
   const categoryTotals = useMemo(() => {
+    if (findingStats?.by_category) return findingStats.by_category;
     const totals = {};
     for (const f of findings) {
       totals[f.category] = (totals[f.category] || 0) + 1;
     }
     return totals;
-  }, [findings]);
+  }, [findingStats, findings]);
 
   const completed = scan.status === "completed";
 
@@ -1284,7 +1295,7 @@ function FindingsWorkspace({ scan }) {
       )}
 
       {/* 整體 viz：嚴重度長條 + 各類別佔比堆疊條 — 完成或進行中皆顯示（進行中是部分資料） */}
-      {findings.length > 0 && (
+      {(findingStats?.total > 0 || findings.length > 0) && (
         <div className="report-viz">
           <div className="report-viz-block">
             <SeverityBarChart severityTotals={severityTotals} />

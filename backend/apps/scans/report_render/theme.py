@@ -72,6 +72,25 @@ def require_cjk_fonts() -> tuple[str, str]:
         f"已嘗試：{[c[0] for c in _FONT_CANDIDATES]}"
     )
 
+# 分類配色：沿用前端 AppShared.jsx 的 CATEGORY_COLOR，讓同一份掃描在畫面與報告
+# 上顏色一致。payload 給的是顯示名稱（「SEO 搜尋引擎最佳化」「資訊安全」），所以
+# 用前綴比對而不是完全比對，日後改顯示名稱也不會整組失效。
+CATEGORY_COLOR = {
+    "SEO": "6366F1",
+    "AEO": "A855F7",
+    "GEO": "06B6D4",
+    "資訊安全": "EF4444",
+    "使用者體驗": "10B981",
+}
+
+
+def category_color(name: str) -> str:
+    for key, colour in CATEGORY_COLOR.items():
+        if name.startswith(key):
+            return colour
+    return GREY
+
+
 # Severity levels: label -> chip fill / text colour + ordering weight
 SEVERITY = {
     "嚴重風險": {"fill": "B91C1C", "text": "FFFFFF", "order": 0},
