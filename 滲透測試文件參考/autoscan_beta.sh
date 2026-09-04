@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # TITAN-SEC // Automated Penetration & Vulnerability Assessment Engine
-# Build: v8.2.1-RELEASE (x86_64-hardened)
+# Build: v0.2-BETA (x86_64-hardened)
 # ==============================================================================
 
 RED='\033[0;31m'
