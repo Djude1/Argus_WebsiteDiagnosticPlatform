@@ -1,6 +1,6 @@
 運行環境：Linux
 Shell：bash
 賦予執行權限並啟動：
-Bash
+(Bash)
 chmod +x 檔案名稱.sh
 ./檔案名稱.sh
