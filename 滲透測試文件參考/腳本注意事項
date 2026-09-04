@@ -3,4 +3,4 @@ Shell：bash
 賦予執行權限並啟動：
 Bash
 chmod +x 檔案名稱.sh
-./auto_daemon.sh
+./檔案名稱.sh
