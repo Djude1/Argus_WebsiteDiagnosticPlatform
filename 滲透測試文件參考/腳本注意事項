@@ -4,3 +4,4 @@ Shell：bash
 (Bash)
 chmod +x "檔案名稱.sh"
 ./"檔案名稱.sh"
+"不要打這行、不要打(Bash)"
