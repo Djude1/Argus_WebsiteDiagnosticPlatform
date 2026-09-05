@@ -69,35 +69,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 驗證追蹤文字檔可用 UTF-8 解碼
-        run: |
-          python - <<'PY'
-          import pathlib
-          import subprocess
-
-          suffixes = {".md", ".py", ".js", ".jsx", ".css", ".json", ".toml", ".yml", ".yaml"}
-          files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
-          for value in files:
-              path = pathlib.Path(value)
-              if path.suffix.lower() in suffixes:
-                  path.read_text(encoding="utf-8")
-          PY
-      - name: 驗證 GitOps build workflow 保留完整排隊
-        run: |
-          python - <<'PY'
-          import pathlib
-
-          workflows = (
-              pathlib.Path(".github/workflows/build-backend.yml"),
-              pathlib.Path(".github/workflows/build-frontend.yml"),
-              pathlib.Path(".github/workflows/build-kali-runner.yml"),
-          )
-          for path in workflows:
-              text = path.read_text(encoding="utf-8")
-              assert "group: argus-gitops-cd" in text, f"{path} 缺少共用 GitOps concurrency group"
-              assert "queue: max" in text, f"{path} 未保留完整 pending queue"
-              assert "cancel-in-progress: true" not in text, f"{path} 不得取消執行中的 image build"
-          PY
+      - name: 追蹤文字檔 UTF-8 與 GitOps 排隊契約
+        # 斷言內容在腳本裡，build-backend.yml 跑的是同一支——避免兩邊各自
+        # 演化、其中一邊悄悄變寬鬆而沒有任何東西會告訴我們。
+        run: python3 scripts/verify_repository_text.py
 
   kubernetes-manifests:
     runs-on: ubuntu-latest
@@ -108,32 +83,8 @@ jobs:
           version: v1.32.2
       - name: Kali runner digest 推廣一致性
         run: python3 scripts/promote_kali_image.py --check
-      - name: Render Kustomize manifests
-        run: |
-          kubectl kustomize k8s > "$RUNNER_TEMP/argus-rendered.yaml"
-          test "$(grep -c '^kind: NetworkPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 9
-          grep -q 'name: application-egress-boundary' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: data-deny-egress' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: argus-kali-default-deny' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: argus-kali-runner-egress' "$RUNNER_TEMP/argus-rendered.yaml"
-          # ClientSettingsPolicy：對齊 frontend nginx client_max_body_size 6m
-          test "$(grep -c '^kind: ClientSettingsPolicy$' "$RUNNER_TEMP/argus-rendered.yaml")" -eq 1
-          grep -qE 'maxSize: ?"?6m"?' "$RUNNER_TEMP/argus-rendered.yaml"
-          # application-egress 同時含 IPv4 與 API Server 可接受的 IPv6 global-unicast rule
-          grep -q 'cidr: 0.0.0.0/0' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'cidr: 2000::/3' "$RUNNER_TEMP/argus-rendered.yaml"
-          ! grep -q 'cidr: ::/0' "$RUNNER_TEMP/argus-rendered.yaml"
-          ! grep -q -- '::ffff:0:0/96' "$RUNNER_TEMP/argus-rendered.yaml"
-          # Task 7：Kali namespace 隔離 + fail-closed admission + least-privilege RBAC
-          grep -q 'name: argus-kali$' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: argus-worker-kali-orchestrator' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: kali-runner' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'name: argus-kali-admission$' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'failurePolicy: Fail' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'cidr: 10.96.0.1/32' "$RUNNER_TEMP/argus-rendered.yaml"
-          grep -q 'cidr: 172.16.2.122/32' "$RUNNER_TEMP/argus-rendered.yaml"
-          # Kali disabled sentinel 必須在 admission 與 ConfigMap 同時出現
-          grep -q 'shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$RUNNER_TEMP/argus-rendered.yaml"
+      - name: Render Kustomize manifests 並斷言網路與 admission 契約
+        run: ./scripts/verify_rendered_manifests.sh
 
   runner-unit-tests:
     runs-on: ubuntu-latest

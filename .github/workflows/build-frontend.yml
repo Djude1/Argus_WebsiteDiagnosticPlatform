@@ -34,11 +34,29 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # 與 build-backend.yml 同理：image build 會做 GitOps write-back，直接決定
+      # 正式站跑什麼。frontend/** 與 k8s/** 的混合 push 一樣會走到這裡，所以
+      # manifest 契約也要在建 image 之前驗過。
+      #
+      # 這裡**刻意不跑**後端測試（ruff / test apps / 部署契約 / Kali digest）。
+      # 原則是「每個 build 擋住的是它自己 paths 能弄壞的東西」：本 workflow 只在
+      # frontend/** 變動時觸發，改不到後端程式碼，跑 813 個後端測試只是每次多花
+      # 三分鐘卻不增加任何保護。不是漏掉。
       - name: 推送 image 前執行前端品質閘門
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
+
+      - name: 追蹤文字檔 UTF-8 與 GitOps 排隊契約
+        run: python3 scripts/verify_repository_text.py
+
+      - uses: azure/setup-kubectl@v5.1.0
+        with:
+          version: v1.32.2
+
+      - name: Render Kustomize manifests 並斷言網路與 admission 契約
+        run: ./scripts/verify_rendered_manifests.sh
 
       - name: 設定 Docker Buildx
         uses: docker/setup-buildx-action@v3

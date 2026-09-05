@@ -39,6 +39,11 @@ jobs:
         # 報告測試會實際產生 .docx（含 matplotlib 圖表），缺字型會在畫圖時
         # RuntimeError。與 Dockerfile 裝的是同一個套件。
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+      # 這一段必須與 Quality Gate 等價。image build 會做 GitOps write-back，
+      # 直接決定正式站跑什麼——閘門若是 Quality Gate 的子集，就會出現
+      # 「Quality Gate 會抓到、但 image 照樣建出來並上線」的缺口。
+      # 先前這裡缺 Kali digest、k8s manifest、repository-text 與 runner 單元測試，
+      # 等於 k8s manifest 壞掉時 image 仍建得出來。
       - name: 推送 image 前執行後端品質閘門
         env:
           DJANGO_SECRET_KEY: ci-only-django-secret-key-at-least-32-bytes
@@ -52,6 +57,20 @@ jobs:
           uv run python backend/manage.py makemigrations --check --dry-run
           uv run python -m unittest discover -s tests
           uv run python backend/manage.py test apps
+          uv run python scripts/promote_kali_image.py --check
+
+      - name: 追蹤文字檔 UTF-8 與 GitOps 排隊契約
+        run: python3 scripts/verify_repository_text.py
+
+      - name: kali-runner 單元測試（純 Python，不需 Docker）
+        run: python3 -m unittest discover -s kali-runner/tests
+
+      - uses: azure/setup-kubectl@v5.1.0
+        with:
+          version: v1.32.2
+
+      - name: Render Kustomize manifests 並斷言網路與 admission 契約
+        run: ./scripts/verify_rendered_manifests.sh
 
       # buildx：啟用 layer cache 與進階 build 功能
       - name: 設定 Docker Buildx
