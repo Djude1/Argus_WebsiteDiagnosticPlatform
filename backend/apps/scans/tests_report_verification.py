@@ -180,20 +180,24 @@ class ReportCacheTests(TestCase):
         self.assertEqual(record.renderer_version, RENDERER_VERSION)
 
     def test_rebuild_keeps_the_previous_hash_verifiable(self):
-        """重產換掉指紋，但先前交付出去的副本不能因此被判成偽造。"""
-        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
-        delivered = ReportVerification.objects.get(scan_job=self.scan_job).content_sha256
+        """重產換掉指紋，但先前交付出去的副本不能因此被判成偽造。
 
-        # 換掉檔案內容，確保重產一定產生不同指紋（同一秒內重產可能位元組相同）
-        report_output_path(self.scan_job).write_bytes(b"tampered")
+        用哨兵指紋而不是真的去比對「重產後指紋有沒有變」：兩次產生若落在
+        同一秒，報告裡的產生時間字串相同，位元組會完全一致、指紋當然不變。
+        本機夠慢所以看不出來，CI 快就會紅——測試會時綠時紅。這裡要驗的是
+        「舊指紋有沒有被完整搬進歷史」，與位元組變不變無關。
+        """
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        delivered = "d" * 64  # 絕不可能等於任何檔案的真實 SHA-256
         ReportVerification.objects.filter(scan_job=self.scan_job).update(
             renderer_version=0, content_sha256=delivered
         )
+
         self.client.get(f"/api/scans/{self.scan_job.id}/report/")
 
         record = ReportVerification.objects.get(scan_job=self.scan_job)
-        self.assertNotEqual(record.content_sha256, delivered)
         self.assertIn(delivered, record.previous_sha256)
+        self.assertNotEqual(record.content_sha256, delivered)
 
     def test_verify_endpoint_accepts_a_superseded_hash(self):
         """收件者拿舊版報告來查驗，仍要回答「是真的」。"""
