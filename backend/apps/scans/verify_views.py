@@ -31,11 +31,25 @@ def verify_report(request, report_number: str):
         )
 
     scan_job = record.scan_job
-    return Response({
+    payload = {
         "report_number": record.report_number,
         "scan_target": scan_job.normalized_url,
         "scanned_at": scan_job.completed_at.isoformat() if scan_job.completed_at else None,
         "generated_at": record.generated_at.isoformat(),
         "overall_score": scan_job.overall_score,
         "content_sha256": record.content_sha256,
-    })
+    }
+
+    # 收件者可以帶自己算的雜湊來問「我這份是不是真的」。比對範圍必須包含歷史
+    # 雜湊：排版升級後報告會重產，只比對最新雜湊會把先前正常交付的副本誤判成
+    # 偽造。歷史雜湊本身不列進回應——揭露一整串雜湊對驗證沒有幫助，只會讓人
+    # 誤以為要逐一比對。
+    submitted = (request.query_params.get("content_sha256") or "").strip().lower()
+    if submitted:
+        known = {record.content_sha256.lower()} | {
+            h.lower() for h in (record.previous_sha256 or [])
+        }
+        payload["matches"] = submitted in known
+        payload["is_latest_version"] = submitted == record.content_sha256.lower()
+
+    return Response(payload)

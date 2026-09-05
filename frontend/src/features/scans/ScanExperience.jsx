@@ -1021,6 +1021,34 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
 // 互動報告（含進度提示、URL-driven 選擇）
 // ============================================================
 
+// DRF 清單端點一次只回一頁（預設 100 筆）。findings 與 pages 在這個畫面上都被
+// 當成「全部」使用——截圖疊圖、每頁 finding 計數、頁籤數字、清單本身——只拿
+// 第一頁會讓排序靠後的資料整段消失，而且是**靜默**消失：畫面上沒有任何跡象
+// 顯示被截斷，看起來就像那些問題不存在。
+//
+// page_size 直接要到後端上限（ScansPagination.max_page_size = 500），多數掃描
+// 一次取完、請求數與過去相同；超過 500 筆才會有第二次往返。
+//
+// 不使用回應裡的 next 絕對網址：那是 DRF 依請求標頭組出來的，經過反向代理時
+// scheme/host 可能與前端實際使用的不一致。自己遞增 page 參數比較可靠。
+const LIST_PAGE_SIZE = 500;
+const MAX_LIST_PAGES = 20; // 防呆上限：異常巨大的掃描不該把瀏覽器記憶體吃光
+
+async function fetchAllResults(path) {
+  const separator = path.includes("?") ? "&" : "?";
+  const items = [];
+  for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
+    const { data } = await api.get(
+      `${path}${separator}page_size=${LIST_PAGE_SIZE}&page=${page}`,
+    );
+    // 端點若未啟用分頁會直接回陣列，此時第一次就取完了
+    if (Array.isArray(data)) return data;
+    items.push(...(data.results || []));
+    if (!data.next) break;
+  }
+  return items;
+}
+
 function FindingsWorkspace({ scan }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [findings, setFindings] = useState([]);
@@ -1050,14 +1078,14 @@ function FindingsWorkspace({ scan }) {
     let cancelled = false;
     async function loadDetails() {
       try {
-        const [findingsResponse, pagesResponse, statsResponse] = await Promise.all([
-          api.get(`/findings/?scan_id=${scan.id}`),
-          api.get(`/pages/?scan_id=${scan.id}`),
+        const [allFindings, allPages, statsResponse] = await Promise.all([
+          fetchAllResults(`/findings/?scan_id=${scan.id}`),
+          fetchAllResults(`/pages/?scan_id=${scan.id}`),
           api.get(`/scans/${scan.id}/finding-stats/`),
         ]);
         if (cancelled) return;
-        setFindings(findingsResponse.data.results || findingsResponse.data);
-        setPages(pagesResponse.data.results || pagesResponse.data);
+        setFindings(allFindings);
+        setPages(allPages);
         setFindingStats(statsResponse.data);
       } catch {
         // polling 會在下一輪重試，這裡不需額外處理
@@ -1301,7 +1329,14 @@ function FindingsWorkspace({ scan }) {
             <SeverityBarChart severityTotals={severityTotals} />
           </div>
           <div className="report-viz-block">
+            {/* 標題要講清楚在數什麼。這裡數的是原始筆數：同一個問題出現在 37 個
+                頁面就算 37 筆，與下方 finding 清單對得上。報告裡的同名圖數的是
+                合併重複後的項目數，兩個數字都對、但回答的是不同問題，沒標註就會
+                讓人以為其中一邊算錯了。 */}
             <h4 className="bar-chart-header-h4">各類別 finding 佔比</h4>
+            <p className="text-[11px] text-slate-400 -mt-1 mb-2">
+              依原始筆數計算（同一問題出現在多個頁面會分別計入）
+            </p>
             <StackedBar
               data={Object.keys(CATEGORY_LABELS).map((cat) => ({
                 label: CATEGORY_LABELS[cat],

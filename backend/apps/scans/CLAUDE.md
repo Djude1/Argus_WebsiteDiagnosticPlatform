@@ -184,10 +184,12 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 |---|---|
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
-| **`views.py` 的 report action 必須用快取** | 重新產生會改變內容雜湊，讓已交付的副本在查驗頁對不上。必須「檔案存在 **且** 有防偽紀錄」才視為可重用——舊版留在磁碟上、沒有編號的報告要重產 |
-| **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊 |
+| **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
+| **改動 `.docx` 版面就要把 `RENDERER_VERSION` +1** | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
+| **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
-報告檔案有保留期限：`manage.py cleanup_reports --older-than-days N`（預設 180，支援 `--dry-run`）。**只刪檔案、不刪 `ReportVerification`**——收件者手上的報告不會因為伺服器清檔就失效，編號必須繼續查得到。代價是清掉後若重新下載會產生新的一版、指紋隨之更新，所以保留期限要設得比「使用者還可能拿舊報告來對」的時間長。
+報告檔案有保留期限：`manage.py cleanup_reports --older-than-days N`（預設 180，支援 `--dry-run`）。**只刪檔案、不刪 `ReportVerification`**——收件者手上的報告不會因為伺服器清檔就失效，編號必須繼續查得到。清掉後若重新下載會產生新的一版、指紋隨之更新，但舊指紋會留在 `previous_sha256`，舊副本仍驗得過。排程見 `k8s/04-backend.yaml` 的 `CronJob/cleanup-reports`（每日 20:00 UTC）與 `CronJob/cleanup-screenshots`（20:30 UTC）——**兩者都必須掛 media PVC**，沒掛就是在容器的空目錄裡掃，每天回報「刪除 0 個」卻什麼也沒清。
 
 附錄小節用 `_SectionNumber` 動態編號：名詞解釋、技術索引、頁面清單都會在沒資料時整段消失，寫死號碼會跳號。
 
@@ -195,7 +197,7 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 與前次掃描比較**只比對同一位使用者的掃描**：同一個網址可能被不同人掃過，拿別人的當「前次」既不合理也會洩漏他人掃描的存在。
 
-封面 logo 走「有就用、沒有就用字標」：偵測 `frontend/public/argus-logo.png`，存在才 `add_picture`。**刻意不引入 SVG 轉檔套件**（`cairosvg` 有系統函式庫相依，會拖累 CI 與 Docker build）。
+封面 logo 走「有就用、沒有就用字標」：偵測 `backend/apps/scans/report_assets/`，存在才 `add_picture`。**必須放在 `backend/` 之內**——backend image 只 `COPY backend ./backend`，放 `frontend/public/` 時 `exists()` 一律 False，封面會靜默退回純文字，本機與測試都看不出來。**刻意不引入 SVG 轉檔套件**（`cairosvg` 有系統函式庫相依，會拖累 CI 與 Docker build）。
 
 前端查驗頁在 `frontend/src/features/public/PublicPages.jsx::VerifyReportPage`，路由 `/verify` 與 `/verify/:reportNumber`。
 

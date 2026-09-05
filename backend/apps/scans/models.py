@@ -240,6 +240,11 @@ class ReportVerification(models.Model):
     轉寄存檔，重新產生時換編號會讓已流出的副本失效。content_sha256 是檔案內容
     的雜湊，收件者可自行 sha256sum 比對；報告本身不印雜湊（會造成循環相依），
     只印編號，雜湊由查驗頁提供。
+
+    renderer_version 記錄產生這份檔案時的排版版本，排版升級後 views.py 據此重產。
+    重產會換掉 content_sha256，先前發出去的副本就對不上了——所以舊雜湊一律留進
+    previous_sha256，查驗端點比對時把歷史一起算進去。少了這一步，「讓舊掃描也能
+    拿到新排版」就會以「把已交付報告打成偽造品」為代價。
     """
 
     scan_job = models.OneToOneField(
@@ -251,6 +256,8 @@ class ReportVerification(models.Model):
     content_sha256 = models.CharField(max_length=64)
     generated_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    renderer_version = models.PositiveIntegerField(default=1)
+    previous_sha256 = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-generated_at"]

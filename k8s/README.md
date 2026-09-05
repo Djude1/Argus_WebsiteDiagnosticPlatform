@@ -25,7 +25,7 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 | `01-namespace-config.yaml` | `argus` namespace + 非機密環境變數 ConfigMap |
 | `02-secret.example.yaml` | 機密**範本**（複製成 `secret.yaml` 填真值，勿 commit） |
 | `03-data.yaml` | PostgreSQL（StatefulSet）、Redis、共享 `media` PVC（RWX/NFS） |
-| `04-backend.yaml` | migrate Job + `web`（Gunicorn ×2）+ `worker`（Celery ×2） |
+| `04-backend.yaml` | migrate Job + `web`（Gunicorn ×2）+ `worker`（Celery ×2） + 三支維護 CronJob：`reap-stale-scans`（每 15 分，回收被 SIGKILL 中斷的掃描並退點數）、`cleanup-reports`（每日 20:00 UTC，保留 180 天）、`cleanup-screenshots`（20:30 UTC，保留 90 天）。兩支 cleanup **必須掛 media PVC**，沒掛就是在空目錄裡掃、每天回報「刪除 0 個」 |
 | `05-frontend.yaml` | nginx 前端（ConfigMap 覆蓋 nginx.conf）×2 + ClusterIP |
 | `06-gateway.yaml` | Gateway API 對外入口（NGINX Gateway Fabric，class `nginx`） |
 | `07-network-policies.yaml` | web/data ingress 白名單與 frontend/migrate/application/data egress 邊界（含 IPv4+IPv6 公網 allow / 私網 deny、worker 對 API server 的精確 /32 egress、`argus-kali` namespace 預設全拒 + runner 專屬 DNS+公網 80/443 邊界） |

@@ -73,8 +73,16 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
             )
             if d
         ]
+        # 按名稱取，不要取「第一個 CronJob」：manifest 裡已經有多個 CronJob，
+        # 位置一換這個測試就會靜默改成在驗證別支作業。
         cron = next(
-            (d for d in documents if d["kind"] == "CronJob"), None
+            (
+                d
+                for d in documents
+                if d["kind"] == "CronJob"
+                and d["metadata"]["name"] == "reap-stale-scans"
+            ),
+            None,
         )
 
         self.assertIsNotNone(cron, "缺少回收卡住掃描的 CronJob")
@@ -118,6 +126,53 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
         self.assertIn("- 2001:db8::/32", manifest)
         self.assertIn("- 2002::/16", manifest)
         self.assertIn("- 3fff::/20", manifest)
+
+
+    def test_cleanup_cronjobs_mount_the_media_volume(self):
+        """清理作業刪的是 media PVC 上的檔案，沒掛 volume 就是在空目錄裡掃。
+
+        沒掛載時失敗方式很惡劣：作業每天正常結束、回報「刪除 0 個」，看起來
+        一切健康，實際上 PVC 仍在單調成長，直到寫截圖失敗才會爆出來。
+        """
+        import yaml
+
+        documents = [
+            d
+            for d in yaml.safe_load_all(
+                (Path(__file__).resolve().parents[1] / "k8s" / "04-backend.yaml")
+                .read_text(encoding="utf-8")
+            )
+            if d
+        ]
+        crons = {
+            d["metadata"]["name"]: d for d in documents if d["kind"] == "CronJob"
+        }
+
+        for name, command in (
+            ("cleanup-reports", "cleanup_reports"),
+            ("cleanup-screenshots", "cleanup_screenshots"),
+        ):
+            with self.subTest(cronjob=name):
+                self.assertIn(name, crons, f"缺少 {name} CronJob")
+                pod = crons[name]["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+                container = pod["containers"][0]
+
+                self.assertEqual(container["command"][:3], [
+                    "/app/.venv/bin/python", "manage.py", command,
+                ])
+                # 保留天數必須寫在 manifest：保留政策是維運決策，不該藏在預設值裡
+                self.assertIn("--older-than-days", container["command"])
+
+                claims = [
+                    v.get("persistentVolumeClaim", {}).get("claimName")
+                    for v in pod.get("volumes", [])
+                ]
+                self.assertIn("media", claims, f"{name} 未掛載 media PVC")
+                mounts = [
+                    m["mountPath"] for m in container.get("volumeMounts", [])
+                ]
+                self.assertIn("/app/backend/media", mounts)
+                self.assertEqual(crons[name]["spec"]["concurrencyPolicy"], "Forbid")
 
 
 if __name__ == "__main__":

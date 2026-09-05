@@ -229,3 +229,111 @@ spec:
                 limits:
                   cpu: 500m
                   memory: 512Mi
+---
+# 定期清理逾期的報告檔與截圖。
+#
+# 為什麼要有：media PVC 只有 5Gi，而每次掃描都會寫入截圖（每頁一張）與報告
+# .docx。沒有清理的話容量是單調成長的，滿了之後掃描會在寫截圖時失敗——那時
+# 才處理就是線上事故。兩支 management command 早就寫好了，只是從來沒有東西
+# 去呼叫它們。
+#
+# 必須掛 media PVC：這兩支是刪檔案的，沒掛就是在容器自己的空目錄裡掃，什麼都
+# 找不到、每天回報「刪除 0 個」，看起來一切正常。
+#
+# 排程用 UTC（CronJob 預設，未指定 timeZone）。20:00 UTC = 隔日 04:00 台北，
+# 避開白天流量；兩支錯開 30 分鐘，不要同時對 NFS 大量 unlink。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-reports
+  namespace: argus
+spec:
+  schedule: "0 20 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: shijie85/argus-backend:latest
+              # 保留天數寫在這裡而不是靠預設值：保留政策是維運決策，應該讓
+              # 看 manifest 的人直接看到，不必去翻 Python 原始碼。
+              command:
+                [
+                  "/app/.venv/bin/python",
+                  "manage.py",
+                  "cleanup_reports",
+                  "--older-than-days",
+                  "180",
+                ]
+              envFrom:
+                - configMapRef:
+                    name: argus-config
+                - secretRef:
+                    name: argus-secret
+              volumeMounts:
+                - name: media
+                  mountPath: /app/backend/media
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: media
+              persistentVolumeClaim:
+                claimName: media
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-screenshots
+  namespace: argus
+spec:
+  schedule: "30 20 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: shijie85/argus-backend:latest
+              command:
+                [
+                  "/app/.venv/bin/python",
+                  "manage.py",
+                  "cleanup_screenshots",
+                  "--older-than-days",
+                  "90",
+                ]
+              envFrom:
+                - configMapRef:
+                    name: argus-config
+                - secretRef:
+                    name: argus-secret
+              volumeMounts:
+                - name: media
+                  mountPath: /app/backend/media
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: media
+              persistentVolumeClaim:
+                claimName: media

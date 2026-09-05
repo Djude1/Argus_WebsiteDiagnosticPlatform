@@ -274,3 +274,31 @@ class ReportLayoutTests(TestCase):
     def test_glossary_omits_terms_not_present_in_this_report(self):
         """詞彙表要對應這份報告的內容，不是貼一份固定清單。"""
         self.assertNotIn("DNSSEC", self._text())
+
+    # --- 分數與佔比的口徑說明 ---------------------------------------
+    def test_a_perfect_category_score_is_qualified_not_claimed_as_risk_free(self):
+        """100 分只代表「檢查的項目都通過」，不代表該面向沒有風險。
+
+        setUp 的 AEO 是 100 分且沒有任何 AEO finding。不加說明時，不熟術語的
+        讀者會把它讀成「AEO 已經完美」，但掃描器能證明的只有「我們檢查過的
+        項目沒發現問題」。分數本身不動——把 100 改成 95 或 98 都是憑空取的
+        數字，沒有依據——改成把限制講清楚。
+        """
+        text = self._text()
+
+        self.assertIn("為滿分", text)
+        self.assertIn("而不是該面向已無任何風險", text)
+
+    def test_a_category_with_findings_is_not_labelled_perfect(self):
+        """有 finding 的分類不該出現滿分說明，否則說明會變成雜訊。"""
+        self.scan_job.category_scores = {"security": 39}
+        self.scan_job.save(update_fields=["category_scores"])
+
+        self.assertNotIn("為滿分", self._text())
+
+    def test_category_share_states_that_counts_are_deduplicated(self):
+        """報告數合併後的項目數、網頁數原始筆數，不標註會被當成其中一邊算錯。"""
+        text = self._text()
+
+        self.assertIn("問題集中在哪些分類", text)
+        self.assertIn("合併重複後的項目數", text)

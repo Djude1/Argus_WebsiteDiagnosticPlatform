@@ -23,7 +23,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.scans.models import Finding, ReportVerification, ScanJob
-from apps.scans.report_render import generate_report
+from apps.scans.report_render import RENDERER_VERSION, generate_report
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.redaction import redact_pii_in_text
 
@@ -775,12 +775,23 @@ def build_scan_report(scan_job: ScanJob) -> str:
 
     # 雜湊算完才寫防偽紀錄：報告本身不印雜湊（印了就循環相依——雜湊要涵蓋整份
     # 檔案，而檔案裡又要有雜湊），收件者拿編號到查驗頁取得雜湊自行比對。
+    #
+    # 重產時舊雜湊要留下來。排版升級會讓同一次掃描產出不同位元組的檔案，若直接
+    # 覆蓋 content_sha256，先前已經寄出去的那份報告在查驗頁就會被判定成「對不上」
+    # ——等於我們自己把交付過的正本變成偽造品。歷史只留雜湊，不留檔案。
+    content_sha256 = sha256(output_path.read_bytes()).hexdigest()
+    existing = ReportVerification.objects.filter(scan_job=scan_job).first()
+    history = list(existing.previous_sha256 or []) if existing else []
+    if existing and existing.content_sha256 not in (content_sha256, *history):
+        history.append(existing.content_sha256)
     ReportVerification.objects.update_or_create(
         scan_job=scan_job,
         defaults={
             "report_number": payload["meta"]["report_id"],
-            "content_sha256": sha256(output_path.read_bytes()).hexdigest(),
+            "content_sha256": content_sha256,
             "generated_at": generated_at,
+            "renderer_version": RENDERER_VERSION,
+            "previous_sha256": history,
         },
     )
     return str(output_path)

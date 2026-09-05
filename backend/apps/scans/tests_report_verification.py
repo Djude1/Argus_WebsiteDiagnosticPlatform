@@ -19,6 +19,7 @@ from docx import Document
 from rest_framework.test import APIClient
 
 from apps.scans.models import Finding, ReportVerification, ScanJob
+from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
 
 User = get_user_model()
@@ -155,3 +156,79 @@ class ReportCacheTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(path.exists())
+
+    def test_stale_renderer_version_forces_a_rebuild(self):
+        """排版升級後，既有掃描下載到的必須是新版面。
+
+        沒有這道判斷時，掃描一旦產過報告就永遠鎖在舊排版——使用者實際踩過：
+        修好圖表後重新下載舊掃描的報告，拿到的是沒有圖表的快取檔。
+        """
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        ReportVerification.objects.filter(scan_job=self.scan_job).update(
+            renderer_version=0
+        )
+
+        with mock.patch(
+            "apps.scans.views.build_scan_report",
+            wraps=build_scan_report,
+        ) as build:
+            response = self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+
+        self.assertEqual(response.status_code, 200)
+        build.assert_called_once()
+        record = ReportVerification.objects.get(scan_job=self.scan_job)
+        self.assertEqual(record.renderer_version, RENDERER_VERSION)
+
+    def test_rebuild_keeps_the_previous_hash_verifiable(self):
+        """重產換掉指紋，但先前交付出去的副本不能因此被判成偽造。"""
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        delivered = ReportVerification.objects.get(scan_job=self.scan_job).content_sha256
+
+        # 換掉檔案內容，確保重產一定產生不同指紋（同一秒內重產可能位元組相同）
+        report_output_path(self.scan_job).write_bytes(b"tampered")
+        ReportVerification.objects.filter(scan_job=self.scan_job).update(
+            renderer_version=0, content_sha256=delivered
+        )
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+
+        record = ReportVerification.objects.get(scan_job=self.scan_job)
+        self.assertNotEqual(record.content_sha256, delivered)
+        self.assertIn(delivered, record.previous_sha256)
+
+    def test_verify_endpoint_accepts_a_superseded_hash(self):
+        """收件者拿舊版報告來查驗，仍要回答「是真的」。"""
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        record = ReportVerification.objects.get(scan_job=self.scan_job)
+        old_hash = "a" * 64
+        record.previous_sha256 = [old_hash]
+        record.save(update_fields=["previous_sha256"])
+
+        url = reverse("report-verify", args=[record.report_number])
+        response = APIClient().get(url, {"content_sha256": old_hash})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["matches"])
+        self.assertFalse(response.data["is_latest_version"])
+
+    def test_verify_endpoint_rejects_an_unknown_hash(self):
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        record = ReportVerification.objects.get(scan_job=self.scan_job)
+
+        url = reverse("report-verify", args=[record.report_number])
+        response = APIClient().get(url, {"content_sha256": "b" * 64})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["matches"])
+
+    def test_verify_endpoint_never_lists_historical_hashes(self):
+        """揭露一整串指紋對驗證沒有幫助，只會讓人以為要逐一比對。"""
+        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        record = ReportVerification.objects.get(scan_job=self.scan_job)
+        record.previous_sha256 = ["c" * 64]
+        record.save(update_fields=["previous_sha256"])
+
+        url = reverse("report-verify", args=[record.report_number])
+        response = APIClient().get(url)
+
+        self.assertNotIn("previous_sha256", response.data)
+        self.assertNotIn("c" * 64, str(response.data))

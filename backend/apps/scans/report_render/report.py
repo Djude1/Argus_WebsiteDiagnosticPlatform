@@ -373,6 +373,22 @@ def _summary(doc, data, ch):
     add_image(doc, ch["categories"], 5.5)
     add_para(doc, [{"text": "虛線為 60 / 80 分門檻。分數為各「已評估」分類的平均；標示「未評估」者不納入計算。",
                     "size": 8, "color": T.LIGHTGREY}], after=8)
+    # 滿分不等於「這個面向沒有風險」。掃描器能證明的只有「我們檢查的項目沒發現
+    # 問題」，證明不了完美；100 分直接呈現給不熟術語的讀者，很容易被讀成後者。
+    # 這裡不人為壓低分數——把 100 改成 95 或 98 都是憑空取的數字，沒有依據——
+    # 改成把這個限制明講。分類名稱取自 findings 的 category，與佔比圖同一來源。
+    scored_counts = {}
+    for f in data["findings"]:
+        scored_counts[f["category"]] = scored_counts.get(f["category"], 0) + 1
+    perfect = [
+        c["name"] for c in s["categories"]
+        if c.get("score") == 100 and not scored_counts.get(c["name"])
+    ]
+    if perfect:
+        add_para(doc, [{"text": f"{'、'.join(perfect)} 為滿分，意思是本次檢查的項目全部通過，"
+                                "而不是該面向已無任何風險——Argus 涵蓋的檢查項目有其範圍，"
+                                "範圍見「掃描資訊與範圍」。",
+                        "size": 8, "color": T.LIGHTGREY}], after=8)
     h2(doc, "發現項目分佈")
     add_image(doc, ch["severity"], 5.5)
     counts = {}
@@ -404,6 +420,12 @@ def _summary(doc, data, ch):
                 continue
             add_run(legend, "■ ", size=9, color=T.category_color(name))
             add_run(legend, f"{name} {n} 項　", size=9, color=T.GREY)
+        # 明講數的是什麼。這裡是合併重複後的項目數，與「發現項目」章節一致；
+        # Argus 網頁上的同名圖表數的是原始筆數（同一問題出現在幾個頁面就算幾筆）。
+        # 兩個數字都對，但回答的是不同問題，不標註就會被當成其中一邊算錯。
+        add_para(doc, [{"text": "數量為合併重複後的項目數：同一個問題出現在多個頁面只計一次，"
+                                "與「發現項目」章節的項目數一致。",
+                        "size": 8, "color": T.LIGHTGREY}], after=8)
 
     # trend
     if s.get("previous") and "trend" in ch:
