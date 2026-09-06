@@ -165,6 +165,11 @@ urlpatterns = [
 
     path(
         "api/",
+        include("apps.rebuild.urls"),
+    ),
+
+    path(
+        "api/",
         include("apps.scans.urls"),
     ),
 

@@ -127,8 +127,21 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {(port["protocol"], port["port"]) for port in api_endpoint_rule["ports"]},
             {("TCP", 6443)},
         )
-        # 確保 API egress 只有這兩條 /32，沒有夾帶其它目的
-        self.assertEqual(len(rules), 7)
+        # OpenCode agent server：叢集外主機的單一 /32 + 單一 port。
+        # public egress 那條 except 掉了整段 172.16.0.0/12，少了這條 worker
+        # 連不上，而且症狀是靜默 timeout 不是明確錯誤。
+        opencode_rule = rules[7]
+        self.assertEqual(
+            opencode_rule["to"][0]["ipBlock"]["cidr"], "172.16.2.126/32"
+        )
+        self.assertEqual(
+            {(port["protocol"], port["port"]) for port in opencode_rule["ports"]},
+            {("TCP", 4096)},
+        )
+
+        # 確保 private 網段的 egress 只有上面那三條 /32，沒有夾帶其它目的。
+        # 這個數字要跟著上面的斷言一起改——只把數字加一等於把白名單變成計數器。
+        self.assertEqual(len(rules), 8)
 
     def test_frontend_and_migrate_have_minimal_egress(self):
         frontend_rules = self.policies["frontend-egress-boundary"]["spec"]["egress"]

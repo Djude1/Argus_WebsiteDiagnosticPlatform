@@ -236,6 +236,16 @@ spec:
       ports:
         - protocol: TCP
           port: 6443
+    # OpenCode agent server（叢集外主機 172.16.2.126:4096）。
+    # 只開單一 /32 與單一 port：公網 egress 那條規則 except 掉了 172.16.0.0/12，
+    # 沒有這條 worker 連不上，而且症狀是靜默 timeout、不是明確錯誤。
+    # 不得改成整段 172.16.0.0/12——那等於把 worker 變成內網掃描跳板。
+    - to:
+        - ipBlock:
+            cidr: 172.16.2.126/32
+      ports:
+        - protocol: TCP
+          port: 4096
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

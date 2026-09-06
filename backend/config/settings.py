@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.scans",
     "apps.agent",
+    "apps.rebuild",
     "apps.billing",
     "apps.reviews",
     "apps.admin_api",
@@ -335,6 +336,25 @@ ARGUS_AGENT_MAX_STEPS = int(os.getenv("ARGUS_AGENT_MAX_STEPS", "20"))
 ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 ARGUS_AGENT_STEP_TIMEOUT = int(os.getenv("ARGUS_AGENT_STEP_TIMEOUT", "30"))
 ARGUS_AGENT_ENABLED = env_bool("ARGUS_AGENT_ENABLED", default=False)
+
+# 網頁複刻與優化（OpenCode agent server）
+# 預設關閉：優化階段會呼叫外部 agent 花錢，而且該 agent 在它那台主機上有
+# shell 權限——沒有明確授權就不該讓 worker 打得到它。
+ARGUS_OPENCODE_ENABLED = env_bool("ARGUS_OPENCODE_ENABLED", default=False)
+ARGUS_OPENCODE_BASE_URL = os.getenv("ARGUS_OPENCODE_BASE_URL", "").strip().rstrip("/")
+ARGUS_OPENCODE_USERNAME = os.getenv("ARGUS_OPENCODE_USERNAME", "")
+ARGUS_OPENCODE_PASSWORD = os.getenv("ARGUS_OPENCODE_PASSWORD", "")
+ARGUS_OPENCODE_AGENT = os.getenv("ARGUS_OPENCODE_AGENT", "build")
+# 空字串＝用 server 端的預設模型。要指定就寫 provider/model（例：opencode/big-pickle）。
+ARGUS_OPENCODE_MODEL = os.getenv("ARGUS_OPENCODE_MODEL", "").strip()
+# agent 端 session 的 cwd。這個目錄必須在 agent 主機上**事先存在**——不存在時
+# session 建得起來，但送 prompt 會回 500（實測 opencode 1.18.29）。
+ARGUS_OPENCODE_WORKSPACE = os.getenv("ARGUS_OPENCODE_WORKSPACE", "/tmp/opencode")
+ARGUS_OPENCODE_TIMEOUT = int(os.getenv("ARGUS_OPENCODE_TIMEOUT", "900"))
+# 送進 prompt 的 HTML 上限。超過就截斷並在 prompt 裡明講，避免 agent 自行補完。
+ARGUS_OPENCODE_MAX_SNAPSHOT_BYTES = int(
+    os.getenv("ARGUS_OPENCODE_MAX_SNAPSHOT_BYTES", "400000")
+)
 
 # Phase 3 Kali 主動驗證工具
 # 預設關閉；即使開啟，仍需 scan_mode=active 且 active_testing_authorized=True 才會執行（三重鎖）

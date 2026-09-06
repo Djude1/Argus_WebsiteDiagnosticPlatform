@@ -301,3 +301,4 @@ docker compose up -d --build frontend
 | 文件同步詳細規則 A/B/C | [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md) |
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
+| 網頁複刻與優化（OpenCode agent）啟用／除錯 | [`docs/opencode-site-rebuild.md`](docs/opencode-site-rebuild.md) |

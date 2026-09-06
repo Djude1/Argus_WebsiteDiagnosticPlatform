@@ -47,6 +47,16 @@ data:
   # approvedImage 變數綁定同一個 disabled sentinel digest；argon worker 拿到這個值
   # 後會把 ARGUS_KALI_BACKEND 當作 "disabled"，完全不發 Job。
   # 啟用時（Task 11）：把 RUNNER_IMAGE 換成真 digest，並同時改 VAP variable。
+  # 網頁複刻與優化（OpenCode agent server，跑在叢集外的 172.16.2.126）
+  # 預設 false：優化會呼叫外部 agent 花錢，而且該 agent 在它那台主機上有
+  # shell 權限。要開之前先確認 agent 端已收斂權限（見 docs/opencode-site-rebuild.md）。
+  # 另外 07-network-policies.yaml 必須有對應的 /32 egress，否則 worker 連不上
+  # 而且是靜默 timeout——application-egress-boundary except 掉了整段 172.16.0.0/12。
+  ARGUS_OPENCODE_ENABLED: "false"
+  ARGUS_OPENCODE_BASE_URL: "http://172.16.2.126:4096"
+  ARGUS_OPENCODE_AGENT: "build"
+  # 這個目錄必須在 agent 主機上事先存在；不存在時 session 建得起來但送 prompt 會 500。
+  ARGUS_OPENCODE_WORKSPACE: "/tmp/opencode"
   ARGUS_KALI_ENABLED: "false"
   ARGUS_KALI_BACKEND: "disabled"
   ARGUS_KALI_NAMESPACE: "argus-kali"
