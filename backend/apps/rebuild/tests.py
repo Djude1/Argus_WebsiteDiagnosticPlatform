@@ -139,8 +139,13 @@ class _FakeClient:
     """替身：真的 client 會連外網並花錢，測試不得碰到它。"""
 
     def __init__(self, reply="done", file_content="<html>optimized</html>", error=None,
-                 found_path=None, found_content=None, cost=0.25):
+                 found_path=None, found_content=None, cost=0.25, events=None):
         self.cost = cost
+        self.events = events if events is not None else [
+            {"type": "thinking", "text": "先看看缺什麼"},
+            {"type": "tool", "name": "write", "detail": "out.html"},
+            {"type": "text", "text": "好了"},
+        ]
         self.reply = reply
         self.file_content = file_content
         self.error = error
@@ -159,6 +164,16 @@ class _FakeClient:
         if self.error:
             raise self.error
         self.prompt_text = text
+        return {"text": self.reply, "cost": self.cost, "model_id": "opencode/fake"}
+
+    def stream(self, session_id, text, agent, model="", directory=""):
+        if self.error:
+            raise self.error
+        self.prompt_text = text
+        yield from self.events
+        yield {"type": "done"}
+
+    def session_result(self, session_id):
         return {"text": self.reply, "cost": self.cost, "model_id": "opencode/fake"}
 
     def read_file(self, directory, path):
@@ -517,3 +532,99 @@ class OutputValidationTests(TestCase):
             _FakeClient(file_content="<!DOCTYPE html><html><body>ok</body></html>")
         )
         self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
+
+
+@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
+class TraceTests(TestCase):
+    """agent 的思考過程要能即時呈現給使用者。
+
+    這個功能的價值在「看得到它在做什麼」——優化是黑箱又要收費，沒有過程
+    使用者無法判斷結果是否可信。
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="trace", password="safe-test-password")
+        self.scan_job = _make_scan(self.user)
+        self.page = _make_page(self.scan_job)
+        self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+
+    def _run(self, client):
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            return run_rebuild(self.rebuild)
+
+    def test_trace_records_thinking_tools_and_text(self):
+        rebuild = self._run(_FakeClient())
+        kinds = [e["kind"] for e in rebuild.trace]
+        self.assertIn("thinking", kinds)
+        self.assertIn("tool", kinds)
+        self.assertIn("text", kinds)
+
+    def test_consecutive_fragments_of_the_same_kind_are_merged(self):
+        """推理是逐字吐出來的，不合併會變成幾百則單字，前端沒法看。"""
+        client = _FakeClient(events=[{"type": "thinking", "text": c} for c in "檢查標題"])
+        rebuild = self._run(client)
+        thinking = [e for e in rebuild.trace if e["kind"] == "thinking"]
+        self.assertEqual(len(thinking), 1)
+        self.assertEqual(thinking[0]["text"], "檢查標題")
+
+    def test_trace_is_capped(self):
+        """沒有上限的話，話多的模型能把單列撐到幾 MB，而列表每次 polling 都讀它。"""
+        client = _FakeClient(
+            events=[{"type": "tool", "name": f"t{i}", "detail": ""} for i in range(500)]
+        )
+        rebuild = self._run(client)
+        self.assertLessEqual(len(rebuild.trace), 120)
+
+    def test_trace_is_visible_through_the_api(self):
+        self._run(_FakeClient())
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        row = client.get("/api/rebuilds/").json()["results"][0]
+        self.assertTrue(row["trace"], "前端要靠這個欄位呈現過程")
+
+
+@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
+class FindingScopeTests(TestCase):
+    """送進 prompt 的 findings 必須與前端頁籤看到的一致。
+
+    真實事故：使用者拿到的「優化版」與原稿一模一樣。原因是只取了
+    `page.findings`——站台層級的 finding（page=NULL）全被漏掉，那一頁剛好
+    沒有頁面層級的 finding，prompt 就變成「沒有偵測到問題，請原樣輸出」，
+    agent 照做。前端的頁籤過濾是「這一頁的 + 全站的」，兩邊必須對齊。
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="scope", password="safe-test-password")
+        self.scan_job = _make_scan(self.user)
+        self.page = _make_page(self.scan_job)
+        self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+
+    def _finding(self, title, page):
+        Finding.objects.create(
+            scan_job=self.scan_job, page=page, category=Finding.Category.SEO,
+            severity=Finding.Severity.HIGH, title=title, description="d",
+            remediation="r", rule_id=title, ai_handoff_prompt="p",
+        )
+
+    def _prompt_for(self):
+        client = _FakeClient()
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            run_rebuild(self.rebuild)
+        return client.prompt_text
+
+    def test_site_wide_findings_are_included(self):
+        self._finding("站台級問題", None)
+        self.assertIn("站台級問題", self._prompt_for())
+
+    def test_page_findings_are_included(self):
+        self._finding("本頁問題", self.page)
+        self.assertIn("本頁問題", self._prompt_for())
+
+    def test_other_pages_findings_are_excluded(self):
+        other = Page.objects.create(
+            scan_job=self.scan_job, url="https://example.com/other",
+            final_url="https://example.com/other", origin="example.com",
+            status_code=200, rendered_dom="<html><body>x</body></html>",
+        )
+        self._finding("別頁問題", other)
+        self.assertNotIn("別頁問題", self._prompt_for())

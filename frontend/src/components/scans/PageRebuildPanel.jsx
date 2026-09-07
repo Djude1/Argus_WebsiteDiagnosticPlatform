@@ -4,6 +4,10 @@ import { api } from "../../api";
 
 const POLL_INTERVAL_MS = 5000;
 
+// 思考流的標記。工具呼叫要跟推理視覺上分開——使用者最在意的是「它到底
+// 動了什麼」，那是判斷結果可不可信的依據。
+const TRACE_ICON = { thinking: "◇", tool: "▸", text: "◆" };
+
 // 後端 SiteRebuild.Status 的對應。進行中的三個狀態要繼續 polling。
 const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing"]);
 const STATUS_LABEL = {
@@ -150,6 +154,25 @@ function PageRebuildPanel({ scan, page }) {
             <p className="rebuild-note">
               本次實際扣 {rebuild.coins_charged} 點，未使用的預扣已退回。
             </p>
+          )}
+
+          {rebuild.trace?.length > 0 && (
+            <details className="rebuild-trace" open={running}>
+              <summary>AI 思考過程（{rebuild.trace.length}）</summary>
+              <div className="rebuild-trace-body">
+                {rebuild.trace.map((entry, index) => (
+                  <p
+                    className={`rebuild-trace-line kind-${entry.kind}`}
+                    key={`${entry.kind}-${index}`}
+                  >
+                    <span className="rebuild-trace-icon">
+                      {TRACE_ICON[entry.kind] || "·"}
+                    </span>
+                    {entry.text}
+                  </p>
+                ))}
+              </div>
+            </details>
           )}
 
           {rebuild.error && <p className="rebuild-note">{rebuild.error}</p>}

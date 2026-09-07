@@ -20,6 +20,7 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
             "has_snapshot",
             "has_optimized",
             "coins_charged",
+            "trace",
             "error",
             "created_at",
             "updated_at",

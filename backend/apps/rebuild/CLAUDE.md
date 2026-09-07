@@ -17,7 +17,7 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 | 檔案 | 職責 |
 |---|---|
 | `snapshot.py` | `build_snapshot_html`——確定性複刻，**不呼叫任何模型** |
-| `client.py` | `OpenCodeClient`：session / prompt / 讀檔 / abort 四個端點 |
+| `client.py` | `OpenCodeClient`：session / prompt / **stream(SSE)** / 讀檔 / abort |
 | `prompts.py` | `build_optimization_prompt`——含提示注入的邊界宣告 |
 | `services.py` | `run_rebuild` 流程編排；`agent_workspace()` / `output_relpath()` |
 | `tasks.py` | `run_site_rebuild`（Celery，**不重試**） |
@@ -43,6 +43,13 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
   不要自己再算一次：帳目的唯一事實來源是交易紀錄，兩邊各算遲早對不起來。
 - **`output_relpath()` 必須維持扁平檔名**，不要改回子目錄：子目錄要先建出來，
   而建目錄通常得動用 bash——那會讓 agent 端沒辦法把 bash 關掉。
+- **送進 prompt 的 findings 必須含站台層級（`page IS NULL`）**，與前端頁籤的
+  過濾一致。只取 `page.findings` 會讓 UI 顯示有問題、prompt 卻是空的，agent
+  收到「沒有偵測到問題，請原樣輸出」就照做——使用者拿到與原稿一模一樣的產出。
+- **花費要加總整個 session**（`client.session_result`）。一次執行會產生多則
+  assistant 訊息、各自記 cost，只看最後一則會嚴重低估（實測最後一則只佔 16%）。
+- **`trace` 有筆數與長度上限**，不可移除：前端每 5 秒 polling 一次列表端點，
+  沒有上限的話話多的模型能把單列撐到幾 MB。
 - **不落地 prompt 與模型原始回應**。那裡面是被掃描站的原始碼；`error` 欄位
   只放可公開的一行訊息，連線類例外連訊息都不存（帶內網位址）。
 - `ARGUS_OPENCODE_WORKSPACE` 指的目錄**必須在 agent 主機上事先存在**：

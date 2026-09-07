@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import requests
 from django.conf import settings
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from apps.billing.models import CoinTransaction
 from apps.billing.services import refund_rebuild, settle_rebuild_actual
@@ -20,6 +20,7 @@ from apps.rebuild.client import OpenCodeClient, OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import OPTIMIZED_FILENAME, build_optimization_prompt
 from apps.rebuild.snapshot import build_snapshot_html
+from apps.scans.models import Finding
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,69 @@ def _set_status(rebuild: SiteRebuild, status: str, **fields) -> None:
     rebuild.save(update_fields=["status", "updated_at", *fields.keys()])
 
 
+# 思考流的上限。前端每 5 秒 polling 一次這筆資料，不設限的話單列會膨脹到
+# 讓列表端點變慢。
+_TRACE_MAX_ENTRIES = 120
+_TRACE_MAX_CHARS = 400
+# 每累積這麼多事件才寫一次 DB。逐則寫等於一次任務打上千次 UPDATE。
+_TRACE_FLUSH_EVERY = 8
+
+
+def _append_trace(entries: list, event: dict) -> None:
+    """把串流事件併進 trace，同型別的連續片段合併成一則。
+
+    模型的推理是逐字吐出來的，不合併的話 trace 會變成幾百則單字，
+    前端渲染起來既慢又不可讀。
+    """
+    kind = event.get("type")
+    text = (event.get("text") or "").strip()
+    if kind == "tool":
+        detail = event.get("detail") or ""
+        entries.append(
+            {"kind": "tool", "text": f"{event.get('name', '')} {detail}".strip()[:_TRACE_MAX_CHARS]}
+        )
+    elif kind in ("thinking", "text") and text:
+        if entries and entries[-1]["kind"] == kind:
+            merged = entries[-1]["text"] + event.get("text", "")
+            entries[-1]["text"] = merged[:_TRACE_MAX_CHARS]
+        else:
+            entries.append({"kind": kind, "text": event.get("text", "")[:_TRACE_MAX_CHARS]})
+    del entries[:-_TRACE_MAX_ENTRIES]
+
+
+def _run_streaming(
+    client: OpenCodeClient, rebuild: SiteRebuild, session_id: str, prompt: str, workspace: str
+) -> dict:
+    """跑一次 agent，過程中把思考流寫進 DB 讓前端能即時看到。
+
+    串流只用來呈現進度；最終的回覆文字與花費一律從訊息物件取回——delta 只
+    保證片段，而計費是照 cost 算的，不能用累加的片段去湊。
+    """
+    entries: list = []
+    pending = 0
+    for event in client.stream(
+        session_id,
+        prompt,
+        agent=settings.ARGUS_OPENCODE_AGENT,
+        model=settings.ARGUS_OPENCODE_MODEL,
+        directory=workspace,
+    ):
+        if event["type"] == "error":
+            raise OpenCodeError(event.get("text") or "agent 串流失敗")
+        if event["type"] == "done":
+            break
+        _append_trace(entries, event)
+        pending += 1
+        if pending >= _TRACE_FLUSH_EVERY:
+            rebuild.trace = entries
+            rebuild.save(update_fields=["trace", "updated_at"])
+            pending = 0
+
+    rebuild.trace = entries
+    rebuild.save(update_fields=["trace", "updated_at"])
+    return client.session_result(session_id)
+
+
 def _fail(rebuild: SiteRebuild, error: str) -> SiteRebuild:
     """標記失敗並退點。
 
@@ -169,7 +233,14 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
     _set_status(rebuild, SiteRebuild.Status.OPTIMIZING)
     workspace = agent_workspace()
     relpath = output_relpath(rebuild)
-    findings = list(rebuild.page.findings.all())
+    # 站台層級的 finding（page=NULL）也要送進去。前端的頁籤過濾就是
+    # 「這一頁的 + 全站的」，只取 page.findings 會讓 UI 顯示有問題、但送給
+    # agent 的清單是空的——agent 收到「沒有偵測到問題，請原樣輸出」就照做，
+    # 使用者拿到與原稿一模一樣的「優化版」。使用者實際踩過。
+    findings = list(
+        Finding.objects.filter(scan_job_id=rebuild.scan_job_id)
+        .filter(Q(page_id=rebuild.page_id) | Q(page__isnull=True))
+    )
     prompt = build_optimization_prompt(rebuild.page, findings, snapshot, relpath)
 
     session_id = ""
@@ -178,12 +249,7 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
         rebuild.opencode_session_id = session_id
         rebuild.save(update_fields=["opencode_session_id", "updated_at"])
 
-        result = client.prompt(
-            session_id,
-            prompt,
-            agent=settings.ARGUS_OPENCODE_AGENT,
-            model=settings.ARGUS_OPENCODE_MODEL,
-        )
+        result = _run_streaming(client, rebuild, session_id, prompt, workspace)
         optimized = _extract_optimized_html(
             client, workspace, relpath, result["text"]
         )

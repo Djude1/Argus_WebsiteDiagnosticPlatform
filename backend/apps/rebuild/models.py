@@ -35,8 +35,12 @@ class SiteRebuild(models.Model):
     # 掛載點相同但不保證未來不變，存相對路徑才不會綁死部署佈局。
     snapshot_path = models.CharField(max_length=512, blank=True)
     optimized_path = models.CharField(max_length=512, blank=True)
-    # 只存 session id 供追查，不存 prompt/回應內容——那可能含被掃描站的原始碼。
+    # 只存 session id 供追查，不存完整 prompt——那含被掃描站的原始碼。
     opencode_session_id = models.CharField(max_length=128, blank=True)
+    # agent 的思考／工具使用過程，供前端即時呈現。任務進行中會被反覆覆寫，
+    # 所以有筆數與長度上限——沒有上限的話，一個話很多的模型可以把單一資料列
+    # 撐到幾 MB，而這張表每次 polling 都會被讀。
+    trace = models.JSONField(default=list, blank=True)
     model_id = models.CharField(max_length=128, blank=True)
     # agent 回報的實際花費（USD），計費的依據
     cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)

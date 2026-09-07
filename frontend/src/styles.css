@@ -1387,6 +1387,40 @@
     @apply mt-1.5 w-full text-[11px] font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-700;
   }
 
+  /* AI 思考過程。進行中預設展開、完成後收起——跑的時候要看得到它在動，
+     結束後這塊就不該再佔版面。 */
+  .rebuild-trace {
+    @apply mt-2 rounded-xl border border-slate-200 bg-white/70 text-[11px];
+  }
+
+  .rebuild-trace summary {
+    @apply cursor-pointer select-none px-2 py-1.5 font-semibold text-slate-600 hover:text-slate-800;
+  }
+
+  .rebuild-trace-body {
+    @apply max-h-56 overflow-y-auto border-t border-slate-200 px-2 py-1.5;
+  }
+
+  .rebuild-trace-line {
+    @apply flex gap-1.5 py-0.5 leading-relaxed;
+  }
+
+  .rebuild-trace-icon {
+    @apply shrink-0 text-slate-400;
+  }
+
+  .rebuild-trace-line.kind-thinking {
+    @apply text-slate-500;
+  }
+
+  .rebuild-trace-line.kind-tool {
+    @apply font-mono text-[10px] text-sky-700;
+  }
+
+  .rebuild-trace-line.kind-text {
+    @apply text-slate-700;
+  }
+
   /* ========================================
      掃描列表 sidebar 強化
      ======================================== */

@@ -21,6 +21,12 @@ worker (k8s, argus ns)                    agent 主機 172.16.2.126（叢集外�
 主機、與 worker 沒有共用檔案系統，而產出的網頁動輒上百 KB，一次吐在回應裡
 會撞到模型的單則輸出上限。寫檔的話 agent 可以分多次編輯把檔案寫完。
 
+**思考過程**：worker 用 `GET /event`（SSE）訂閱 agent 的推理與工具呼叫，
+邊跑邊寫進 `SiteRebuild.trace`，前端 polling 時就能逐步顯示。兩個實作細節
+不能改：SSE 必須在送 prompt **之前**訂閱（否則開頭的 delta 會遺失），而且
+要手動把 response encoding 設成 UTF-8（`text/event-stream` 不帶 charset，
+requests 會退回 ISO-8859-1，中文推理全變亂碼）。
+
 ## 啟用前必須確認
 
 | 項目 | 怎麼確認 | 沒做會怎樣 |
