@@ -6,6 +6,12 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.billing.services import (
+    InsufficientCoinError,
+    estimate_rebuild_cost,
+    get_or_create_wallet,
+    hold_for_rebuild,
+)
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.serializers import SiteRebuildCreateSerializer, SiteRebuildSerializer
 from apps.rebuild.tasks import run_site_rebuild
@@ -55,9 +61,31 @@ class SiteRebuildViewSet(
             raise Http404("找不到頁面。")
 
         rebuild = SiteRebuild.objects.create(scan_job=page.scan_job, page=page)
+        # 先扣再排任務。反過來的話，餘額不足的人已經讓 agent 花掉真錢了才被擋。
+        try:
+            hold_for_rebuild(request.user, rebuild)
+        except InsufficientCoinError as exc:
+            rebuild.delete()
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_402_PAYMENT_REQUIRED
+            )
         run_site_rebuild.delay(rebuild.pk)
         return Response(
             SiteRebuildSerializer(rebuild).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=False, methods=["get"])
+    def cost(self, request):
+        """產生前先讓前端知道要花多少點。
+
+        沒有這個端點，使用者只能按下去才從 402 得知價格與餘額不足——按鈕
+        本身要先講清楚代價，這是 affordance 不是額外功能。
+        """
+        return Response(
+            {
+                "cost": estimate_rebuild_cost(),
+                "balance": get_or_create_wallet(request.user).balance,
+            }
         )
 
     @action(detail=True, methods=["get"])

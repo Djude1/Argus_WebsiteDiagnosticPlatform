@@ -21,7 +21,8 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 | `prompts.py` | `build_optimization_prompt`——含提示注入的邊界宣告 |
 | `services.py` | `run_rebuild` 流程編排；`agent_workspace()` / `output_relpath()` |
 | `tasks.py` | `run_site_rebuild`（Celery，**不重試**） |
-| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox |
+| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格 |
+| `management/commands/cleanup_rebuilds.py` | 清理逾期產出（CronJob 每天跑） |
 
 ## 硬規則
 - **複刻不得改用 LLM**。爬蟲已經存了 DOM，用模型「推理出一樣的頁面」既貴又不可能逐字一致。
@@ -31,6 +32,12 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 - **`scan_job` 只能從 `page` 反查**，不得接受呼叫端傳入——否則可以把別人的
   page 掛到自己的 scan 底下。
 - **task 不得加自動重試**。優化會花錢，自動重試等於在使用者沒同意下重複計費。
+- **失敗一律退點，且只能透過 `services._fail()`**。任何新的失敗路徑都要走它——
+  漏掉一條，使用者就會為沒拿到的產出付錢，而且不會有人發現。
+- **點數必須在排任務之前扣**（`views.create`）。反過來的話，餘額不足的人已經
+  讓 agent 花掉真錢了才被擋。
+- **`output_relpath()` 必須維持扁平檔名**，不要改回子目錄：子目錄要先建出來，
+  而建目錄通常得動用 bash——那會讓 agent 端沒辦法把 bash 關掉。
 - **不落地 prompt 與模型原始回應**。那裡面是被掃描站的原始碼；`error` 欄位
   只放可公開的一行訊息，連線類例外連訊息都不存（帶內網位址）。
 - `ARGUS_OPENCODE_WORKSPACE` 指的目錄**必須在 agent 主機上事先存在**：

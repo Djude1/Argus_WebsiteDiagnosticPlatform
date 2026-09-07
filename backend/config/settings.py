@@ -344,7 +344,10 @@ ARGUS_OPENCODE_ENABLED = env_bool("ARGUS_OPENCODE_ENABLED", default=False)
 ARGUS_OPENCODE_BASE_URL = os.getenv("ARGUS_OPENCODE_BASE_URL", "").strip().rstrip("/")
 ARGUS_OPENCODE_USERNAME = os.getenv("ARGUS_OPENCODE_USERNAME", "")
 ARGUS_OPENCODE_PASSWORD = os.getenv("ARGUS_OPENCODE_PASSWORD", "")
-ARGUS_OPENCODE_AGENT = os.getenv("ARGUS_OPENCODE_AGENT", "build")
+# 預設指向受限的專用 agent，不是全權限的內建 build。agent 不存在時 opencode
+# 回 500、功能整個不動——fail closed，總比安靜地用全權限 agent 跑好。
+# 建立方式見 docs/opencode-site-rebuild.md。
+ARGUS_OPENCODE_AGENT = os.getenv("ARGUS_OPENCODE_AGENT", "argus-rebuild")
 # 空字串＝用 server 端的預設模型。要指定就寫 provider/model（例：opencode/big-pickle）。
 ARGUS_OPENCODE_MODEL = os.getenv("ARGUS_OPENCODE_MODEL", "").strip()
 # agent 端 session 的 cwd。這個目錄必須在 agent 主機上**事先存在**——不存在時
@@ -387,6 +390,10 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 # - 每爬一個頁面的單價（建立掃描時以 max_pages × 此值預扣，完成後依實際頁數退差）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
 ARGUS_COIN_PER_PAGE = int(os.getenv("ARGUS_COIN_PER_PAGE", "10"))
+# 一次網頁複刻＋優化的點數。複刻本身不花錢，這個價錢買的是優化那段的 agent
+# 呼叫——實測一頁極小的 HTML 就要 $0.0018，真實頁面會更貴。預設值是佔位，
+# 上線前應依實際模型成本重新定價。
+ARGUS_COIN_PER_REBUILD = int(os.getenv("ARGUS_COIN_PER_REBUILD", "30"))
 
 # 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
 ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()

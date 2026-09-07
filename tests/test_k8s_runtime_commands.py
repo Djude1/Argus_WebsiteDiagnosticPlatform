@@ -151,6 +151,7 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
         for name, command in (
             ("cleanup-reports", "cleanup_reports"),
             ("cleanup-screenshots", "cleanup_screenshots"),
+            ("cleanup-rebuilds", "cleanup_rebuilds"),
         ):
             with self.subTest(cronjob=name):
                 self.assertIn(name, crons, f"缺少 {name} CronJob")

@@ -145,6 +145,29 @@ class OpenCodeClient:
         content = data.get("content")
         return content if content else None
 
+    def find_file(self, directory: str, filename: str) -> str | None:
+        """在工作目錄下找出這個檔名的實際位置。
+
+        存在的理由：agent 不見得會照指示寫在 cwd——實測它曾自己建了子目錄再把
+        檔案放進去，回覆裡還講得很篤定。與其相信它，不如問 server 檔案在哪。
+        只接受 basename 完全相同的結果，避免拿到名字相近的別的檔。
+        """
+        try:
+            paths = self._request(
+                "GET",
+                "/find/file",
+                params={"query": filename, "directory": directory},
+                timeout=60,
+            )
+        except OpenCodeError:
+            return None
+        if not isinstance(paths, list):
+            return None
+        for path in paths:
+            if isinstance(path, str) and path.rsplit("/", 1)[-1] == filename:
+                return path
+        return None
+
     def abort(self, session_id: str) -> None:
         """盡力而為地中止；失敗不拋——這是收尾動作，不該蓋掉真正的錯誤。"""
         try:

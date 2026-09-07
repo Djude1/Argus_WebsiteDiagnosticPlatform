@@ -121,6 +121,83 @@ def refund_full_for_scan(user, scan_job, *, reason: str) -> CoinTransaction | No
     )
 
 
+def estimate_rebuild_cost() -> int:
+    """一次網頁複刻＋優化的點數（固定價，與頁數無關）。"""
+    return settings.ARGUS_COIN_PER_REBUILD
+
+
+@transaction.atomic
+def hold_for_rebuild(user, site_rebuild) -> CoinTransaction:
+    """建立複刻任務時預扣。
+
+    先扣再跑，不是跑完才扣：優化那段會呼叫外部 agent 花真錢，餘額不足的人
+    必須在花錢之前就被擋下來。失敗時由 refund_rebuild 退回。
+    """
+    cost = estimate_rebuild_cost()
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    if wallet.balance < cost:
+        raise InsufficientCoinError(required=cost, balance=wallet.balance)
+    new_balance = wallet.balance - cost
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=-cost,
+        kind=CoinTransaction.Kind.REBUILD_HOLD,
+        balance_after=new_balance,
+        scan_job=site_rebuild.scan_job,
+        site_rebuild=site_rebuild,
+        note=f"網頁複刻預扣（page={site_rebuild.page_id}）",
+    )
+
+
+def _sum_rebuild_holds(wallet: CoinWallet, site_rebuild_id: int) -> int:
+    """該次複刻在錢包內的累積淨扣款。
+
+    刻意用 site_rebuild 而非 scan_job 當條件：一次掃描可以產生多次複刻，
+    用 scan_job 篩會把同一掃描其他複刻的預扣一起算進來，退款就會超退。
+    """
+    rows = CoinTransaction.objects.filter(
+        wallet=wallet,
+        site_rebuild_id=site_rebuild_id,
+        kind__in=[
+            CoinTransaction.Kind.REBUILD_HOLD,
+            CoinTransaction.Kind.REBUILD_REFUND,
+        ],
+    ).values_list("amount", flat=True)
+    return -sum(rows)
+
+
+@transaction.atomic
+def refund_rebuild(user, site_rebuild, *, reason: str) -> CoinTransaction | None:
+    """複刻失敗：把該次複刻的預扣退回。
+
+    冪等：已退完（淨扣為 0）回 None。使用者只拿到不花錢的原樣快照時也算失敗，
+    照樣要退——那一段本來就不該收費。
+
+    用 get_or_create_wallet 而非直接 get：退款是在失敗路徑上呼叫的，這裡再
+    因為「錢包不存在」拋一次例外，只會把原本的失敗原因蓋掉、更難查。
+    """
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    outstanding = _sum_rebuild_holds(wallet, site_rebuild.id)
+    if outstanding <= 0:
+        return None
+    new_balance = wallet.balance + outstanding
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=outstanding,
+        kind=CoinTransaction.Kind.REBUILD_REFUND,
+        balance_after=new_balance,
+        scan_job=site_rebuild.scan_job,
+        site_rebuild=site_rebuild,
+        note=f"網頁複刻{reason}退款",
+    )
+
+
 @transaction.atomic
 def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | None:
     """掃描完成：依實際頁數退差額（max_pages - actual_pages）× coin_per_page。

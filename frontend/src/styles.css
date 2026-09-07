@@ -130,6 +130,8 @@
   }
   .tech-marquee-track { animation: none; }
   .tech-marquee-group.is-clone { display: none; }
+  /* 進行中狀態改用靜態色點：脈動只是輔助訊號，狀態文字本身已經講清楚了 */
+  .rebuild-dot { animation: none; }
 }
 
 @keyframes shimmer {
@@ -1325,6 +1327,64 @@
 
   .top-action-title {
     @apply flex-1 truncate font-medium text-slate-700;
+  }
+
+  /* ========================================
+     單頁複刻與優化（PageRebuildPanel）
+     沿用 top-actions-box 的卡片語言，視覺權重刻意低於「下載報告」——
+     這是輔助產出，不是這一頁的主要 CTA。
+     ======================================== */
+
+  .rebuild-box {
+    @apply rounded-2xl bg-gradient-to-br from-slate-50 to-cyan-50/60 p-4;
+  }
+
+  .rebuild-title {
+    @apply mb-1 text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-desc {
+    @apply mb-2 text-xs leading-relaxed text-slate-500;
+  }
+
+  .rebuild-action {
+    @apply mt-1.5 w-full py-1.5 text-xs;
+  }
+
+  .rebuild-status {
+    @apply mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700;
+  }
+
+  .rebuild-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-slate-400;
+  }
+
+  /* 進行中的三個狀態用同一個脈動，讓「還在跑」一眼可辨 */
+  .rebuild-dot.status-pending,
+  .rebuild-dot.status-snapshotting,
+  .rebuild-dot.status-optimizing {
+    @apply bg-sky-500;
+    animation: pulse-soft 1.4s ease-in-out infinite;
+  }
+
+  .rebuild-dot.status-succeeded {
+    @apply bg-emerald-500;
+  }
+
+  .rebuild-dot.status-failed {
+    @apply bg-amber-500;
+  }
+
+  .rebuild-note {
+    @apply mt-2 text-[11px] leading-relaxed text-slate-500;
+  }
+
+  .rebuild-note.error {
+    @apply text-red-600;
+  }
+
+  .rebuild-retry {
+    @apply mt-1.5 w-full text-[11px] font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-700;
   }
 
   /* ========================================

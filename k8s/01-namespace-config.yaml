@@ -54,7 +54,9 @@ data:
   # 而且是靜默 timeout——application-egress-boundary except 掉了整段 172.16.0.0/12。
   ARGUS_OPENCODE_ENABLED: "false"
   ARGUS_OPENCODE_BASE_URL: "http://172.16.2.126:4096"
-  ARGUS_OPENCODE_AGENT: "build"
+  # 受限的專用 agent（見 docs/opencode-site-rebuild.md）。agent 不存在時
+  # opencode 回 500，功能不會退回全權限的內建 build agent——這是刻意的。
+  ARGUS_OPENCODE_AGENT: "argus-rebuild"
   # 這個目錄必須在 agent 主機上事先存在；不存在時 session 建得起來但送 prompt 會 500。
   ARGUS_OPENCODE_WORKSPACE: "/tmp/opencode"
   ARGUS_KALI_ENABLED: "false"

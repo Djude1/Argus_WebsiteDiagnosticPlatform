@@ -154,6 +154,8 @@ class CoinTransaction(models.Model):
         SCAN_HOLD = "scan_hold", "掃描預扣"
         SCAN_REFUND = "scan_refund", "掃描退款"
         ADMIN_ADJUST = "admin_adjust", "管理員調整"
+        REBUILD_HOLD = "rebuild_hold", "網頁複刻預扣"
+        REBUILD_REFUND = "rebuild_refund", "網頁複刻退款"
 
     wallet = models.ForeignKey(
         CoinWallet,
@@ -176,6 +178,16 @@ class CoinTransaction(models.Model):
         null=True,
         blank=True,
         related_name="transactions",
+    )
+    # 複刻的扣款要能追到是「哪一次產出」，不能只記到 scan_job：一次掃描可以
+    # 產生多次複刻，只記 scan_job 的話退款的冪等判斷會把同一掃描的其他複刻
+    # 一起退掉。
+    site_rebuild = models.ForeignKey(
+        "rebuild.SiteRebuild",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="coin_transactions",
     )
     admin_actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,

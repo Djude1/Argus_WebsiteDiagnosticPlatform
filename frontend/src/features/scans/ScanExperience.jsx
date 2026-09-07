@@ -18,6 +18,7 @@ import "reactflow/dist/style.css";
 
 import { api } from "../../api";
 import NavActions from "../../components/navigation/NavActions.jsx";
+import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import { useArgusStore } from "../../store";
 import {
@@ -1357,6 +1358,13 @@ function FindingsWorkspace({ scan }) {
           onSelectFinding={selectFinding}
         />
         <div className="space-y-3">
+          {/* 複刻是「針對某一頁」的產出，全站頁籤下沒有明確對象，所以只在
+              選定單一頁面時出現，避免使用者按了不知道會產出哪一頁。 */}
+          {/* key 讓面板隨頁面重新掛載：不這樣做的話，切頁籤時前一頁還在跑的
+              polling 會把舊結果寫進新頁面的狀態。 */}
+          {targetPage && (
+            <PageRebuildPanel key={targetPage.id} scan={scan} page={targetPage} />
+          )}
           <div className="top-actions-box">
             <p className="top-actions-title">⚡ Top Actions</p>
             {(scan.top_actions || []).map((action, idx) => (

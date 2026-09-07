@@ -337,3 +337,54 @@ spec:
             - name: media
               persistentVolumeClaim:
                 claimName: media
+---
+# 網頁複刻產出的清理。保留期限比截圖／報告短（30 天）：複刻是使用者可以隨時
+# 重新觸發的產出，沒有留存價值，而且每次都寫兩份完整網頁。
+# **必須掛 media PVC**：不掛的話容器裡看到的是空目錄，Job 每天回報「刪除 0 個」
+# 成功結束，PVC 卻一直長大——失敗完全無聲。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-rebuilds
+  namespace: argus
+spec:
+  schedule: "0 21 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: shijie85/argus-backend:latest
+              command:
+                [
+                  "/app/.venv/bin/python",
+                  "manage.py",
+                  "cleanup_rebuilds",
+                  "--older-than-days",
+                  "30",
+                ]
+              envFrom:
+                - configMapRef:
+                    name: argus-config
+                - secretRef:
+                    name: argus-secret
+              volumeMounts:
+                - name: media
+                  mountPath: /app/backend/media
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: media
+              persistentVolumeClaim:
+                claimName: media
