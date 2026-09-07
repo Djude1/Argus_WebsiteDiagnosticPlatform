@@ -16,7 +16,11 @@ from django.conf import settings
 from django.db.models import Q, Sum
 
 from apps.billing.models import CoinTransaction
-from apps.billing.services import refund_rebuild, settle_rebuild_actual
+from apps.billing.services import (
+    charge_rebuild_usage,
+    refund_rebuild,
+    settle_rebuild_actual,
+)
 from apps.rebuild.client import OpenCodeClient, OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
@@ -76,6 +80,8 @@ _TRACE_MAX_ENTRIES = 120
 _TRACE_MAX_CHARS = 1500
 # 每累積這麼多事件才寫一次 DB。逐則寫等於一次任務打上千次 UPDATE。
 _TRACE_FLUSH_EVERY = 8
+# 回覆的長度上限。prompt 要求只回一行摘要，正常遠低於此；設限是防模型失控。
+_REPLY_MAX_CHARS = 8000
 
 
 def _append_trace(entries: list, event: dict) -> None:
@@ -83,6 +89,9 @@ def _append_trace(entries: list, event: dict) -> None:
 
     模型的推理是逐字吐出來的，不合併的話 trace 會變成幾百則單字，
     前端渲染起來既慢又不可讀。
+
+    **agent 的回覆不走這裡**——結論存進 SiteRebuild.reply 獨立呈現。
+    混在推理片段之間的話使用者找不到重點。
     """
     kind = event.get("type")
     text = (event.get("text") or "").strip()
@@ -115,7 +124,8 @@ def _run_streaming(
     串流只用來呈現進度；最終的回覆文字與花費一律從訊息物件取回——delta 只
     保證片段，而計費是照 cost 算的，不能用累加的片段去湊。
     """
-    entries: list = []
+    entries: list = list(rebuild.trace or [])
+    reply_parts: list[str] = []
     pending = 0
     for event in client.stream(
         session_id,
@@ -128,15 +138,21 @@ def _run_streaming(
             raise OpenCodeError(event.get("text") or "agent 串流失敗")
         if event["type"] == "done":
             break
-        _append_trace(entries, event)
+        if event["type"] == "text":
+            # 回覆逐字累積到 reply，讓前端邊跑邊顯示結論，而不是等跑完才出現
+            reply_parts.append(event.get("text", ""))
+        else:
+            _append_trace(entries, event)
         pending += 1
         if pending >= _TRACE_FLUSH_EVERY:
             rebuild.trace = entries
-            rebuild.save(update_fields=["trace", "updated_at"])
+            rebuild.reply = "".join(reply_parts)[:_REPLY_MAX_CHARS]
+            rebuild.save(update_fields=["trace", "reply", "updated_at"])
             pending = 0
 
     rebuild.trace = entries
-    rebuild.save(update_fields=["trace", "updated_at"])
+    rebuild.reply = "".join(reply_parts)[:_REPLY_MAX_CHARS]
+    rebuild.save(update_fields=["trace", "reply", "updated_at"])
     return client.session_result(session_id)
 
 
@@ -148,6 +164,77 @@ def _fail(rebuild: SiteRebuild, error: str) -> SiteRebuild:
     """
     _set_status(rebuild, SiteRebuild.Status.FAILED, error=error[:255])
     refund_rebuild(rebuild.scan_job.user, rebuild, reason="失敗")
+    return rebuild
+
+
+_CONVERSATION_MAX_TURNS = 20
+_QUESTION_MAX_CHARS = 2000
+
+
+def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
+    """在**同一個 opencode session** 裡追問。
+
+    沿用原 session 才有意義：session 裡已經有整份 HTML 與診斷清單的上下文，
+    重開一個等於要使用者再付一次把 85KB 塞進 prompt 的錢，而且 agent 會失憶。
+
+    這裡不預扣點數——追問的回合很短，實際用量由 settle 依 cost 結算。
+    餘額檢查在 view 層做，避免餘額為 0 的人先把 agent 的錢花掉。
+    """
+    question = (question or "").strip()[:_QUESTION_MAX_CHARS]
+    if not question:
+        raise OpenCodeError("問題不能是空的")
+    if not rebuild.opencode_session_id:
+        raise OpenCodeError("這次複刻沒有可延續的對話（可能是在啟用優化前產生的）")
+
+    client = OpenCodeClient()
+    if not client.is_configured:
+        raise OpenCodeError("未設定 ARGUS_OPENCODE_BASE_URL")
+
+    conversation = list(rebuild.conversation or [])
+    conversation.append({"role": "user", "text": question})
+    _set_status(
+        rebuild,
+        SiteRebuild.Status.ASKING,
+        conversation=conversation[-_CONVERSATION_MAX_TURNS:],
+        reply="",
+    )
+
+    try:
+        result = _run_streaming(
+            client, rebuild, rebuild.opencode_session_id, question, agent_workspace()
+        )
+    except (OpenCodeError, requests.RequestException) as exc:
+        message = (
+            str(exc)
+            if isinstance(exc, OpenCodeError)
+            else "無法連線到 OpenCode agent 服務"
+        )
+        if not isinstance(exc, OpenCodeError):
+            logger.exception("追問連線失敗 rebuild=%s", rebuild.pk)
+        # 失敗不改回 failed：那會讓已經產出的優化版看起來像沒做成。
+        # 只把錯誤放進對話，讓使用者知道這一輪沒成功。
+        conversation.append({"role": "agent", "text": f"（失敗）{message}"})
+        _set_status(
+            rebuild,
+            SiteRebuild.Status.SUCCEEDED,
+            conversation=conversation[-_CONVERSATION_MAX_TURNS:],
+        )
+        return rebuild
+
+    conversation.append({"role": "agent", "text": rebuild.reply[:_REPLY_MAX_CHARS]})
+    # session_result 回的是整個 session 的累計花費（含最初的優化那輪）。
+    # 追問只該收「這一輪多花的」，所以扣掉先前已記錄的部分。
+    previous = Decimal(str(rebuild.cost_usd or 0))
+    total = Decimal(str(result["cost"] or 0))
+    rebuild.cost_usd = total
+    rebuild.save(update_fields=["cost_usd", "updated_at"])
+    charge_rebuild_usage(rebuild.scan_job.user, rebuild, max(Decimal("0"), total - previous))
+    _set_status(
+        rebuild,
+        SiteRebuild.Status.SUCCEEDED,
+        conversation=conversation[-_CONVERSATION_MAX_TURNS:],
+        coins_charged=_sum_rebuild_charge(rebuild),
+    )
     return rebuild
 
 
@@ -168,8 +255,37 @@ def _extract_edits(reply: str) -> list[dict]:
             continue
         edits = data.get("edits") if isinstance(data, dict) else data
         if isinstance(edits, list):
-            return [e for e in edits if isinstance(e, dict) and e.get("find")]
+            normalized = [_normalize_edit(e) for e in edits if isinstance(e, dict)]
+            found = [e for e in normalized if e]
+            if found:
+                return found
     return []
+
+
+# 模型不一定照 prompt 的欄位名走。實測看過它自己改用 old/new——那種整批
+# 會被丟掉，使用者付了錢卻拿到「沒有提出任何修改」。認別名成本很低。
+_FIND_KEYS = ("find", "old", "search", "from")
+_REPLACE_KEYS = ("replace", "new", "to")
+_WHY_KEYS = ("why", "issue", "reason")
+
+
+def _pick(item: dict, keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _normalize_edit(item: dict) -> dict | None:
+    find = _pick(item, _FIND_KEYS)
+    if not find:
+        return None
+    return {
+        "find": find,
+        "replace": _pick(item, _REPLACE_KEYS),
+        "why": _pick(item, _WHY_KEYS),
+    }
 
 
 def apply_edits(html: str, edits: list[dict]) -> tuple[str, list[dict]]:

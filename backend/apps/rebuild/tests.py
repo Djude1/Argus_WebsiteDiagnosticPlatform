@@ -29,7 +29,12 @@ from apps.billing.services import (
 from apps.rebuild.client import OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
-from apps.rebuild.services import apply_edits, run_rebuild
+from apps.rebuild.services import (
+    _extract_edits,
+    apply_edits,
+    ask_followup,
+    run_rebuild,
+)
 from apps.rebuild.snapshot import build_snapshot_html
 from apps.scans.models import Finding, Page, ScanJob
 
@@ -162,6 +167,7 @@ class _FakeClient:
 
     def create_session(self, directory):
         self.directory = directory
+        self.created_directory = directory
         return "ses_fake"
 
     def prompt(self, session_id, text, agent, model=""):
@@ -171,6 +177,7 @@ class _FakeClient:
         return {"text": self.reply, "cost": self.cost, "model_id": "opencode/fake"}
 
     def stream(self, session_id, text, agent, model="", directory=""):
+        self.session_used = session_id
         if self.error:
             raise self.error
         self.prompt_text = text
@@ -475,12 +482,18 @@ class TraceTests(TestCase):
         with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
             return run_rebuild(self.rebuild)
 
-    def test_trace_records_thinking_tools_and_text(self):
+    def test_trace_holds_process_and_reply_is_separate(self):
+        """思考流只放過程，結論放 reply。
+
+        混在一起的話，回答會被埋在幾百則推理片段之間，使用者找不到重點——
+        這是實際回報過的體感問題（「Agent 回覆和思考流都感覺怪怪的」）。
+        """
         rebuild = self._run(_FakeClient())
         kinds = [e["kind"] for e in rebuild.trace]
         self.assertIn("thinking", kinds)
         self.assertIn("tool", kinds)
-        self.assertIn("text", kinds)
+        self.assertNotIn("text", kinds, "回覆不該出現在思考流裡")
+        self.assertTrue(rebuild.reply, "回覆要獨立存進 reply")
 
     def test_consecutive_fragments_of_the_same_kind_are_merged(self):
         """推理是逐字吐出來的，不合併會變成幾百則單字，前端沒法看。"""
@@ -623,3 +636,133 @@ class ApplyEditsTests(TestCase):
         """report 會回傳給前端；find 可能很長，不能整段帶出去。"""
         _, report = apply_edits("x" * 5000, [{"find": "x" * 5000, "replace": "y"}])
         self.assertLessEqual(len(report[0]["find"]), 120)
+
+
+@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
+class FollowupTests(TestCase):
+    """追問：在同一個 agent session 裡繼續對話。
+
+    沿用原 session 才有意義——session 裡已有整份 HTML 與診斷清單的上下文，
+    重開等於要使用者再付一次把 85KB 塞進 prompt 的錢，而且 agent 會失憶。
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ask", password="safe-test-password")
+        self.scan_job = _make_scan(self.user)
+        self.page = _make_page(self.scan_job)
+        wallet = get_or_create_wallet(self.user)
+        wallet.balance = 1000
+        wallet.save(update_fields=["balance"])
+        self.rebuild = SiteRebuild.objects.create(
+            scan_job=self.scan_job,
+            page=self.page,
+            status=SiteRebuild.Status.SUCCEEDED,
+            opencode_session_id="ses_existing",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_reply_is_stored_separately_from_the_trace(self):
+        """結論不能混在推理片段裡——使用者回報過「找不到重點」。"""
+        client = _FakeClient(
+            events=[
+                {"type": "thinking", "text": "想一下"},
+                {"type": "text", "text": "因為那些圖是裝飾性的"},
+            ]
+        )
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "為什麼沒補 alt？")
+        self.assertEqual(self.rebuild.reply, "因為那些圖是裝飾性的")
+        self.assertNotIn(
+            "因為那些圖是裝飾性的",
+            " ".join(e["text"] for e in self.rebuild.trace),
+            "回覆不該出現在思考流裡",
+        )
+
+    def test_conversation_records_both_sides(self):
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
+            ask_followup(self.rebuild, "再多修一點")
+        roles = [t["role"] for t in self.rebuild.conversation]
+        self.assertEqual(roles, ["user", "agent"])
+        self.assertEqual(self.rebuild.conversation[0]["text"], "再多修一點")
+
+    def test_uses_the_existing_session(self):
+        client = _FakeClient()
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "問題")
+        self.assertEqual(client.session_used, "ses_existing")
+        self.assertIsNone(
+            getattr(client, "created_directory", None), "不該另開新 session"
+        )
+
+    def test_followup_is_charged(self):
+        """settle_rebuild_actual 是冪等的，第二輪會被跳過——追問等於免費，
+        但它花的是真錢。所以走 charge_rebuild_usage 事後扣款。"""
+        before = get_or_create_wallet(self.user).balance
+        with patch(
+            "apps.rebuild.services.OpenCodeClient", return_value=_FakeClient(cost=0.05)
+        ):
+            ask_followup(self.rebuild, "問題")
+        self.assertLess(get_or_create_wallet(self.user).balance, before)
+
+    def test_failure_does_not_mark_the_rebuild_failed(self):
+        """優化版已經產出了，追問失敗不該讓它看起來像整個沒做成。"""
+        with patch(
+            "apps.rebuild.services.OpenCodeClient",
+            return_value=_FakeClient(error=OpenCodeError("provider 掛了")),
+        ):
+            ask_followup(self.rebuild, "問題")
+        self.assertEqual(self.rebuild.status, SiteRebuild.Status.SUCCEEDED)
+        self.assertIn("失敗", self.rebuild.conversation[-1]["text"])
+
+    def test_api_rejects_empty_question(self):
+        response = self.client.post(f"/api/rebuilds/{self.rebuild.id}/ask/", {"question": "  "})
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_rejects_while_running(self):
+        self.rebuild.status = SiteRebuild.Status.OPTIMIZING
+        self.rebuild.save(update_fields=["status"])
+        response = self.client.post(f"/api/rebuilds/{self.rebuild.id}/ask/", {"question": "x"})
+        self.assertEqual(response.status_code, 409)
+
+    def test_api_rejects_when_balance_is_too_low(self):
+        """餘額為 0 的人必須在 agent 花掉真錢之前被擋下。"""
+        wallet = get_or_create_wallet(self.user)
+        wallet.balance = 0
+        wallet.save(update_fields=["balance"])
+        with patch("apps.rebuild.views.ask_rebuild_agent.delay") as delay:
+            response = self.client.post(
+                f"/api/rebuilds/{self.rebuild.id}/ask/", {"question": "x"}
+            )
+        self.assertEqual(response.status_code, 402)
+        delay.assert_not_called()
+
+
+class EditSchemaToleranceTests(TestCase):
+    """模型不一定照 prompt 的欄位名走。
+
+    實測看過它自己改用 {"selector","issue","old","new"}——只認 find/replace
+    的話那批會整個被丟掉，使用者付了錢卻拿到「沒有提出任何修改」。
+    """
+
+    def test_accepts_old_new_aliases(self):
+        edits = _extract_edits(
+            '```json\n{"edits": [{"old": "<a>", "new": "<b>", "issue": "壞了"}]}\n```'
+        )
+        self.assertEqual(edits[0]["find"], "<a>")
+        self.assertEqual(edits[0]["replace"], "<b>")
+        self.assertEqual(edits[0]["why"], "壞了")
+
+    def test_accepts_canonical_names(self):
+        edits = _extract_edits(
+            '```json\n{"edits": [{"find": "<a>", "replace": "<b>", "why": "r"}]}\n```'
+        )
+        self.assertEqual(edits[0]["find"], "<a>")
+
+    def test_entries_without_any_find_key_are_dropped(self):
+        self.assertEqual(_extract_edits('```json\n{"edits": [{"why": "只有說明"}]}\n```'), [])
+
+    def test_bare_json_without_fence_still_parses(self):
+        """模型偶爾忘記加圍欄。"""
+        edits = _extract_edits('好了 {"edits": [{"find": "x", "replace": "y"}]} 完成')
+        self.assertEqual(edits[0]["find"], "x")

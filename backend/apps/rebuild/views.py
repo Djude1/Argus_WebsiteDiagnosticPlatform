@@ -18,7 +18,7 @@ from apps.rebuild.serializers import (
     SiteRebuildDetailSerializer,
     SiteRebuildSerializer,
 )
-from apps.rebuild.tasks import run_site_rebuild
+from apps.rebuild.tasks import ask_rebuild_agent, run_site_rebuild
 from apps.scans.models import Page
 
 
@@ -82,6 +82,47 @@ class SiteRebuildViewSet(
         run_site_rebuild.delay(rebuild.pk)
         return Response(
             SiteRebuildSerializer(rebuild).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=["post"])
+    def ask(self, request, pk=None):
+        """在同一個 agent session 裡追問。
+
+        餘額檢查放在這裡而不是 task 裡：餘額為 0 的人必須在 agent 花掉真錢
+        **之前**被擋下來。實際扣多少由用量決定（事後結算），這裡只確認他至少
+        付得起最低消費。
+        """
+        rebuild = self.get_object()
+        question = (request.data.get("question") or "").strip()
+        if not question:
+            return Response(
+                {"detail": "請輸入問題。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if rebuild.status in {
+            SiteRebuild.Status.PENDING,
+            SiteRebuild.Status.SNAPSHOTTING,
+            SiteRebuild.Status.OPTIMIZING,
+            SiteRebuild.Status.ASKING,
+        }:
+            return Response(
+                {"detail": "上一輪還在進行中，請稍候。"},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if not rebuild.opencode_session_id:
+            return Response(
+                {"detail": "這次複刻沒有可延續的對話。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        wallet = get_or_create_wallet(request.user)
+        if wallet.balance < settings.ARGUS_COIN_REBUILD_MIN:
+            return Response(
+                {"detail": f"coin 不足：至少需要 {settings.ARGUS_COIN_REBUILD_MIN}"},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        ask_rebuild_agent.delay(rebuild.pk, question)
+        return Response(
+            SiteRebuildDetailSerializer(rebuild).data, status=status.HTTP_202_ACCEPTED
         )
 
     @action(detail=False, methods=["get"])

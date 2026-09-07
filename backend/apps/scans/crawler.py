@@ -216,7 +216,9 @@ async def collect_mobile_layout(page) -> dict:
         await page.wait_for_timeout(300)
         return await asyncio.wait_for(
             page.evaluate(
-                """
+                # raw string：JS 的 \s 在非 raw 的 Python 字串裡是無效跳脫序列
+                # （目前是 SyntaxWarning，未來的 Python 版本會直接報錯）
+                r"""
                 (maxOffenders) => {
                     const doc = document.documentElement;
                     const viewport = doc.clientWidth;

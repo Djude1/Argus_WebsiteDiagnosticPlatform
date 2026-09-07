@@ -14,6 +14,7 @@ class SiteRebuild(models.Model):
         PENDING = "pending", "等待中"
         SNAPSHOTTING = "snapshotting", "複刻中"
         OPTIMIZING = "optimizing", "優化中"
+        ASKING = "asking", "回答中"
         SUCCEEDED = "succeeded", "完成"
         FAILED = "failed", "失敗"
 
@@ -41,6 +42,12 @@ class SiteRebuild(models.Model):
     # 所以有筆數與長度上限——沒有上限的話，一個話很多的模型可以把單一資料列
     # 撐到幾 MB，而這張表每次 polling 都會被讀。
     trace = models.JSONField(default=list, blank=True)
+    # agent 的「回答」與「思考過程」分開存。混在一起的話，結論會被埋在幾百則
+    # 推理片段之間，使用者找不到重點——這是實際回報過的體感問題。
+    reply = models.TextField(blank=True)
+    # 使用者的追問往返，[{"role": "user"|"agent", "text": ...}]。
+    # 有上限，理由同 trace：列表端點會被 polling。
+    conversation = models.JSONField(default=list, blank=True)
     # 每一筆修改有沒有套用成功。模型偶爾會憑印象重打 find 字串而對不上，
     # 使用者有權知道「它說要改 12 項，實際只套上 9 項」。
     edit_report = models.JSONField(default=list, blank=True)

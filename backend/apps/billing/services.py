@@ -238,6 +238,39 @@ def _sum_rebuild_holds(wallet: CoinWallet, site_rebuild_id: int) -> int:
 
 
 @transaction.atomic
+def charge_rebuild_usage(user, site_rebuild, cost_usd) -> CoinTransaction | None:
+    """追問等後續回合的事後扣款：直接按實際用量收，沒有預扣也沒有退款。
+
+    不能沿用 settle_rebuild_actual：那個以「這次複刻只結算一次」為前提（有
+    REBUILD_REFUND 就跳過），第二輪會被冪等邏輯整個略過——追問等於免費，
+    但它花的是真錢。
+
+    扣款上限是當前餘額：CoinWallet.balance 是 PositiveBigIntegerField，
+    扣成負數會直接拋資料庫錯誤。view 層已先擋掉餘額不足的人，這裡是最後一道。
+    """
+    coins = rebuild_coins_for_usd(cost_usd)
+    if coins <= 0:
+        return None
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    charged = min(coins, wallet.balance)
+    if charged <= 0:
+        return None
+    new_balance = wallet.balance - charged
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=-charged,
+        kind=CoinTransaction.Kind.REBUILD_HOLD,
+        balance_after=new_balance,
+        scan_job=site_rebuild.scan_job,
+        site_rebuild=site_rebuild,
+        note=f"網頁複刻追問，實際用量 {coins} coin",
+    )
+
+
+@transaction.atomic
 def refund_rebuild(user, site_rebuild, *, reason: str) -> CoinTransaction | None:
     """複刻失敗：把該次複刻的預扣退回。
 

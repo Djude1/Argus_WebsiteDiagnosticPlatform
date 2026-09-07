@@ -21,7 +21,7 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 | `prompts.py` | `build_optimization_prompt`——要求**修改清單**而非整份 HTML；含提示注入邊界宣告 |
 | `services.py` | `run_rebuild` 流程編排；`agent_workspace()` / `output_relpath()` |
 | `tasks.py` | `run_site_rebuild`（Celery，**不重試**） |
-| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格 |
+| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格；`ask` 追問 |
 | `management/commands/cleanup_rebuilds.py` | 清理逾期產出（CronJob 每天跑） |
 
 ## 硬規則
@@ -57,6 +57,17 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
   assistant 訊息、各自記 cost，只看最後一則會嚴重低估（實測最後一則只佔 16%）。
 - **`trace` 有筆數與長度上限**，不可移除：前端每 5 秒 polling 一次列表端點，
   沒有上限的話話多的模型能把單列撐到幾 MB。
+- **回覆存 `reply`，過程存 `trace`，不可合併**。混在一起的話結論會被埋在幾百則
+  推理片段之間，使用者找不到重點——實際回報過的體感問題。
+- **追問必須沿用 `opencode_session_id`**。session 裡已有整份 HTML 與診斷清單的
+  上下文；重開一個等於要使用者再付一次把幾十 KB 塞進 prompt 的錢，而且 agent
+  會失憶。
+- **追問走 `charge_rebuild_usage` 而非 `settle_rebuild_actual`**：後者以「一次
+  複刻只結算一次」為前提（有 REBUILD_REFUND 就跳過），第二輪會被冪等邏輯整個
+  略過——追問等於免費，但它花的是真錢。
+- **`_extract_edits` 要容忍欄位別名**（`old`/`new`）。實測看過模型自行改用那組
+  名稱，只認 `find`/`replace` 的話整批會被丟掉，使用者付了錢卻拿到「沒有提出
+  任何修改」。
 - **不落地 prompt 與模型原始回應**。那裡面是被掃描站的原始碼；`error` 欄位
   只放可公開的一行訊息，連線類例外連訊息都不存（帶內網位址）。
 - `ARGUS_OPENCODE_WORKSPACE` 指的目錄**必須在 agent 主機上事先存在**：

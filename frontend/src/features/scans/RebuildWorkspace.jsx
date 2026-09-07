@@ -6,15 +6,24 @@ import { api } from "../../api";
 // 專屬頁面比側欄面板更新得快：這裡是使用者盯著看的畫面，5 秒一跳會很鈍。
 const POLL_INTERVAL_MS = 1000;
 
-const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing"]);
+const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing", "asking"]);
 const STATUS_LABEL = {
   pending: "排隊中",
   snapshotting: "複刻中",
   optimizing: "優化中",
+  asking: "回答中",
   succeeded: "完成",
   failed: "未完成",
 };
-const TRACE_LABEL = { thinking: "推理", tool: "工具", text: "回覆" };
+// 進行中要讓使用者知道「它現在在做什麼」，而不只是「還在跑」。
+// 這是照 AI-Wealth-Manager 的做法：狀態列 + 經過秒數 + 工具呼叫次數。
+function currentAction(rebuild) {
+  if (rebuild.status === "snapshotting") return "複刻原始頁面…";
+  if (rebuild.status === "asking") return "思考中…";
+  if (rebuild.status !== "optimizing") return "";
+  const lastTool = [...(rebuild.trace || [])].reverse().find((e) => e.kind === "tool");
+  return lastTool ? `執行 ${lastTool.text}…` : "分析診斷結果…";
+}
 
 /**
  * 單次複刻的完整工作區：左側 AI 思考過程、右側產出預覽。
@@ -29,8 +38,13 @@ function RebuildWorkspace() {
   const [variant, setVariant] = useState("optimized");
   const [docs, setDocs] = useState({});
   const [error, setError] = useState("");
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const traceEndRef = useRef(null);
+  const traceBodyRef = useRef(null);
   const cancelledRef = useRef(false);
+  const startedAtRef = useRef(0);
 
   const running = rebuild && IN_PROGRESS.has(rebuild.status);
 
@@ -56,10 +70,49 @@ function RebuildWorkspace() {
     };
   }, [rebuildId]);
 
-  // 跑的時候讓思考流自動捲到最新一則，不然使用者得一直手動往下拉
+  // 經過秒數：沒有這個，跑久了分不出「還在想」與「卡住」
   useEffect(() => {
-    if (running) traceEndRef.current?.scrollIntoView({ block: "end" });
-  }, [rebuild?.trace?.length, running]);
+    if (!running) return undefined;
+    if (!startedAtRef.current) startedAtRef.current = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
+    if (!running) startedAtRef.current = 0;
+  }, [running]);
+
+  // 自動捲到最新——但**只在使用者沒有往上捲去讀的時候**。
+  // 無條件捲動會把正在讀舊內容的人一直拉回底部。
+  useEffect(() => {
+    if (!running) return;
+    const body = traceBodyRef.current;
+    if (!body) return;
+    const pinned = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    if (pinned) traceEndRef.current?.scrollIntoView({ block: "end" });
+  }, [rebuild?.trace?.length, rebuild?.reply, running]);
+
+  async function submitQuestion(event) {
+    event.preventDefault();
+    const text = question.trim();
+    if (!text || asking) return;
+    setAsking(true);
+    setError("");
+    try {
+      await api.post(`/rebuilds/${rebuildId}/ask/`, { question: text });
+      setQuestion("");
+      // 立刻重新 polling：任務是非同步的，狀態要靠下一次讀取才會變
+      const { data } = await api.get(`/rebuilds/${rebuildId}/`);
+      setRebuild(data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "無法送出問題。");
+    } finally {
+      setAsking(false);
+    }
+  }
 
   const loadDoc = useCallback(
     async (which) => {
@@ -120,6 +173,7 @@ function RebuildWorkspace() {
     );
   }
 
+  const toolCount = (rebuild.trace || []).filter((e) => e.kind === "tool").length;
   const both = docs.original != null && docs.optimized != null;
   const identical = both && docs.original === docs.optimized;
   const current = docs[variant];
@@ -143,19 +197,78 @@ function RebuildWorkspace() {
 
       <div className="rebuild-ws-grid">
         <div className="rebuild-ws-pane">
-          <h3 className="rebuild-ws-pane-title">AI 思考過程</h3>
-          <div className="rebuild-ws-trace">
-            {(rebuild.trace || []).map((entry, index) => (
-              <div className={`rebuild-ws-entry kind-${entry.kind}`} key={`${entry.kind}-${index}`}>
-                <span className="rebuild-ws-entry-tag">{TRACE_LABEL[entry.kind] || entry.kind}</span>
-                <p className="rebuild-ws-entry-text">{entry.text}</p>
-              </div>
-            ))}
-            {!(rebuild.trace || []).length && (
-              <p className="hint-text">{running ? "等待 agent 開始…" : "這次沒有記錄到過程。"}</p>
-            )}
-            <div ref={traceEndRef} />
+          <div className={`rebuild-ws-live ${running ? "is-live" : "is-done"}`}>
+            <span className="rebuild-ws-live-dot" />
+            <span>{running ? currentAction(rebuild) || "進行中…" : "已結束"}</span>
+            <span className="rebuild-ws-live-meta">
+              {toolCount > 0 && `${toolCount} 次工具呼叫`}
+              {running && ` · ${elapsed}s`}
+            </span>
           </div>
+
+          <details className="rebuild-ws-trace-wrap" open>
+            <summary>思考過程與工具呼叫</summary>
+            {/* 等寬、淡色、連續流動——這是過程不是結論，視覺權重要低於下方的回覆 */}
+            <div className="rebuild-ws-trace" ref={traceBodyRef}>
+              {(rebuild.trace || []).map((entry, index) =>
+                entry.kind === "tool" ? (
+                  <span className="rebuild-ws-tool" key={`t-${index}`}>
+                    ▸ {entry.text}
+                  </span>
+                ) : (
+                  <span className="rebuild-ws-think" key={`k-${index}`}>
+                    {entry.text}
+                  </span>
+                ),
+              )}
+              {!(rebuild.trace || []).length && (
+                <span className="hint-text">
+                  {running ? "等待 agent 開始…" : "這次沒有記錄到過程。"}
+                </span>
+              )}
+              <div ref={traceEndRef} />
+            </div>
+          </details>
+
+          {/* 回覆是結論，必須跟過程分開、字級正常。混在推理片段裡會找不到重點 */}
+          <div className="rebuild-ws-reply-head">Agent 回覆</div>
+          <div className="rebuild-ws-reply">
+            {rebuild.reply || (running ? "…" : "（這一輪沒有文字回覆）")}
+          </div>
+
+          {(rebuild.conversation || []).length > 0 && (
+            <div className="rebuild-ws-chat">
+              {rebuild.conversation.map((turn, index) => (
+                <p className={`rebuild-ws-turn role-${turn.role}`} key={`c-${index}`}>
+                  <span className="rebuild-ws-turn-tag">
+                    {turn.role === "user" ? "你" : "Agent"}
+                  </span>
+                  {turn.text}
+                </p>
+              ))}
+            </div>
+          )}
+
+          <form className="rebuild-ws-ask" onSubmit={submitQuestion}>
+            <textarea
+              className="input rebuild-ws-ask-input"
+              placeholder="追問或要求更深入的優化，例如：為什麼沒有補圖片的 alt？"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              disabled={running || asking}
+              rows={2}
+            />
+            <button
+              className="secondary-button"
+              type="submit"
+              disabled={running || asking || !question.trim()}
+            >
+              {asking ? "送出中…" : "送出"}
+            </button>
+          </form>
+          <p className="rebuild-ws-ask-note">
+            追問會延續同一個對話（agent 記得這一頁的 HTML 與診斷結果），依實際用量計費。
+          </p>
         </div>
 
         <div className="rebuild-ws-pane">

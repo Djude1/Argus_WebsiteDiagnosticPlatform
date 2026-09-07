@@ -41,7 +41,13 @@ class SiteRebuildDetailSerializer(SiteRebuildSerializer):
     """
 
     class Meta(SiteRebuildSerializer.Meta):
-        fields = [*SiteRebuildSerializer.Meta.fields, "trace", "edit_report"]
+        fields = [
+            *SiteRebuildSerializer.Meta.fields,
+            "trace",
+            "edit_report",
+            "reply",
+            "conversation",
+        ]
         read_only_fields = fields
 
 

@@ -1540,6 +1540,95 @@
     @apply mt-2 flex gap-2;
   }
 
+  /* ── 即時狀態列 ──
+     跑久了要能分辨「還在想」與「卡住」，所以有脈動點、當前動作與經過秒數。 */
+  .rebuild-ws-live {
+    @apply mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600;
+  }
+
+  .rebuild-ws-live-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full bg-slate-400;
+  }
+
+  .rebuild-ws-live.is-live .rebuild-ws-live-dot {
+    @apply bg-sky-500;
+    animation: pulse-soft 1.1s ease-in-out infinite;
+  }
+
+  .rebuild-ws-live.is-done .rebuild-ws-live-dot {
+    @apply bg-emerald-500;
+  }
+
+  .rebuild-ws-live-meta {
+    @apply ml-auto font-mono text-[10px] text-slate-400;
+  }
+
+  /* ── 思考流 ──
+     等寬、淡色、連續流動。這是過程不是結論，視覺權重必須低於下方的回覆；
+     推理逐字接在同一段後面，不要切成一則一則的方框。 */
+  .rebuild-ws-trace-wrap {
+    @apply rounded-xl border border-slate-200 bg-slate-50;
+  }
+
+  .rebuild-ws-trace-wrap > summary {
+    @apply cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700;
+  }
+
+  .rebuild-ws-trace {
+    @apply max-h-72 overflow-y-auto whitespace-pre-wrap break-words border-t border-slate-200 px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-400;
+  }
+
+  .rebuild-ws-think {
+    @apply inline;
+  }
+
+  .rebuild-ws-tool {
+    @apply my-1 block text-sky-700;
+  }
+
+  /* ── Agent 回覆 ──
+     結論。正常字級、正常行高，與上方等寬淡色的過程明確區隔。 */
+  .rebuild-ws-reply-head {
+    @apply mt-3 mb-1 text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-ws-reply {
+    @apply whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-700;
+  }
+
+  /* ── 追問往返 ── */
+  .rebuild-ws-chat {
+    @apply mt-2 space-y-1;
+  }
+
+  .rebuild-ws-turn {
+    @apply whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-xs leading-relaxed;
+  }
+
+  .rebuild-ws-turn.role-user {
+    @apply bg-sky-50 text-sky-900;
+  }
+
+  .rebuild-ws-turn.role-agent {
+    @apply bg-slate-50 text-slate-700;
+  }
+
+  .rebuild-ws-turn-tag {
+    @apply mr-2 text-[10px] font-bold uppercase opacity-60;
+  }
+
+  .rebuild-ws-ask {
+    @apply mt-2 flex gap-2;
+  }
+
+  .rebuild-ws-ask-input {
+    @apply flex-1 resize-y text-xs;
+  }
+
+  .rebuild-ws-ask-note {
+    @apply mt-1 text-[10px] leading-relaxed text-slate-400;
+  }
+
   /* 套用結果：使用者有權知道「它說要改 5 項、實際只套上 3 項」 */
   .rebuild-ws-edits {
     @apply mb-2 rounded-xl bg-white p-2;
