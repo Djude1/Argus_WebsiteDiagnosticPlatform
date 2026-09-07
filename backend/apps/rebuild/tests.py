@@ -13,6 +13,7 @@ from __future__ import annotations
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -28,7 +29,7 @@ from apps.billing.services import (
 from apps.rebuild.client import OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
-from apps.rebuild.services import output_relpath, run_rebuild
+from apps.rebuild.services import apply_edits, run_rebuild
 from apps.rebuild.snapshot import build_snapshot_html
 from apps.scans.models import Finding, Page, ScanJob
 
@@ -115,7 +116,7 @@ class PromptTests(TestCase):
     def test_findings_are_ordered_by_severity(self):
         low = self._finding(Finding.Severity.LOW, "low-one")
         critical = self._finding(Finding.Severity.CRITICAL, "critical-one")
-        prompt = build_optimization_prompt(self.page, [low, critical], "<html></html>", "out.html")
+        prompt = build_optimization_prompt(self.page, [low, critical], "<html></html>")
         self.assertLess(prompt.index("critical-one"), prompt.index("low-one"))
 
     def test_prompt_marks_page_html_as_untrusted_data(self):
@@ -123,14 +124,14 @@ class PromptTests(TestCase):
 
         邊界宣告不是防護，但拿掉它連「誤把頁面文字當指令」都擋不住。
         """
-        prompt = build_optimization_prompt(self.page, [], "<html></html>", "out.html")
+        prompt = build_optimization_prompt(self.page, [], "<html></html>")
         self.assertIn("<untrusted-data>", prompt)
         self.assertIn("<page-html>", prompt)
 
     @override_settings(ARGUS_OPENCODE_MAX_SNAPSHOT_BYTES=50)
     def test_truncation_is_announced(self):
         """不告知截斷，agent 會自行補完它沒看過的部分，憑空生出原站沒有的內容。"""
-        prompt = build_optimization_prompt(self.page, [], "x" * 500, "out.html")
+        prompt = build_optimization_prompt(self.page, [], "x" * 500)
         self.assertIn("截斷", prompt)
         self.assertNotIn("x" * 100, prompt)
 
@@ -138,8 +139,16 @@ class PromptTests(TestCase):
 class _FakeClient:
     """替身：真的 client 會連外網並花錢，測試不得碰到它。"""
 
-    def __init__(self, reply="done", file_content="<html>optimized</html>", error=None,
-                 found_path=None, found_content=None, cost=0.25, events=None):
+    DEFAULT_REPLY = (
+        '好了\n```json\n{"edits": [{'
+        '"find": "<title>t</title>",'
+        ' "replace": "<title>示範頁｜完整標題</title>",'
+        ' "why": "title 過短"'
+        "}]}\n```"
+    )
+
+    def __init__(self, reply=None, error=None, cost=0.25, events=None):
+        reply = self.DEFAULT_REPLY if reply is None else reply
         self.cost = cost
         self.events = events if events is not None else [
             {"type": "thinking", "text": "先看看缺什麼"},
@@ -147,13 +156,8 @@ class _FakeClient:
             {"type": "text", "text": "好了"},
         ]
         self.reply = reply
-        self.file_content = file_content
         self.error = error
-        # 模擬「agent 把檔案寫到別的地方」：指定路徑讀不到，但 find 找得到
-        self.found_path = found_path
-        self.found_content = found_content
         self.aborted = []
-        self.read_path = ""
         self.is_configured = True
 
     def create_session(self, directory):
@@ -175,13 +179,6 @@ class _FakeClient:
 
     def session_result(self, session_id):
         return {"text": self.reply, "cost": self.cost, "model_id": "opencode/fake"}
-
-    def read_file(self, directory, path):
-        self.read_path = path
-        return self.found_content if path == self.found_path else self.file_content
-
-    def find_file(self, directory, filename):
-        return self.found_path
 
     def abort(self, session_id):
         self.aborted.append(session_id)
@@ -205,14 +202,17 @@ class RunRebuildTests(TestCase):
         self.assertTrue(rebuild.snapshot_path)
         self.assertTrue(rebuild.optimized_path)
 
-    def test_each_rebuild_writes_to_its_own_path(self):
-        """共用一個檔名的話，兩次複刻會互相覆蓋，也會讓 find 後備撈到舊檔。
+    def test_edits_are_applied_to_the_snapshot(self):
+        """產出＝原稿套用修改清單，不是模型重新產生的整份文件。
 
-        cwd 是固定的（agent 主機上必須存在的既有目錄），隔離只能靠檔名。
+        模型整份重寫會撞到單次輸出上限：實測 84KB 的頁面在 15,022 token
+        就被截斷（finish='length'），連工具呼叫參數都沒吐完、什麼都沒交付。
         """
-        client = _FakeClient()
-        self._run(client)
-        self.assertIn(f"argus-rebuild-{self.rebuild.pk}-", client.read_path)
+        rebuild = self._run(_FakeClient())
+        path = settings.MEDIA_ROOT / rebuild.optimized_path
+        html = path.read_text(encoding="utf-8")
+        self.assertIn("示範頁｜完整標題", html)
+        self.assertIn("<base href=", html, "原稿的其餘部分必須原封不動")
 
     def test_session_cwd_is_the_configured_workspace(self):
         """cwd 換成不存在的目錄，opencode 會在送 prompt 時回 500（實測 1.18.29）。"""
@@ -233,16 +233,17 @@ class RunRebuildTests(TestCase):
         self._run(client)
         self.assertEqual(client.aborted, ["ses_fake"])
 
-    def test_falls_back_to_html_fence_when_no_file_written(self):
-        client = _FakeClient(
-            reply="好了\n```html\n<html>fenced</html>\n```", file_content=None
-        )
-        rebuild = self._run(client)
-        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
-
-    def test_no_output_at_all_is_a_failure(self):
-        rebuild = self._run(_FakeClient(reply="我不知道", file_content=None))
+    def test_no_edits_is_a_failure(self):
+        rebuild = self._run(_FakeClient(reply="我不知道"))
         self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
+
+    def test_edits_that_match_nothing_are_a_failure(self):
+        """全部對不上代表這一輪沒有任何價值，不能收錢。"""
+        rebuild = self._run(
+            _FakeClient(reply='```json\n{"edits": [{"find": "不存在的字串", "replace": "x"}]}\n```')
+        )
+        self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
+        self.assertIn("對不上", rebuild.error)
 
     @override_settings(ARGUS_OPENCODE_ENABLED=False)
     def test_disabled_still_produces_the_snapshot(self):
@@ -457,84 +458,6 @@ class RebuildBillingTests(TestCase):
 
 
 @override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
-class MisplacedOutputTests(TestCase):
-    """agent 沒把檔案寫在指定位置時的取回行為。
-
-    這不是假設的情況：實測 agent 自己建了 `argus/scan-1-page-1/` 子目錄再把
-    檔案放進去，回覆裡還宣稱已經寫好。只信指定路徑的話會誤判成「未產出」，
-    使用者白等一輪、還要重扣一次點數。
-    """
-
-    def setUp(self):
-        self.user = User.objects.create_user(username="misplaced", password="safe-test-password")
-        self.scan_job = _make_scan(self.user)
-        self.page = _make_page(self.scan_job)
-        self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
-
-    def test_recovers_file_written_to_a_subdirectory(self):
-        client = _FakeClient(
-            file_content=None,
-            found_path="argus/scan-1-page-1/argus-rebuild-1-optimized.html",
-            found_content="<html>recovered</html>",
-        )
-        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
-            rebuild = run_rebuild(self.rebuild)
-        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
-
-    def test_output_filename_is_unique_per_attempt(self):
-        """用 scan/page 命名的話，重跑會撞名，find 可能撈到上一次的舊檔。"""
-        second = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
-        self.assertNotEqual(output_relpath(self.rebuild), output_relpath(second))
-
-
-@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
-class OutputValidationTests(TestCase):
-    """交付前必須確認拿到的是一份網頁。
-
-    真實事故：工作目錄裡留著一個同名殘檔，內容是別人測試寫入權限時留下的
-    一行純文字（`test sudo tee access`）。agent 那一輪其實沒寫成功，但舊程式
-    只檢查「非空」，就把那 20 bytes 當成「優化後的網頁」讓使用者下載。
-    """
-
-    def setUp(self):
-        self.user = User.objects.create_user(username="valid", password="safe-test-password")
-        self.scan_job = _make_scan(self.user)
-        self.page = _make_page(self.scan_job)
-        self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
-
-    def _run(self, client):
-        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
-            return run_rebuild(self.rebuild)
-
-    def test_non_html_file_is_rejected(self):
-        rebuild = self._run(_FakeClient(file_content="test sudo tee access"))
-        self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
-        self.assertEqual(rebuild.optimized_path, "", "非網頁內容不得被寫成產出")
-
-    def test_non_html_file_does_not_block_the_fence_fallback(self):
-        """殘檔擋在前面時，仍要能從回覆裡撈到真正的產出。"""
-        rebuild = self._run(
-            _FakeClient(
-                file_content="test sudo tee access",
-                reply="好了\n```html\n<html><body>real</body></html>\n```",
-            )
-        )
-        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
-
-    def test_non_html_fence_is_also_rejected(self):
-        rebuild = self._run(
-            _FakeClient(file_content=None, reply="```\n我沒辦法完成\n```")
-        )
-        self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
-
-    def test_accepts_a_normal_document(self):
-        rebuild = self._run(
-            _FakeClient(file_content="<!DOCTYPE html><html><body>ok</body></html>")
-        )
-        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
-
-
-@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
 class TraceTests(TestCase):
     """agent 的思考過程要能即時呈現給使用者。
 
@@ -650,3 +573,53 @@ class FindingScopeTests(TestCase):
         )
         self._finding("別頁問題", other)
         self.assertNotIn("別頁問題", self._prompt_for())
+
+
+class ApplyEditsTests(TestCase):
+    """修改清單的套用規則。
+
+    這是取代「模型重寫整份 HTML」的核心：模型只描述差異，套用由程式做。
+    實測 84KB 的頁面整份重寫會在 15,022 output token 被截斷（finish='length'），
+    連工具呼叫的參數都吐不完。
+    """
+
+    def test_applies_every_matching_edit(self):
+        html, report = apply_edits(
+            "<html><title>a</title><p>b</p></html>",
+            [
+                {"find": "<title>a</title>", "replace": "<title>A</title>", "why": "1"},
+                {"find": "<p>b</p>", "replace": "<p>B</p>", "why": "2"},
+            ],
+        )
+        self.assertIn("<title>A</title>", html)
+        self.assertIn("<p>B</p>", html)
+        self.assertEqual([r["applied"] for r in report], [1, 1])
+
+    def test_unmatched_edit_is_skipped_not_fatal(self):
+        """模型常有幾筆憑印象重打而對不上，其餘是好的。
+
+        全有全無會讓一兩個字的偏差毀掉整次產出，而使用者已經付過錢了。
+        """
+        html, report = apply_edits(
+            "<html><title>a</title></html>",
+            [
+                {"find": "不存在", "replace": "x", "why": "對不上"},
+                {"find": "<title>a</title>", "replace": "<title>A</title>", "why": "好的"},
+            ],
+        )
+        self.assertIn("<title>A</title>", html)
+        self.assertEqual([r["applied"] for r in report], [0, 1])
+
+    def test_repeated_string_is_replaced_everywhere(self):
+        """例如把整站的 alt="." 一次改掉——這正是模型會提的那種修改。"""
+        html, report = apply_edits(
+            '<img alt="."><img alt="."><img alt=".">',
+            [{"find": 'alt="."', "replace": 'alt=""', "why": "無意義 alt"}],
+        )
+        self.assertNotIn('alt="."', html)
+        self.assertEqual(report[0]["applied"], 3)
+
+    def test_report_does_not_leak_whole_page(self):
+        """report 會回傳給前端；find 可能很長，不能整段帶出去。"""
+        _, report = apply_edits("x" * 5000, [{"find": "x" * 5000, "replace": "y"}])
+        self.assertLessEqual(len(report[0]["find"]), 120)

@@ -41,6 +41,9 @@ class SiteRebuild(models.Model):
     # 所以有筆數與長度上限——沒有上限的話，一個話很多的模型可以把單一資料列
     # 撐到幾 MB，而這張表每次 polling 都會被讀。
     trace = models.JSONField(default=list, blank=True)
+    # 每一筆修改有沒有套用成功。模型偶爾會憑印象重打 find 字串而對不上，
+    # 使用者有權知道「它說要改 12 項，實際只套上 9 項」。
+    edit_report = models.JSONField(default=list, blank=True)
     model_id = models.CharField(max_length=128, blank=True)
     # agent 回報的實際花費（USD），計費的依據
     cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)

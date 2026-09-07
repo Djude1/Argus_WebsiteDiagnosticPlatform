@@ -18,7 +18,7 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 |---|---|
 | `snapshot.py` | `build_snapshot_html`——確定性複刻，**不呼叫任何模型** |
 | `client.py` | `OpenCodeClient`：session / prompt / **stream(SSE)** / 讀檔 / abort |
-| `prompts.py` | `build_optimization_prompt`——含提示注入的邊界宣告 |
+| `prompts.py` | `build_optimization_prompt`——要求**修改清單**而非整份 HTML；含提示注入邊界宣告 |
 | `services.py` | `run_rebuild` 流程編排；`agent_workspace()` / `output_relpath()` |
 | `tasks.py` | `run_site_rebuild`（Celery，**不重試**） |
 | `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格 |
@@ -26,6 +26,13 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 
 ## 硬規則
 - **複刻不得改用 LLM**。爬蟲已經存了 DOM，用模型「推理出一樣的頁面」既貴又不可能逐字一致。
+- **優化不得改回「要模型輸出整份 HTML」**。真實網頁動輒數萬字，會撞到單次輸出
+  上限：實測 84KB 的頁面在 15,022 output token 被截斷（`finish='length'`），
+  連工具呼叫的參數都沒吐完、什麼都沒交付。現在的做法是模型只輸出
+  `{find, replace}` 清單、由 `apply_edits()` 套用——同一份頁面改成清單後
+  35 秒完成、成本從 $0.052 降到 $0.019，而且一筆修改可以改掉 42 個 alt。
+- **對不上的修改要略過而不是整批失敗**。模型常有幾筆憑印象重打、字元對不上，
+  但其餘是好的；全有全無會讓一兩個字的偏差毀掉整次產出，而使用者已經付過錢。
 - **`download` 不得改成 inline 顯示**。產出是第三方 HTML，內容不受我們控制；
   在 Argus 自己的網域上渲染它 = 儲存型 XSS 與釣魚頁載體。必須維持
   `as_attachment=True` + `Content-Security-Policy: default-src 'none'; sandbox` + `nosniff`。

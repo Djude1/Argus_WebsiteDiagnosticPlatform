@@ -181,6 +181,26 @@ function RebuildWorkspace() {
             </div>
           </div>
 
+          {rebuild.edit_report?.length > 0 && (
+            <div className="rebuild-ws-edits">
+              <p className="rebuild-ws-edits-title">
+                套用的修改（{rebuild.edit_report.filter((e) => e.applied).length}/
+                {rebuild.edit_report.length}）
+              </p>
+              {rebuild.edit_report.map((item, index) => (
+                <p
+                  className={`rebuild-ws-edit ${item.applied ? "ok" : "miss"}`}
+                  key={`edit-${index}`}
+                >
+                  <span className="rebuild-ws-edit-count">
+                    {item.applied ? `×${item.applied}` : "未套用"}
+                  </span>
+                  {item.why || item.find}
+                </p>
+              ))}
+            </div>
+          )}
+
           {both && (
             <p className={`rebuild-ws-diff ${identical ? "same" : "changed"}`}>
               {identical
