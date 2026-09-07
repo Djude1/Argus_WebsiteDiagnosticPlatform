@@ -225,6 +225,8 @@ class PageAnalysisInput:
     headers: dict[str, str]
     element_boxes: dict[str, dict]
     html_only: str = ""
+    # 行動版量測。空 dict 代表**未量測**（量測失敗或舊資料），不是「沒問題」。
+    layout_metrics: dict | None = None
 
 
 class HtmlSignalParser(HTMLParser):
@@ -460,7 +462,70 @@ def analyze_page(page_input: PageAnalysisInput) -> list[dict]:
     findings.extend(analyze_geo_fast(page_input, parser))
     findings.extend(analyze_security(page_input, parser))
     findings.extend(analyze_data_exposure(page_input))
+    findings.extend(analyze_ux(page_input))
     return findings
+
+
+# 手機上超出這個寬度就會出現水平捲軸。1px 以內是次像素捨入，crawler 已扣掉。
+_MOBILE_OVERFLOW_TOLERANCE_PX = 4
+
+
+def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
+    """行動版版面問題。目前只有水平溢出。
+
+    刻意只做這一項：判準客觀（`scrollWidth > clientWidth`）、不需要 computed
+    style、而且修好之後在手機上一眼看得出差別——先用最小的一項把「crawler
+    加量測」這條路走通，再考慮對比度、字級、觸控目標那批。
+
+    `layout_metrics` 為空代表**沒量到**（舊資料或量測失敗），不能當成通過。
+    """
+    metrics = page_input.layout_metrics or {}
+    if not metrics:
+        return []
+
+    overflow = int(metrics.get("overflow_px") or 0)
+    if overflow <= _MOBILE_OVERFLOW_TOLERANCE_PX:
+        return []
+
+    offenders = metrics.get("offenders") or []
+    worst = offenders[0] if offenders else {}
+    viewport = metrics.get("viewport_width") or 375
+    detail = (
+        "、".join(f"{o.get('selector')}（超出 {o.get('overflow_px')}px）" for o in offenders[:3])
+        or "未能定位到具體元素"
+    )
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            # 超出越多、破版越明顯。半個螢幕寬以上已經是嚴重可用性問題。
+            severity=(
+                Finding.Severity.MEDIUM if overflow >= viewport * 0.5 else Finding.Severity.LOW
+            ),
+            title="行動版出現水平捲動（破版）",
+            description=(
+                f"在 {viewport}px 寬的行動版視窗下，頁面內容寬度為 "
+                f"{metrics.get('scroll_width')}px，超出 {overflow}px，"
+                "會產生左右捲動。使用者需要橫向滑動才能看完內容，"
+                "在手機上是明顯的可用性問題。"
+            ),
+            remediation=(
+                "找出超出視窗的元素，改用 max-width:100% 或 width:auto，"
+                "並檢查是否有固定寬度、負 margin 或未換行的長字串（可用 "
+                "overflow-wrap:anywhere 處理）。"
+            ),
+            evidence=f"viewport={viewport}px, overflow={overflow}px, 元素：{detail}",
+            selector=worst.get("selector", ""),
+            impact_area="responsive",
+            priority_score=55 if overflow >= viewport * 0.5 else 42,
+            evidence_type="layout_metrics",
+            evidence_json={
+                "viewport_width": viewport,
+                "scroll_width": metrics.get("scroll_width"),
+                "overflow_px": overflow,
+                "offenders": offenders[:5],
+            },
+        )
+    ]
 
 
 def analyze_seo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:

@@ -310,6 +310,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 outgoing_links=page_data["outgoing_links"],
                 headers=page_data["headers"],
                 element_boxes=page_data["element_boxes"],
+                layout_metrics=page_data.get("layout_metrics") or {},
             )
             # 被阻擋的頁面內容是錯誤頁，不進行四維掃描，僅保留紀錄與警告
             if not page_data["blocked_reason"]:
@@ -322,6 +323,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         headers=page_data["headers"],
                         element_boxes=page_data["element_boxes"],
                         html_only=page_data["html_only"],
+                        layout_metrics=page_data.get("layout_metrics") or {},
                     )
                 )
                 all_findings.extend(page_findings)
@@ -784,6 +786,14 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         tested_categories = {"security", "geo"}
         if crawled_pages:
             tested_categories.update({"seo", "aeo"})
+        # UX 有兩個來源，任一成立就算「有測」：
+        #   1. 行動版版面量測（analyze_ux）——每頁都跑、不需要 agent
+        #   2. Hermes-Agent 實際跑完（預設不啟用）
+        # 量測失敗時 layout_metrics 是空 dict，那種頁不算數——沿用本段既有的
+        # 原則：沒真的測過就不能列進 tested_categories，否則報告會把「沒測」
+        # 顯示成滿分。
+        if any(page.get("layout_metrics") for page in crawled_pages):
+            tested_categories.add("ux")
         if agent_meta and agent_meta.get("status") != "error":
             tested_categories.add("ux")
         # 0 頁是「掃描實質失效」的強信號：在 warning_summary 標記 + scan_log 警告，

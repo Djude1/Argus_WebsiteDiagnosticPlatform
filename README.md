@@ -48,7 +48,9 @@
 
 1. **全站爬蟲**：Playwright Chromium headless，BFS 廣度優先，同網域最多 50 頁 / 深度 3 層，遵守 `robots.txt`
 2. **四維靜態掃描**：SEO × AEO × GEO × 被動資安，每個問題產出嚴重度、修補建議與 AI Handoff Prompt
-3. **Hermes-Agent 動態 UX 測試**（Phase 2）：LLM 驅動 Playwright 擬真使用者操作，自動回報流程斷點與 UI 缺陷
+3. **Hermes-Agent 動態 UX 測試**（Phase 2，**需明確啟用**）：LLM 驅動 Playwright 擬真使用者操作，自動回報流程斷點與 UI 缺陷。
+   一般掃描**不會執行**——必須同時滿足：`ARGUS_AGENT_ENABLED=true`、掃描模式為 `active`、勾選主動測試授權、且非單頁掃描（`scan_plan.py` 的 `run_agent`），
+   並設定 `MINIMAX_API_KEY` / `GLM_API_KEY` / `GOOGLE_API_KEY` 其中之一。條件未滿足時整段跳過，不會有 UX finding
 4. **可互動工作區**：長截圖 + Canvas 高光標示 + 側邊欄 Findings 列表，支援篩選與一鍵複製問題 Prompt
 5. **Word 報告匯出**：封面 → 摘要統計 → 逐頁問題條列 → 附錄，由 `python-docx` 產生
 

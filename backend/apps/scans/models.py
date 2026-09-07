@@ -136,6 +136,9 @@ class Page(models.Model):
     outgoing_links = models.JSONField(default=list, blank=True)
     headers = models.JSONField(default=dict, blank=True)
     element_boxes = models.JSONField(default=dict, blank=True)
+    # 行動版（375px）量到的版面資訊。目前只有水平溢出；量測失敗時是空 dict，
+    # 分析端必須把「空」當成「未量測」而不是「沒問題」。
+    layout_metrics = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

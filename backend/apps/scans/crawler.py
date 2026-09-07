@@ -193,6 +193,82 @@ async def collect_element_boxes(page) -> dict[str, dict]:
     return boxes
 
 
+# 行動版量測的視窗寬度。375 是主流手機的 CSS 寬度（iPhone 6 以降的多數機型），
+# 破版在這個寬度看得最清楚。
+MOBILE_VIEWPORT = {"width": 375, "height": 812}
+# 只回報最嚴重的幾個元素。一個溢出的子元素會讓所有祖先都超寬，全記等於洗版，
+# 而這份資料每頁都要進 DB。
+_MAX_OVERFLOW_OFFENDERS = 5
+
+
+async def collect_mobile_layout(page) -> dict:
+    """切到行動版視窗量一次水平溢出。
+
+    **必須在所有其他擷取完成之後才呼叫**：這裡會改動 viewport，跑在截圖或
+    內容擷取之前會讓那些結果變成行動版的。
+
+    失敗一律吞掉回傳 {}：這是加值資訊，不值得讓整頁擷取失敗。專案踩過同型
+    的坑——截圖寫入失敗曾導致整頁被丟進 failed_urls、掃描變成 0 頁。
+    """
+    try:
+        await page.set_viewport_size(MOBILE_VIEWPORT)
+        # 換寬度後要讓 layout 重算，否則量到的是舊值
+        await page.wait_for_timeout(300)
+        return await asyncio.wait_for(
+            page.evaluate(
+                """
+                (maxOffenders) => {
+                    const doc = document.documentElement;
+                    const viewport = doc.clientWidth;
+                    const scrollWidth = Math.max(
+                        doc.scrollWidth, document.body ? document.body.scrollWidth : 0
+                    );
+                    // 1px 容差：瀏覽器的次像素捨入常造成 1px 誤差，不是真破版
+                    const overflow = Math.max(0, scrollWidth - viewport - 1);
+                    const result = {
+                        viewport_width: viewport,
+                        scroll_width: scrollWidth,
+                        overflow_px: overflow,
+                        offenders: [],
+                    };
+                    if (!overflow || !document.body) return result;
+
+                    const describe = (el) => {
+                        const id = el.id ? `#${el.id}` : "";
+                        const cls = (el.className && typeof el.className === "string")
+                            ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+                            : "";
+                        return (el.tagName.toLowerCase() + id + cls).slice(0, 120);
+                    };
+                    const seen = new Set();
+                    const found = [];
+                    for (const el of document.body.querySelectorAll("*")) {
+                        const rect = el.getBoundingClientRect();
+                        if (!rect.width || !rect.height) continue;
+                        const right = rect.right + window.scrollX;
+                        if (right <= viewport + 1) continue;
+                        const selector = describe(el);
+                        if (seen.has(selector)) continue;
+                        seen.add(selector);
+                        found.push({
+                            selector,
+                            overflow_px: Math.round(right - viewport),
+                            width_px: Math.round(rect.width),
+                        });
+                    }
+                    found.sort((a, b) => b.overflow_px - a.overflow_px);
+                    result.offenders = found.slice(0, maxOffenders);
+                    return result;
+                }
+                """,
+                _MAX_OVERFLOW_OFFENDERS,
+            ),
+            timeout=10,
+        )
+    except Exception:
+        return {}
+
+
 async def extract_links(page, base_url: str, origin: str) -> list[str]:
     hrefs = await page.eval_on_selector_all("a[href]", "els => els.map(el => el.href)")
     links: list[str] = []
@@ -442,6 +518,7 @@ async def crawl_site(
                         html_only = ""
                         links = []
                         element_boxes = {}
+                        layout_metrics = {}
                         screenshot_path = None
                     else:
                         # 從這裡到內容擷取完成為止，若頁面被延遲觸發的 JS 導轉
@@ -475,6 +552,7 @@ async def crawl_site(
                                 html_only = ""
                                 links = []
                                 element_boxes = {}
+                                layout_metrics = {}
                                 screenshot_path = None
                             else:
                                 page_stage = "content"
@@ -516,6 +594,10 @@ async def crawl_site(
                                 )
                                 page_stage = "element_boxes"
                                 element_boxes = await collect_element_boxes(page)
+                                # 一定要放最後：會改 viewport，跑在截圖或內容
+                                # 擷取之前會讓那些結果變成行動版的
+                                page_stage = "mobile_layout"
+                                layout_metrics = await collect_mobile_layout(page)
                         finally:
                             page.remove_listener("framenavigated", _on_frame_navigated)
 
@@ -526,6 +608,7 @@ async def crawl_site(
                             html_only = ""
                             links = []
                             element_boxes = {}
+                            layout_metrics = {}
                             if screenshot_path is not None:
                                 screenshot_path.unlink(missing_ok=True)
                                 screenshot_path = None
@@ -551,6 +634,7 @@ async def crawl_site(
                             "outgoing_links": links,
                             "headers": headers,
                             "element_boxes": element_boxes,
+                            "layout_metrics": layout_metrics,
                         }
                     )
                     if blocked_reason:

@@ -28,7 +28,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `scan_plan.py` | 將單頁／全網站範圍與主動授權集中轉成各工具的執行閘門 | 寫 DB、執行任何掃描工具 |
 | `process_runner.py` | 以 `Popen` 執行 Nuclei/Katana，輪詢 DB 取消並終止 process tree | 吞掉 `ScanCancelled`、記錄 raw stdout/stderr |
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面 | 修改 ScanJob.status、呼叫 billing |
-| `scanners.py` | SEO/AEO/GEO 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
+| `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
@@ -163,6 +163,13 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 `page.screenshot()` 在 `crawler.py` 裡是在 **`pages.append()` 之前**執行的。
 舊版讓它的例外直接冒出去，會被外層的 `except Exception` 接住，**整頁被丟進 `failed_urls`**——連帶該頁的 `Page` 紀錄與 SEO/AEO finding 一起消失。
+
+**UX 有兩個來源**：`analyze_ux()`（行動版版面量測，每頁都跑）與 Hermes-Agent
+（預設不啟用）。`Page.layout_metrics` 為空代表**沒量到**（量測失敗或舊資料），
+不可當成「沒問題」——`tasks.py` 的 `tested_categories` 也依此判斷，否則報告會
+把「未評估」顯示成滿分。量測本身在 `crawler.collect_mobile_layout()`，**必須
+留在所有其他擷取之後**：它會改 viewport，跑在截圖或內容擷取之前會讓那些結果
+變成行動版的。失敗一律吞掉回傳 `{}`，比照截圖的失敗隔離。
 
 **SEO 與 AEO finding 只由 `analyze_page()` 逐頁產生**，所以「爬到 0 頁」＝這兩類完全沒有結果。正式站的實際症狀是：掃描顯示完成，但畫面截圖空白、SEO 分析整個不見，只剩站台層級的 DNS/SSL/header 檢查。
 
