@@ -124,11 +124,18 @@ def _append_trace(entries: list, event: dict) -> None:
             {"kind": "tool", "text": f"{event.get('name', '')} {detail}".strip()[:_TRACE_MAX_CHARS]}
         )
     elif kind in ("thinking", "text") and text:
-        if entries and entries[-1]["kind"] == kind:
-            merged = entries[-1]["text"] + event.get("text", "")
-            entries[-1]["text"] = merged[:_TRACE_MAX_CHARS]
-        else:
-            entries.append({"kind": kind, "text": event.get("text", "")[:_TRACE_MAX_CHARS]})
+        chunk = event.get("text", "")
+        last = entries[-1] if entries else None
+        # 只在「同型別且尚未寫滿」時併進上一則。少了長度判斷的話，一旦某則
+        # 達到上限，後續所有 delta 都會被重新截回同樣長度、內容再也不增加，
+        # 畫面看起來就像 agent 停住了——使用者實際回報過「卡住」。
+        if last and last["kind"] == kind and len(last["text"]) < _TRACE_MAX_CHARS:
+            room = _TRACE_MAX_CHARS - len(last["text"])
+            last["text"] += chunk[:room]
+            chunk = chunk[room:]
+        while chunk:
+            entries.append({"kind": kind, "text": chunk[:_TRACE_MAX_CHARS]})
+            chunk = chunk[_TRACE_MAX_CHARS:]
     del entries[:-_TRACE_MAX_ENTRIES]
 
 

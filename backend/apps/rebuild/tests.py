@@ -567,6 +567,20 @@ class TraceTests(TestCase):
         self.assertEqual(len(thinking), 1)
         self.assertEqual(thinking[0]["text"], "檢查標題")
 
+    def test_long_reasoning_rolls_over_instead_of_freezing(self):
+        """單則寫滿後要換下一則，不能把後續內容丟掉。
+
+        真實事故：使用者看到思考流停在推理的前 1500 字、斷在句子中間，
+        以為 agent 卡住了。實際上 agent 還在跑，只是每一則新 delta 都被
+        重新截回上限、內容再也不增加。
+        """
+        client = _FakeClient(events=[{"type": "thinking", "text": "字" * 900} for _ in range(4)])
+        rebuild = self._run(client)
+        thinking = [e for e in rebuild.trace if e["kind"] == "thinking"]
+        total = sum(len(e["text"]) for e in thinking)
+        self.assertGreater(len(thinking), 1, "寫滿後應該換一則")
+        self.assertEqual(total, 3600, "內容不得遺失")
+
     def test_trace_is_capped(self):
         """沒有上限的話，話多的模型能把單列撐到幾 MB，而列表每次 polling 都讀它。"""
         client = _FakeClient(
