@@ -36,6 +36,11 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
   漏掉一條，使用者就會為沒拿到的產出付錢，而且不會有人發現。
 - **點數必須在排任務之前扣**（`views.create`）。反過來的話，餘額不足的人已經
   讓 agent 花掉真錢了才被擋。
+- **預扣是額度不是價格**。成功時走 `settle_rebuild_actual` 依 `cost_usd` 結算、
+  退回差額；實際用量超過預扣時**只收預扣額，不得追扣**——追扣等於在沒有再次
+  檢查餘額的情況下二次扣款，可能把餘額扣成負數。
+- **`coins_charged` 一律從 CoinTransaction 回推**（`_sum_rebuild_charge`），
+  不要自己再算一次：帳目的唯一事實來源是交易紀錄，兩邊各算遲早對不起來。
 - **`output_relpath()` 必須維持扁平檔名**，不要改回子目錄：子目錄要先建出來，
   而建目錄通常得動用 bash——那會讓 agent 端沒辦法把 bash 關掉。
 - **不落地 prompt 與模型原始回應**。那裡面是被掃描站的原始碼；`error` 欄位

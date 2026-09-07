@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from apps.billing.services import (
     InsufficientCoinError,
-    estimate_rebuild_cost,
+    estimate_rebuild_hold,
     get_or_create_wallet,
     hold_for_rebuild,
 )
@@ -76,14 +76,17 @@ class SiteRebuildViewSet(
 
     @action(detail=False, methods=["get"])
     def cost(self, request):
-        """產生前先讓前端知道要花多少點。
+        """產生前先讓前端知道要預扣多少點。
 
-        沒有這個端點，使用者只能按下去才從 402 得知價格與餘額不足——按鈕
+        沒有這個端點，使用者只能按下去才從 402 得知額度與餘額不足——按鈕
         本身要先講清楚代價，這是 affordance 不是額外功能。
+
+        回傳的是**預扣上限**不是最終價格：實際依 agent 用量結算後退差額，
+        所以欄位名是 hold，不要改回 cost 讓前端誤以為那就是要付的錢。
         """
         return Response(
             {
-                "cost": estimate_rebuild_cost(),
+                "hold": estimate_rebuild_hold(),
                 "balance": get_or_create_wallet(request.user).balance,
             }
         )

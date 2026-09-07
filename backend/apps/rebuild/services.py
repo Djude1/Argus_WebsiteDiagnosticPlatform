@@ -12,8 +12,10 @@ from decimal import Decimal
 
 import requests
 from django.conf import settings
+from django.db.models import Sum
 
-from apps.billing.services import refund_rebuild
+from apps.billing.models import CoinTransaction
+from apps.billing.services import refund_rebuild, settle_rebuild_actual
 from apps.rebuild.client import OpenCodeClient, OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import OPTIMIZED_FILENAME, build_optimization_prompt
@@ -60,6 +62,18 @@ def _write_media(relative_path: str, content: str) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return relative_path
+
+
+def _sum_rebuild_charge(rebuild: SiteRebuild) -> int:
+    """這次複刻實際被扣掉的淨點數。
+
+    從 CoinTransaction 回推而不是自己再算一次：帳目的唯一事實來源是交易紀錄，
+    兩邊各算各的遲早會對不起來。
+    """
+    total = CoinTransaction.objects.filter(site_rebuild=rebuild).aggregate(
+        s=Sum("amount")
+    )["s"]
+    return max(0, -(total or 0))
 
 
 def _set_status(rebuild: SiteRebuild, status: str, **fields) -> None:
@@ -173,4 +187,8 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
         model_id=result["model_id"][:128],
         cost_usd=Decimal(str(result["cost"] or 0)),
     )
+    # 依實際用量結算：cost_usd 要先落地，settle 才讀得到
+    settle_rebuild_actual(rebuild.scan_job.user, rebuild)
+    rebuild.coins_charged = _sum_rebuild_charge(rebuild)
+    rebuild.save(update_fields=["coins_charged", "updated_at"])
     return rebuild

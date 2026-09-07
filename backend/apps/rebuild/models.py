@@ -38,7 +38,11 @@ class SiteRebuild(models.Model):
     # 只存 session id 供追查，不存 prompt/回應內容——那可能含被掃描站的原始碼。
     opencode_session_id = models.CharField(max_length=128, blank=True)
     model_id = models.CharField(max_length=128, blank=True)
+    # agent 回報的實際花費（USD），計費的依據
     cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+    # 結算後真正扣掉的點數。預扣是上限不是價格，兩者要分開存，否則使用者
+    # 看到的「花了 30 點」會與實際不符。
+    coins_charged = models.PositiveIntegerField(default=0)
     # 只放可以直接顯示給使用者的訊息；provider 原始錯誤不落地（可能含 key）。
     error = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from decimal import ROUND_CEILING, Decimal
+
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -121,9 +123,27 @@ def refund_full_for_scan(user, scan_job, *, reason: str) -> CoinTransaction | No
     )
 
 
-def estimate_rebuild_cost() -> int:
-    """一次網頁複刻＋優化的點數（固定價，與頁數無關）。"""
-    return settings.ARGUS_COIN_PER_REBUILD
+def estimate_rebuild_hold() -> int:
+    """建立複刻時要預扣的點數上限。
+
+    這是**預授權額度不是價格**：最終只收實際用量（settle_rebuild_actual），
+    差額退回。預扣存在的理由是餘額不足的人不能先把 agent 的錢花掉。
+    """
+    return settings.ARGUS_COIN_REBUILD_HOLD
+
+
+def rebuild_coins_for_usd(cost_usd) -> int:
+    """把 agent 回報的實際花費（USD）換算成點數。
+
+    無條件進位：不足一點的用量仍要收一點，否則大量極小的呼叫會完全免費。
+    再套最低消費——agent 用免費模型時 USD 成本是 0，但 Argus 自己的 worker
+    與儲存成本不會因此消失。
+    """
+    exact = Decimal(str(cost_usd or 0)) * settings.ARGUS_COIN_PER_USD
+    return max(
+        settings.ARGUS_COIN_REBUILD_MIN,
+        int(exact.to_integral_value(rounding=ROUND_CEILING)),
+    )
 
 
 @transaction.atomic
@@ -133,7 +153,7 @@ def hold_for_rebuild(user, site_rebuild) -> CoinTransaction:
     先扣再跑，不是跑完才扣：優化那段會呼叫外部 agent 花真錢，餘額不足的人
     必須在花錢之前就被擋下來。失敗時由 refund_rebuild 退回。
     """
-    cost = estimate_rebuild_cost()
+    cost = estimate_rebuild_hold()
     get_or_create_wallet(user)
     wallet = CoinWallet.objects.select_for_update().get(user=user)
     if wallet.balance < cost:
@@ -148,7 +168,55 @@ def hold_for_rebuild(user, site_rebuild) -> CoinTransaction:
         balance_after=new_balance,
         scan_job=site_rebuild.scan_job,
         site_rebuild=site_rebuild,
-        note=f"網頁複刻預扣（page={site_rebuild.page_id}）",
+        note=f"網頁複刻預扣上限（page={site_rebuild.page_id}）",
+    )
+
+
+@transaction.atomic
+def settle_rebuild_actual(user, site_rebuild) -> CoinTransaction | None:
+    """複刻成功：依 agent 回報的實際花費結算，退回沒用到的預扣。
+
+    與 settle_scan_actual 同一套模式。實收金額**上限是預扣額**：實際用量
+    超過預扣時只收預扣額，不追扣——追扣等於在使用者沒同意、也沒再檢查餘額
+    的情況下二次扣款，可能把餘額扣成負數。
+
+    冪等：已經有這次複刻的 REBUILD_REFUND 交易就代表結算過了，直接跳過。
+    """
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    if CoinTransaction.objects.filter(
+        wallet=wallet,
+        site_rebuild=site_rebuild,
+        kind=CoinTransaction.Kind.REBUILD_REFUND,
+    ).exists():
+        return None
+
+    held = _sum_rebuild_holds(wallet, site_rebuild.id)
+    actual = min(held, rebuild_coins_for_usd(site_rebuild.cost_usd))
+    refund_amount = max(0, held - actual)
+
+    if refund_amount <= 0:
+        # 0 元標記交易當冪等信號：實際用滿預扣時也要留下「已結算」的痕跡
+        return CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=0,
+            kind=CoinTransaction.Kind.REBUILD_REFUND,
+            balance_after=wallet.balance,
+            scan_job=site_rebuild.scan_job,
+            site_rebuild=site_rebuild,
+            note=f"實際用量 {actual} coin，無退款差額",
+        )
+
+    new_balance = wallet.balance + refund_amount
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=refund_amount,
+        kind=CoinTransaction.Kind.REBUILD_REFUND,
+        balance_after=new_balance,
+        scan_job=site_rebuild.scan_job,
+        site_rebuild=site_rebuild,
+        note=f"實際用量 {actual} coin，退回未使用的 {refund_amount} coin",
     )
 
 

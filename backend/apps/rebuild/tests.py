@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -18,10 +19,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.billing.services import (
-    estimate_rebuild_cost,
+    estimate_rebuild_hold,
     get_or_create_wallet,
     hold_for_rebuild,
     refund_rebuild,
+    settle_rebuild_actual,
 )
 from apps.rebuild.client import OpenCodeError
 from apps.rebuild.models import SiteRebuild
@@ -137,7 +139,8 @@ class _FakeClient:
     """替身：真的 client 會連外網並花錢，測試不得碰到它。"""
 
     def __init__(self, reply="done", file_content="<html>optimized</html>", error=None,
-                 found_path=None, found_content=None):
+                 found_path=None, found_content=None, cost=0.25):
+        self.cost = cost
         self.reply = reply
         self.file_content = file_content
         self.error = error
@@ -156,7 +159,7 @@ class _FakeClient:
         if self.error:
             raise self.error
         self.prompt_text = text
-        return {"text": self.reply, "cost": 0.25, "model_id": "opencode/fake"}
+        return {"text": self.reply, "cost": self.cost, "model_id": "opencode/fake"}
 
     def read_file(self, directory, path):
         self.read_path = path
@@ -305,7 +308,7 @@ class RebuildBillingTests(TestCase):
         with patch("apps.rebuild.views.run_site_rebuild.delay"):
             response = self.client.post("/api/rebuilds/", {"page": self.page.id})
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(self._balance(), 1000 - estimate_rebuild_cost())
+        self.assertEqual(self._balance(), 1000 - estimate_rebuild_hold())
 
     def test_insufficient_balance_is_rejected_before_any_agent_call(self):
         """餘額不足必須在排任務**之前**擋下，否則 agent 已經花掉真錢了。"""
@@ -329,17 +332,76 @@ class RebuildBillingTests(TestCase):
         ):
             run_rebuild(rebuild)
         self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
-        self.assertEqual(self._balance(), held + estimate_rebuild_cost())
+        self.assertEqual(self._balance(), held + estimate_rebuild_hold())
 
-    @override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc")
-    def test_success_keeps_the_charge(self):
+    @override_settings(
+        ARGUS_OPENCODE_ENABLED=True,
+        ARGUS_OPENCODE_BASE_URL="http://oc",
+        ARGUS_COIN_PER_USD=100,
+        ARGUS_COIN_REBUILD_HOLD=30,
+    )
+    def test_success_charges_actual_usage_and_refunds_the_rest(self):
+        """預扣是額度不是價格：$0.05 × 100 = 5 點，其餘 25 點要退。"""
         rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
         hold_for_rebuild(self.user, rebuild)
-        held = self._balance()
-        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
+        after_hold = self._balance()
+        with patch(
+            "apps.rebuild.services.OpenCodeClient", return_value=_FakeClient(cost=0.05)
+        ):
             run_rebuild(rebuild)
         self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
-        self.assertEqual(self._balance(), held)
+        self.assertEqual(self._balance(), after_hold + 25)
+        self.assertEqual(rebuild.coins_charged, 5)
+
+    @override_settings(
+        ARGUS_OPENCODE_ENABLED=True,
+        ARGUS_OPENCODE_BASE_URL="http://oc",
+        ARGUS_COIN_PER_USD=100,
+        ARGUS_COIN_REBUILD_HOLD=30,
+    )
+    def test_usage_above_the_hold_is_capped_not_chased(self):
+        """實際用量超過預扣時只收預扣額。
+
+        追扣等於在使用者沒同意、也沒再檢查餘額的情況下二次扣款，
+        可能把餘額扣成負數。
+        """
+        rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+        hold_for_rebuild(self.user, rebuild)
+        after_hold = self._balance()
+        with patch(
+            "apps.rebuild.services.OpenCodeClient", return_value=_FakeClient(cost=9.99)
+        ):
+            run_rebuild(rebuild)
+        self.assertEqual(self._balance(), after_hold, "不得再多扣")
+        self.assertEqual(rebuild.coins_charged, 30)
+
+    @override_settings(
+        ARGUS_OPENCODE_ENABLED=True,
+        ARGUS_OPENCODE_BASE_URL="http://oc",
+        ARGUS_COIN_PER_USD=100,
+        ARGUS_COIN_REBUILD_MIN=1,
+    )
+    def test_free_model_still_costs_the_minimum(self):
+        """agent 用免費模型時 USD 成本是 0，但 worker 與儲存成本不會消失。"""
+        rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+        hold_for_rebuild(self.user, rebuild)
+        after_hold = self._balance()
+        with patch(
+            "apps.rebuild.services.OpenCodeClient", return_value=_FakeClient(cost=0)
+        ):
+            run_rebuild(rebuild)
+        self.assertEqual(rebuild.coins_charged, 1)
+        self.assertEqual(self._balance(), after_hold + estimate_rebuild_hold() - 1)
+
+    def test_settlement_is_idempotent(self):
+        rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+        hold_for_rebuild(self.user, rebuild)
+        rebuild.cost_usd = Decimal("0.05")
+        rebuild.save(update_fields=["cost_usd"])
+        settle_rebuild_actual(self.user, rebuild)
+        once = self._balance()
+        settle_rebuild_actual(self.user, rebuild)
+        self.assertEqual(self._balance(), once)
 
     @override_settings(ARGUS_OPENCODE_ENABLED=False)
     def test_disabled_optimization_is_refunded(self):
@@ -348,7 +410,7 @@ class RebuildBillingTests(TestCase):
         hold_for_rebuild(self.user, rebuild)
         held = self._balance()
         run_rebuild(rebuild)
-        self.assertEqual(self._balance(), held + estimate_rebuild_cost())
+        self.assertEqual(self._balance(), held + estimate_rebuild_hold())
 
     def test_refund_is_idempotent(self):
         """worker 與其他路徑可能各退一次，第二次不能再加錢。"""
@@ -369,12 +431,13 @@ class RebuildBillingTests(TestCase):
 
         refund_rebuild(self.user, first, reason="失敗")
 
-        self.assertEqual(self._balance(), both_held + estimate_rebuild_cost())
+        self.assertEqual(self._balance(), both_held + estimate_rebuild_hold())
 
-    def test_cost_endpoint_reports_price_and_balance(self):
+    def test_cost_endpoint_reports_hold_and_balance(self):
+        """回傳的是預扣上限。欄位名不能叫 cost——那會讓前端把額度當成價格顯示。"""
         response = self.client.get("/api/rebuilds/cost/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["cost"], estimate_rebuild_cost())
+        self.assertEqual(response.json()["hold"], estimate_rebuild_hold())
         self.assertEqual(response.json()["balance"], 1000)
 
 

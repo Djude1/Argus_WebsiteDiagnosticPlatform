@@ -119,7 +119,8 @@ function PageRebuildPanel({ scan, page }) {
       <p className="rebuild-title">🧬 網頁複刻與優化</p>
       <p className="rebuild-desc">
         複刻這一頁的原始樣貌，並依本頁的診斷結果產生優化版本。
-        {pricing && `每次消耗 ${pricing.cost} 點，目前餘額 ${pricing.balance} 點。`}
+        {pricing &&
+          `先預扣 ${pricing.hold} 點，完成後依實際用量結算、退回差額（餘額 ${pricing.balance} 點）。`}
       </p>
 
       {!rebuild && (
@@ -132,7 +133,7 @@ function PageRebuildPanel({ scan, page }) {
           {busy
             ? "建立中…"
             : pricing
-              ? `產生複刻與優化版（${pricing.cost} 點）`
+              ? `產生複刻與優化版（預扣 ${pricing.hold} 點）`
               : "產生複刻與優化版"}
         </button>
       )}
@@ -144,6 +145,12 @@ function PageRebuildPanel({ scan, page }) {
             {STATUS_LABEL[rebuild.status] || rebuild.status}
             {running && "…"}
           </p>
+
+          {rebuild.status === "succeeded" && rebuild.coins_charged > 0 && (
+            <p className="rebuild-note">
+              本次實際扣 {rebuild.coins_charged} 點，未使用的預扣已退回。
+            </p>
+          )}
 
           {rebuild.error && <p className="rebuild-note">{rebuild.error}</p>}
 

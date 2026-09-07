@@ -390,10 +390,19 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 # - 每爬一個頁面的單價（建立掃描時以 max_pages × 此值預扣，完成後依實際頁數退差）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
 ARGUS_COIN_PER_PAGE = int(os.getenv("ARGUS_COIN_PER_PAGE", "10"))
-# 一次網頁複刻＋優化的點數。複刻本身不花錢，這個價錢買的是優化那段的 agent
-# 呼叫——實測一頁極小的 HTML 就要 $0.0018，真實頁面會更貴。預設值是佔位，
-# 上線前應依實際模型成本重新定價。
-ARGUS_COIN_PER_REBUILD = int(os.getenv("ARGUS_COIN_PER_REBUILD", "30"))
+# 網頁複刻的計費：預扣上限 → 依 agent 回報的實際用量結算退差額，
+# 與掃描的 hold_for_scan / settle_scan_actual 同一套模式。
+#
+# 預扣的存在理由是「餘額不足的人不能先把 agent 的錢花掉」，不是最終價格；
+# 實際只收 min(上限, max(下限, 實際 USD × ARGUS_COIN_PER_USD))。
+ARGUS_COIN_REBUILD_HOLD = int(os.getenv("ARGUS_COIN_REBUILD_HOLD", "30"))
+# USD → coin 換算。依購點方案推算：1 coin ≈ NT$0.845（四個方案平均），
+# USD/NTD 以 32 計，純成本轉換約 38 coin/USD。預設 100 約為純成本的 2.6 倍，
+# 用來涵蓋 worker 運算與儲存。**這是營運參數，該由定價決定而不是照抄。**
+ARGUS_COIN_PER_USD = int(os.getenv("ARGUS_COIN_PER_USD", "100"))
+# 每次成功複刻的最低消費。沒有下限的話，agent 用免費模型時實際成本為 0、
+# 這個功能會完全不收費，但 Argus 自己的 worker 與儲存成本仍在。
+ARGUS_COIN_REBUILD_MIN = int(os.getenv("ARGUS_COIN_REBUILD_MIN", "1"))
 
 # 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
 ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()

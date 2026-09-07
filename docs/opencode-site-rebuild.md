@@ -115,9 +115,28 @@ model: MiniMax-M3   cost: 0.00178578 USD
 模型由 .126 上的 agent 設定決定，不是 Argus 這邊選的。要指定就設
 `ARGUS_OPENCODE_MODEL=provider/model`。
 
-**已接 billing**：建立任務時預扣 `ARGUS_COIN_PER_REBUILD`（預設 30 點），
-任何失敗路徑都全額退（`refund_rebuild` 冪等）。預設值是佔位價格，上線前
-應依實際 agent 成本重新定價——30 點目前對應不到任何實測數字。
+**計費是按實際用量結算**，與掃描的 `hold_for_scan` / `settle_scan_actual`
+同一套模式：
+
+```
+建立時   預扣 ARGUS_COIN_REBUILD_HOLD（預設 30）  ← 額度，不是價格
+完成後   實收 = min(預扣, max(下限, 實際USD × ARGUS_COIN_PER_USD))，差額退回
+失敗     全額退（refund_rebuild，冪等）
+```
+
+實測一次（$0.001333）：預扣 30 → 實收 **1** 點 → 退回 29。
+
+三個參數：
+
+| 設定 | 預設 | 意義 |
+|---|---|---|
+| `ARGUS_COIN_REBUILD_HOLD` | 30 | 預扣上限。實際用量超過時**只收上限、不追扣**——追扣等於沒再檢查餘額就二次扣款 |
+| `ARGUS_COIN_PER_USD` | 100 | USD→coin。購點方案平均 1 coin ≈ NT$0.845，USD/NTD 取 32 → 純成本約 38；預設 100 約為純成本 2.6 倍 |
+| `ARGUS_COIN_REBUILD_MIN` | 1 | 每次成功的最低消費 |
+
+**目前實際成本低到最低消費才是決定價格的那一項**：$0.001333 × 100 = 0.13 點，
+遠低於下限 1 點。也就是說現在等於固定收 1 點。真正想按用量浮動計費，得等
+使用大模型或大頁面把成本拉到 0.01 USD 以上，或把 `ARGUS_COIN_PER_USD` 調高。
 
 ## 除錯順序
 
