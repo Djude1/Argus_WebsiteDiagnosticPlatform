@@ -20,7 +20,6 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
             "has_snapshot",
             "has_optimized",
             "coins_charged",
-            "trace",
             "error",
             "created_at",
             "updated_at",
@@ -32,6 +31,18 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
 
     def get_has_optimized(self, obj) -> bool:
         return bool(obj.optimized_path)
+
+
+class SiteRebuildDetailSerializer(SiteRebuildSerializer):
+    """單筆檢視才帶 trace。
+
+    思考流可以到上百 KB，而列表端點會被每秒 polling——放進 list 等於每次都
+    把所有紀錄的思考流一起撈出來。
+    """
+
+    class Meta(SiteRebuildSerializer.Meta):
+        fields = [*SiteRebuildSerializer.Meta.fields, "trace"]
+        read_only_fields = fields
 
 
 class SiteRebuildCreateSerializer(serializers.Serializer):

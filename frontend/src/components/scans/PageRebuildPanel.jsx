@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../../api";
 
 const POLL_INTERVAL_MS = 5000;
-
-// 思考流的標記。工具呼叫要跟推理視覺上分開——使用者最在意的是「它到底
-// 動了什麼」，那是判斷結果可不可信的依據。
-const TRACE_ICON = { thinking: "◇", tool: "▸", text: "◆" };
 
 // 後端 SiteRebuild.Status 的對應。進行中的三個狀態要繼續 polling。
 const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing"]);
@@ -156,24 +153,13 @@ function PageRebuildPanel({ scan, page }) {
             </p>
           )}
 
-          {rebuild.trace?.length > 0 && (
-            <details className="rebuild-trace" open={running}>
-              <summary>AI 思考過程（{rebuild.trace.length}）</summary>
-              <div className="rebuild-trace-body">
-                {rebuild.trace.map((entry, index) => (
-                  <p
-                    className={`rebuild-trace-line kind-${entry.kind}`}
-                    key={`${entry.kind}-${index}`}
-                  >
-                    <span className="rebuild-trace-icon">
-                      {TRACE_ICON[entry.kind] || "·"}
-                    </span>
-                    {entry.text}
-                  </p>
-                ))}
-              </div>
-            </details>
-          )}
+          {/* 思考流與並排比對放在專屬頁面：側欄只有 360px，那是需要閱讀的內容 */}
+          <Link
+            className="rebuild-open-workspace"
+            to={`/scans/${scan.id}/rebuild/${rebuild.id}`}
+          >
+            {running ? "查看即時進度 →" : "查看過程與產出比對 →"}
+          </Link>
 
           {rebuild.error && <p className="rebuild-note">{rebuild.error}</p>}
 

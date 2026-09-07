@@ -13,7 +13,11 @@ from apps.billing.services import (
     hold_for_rebuild,
 )
 from apps.rebuild.models import SiteRebuild
-from apps.rebuild.serializers import SiteRebuildCreateSerializer, SiteRebuildSerializer
+from apps.rebuild.serializers import (
+    SiteRebuildCreateSerializer,
+    SiteRebuildDetailSerializer,
+    SiteRebuildSerializer,
+)
 from apps.rebuild.tasks import run_site_rebuild
 from apps.scans.models import Page
 
@@ -39,6 +43,12 @@ class SiteRebuildViewSet(
     serializer_class = SiteRebuildSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = RebuildPagination
+
+    def get_serializer_class(self):
+        # 單筆才給 trace；列表被每秒 polling，不能每次都拖著思考流。
+        if self.action == "retrieve":
+            return SiteRebuildDetailSerializer
+        return SiteRebuildSerializer
 
     def get_queryset(self):
         queryset = SiteRebuild.objects.filter(

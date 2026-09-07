@@ -9,6 +9,7 @@ function lazyNamed(loader, exportName) {
 
 const loadAuthPages = () => import("./features/auth/AuthPages.jsx");
 const loadScanExperience = () => import("./features/scans/ScanExperience.jsx");
+const loadRebuildWorkspace = () => import("./features/scans/RebuildWorkspace.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
@@ -22,6 +23,7 @@ const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
 const ScansPlaceholder = lazyNamed(loadScanExperience, "ScansPlaceholder");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const TopologyPage = lazyNamed(loadScanExperience, "TopologyPage");
+const RebuildWorkspace = lazyNamed(loadRebuildWorkspace, "RebuildWorkspace");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
 const DashboardPage = lazyNamed(loadAuthenticatedPages, "DashboardPage");
 const HistoryPage = lazyNamed(loadAuthenticatedPages, "HistoryPage");
@@ -118,6 +120,10 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/scans" element={<ScansPlaceholder />} />
             <Route path="/scans/:scanId" element={<ScanDetailPage />} />
             <Route path="/scans/:scanId/topology" element={<TopologyPage />} />
+            <Route
+              path="/scans/:scanId/rebuild/:rebuildId"
+              element={<RebuildWorkspace />}
+            />
           </Route>
           <Route
             path="/history"

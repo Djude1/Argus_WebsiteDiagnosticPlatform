@@ -105,7 +105,7 @@ def _set_status(rebuild: SiteRebuild, status: str, **fields) -> None:
 # 思考流的上限。前端每 5 秒 polling 一次這筆資料，不設限的話單列會膨脹到
 # 讓列表端點變慢。
 _TRACE_MAX_ENTRIES = 120
-_TRACE_MAX_CHARS = 400
+_TRACE_MAX_CHARS = 1500
 # 每累積這麼多事件才寫一次 DB。逐則寫等於一次任務打上千次 UPDATE。
 _TRACE_FLUSH_EVERY = 8
 

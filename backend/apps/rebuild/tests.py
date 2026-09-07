@@ -575,12 +575,20 @@ class TraceTests(TestCase):
         rebuild = self._run(client)
         self.assertLessEqual(len(rebuild.trace), 120)
 
-    def test_trace_is_visible_through_the_api(self):
+    def test_trace_is_visible_on_the_detail_endpoint(self):
+        self._run(_FakeClient())
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        row = client.get(f"/api/rebuilds/{self.rebuild.id}/").json()
+        self.assertTrue(row["trace"], "專屬頁面要靠這個欄位呈現過程")
+
+    def test_list_does_not_carry_the_trace(self):
+        """列表被每秒 polling；帶著思考流等於每次都把上百 KB 一起撈出來。"""
         self._run(_FakeClient())
         client = APIClient()
         client.force_authenticate(user=self.user)
         row = client.get("/api/rebuilds/").json()["results"][0]
-        self.assertTrue(row["trace"], "前端要靠這個欄位呈現過程")
+        self.assertNotIn("trace", row)
 
 
 @override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")

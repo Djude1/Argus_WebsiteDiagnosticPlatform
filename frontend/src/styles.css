@@ -1421,6 +1421,125 @@
     @apply text-slate-700;
   }
 
+  .rebuild-open-workspace {
+    @apply mt-2 block text-center text-[11px] font-semibold text-sky-700 underline underline-offset-2 hover:text-sky-900;
+  }
+
+  /* ========================================
+     複刻工作區（獨立頁面）
+     側欄那 360px 放不下需要閱讀的思考流，所以獨立一頁：
+     左邊過程、右邊產出，寬度才夠。
+     ======================================== */
+
+  .rebuild-workspace {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .rebuild-ws-back {
+    @apply text-xs font-semibold text-slate-500 hover:text-slate-800;
+  }
+
+  .rebuild-ws-title {
+    @apply mt-1 text-lg font-bold text-slate-800;
+  }
+
+  .rebuild-ws-url {
+    @apply truncate text-xs text-slate-500;
+  }
+
+  .rebuild-ws-status {
+    @apply mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-700;
+  }
+
+  .rebuild-ws-grid {
+    @apply mt-4 grid gap-4 lg:grid-cols-2;
+  }
+
+  .rebuild-ws-pane {
+    @apply flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-3;
+  }
+
+  .rebuild-ws-pane-head {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
+
+  .rebuild-ws-pane-title {
+    @apply text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-ws-trace {
+    @apply max-h-[32rem] overflow-y-auto rounded-xl bg-white p-2;
+  }
+
+  .rebuild-ws-entry {
+    @apply mb-1.5 flex gap-2 rounded-lg px-2 py-1.5 text-xs leading-relaxed;
+  }
+
+  .rebuild-ws-entry-tag {
+    @apply shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold;
+  }
+
+  .rebuild-ws-entry-text {
+    @apply whitespace-pre-wrap break-words;
+  }
+
+  .rebuild-ws-entry.kind-thinking {
+    @apply bg-slate-50 text-slate-600;
+  }
+
+  .rebuild-ws-entry.kind-thinking .rebuild-ws-entry-tag {
+    @apply bg-slate-200 text-slate-600;
+  }
+
+  .rebuild-ws-entry.kind-tool {
+    @apply bg-sky-50 font-mono text-sky-800;
+  }
+
+  .rebuild-ws-entry.kind-tool .rebuild-ws-entry-tag {
+    @apply bg-sky-200 text-sky-800;
+  }
+
+  .rebuild-ws-entry.kind-text {
+    @apply bg-emerald-50 text-slate-800;
+  }
+
+  .rebuild-ws-entry.kind-text .rebuild-ws-entry-tag {
+    @apply bg-emerald-200 text-emerald-900;
+  }
+
+  .rebuild-ws-tabs {
+    @apply flex gap-1;
+  }
+
+  .rebuild-ws-tab {
+    @apply rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .rebuild-ws-tab.active {
+    @apply border-sky-500 bg-sky-50 text-sky-800;
+  }
+
+  /* 「有沒有改到東西」要一眼看見——這是使用者實際踩過的問題 */
+  .rebuild-ws-diff {
+    @apply mb-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold;
+  }
+
+  .rebuild-ws-diff.same {
+    @apply bg-amber-50 text-amber-800;
+  }
+
+  .rebuild-ws-diff.changed {
+    @apply bg-emerald-50 text-emerald-800;
+  }
+
+  .rebuild-ws-frame {
+    @apply h-[32rem] w-full rounded-xl border border-slate-200 bg-white;
+  }
+
+  .rebuild-ws-actions {
+    @apply mt-2 flex gap-2;
+  }
+
   /* ========================================
      掃描列表 sidebar 強化
      ======================================== */
