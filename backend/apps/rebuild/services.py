@@ -26,6 +26,24 @@ logger = logging.getLogger(__name__)
 # agent 沒照指示寫檔時的退路：從回覆裡撈 ```html 圍欄。
 _HTML_FENCE = re.compile(r"```(?:html)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
+# 交付前的最低門檻：至少要是一份 HTML 文件。
+_HTML_MARKERS = ("<html", "<!doctype html", "<body")
+
+
+def _looks_like_html(text: str | None) -> bool:
+    """判斷取回的內容是不是一份網頁。
+
+    存在的理由是真的踩過：工作目錄裡留著一個同名的殘檔（內容是別人測試寫入
+    權限時留下的一行純文字），agent 這一輪其實沒寫成功，但舊程式只檢查「非空」
+    就把那 20 bytes 當成優化後的網頁交給使用者下載。
+
+    只認文件層級的標記，不接受片段——prompt 要求的就是完整頁面。
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in _HTML_MARKERS)
+
 
 def rebuild_media_dir(rebuild: SiteRebuild) -> str:
     return f"rebuilds/scan-{rebuild.scan_job_id}/page-{rebuild.page_id}"
@@ -103,18 +121,22 @@ def _extract_optimized_html(
     回覆裡宣稱已經寫好了。只信第一層的話，這種情況會被判成「未產出」。
     """
     content = client.read_file(workspace, relpath)
-    if content:
+    if _looks_like_html(content):
         return content
+    if content:
+        # 檔案在、但不是網頁：多半是殘檔或 agent 寫壞了。不能當成產出，
+        # 但也不能就此放棄——後面兩層還可能拿到真的結果。
+        logger.warning("OpenCode 的 %s 不是 HTML（%d bytes），忽略", relpath, len(content))
 
     found = client.find_file(workspace, relpath.rsplit("/", 1)[-1])
     if found:
         content = client.read_file(workspace, found)
-        if content:
+        if _looks_like_html(content):
             logger.warning("OpenCode 把 %s 寫到 %s，已改從該處讀取", relpath, found)
             return content
 
     match = _HTML_FENCE.search(reply or "")
-    if match and match.group(1).strip():
+    if match and _looks_like_html(match.group(1).strip()):
         logger.warning("OpenCode 未寫出 %s，改用回覆中的 HTML 圍欄", relpath)
         return match.group(1).strip()
     return None

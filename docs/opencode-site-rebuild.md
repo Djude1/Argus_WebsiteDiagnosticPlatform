@@ -95,11 +95,29 @@ agent 仍然走得出去。另外 .126 的 hostname 是 `k8s`——如果那是�
   才能讓提示注入即使得手也帶不走東西。
 - `external_directory: deny` 讓 `read`/`edit` 只在 session 的 `directory` 內有效。
 
-> **這份設定是依 opencode 官方 schema（`$defs.PermissionConfig`）寫出來的，
-> 我沒有辦法在你那台機器上實測**——我只有 HTTP API，沒有 shell。套用後請先
-> 確認：`GET /agent` 看得到 `argus-rebuild`，且跑一次複刻能成功產出檔案。
-> 若 agent 因為缺少某個工具而寫不出檔案，`SiteRebuild.error` 會是
-> 「agent 未產出優化後的 HTML」。
+### 實測過的環境事實（2026-09-07，踩過才寫的）
+
+| 事實 | 症狀 | 
+|---|---|
+| **agent 定義只能放 `~/.config/opencode/agent/<name>.md`** | 放進 `~/.omo/omo.jsonc` 的 `[opencode].agents` **不會建立新 agent**——那只是 omo 對它內建 roster 的模型覆寫表。放錯地方時 `GET /agent` 永遠看不到它，worker 送過去得到 500 |
+| **設定只在啟動時載入** | 改完 md 檔後 `GET /agent` 不會變。必須 `sudo systemctl restart opencode`。opencode 有 inotify watcher，但不會重讀 agent 設定 |
+| **工作目錄必須屬於 opencode 的執行使用者** | 用 `sudo` 在工作目錄建過檔會讓目錄變成 `root:root 755`，`argus` 就只能**編輯既有檔、無法建立新檔**。錯誤是 `PermissionDenied: FileSystem.writeFile`，看起來很像 opencode 的權限設定問題，其實是檔案系統。先查 `ls -ld <工作目錄>` 再懷疑 permission 設定 |
+| **`tools: false` 會轉成 permission deny** | 在 `GET /agent` 的 permission 陣列裡看得到，例如 `bash * deny` |
+| **permission 陣列是後者優先** | index 0 是 `* * allow` 當預設，後面逐條覆寫 |
+| **`external_directory` 的 pattern 不匹配目錄本身** | `/tmp/opencode/*` 匹配不到 `/tmp/opencode`。要限制得同時列出兩者 |
+
+> 上面這份 agent 設定依 opencode 官方 schema（`$defs.PermissionConfig`）寫成，
+> 並在 2026-09-07 對 `.126` 實測通過：`bash` 被拒的情況下仍能寫出檔案。
+> 之所以能關掉 `bash`，是因為 Argus 的輸出是工作目錄下的**扁平檔名**，
+> agent 不需要建任何目錄——`output_relpath()` 不可改回子目錄形式。
+
+### ⚠ 執行使用者不該在 sudo 群組
+
+實測發現 `.126` 的 `argus` 使用者在 `sudo` 群組裡。這代表**擁有 bash 的 `build`
+agent 實際上可以取得 root**——任何能連到 4096 port 並知道密碼的人都可以。
+
+`argus-rebuild` 的 `bash: deny` 擋住了這條路，但 `build` 沒有。這台若不只跑
+opencode，應把執行使用者移出 sudo 群組。
 
 設定 `ARGUS_OPENCODE_AGENT` 預設就是 `argus-rebuild`。**沒建這個 agent 就啟用
 的話，opencode 會回 500、整個功能不動**——不會安靜地退回全權限的 `build`。
@@ -145,8 +163,10 @@ model: MiniMax-M3   cost: 0.00178578 USD
 3. `無法連線到 OpenCode agent 服務` → 先懷疑 NetworkPolicy，不是 agent 掛了。
    從 worker pod 內 `curl -m5 http://172.16.2.126:4096/agent` 驗。
 4. `agent 未產出優化後的 HTML` → agent 寫檔失敗或寫到別的路徑。用
-   `GET /file/content?path=argus-scan-<id>-page-<id>-optimized.html&directory=/tmp/opencode`
-   直接查。若剛套用受限 agent，優先懷疑它缺少寫檔所需的工具。
+   `GET /file/content?path=argus-rebuild-<id>-optimized.html&directory=/tmp/opencode`
+   直接查。**先查 `ls -ld` 工作目錄的擁有者**，再懷疑 opencode 的 permission
+   設定——`PermissionDenied: FileSystem.writeFile` 最常見的成因是目錄不屬於
+   opencode 的執行使用者（見上節）。
 5. 500 → 兩種可能，都很常見：`directory` 不存在，或 `ARGUS_OPENCODE_AGENT`
    指的 agent 在 server 上不存在。
 6. 402 → 使用者點數不足。點數在建立任務時就預扣，失敗會自動退。

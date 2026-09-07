@@ -470,3 +470,50 @@ class MisplacedOutputTests(TestCase):
         """用 scan/page 命名的話，重跑會撞名，find 可能撈到上一次的舊檔。"""
         second = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
         self.assertNotEqual(output_relpath(self.rebuild), output_relpath(second))
+
+
+@override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc:4096")
+class OutputValidationTests(TestCase):
+    """交付前必須確認拿到的是一份網頁。
+
+    真實事故：工作目錄裡留著一個同名殘檔，內容是別人測試寫入權限時留下的
+    一行純文字（`test sudo tee access`）。agent 那一輪其實沒寫成功，但舊程式
+    只檢查「非空」，就把那 20 bytes 當成「優化後的網頁」讓使用者下載。
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="valid", password="safe-test-password")
+        self.scan_job = _make_scan(self.user)
+        self.page = _make_page(self.scan_job)
+        self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
+
+    def _run(self, client):
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            return run_rebuild(self.rebuild)
+
+    def test_non_html_file_is_rejected(self):
+        rebuild = self._run(_FakeClient(file_content="test sudo tee access"))
+        self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
+        self.assertEqual(rebuild.optimized_path, "", "非網頁內容不得被寫成產出")
+
+    def test_non_html_file_does_not_block_the_fence_fallback(self):
+        """殘檔擋在前面時，仍要能從回覆裡撈到真正的產出。"""
+        rebuild = self._run(
+            _FakeClient(
+                file_content="test sudo tee access",
+                reply="好了\n```html\n<html><body>real</body></html>\n```",
+            )
+        )
+        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
+
+    def test_non_html_fence_is_also_rejected(self):
+        rebuild = self._run(
+            _FakeClient(file_content=None, reply="```\n我沒辦法完成\n```")
+        )
+        self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
+
+    def test_accepts_a_normal_document(self):
+        rebuild = self._run(
+            _FakeClient(file_content="<!DOCTYPE html><html><body>ok</body></html>")
+        )
+        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
