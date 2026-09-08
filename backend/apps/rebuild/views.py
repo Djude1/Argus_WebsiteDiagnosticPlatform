@@ -142,6 +142,32 @@ class SiteRebuildViewSet(
             }
         )
 
+    @action(detail=True, methods=["get"], url_path="turn-trace")
+    def turn_trace(self, request, pk=None):
+        """取某一輪對話的思考流。
+
+        獨立成一個端點而不是塞進 detail：detail 在執行期間每秒被 polling，
+        把 20 輪的思考流一起送出去等於每秒好幾 MB。使用者真的展開某一輪時
+        才需要這份資料，而那是點擊觸發、一次性的。
+        """
+        rebuild = self.get_object()
+        try:
+            index = int(request.query_params.get("index", ""))
+        except ValueError:
+            return Response(
+                {"detail": "index 必須是整數。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        conversation = rebuild.conversation or []
+        # 負索引在 Python 會從尾端取值，這裡不是想要的行為——那會讓 index=-1
+        # 悄悄回傳最後一輪，而不是告訴呼叫端索引無效。
+        if index < 0 or index >= len(conversation):
+            return Response(
+                {"detail": "查無此對話輪次。"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({"index": index, "trace": conversation[index].get("trace") or []})
+
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         """下載複刻（variant=original）或優化後（variant=optimized）的 HTML。

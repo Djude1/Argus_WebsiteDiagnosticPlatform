@@ -176,6 +176,30 @@ def _fail(rebuild: SiteRebuild, error: str) -> SiteRebuild:
 
 
 _CONVERSATION_MAX_TURNS = 20
+# 歸檔進對話串的思考流上限。比 live trace 緊：live 是「正在看」的內容，歸檔是
+# 「偶爾回頭查」的內容，而且會累積 20 輪。不設上限的話單一資料列會膨脹到 MB 級。
+_ARCHIVED_TRACE_MAX_ENTRIES = 60
+
+
+def _archive_turn(conversation: list, role: str, text: str, trace: list | None = None) -> None:
+    """把一輪對話（含它自己的思考流）寫進對話串。
+
+    思考流必須跟著它產生的那一輪走。舊版只有一個全域 trace 欄位、每次追問就清空，
+    結果畫面上永遠只剩最後一輪的推理，而且被畫在對話串的最上方——使用者追問幾次
+    之後，思考過程離它對應的答案越來越遠，看起來像是「上面那塊跟我剛問的無關」。
+
+    工具呼叫優先保留：它是「agent 到底動了什麼」的稽核軌跡，比推理片段更值得留。
+    """
+    turn = {"role": role, "text": text}
+    entries = list(trace or [])
+    if entries:
+        if len(entries) > _ARCHIVED_TRACE_MAX_ENTRIES:
+            tools = [e for e in entries if e.get("kind") == "tool"]
+            others = [e for e in entries if e.get("kind") != "tool"]
+            room = max(0, _ARCHIVED_TRACE_MAX_ENTRIES - len(tools))
+            entries = (tools + others[-room:]) if room else tools[-_ARCHIVED_TRACE_MAX_ENTRIES:]
+        turn["trace"] = entries
+    conversation.append(turn)
 _QUESTION_MAX_CHARS = 2000
 
 
@@ -202,8 +226,9 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
     # 初次分析的說明只存在 reply，而下面會把 reply 清空。不先收進對話串的話，
     # 使用者一追問，最初那份「改了什麼、哪些沒處理」就永遠消失了。
     if not conversation and rebuild.reply:
-        conversation.append({"role": "agent", "text": rebuild.reply})
-    conversation.append({"role": "user", "text": question})
+        # 這一輪的 trace 就是「產生優化版」的推理，下面會被清空，必須先收走
+        _archive_turn(conversation, "agent", rebuild.reply, rebuild.trace)
+    _archive_turn(conversation, "user", question)
     # 清掉上一輪的思考流：那是「產生優化版」的推理，跟這個問題無關，
     # 留著只會讓使用者以為新的回應沒有進來。對話本身保存在 conversation。
     _set_status(
@@ -228,7 +253,7 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
             logger.exception("追問連線失敗 rebuild=%s", rebuild.pk)
         # 失敗不改回 failed：那會讓已經產出的優化版看起來像沒做成。
         # 只把錯誤放進對話，讓使用者知道這一輪沒成功。
-        conversation.append({"role": "agent", "text": f"（失敗）{message}"})
+        _archive_turn(conversation, "agent", f"（失敗）{message}", rebuild.trace)
         _set_status(
             rebuild,
             SiteRebuild.Status.SUCCEEDED,
@@ -236,7 +261,7 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
         )
         return rebuild
 
-    conversation.append({"role": "agent", "text": rebuild.reply[:_REPLY_MAX_CHARS]})
+    _archive_turn(conversation, "agent", rebuild.reply[:_REPLY_MAX_CHARS], rebuild.trace)
     # session_result 回的是整個 session 的累計花費（含最初的優化那輪）。
     # 追問只該收「這一輪多花的」，所以扣掉先前已記錄的部分。
     previous = Decimal(str(rebuild.cost_usd or 0))

@@ -299,6 +299,71 @@ class RebuildApiTests(TestCase):
         response = self.client.get(f"/api/rebuilds/{rebuild.id}/download/?variant=optimized")
         self.assertEqual(response.status_code, 404)
 
+    # --- 每輪思考流 -------------------------------------------------
+    def _rebuild_with_thread(self):
+        return SiteRebuild.objects.create(
+            scan_job=self.scan_job,
+            page=self.page,
+            conversation=[
+                {
+                    "role": "agent",
+                    "text": "第一輪答案",
+                    "trace": [{"kind": "tool", "text": "read index.html"}],
+                },
+                {"role": "user", "text": "為什麼沒補 alt？"},
+                {
+                    "role": "agent",
+                    "text": "第二輪答案",
+                    "trace": [{"kind": "think", "text": "檢查圖片"}],
+                },
+            ],
+        )
+
+    def test_detail_never_ships_archived_traces(self):
+        """detail 在執行期間每秒被 polling，20 輪思考流一起送等於每秒好幾 MB。"""
+        rebuild = self._rebuild_with_thread()
+
+        response = self.client.get(f"/api/rebuilds/{rebuild.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        thread = response.data["conversation"]
+        self.assertEqual([t["has_trace"] for t in thread], [True, False, True])
+        for turn in thread:
+            self.assertNotIn("trace", turn)
+        self.assertNotIn("read index.html", str(response.data["conversation"]))
+
+    def test_turn_trace_returns_that_turns_entries(self):
+        rebuild = self._rebuild_with_thread()
+
+        response = self.client.get(f"/api/rebuilds/{rebuild.id}/turn-trace/?index=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["trace"], [{"kind": "think", "text": "檢查圖片"}])
+
+    def test_turn_trace_rejects_a_negative_index(self):
+        """負索引在 Python 會從尾端取值，那會悄悄回傳最後一輪而不是報錯。"""
+        rebuild = self._rebuild_with_thread()
+
+        response = self.client.get(f"/api/rebuilds/{rebuild.id}/turn-trace/?index=-1")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_turn_trace_rejects_a_non_integer_index(self):
+        rebuild = self._rebuild_with_thread()
+
+        response = self.client.get(f"/api/rebuilds/{rebuild.id}/turn-trace/?index=abc")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_turn_trace_is_scoped_to_the_owner(self):
+        """思考流含被掃描站的內容，不能靠猜 id 就拿得到。"""
+        rebuild = self._rebuild_with_thread()
+        self.client.force_authenticate(user=self.other)
+
+        response = self.client.get(f"/api/rebuilds/{rebuild.id}/turn-trace/?index=0")
+
+        self.assertEqual(response.status_code, 404)
+
     def test_listing_hides_other_users_rebuilds(self):
         other_scan = _make_scan(self.other, url="https://victim.example/")
         SiteRebuild.objects.create(scan_job=other_scan, page=_make_page(other_scan))
@@ -694,6 +759,64 @@ class FollowupTests(TestCase):
         joined = " ".join(e["text"] for e in self.rebuild.trace)
         self.assertNotIn("上一輪的推理", joined)
         self.assertIn("這一輪的推理", joined)
+
+    def test_previous_round_trace_is_archived_onto_its_own_turn(self):
+        """清空 live trace 不等於丟掉它——它要跟著自己那一輪進對話串。
+
+        舊版只有一個全域 trace 欄位，追問就清空，過去每一輪的推理永遠消失，
+        畫面上也只能把「最後一輪的思考」畫在對話串最上方，離它對應的答案很遠。
+        """
+        self.rebuild.reply = "初次分析：我補了 title。"
+        self.rebuild.trace = [{"kind": "tool", "text": "read index.html"}]
+        self.rebuild.save(update_fields=["reply", "trace"])
+
+        client = _FakeClient(events=[{"type": "thinking", "text": "這一輪的推理"}])
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "還能改什麼？")
+
+        thread = self.rebuild.conversation
+        self.assertEqual([t["role"] for t in thread], ["agent", "user", "agent"])
+        # 第 0 輪保住了「產生優化版」那次的工具呼叫
+        self.assertEqual(thread[0]["trace"], [{"kind": "tool", "text": "read index.html"}])
+        # 使用者的提問沒有思考流可言
+        self.assertNotIn("trace", thread[1])
+        # 這一輪的推理歸檔在這一輪
+        self.assertIn("這一輪的推理", " ".join(e["text"] for e in thread[2]["trace"]))
+
+    def test_failed_followup_still_archives_what_it_managed_to_think(self):
+        """失敗那一輪的過程往往才是使用者最想看的——不能因為失敗就丟掉。
+
+        事件數要跨過 _TRACE_FLUSH_EVERY（8）：串流是每 8 個事件才把 trace 落地一次，
+        在那之前就中斷的話 DB 裡本來就還沒有東西。這裡驗的是「已經記錄下來的過程
+        不會因為這一輪失敗而消失」。
+        """
+        client = _FakeClient(
+            events=[{"type": "thinking", "text": f"步驟{i}"} for i in range(8)]
+            + [{"type": "error", "text": "agent 掛了"}]
+        )
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "問題")
+
+        last = self.rebuild.conversation[-1]
+        self.assertIn("（失敗）", last["text"])
+        self.assertIn("步驟0", " ".join(e["text"] for e in last["trace"]))
+
+    def test_archived_trace_keeps_tool_calls_when_it_must_be_trimmed(self):
+        """歸檔有上限，但工具呼叫是「agent 到底動了什麼」的稽核軌跡，優先留。"""
+        self.rebuild.reply = "初次分析"
+        self.rebuild.trace = (
+            [{"kind": "tool", "text": f"tool-{i}"} for i in range(5)]
+            + [{"kind": "thinking", "text": f"think-{i}"} for i in range(200)]
+        )
+        self.rebuild.save(update_fields=["reply", "trace"])
+
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
+            ask_followup(self.rebuild, "問題")
+
+        archived = self.rebuild.conversation[0]["trace"]
+        self.assertLessEqual(len(archived), 60)
+        tools = [e["text"] for e in archived if e["kind"] == "tool"]
+        self.assertEqual(tools, [f"tool-{i}" for i in range(5)], "工具呼叫被裁掉了")
 
     def test_first_analysis_reply_is_preserved_into_the_thread(self):
         """追問會清空 reply。不先把初次分析的說明收進對話串的話，

@@ -1566,14 +1566,6 @@
   /* ── 思考流 ──
      等寬、淡色、連續流動。這是過程不是結論，視覺權重必須低於下方的回覆；
      推理逐字接在同一段後面，不要切成一則一則的方框。 */
-  .rebuild-ws-trace-wrap {
-    @apply rounded-xl border border-slate-200 bg-slate-50;
-  }
-
-  .rebuild-ws-trace-wrap > summary {
-    @apply cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700;
-  }
-
   .rebuild-ws-trace {
     @apply max-h-72 overflow-y-auto whitespace-pre-wrap break-words border-t border-slate-200 px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-400;
   }
@@ -1599,6 +1591,30 @@
   /* ── 追問往返 ── */
   .rebuild-ws-chat {
     @apply mt-2 space-y-1;
+  }
+
+  /* 一輪＝思考過程（收合）+ 答案，兩者貼在一起視覺上才是同一件事。
+     輪與輪之間留白比輪內大，掃過去就看得出邊界在哪。 */
+  .rebuild-ws-turn-block {
+    @apply space-y-1 pt-1;
+  }
+
+  /* 過程的視覺權重必須低於答案：收合狀態只是一行淡色小字，不與結論搶注意力。
+     進行中那一輪加一點左側 accent，讓「現在正在想」和「以前想過」分得開。 */
+  .rebuild-ws-turn-trace {
+    @apply rounded-xl border border-slate-200 bg-slate-50;
+  }
+
+  .rebuild-ws-turn-trace > summary {
+    @apply cursor-pointer select-none px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700;
+  }
+
+  .rebuild-ws-turn-trace.is-live {
+    @apply border-sky-200 bg-sky-50/40;
+  }
+
+  .rebuild-ws-turn-trace.is-live > summary {
+    @apply text-sky-700;
   }
 
   .rebuild-ws-turn {

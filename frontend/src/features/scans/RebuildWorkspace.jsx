@@ -19,6 +19,59 @@ const STATUS_LABEL = {
   succeeded: "完成",
   failed: "未完成",
 };
+// 思考流的一則一則：工具呼叫獨立成行（那是 agent 實際動了什麼），
+// 推理片段接續排版成連續流。live 與歸檔兩處共用，避免兩邊長得不一樣。
+function TraceEntries({ entries }) {
+  return entries.map((entry, index) =>
+    entry.kind === "tool" ? (
+      <span className="rebuild-ws-tool" key={`t-${index}`}>
+        ▸ {entry.text}
+      </span>
+    ) : (
+      <span className="rebuild-ws-think" key={`k-${index}`}>
+        {entry.text}
+      </span>
+    ),
+  );
+}
+
+// 已結束那幾輪的思考流。
+//
+// 展開才抓，而且只抓一次：detail 端點在執行期間每秒被 polling，把 20 輪的
+// 思考流一起塞進那個回應等於每秒好幾 MB。使用者絕大多數時候不會回頭看舊的
+// 推理，真的要看時多一次往返完全可以接受。
+function TurnTrace({ rebuildId, index }) {
+  const [entries, setEntries] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function loadOnce(event) {
+    if (!event.currentTarget.open || entries || loading) return;
+    setLoading(true);
+    setFailed(false);
+    try {
+      const { data } = await api.get(`/rebuilds/${rebuildId}/turn-trace/?index=${index}`);
+      setEntries(data.trace || []);
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <details className="rebuild-ws-turn-trace" onToggle={loadOnce}>
+      <summary>思考過程與工具呼叫</summary>
+      <div className="rebuild-ws-trace">
+        {loading && <span className="hint-text">載入中…</span>}
+        {failed && <span className="hint-text">這一輪的過程載入失敗，重新展開可再試一次。</span>}
+        {entries && !entries.length && <span className="hint-text">這一輪沒有記錄到過程。</span>}
+        {entries && <TraceEntries entries={entries} />}
+      </div>
+    </details>
+  );
+}
+
 // 進行中要讓使用者知道「它現在在做什麼」，而不只是「還在跑」。
 // 這是照 AI-Wealth-Manager 的做法：狀態列 + 經過秒數 + 工具呼叫次數。
 function currentAction(rebuild) {
@@ -214,6 +267,31 @@ function RebuildWorkspace() {
   const identical = both && docs.original === docs.optimized;
   const current = docs[variant];
 
+  // 進行中（或剛結束、還沒併進對話串）那一輪的思考流。
+  //
+  // 不抽成獨立元件：自動跟隨捲動要靠 traceBodyRef / handleTraceScroll，
+  // 那組 ref 與「使用者是否自己捲上去了」的狀態都在這一層，搬出去反而要多傳
+  // 三個 prop。預設展開——正在跑的這一輪就是使用者當下在看的東西。
+  const liveEntries = rebuild.trace || [];
+  const liveTrace = (
+    <details className={`rebuild-ws-turn-trace ${running ? "is-live" : ""}`} open>
+      <summary>思考過程與工具呼叫</summary>
+      <div
+        className="rebuild-ws-trace"
+        ref={traceBodyRef}
+        onScroll={handleTraceScroll}
+      >
+        <TraceEntries entries={liveEntries} />
+        {!liveEntries.length && (
+          <span className="hint-text">
+            {running ? "等待 agent 開始…" : "這次沒有記錄到過程。"}
+          </span>
+        )}
+        <div ref={traceEndRef} />
+      </div>
+    </details>
+  );
+
   return (
     <section className="rebuild-workspace">
       <div className="rebuild-ws-head">
@@ -242,34 +320,6 @@ function RebuildWorkspace() {
             </span>
           </div>
 
-          <details className="rebuild-ws-trace-wrap" open>
-            <summary>思考過程與工具呼叫</summary>
-            {/* 等寬、淡色、連續流動——這是過程不是結論，視覺權重要低於下方的回覆 */}
-            <div
-              className="rebuild-ws-trace"
-              ref={traceBodyRef}
-              onScroll={handleTraceScroll}
-            >
-              {(rebuild.trace || []).map((entry, index) =>
-                entry.kind === "tool" ? (
-                  <span className="rebuild-ws-tool" key={`t-${index}`}>
-                    ▸ {entry.text}
-                  </span>
-                ) : (
-                  <span className="rebuild-ws-think" key={`k-${index}`}>
-                    {entry.text}
-                  </span>
-                ),
-              )}
-              {!(rebuild.trace || []).length && (
-                <span className="hint-text">
-                  {running ? "等待 agent 開始…" : "這次沒有記錄到過程。"}
-                </span>
-              )}
-              <div ref={traceEndRef} />
-            </div>
-          </details>
-
           {/* 回覆是結論，必須跟過程分開、字級正常。混在推理片段裡會找不到重點。
               一旦開始追問就整段變成對話串——`reply` 的內容此時已經在 conversation
               裡了，兩邊都畫會讓同一段文字出現兩次。 */}
@@ -278,26 +328,46 @@ function RebuildWorkspace() {
           </div>
           {thread.length ? (
             <div className="rebuild-ws-chat">
-              {thread.map((turn, index) => (
-                <p className={`rebuild-ws-turn role-${turn.role}`} key={`c-${index}`}>
-                  <span className="rebuild-ws-turn-tag">
-                    {turn.role === "user" ? "你" : "Agent"}
-                  </span>
-                  {turn.text}
-                </p>
-              ))}
+              {thread.map((turn, index) =>
+                turn.role === "user" ? (
+                  <p className="rebuild-ws-turn role-user" key={`c-${index}`}>
+                    <span className="rebuild-ws-turn-tag">你</span>
+                    {turn.text}
+                  </p>
+                ) : (
+                  // 思考過程屬於它產生的那一輪，收合放在答案正上方。
+                  // 舊版是一塊全域面板釘在最上面，追問幾次之後就離對應的答案很遠，
+                  // 讀起來像是「上面那塊跟我剛問的無關」。
+                  <div className="rebuild-ws-turn-block" key={`c-${index}`}>
+                    {turn.has_trace && (
+                      <TurnTrace rebuildId={rebuild.id} index={index} />
+                    )}
+                    <p className="rebuild-ws-turn role-agent">
+                      <span className="rebuild-ws-turn-tag">Agent</span>
+                      {turn.text}
+                    </p>
+                  </div>
+                ),
+              )}
               {/* 追問進行中：這一輪的回答還沒寫進 conversation，用串流中的
-                  reply 暫代，讓使用者邊跑邊看到答案成形 */}
+                  reply 暫代，讓使用者邊跑邊看到答案成形。思考流同樣接在正上方，
+                  且**預設展開**——正在跑的那一輪就是使用者當下在看的東西。 */}
               {running && (
-                <p className="rebuild-ws-turn role-agent" key="pending">
-                  <span className="rebuild-ws-turn-tag">Agent</span>
-                  {rebuild.reply || "…"}
-                </p>
+                <div className="rebuild-ws-turn-block" key="pending">
+                  {liveTrace}
+                  <p className="rebuild-ws-turn role-agent">
+                    <span className="rebuild-ws-turn-tag">Agent</span>
+                    {rebuild.reply || "…"}
+                  </p>
+                </div>
               )}
             </div>
           ) : (
-            <div className="rebuild-ws-reply">
-              {rebuild.reply || (running ? "…" : "（這一輪沒有文字回覆）")}
+            <div className="rebuild-ws-turn-block">
+              {liveTrace}
+              <div className="rebuild-ws-reply">
+                {rebuild.reply || (running ? "…" : "（這一輪沒有文字回覆）")}
+              </div>
             </div>
           )}
 

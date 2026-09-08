@@ -59,6 +59,14 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
   沒有上限的話話多的模型能把單列撐到幾 MB。
 - **回覆存 `reply`，過程存 `trace`，不可合併**。混在一起的話結論會被埋在幾百則
   推理片段之間，使用者找不到重點——實際回報過的體感問題。
+- **`trace` 只放進行中那一輪；結束的每一輪把自己的思考流歸檔進 `conversation`**
+  （`_archive_turn()`，上限 `_ARCHIVED_TRACE_MAX_ENTRIES`，裁切時優先保留工具
+  呼叫——那是「agent 到底動了什麼」的稽核軌跡）。舊版只有一個全域 `trace`、
+  追問就清空，過去每一輪的推理永遠消失，畫面上也只能把最後一輪的思考畫在對話串
+  最上方，離它對應的答案越來越遠——實際回報過的體感問題。
+- **歸檔的思考流不得寫進 detail serializer 的 `conversation`**：detail 在執行期間
+  被**每秒** polling，20 輪 × 單輪上限一起送等於每秒好幾 MB。只送 `has_trace`
+  旗標，使用者展開某一輪時再打 `GET /api/rebuilds/{id}/turn-trace/?index=N`。
 - **追問必須沿用 `opencode_session_id`**。session 裡已有整份 HTML 與診斷清單的
   上下文；重開一個等於要使用者再付一次把幾十 KB 塞進 prompt 的錢，而且 agent
   會失憶。
