@@ -52,8 +52,16 @@ function RebuildWorkspace() {
   // 追問送出後用來強制重啟 polling
   const [pollNonce, setPollNonce] = useState(0);
   const waitingStartRef = useRef(false);
+  // 使用者往上捲去讀時就不再自動跟隨；捲回底部會自動恢復
+  const stickToBottomRef = useRef(true);
 
   const running = rebuild && IN_PROGRESS.has(rebuild.status);
+  // 內容長度而非筆數：後端把連續推理合併進同一則，筆數不動、文字才會長。
+  // 必須宣告在下面的 effect 之前——放在早退之後會踩到 TDZ，元件直接崩潰。
+  const traceSignature = (rebuild?.trace || []).reduce(
+    (total, entry) => total + (entry.text || "").length,
+    0,
+  );
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -100,15 +108,25 @@ function RebuildWorkspace() {
     if (!running) startedAtRef.current = 0;
   }, [running]);
 
-  // 自動捲到最新——但**只在使用者沒有往上捲去讀的時候**。
-  // 無條件捲動會把正在讀舊內容的人一直拉回底部。
+  // 自動捲到最新——但只在使用者沒有往上捲去讀的時候。
+  //
+  // 三個踩過的坑：
+  //   1. 依賴 trace.length 沒用：後端會把連續的推理合併進同一則，agent 在想
+  //      的時候長度一直是 1，effect 根本不會重跑。要看**內容長度**。
+  //   2. scrollIntoView 會連帶捲動祖先容器；直接設 scrollTop 才只動這一塊。
+  //   3. 在 DOM 更新後才算「離底部多遠」會誤判：內容剛長大，距離自然變遠，
+  //      於是判定成「使用者捲上去了」而停止跟隨。改成用 onScroll 記錄使用者
+  //      的意圖，渲染後只管照著做。
   useEffect(() => {
-    if (!running) return;
+    if (!stickToBottomRef.current) return;
     const body = traceBodyRef.current;
-    if (!body) return;
-    const pinned = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
-    if (pinned) traceEndRef.current?.scrollIntoView({ block: "end" });
-  }, [rebuild?.trace?.length, rebuild?.reply, running]);
+    if (body) body.scrollTop = body.scrollHeight;
+  }, [traceSignature, rebuild?.reply]);
+
+  function handleTraceScroll(event) {
+    const el = event.currentTarget;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }
 
   async function submitQuestion(event) {
     event.preventDefault();
@@ -226,7 +244,11 @@ function RebuildWorkspace() {
           <details className="rebuild-ws-trace-wrap" open>
             <summary>思考過程與工具呼叫</summary>
             {/* 等寬、淡色、連續流動——這是過程不是結論，視覺權重要低於下方的回覆 */}
-            <div className="rebuild-ws-trace" ref={traceBodyRef}>
+            <div
+              className="rebuild-ws-trace"
+              ref={traceBodyRef}
+              onScroll={handleTraceScroll}
+            >
               {(rebuild.trace || []).map((entry, index) =>
                 entry.kind === "tool" ? (
                   <span className="rebuild-ws-tool" key={`t-${index}`}>

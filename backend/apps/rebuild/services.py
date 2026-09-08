@@ -30,6 +30,14 @@ from apps.scans.models import Finding
 logger = logging.getLogger(__name__)
 
 _JSON_FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+# 顯示用的回覆要去掉 json 區塊——那是給程式吃的，人看到一坨 JSON 只會覺得
+# 這個產品沒做完。修改內容本身另有 edit_report 呈現。
+_ANY_FENCE = re.compile(r"```.*?```", re.DOTALL)
+
+
+def _human_reply(text: str) -> str:
+    """把 agent 回覆裡的程式碼區塊剝掉，只留給人看的說明。"""
+    return _ANY_FENCE.sub("", text or "").strip()
 # 模型忘記加圍欄時的退路
 _BARE_EDITS = re.compile(r"\{\s*\"edits\"\s*:.*\}", re.DOTALL)
 
@@ -146,12 +154,12 @@ def _run_streaming(
         pending += 1
         if pending >= _TRACE_FLUSH_EVERY:
             rebuild.trace = entries
-            rebuild.reply = "".join(reply_parts)[:_REPLY_MAX_CHARS]
+            rebuild.reply = _human_reply("".join(reply_parts))[:_REPLY_MAX_CHARS]
             rebuild.save(update_fields=["trace", "reply", "updated_at"])
             pending = 0
 
     rebuild.trace = entries
-    rebuild.reply = "".join(reply_parts)[:_REPLY_MAX_CHARS]
+    rebuild.reply = _human_reply("".join(reply_parts))[:_REPLY_MAX_CHARS]
     rebuild.save(update_fields=["trace", "reply", "updated_at"])
     return client.session_result(session_id)
 

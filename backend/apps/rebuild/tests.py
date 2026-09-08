@@ -31,6 +31,7 @@ from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
 from apps.rebuild.services import (
     _extract_edits,
+    _human_reply,
     apply_edits,
     ask_followup,
     run_rebuild,
@@ -781,3 +782,26 @@ class EditSchemaToleranceTests(TestCase):
         """模型偶爾忘記加圍欄。"""
         edits = _extract_edits('好了 {"edits": [{"find": "x", "replace": "y"}]} 完成')
         self.assertEqual(edits[0]["find"], "x")
+
+
+class HumanReplyTests(TestCase):
+    """交給使用者看的回覆不能是一坨 JSON。
+
+    真實回報：「現在分析 Agent 的回復只有 Json 沒有任何說明，對於一個成熟的
+    項目這太怪了」。JSON 是給程式吃的，修改內容另有 edit_report 呈現。
+    """
+
+    def test_json_block_is_stripped(self):
+        text = '我補了 title，CSP 需要伺服器端處理。\n\n```json\n{"edits": []}\n```'
+        self.assertEqual(_human_reply(text), "我補了 title，CSP 需要伺服器端處理。")
+
+    def test_any_fenced_block_is_stripped(self):
+        self.assertEqual(_human_reply("說明\n\n```html\n<p>x</p>\n```"), "說明")
+
+    def test_prose_without_fences_is_untouched(self):
+        self.assertEqual(_human_reply("只有說明沒有區塊"), "只有說明沒有區塊")
+
+    def test_reply_that_is_only_json_becomes_empty(self):
+        """只有 JSON 沒有說明時回空字串——前端會顯示「這一輪沒有文字回覆」，
+        比顯示一坨 JSON 誠實。"""
+        self.assertEqual(_human_reply('```json\n{"edits": []}\n```'), "")

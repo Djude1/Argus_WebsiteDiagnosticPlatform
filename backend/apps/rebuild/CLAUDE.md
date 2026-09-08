@@ -68,6 +68,14 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
 - **`_extract_edits` 要容忍欄位別名**（`old`/`new`）。實測看過模型自行改用那組
   名稱，只認 `find`/`replace` 的話整批會被丟掉，使用者付了錢卻拿到「沒有提出
   任何修改」。
+- **顯示用的 `reply` 必須剝掉程式碼區塊**（`_human_reply`）。JSON 是給程式吃的，
+  直接顯示給使用者只會讓產品看起來沒做完——實際回報過。修改內容另有
+  `edit_report` 呈現。
+- **prompt 必須要求「先說明、再給 JSON」**，且說明裡要交代**哪些診斷沒處理及
+  原因**。使用者付費得到的是判斷，不是一份看不懂的清單。
+- **agent 端已不需要任何工具**：改成修改清單後不碰檔案系統，`.126` 的
+  `argus-rebuild` 已把 read/write/edit/glob/grep 一併關閉。不要因為「以防萬一」
+  把它們打開。
 - **不落地 prompt 與模型原始回應**。那裡面是被掃描站的原始碼；`error` 欄位
   只放可公開的一行訊息，連線類例外連訊息都不存（帶內網位址）。
 - `ARGUS_OPENCODE_WORKSPACE` 指的目錄**必須在 agent 主機上事先存在**：
