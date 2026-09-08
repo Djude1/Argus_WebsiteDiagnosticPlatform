@@ -7,6 +7,10 @@ import { api } from "../../api";
 const POLL_INTERVAL_MS = 1000;
 
 const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing", "asking"]);
+// 送出追問後，worker 還沒撿起任務前狀態仍是 succeeded。這段寬限期內即使
+// 看起來「沒在跑」也要繼續 polling，否則畫面從此不再更新——使用者實際踩過：
+// opencode 收到也回答了，Argus 頁面卻一片空白。
+const START_GRACE_POLLS = 30;
 const STATUS_LABEL = {
   pending: "排隊中",
   snapshotting: "複刻中",
@@ -45,30 +49,41 @@ function RebuildWorkspace() {
   const traceBodyRef = useRef(null);
   const cancelledRef = useRef(false);
   const startedAtRef = useRef(0);
+  // 追問送出後用來強制重啟 polling
+  const [pollNonce, setPollNonce] = useState(0);
+  const waitingStartRef = useRef(false);
 
   const running = rebuild && IN_PROGRESS.has(rebuild.status);
 
   useEffect(() => {
     cancelledRef.current = false;
     let timer = null;
-    async function poll() {
+    async function poll(attempt, sawProgress) {
       try {
         const { data } = await api.get(`/rebuilds/${rebuildId}/`);
         if (cancelledRef.current) return;
         setRebuild(data);
-        if (IN_PROGRESS.has(data.status)) {
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
+        const inProgress = IN_PROGRESS.has(data.status);
+        // 剛送出追問時任務還沒開始跑，狀態是終態；這時停掉 polling
+        // 就再也不會更新了。等它真的動起來、或寬限期用完才收手。
+        const waitingToStart = waitingStartRef.current && attempt < START_GRACE_POLLS;
+        if (inProgress) waitingStartRef.current = false;
+        if (inProgress || waitingToStart) {
+          timer = setTimeout(
+            () => poll(attempt + 1, sawProgress || inProgress),
+            POLL_INTERVAL_MS,
+          );
         }
       } catch {
         if (!cancelledRef.current) setError("無法載入這次複刻，可能不存在或無權限。");
       }
     }
-    poll();
+    poll(0, false);
     return () => {
       cancelledRef.current = true;
       if (timer) clearTimeout(timer);
     };
-  }, [rebuildId]);
+  }, [rebuildId, pollNonce]);
 
   // 經過秒數：沒有這個，跑久了分不出「還在想」與「卡住」
   useEffect(() => {
@@ -104,9 +119,11 @@ function RebuildWorkspace() {
     try {
       await api.post(`/rebuilds/${rebuildId}/ask/`, { question: text });
       setQuestion("");
-      // 立刻重新 polling：任務是非同步的，狀態要靠下一次讀取才會變
-      const { data } = await api.get(`/rebuilds/${rebuildId}/`);
-      setRebuild(data);
+      // 任務是非同步的：這一刻狀態多半還是終態。必須強制重啟 polling 並
+      // 進入寬限期，否則畫面永遠停在送出前的樣子。
+      waitingStartRef.current = true;
+      startedAtRef.current = Date.now();
+      setPollNonce((n) => n + 1);
     } catch (err) {
       setError(err?.response?.data?.detail || "無法送出問題。");
     } finally {

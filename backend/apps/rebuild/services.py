@@ -192,11 +192,14 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
 
     conversation = list(rebuild.conversation or [])
     conversation.append({"role": "user", "text": question})
+    # 清掉上一輪的思考流：那是「產生優化版」的推理，跟這個問題無關，
+    # 留著只會讓使用者以為新的回應沒有進來。對話本身保存在 conversation。
     _set_status(
         rebuild,
         SiteRebuild.Status.ASKING,
         conversation=conversation[-_CONVERSATION_MAX_TURNS:],
         reply="",
+        trace=[],
     )
 
     try:

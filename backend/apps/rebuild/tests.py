@@ -679,6 +679,21 @@ class FollowupTests(TestCase):
             "回覆不該出現在思考流裡",
         )
 
+    def test_followup_clears_the_previous_round_trace(self):
+        """上一輪的推理是「產生優化版」的過程，跟這個問題無關。
+
+        留著會讓使用者以為新的回應沒進來——實際回報過「思考過程也沒有清空」。
+        對話本身保存在 conversation，不會遺失。
+        """
+        self.rebuild.trace = [{"kind": "thinking", "text": "上一輪的推理"}]
+        self.rebuild.save(update_fields=["trace"])
+        client = _FakeClient(events=[{"type": "thinking", "text": "這一輪的推理"}])
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "問題")
+        joined = " ".join(e["text"] for e in self.rebuild.trace)
+        self.assertNotIn("上一輪的推理", joined)
+        self.assertIn("這一輪的推理", joined)
+
     def test_conversation_records_both_sides(self):
         with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
             ask_followup(self.rebuild, "再多修一點")
