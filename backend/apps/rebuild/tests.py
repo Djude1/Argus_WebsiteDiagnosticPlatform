@@ -786,20 +786,45 @@ class FollowupTests(TestCase):
     def test_failed_followup_still_archives_what_it_managed_to_think(self):
         """失敗那一輪的過程往往才是使用者最想看的——不能因為失敗就丟掉。
 
-        事件數要跨過 _TRACE_FLUSH_EVERY（8）：串流是每 8 個事件才把 trace 落地一次，
-        在那之前就中斷的話 DB 裡本來就還沒有東西。這裡驗的是「已經記錄下來的過程
-        不會因為這一輪失敗而消失」。
+        **刻意只給兩個事件**，遠少於 _TRACE_FLUSH_EVERY（8）。串流是每 8 個事件才
+        把 trace 落地一次，所以這是最容易掉資料的路徑：跑沒幾步就死掉的那一輪，
+        使用者想問的正是「它到底想了什麼才卡住」，而那份推理如果只存在記憶體裡，
+        例外一拋就沒了。
         """
         client = _FakeClient(
-            events=[{"type": "thinking", "text": f"步驟{i}"} for i in range(8)]
-            + [{"type": "error", "text": "agent 掛了"}]
+            events=[
+                {"type": "thinking", "text": "先看看缺什麼"},
+                {"type": "error", "text": "agent 掛了"},
+            ]
         )
         with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
             ask_followup(self.rebuild, "問題")
 
         last = self.rebuild.conversation[-1]
         self.assertIn("（失敗）", last["text"])
-        self.assertIn("步驟0", " ".join(e["text"] for e in last["trace"]))
+        self.assertIn("先看看缺什麼", " ".join(e["text"] for e in last["trace"]))
+
+    def test_a_long_round_that_dies_persists_the_whole_trace(self):
+        """跨過落地門檻後才中斷時，歸檔進對話串的過程要完整。
+
+        這一項**不**足以證明「中斷時會落地」——那是上一個測試（只給兩個事件、
+        遠不到落地門檻）的工作。這裡即使拿掉中斷落地也會過：第一次落地之後
+        rebuild.trace 與 _run_streaming 內部的 entries 指向同一個 list，後續片段
+        會直接出現在記憶體物件上，而歸檔正是從那個物件讀的。
+
+        留著是為了鎖住端到端行為：哪天有人把歸檔改成從 DB 重讀，這裡會紅。
+        """
+        client = _FakeClient(
+            events=[{"type": "thinking", "text": f"步驟{i}"} for i in range(10)]
+            + [{"type": "error", "text": "agent 掛了"}]
+        )
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client):
+            ask_followup(self.rebuild, "問題")
+
+        stored = SiteRebuild.objects.get(pk=self.rebuild.pk)
+        joined = " ".join(e["text"] for e in stored.conversation[-1]["trace"])
+        self.assertIn("步驟0", joined)   # 第一次落地就寫進去的
+        self.assertIn("步驟9", joined)   # 落地之後、中斷之前才產生的
 
     def test_archived_trace_keeps_tool_calls_when_it_must_be_trimmed(self):
         """歸檔有上限，但工具呼叫是「agent 到底動了什麼」的稽核軌跡，優先留。"""

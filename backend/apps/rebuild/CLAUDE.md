@@ -64,6 +64,11 @@ Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之�
   呼叫——那是「agent 到底動了什麼」的稽核軌跡）。舊版只有一個全域 `trace`、
   追問就清空，過去每一輪的推理永遠消失，畫面上也只能把最後一輪的思考畫在對話串
   最上方，離它對應的答案越來越遠——實際回報過的體感問題。
+- **`_run_streaming` 中斷時必須先把 trace 落地再往上拋**：落地是每
+  `_TRACE_FLUSH_EVERY`（8）個事件才做一次，少了這一步，「開跑沒幾步就失敗」的
+  那一輪過程完全不會進 DB——而失敗那輪的推理往往才是使用者最想看的。保存失敗
+  只記 log，不可讓 `DatabaseError` 取代原始例外：呼叫端是依 `OpenCodeError` /
+  `RequestException` 決定要不要把整次複刻標成失敗的。
 - **歸檔的思考流不得寫進 detail serializer 的 `conversation`**：detail 在執行期間
   被**每秒** polling，20 輪 × 單輪上限一起送等於每秒好幾 MB。只送 `has_trace`
   旗標，使用者展開某一輪時再打 `GET /api/rebuilds/{id}/turn-trace/?index=N`。

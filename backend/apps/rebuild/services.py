@@ -135,32 +135,48 @@ def _run_streaming(
     entries: list = list(rebuild.trace or [])
     reply_parts: list[str] = []
     pending = 0
-    for event in client.stream(
-        session_id,
-        prompt,
-        agent=settings.ARGUS_OPENCODE_AGENT,
-        model=settings.ARGUS_OPENCODE_MODEL,
-        directory=workspace,
-    ):
-        if event["type"] == "error":
-            raise OpenCodeError(event.get("text") or "agent 串流失敗")
-        if event["type"] == "done":
-            break
-        if event["type"] == "text":
-            # 回覆逐字累積到 reply，讓前端邊跑邊顯示結論，而不是等跑完才出現
-            reply_parts.append(event.get("text", ""))
-        else:
-            _append_trace(entries, event)
-        pending += 1
-        if pending >= _TRACE_FLUSH_EVERY:
-            rebuild.trace = entries
-            rebuild.reply = _human_reply("".join(reply_parts))[:_REPLY_MAX_CHARS]
-            rebuild.save(update_fields=["trace", "reply", "updated_at"])
-            pending = 0
 
-    rebuild.trace = entries
-    rebuild.reply = _human_reply("".join(reply_parts))[:_REPLY_MAX_CHARS]
-    rebuild.save(update_fields=["trace", "reply", "updated_at"])
+    def flush() -> None:
+        rebuild.trace = entries
+        rebuild.reply = _human_reply("".join(reply_parts))[:_REPLY_MAX_CHARS]
+        rebuild.save(update_fields=["trace", "reply", "updated_at"])
+
+    try:
+        for event in client.stream(
+            session_id,
+            prompt,
+            agent=settings.ARGUS_OPENCODE_AGENT,
+            model=settings.ARGUS_OPENCODE_MODEL,
+            directory=workspace,
+        ):
+            if event["type"] == "error":
+                raise OpenCodeError(event.get("text") or "agent 串流失敗")
+            if event["type"] == "done":
+                break
+            if event["type"] == "text":
+                # 回覆逐字累積到 reply，讓前端邊跑邊顯示結論，而不是等跑完才出現
+                reply_parts.append(event.get("text", ""))
+            else:
+                _append_trace(entries, event)
+            pending += 1
+            if pending >= _TRACE_FLUSH_EVERY:
+                flush()
+                pending = 0
+    except Exception:
+        # 中斷時先把已經收集到的過程落地，再往上拋。
+        # 落地是每 _TRACE_FLUSH_EVERY 次才做一次，沒有這一段的話，「開跑沒幾個
+        # 事件就失敗」的那一輪過程完全不會進 DB——而失敗那輪的推理往往才是使用者
+        # 最想看的（「它到底想了什麼才卡住？」）。
+        try:
+            flush()
+        except Exception:
+            # 保存失敗不能蓋掉原始錯誤：呼叫端是依 OpenCodeError /
+            # RequestException 來決定要不要把整次複刻標成失敗的，換成
+            # DatabaseError 冒出去會走到完全不同的分支。
+            logger.exception("中斷時保存思考流失敗 rebuild=%s", rebuild.pk)
+        raise
+
+    flush()
     return client.session_result(session_id)
 
 

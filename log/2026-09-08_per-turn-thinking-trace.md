@@ -18,6 +18,10 @@
 - `serializers`：detail 的 `conversation` 改為 SerializerMethodField，只送
   `has_trace` 旗標，不送歸檔內容。
 - `views.turn_trace`：`GET /api/rebuilds/{id}/turn-trace/?index=N`，按需取單輪思考流。
+- `_run_streaming` 中斷時先落地再往上拋：串流每 `_TRACE_FLUSH_EVERY`（8）個事件
+  才存一次，「開跑沒幾步就失敗」的那一輪過程原本完全不會進 DB。保存失敗時只記
+  log 不改拋出的例外型別——呼叫端是依 `OpenCodeError` / `RequestException` 決定
+  分支的，換成 `DatabaseError` 冒出去會走到完全不同的路。
 
 ### 樣式
 - 新增 `.rebuild-ws-turn-block`、`.rebuild-ws-turn-trace`（含 `.is-live`）。
@@ -48,7 +52,7 @@
 ## 驗證方式
 
 - `manage.py test apps` → **897 tests OK (skipped=1)**
-- `apps.rebuild` → **77 tests OK**（改動前 69，+8）
+- `apps.rebuild` → **78 tests OK**（改動前 69，+9）
 - 新測試確實抓得到迴歸：拿掉 `_archive_turn` 的歸檔後 3 個測試失敗
 - `ruff check backend`、`manage.py check`、`makemigrations --check` 皆通過
 - 前端 `vite build` 通過
@@ -60,10 +64,15 @@
 commit（`460ece6`、`fc13fe5`、`a5e3a17`）各自加了測試，`apps.scans` 也從 617
 變成 632。靜態計數佐證：改動前 883、改動後 891，差 8 正好等於本次新增數。
 
+## 過程中的一個測試修正
+
+`test_a_long_round_that_dies_persists_the_whole_trace` 原本被我當成「能證明中斷
+落地」的測試，實際上**不能**：第一次落地之後 `rebuild.trace` 與 `_run_streaming`
+內部的 `entries` 指向同一個 list，後續片段會直接出現在記憶體物件上，而 `ask_followup`
+的歸檔正是從那個物件讀的——所以拿掉中斷落地它照樣過，改成從 DB 重讀也一樣。
+真正證明修復的是只給兩個事件的那一項。docstring 已改成誠實描述它鎖的是端到端行為。
+
 ## 尚未處理
 
 - **視覺觀感未經人工確認**：本機無瀏覽器，間距、收合樣式、`.is-live` 藍色 accent
   的實際效果需要人工看過。build 通過只代表語法正確。
-- `_run_streaming` 每 `_TRACE_FLUSH_EVERY`（8）個事件才把 trace 落地，因此
-  「開跑不到 8 個事件就失敗」的那一輪，過程留不下來。已在測試 docstring 註明，
-  未修（不在本次需求範圍）。
