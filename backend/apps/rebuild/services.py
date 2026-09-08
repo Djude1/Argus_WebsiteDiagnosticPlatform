@@ -199,6 +199,10 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
         raise OpenCodeError("未設定 ARGUS_OPENCODE_BASE_URL")
 
     conversation = list(rebuild.conversation or [])
+    # 初次分析的說明只存在 reply，而下面會把 reply 清空。不先收進對話串的話，
+    # 使用者一追問，最初那份「改了什麼、哪些沒處理」就永遠消失了。
+    if not conversation and rebuild.reply:
+        conversation.append({"role": "agent", "text": rebuild.reply})
     conversation.append({"role": "user", "text": question})
     # 清掉上一輪的思考流：那是「產生優化版」的推理，跟這個問題無關，
     # 留著只會讓使用者以為新的回應沒有進來。對話本身保存在 conversation。

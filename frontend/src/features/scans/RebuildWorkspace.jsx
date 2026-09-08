@@ -209,6 +209,7 @@ function RebuildWorkspace() {
   }
 
   const toolCount = (rebuild.trace || []).filter((e) => e.kind === "tool").length;
+  const thread = rebuild.conversation || [];
   const both = docs.original != null && docs.optimized != null;
   const identical = both && docs.original === docs.optimized;
   const current = docs[variant];
@@ -269,15 +270,15 @@ function RebuildWorkspace() {
             </div>
           </details>
 
-          {/* 回覆是結論，必須跟過程分開、字級正常。混在推理片段裡會找不到重點 */}
-          <div className="rebuild-ws-reply-head">Agent 回覆</div>
-          <div className="rebuild-ws-reply">
-            {rebuild.reply || (running ? "…" : "（這一輪沒有文字回覆）")}
+          {/* 回覆是結論，必須跟過程分開、字級正常。混在推理片段裡會找不到重點。
+              一旦開始追問就整段變成對話串——`reply` 的內容此時已經在 conversation
+              裡了，兩邊都畫會讓同一段文字出現兩次。 */}
+          <div className="rebuild-ws-reply-head">
+            {thread.length ? "對話" : "Agent 回覆"}
           </div>
-
-          {(rebuild.conversation || []).length > 0 && (
+          {thread.length ? (
             <div className="rebuild-ws-chat">
-              {rebuild.conversation.map((turn, index) => (
+              {thread.map((turn, index) => (
                 <p className={`rebuild-ws-turn role-${turn.role}`} key={`c-${index}`}>
                   <span className="rebuild-ws-turn-tag">
                     {turn.role === "user" ? "你" : "Agent"}
@@ -285,6 +286,18 @@ function RebuildWorkspace() {
                   {turn.text}
                 </p>
               ))}
+              {/* 追問進行中：這一輪的回答還沒寫進 conversation，用串流中的
+                  reply 暫代，讓使用者邊跑邊看到答案成形 */}
+              {running && (
+                <p className="rebuild-ws-turn role-agent" key="pending">
+                  <span className="rebuild-ws-turn-tag">Agent</span>
+                  {rebuild.reply || "…"}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="rebuild-ws-reply">
+              {rebuild.reply || (running ? "…" : "（這一輪沒有文字回覆）")}
             </div>
           )}
 

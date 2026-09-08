@@ -695,6 +695,28 @@ class FollowupTests(TestCase):
         self.assertNotIn("上一輪的推理", joined)
         self.assertIn("這一輪的推理", joined)
 
+    def test_first_analysis_reply_is_preserved_into_the_thread(self):
+        """追問會清空 reply。不先把初次分析的說明收進對話串的話，
+        使用者一追問，那份「改了什麼、哪些沒處理」就永遠消失了。
+        """
+        self.rebuild.reply = "初次分析：我補了 title，CSP 需伺服器端處理。"
+        self.rebuild.save(update_fields=["reply"])
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
+            ask_followup(self.rebuild, "還能改什麼？")
+        roles = [t["role"] for t in self.rebuild.conversation]
+        self.assertEqual(roles, ["agent", "user", "agent"])
+        self.assertIn("初次分析", self.rebuild.conversation[0]["text"])
+
+    def test_reply_is_not_duplicated_into_the_thread_twice(self):
+        """reply 與對話串的最後一則會是同一段文字，前端只能畫一次。
+
+        使用者實際看到「Agent 回覆下面還有 Agent 的回覆，有兩個」。
+        """
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
+            ask_followup(self.rebuild, "問題")
+        agent_turns = [t["text"] for t in self.rebuild.conversation if t["role"] == "agent"]
+        self.assertEqual(agent_turns[-1], self.rebuild.reply)
+
     def test_conversation_records_both_sides(self):
         with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()):
             ask_followup(self.rebuild, "再多修一點")
