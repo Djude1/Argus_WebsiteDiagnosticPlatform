@@ -60,6 +60,10 @@ _TW_ID_LETTER_VALUES = {
 # HTML5 語意化區塊標籤，用於 GEO FAST 的 Structured 維度判斷
 SEMANTIC_LANDMARK_TAGS = {"main", "article", "header", "nav", "section", "footer", "aside"}
 
+# Open Graph 標籤鍵：決定頁面分享到社群／通訊軟體時的預覽呈現。
+# 標準寫法是 property=，少數網站用 name=，兩種都認。
+OG_META_KEYS = {"og:title", "og:description", "og:image", "og:url"}
+
 # 不對外索引的後台/管理路徑前綴。這些頁面不需要 SEO/AEO/GEO 評分（補 H1、JSON-LD
 # 等對搜尋引擎曝光無意義），但安全性檢查（CSRF token、安全頭部）仍需照常進行。
 ADMIN_PATH_PREFIXES = (
@@ -243,6 +247,7 @@ class HtmlSignalParser(HTMLParser):
         self.form_without_csrf = 0
         self.json_ld_blocks: list[str] = []
         self.dl_count = 0
+        self.og_tags: set[str] = set()
         self.current_script_type = ""
         self.current_script_parts: list[str] = []
         self.in_form = False
@@ -255,6 +260,10 @@ class HtmlSignalParser(HTMLParser):
 
         if normalized_tag == "meta" and attributes.get("name", "").lower() == "description":
             self.meta_description = attributes.get("content", "")
+        elif normalized_tag == "meta":
+            og_key = (attributes.get("property", "") or attributes.get("name", "")).lower()
+            if og_key in OG_META_KEYS and attributes.get("content", "").strip():
+                self.og_tags.add(og_key)
         elif normalized_tag == "link":
             rel = attributes.get("rel", "").lower()
             if rel == "canonical":
@@ -605,6 +614,27 @@ def analyze_seo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list
                 selector='link[rel="canonical"]',
                 impact_area="metadata",
                 priority_score=15,
+            )
+        )
+    missing_og = sorted(OG_META_KEYS - parser.og_tags)
+    if missing_og:
+        findings.append(
+            make_finding(
+                category=Finding.Category.SEO,
+                severity=Finding.Severity.LOW,
+                title="缺少 Open Graph 社交分享標籤",
+                description=(
+                    "頁面缺少部分 Open Graph 標籤，連結被分享到社群媒體或通訊軟體時，"
+                    "預覽卡片可能沒有標題、描述或圖片，降低點擊意願。"
+                ),
+                remediation=(
+                    "為頁面補齊 og:title、og:description、og:image 與 og:url 標籤，"
+                    "內容與頁面主題一致，圖片建議 1200×630 以上。"
+                ),
+                evidence=f"missing_og_tags={', '.join(missing_og)}",
+                selector='meta[property^="og:"]',
+                impact_area="metadata",
+                priority_score=30,
             )
         )
     return findings
