@@ -76,9 +76,11 @@ last_bonus_year / last_bonus_month（月贈點冪等欄位）
 **CoinTransaction**（`apps/billing/models.py`）
 ```
 wallet FK、amount（正=入帳、負=扣款）、balance_after（異動後餘額快照）
-kind（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust）
+kind（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust /
+  rebuild_hold / rebuild_refund / fixgen_grant / fixgen_charge / fixgen_refund）
 scan_job FK（nullable）、plan FK（nullable）、admin_actor FK（nullable）、note
 → 審計不可改；補正交易用 kind=admin_adjust（不是 type，也沒有 manual 值）
+→ fixgen 三種為修正產出額度/計費（額度類交易 amount=0，詳 billing/CLAUDE.md）
 ```
 
 **AdminAuditLog**（`apps/admin_api/models.py`）

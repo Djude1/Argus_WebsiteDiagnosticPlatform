@@ -410,6 +410,9 @@ ARGUS_COIN_PER_USD = int(os.getenv("ARGUS_COIN_PER_USD", "100"))
 # 每次成功複刻的最低消費。沒有下限的話，agent 用免費模型時實際成本為 0、
 # 這個功能會完全不收費，但 Argus 自己的 worker 與儲存成本仍在。
 ARGUS_COIN_REBUILD_MIN = int(os.getenv("ARGUS_COIN_REBUILD_MIN", "1"))
+# 修正產出額度外的每次產生固定點數。暫定值——上線前以 rebuild 實際
+# token 成本校準（spec docs/specs/0002-fix-output.md）。
+ARGUS_COIN_FIXGEN_GENERATION = int(os.getenv("ARGUS_COIN_FIXGEN_GENERATION", "30"))
 
 # 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
 ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()

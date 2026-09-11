@@ -14,7 +14,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.billing.services import refund_full_for_scan, settle_scan_actual
+from apps.billing.services import (
+    grant_fixgen_entitlement,
+    refund_full_for_scan,
+    settle_scan_actual,
+)
 from apps.scans.cancellation import ScanCancelled, is_cancelled, raise_if_cancelled
 from apps.scans.crawler import crawl_site
 from apps.scans.katana_scanner import run_katana
@@ -861,6 +865,16 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             warning_summary["settlement_error"] = settlement_error
             ScanJob.objects.filter(id=scan_job_id).update(warning_summary=warning_summary)
             scan_job.warning_summary = warning_summary
+        # 付費掃描結算成功 → 附贈 1 次修正產出額度（冪等）。失敗只記 log：
+        # 贈與失敗不影響掃描結果，之後仍可手動補贈，不值得讓它動到掃描狀態。
+        try:
+            grant_fixgen_entitlement(scan_job.user, scan_job)
+        except Exception as exc:  # noqa: BLE001
+            append_log(
+                scan_job_id,
+                f"修正產出額度贈與失敗（{exc.__class__.__name__}）",
+                level="warn",
+            )
         return {
             "status": scan_job.status,
             "pages": len(crawled_pages),

@@ -156,6 +156,11 @@ class CoinTransaction(models.Model):
         ADMIN_ADJUST = "admin_adjust", "管理員調整"
         REBUILD_HOLD = "rebuild_hold", "網頁複刻預扣"
         REBUILD_REFUND = "rebuild_refund", "網頁複刻退款"
+        # 修正產出（Fix Output）：贈與／扣款／退款。額度類交易 amount=0，
+        # 點數類金額非 0——同一 kind 以金額與 note 區分用途。
+        FIXGEN_GRANT = "fixgen_grant", "修正產出額度贈與"
+        FIXGEN_CHARGE = "fixgen_charge", "修正產出扣款"
+        FIXGEN_REFUND = "fixgen_refund", "修正產出退款"
 
     wallet = models.ForeignKey(
         CoinWallet,

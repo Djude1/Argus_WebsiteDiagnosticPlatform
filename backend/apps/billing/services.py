@@ -452,3 +452,171 @@ def admin_adjust(*, target_user, delta: int, admin_actor, note: str) -> CoinTran
         },
     )
     return tx
+
+
+# ---------- 修正產出（Fix Output）：產生額度與計費 ----------
+#
+# 產生額度以交易紀錄表達（不另建模型、不動 wallet 欄位）：
+# - FIXGEN_GRANT（amount=0）：付費掃描結算時附贈，同掃描只贈一次
+# - FIXGEN_CHARGE：觸發產生前計費——額度內 amount=0（消耗額度）、
+#   額度外扣 ARGUS_COIN_FIXGEN_GENERATION 固定點數
+# - FIXGEN_REFUND：產生失敗退費——點數退點（正數）、額度返還（amount=0）
+#
+# 額度可用判定＝有贈與，且 0 元扣款未被 0 元退款抵銷：失敗重試後額度會回來，
+# 「不為失敗的產出付費」對兩種支付方式都成立。
+
+
+def _scan_net_charge(wallet: CoinWallet, scan_job) -> int:
+    """該掃描實際花掉的點數（hold - refund 的淨額）。"""
+    rows = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind__in=[CoinTransaction.Kind.SCAN_HOLD, CoinTransaction.Kind.SCAN_REFUND],
+    ).values_list("amount", flat=True)
+    return -sum(rows)
+
+
+def _fixgen_net_charge(wallet: CoinWallet, scan_job) -> int:
+    """該掃描在修正產出上目前實扣的點數淨額。"""
+    rows = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind__in=[CoinTransaction.Kind.FIXGEN_CHARGE, CoinTransaction.Kind.FIXGEN_REFUND],
+    ).values_list("amount", flat=True)
+    return -sum(rows)
+
+
+@transaction.atomic
+def grant_fixgen_entitlement(user, scan_job) -> CoinTransaction | None:
+    """付費掃描結算後附贈 1 次修正產出額度。
+
+    冪等：同掃描已有 FIXGEN_GRANT → 回 None。淨扣為 0 的掃描（未付費或
+    全額退款）不贈與——額度對應的是「一份付費的掃描結果」。
+    """
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    if CoinTransaction.objects.filter(
+        wallet=wallet, scan_job=scan_job, kind=CoinTransaction.Kind.FIXGEN_GRANT
+    ).exists():
+        return None
+    if _scan_net_charge(wallet, scan_job) <= 0:
+        return None
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=0,
+        kind=CoinTransaction.Kind.FIXGEN_GRANT,
+        balance_after=wallet.balance,
+        scan_job=scan_job,
+        note="付費掃描附贈修正產出額度 1 次",
+    )
+
+
+def fixgen_entitlement_available(user, scan_job) -> bool:
+    """該掃描的產生額度是否可用（未消耗，或已因失敗返還）。"""
+    wallet = CoinWallet.objects.filter(user=user).first()
+    if wallet is None:
+        return False
+    if not CoinTransaction.objects.filter(
+        wallet=wallet, scan_job=scan_job, kind=CoinTransaction.Kind.FIXGEN_GRANT
+    ).exists():
+        return False
+    used = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind=CoinTransaction.Kind.FIXGEN_CHARGE,
+        amount=0,
+    ).count()
+    returned = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind=CoinTransaction.Kind.FIXGEN_REFUND,
+        amount=0,
+    ).count()
+    return used <= returned
+
+
+@transaction.atomic
+def charge_fixgen_generation(user, scan_job) -> CoinTransaction:
+    """觸發修正產出前的計費：額度內 0 元消耗，額度外扣固定點數。
+
+    點數必須在排任務之前扣（同 rebuild 規則）：餘額不足的人不能先讓
+    LLM 把 token 花掉。餘額不足 raise InsufficientCoinError。
+    """
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+    if fixgen_entitlement_available(user, scan_job):
+        return CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=0,
+            kind=CoinTransaction.Kind.FIXGEN_CHARGE,
+            balance_after=wallet.balance,
+            scan_job=scan_job,
+            note="使用附贈額度產生修正產出",
+        )
+    cost = settings.ARGUS_COIN_FIXGEN_GENERATION
+    if wallet.balance < cost:
+        raise InsufficientCoinError(required=cost, balance=wallet.balance)
+    new_balance = wallet.balance - cost
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=-cost,
+        kind=CoinTransaction.Kind.FIXGEN_CHARGE,
+        balance_after=new_balance,
+        scan_job=scan_job,
+        note=f"修正產出產生扣款（{cost} coin）",
+    )
+
+
+@transaction.atomic
+def refund_fixgen_generation(user, scan_job) -> CoinTransaction | None:
+    """修正產出失敗退費：點數退點、額度返還。冪等（無可退回 None）。"""
+    get_or_create_wallet(user)
+    wallet = CoinWallet.objects.select_for_update().get(user=user)
+
+    net_coins = _fixgen_net_charge(wallet, scan_job)
+    if net_coins > 0:
+        new_balance = wallet.balance + net_coins
+        wallet.balance = new_balance
+        wallet.save(update_fields=["balance", "updated_at"])
+        return CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=net_coins,
+            kind=CoinTransaction.Kind.FIXGEN_REFUND,
+            balance_after=new_balance,
+            scan_job=scan_job,
+            note="修正產出產生失敗，全額退點",
+        )
+
+    # 沒有實扣點數 → 看額度是否被消耗而未返還
+    used = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind=CoinTransaction.Kind.FIXGEN_CHARGE,
+        amount=0,
+    ).count()
+    returned = CoinTransaction.objects.filter(
+        wallet=wallet,
+        scan_job=scan_job,
+        kind=CoinTransaction.Kind.FIXGEN_REFUND,
+        amount=0,
+    ).count()
+    if used <= returned:
+        return None
+    return CoinTransaction.objects.create(
+        wallet=wallet,
+        amount=0,
+        kind=CoinTransaction.Kind.FIXGEN_REFUND,
+        balance_after=wallet.balance,
+        scan_job=scan_job,
+        note="修正產出產生失敗，附贈額度返還",
+    )
+
+
+def is_paid_tier(user) -> bool:
+    """free/paid 二級自動判定：曾購點數包或完成付費掃描即 paid。"""
+    wallet = CoinWallet.objects.filter(user=user).first()
+    if wallet is None:
+        return False
+    return (wallet.total_purchased_ntd or 0) > 0 or (wallet.total_scans_used or 0) > 0

@@ -40,6 +40,11 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `refund_full_for_scan(user, scan_job, *, reason)` | 取消或失敗時全退 | ✅ 可重複呼叫 |
 | `purchase_plan(user, plan)` | 購買方案入帳 | 否 |
 | `admin_adjust(*, target_user, delta, admin_actor, note)` | 管理員手動調整 | 否 |
+| `grant_fixgen_entitlement(user, scan_job)` | 付費掃描結算後附贈 1 次修正產出額度（淨扣 0 不贈） | ✅ 同掃描只贈一次 |
+| `fixgen_entitlement_available(user, scan_job)` | 該掃描的產生額度是否可用（純查詢） | 純查詢 |
+| `charge_fixgen_generation(user, scan_job)` | 觸發修正產出前計費：額度內 0 元消耗、額度外扣 `ARGUS_COIN_FIXGEN_GENERATION` 固定點數 | 否 |
+| `refund_fixgen_generation(user, scan_job)` | 產生失敗退費：點數退點、額度返還（amount=0） | ✅ 無可退回 None |
+| `is_paid_tier(user)` | free/paid 二級自動判定（曾購點數包或完成付費掃描即 paid） | 純查詢 |
 
 ---
 
@@ -73,6 +78,11 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `scan_hold` | 掃描預扣 |
 | `scan_refund` | 掃描退款（涵蓋完成結算退差與取消/失敗全退） |
 | `admin_adjust` | 管理員手動調整 |
+| `rebuild_hold` | 網頁複刻預扣 |
+| `rebuild_refund` | 網頁複刻退款 |
+| `fixgen_grant` | 修正產出額度贈與（amount=0，付費掃描附贈） |
+| `fixgen_charge` | 修正產出扣款（額度內 amount=0、額度外負數固定點數） |
+| `fixgen_refund` | 修正產出退款（點數退正數、額度返還 amount=0） |
 
 ---
 
