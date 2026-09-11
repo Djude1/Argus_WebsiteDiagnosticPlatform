@@ -20,6 +20,7 @@ import { api } from "../../api";
 import NavActions from "../../components/navigation/NavActions.jsx";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
+import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
 import { useArgusStore } from "../../store";
 import {
   CATEGORY_COLOR,
@@ -1450,6 +1451,10 @@ function FindingsWorkspace({ scan }) {
           )}
         </div>
       </div>
+
+      {/* 修正產出專區：全寬獨立區塊，只在掃描完成後出現——進行中的掃描
+          沒有完整爬取內容可當事實基礎，也不該讓使用者誤觸計費。 */}
+      {scan.status === "completed" && <FixOutputSection scan={scan} />}
     </section>
     {dialogHost}
     </>
