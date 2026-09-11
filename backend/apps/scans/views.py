@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db import close_old_connections, connections
 from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
@@ -18,13 +18,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.billing.services import (
+    InsufficientCoinError,
     estimate_scan_cost,
     get_or_create_wallet,
     refund_full_for_scan,
 )
+from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
 from apps.scans.models import (
     AuthorizationConsent,
     Finding,
+    FixOutput,
     Page,
     ReportVerification,
     ScanJob,
@@ -34,6 +37,7 @@ from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
 from apps.scans.serializers import (
     FindingSerializer,
+    FixOutputSerializer,
     PageSerializer,
     ScanEstimateSerializer,
     ScanJobCreateSerializer,
@@ -326,6 +330,87 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         # 立即退回該 scan 預扣的 coin（worker 那邊也會再做一次，refund 函式本身冪等）
         refund_full_for_scan(scan_job.user, scan_job, reason="取消")
         return Response(ScanJobSerializer(scan_job).data)
+
+    # ---------- 修正產出（Fix Output）----------
+
+    @action(detail=True, methods=["post"], url_path="fix-output/trigger")
+    def fix_output_trigger(self, request, pk=None):
+        """觸發修正產出：額度→點數計費閘門＋冪等派工。
+
+        已產生中／已完成回 200（不重複計費）；真正派工回 202。
+        計費在派工之前（同 rebuild 規則），餘額不足回 400 且不派工。
+        """
+        scan_job = self.get_object()
+        if not settings.ARGUS_FIXGEN_ENABLED:
+            return Response(
+                {"detail": "修正產出功能目前未開放。"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if scan_job.status != ScanJob.Status.COMPLETED:
+            return Response(
+                {"detail": "修正產出僅在掃描完成後可用。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            fix_output, dispatched = trigger_fix_output(scan_job)
+        except FixgenDisabledError:
+            return Response(
+                {"detail": "修正產出功能目前未開放。"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except InsufficientCoinError as exc:
+            return Response(
+                {
+                    "detail": str(exc),
+                    "required": exc.required,
+                    "balance": exc.balance,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            {"fix_output": FixOutputSerializer(fix_output).data, "dispatched": dispatched},
+            status=status.HTTP_202_ACCEPTED if dispatched else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get"], url_path="fix-output/status")
+    def fix_output_status(self, request, pk=None):
+        """輪詢修正產出狀態（idle/generating/ready/failed 含原因）。"""
+        scan_job = self.get_object()
+        fix_output = FixOutput.objects.filter(scan_job=scan_job).first()
+        if fix_output is None:
+            return Response({"status": FixOutput.Status.IDLE, "error": ""})
+        return Response(FixOutputSerializer(fix_output).data)
+
+    @action(detail=True, methods=["get"], url_path="fix-output/artifacts")
+    def fix_output_artifacts(self, request, pk=None):
+        """讀取修正產出產物。
+
+        ``?download=llms_txt`` 以主機檔案型態交付（attachment）；其餘產物
+        是 HTML 片段，走 JSON 整包讀取、由前端一鍵複製。
+        """
+        scan_job = self.get_object()
+        fix_output = FixOutput.objects.filter(
+            scan_job=scan_job, status=FixOutput.Status.READY
+        ).first()
+        if fix_output is None:
+            raise Http404("修正產出尚未完成。")
+
+        download_key = request.query_params.get("download")
+        if download_key:
+            # 只有 llms.txt 是「上傳到主機根目錄」的檔案型交付；
+            # 其餘產物是貼進 CMS/HTML 的片段，提供下載反而讓人誤存成檔案。
+            if download_key != "llms_txt":
+                return Response(
+                    {"detail": "只有 llms.txt 提供檔案下載；其餘產物請使用複製。"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            artifact = fix_output.artifacts.get("llms_txt") or {}
+            content = artifact.get("content", "")
+            response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
+            response["Content-Disposition"] = 'attachment; filename="llms.txt"'
+            return response
+
+        return Response({"artifacts": fix_output.artifacts})
 
     @action(detail=True, methods=["get"])
     def topology(self, request, pk=None):

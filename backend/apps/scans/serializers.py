@@ -11,7 +11,7 @@ from apps.billing.services import (
     get_or_create_wallet,
     hold_for_scan,
 )
-from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
+from apps.scans.models import AuthorizationConsent, Finding, FixOutput, Page, ScanJob
 from apps.scans.services import (
     assert_public_http_url,
     get_hostname,
@@ -242,3 +242,29 @@ class FindingSerializer(serializers.ModelSerializer):
             "ai_handoff_prompt",
             "created_at",
         ]
+
+
+class FixOutputSerializer(serializers.ModelSerializer):
+    """修正產出狀態（輪詢用）——刻意不含 artifacts 本體。
+
+    前端每幾秒 poll 一次這個端點；產物內容（含逐欄位來源標註）量大，
+    只該在 ready 後由 artifacts 端點整包讀取一次。
+    """
+
+    artifact_keys = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FixOutput
+        fields = [
+            "status",
+            "error",
+            "provider",
+            "model_id",
+            "generated_at",
+            "artifact_keys",
+        ]
+
+    def get_artifact_keys(self, obj) -> list[str]:
+        if obj.status != FixOutput.Status.READY:
+            return []
+        return list(obj.artifacts.keys())
