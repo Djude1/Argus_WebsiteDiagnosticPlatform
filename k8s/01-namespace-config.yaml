@@ -40,6 +40,11 @@ data:
   GOOGLE_OAUTH_CLIENT_ID: "856926123222-ci7ubqlvdi1shkjopgkicef71tf3ksr9.apps.googleusercontent.com"
   # Hermes-Agent 預設關閉
   ARGUS_AGENT_ENABLED: "true"
+  # 修正產出（Fix Output）：啟用才花 token（觸發時計費，失敗全額退點）。
+  # TIMEOUT 必須夠寬——實測 MiniMax-M2.7 對真實 prompt 推理需 ~77 秒，
+  # 沿用程式預設 60 秒會逾時落到 fallback（見 log/2026-09-11_fixgen-e2e-selftest）。
+  ARGUS_FIXGEN_ENABLED: "true"
+  ARGUS_FIXGEN_TIMEOUT: "180"
   # Email：預設 filebased（寄出的信寫到 container 內 backend/dev_emails/*.log）
   # 要真寄信改成 django.core.mail.backends.smtp.EmailBackend 並把 EMAIL_* 放進 Secret
   DJANGO_EMAIL_BACKEND: "django.core.mail.backends.filebased.EmailBackend"
