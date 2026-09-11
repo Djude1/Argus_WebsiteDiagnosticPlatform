@@ -817,6 +817,22 @@ function FreeToolsPage() {
                   <div className="insight-success">單頁檢查未發現明顯問題。</div>
                 )}
                 <p className="insight-note">{quick.result.note}</p>
+                {/* 導流 CTA（修正產出票06）：只講完整掃描的加值與入口，
+                    不提供任何免費產生——修正產出對應的是一份付費掃描結果。 */}
+                <div className="insight-upsell">
+                  <strong>完整掃描可獲得可直接貼上的修正內容</strong>
+                  <span>
+                    JSON-LD、Open Graph＋meta、llms.txt 與 FAQ Schema，
+                    以網站實際內容產生、可直接複製採用；付費掃描附贈 1 次產生額度。
+                  </span>
+                  <button
+                    type="button"
+                    className="public-cta-primary"
+                    onClick={() => navigate("/login")}
+                  >
+                    登入建立完整掃描
+                  </button>
+                </div>
               </>
             )}
           </div>

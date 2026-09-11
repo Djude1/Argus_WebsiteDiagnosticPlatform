@@ -12436,3 +12436,35 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   .fixoutput-field-source {
     @apply text-cyan-700 underline underline-offset-2 hover:text-cyan-900;
   }
+
+  /* quick-scan 結果頁的完整掃描導流（修正產出票06）：
+     樣式隨 insight 工具卡的深色語言，CTA 按鈕沿用 public-cta-primary。 */
+  .insight-upsell {
+    @apply mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4 text-left;
+  }
+
+  .insight-upsell strong {
+    @apply block text-sm font-bold text-cyan-100;
+  }
+
+  .insight-upsell span {
+    @apply mt-1 block text-xs leading-relaxed text-cyan-100/70;
+  }
+
+  .insight-upsell .public-cta-primary {
+    @apply mt-3 py-2 text-xs;
+  }
+
+  /* 光主題：卡片轉白底，導流文字改用深色系 */
+  :root[data-theme="light"] .insight-upsell {
+    background: rgba(6, 182, 212, 0.06);
+    border-color: rgba(8, 145, 178, 0.25);
+  }
+
+  :root[data-theme="light"] .insight-upsell strong {
+    color: #0e7490;
+  }
+
+  :root[data-theme="light"] .insight-upsell span {
+    color: #475569;
+  }
