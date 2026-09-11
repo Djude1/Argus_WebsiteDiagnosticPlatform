@@ -149,7 +149,7 @@ def collect_crawled_facts(scan_job: ScanJob) -> CrawledFacts:
 
     facts.home = facts.pages[0] if facts.pages else None
     # 比對用語料：lowercase + 去除所有空白，避免換行／全形差異造成假陰性
-    facts.corpus_norm = _normalize(" ".join(corpus_parts))
+    facts.corpus_norm = normalize_for_match(" ".join(corpus_parts))
 
     if facts.home:
         home = facts.home
@@ -166,7 +166,7 @@ def collect_crawled_facts(scan_job: ScanJob) -> CrawledFacts:
     return facts
 
 
-def _normalize(value: str) -> str:
+def normalize_for_match(value: str) -> str:
     return re.sub(r"\s+", "", (value or "")).lower()
 
 

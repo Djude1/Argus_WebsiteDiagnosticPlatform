@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-from apps.scans.fixgen.facts import CrawledFacts, _normalize
+from apps.scans.fixgen.facts import CrawledFacts, normalize_for_match
 
 PLACEHOLDER = "【請填寫：{label}】"
 
@@ -27,16 +27,16 @@ def identity_field(
 ) -> tuple[str, dict]:
     """驗證識別類欄位：語料可支撐 → 原值＋verified；否則 → 佔位符。"""
     value = (value or "").strip()
-    if value and _normalize(value) in facts.corpus_norm:
+    if value and normalize_for_match(value) in facts.corpus_norm:
         return value, {"status": "verified", "source_url": find_source_url(facts, value)}
     return PLACEHOLDER.format(label=label), {"status": "placeholder"}
 
 
 def find_source_url(facts: CrawledFacts, value: str) -> str | None:
     """回傳第一個文字內容包含此值的頁面 URL（來源頁標註用）。"""
-    normalized = _normalize(value)
+    normalized = normalize_for_match(value)
     for page in facts.pages:
-        if normalized in _normalize(" ".join(page.lines)):
+        if normalized in normalize_for_match(" ".join(page.lines)):
             return page.url
     return None
 
@@ -68,7 +68,7 @@ def new_hard_facts(text: str, facts: CrawledFacts) -> list[str]:
         token = token.rstrip(".,;、。")
         if not token:
             continue
-        if _normalize(token) not in facts.corpus_norm:
+        if normalize_for_match(token) not in facts.corpus_norm:
             problems.append(token)
     return problems
 

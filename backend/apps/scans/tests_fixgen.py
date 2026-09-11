@@ -278,6 +278,36 @@ class FixOutputGenerationTests(TestCase):
         self.assertEqual(json_ld["fields"]["same_as"]["status"], "partial")
 
     @override_settings(ARGUS_FIXGEN_ENABLED=True)
+    def test_og_title_with_quotes_is_escaped(self):
+        """標題含雙引號時輸出仍必須是合法 HTML（「可直接貼上」承諾）。"""
+        self.home.title = '陽光咖啡 "限量" 手沖禮盒'
+        self.home.save(update_fields=["title"])
+
+        fix_output = self._run(_fake_chain())
+
+        content = fix_output.artifacts["og_meta"]["content"]
+        self.assertIn("陽光咖啡 &quot;限量&quot; 手沖禮盒", content)
+        self.assertNotIn('"限量"', content)  # 不得出現未跳脫的雙引號
+
+    @override_settings(ARGUS_FIXGEN_ENABLED=True)
+    def test_twitter_card_survives_without_image(self):
+        """無可用圖片時 Twitter 標籤組仍要輸出（basic card），不能整組消失。"""
+        payload = json.loads(json.dumps(LLM_PAYLOAD, ensure_ascii=False))
+        payload["og_meta"]["og_image"] = "https://cdn.example.com/not-crawled.png"
+
+        fix_output = self._run(_fake_chain(payload))
+
+        content = fix_output.artifacts["og_meta"]["content"]
+        self.assertNotIn('property="og:image"', content)
+        self.assertIn('name="twitter:card" content="summary"', content)
+        self.assertIn('name="twitter:title"', content)
+        self.assertIn('name="twitter:description"', content)
+        self.assertEqual(
+            fix_output.artifacts["og_meta"]["fields"]["og_image"]["status"],
+            "placeholder",
+        )
+
+    @override_settings(ARGUS_FIXGEN_ENABLED=True)
     def test_start_is_idempotent_and_dispatches_once(self):
         with patch("apps.scans.fixgen.services.run_fix_output_task") as task:
             fix_output, dispatched = start_fix_output(self.scan)

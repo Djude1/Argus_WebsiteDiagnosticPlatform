@@ -7,6 +7,7 @@ LLM 只輸出欄位值（不輸出最終 HTML/檔案內容）——逐欄位驗�
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -18,8 +19,8 @@ from apps.agent.providers import ChatProvider, ProviderChain
 from apps.scans.fixgen.facts import (
     CrawledFacts,
     PageFacts,
-    _normalize,
     collect_crawled_facts,
+    normalize_for_match,
 )
 from apps.scans.fixgen.policy import (
     PLACEHOLDER,
@@ -67,7 +68,7 @@ def build_prompt(facts: CrawledFacts) -> str:
     facts_json = json.dumps(facts.prompt_payload(), ensure_ascii=False, indent=1)
     return (
         "你是網站 SEO/AEO/GEO 修正內容產生器。下方 JSON 是從目標網站爬取到的"
-        "全部事實。你只能使用這些事產生修正內容；網站上沒有的資訊，對應欄位"
+        "全部事實。你只能使用這些事實產生修正內容；網站上沒有的資訊，對應欄位"
         "留空字串或空清單，絕對不可以編造——產生後有驗證步驟，語料中不存在"
         "的值會被佔位符取代。\n\n"
         f"【事實】\n{facts_json}\n\n"
@@ -87,7 +88,7 @@ def build_prompt(facts: CrawledFacts) -> str:
         "- llms_txt.sections[].path 只能使用事實頁面的 URL path，"
         "title／description 只能改寫該頁內容。\n"
         "- faq_schema.main_entity[].question 只能取自 faq_questions"
-        "（可微調語氣，不可更換主題）；answer 只能改寫該問答附近的内容。"
+        "（可微調語氣，不可更換主題）；answer 只能改寫該問答附近的內容。"
         "事實沒有 faq_questions 時，main_entity 留空清單。"
     )
 
@@ -204,20 +205,31 @@ def _build_og_meta(facts: CrawledFacts, data: dict) -> dict:
         og_image = ""
         image_ann = {"status": "placeholder"}
 
+    # 標題／描述可能含雙引號（如「"限量"優惠」），未跳脫會產出斷裂的
+    # meta 標籤——「可直接貼上」是本功能的承諾，輸出必須是合法 HTML。
+    esc_title = html.escape(og_title, quote=True)
+    esc_description = html.escape(og_description, quote=True)
+    esc_site_name = html.escape(og_site_name, quote=True)
+
     lines = [
-        f'<meta property="og:title" content="{og_title}">',
-        f'<meta property="og:description" content="{og_description}">',
+        f'<meta property="og:title" content="{esc_title}">',
+        f'<meta property="og:description" content="{esc_description}">',
         f'<meta property="og:url" content="{home.url}">',
         '<meta property="og:type" content="website">',
-        f'<meta property="og:site_name" content="{og_site_name}">',
+        f'<meta property="og:site_name" content="{esc_site_name}">',
     ]
     if og_image:
-        lines.append(f'<meta property="og:image" content="{og_image}">')
+        lines.append(f'<meta property="og:image" content="{html.escape(og_image, quote=True)}">')
+        # Twitter Card 有圖給大圖卡；沒圖時仍要輸出 basic card——
+        # story 2 承諾的是「完整的 OG＋Twitter Card＋meta 標籤組」，
+        # 缺圖不該讓整組 Twitter 標籤跟著消失。
         lines.append('<meta name="twitter:card" content="summary_large_image">')
-        lines.append(f'<meta name="twitter:title" content="{og_title}">')
-        lines.append(f'<meta name="twitter:description" content="{og_description}">')
-        lines.append(f'<meta name="twitter:image" content="{og_image}">')
-    lines.append(f'<meta name="description" content="{og_description}">')
+        lines.append(f'<meta name="twitter:image" content="{html.escape(og_image, quote=True)}">')
+    else:
+        lines.append('<meta name="twitter:card" content="summary">')
+    lines.append(f'<meta name="twitter:title" content="{esc_title}">')
+    lines.append(f'<meta name="twitter:description" content="{esc_description}">')
+    lines.append(f'<meta name="description" content="{esc_description}">')
 
     fields = {
         "og_title": {"status": "verified", "source_url": home.url},
@@ -283,10 +295,10 @@ def _build_llms_txt(facts: CrawledFacts, data: dict) -> dict:
 
 def _extractive_answer(facts: CrawledFacts, question: str) -> str:
     """從問題所在頁面逐字摘錄答案：問題行之後的第一段文字。"""
-    normalized = _normalize(question)
+    normalized = normalize_for_match(question)
     for page in facts.pages:
         for index, line in enumerate(page.lines):
-            if normalized and normalized in _normalize(line):
+            if normalized and normalized in normalize_for_match(line):
                 for followup in page.lines[index + 1 :]:
                     if len(followup) > 10:
                         return followup[:150]
@@ -307,7 +319,7 @@ def _build_faq_schema(facts: CrawledFacts, data: dict) -> dict | None:
         if not question or not answer:
             continue
         # 問句必須在語料中——憑空出現的問題整組丟棄
-        if _normalize(question) not in facts.corpus_norm:
+        if normalize_for_match(question) not in facts.corpus_norm:
             continue
         if new_hard_facts(answer, facts):
             fallback = _extractive_answer(facts, question)
