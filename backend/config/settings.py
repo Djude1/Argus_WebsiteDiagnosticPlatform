@@ -343,6 +343,9 @@ ARGUS_FIXGEN_ENABLED = env_bool("ARGUS_FIXGEN_ENABLED", default=False)
 # 空字串＝沿用 provider chain 各 provider 的 default_model（fallback 語義）。
 ARGUS_FIXGEN_MODEL = os.getenv("ARGUS_FIXGEN_MODEL", "").strip()
 ARGUS_FIXGEN_MAX_TOKENS = int(os.getenv("ARGUS_FIXGEN_MAX_TOKENS", "4096"))
+# 單次產生的 HTTP 逾時（秒）。推理型模型對長 prompt 的完整回應可能遠超
+# provider 預設的 60 秒（實測 MiniMax-M2.7 約 77 秒），故另立較寬上限。
+ARGUS_FIXGEN_TIMEOUT = int(os.getenv("ARGUS_FIXGEN_TIMEOUT", "180"))
 
 # 網頁複刻與優化（OpenCode agent server）
 # 預設關閉：優化階段會呼叫外部 agent 花錢，而且該 agent 在它那台主機上有

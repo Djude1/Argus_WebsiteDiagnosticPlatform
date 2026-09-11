@@ -53,6 +53,7 @@ def generate_artifacts(
         model=settings.ARGUS_FIXGEN_MODEL or None,
         temperature=0.2,
         max_tokens=settings.ARGUS_FIXGEN_MAX_TOKENS,
+        timeout=settings.ARGUS_FIXGEN_TIMEOUT,
     )
     data = parse_llm_json(response.content)
     artifacts = build_artifacts(facts, data)
@@ -95,6 +96,12 @@ def build_prompt(facts: CrawledFacts) -> str:
 
 def parse_llm_json(content: str) -> dict:
     text = (content or "").strip()
+    # 推理型模型（如 MiniMax-M2.7）會先輸出 <think>…</think> 思考過程，其中
+    # 常出現 JSON 範例——先剝掉再找邊界，否則第一個 { 會落在思考文字裡、
+    # 把完整的正式輸出判成解析失敗（實機 E2E 發現）。
+    text = re.sub(
+        r"<think>.*?</think>", " ", text, flags=re.DOTALL | re.IGNORECASE
+    ).strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     start, end = text.find("{"), text.rfind("}")

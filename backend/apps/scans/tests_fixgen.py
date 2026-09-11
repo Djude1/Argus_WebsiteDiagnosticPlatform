@@ -97,12 +97,19 @@ class FakeProvider:
         self.content = content
         self.error = error
         self.prompts: list[str] = []
+        self.last_kwargs: dict = {}
 
     def chat_with_tools(self, *args, **kwargs):
         raise ProviderError(self.name, "unsupported", "fake 不支援 tool calling")
 
-    def chat_text(self, prompt, model=None, temperature=0.2, max_tokens=2048):
+    def chat_text(self, prompt, model=None, temperature=0.2, max_tokens=2048, **kwargs):
         self.prompts.append(prompt)
+        self.last_kwargs = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            **kwargs,
+        }
         if self.error:
             raise self.error
         return ChatResponse(
@@ -276,6 +283,29 @@ class FixOutputGenerationTests(TestCase):
         json_ld = fix_output.artifacts["json_ld"]
         self.assertNotIn("https://twitter.com/sunshine", json_ld["content"])
         self.assertEqual(json_ld["fields"]["same_as"]["status"], "partial")
+
+    @override_settings(ARGUS_FIXGEN_ENABLED=True)
+    def test_reasoning_model_think_block_is_stripped_before_json_parse(self):
+        """推理型模型（MiniMax-M2.7）回應前綴 <think>…</think>，思考文字內含
+        JSON 範例的 { —— 邊界抓取必須剝除 think 後才算（實機 E2E 發現）。"""
+        provider = FakeProvider(
+            content=(
+                '<think>使用者要 JSON。輸出契約像 {"json_ld": {...}} 這樣。</think>\n'
+                + json.dumps(LLM_PAYLOAD, ensure_ascii=False)
+            )
+        )
+        fix_output = self._run(ProviderChain(providers=[provider]))
+
+        self.assertEqual(fix_output.status, FixOutput.Status.READY)
+        self.assertIn("陽光咖啡", fix_output.artifacts["json_ld"]["content"])
+
+    @override_settings(ARGUS_FIXGEN_ENABLED=True, ARGUS_FIXGEN_TIMEOUT=240)
+    def test_engine_passes_timeout_setting_to_provider(self):
+        """產生逾時跟著 ARGUS_FIXGEN_TIMEOUT 走（推理模型需要較寬上限）。"""
+        provider = FakeProvider(content=json.dumps(LLM_PAYLOAD, ensure_ascii=False))
+        self._run(ProviderChain(providers=[provider]))
+
+        self.assertEqual(provider.last_kwargs.get("timeout"), 240)
 
     @override_settings(ARGUS_FIXGEN_ENABLED=True)
     def test_og_title_with_quotes_is_escaped(self):

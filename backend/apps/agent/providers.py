@@ -71,6 +71,7 @@ class ChatProvider:
         temperature: float = 0.2,
         max_tokens: int = 1024,
         tool_choice: str | dict[str, Any] = "auto",
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         raise NotImplementedError
 
@@ -80,6 +81,7 @@ class ChatProvider:
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         """單次文字生成（無 tool calling）。供 bounded 結構化產生使用。"""
         raise ProviderError(self.name, "unsupported", "chat_text 未實作")
@@ -147,6 +149,7 @@ class _OpenAICompatibleProvider(ChatProvider):
         temperature: float = 0.2,
         max_tokens: int = 1024,
         tool_choice: str | dict[str, Any] = "auto",
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         if not self.available:
             raise ProviderError(self.name, "no_key", f"{self.api_key_env} not set")
@@ -169,7 +172,7 @@ class _OpenAICompatibleProvider(ChatProvider):
                     "Content-Type": "application/json",
                 },
                 data=json.dumps(body),
-                timeout=DEFAULT_TIMEOUT,
+                timeout=timeout,
             )
         except requests.RequestException as exc:
             raise ProviderError(self.name, "network", exc.__class__.__name__) from exc
@@ -191,13 +194,17 @@ class _OpenAICompatibleProvider(ChatProvider):
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         # OpenAI-compatible 端點不帶 tools 就是純文字生成，content 即回應。
+        # 推理型模型對長 prompt 的完整回應可能遠超一分鐘（實測 MiniMax-M2.7
+        # 約 77 秒），呼叫端可自帶較寬的 timeout。
         return self.chat_with_tools(
             messages=[{"role": "user", "content": prompt}],
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
+            timeout=timeout,
         )
 
 
@@ -244,6 +251,7 @@ class GeminiProvider(ChatProvider):
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         """純文字分析。不接 tool calling，僅供報告解釋或備援。"""
         if not self.available:
@@ -256,7 +264,7 @@ class GeminiProvider(ChatProvider):
             "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
         }
         try:
-            r = requests.post(url, json=body, timeout=DEFAULT_TIMEOUT)
+            r = requests.post(url, json=body, timeout=timeout)
         except requests.RequestException as exc:
             raise ProviderError(self.name, "network", exc.__class__.__name__) from exc
         if r.status_code != 200:
@@ -321,6 +329,7 @@ class ProviderChain:
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
+        timeout: int = DEFAULT_TIMEOUT,
     ) -> ChatResponse:
         """單次文字生成的 chain 版：與 chat_with_tools 同款 fallback 語義。
 
@@ -336,6 +345,7 @@ class ProviderChain:
                     model=model if _is_model_for(provider, model) else None,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    timeout=timeout,
                 )
             except ProviderError as exc:
                 last_err = exc
