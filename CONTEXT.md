@@ -30,3 +30,27 @@ _Avoid_: 把它當成漏洞結論——它本身不構成 CVE 等級的發現。
 **CVE 等級發現（CVE-level Finding）**:
 進一步把偵測到的版本比對 CVE 資料庫，產生「該版本受 CVE-XXXX-XXXX 影響」的結論，附 severity、CWE 與修補建議。這是指紋比對型偵測的產出，也是 A 的驗收標準。
 _Avoid_: 「驗證」一詞的歧義——此處的「可驗證」指 Finding 附帶可查證的 CVE 編號（可信度），而非主動利用確認（那是 Active Exploitation Verification）。
+
+### 診斷維度
+
+**一站式健檢（One-stop Diagnosis）**:
+Argus 的產品定位：SEO、AEO、GEO、資安四個維度在單一掃描中同時健檢、同台交付，皆為一等公民；UX 動態測試（Hermes-Agent）為補充。
+_Avoid_: 把 Argus 只描述成漏洞掃描器——ADR-0001 的「指紋→CVE 主軸」是資安工作線的優先序，不是產品邊界。
+
+**AEO（Answer Engine Optimization，答案引擎優化）**:
+讓網站內容能被「直接給答案」的引擎辨識與引用。Argus 檢核：問句覆蓋、FAQ 結構與 FAQPage/HowTo Schema 的對應。
+_Avoid_: 與 GEO 混用——AEO 看「問與答的結構」，GEO 看「實體與可檢索性」。
+
+**GEO（Generative Engine Optimization，生成式引擎優化）**:
+讓網站內容能被生成式 AI（LLM 搜尋／聊天）檢索與引用。Argus 檢核：JSON-LD 實體標註、實體類型明確度、可引用段落量、llms.txt 存在性、robots.txt 對 AI 爬蟲的開放程度。
+_Avoid_: 把 llms.txt 當成 HTML 片段——它是主機層檔案，交付型態與 meta 標籤不同。
+
+### 偵測與修正
+
+**修正產出（Fix Output）**:
+從掃描結果自動產生、可直接採用的修正內容（meta/OG 片段、JSON-LD、llms.txt 檔案），與文字版「修補建議（remediation）」分屬兩層：建議教人修，修正產出直接給成品。
+_Avoid_: 與「交辦提示（handoff prompt）」混淆——後者只產生給外部 LLM／工程師的指示，既有設計刻意不輸出完整程式碼；修正產出則直接交付可貼上內容。
+
+**產生額度（Generation Entitlement）**:
+付費掃描（paid 級）完成時自動附贈的修正產出次數；額度外的每次產生按固定點數計費。
+_Avoid_: 與點數餘額混淆——額度是附在掃描上的「次數」，點數是錢包裡的餘額。
