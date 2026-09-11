@@ -332,3 +332,49 @@ class AgentStep(models.Model):
         return f"{self.session_id} step {self.step_number}"
 
 
+class FixOutput(models.Model):
+    """修正產出：與 ScanJob 一對一的可貼上修正內容（ADR-0002）。
+
+    狀態機 idle → generating → ready / failed；每份 ScanJob 只產一次，
+    重複觸發回傳既有結果（冪等、不重複計費），重新掃描才有新的產出。
+
+    artifacts 鍵：json_ld / og_meta / llms_txt / faq_schema（無 FAQ 依據時
+    缺鍵）。每個產物 = {"content": 可貼上本體, "fields": {欄位名: {"status":
+    verified|placeholder|rule|extracted|partial, "source_url": 來源頁}}}。
+    事實政策三級驗證在產生後強制執行：識別類不符爬取內容即取代為佔位符。
+    """
+
+    class Status(models.TextChoices):
+        IDLE = "idle", "尚未產生"
+        GENERATING = "generating", "產生中"
+        READY = "ready", "已完成"
+        FAILED = "failed", "失敗"
+
+    scan_job = models.OneToOneField(
+        ScanJob,
+        on_delete=models.CASCADE,
+        related_name="fix_output",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.IDLE,
+        db_index=True,
+    )
+    artifacts = models.JSONField(default=dict, blank=True)
+    provider = models.CharField(max_length=64, blank=True)
+    model_id = models.CharField(max_length=128, blank=True)
+    total_tokens = models.PositiveIntegerField(default=0)
+    # 只放可直接顯示給使用者的失敗原因；provider 原始錯誤不落地（含金鑰風險）。
+    error = models.CharField(max_length=255, blank=True)
+    generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"FixOutput<{self.pk}> scan={self.scan_job_id} {self.status}"
+
+

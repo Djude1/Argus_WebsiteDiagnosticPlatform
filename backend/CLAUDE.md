@@ -56,6 +56,16 @@ owasp_category（A01~A10，nullable）、cwe_id（CWE 編號，nullable）
   tag()（寫入前）/ backfill()（既有資料回填）負責；空字串代表無對映
 ```
 
+**FixOutput**（`apps/scans/models.py`）
+```
+scan_job OneToOne（每份掃描只產一次，冪等）
+狀態機：idle → generating → ready / failed（failed 記可公開原因）
+artifacts（JSON）：json_ld / og_meta / llms_txt / faq_schema，
+  各含 content＋逐欄位 fields 標註（verified/placeholder/rule/extracted/partial）
+→ 產生走 apps/scans/fixgen/（ARGUS_FIXGEN_*、預設關閉）；
+  事實政策三級驗證確保絕不編造（識別類不符→佔位符【請填寫：…】）
+```
+
 **CoinWallet**（`apps/billing/models.py`）
 ```
 balance（目前餘額）、total_purchased_ntd、total_scans_used

@@ -74,6 +74,16 @@ class ChatProvider:
     ) -> ChatResponse:
         raise NotImplementedError
 
+    def chat_text(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> ChatResponse:
+        """單次文字生成（無 tool calling）。供 bounded 結構化產生使用。"""
+        raise ProviderError(self.name, "unsupported", "chat_text 未實作")
+
 
 def _parse_openai_choice(provider: str, model: str, payload: dict[str, Any]) -> ChatResponse:
     """從 OpenAI-compatible 回應抽出 ChatResponse。"""
@@ -175,6 +185,21 @@ class _OpenAICompatibleProvider(ChatProvider):
 
         return _parse_openai_choice(self.name, body["model"], data)
 
+    def chat_text(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> ChatResponse:
+        # OpenAI-compatible 端點不帶 tools 就是純文字生成，content 即回應。
+        return self.chat_with_tools(
+            messages=[{"role": "user", "content": prompt}],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
 
 class MiniMaxProvider(_OpenAICompatibleProvider):
     name = "minimax"
@@ -213,7 +238,13 @@ class GeminiProvider(ChatProvider):
     def chat_with_tools(self, *args: Any, **kwargs: Any) -> ChatResponse:
         raise ProviderError(self.name, "unsupported", "Gemini tool-calling 未在本期接入")
 
-    def chat_text(self, prompt: str, model: str | None = None) -> ChatResponse:
+    def chat_text(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> ChatResponse:
         """純文字分析。不接 tool calling，僅供報告解釋或備援。"""
         if not self.available:
             raise ProviderError(self.name, "no_key", f"{self.api_key_env} not set")
@@ -222,6 +253,7 @@ class GeminiProvider(ChatProvider):
         url = f"{self.base_url}/models/{model}:generateContent?key={self._key}"
         body = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
         }
         try:
             r = requests.post(url, json=body, timeout=DEFAULT_TIMEOUT)
@@ -273,6 +305,37 @@ class ProviderChain:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     tool_choice=tool_choice,
+                )
+            except ProviderError as exc:
+                last_err = exc
+                if exc.http_status not in self.RETRYABLE_HTTP:
+                    raise
+                continue
+        if last_err is None:
+            raise ProviderError("chain", "empty", "no providers configured")
+        raise last_err
+
+    def chat_text(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+    ) -> ChatResponse:
+        """單次文字生成的 chain 版：與 chat_with_tools 同款 fallback 語義。
+
+        Gemini 不支援 tool calling、但支援純文字——走這條路才真的有
+        MiniMax → GLM → Gemini 三級 fallback（chat_with_tools 對純文字
+        呼叫實際到不了 Gemini）。
+        """
+        last_err: ProviderError | None = None
+        for provider in self.providers:
+            try:
+                return provider.chat_text(
+                    prompt=prompt,
+                    model=model if _is_model_for(provider, model) else None,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                 )
             except ProviderError as exc:
                 last_err = exc

@@ -337,6 +337,13 @@ ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 ARGUS_AGENT_STEP_TIMEOUT = int(os.getenv("ARGUS_AGENT_STEP_TIMEOUT", "30"))
 ARGUS_AGENT_ENABLED = env_bool("ARGUS_AGENT_ENABLED", default=False)
 
+# 修正產出（Fix Output）產生引擎——bounded 單次結構化產生，非 agent 迴圈。
+# 預設關閉，與 ARGUS_AGENT_ENABLED 同模式：啟用才會花 token。
+ARGUS_FIXGEN_ENABLED = env_bool("ARGUS_FIXGEN_ENABLED", default=False)
+# 空字串＝沿用 provider chain 各 provider 的 default_model（fallback 語義）。
+ARGUS_FIXGEN_MODEL = os.getenv("ARGUS_FIXGEN_MODEL", "").strip()
+ARGUS_FIXGEN_MAX_TOKENS = int(os.getenv("ARGUS_FIXGEN_MAX_TOKENS", "4096"))
+
 # 網頁複刻與優化（OpenCode agent server）
 # 預設關閉：優化階段會呼叫外部 agent 花錢，而且該 agent 在它那台主機上有
 # shell 權限——沒有明確授權就不該讓 worker 打得到它。
