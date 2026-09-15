@@ -1,6 +1,6 @@
 # accounts 模組規則
 
-Claude 操作 `backend/apps/accounts/` 時，本檔在專案層 `CLAUDE.md` 之後自動載入。
+Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ## 職責
 自訂 `User`（繼承 `AbstractUser`，`username = email`）、登入 / 註冊、JWT 簽發、個人資料維護。**所有登入唯一入口**（含管理員）；本 app **不簽發 staff / superuser**（管理員亦以前台 email 登入後進 React `/admin`；staff/superuser 僅由 `manage.py seed_admin` 或 Django shell 設定。django-admin 已移除）。

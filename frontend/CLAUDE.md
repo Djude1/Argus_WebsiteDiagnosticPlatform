@@ -1,6 +1,6 @@
 # frontend 模組規則
 
-Claude 操作 `frontend/` 目錄時，本檔會在專案層 `CLAUDE.md` 之後自動載入。規則有衝突時以本檔為準。
+Claude Code 進 `frontend/` 工作時，本檔會在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。規則有衝突時以本檔為準。
 
 ---
 

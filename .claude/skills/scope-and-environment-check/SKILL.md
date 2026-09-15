@@ -1,13 +1,13 @@
 ---
 name: scope-and-environment-check
-description: Argus 專案「範圍與環境感知」強制規則。**必須主動呼叫**的情境：(a) 對話開始或接到新任務時的第一步；(b) 使用者問題含「整個 / 所有 / 每個 / 全部 / 列出 / 介紹專案」這類**全稱詞**，回答前先做；(c) 使用者糾錯、質疑、補充事實後（不論大小）；(d) 在 worktree 工作但要回答主 repo 全貌時；(e) `ls` / `find` / `grep` 後要做「總結性 / 全面性」回答前。核心鐵律：**先宣告檢查範圍與已知盲區，再回答內容**；視野有限就主動承認；使用者糾錯一次 → 同類型回頭掃一遍 → 修補規則本身。N+1 不同方法測試的循環細節見 CLAUDE.md「QA 鐵則」。
+description: Argus 專案「範圍與環境感知」強制規則。**必須主動呼叫**的情境：(a) 對話開始或接到新任務時的第一步；(b) 使用者問題含「整個 / 所有 / 每個 / 全部 / 列出 / 介紹專案」這類**全稱詞**，回答前先做；(c) 使用者糾錯、質疑、補充事實後（不論大小）；(d) 在 worktree 工作但要回答主 repo 全貌時；(e) `ls` / `find` / `grep` 後要做「總結性 / 全面性」回答前。核心鐵律：**先宣告檢查範圍與已知盲區，再回答內容**；視野有限就主動承認；使用者糾錯一次 → 同類型回頭掃一遍 → 修補規則本身。N+1 不同方法測試的循環見根入口行為準則第 6 條（完整版 docs/behavior-guidelines.md）。
 ---
 
 # Scope and Environment Check
 
 ## 為何存在（真實事故）
 
-2026-06-03，使用者問「介紹專案每個資料夾」，Claude 在 worktree 內 `ls` 後直接回答，漏看了主 repo 真實存在但**未入 git** 的兩個資料夾（`網站範例/` 與 `文件生成/`），把「worktree 看到的」當成「整個專案」。同日又因沒查 `git worktree list` / 主 repo `status`，沒發現另一個 Claude Code 平行工作中，差點撞車（CLAUDE.md / 使用說明.md 同檔不同修改）。
+2026-06-03，使用者問「介紹專案每個資料夾」，agent 在 worktree 內 `ls` 後直接回答，漏看了主 repo 真實存在但**未入 git** 的兩個資料夾（`網站範例/` 與 `文件生成/`），把「worktree 看到的」當成「整個專案」。同日又因沒查 `git worktree list` / 主 repo `status`，沒發現另一個 agent 平行工作中，差點撞車（`CLAUDE.md` / 使用說明.md 同檔不同修改）。
 
 此 skill 強制讓「**對範圍的隱性假設**」變成「**必須明說的宣告**」。
 
@@ -35,7 +35,7 @@ git log $(git merge-base HEAD main)..main --oneline
 
 | 觀察到 | 必做 |
 |---|---|
-| 兄弟 worktree 在別的分支 | 主動告訴使用者「另一個 Claude 可能在 X 分支工作中」 |
+| 兄弟 worktree 在別的分支 | 主動告訴使用者「另一個 agent 可能在 X 分支工作中」 |
 | 本機 main ≠ origin/main | 告訴使用者「本機 main 領先 N 個 commit 未 push」 |
 | 主 repo working tree 有未 commit 變動 | 列出檔案；**禁止**修改其中任何一個未先協調 |
 | 自己在 worktree | 主動宣告「視野有限、看不到主 repo untracked」 |
@@ -90,7 +90,7 @@ git log $(git merge-base HEAD main)..main --oneline
 3. **回頭掃同類** — 問自己：「**這次漏 X 的成因，會不會也讓我漏了 Y、Z？**」並實際去查
    - 範例：漏「網站範例」是因為 worktree 看不到 untracked → 主 repo 還有什麼 untracked？→ 「文件生成」也漏了
 4. **修補規則** — 若同類錯誤可能重演，提議更新規則 / skill / 環境陷阱清單
-5. **若涉及檔案/目錄存在性問題**，**必須**重跑 Phase 0 確認是否其他 Claude 已動過
+5. **若涉及檔案/目錄存在性問題**，**必須**重跑 Phase 0 確認是否其他 agent 已動過
 
 ### 反模式
 
@@ -103,14 +103,14 @@ git log $(git merge-base HEAD main)..main --oneline
 ## 環境陷阱清單
 
 > 開工前**全部掃過一次**，遇到對應情境直接查表，不再現場推理。
-> CLAUDE.md 已記錄的陷阱（Node v24 / cloudflared / Playwright 等）不在此重複。
+> 根入口（`CLAUDE.md`／`AGENTS.md`）已記錄的陷阱（Node v24 / cloudflared / Playwright 等）不在此重複。
 
 ### 🔴 高 — 會交付錯誤事實或漏看內容
 
 #### 1. worktree 看不到 untracked 檔案 ⚠ **本次事故元兇**
-- **觸發**：在 `.claude/worktrees/*` 路徑下工作
+- **觸發**：在 worktree 路徑（如 `.claude/worktrees/*`）下工作
 - **症狀**：`ls`、`Glob`、`Grep` 看不到主 repo 真實存在但未 `git add` 的檔案/目錄
-  - 例如：`網站範例/`、`文件生成/`、`.env`、`CLAUDE.local.md`、`交接資料/`
+  - 例如：`網站範例/`、`文件生成/`、`.env`、`CLAUDE.local.md`／`Codex.local.md`、`交接資料/`
 - **正確做法**：
   - 開工先跑 Phase 0 命令確認在 worktree
   - 全稱問題回答前，主動 `ls <主 repo 絕對路徑>` 對照
@@ -123,7 +123,7 @@ git log $(git merge-base HEAD main)..main --oneline
 - **正確做法**：套用本 skill「規則 A」回答模板
 
 #### 3. 信任文件而非程式碼當「事實」
-- **觸發**：用 CLAUDE.md / README.md / 開發計畫.md 的描述來宣稱程式行為
+- **觸發**：用 `CLAUDE.md`／`AGENTS.md`、README.md、開發計畫.md 的描述來宣稱程式行為
 - **症狀**：文件漂移時交付錯誤事實
 - **正確做法**：
   - 標註「以下來自文件描述，未經程式碼驗證」vs「以下我讀了 `<路徑>:<行>`」
@@ -165,6 +165,6 @@ git log $(git merge-base HEAD main)..main --oneline
 
 ## 與其他規則的關係
 
-- **CLAUDE.md「QA 鐵則」** — 收錄了「找到 N 錯 → 再做 N+1 個不同方法測試（含原方法重跑）」與 N 廣義化規則。本 skill 規則 B「糾錯反思循環」與其銜接。
-- **CLAUDE.md「交接鐵則 C」** — 收錄了 Phase 0 並行檢查 SOP。本 skill 是其展開版（含結果判讀與標準開場白）。
-- **執行順序**：對話開始/接到任務 → 本 skill（範圍與環境）→ 動手 → 過程中 QA 鐵則持續觸發 → 完工驗證 → commit。
+- **根入口行為準則第 5、6 條**（完整版 `docs/behavior-guidelines.md`）— 收錄目標導向執行與「找到 N 錯 → 再做 N+1 個不同方法測試（含原方法重跑）」的驗證循環。本 skill 規則 B「糾錯反思循環」與其銜接。
+- **Phase 0 並行檢查 SOP** — 本 skill 即其完整展開版（含結果判讀與標準開場白）。
+- **執行順序**：對話開始/接到任務 → 本 skill（範圍與環境）→ 動手 → 過程中驗證循環持續觸發 → 完工驗證 → commit。

@@ -1,6 +1,6 @@
 # admin_api 模組規則
 
-Claude 操作 `backend/apps/admin_api/` 時，本檔在專案層 `CLAUDE.md` 之後自動載入。
+Claude Code 進 `backend/apps/admin_api/` 工作時，本檔在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ## 職責
 React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意扁平、隱藏內部 model**（AgentSession / Page / Finding 等不外露）。

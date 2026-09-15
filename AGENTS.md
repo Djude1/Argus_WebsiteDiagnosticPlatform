@@ -1,21 +1,48 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AGENTS-compatible agents (ZCode, Codex) when working with code in this repository.
+
+---
+
+## 執行器載入事實（先懂這個；2026-09-16 依官方文件核實）
+
+各執行器**自動載入**的規則檔範圍不同，誰會看到什麼必須先分清楚：
+
+| 執行器 | 每 session 自動載入 | 不會自動載入（須顯式 Read 或靠 skill 觸發） |
+|---|---|---|
+| ZCode | 全域 `~/.zcode/AGENTS.md` ＋ workspace 根 `AGENTS.md`（本檔）；已啟用 skill 的 description 摘要（單梞上限 250 字元）每輪注入 context | 子目錄 `AGENTS.md`／`CLAUDE.md`（**不掃描**）、根 `CLAUDE.md`（執行期**不載入**）、`docs/`、`專案導覽.md`、`@import`／`@include`（**不展開**） |
+| Claude Code | `~/.claude/CLAUDE.md` → 根 `CLAUDE.md` → 子目錄 `CLAUDE.md`（進該目錄工作時載入） | `docs/`、`專案導覽.md`（靠根入口連結） |
+
+- 官方文件：`zcode.z.ai/docs/agents`、`zcode.z.ai/docs/skill`。
+- **推論**：本檔是 ZCode 唯一自動出現的專案規則檔；模組規則、`docs/`、`專案導覽.md` 都必須由你**主動 Read**——下方閘門就是為此存在。Skill 是唯一每輪自動注入的機制，但所有 skill 的 metadata 共用固定預算，裝太多會降級成只注入名稱，觸發條件必須寫進 description 前段。
+
+### 模組規則必讀閘門（強制）
+
+子目錄規則**不會**自動出現在你的 context，動手前必須先 Read：
+
+| 要動的範圍 | 動手前必讀 |
+|---|---|
+| `frontend/**` | [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| `backend/**` | [`backend/CLAUDE.md`](backend/CLAUDE.md) ＋ 對應 `backend/apps/<app>/CLAUDE.md` |
+| 深度資安掃描 | 再加 [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) |
+| git commit／push、部署 | `argus-git-safety` skill（觸發即載入；索引見 [`專案導覽.md`](專案導覽.md)） |
+| 前端 UI／樣式 | `argus-ui-design` skill ＋ [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
 
 ---
 
 ## 專案規則分層（跨 Agent）
 
-目前沒有單一檔名能保證被所有 Agent 執行器自動載入，因此本專案採「成對入口 + 共用事實來源」：Codex／AGENTS 相容工具讀本檔，Claude 讀根目錄 `CLAUDE.md`；較長的專案共用規則集中在 `docs/`，再由兩個根入口共同連結。
+目前沒有單一檔名能保證被所有 Agent 執行器自動載入，因此本專案採「成對入口 + 共用事實來源」：ZCode／Codex 等 AGENTS 相容工具讀本檔，Claude Code 讀根目錄 `CLAUDE.md`；較長的專案共用規則集中在 `docs/`，再由兩個根入口共同連結。
 
 | 層 | 路徑 | 用途 | git 追蹤 |
 |---|---|---|---|
-| Codex 使用者層 | `~/.Codex/AGENTS.md` | 個人偏好、工具規則 | 不提交 |
-| AGENTS 專案入口 | `AGENTS.md`（本檔） | Codex／AGENTS 相容工具的團隊規則入口 | ✅ 提交 |
-| Claude 專案入口 | `CLAUDE.md` | Claude 的團隊規則入口 | ✅ 提交 |
-| 模組規則 | `frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/*/CLAUDE.md` | 各模組具體規則；修改前主動讀取 | ✅ 提交 |
+| 使用者層 | `~/.zcode/AGENTS.md`（ZCode）、`~/.Codex/AGENTS.md`（Codex）、`~/.claude/CLAUDE.md`（Claude Code） | 個人偏好、工具規則 | 不提交 |
+| AGENTS 專案入口 | `AGENTS.md`（本檔） | ZCode／Codex 等 AGENTS 相容工具的團隊規則入口 | ✅ 提交 |
+| Claude 專案入口 | `CLAUDE.md` | Claude Code 的團隊規則入口 | ✅ 提交 |
+| Skill（每輪注入） | `.agents/skills/`（ZCode／Codex 載入）、`.claude/skills/`（Claude Code 載入），兩份內容必須一致 | 觸發式規範（git 安全、UI 規範、範圍檢查） | ✅ 提交 |
+| 模組規則 | `frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/*/CLAUDE.md` | 各模組具體規則；見上方必讀閘門 | ✅ 提交 |
 | 共用詳細規則 | `docs/*.md` | 跨 Agent 的單一事實來源，由兩個根入口連結 | ✅ 提交 |
-| 個人覆寫層 | `Codex.local.md`、`CLAUDE.local.md` | 本機個人微調，不影響他人 | 不提交 |
+| 個人覆寫層 | `Codex.local.md`、`CLAUDE.local.md`（僅 Codex／Claude Code 自動載入；ZCode 不會） | 本機個人微調，不影響他人 | 不提交 |
 
 **目前實際存在的模組規則**（完整地圖＋ SKILL 索引見 [`專案導覽.md`](專案導覽.md)）：
 - [`frontend/CLAUDE.md`](frontend/CLAUDE.md) — React/Vite build、App.jsx 操作規範
@@ -24,6 +51,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 - [`backend/apps/scans/CLAUDE.md`](backend/apps/scans/CLAUDE.md) — ScanJob 狀態機、Playwright、取消機制
 - [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) — 深度資安掃描、Kali 工具呼叫、OWASP 對映
 - [`backend/apps/agent/CLAUDE.md`](backend/apps/agent/CLAUDE.md) — Hermes-Agent（預設關閉）、禁印 key、same-origin
+- [`backend/apps/rebuild/CLAUDE.md`](backend/apps/rebuild/CLAUDE.md) — 網頁複刻與優化（複刻免 token、優化花錢）、下載強制 attachment + sandbox
 - [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) — 點數系統唯一入口規則
 - [`backend/apps/reviews/CLAUDE.md`](backend/apps/reviews/CLAUDE.md) — 評論（一人一則 + thread + 圖片）
 - [`backend/apps/admin_api/CLAUDE.md`](backend/apps/admin_api/CLAUDE.md) — 後台 API + AdminAuditLog 稽核
@@ -242,7 +270,7 @@ docker compose up -d --build frontend
 完成任何**與專案相關**的任務後必須：
 - 更新記憶索引與對應 memory 檔案（新發現、決策理由、地雷）
 - 更新相關 `.md` 文件記錄本次決策
-- 若新增或修改了 Skill，同步更新 `AGENTS.md` 的 Skills 表格
+- 若新增或修改了 Skill，同步更新 [`專案導覽.md`](專案導覽.md) 的「SKILL 索引」，且 `.agents/skills/` 與 `.claude/skills/` 兩份副本必須同次改為一致
 
 與專案無關的個人化環境調整（全域 skill 安裝、本機工具設定等）不寫入專案記憶／log／共用文件，只留個人本機層設定。
 

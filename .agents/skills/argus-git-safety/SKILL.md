@@ -23,11 +23,11 @@ description: Argus 版本控制 / commit / push / 協作安全規範與部署現
 
 ## 一定不能 push 的東西
 
-- `Codex.local.md`（機器專屬、在 `.gitignore`，本來就不被追蹤）。
+- 個人覆寫層 `CLAUDE.local.md`／`Codex.local.md`（機器專屬、在 `.gitignore`，本來就不被追蹤）。
 - 任何硬編碼的 API Key / Token / 密碼 / `.env`。
 - 與本次任務無關的工作區雜項變更（未追蹤目錄、別人的刪檔等）。
 
 ## 機器專屬設定放哪（不要寫進會被 push 的檔）
 
-- 「本機是不是測試機、RTK 實際安裝路徑」這類**機器專屬**規則一律放 `Codex.local.md`（gitignored、每 session 自動載入、不被 pull 覆蓋、也不會 push 給組員）；**實際路徑值只寫在該檔**，不寫進任何被追蹤的檔。
-- **不要**把機器專屬路徑寫進會被追蹤的 `AGENTS.md`、`ONBOARDING.md` 或任何 skill（每台機器的 RTK 安裝位置不同），否則會造成跨機器 drift 並洩漏到組員環境。pull 後若團隊共用文件冒出與本機不符的 RTK 路徑，一律以本機 `Codex.local.md` 記載的路徑為準。
+- 「本機是不是測試機、RTK 實際安裝路徑」這類**機器專屬**規則一律放個人覆寫層 `CLAUDE.local.md`／`Codex.local.md`（gitignored、僅 Claude Code／Codex 自動載入，ZCode 不會自動載入；不被 pull 覆蓋、也不會 push 給組員）；**實際路徑值只寫在該檔**，不寫進任何被追蹤的檔。
+- **不要**把機器專屬路徑寫進會被追蹤的根 `CLAUDE.md`／`AGENTS.md`、`ONBOARDING.md` 或任何 skill（每台機器的 RTK 安裝位置不同），否則會造成跨機器 drift 並洩漏到組員環境。pull 後若團隊共用文件冒出與本機不符的 RTK 路徑，一律以本機個人覆寫層記載的路徑為準。

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 多層 CLAUDE.md 架構（摘要）
 
-四層串接（不覆蓋）：`~/.claude/CLAUDE.md`（使用者層）→ 本檔（專案層）→ 子目錄層（`frontend/`、`backend/`、`backend/apps/*/` 的 CLAUDE.md，進該目錄工作時自動載入）→ `CLAUDE.local.md`（本機覆寫，不提交）。
+四層串接（不覆蓋）：`~/.claude/CLAUDE.md`（使用者層）→ 本檔（專案層）→ 子目錄層（`frontend/`、`backend/`、`backend/apps/*/` 的 CLAUDE.md，進該目錄工作時自動載入）→ `CLAUDE.local.md`（本機覆寫，不提交）。以上為 **Claude Code** 的載入行為；**ZCode 每 session 只自動載入全域 `~/.zcode/AGENTS.md` ＋ workspace 根 `AGENTS.md`**（子目錄不掃描、`@import` 不展開、本檔對 ZCode 執行期不載入）——跨執行器載入事實見根 [`AGENTS.md`](AGENTS.md) 與 [`專案導覽.md`](專案導覽.md) 第一節。
 
 - **修改任何子系統前，先讀該目錄的 CLAUDE.md**；子目錄索引與 SKILL 地圖見 [`專案導覽.md`](專案導覽.md)
 - 所有 Agent 都應遵守的專案規則，必須同次同步根目錄 `AGENTS.md`、本檔與對應 `docs/` 共用文件；完整跨層同步規則見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)

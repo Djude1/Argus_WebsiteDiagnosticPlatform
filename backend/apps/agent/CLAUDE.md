@@ -1,6 +1,6 @@
 # agent 模組規則
 
-Claude 操作 `backend/apps/agent/` 時，本檔在專案層 `CLAUDE.md` 之後自動載入。
+Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ## 職責
 Phase 2 **Hermes-Agent**（掃描後的動態 UX 測試）。**預設關閉**（`ARGUS_AGENT_ENABLED=false`）；關閉時 `runner.run_agent_for_scan` 直接 `return None`，向下相容既有掃描流程。

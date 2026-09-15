@@ -1,6 +1,6 @@
 # rebuild 模組規則
 
-Claude 操作 `backend/apps/rebuild/` 時，本檔在專案層 `CLAUDE.md` 之後自動載入。
+Claude Code 進 `backend/apps/rebuild/` 工作時，本檔在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ## 職責
 掃描後的**網頁複刻與優化**。兩段成本天差地遠，程式上刻意分開：

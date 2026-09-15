@@ -1,6 +1,6 @@
 # scans/security 子模組規則
 
-Claude 操作 `backend/apps/scans/security/` 時，本檔在 `scans/CLAUDE.md` 之後自動載入。
+Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ---
 
