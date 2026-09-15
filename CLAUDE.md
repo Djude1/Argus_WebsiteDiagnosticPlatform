@@ -133,7 +133,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 1. **動手前先思考**：不假設、不隱藏困惑；有多種解讀先全部列出再問，不可靜默選擇；有更簡單的做法要說出來。
 2. **簡潔優先**：用最少的程式碼解決問題；不加未被要求的功能、彈性或抽象層。
 3. **精準修改**：只動必須動的地方，配合現有風格；不「順便改進」相鄰程式碼；只清理自己改動造成的孤兒。
-4. **深度理解與交接**：動手前先讀現況文件與程式碼、確認需求背後的真正目的（Why）；完工後更新 memory 與相關 `.md`，讓下次接手不需使用者重新解釋。
+4. **深度理解與交接**：動手前先讀現況文件與程式碼、確認需求背後的真正目的（Why）；與專案相關的任務完工後更新 memory 與相關 `.md`（個人化環境調整不進專案記錄），讓下次接手不需使用者重新解釋。
 5. **目標導向執行**：先定義可驗證的成功條件（測試先行），多步驟任務先列「步驟 → 驗證」計畫。
 6. **改完必徹底驗證**：跑測試 / lint / build 到全部通過才算完成，不能只說「應該沒問題」；無法自動驗證的項目，明確列清單請使用者手動確認。
 
@@ -156,3 +156,17 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | K8s Secret 靜態加密啟用（Task 11 前置） | [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) |
 | K8s Kali SQLmap 攻擊鏈啟用／回滾（Task 11） | [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md) |
 | 子目錄 CLAUDE.md 索引、SKILL 索引 | [`專案導覽.md`](專案導覽.md) |
+
+---
+
+## Agent skills
+
+> Matt Pocock 工程類 skill 的 per-repo 設定入口；設定檔放在 `docs/agents/`，可直接編輯。
+
+### Issue tracker
+
+本 repo 的 issue / spec（PRD）記在 **GitHub Issues**（`Djude1/Argus_WebsiteDiagnosticPlatform`），所有操作透過 `gh` CLI。詳見 [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
+
+### Domain docs
+
+**單一情境（single-context）**：領域詞彙在根目錄 `CONTEXT.md`、架構決策在 `docs/adr/`（兩者已存在，由 `/domain-modeling` 隨詞彙與決策釐清持續維護）。詳見 [`docs/agents/domain.md`](docs/agents/domain.md)。

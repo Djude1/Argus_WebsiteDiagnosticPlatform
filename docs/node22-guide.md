@@ -1,16 +1,14 @@
 # Node 22 Portable 使用說明
 
-系統 Node 是 v24.13（`C:\Program Files\nodejs`），但 v24 + Rollup 4.x 在 Windows 會 crash（`STATUS_STACK_BUFFER_OVERRUN`，exit `-1073740791`）。已將 Node v22 解壓到 portable 目錄（不動 PATH 也不動系統 Node）。
+系統 Node 是 v24.x（`C:\Program Files\nodejs`，2026-07-07 實測 v24.14.1），但 v24 + Rollup 4.x 在 Windows 會 crash（`STATUS_STACK_BUFFER_OVERRUN`，exit `-1073740791`）。做法是把 Node v22 解壓到 portable 目錄（不動 PATH 也不動系統 Node），build 一律走該 portable Node。
 
-## 實際路徑（2026-06-14 確認）
+## 路徑（build-node22.ps1 自動偵測，非寫死）
 
-本機已有兩份 portable Node 22：
-- `D:\nodejs` — v22.17.0（**主要使用**）
-- `D:\Node` — v22.14.0（備援）
+`frontend/build-node22.ps1` 會依序 probe `D:\nodejs` → `D:\node22` → `D:\Node`，第一個有 `node.exe` 的勝出，所以**路徑不是寫死**——新環境把 portable Node 22 裝在這三個任一即可（見下方「安裝方式」），三個都沒有時 script 會報 `No portable Node 22 found` 並中止。
 
-`frontend/build-node22.ps1` 會依序 probe `D:\nodejs` → `D:\node22` → `D:\Node`，第一個有 `node.exe` 的勝出，所以**路徑不是寫死**。
-
-> 歷史備註：CLAUDE.md 與舊文件常寫 `D:\node22`，那是早期路徑；目前實際在 `D:\nodejs`。新環境裝在哪個都能跑（只要有 `node.exe`）。
+> ⚠ 現況（2026-07-07 實測）：本機三個候選路徑目前**都沒有** portable Node 22，系統只有 Node v24.14.1。**首次 build 前必須先依下方「安裝方式」裝一份 Node 22**，否則 `build-node22.ps1` 會直接失敗。
+>
+> 歷史備註：CLAUDE.md 與舊接手文件常寫死 `D:\node22`，那是早期路徑；一律以 build-node22.ps1 的自動偵測結果為準，不要在文件裡寫死任何一個路徑。
 
 ## 各情境使用方式
 

@@ -239,10 +239,12 @@ docker compose up -d --build frontend
 - 確認使用者的需求背後的**真正目的**（Why），不只是表面請求（What）
 - 若不確定專案現況，先查再動手，不猜測
 
-完成任何任務後必須：
+完成任何**與專案相關**的任務後必須：
 - 更新記憶索引與對應 memory 檔案（新發現、決策理由、地雷）
 - 更新相關 `.md` 文件記錄本次決策
 - 若新增或修改了 Skill，同步更新 `AGENTS.md` 的 Skills 表格
+
+與專案無關的個人化環境調整（全域 skill 安裝、本機工具設定等）不寫入專案記憶／log／共用文件，只留個人本機層設定。
 
 **目標：下次接觸此專案時，不需要使用者重新解釋，即可立刻掌握現況並繼續工作。**
 
@@ -302,3 +304,17 @@ docker compose up -d --build frontend
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
 | 網頁複刻與優化（OpenCode agent）啟用／除錯 | [`docs/opencode-site-rebuild.md`](docs/opencode-site-rebuild.md) |
+
+---
+
+## Agent skills
+
+> Matt Pocock 工程類 skill 的 per-repo 設定入口；設定檔放在 `docs/agents/`，可直接編輯。
+
+### Issue tracker
+
+本 repo 的 issue / spec（PRD）記在 **GitHub Issues**（`Djude1/Argus_WebsiteDiagnosticPlatform`），所有操作透過 `gh` CLI。詳見 [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
+
+### Domain docs
+
+**單一情境（single-context）**：領域詞彙在根目錄 `CONTEXT.md`、架構決策在 `docs/adr/`（兩者已存在，由 `/domain-modeling` 隨詞彙與決策釐清持續維護）。詳見 [`docs/agents/domain.md`](docs/agents/domain.md)。
