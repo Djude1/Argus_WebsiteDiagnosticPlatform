@@ -18,6 +18,34 @@ export function setAccessToken(token) {
 
 let refreshRequest = null;
 
+// ---- 訂閱（billing subscription）：回傳 data，錯誤丟給呼叫端以 axios error 處理 ----
+
+// 公開的訂閱方案清單；回傳 { plans, payment_mode, subscribe_enabled }
+export async function fetchSubscriptionPlans() {
+  const response = await api.get("/billing/subscription/plans/");
+  return response.data;
+}
+
+// 自己的訂閱狀態；回傳 { subscription: {...} | null }
+export async function fetchMySubscription() {
+  const response = await api.get("/billing/subscription/");
+  return response.data;
+}
+
+// 訂閱方案（plan_code）；成功回傳 { subscription, payment_mode }，付費關閉時 503
+export async function subscribePlan(planCode) {
+  const response = await api.post("/billing/subscription/subscribe/", {
+    plan_code: planCode,
+  });
+  return response.data;
+}
+
+// 取消訂閱（當期權益保留到期滿）；回傳 { subscription }
+export async function cancelSubscription() {
+  const response = await api.post("/billing/subscription/cancel/");
+  return response.data;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
