@@ -20,6 +20,7 @@ description: Argus 版本控制 / commit / push / 協作安全規範與部署現
 2. **只 stage 自己這次的改動**：用 `git add <明確檔案路徑>`，**禁止 `git add .` / `git add -A`**。工作區常夾雜別人或無關的變更（他人刪的檔、未追蹤目錄），絕不可一起 commit。
 3. **先驗證無任何問題**：依改動範圍跑相關測試 / `uv run python backend/manage.py check` / 前端 build，並 `git diff --staged` 逐項審視，確認沒壞東西、沒夾帶機密。
 4. **取得使用者明確同意才 push**：先把「要納入的檔案清單 ＋ commit 訊息草稿 ＋ 驗證結果」列給使用者確認，得到明確「推」才執行，**絕不自行 push**。
+5. **競賽文件同步檢查**：本次 commit 含對外可見功能異動時，`專題文件生成/` 的內容 md 是否已同步更新？未同步不得 push（規則見 `專題文件生成/Word文件同步規則.md`）。
 
 ## 一定不能 push 的東西
 

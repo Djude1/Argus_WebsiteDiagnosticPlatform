@@ -27,6 +27,7 @@ This file provides guidance to AGENTS-compatible agents (ZCode, Codex) when work
 | 深度資安掃描 | 再加 [`backend/apps/scans/security/CLAUDE.md`](backend/apps/scans/security/CLAUDE.md) |
 | git commit／push、部署 | `argus-git-safety` skill（觸發即載入；索引見 [`專案導覽.md`](專案導覽.md)） |
 | 前端 UI／樣式 | `argus-ui-design` skill ＋ [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| `專題文件生成/**` 或任何「對外可見功能」異動 | [`專題文件生成/Word文件同步規則.md`](專題文件生成/Word文件同步規則.md) |
 
 ---
 
@@ -123,7 +124,7 @@ This file provides guidance to AGENTS-compatible agents (ZCode, Codex) when work
 
 **核心原則：程式碼是唯一事實來源；文件漂移視同 bug，與程式 bug 同等嚴重。**
 
-改了程式 → 同次 commit 同步所有受影響文件；純文件改動 → 先 `Grep` / `Read` 驗證事實再動筆；改完後掃全檔確認無殘留舊事實。
+改了程式 → 同次 commit 同步所有受影響文件；**對外可見功能（新功能、API、model、計費、前端流程）異動另須同步競賽 Word 內容 md**（[`專題文件生成/Word文件同步規則.md`](專題文件生成/Word文件同步規則.md)）；純文件改動 → 先 `Grep` / `Read` 驗證事實再動筆；改完後掃全檔確認無殘留舊事實。
 
 詳細對應規則（規則 A/B/C）與接手文件清單見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)。
 MD 修改後必執行核對清單：[`docs/md-checklist.md`](docs/md-checklist.md)。
@@ -332,6 +333,7 @@ docker compose up -d --build frontend
 | log 記錄格式範本 | [`docs/log-template.md`](docs/log-template.md) |
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
 | 網頁複刻與優化（OpenCode agent）啟用／除錯 | [`docs/opencode-site-rebuild.md`](docs/opencode-site-rebuild.md) |
+| 競賽 Word 文件維護（需求書同步、修訂提示詞） | [`專題文件生成/Word文件同步規則.md`](專題文件生成/Word文件同步規則.md) |
 
 ---
 

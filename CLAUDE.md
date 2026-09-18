@@ -122,7 +122,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 - 敏感資訊（API Key / 密碼 / Token / 模型路徑）一律放 `.env`，用 `python-dotenv` 讀取
 - 套件安裝一律用 `uv`（`uv add` / `uv run`），必須在 `.venv` 或 Docker 內執行，禁止污染全域環境
 - **每次完成任務後，必須在 `log/` 建立記錄並納入同次 git commit**：命名 `log/YYYY-MM-DD_簡短描述.md`（同天多筆加後綴 `fix-a`、`fix-b`），格式見 [`docs/log-template.md`](docs/log-template.md)
-- **文件同步**：程式碼是唯一事實來源，文件漂移視同 bug。改了程式 → 同次 commit 同步所有受影響文件；純文件改動 → 先 `Grep` / `Read` 驗證事實再動筆。詳細規則見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)；MD 修改後必執行 [`docs/md-checklist.md`](docs/md-checklist.md)
+- **文件同步**：程式碼是唯一事實來源，文件漂移視同 bug。改了程式 → 同次 commit 同步所有受影響文件；**對外可見功能（新功能、API、model、計費、前端流程）異動另須同步競賽 Word 內容 md**（[`專題文件生成/Word文件同步規則.md`](專題文件生成/Word文件同步規則.md)）；純文件改動 → 先 `Grep` / `Read` 驗證事實再動筆。詳細規則見 [`docs/doc-sync-rules.md`](docs/doc-sync-rules.md)；MD 修改後必執行 [`docs/md-checklist.md`](docs/md-checklist.md)
 
 ---
 
@@ -153,6 +153,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 | Node 22 portable 詳細安裝說明 | [`docs/node22-guide.md`](docs/node22-guide.md) |
 | OpenCode CLI subagent 委派、監工與驗收 | [`docs/opencode-delegation-manual.md`](docs/opencode-delegation-manual.md) |
 | 網頁複刻與優化（OpenCode agent）啟用／除錯 | [`docs/opencode-site-rebuild.md`](docs/opencode-site-rebuild.md) |
+| 競賽 Word 文件維護（需求書同步、修訂提示詞） | [`專題文件生成/Word文件同步規則.md`](專題文件生成/Word文件同步規則.md) |
 | K8s Secret 靜態加密啟用（Task 11 前置） | [`docs/runbooks/kubernetes-secret-at-rest-encryption.md`](docs/runbooks/kubernetes-secret-at-rest-encryption.md) |
 | K8s Kali SQLmap 攻擊鏈啟用／回滾（Task 11） | [`docs/runbooks/kali-sqlmap-rollout.md`](docs/runbooks/kali-sqlmap-rollout.md) |
 | 子目錄 CLAUDE.md 索引、SKILL 索引 | [`專案導覽.md`](專案導覽.md) |

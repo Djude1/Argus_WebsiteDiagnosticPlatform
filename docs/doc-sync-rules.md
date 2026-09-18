@@ -32,6 +32,7 @@
 | 新增 / 移除 Python 或 Node 套件 | `CLAUDE.md`（技術棧相關段）、`ONBOARDING.md` §3 技術棧 + §2 安裝步驟 |
 | 改 `ARGUS_*` 等 settings 常數 | `ONBOARDING.md` 附錄 B、`CLAUDE.md` 對應段落 |
 | 新增 / 修改 Skill | `.agents/skills/` 與 `.claude/skills/` 兩份副本同次改為一致（diff 驗證）＋ `專案導覽.md` 第二節「SKILL 索引」（並跑 [`docs/md-checklist.md`](md-checklist.md)） |
+| 對外可見功能（新功能、新 API 端點、新 model、商業／計費邏輯、前端流程） | `專題文件生成/需求書_複賽版完整內容.md`、`專題文件生成/設計文件_圖表與成本模組.md`、`專題文件生成/初賽與複賽差異對照.md` 對應小節（完整流程見 [`專題文件生成/Word文件同步規則.md`](../專題文件生成/Word文件同步規則.md)） |
 | 測試數量變動 | 不要寫死精確數字於多處；以「約 N 項，以 `manage.py test apps` 實跑為準」描述，且全檔一致 |
 
 ## 規則 B：純文件改動 → 動筆前必須對照程式碼驗證
@@ -47,4 +48,5 @@
 - `ONBOARDING.md` — 快速接手流程（事實密度最高，最容易漂移）
 - `AGENTS.md`、`CLAUDE.md` — 跨 Agent 的專案規則入口
 - `frontend/CLAUDE.md`、`backend/apps/billing/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`
+- `專題文件生成/` — 競賽 Word 文件的內容單一事實來源與同步規則（[`Word文件同步規則.md`](../專題文件生成/Word文件同步規則.md)）
 - `Project_說明.md`、`開發計畫.md`
