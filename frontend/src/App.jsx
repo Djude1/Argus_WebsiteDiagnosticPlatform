@@ -10,6 +10,7 @@ function lazyNamed(loader, exportName) {
 const loadAuthPages = () => import("./features/auth/AuthPages.jsx");
 const loadScanExperience = () => import("./features/scans/ScanExperience.jsx");
 const loadRebuildWorkspace = () => import("./features/scans/RebuildWorkspace.jsx");
+const loadDomainPages = () => import("./features/domains/DomainVerifyPage.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
@@ -24,6 +25,7 @@ const ScansPlaceholder = lazyNamed(loadScanExperience, "ScansPlaceholder");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const TopologyPage = lazyNamed(loadScanExperience, "TopologyPage");
 const RebuildWorkspace = lazyNamed(loadRebuildWorkspace, "RebuildWorkspace");
+const DomainVerifyPage = lazyNamed(loadDomainPages, "DomainVerifyPage");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
 const DashboardPage = lazyNamed(loadAuthenticatedPages, "DashboardPage");
 const HistoryPage = lazyNamed(loadAuthenticatedPages, "HistoryPage");
@@ -46,6 +48,7 @@ const AdminTransactionsPage = lazyNamed(loadAdminPages, "AdminTransactionsPage")
 const AdminReviewsPage = lazyNamed(loadAdminPages, "AdminReviewsPage");
 const AdminScansPage = lazyNamed(loadAdminPages, "AdminScansPage");
 const AdminScanDetailPage = lazyNamed(loadAdminPages, "AdminScanDetailPage");
+const AdminDomainsPage = lazyNamed(loadAdminPages, "AdminDomainsPage");
 const AdminContentPage = lazyNamed(loadAdminPages, "AdminContentPage");
 const AdminPlansPage = lazyNamed(loadAdminPages, "AdminPlansPage");
 const AdminSettingsPage = lazyNamed(loadAdminPages, "AdminSettingsPage");
@@ -134,6 +137,14 @@ function AppShell({ googleOAuthEnabled }) {
             }
           />
           <Route
+            path="/domains"
+            element={
+              <RequireAuth>
+                <DomainVerifyPage />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/billing"
             element={
               <RequireAuth>
@@ -164,6 +175,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
             <Route path="/admin/scans" element={<AdminScansPage />} />
             <Route path="/admin/scans/:scanId" element={<AdminScanDetailPage />} />
+            <Route path="/admin/domains" element={<AdminDomainsPage />} />
             <Route path="/admin/content" element={<AdminContentPage />} />
             <Route path="/admin/plans" element={<AdminPlansPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />

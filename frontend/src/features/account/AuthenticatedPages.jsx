@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { to: "/project", label: "首頁", emoji: "🏠" },
   { to: "/dashboard", label: "Dashboard", emoji: "📊" },
   { to: "/scans", label: "掃描", emoji: "🔍" },
+  { to: "/domains", label: "網域驗證", emoji: "🌐" },
   { to: "/history", label: "歷史", emoji: "📈" },
   { to: "/billing", label: "購點", emoji: "💎" },
   { to: "/reviews", label: "評論", emoji: "⭐" },

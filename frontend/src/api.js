@@ -46,6 +46,68 @@ export async function cancelSubscription() {
   return response.data;
 }
 
+// ---- 網域驗證（scans/domains）：主動式資安測試的技術性閘門 ----
+
+// 自己的網域驗證清單；回傳 DRF 分頁 { count, next, previous, results }
+export async function fetchVerifiedDomains() {
+  const response = await api.get("/scans/domains/");
+  return response.data;
+}
+
+// 新增待驗證網域；成功（201）回傳 { ...網域欄位, token, instructions }，重複時 409
+export async function createVerifiedDomain(domain) {
+  const response = await api.post("/scans/domains/", { domain });
+  return response.data;
+}
+
+// 以指定方法（dns_txt / meta_tag / html_file）驗證既有網域；回傳 { ...網域欄位, verified }
+export async function verifyVerifiedDomain(domainId, method) {
+  const response = await api.post(`/scans/domains/${domainId}/verify/`, { method });
+  return response.data;
+}
+
+// 刪除網域（204 無內容）
+export async function deleteVerifiedDomain(domainId) {
+  await api.delete(`/scans/domains/${domainId}/`);
+}
+
+// ---- Admin：網域人工審核 / 使用者登入事件 / 訂閱管理 ----
+
+// 全部使用者的網域驗證清單；params: { page, q, status }；回傳 { domains, page, total_pages, total }
+export async function fetchAdminDomains(params) {
+  const response = await api.get("/admin/domains/", { params });
+  return response.data;
+}
+
+// 網域人工審核：approve=true 核准（同等於驗證通過）、false 否決；回傳更新後的網域物件
+export async function adminDomainOverride(domainId, approve, note = "") {
+  const response = await api.post(`/admin/domains/${domainId}/override/`, { approve, note });
+  return response.data;
+}
+
+// 指定使用者的登入事件（最近 50 筆）；回傳 { events }
+export async function fetchUserLoginEvents(userId) {
+  const response = await api.get(`/admin/users/${userId}/login-events/`);
+  return response.data;
+}
+
+// 後台調整訂閱：action=grant 需 planCode 與 periods（1-36）、action=cancel 不需；
+// 兩者皆回傳 { subscription }（取消但無訂閱時 404）
+export async function adminUserSubscriptionAction(userId, action, planCode = null, periods = 1) {
+  const response = await api.post(`/admin/users/${userId}/subscription/`, {
+    action,
+    plan_code: planCode || undefined,
+    periods,
+  });
+  return response.data;
+}
+
+// 後台訂閱方案清單（含停用）；回傳 { plans }
+export async function fetchAdminSubscriptionPlans() {
+  const response = await api.get("/admin/subscriptions/plans/");
+  return response.data;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {

@@ -16,7 +16,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { api } from "../../api";
+import { api, fetchVerifiedDomains } from "../../api";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import NavActions from "../../components/navigation/NavActions.jsx";
@@ -238,9 +238,50 @@ function ScanJobForm({ onCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null); // { estimated_pages, estimated_cost, confidence }
+  const [verifiedDomains, setVerifiedDomains] = useState([]); // 已通過驗證的網域（URL 徽章提示用）
   const navigate = useNavigate();
   const wallet = useArgusStore((s) => s.wallet);
   const fetchWallet = useArgusStore((s) => s.fetchWallet);
+
+  // 只抓一次已驗證網域清單（提示用途；失敗時安靜略過，後端仍會擋主動模式）
+  useEffect(() => {
+    let cancelled = false;
+    fetchVerifiedDomains()
+      .then((data) => {
+        if (!cancelled) setVerifiedDomains(data.results || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 從目標 URL 抽 hostname（容錯：沒打協定時補 https:// 再試）
+  const urlHostname = useMemo(() => {
+    const raw = url.trim();
+    if (!raw) return "";
+    try {
+      return new URL(raw).hostname.toLowerCase();
+    } catch {
+      try {
+        return new URL(`https://${raw}`).hostname.toLowerCase();
+      } catch {
+        return "";
+      }
+    }
+  }, [url]);
+
+  // 命中已有效驗證的網域（含子網域：hostname===domain 或 endswith('.'+domain)）
+  const matchedVerifiedDomain = useMemo(() => {
+    if (!urlHostname) return null;
+    return (
+      verifiedDomains.find(
+        (item) =>
+          item.is_effectively_verified &&
+          (urlHostname === item.domain || urlHostname.endsWith(`.${item.domain}`)),
+      ) || null
+    );
+  }, [verifiedDomains, urlHostname]);
 
   const coinPerPage = wallet?.coin_per_page ?? 10;
   const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
@@ -375,6 +416,15 @@ function ScanJobForm({ onCreated }) {
           value={url}
           onChange={(event) => { setUrl(event.target.value); setEstimate(null); }}
         />
+        {matchedVerifiedDomain && (
+          <div className="scan-verified-badge" role="status">
+            <span className="scan-verified-dot" aria-hidden="true" />
+            已驗證網域
+            {matchedVerifiedDomain.domain !== urlHostname &&
+              `（${matchedVerifiedDomain.domain}）`}
+            <span className="scan-verified-note">可使用主動式資安測試</span>
+          </div>
+        )}
         {scope !== "single" && (
           <div className="scan-estimate-row">
             <button
@@ -457,6 +507,24 @@ function ScanJobForm({ onCreated }) {
           />
           我同意進行侵入式測試，並理解系統會限制 RPS ≤ 2。
         </label>
+      )}
+      {activeMode && !matchedVerifiedDomain && (
+        <div className="scan-domain-warning" role="alert">
+          <p className="scan-domain-warning-title">⚠ 主動式測試需要先通過網域驗證</p>
+          <p className="scan-domain-warning-text">
+            {urlHostname
+              ? `目標 ${urlHostname} 尚未通過網域所有權驗證，直接送出會被系統拒絕。`
+              : "目前輸入的目標尚未通過網域所有權驗證，直接送出會被系統拒絕。"}
+            請先完成網域驗證（驗證一次即涵蓋子網域）。
+          </p>
+          <button
+            type="button"
+            className="scan-domain-warning-link"
+            onClick={() => navigate("/domains")}
+          >
+            前往網域驗證 →
+          </button>
+        </div>
       )}
       {error && <p className="error-text">{error}</p>}
       <button className="primary-button" type="submit" disabled={submitting}>

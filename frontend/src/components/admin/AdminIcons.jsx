@@ -66,6 +66,18 @@ export function AdminScansIcon(props) {
   );
 }
 
+export function AdminDomainsIcon(props) {
+  return (
+    <IconShell {...props}>
+      {/* 主圖形：地球（網域）＋ 右下勾選（驗證通過） */}
+      <circle cx="10" cy="11" r="7" />
+      <path d="M3 11h14" />
+      <path d="M10 4c2.45 1.9 3.75 4.3 3.75 7s-1.3 5.1-3.75 7c-2.45-1.9-3.75-4.3-3.75-7s1.3-5.1 3.75-7Z" />
+      <path d="M14.3 15.8l2.1 2.1 4-4.6" />
+    </IconShell>
+  );
+}
+
 export function AdminTransactionsIcon(props) {
   return (
     <IconShell {...props}>

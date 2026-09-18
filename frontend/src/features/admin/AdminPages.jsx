@@ -8,7 +8,14 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { api } from "../../api";
+import {
+  adminDomainOverride,
+  adminUserSubscriptionAction,
+  api,
+  fetchAdminDomains,
+  fetchAdminSubscriptionPlans,
+  fetchUserLoginEvents,
+} from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
 import { STATUS_LABELS, StatusDoneGlyph, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
@@ -16,6 +23,7 @@ import {
   AdminOverviewIcon,
   AdminUsersIcon,
   AdminScansIcon,
+  AdminDomainsIcon,
   AdminTransactionsIcon,
   AdminPlansIcon,
   AdminContentIcon,
@@ -35,6 +43,7 @@ const ADMIN_NAV_ITEMS = [
   { to: "/admin/overview", label: "概覽", Icon: AdminOverviewIcon },
   { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
   { to: "/admin/scans", label: "掃描", Icon: AdminScansIcon },
+  { to: "/admin/domains", label: "網域", Icon: AdminDomainsIcon },
   { to: "/admin/transactions", label: "交易", Icon: AdminTransactionsIcon },
   { to: "/admin/plans", label: "方案", Icon: AdminPlansIcon },
   { to: "/admin/content", label: "內容", Icon: AdminContentIcon },
@@ -645,6 +654,16 @@ function AdminUserDetailPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  // 登入記錄（最近 50 筆；null = 載入中）
+  const [loginEvents, setLoginEvents] = useState(null);
+  // 訂閱管理：後端僅在開通／取消動作後回傳訂閱現況（無獨立讀取端點）
+  const [subscription, setSubscription] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [subPlanCode, setSubPlanCode] = useState("");
+  const [subPeriods, setSubPeriods] = useState(1);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subFeedback, setSubFeedback] = useState(null);
+  const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   async function load() {
     try {
@@ -655,6 +674,66 @@ function AdminUserDetailPage() {
     }
   }
   useEffect(() => { load(); /* eslint-disable-line */ }, [userId]);
+
+  // 登入事件與訂閱方案清單隨使用者切換載入（失敗不擋頁面）；
+  // 訂閱現況顯示也一併重置，避免切到別位使用者時殘留上一位的狀態
+  useEffect(() => {
+    setLoginEvents(null);
+    setSubscription(null);
+    setSubFeedback(null);
+    fetchUserLoginEvents(userId)
+      .then((data) => setLoginEvents(data.events || []))
+      .catch(() => setLoginEvents([]));
+    fetchAdminSubscriptionPlans()
+      .then((data) => {
+        setPlans(data.plans || []);
+        const firstActive = (data.plans || []).find((plan) => plan.is_active);
+        if (firstActive) setSubPlanCode(firstActive.code);
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  async function handleGrantSubscription(e) {
+    e.preventDefault();
+    if (!subPlanCode) {
+      setSubFeedback({ tone: "bad", message: "請先選擇要開通的方案。" });
+      return;
+    }
+    setSubBusy(true);
+    setSubFeedback(null);
+    try {
+      const data = await adminUserSubscriptionAction(userId, "grant", subPlanCode, subPeriods);
+      setSubscription(data.subscription);
+      setSubFeedback({
+        tone: "good",
+        message: `已開通 ${data.subscription.plan_name}（${data.subscription.periods_remaining} 期），並立即結算本月贈點。`,
+      });
+      await load();
+    } catch (err) {
+      setSubFeedback({ tone: "bad", message: err?.response?.data?.detail || "開通失敗，請確認方案與期數。" });
+    } finally {
+      setSubBusy(false);
+    }
+  }
+
+  async function handleCancelSubscription() {
+    const ok = await confirmDialog(
+      `確定取消 ${user?.username ?? "該使用者"} 的訂閱？（已付費的當期權益會保留到期滿）`,
+      { danger: true },
+    );
+    if (!ok) return;
+    setSubBusy(true);
+    setSubFeedback(null);
+    try {
+      const data = await adminUserSubscriptionAction(userId, "cancel");
+      setSubscription(data.subscription);
+      setSubFeedback({ tone: "good", message: "已取消訂閱（當期權益保留到期滿）。" });
+    } catch (err) {
+      setSubFeedback({ tone: "bad", message: err?.response?.data?.detail || "取消失敗。" });
+    } finally {
+      setSubBusy(false);
+    }
+  }
 
   async function handleAdjust(e) {
     e.preventDefault();
@@ -762,6 +841,89 @@ function AdminUserDetailPage() {
         </form>
       </section>
 
+      <section className="admin-panel">
+        <h3><span className="admin-panel-icon-chip"><AdminPlansIcon /></span>訂閱管理</h3>
+        {subscription ? (
+          <dl className="admin-dl admin-sub-current">
+            <dt>方案</dt><dd>{subscription.plan_name}（{subscription.plan_code}）</dd>
+            <dt>狀態</dt><dd>{subscription.status_label}</dd>
+            <dt>剩餘期數</dt><dd>{subscription.periods_remaining} 期</dd>
+            <dt>下次贈點時間</dt><dd>{new Date(subscription.current_period_end).toLocaleString("zh-Hant")}</dd>
+            {subscription.cancelled_at && (
+              <><dt>取消時間</dt><dd>{new Date(subscription.cancelled_at).toLocaleString("zh-Hant")}</dd></>
+            )}
+          </dl>
+        ) : (
+          <p className="admin-empty">尚未顯示訂閱現況：後台會在開通或取消後顯示最新狀態。</p>
+        )}
+        <form className="admin-sub-form" onSubmit={handleGrantSubscription}>
+          <select
+            className="admin-input"
+            value={subPlanCode}
+            onChange={(e) => setSubPlanCode(e.target.value)}
+            aria-label="訂閱方案"
+          >
+            <option value="">選擇方案…</option>
+            {plans.map((plan) => (
+              <option key={plan.code} value={plan.code}>
+                {plan.name} · NT$ {plan.monthly_price_ntd.toLocaleString()}/月 · {plan.monthly_coins.toLocaleString()} coin{plan.is_active ? "" : "（停用）"}
+              </option>
+            ))}
+          </select>
+          <label className="admin-sub-periods">
+            期數
+            <input
+              className="admin-input"
+              type="number"
+              min={1}
+              max={36}
+              value={subPeriods}
+              onChange={(e) => setSubPeriods(Math.min(36, Math.max(1, Number(e.target.value) || 1)))}
+            />
+          </label>
+          <button className="admin-btn primary" type="submit" disabled={subBusy || !subPlanCode}>
+            {subBusy ? "處理中…" : "開通訂閱"}
+          </button>
+          <button
+            className="admin-btn danger"
+            type="button"
+            onClick={handleCancelSubscription}
+            disabled={subBusy}
+          >
+            取消訂閱
+          </button>
+        </form>
+        {subFeedback && (
+          <div className={`admin-feedback tone-${subFeedback.tone}`}>{subFeedback.message}</div>
+        )}
+      </section>
+
+      <section className="admin-panel">
+        <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>登入記錄（最近 50 筆）</h3>
+        {loginEvents === null ? (
+          <div className="admin-loading">載入中…</div>
+        ) : loginEvents.length === 0 ? (
+          <p className="admin-empty">尚無登入紀錄</p>
+        ) : (
+          <ul className="admin-login-timeline">
+            {loginEvents.map((event, index) => (
+              <li key={`${event.created_at}-${index}`} className="admin-login-item">
+                <div className="admin-login-line1">
+                  <span className={`admin-login-method method-${event.method}`}>
+                    {event.method_label}
+                  </span>
+                  <span className="admin-login-ip">{event.ip_address || "IP 未記錄"}</span>
+                  <time className="admin-login-time">
+                    {new Date(event.created_at).toLocaleString("zh-Hant")}
+                  </time>
+                </div>
+                <p className="admin-login-ua" title={event.user_agent}>{event.user_agent || "—"}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {user.ai_usage && (
         <section className="admin-panel">
           <h3><span className="admin-panel-icon-chip"><AdminTokensIcon /></span>AI 使用量</h3>
@@ -823,6 +985,187 @@ function AdminUserDetailPage() {
           </table>
         </div>
       </section>
+      {dialogHost}
+    </div>
+  );
+}
+
+// ------ AdminDomainsPage：網域所有權驗證清單＋人工審核 ------
+
+const DOMAIN_STATUS_OPTIONS = [
+  { v: "", label: "全部狀態" },
+  { v: "pending", label: "待驗證" },
+  { v: "verified", label: "已驗證" },
+  { v: "rejected", label: "已否決" },
+  { v: "expired", label: "已過期" },
+];
+
+function AdminDomainsPage() {
+  const [data, setData] = useState(null);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [notes, setNotes] = useState({}); // domainId -> 審核備註草稿
+  const [busyId, setBusyId] = useState(null);
+  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
+
+  async function load() {
+    try {
+      const response = await fetchAdminDomains({
+        page,
+        q: query || undefined,
+        status: status || undefined,
+      });
+      setData(response);
+    } catch {
+      notifyDialog("載入網域清單失敗，請稍後再試。");
+    }
+  }
+  useEffect(() => { load(); /* eslint-disable-line */ }, [page, status, query]);
+
+  function handleSearchSubmit(e) {
+    e.preventDefault();
+    setPage(1);
+    setQuery(searchInput.trim());
+  }
+
+  async function handleOverride(domain, approve) {
+    const note = (notes[domain.id] || "").trim();
+    const ok = await confirmDialog(
+      approve
+        ? `確定人工核准「${domain.domain}」（${domain.username}）？核准後同等於驗證通過，可直接用於主動式測試。`
+        : `確定否決「${domain.domain}」（${domain.username}）？否決後該網域將無法用於主動式測試。`,
+      { danger: !approve },
+    );
+    if (!ok) return;
+    setBusyId(domain.id);
+    try {
+      const updated = await adminDomainOverride(domain.id, approve, note);
+      setData((current) =>
+        current
+          ? { ...current, domains: current.domains.map((d) => (d.id === updated.id ? updated : d)) }
+          : current,
+      );
+      setNotes((current) => ({ ...current, [domain.id]: "" }));
+    } catch (err) {
+      notifyDialog(err?.response?.data?.detail || "操作失敗，請稍後再試。");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="admin-page">
+      <header className="admin-page-head">
+        <h1 className="admin-page-title">網域管理</h1>
+        <p>所有使用者的網域所有權驗證清單；無法自行驗證的網域可人工核准（同等於驗證通過）或否決。</p>
+      </header>
+
+      <div className="admin-filter-bar">
+        <form className="admin-search-bar" onSubmit={handleSearchSubmit}>
+          <input
+            className="admin-input"
+            type="search"
+            placeholder="搜尋網域或使用者名稱…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            aria-label="搜尋網域或使用者"
+          />
+          <button className="admin-btn" type="submit">搜尋</button>
+        </form>
+        <select
+          className="admin-input"
+          value={status}
+          onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+        >
+          {DOMAIN_STATUS_OPTIONS.map((o) => (
+            <option key={o.v} value={o.v}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {!data && <div className="admin-loading">載入中…</div>}
+      {data && (
+        <>
+          <div className="admin-table-scroll">
+            <table className="admin-table compact">
+              <thead>
+                <tr>
+                  <th>網域</th>
+                  <th>使用者</th>
+                  <th>狀態</th>
+                  <th>驗證方法</th>
+                  <th>到期日</th>
+                  <th>人工核准</th>
+                  <th>最後錯誤</th>
+                  <th>審核</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.domains.map((domain) => (
+                  <tr key={domain.id}>
+                    <td className="admin-cell-mono">{domain.domain}</td>
+                    <td>{domain.username}</td>
+                    <td>
+                      <span
+                        className={`admin-domain-status is-${domain.status}${domain.is_effectively_verified ? " is-effective" : ""}`}
+                      >
+                        {domain.status_label}
+                      </span>
+                      {domain.is_effectively_verified && (
+                        <span className="admin-domain-effective" title="掃描閘門判定：生效中">生效中</span>
+                      )}
+                    </td>
+                    <td>{domain.method ? domain.method_label : "—"}</td>
+                    <td>{domain.expires_at ? new Date(domain.expires_at).toLocaleString("zh-Hant") : "—"}</td>
+                    <td className="admin-cell-secondary">
+                      {domain.admin_override
+                        ? `${domain.admin_actor_username ? `by ${domain.admin_actor_username}` : "是"}${domain.admin_note ? ` · ${domain.admin_note}` : ""}`
+                        : "—"}
+                    </td>
+                    <td className="admin-cell-secondary admin-domain-error">{domain.last_error || "—"}</td>
+                    <td>
+                      <div className="admin-domain-review">
+                        <input
+                          className="admin-input admin-domain-note"
+                          placeholder="備註（選填）"
+                          value={notes[domain.id] || ""}
+                          onChange={(e) =>
+                            setNotes((current) => ({ ...current, [domain.id]: e.target.value }))
+                          }
+                          aria-label={`${domain.domain} 審核備註`}
+                        />
+                        <button
+                          className="admin-btn small"
+                          type="button"
+                          disabled={busyId === domain.id}
+                          onClick={() => handleOverride(domain, true)}
+                        >
+                          {busyId === domain.id ? "…" : "人工核准"}
+                        </button>
+                        <button
+                          className="admin-btn small danger"
+                          type="button"
+                          disabled={busyId === domain.id}
+                          onClick={() => handleOverride(domain, false)}
+                        >
+                          否決
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {data.domains.length === 0 && (
+                  <tr><td colSpan="8" className="admin-empty">沒有符合的網域</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />
+        </>
+      )}
+      {dialogHost}
     </div>
   );
 }
@@ -2143,6 +2486,7 @@ export {
   AdminReviewsPage,
   AdminScansPage,
   AdminScanDetailPage,
+  AdminDomainsPage,
   AdminContentPage,
   AdminPlansPage,
   AdminSettingsPage,

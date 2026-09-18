@@ -97,6 +97,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/purchase` | `PurchasePage` | 購買點數（3 步驟結帳 wizard） |
 | `/download` | `DownloadPage` | 下載報告 |
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
+| `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
@@ -110,6 +111,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理 |
 | `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角） |
+| `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理 |
 | `/admin/audit-log` | `AdminAuditLogPage` | 操作紀錄（superuser 限定） |
@@ -121,6 +123,7 @@ D:\nodejs\npm.cmd install 套件名
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
 | `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
 | `src/features/scans/ScanExperience.jsx` | 掃描建立、列表、詳情與拓樸頁 |
+| `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
 | `src/components/scans/FixOutputSection.jsx` | 掃描詳情的「修正產出」專區：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
