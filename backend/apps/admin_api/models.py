@@ -12,6 +12,7 @@ class AdminAuditLog(models.Model):
 
     class Action(models.TextChoices):
         COIN_ADJUST = "coin_adjust", "調整點數"
+        SUBSCRIPTION_ADJUST = "subscription_adjust", "調整訂閱"
         REVIEW_REPLY = "review_reply", "回覆評論"
         REVIEW_MODERATE = "review_moderate", "審核評論"
         REVIEW_DELETE = "review_delete", "刪除評論"

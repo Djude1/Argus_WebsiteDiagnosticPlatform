@@ -6,6 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.admin_api.models import AdminAuditLog
 from apps.billing.models import CoinTransaction
 from apps.billing.services import purchase_plan
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
@@ -542,3 +543,164 @@ class AIUsageTests(APITestCase):
         self.client.force_authenticate(normal)
         response = self.client.get(reverse("admin-dashboard"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class UserLoginEventsTests(APITestCase):
+    """GET /api/admin/users/<id>/login-events/：最近 50 筆、serializer whitelist。"""
+
+    def setUp(self):
+        self.admin = _make_user("admin_le", staff=True)
+        self.alice = _make_user("alice_le")
+
+    def test_non_staff_blocked(self):
+        self.client.force_authenticate(self.alice)
+        response = self.client.get(
+            reverse("admin-user-login-events", args=[self.alice.id]),
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_returns_latest_events_with_whitelist_fields(self):
+        from apps.accounts.models import LoginEvent
+        LoginEvent.objects.create(
+            user=self.alice,
+            method=LoginEvent.Method.PASSWORD,
+            ip_address="203.0.113.10",
+            user_agent="ArgusTestAgent/1.0",
+        )
+        LoginEvent.objects.create(
+            user=self.alice,
+            method=LoginEvent.Method.GOOGLE,
+            ip_address=None,
+            user_agent="",
+        )
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(
+            reverse("admin-user-login-events", args=[self.alice.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        events = response.data["events"]
+        self.assertEqual(len(events), 2)
+        # 最新在前；whitelist 只含 method/ip/user_agent/created_at（與 label）
+        self.assertEqual(events[0]["method"], LoginEvent.Method.GOOGLE)
+        self.assertEqual(
+            set(events[0].keys()),
+            {"method", "method_label", "ip_address", "user_agent", "created_at"},
+        )
+        self.assertEqual(events[1]["ip_address"], "203.0.113.10")
+        self.assertEqual(events[1]["user_agent"], "ArgusTestAgent/1.0")
+
+    def test_unknown_user_returns_404(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get(reverse("admin-user-login-events", args=[99999]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AdminSubscriptionTests(APITestCase):
+    """後台訂閱調整：grant / cancel 走 billing.services 並寫 AdminAuditLog。"""
+
+    def setUp(self):
+        self.admin = _make_user("admin_sub", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.alice = _make_user("alice_sub")
+        from apps.billing.models import SubscriptionPlan
+        self.plan = SubscriptionPlan.objects.create(
+            code="sub-admin-test",
+            name="後台測試方案",
+            monthly_price_ntd=299,
+            monthly_coins=400,
+            features=["每月 400 點"],
+            sort_order=99,
+        )
+
+    def test_non_staff_blocked(self):
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "grant", "plan_code": "sub-admin-test", "periods": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_grant_creates_subscription_and_audits(self):
+        response = self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "grant", "plan_code": "sub-admin-test", "periods": 2},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        sub = response.data["subscription"]
+        self.assertEqual(sub["status"], "active")
+        self.assertEqual(sub["periods_remaining"], 1)  # 2 期中已結算首期
+        self.assertEqual(sub["plan_code"], "sub-admin-test")
+        from apps.billing.models import CoinTransaction, UserSubscription
+        self.assertTrue(
+            CoinTransaction.objects.filter(
+                wallet__user=self.alice,
+                kind=CoinTransaction.Kind.SUBSCRIPTION_GRANT,
+                amount=400,
+            ).exists(),
+        )
+        self.assertEqual(
+            UserSubscription.objects.get(user=self.alice).source,
+            UserSubscription.Source.ADMIN_GRANT,
+        )
+        # 稽核：grant 在 services 內寫入 AdminAuditLog
+        log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.SUBSCRIPTION_ADJUST,
+            target_user=self.alice,
+        ).get()
+        self.assertEqual(log.payload["operation"], "grant")
+        self.assertEqual(log.payload["periods"], 2)
+        self.assertEqual(log.admin_actor, self.admin)
+
+    def test_grant_requires_plan_code(self):
+        response = self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "grant", "periods": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cancel_audits_and_returns_state(self):
+        self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "grant", "plan_code": "sub-admin-test", "periods": 1},
+            format="json",
+        )
+
+        response = self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "cancel"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["subscription"]["status"], "cancelled")
+        log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.SUBSCRIPTION_ADJUST,
+            target_user=self.alice,
+            payload__operation="cancel",
+        ).get()
+        self.assertEqual(log.admin_actor, self.admin)
+
+    def test_cancel_without_subscription_returns_404(self):
+        response = self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "cancel"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_subscription_plans_endpoint_lists_plans(self):
+        response = self.client.get(reverse("admin-subscription-plans"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        codes = [p["code"] for p in response.data["plans"]]
+        self.assertIn("sub-admin-test", codes)
+        # seed migration 建立的內建方案也應列出
+        self.assertIn("sub-lite", codes)
+        self.assertIn("sub-pro", codes)
+        self.assertIn("sub-team", codes)

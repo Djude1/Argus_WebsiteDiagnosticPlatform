@@ -28,17 +28,32 @@ from apps.admin_api.serializers import (
     AdjustCoinSerializer,
     AdminAuditLogSerializer,
     AdminCoinTransactionSerializer,
+    AdminLoginEventSerializer,
     AdminModerateReviewSerializer,
     AdminPurchaseOrderSerializer,
     AdminReplyReviewSerializer,
     AdminReviewSerializer,
     AdminScanJobSerializer,
+    AdminSubscriptionActionSerializer,
+    AdminSubscriptionPlanSerializer,
     AdminUserDetailSerializer,
     AdminUserListSerializer,
+    AdminUserSubscriptionSerializer,
     AnnouncementSerializer,
 )
-from apps.billing.models import CoinTransaction, CoinWallet, PurchaseOrder
-from apps.billing.services import admin_adjust
+from apps.billing.models import (
+    CoinTransaction,
+    CoinWallet,
+    PurchaseOrder,
+    SubscriptionPlan,
+    UserSubscription,
+)
+from apps.billing.services import (
+    admin_adjust,
+    cancel_subscription,
+    grant_subscription,
+    settle_subscription,
+)
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 from apps.scans.models import AgentSession, ScanJob
 
@@ -324,6 +339,72 @@ def adjust_coin(request, user_id: int):
         "transaction": AdminCoinTransactionSerializer(tx).data,
         "wallet_balance": tx.balance_after,
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAdminUser])
+def user_login_events(request, user_id: int):
+    """指定使用者的登入事件（最近 50 筆；資安檢視用）。"""
+    user_model = get_user_model()
+    user = get_object_or_404(user_model, pk=user_id)
+    events = user.login_events.all()[:50]
+    return Response({"events": AdminLoginEventSerializer(events, many=True).data})
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def user_subscription(request, user_id: int):
+    """管理指定使用者的訂閱：action=grant 授予期數、action=cancel 取消。
+
+    點數異動一律走 billing.services（grant/cancel/settle），不直接動錢包。
+    """
+    user_model = get_user_model()
+    target = get_object_or_404(user_model, pk=user_id)
+    serializer = AdminSubscriptionActionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    action = serializer.validated_data["action"]
+
+    if action == AdminSubscriptionActionSerializer.ACTION_GRANT:
+        sub = grant_subscription(
+            target,
+            serializer.context["plan"],
+            serializer.validated_data["periods"],
+            source=UserSubscription.Source.ADMIN_GRANT,
+            admin_actor=request.user,
+        )
+        # 授予後立即結算，讓已到期期數馬上入點（稽核已在 services 內寫入）
+        settle_subscription(target)
+    else:
+        sub = cancel_subscription(target)
+        if sub is None:
+            return Response(
+                {"detail": "該使用者目前沒有訂閱。"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.SUBSCRIPTION_ADJUST,
+            target_user=target,
+            target_repr=f"{target.username} 取消訂閱（{sub.plan.code}）",
+            payload={
+                "operation": "cancel",
+                "plan_code": sub.plan.code,
+                "periods_remaining": sub.periods_remaining,
+            },
+        )
+    sub.refresh_from_db()
+    return Response(
+        {"subscription": AdminUserSubscriptionSerializer(sub).data},
+        status=status.HTTP_201_CREATED if action == "grant" else status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAdminUser])
+def subscription_plans(request):
+    """列出訂閱方案供後台顯示（含停用；本 wave 唯讀，不做 CRUD）。"""
+    plans = SubscriptionPlan.objects.order_by("sort_order", "monthly_price_ntd")
+    return Response({"plans": AdminSubscriptionPlanSerializer(plans, many=True).data})
 
 
 @api_view(["GET"])

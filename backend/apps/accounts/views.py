@@ -1,3 +1,5 @@
+import logging
+
 from config.client_ip import resolve_client_ip
 from config.throttling import ScopedRateThrottle
 from django.conf import settings
@@ -19,8 +21,23 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.emails import send_password_reset_email
-from apps.accounts.models import PasswordResetToken
-from apps.billing.services import grant_monthly_bonus_if_needed
+from apps.accounts.models import LoginEvent, PasswordResetToken
+from apps.billing.services import grant_monthly_bonus_if_needed, settle_subscription_safe
+
+logger = logging.getLogger(__name__)
+
+
+def _record_login_event(request, user, method: str) -> None:
+    """登入成功後寫一筆 LoginEvent；失敗只記 log，不影響登入回應。"""
+    try:
+        LoginEvent.objects.create(
+            user=user,
+            method=method,
+            ip_address=resolve_client_ip(request) or None,
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+    except Exception:  # noqa: BLE001 — 紀錄失敗不該擋登入
+        logger.exception("寫入 LoginEvent 失敗（user_pk=%s）", getattr(user, "pk", None))
 
 
 def _auth_response(user, *, response_status: int) -> Response:
@@ -113,6 +130,8 @@ class GoogleLoginView(views.APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
+        _record_login_event(request, user, LoginEvent.Method.GOOGLE)
+        settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_200_OK)
 
@@ -152,6 +171,8 @@ class EmailRegisterView(views.APIView):
             user.last_login = timezone.now()
             user.save(update_fields=["last_login"])
             grant_monthly_bonus_if_needed(user)
+        _record_login_event(request, user, LoginEvent.Method.REGISTER)
+        settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_201_CREATED)
 
@@ -183,6 +204,8 @@ class EmailLoginView(views.APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
+        _record_login_event(request, user, LoginEvent.Method.PASSWORD)
+        settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_200_OK)
 

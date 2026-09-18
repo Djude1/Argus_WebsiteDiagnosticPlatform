@@ -1,7 +1,14 @@
 from rest_framework import serializers
 
+from apps.accounts.models import LoginEvent
 from apps.admin_api.models import AdminAuditLog, Announcement
-from apps.billing.models import CoinTransaction, CoinWallet, PurchaseOrder
+from apps.billing.models import (
+    CoinTransaction,
+    CoinWallet,
+    PurchaseOrder,
+    SubscriptionPlan,
+    UserSubscription,
+)
 from apps.reviews.models import PlatformReview, ReviewResponse
 from apps.scans.models import ScanJob
 
@@ -223,3 +230,70 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             "active_days", "is_active", "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+
+class AdminLoginEventSerializer(serializers.ModelSerializer):
+    """使用者登入事件（whitelist：method/ip/user_agent/created_at）。"""
+
+    method_label = serializers.CharField(source="get_method_display", read_only=True)
+
+    class Meta:
+        model = LoginEvent
+        fields = ["method", "method_label", "ip_address", "user_agent", "created_at"]
+
+
+class AdminSubscriptionPlanSerializer(serializers.ModelSerializer):
+    """後台訂閱方案清單（本 wave 唯讀，不做方案 CRUD）。"""
+
+    class Meta:
+        model = SubscriptionPlan
+        fields = [
+            "id", "code", "name",
+            "monthly_price_ntd", "monthly_coins",
+            "features", "badge", "sort_order", "is_active",
+            "created_at", "updated_at",
+        ]
+
+
+class AdminUserSubscriptionSerializer(serializers.ModelSerializer):
+    """指定使用者的訂閱狀態（whitelist）。"""
+
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    plan_code = serializers.CharField(source="plan.code", read_only=True)
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+
+    class Meta:
+        model = UserSubscription
+        fields = [
+            "status", "status_label",
+            "plan_code", "plan_name",
+            "periods_remaining",
+            "started_at", "current_period_end", "cancelled_at",
+            "created_at", "updated_at",
+        ]
+
+
+class AdminSubscriptionActionSerializer(serializers.Serializer):
+    """後台調整訂閱：action=grant 需 plan_code（periods 預設 1）；cancel 不需。"""
+
+    ACTION_GRANT = "grant"
+    ACTION_CANCEL = "cancel"
+
+    action = serializers.ChoiceField(choices=[ACTION_GRANT, ACTION_CANCEL])
+    plan_code = serializers.SlugField(required=False, allow_blank=False)
+    periods = serializers.IntegerField(min_value=1, max_value=36, default=1)
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs.get("action") == self.ACTION_GRANT:
+            plan_code = attrs.get("plan_code")
+            if not plan_code:
+                raise serializers.ValidationError(
+                    {"plan_code": "action=grant 必須提供 plan_code。"},
+                )
+            try:
+                self.context["plan"] = SubscriptionPlan.objects.get(code=plan_code)
+            except SubscriptionPlan.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"plan_code": "找不到該訂閱方案。"},
+                ) from exc
+        return attrs

@@ -6,13 +6,25 @@
 
 from __future__ import annotations
 
+import calendar
+import logging
+from datetime import datetime
 from decimal import ROUND_CEILING, Decimal
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan, PurchaseOrder
+from apps.billing.models import (
+    CoinTransaction,
+    CoinWallet,
+    PricingPlan,
+    PurchaseOrder,
+    SubscriptionPlan,
+    UserSubscription,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class InsufficientCoinError(Exception):
@@ -620,3 +632,180 @@ def is_paid_tier(user) -> bool:
     if wallet is None:
         return False
     return (wallet.total_purchased_ntd or 0) > 0 or (wallet.total_scans_used or 0) > 0
+
+
+# ---------- 輕量訂閱：lazy 結算 ----------
+#
+# 無週期扣款、無 celery beat：訂閱期數以 periods_remaining 預付記帳，
+# 每月點數在「到期邊界被走到」時才補發（登入、wallet/subscription API 進場
+# 時觸發 settle_subscription）。金額異動一律走本檔（唯一寫入入口原則）。
+
+
+def _advance_month(dt: datetime, months: int = 1) -> datetime:
+    """月份前進 N 個月；day 超過目標月天數時夾到最後一天（1/31 → 2/28）。
+
+    保留原 datetime 的時分秒與 tzinfo（timezone-aware 可直接存 DB）。
+    """
+    total = dt.year * 12 + (dt.month - 1) + months
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
+
+
+def _period_label(dt: datetime) -> str:
+    """期別標籤，如 2026-09-15 → "2026-09"（last_grant_period 冪等用）。"""
+    return f"{dt.year}-{dt.month:02d}"
+
+
+@transaction.atomic
+def grant_subscription(
+    user,
+    plan: SubscriptionPlan,
+    periods: int,
+    *,
+    source: str,
+    admin_actor=None,
+) -> UserSubscription:
+    """建立或延長訂閱（不直接發點；點數由 settle_subscription 補發）。
+
+    - 首次建立：periods_remaining=periods、current_period_end=now、status=active
+    - 既有訂閱：periods_remaining 累加、status 回 active、清 cancelled_at；
+      前一輪已全部到期（current_period_end 已過）則從 now 重新起算
+    - admin 操作傳 admin_actor：比照 admin_adjust 在服務層寫 AdminAuditLog
+    """
+    if periods < 1:
+        raise ValueError("periods 必須大於 0")
+    now = timezone.now()
+    sub = UserSubscription.objects.select_for_update().filter(user=user).first()
+    if sub is None:
+        sub = UserSubscription.objects.create(
+            user=user,
+            plan=plan,
+            periods_remaining=periods,
+            current_period_end=now,
+            status=UserSubscription.Status.ACTIVE,
+            source=source,
+        )
+    else:
+        sub.plan = plan
+        sub.periods_remaining += periods
+        sub.status = UserSubscription.Status.ACTIVE
+        sub.cancelled_at = None
+        sub.source = source
+        if sub.current_period_end < now:
+            # 前一輪已全部到期（expired）：新一輪從 now 起算，避免回填過去期數
+            sub.current_period_end = now
+        sub.save(update_fields=[
+            "plan", "periods_remaining", "status", "cancelled_at",
+            "source", "current_period_end", "updated_at",
+        ])
+    if admin_actor is not None:
+        # 延後 import 避免 circular（admin_api 也 import billing.services）
+        from apps.admin_api.models import AdminAuditLog, log_admin_action
+        log_admin_action(
+            admin_actor=admin_actor,
+            action=AdminAuditLog.Action.SUBSCRIPTION_ADJUST,
+            target_user=user,
+            target_repr=f"{user.username} {plan.code} +{periods} 期",
+            payload={
+                "operation": "grant",
+                "plan_code": plan.code,
+                "periods": periods,
+                "periods_remaining": sub.periods_remaining,
+            },
+        )
+    return sub
+
+
+@transaction.atomic
+def settle_subscription(user) -> list[CoinTransaction]:
+    """訂閱 lazy 結算：到期未發的期數逐月補發點數。
+
+    - active：now ≥ current_period_end 且 periods_remaining > 0 時迴圈逐月補發，
+      每期發 plan.monthly_coins 點（kind=subscription_grant）、periods_remaining
+      減 1、current_period_end 前進一個月、last_grant_period 更新。
+    - cancelled：只補發「取消時該期已經開始」（current_period_end ≤ cancelled_at）
+      的期數；取消後才開始的新期一律不發。期滿後不會再有異動。
+    - periods_remaining 歸零且過了 current_period_end → status=expired。
+    - 冪等：select_for_update 交易鎖＋last_grant_period 期別檢查，
+      同一期重複呼叫不會重複發點。
+
+    回傳本次實際補發的交易列表（無事可做回空 list）。
+    """
+    sub = (
+        UserSubscription.objects.select_for_update()
+        .select_related("plan")
+        .filter(user=user)
+        .first()
+    )
+    if sub is None or sub.status == UserSubscription.Status.EXPIRED:
+        return []
+    now = timezone.now()
+    if now < sub.current_period_end:
+        return []
+
+    # 鎖定順序固定 sub → wallet，與 grant_monthly_bonus_if_needed 一致
+    wallet = CoinWallet.objects.select_for_update().get_or_create(user=user)[0]
+    granted: list[CoinTransaction] = []
+    while sub.periods_remaining > 0 and now >= sub.current_period_end:
+        if (
+            sub.status == UserSubscription.Status.CANCELLED
+            and sub.current_period_end > (sub.cancelled_at or now)
+        ):
+            # 已取消：當前到期邊界是在取消之後才到的 → 新期不發
+            break
+        label = _period_label(sub.current_period_end)
+        if sub.last_grant_period == label:
+            # 冪等防線：同期已發過（正常流程不會走到，防禦性保留）
+            break
+        new_balance = wallet.balance + sub.plan.monthly_coins
+        wallet.balance = new_balance
+        wallet.save(update_fields=["balance", "updated_at"])
+        granted.append(CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=sub.plan.monthly_coins,
+            kind=CoinTransaction.Kind.SUBSCRIPTION_GRANT,
+            balance_after=new_balance,
+            note=f"訂閱月贈點 {sub.plan.name}（{label}）",
+        ))
+        sub.periods_remaining -= 1
+        sub.last_grant_period = label
+        sub.current_period_end = _advance_month(sub.current_period_end)
+        sub.save(update_fields=[
+            "periods_remaining", "last_grant_period",
+            "current_period_end", "updated_at",
+        ])
+    if (
+        sub.status == UserSubscription.Status.ACTIVE
+        and sub.periods_remaining == 0
+        and now >= sub.current_period_end
+    ):
+        sub.status = UserSubscription.Status.EXPIRED
+        sub.save(update_fields=["status", "updated_at"])
+    return granted
+
+
+@transaction.atomic
+def cancel_subscription(user) -> UserSubscription | None:
+    """取消訂閱：status=cancelled＋cancelled_at（冪等；重複取消不動）。
+
+    當前期權益保留到 current_period_end（settle 對已開始的期數仍可補發），
+    之後不再發新期。無訂閱回 None。
+    """
+    sub = UserSubscription.objects.select_for_update().filter(user=user).first()
+    if sub is None:
+        return None
+    if sub.status == UserSubscription.Status.ACTIVE:
+        sub.status = UserSubscription.Status.CANCELLED
+        sub.cancelled_at = timezone.now()
+        sub.save(update_fields=["status", "cancelled_at", "updated_at"])
+    return sub
+
+
+def settle_subscription_safe(user) -> None:
+    """輕量觸發 lazy 結算：失敗只記 log，不影響呼叫端（登入／API）回應。"""
+    try:
+        settle_subscription(user)
+    except Exception:  # noqa: BLE001 — 結算失敗不該擋登入或錢包查詢
+        logger.exception("訂閱 lazy 結算失敗（user_pk=%s）", getattr(user, "pk", None))

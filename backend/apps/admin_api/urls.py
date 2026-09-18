@@ -18,6 +18,17 @@ urlpatterns = [
     path("users/", views.users_list, name="admin-users"),
     path("users/<int:user_id>/", views.user_detail, name="admin-user-detail"),
     path("users/<int:user_id>/adjust-coin/", views.adjust_coin, name="admin-adjust-coin"),
+    path(
+        "users/<int:user_id>/login-events/",
+        views.user_login_events,
+        name="admin-user-login-events",
+    ),
+    path(
+        "users/<int:user_id>/subscription/",
+        views.user_subscription,
+        name="admin-user-subscription",
+    ),
+    path("subscriptions/plans/", views.subscription_plans, name="admin-subscription-plans"),
     path("transactions/", views.transactions_list, name="admin-transactions"),
     path("reviews/", views.reviews_list, name="admin-reviews"),
     path("reviews/<int:review_id>/reply/", views.reply_review, name="admin-reply-review"),

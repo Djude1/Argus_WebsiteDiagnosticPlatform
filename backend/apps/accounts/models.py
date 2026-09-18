@@ -13,6 +13,39 @@ class User(AbstractUser):
     pass
 
 
+class LoginEvent(models.Model):
+    """登入成功事件紀錄（供後台資安檢視，如異常 IP 頻繁登入）。
+
+    只記登入成功；寫入失敗不影響登入本身（view 端以 try/except 包住）。
+    """
+
+    class Method(models.TextChoices):
+        PASSWORD = "password", "帳號密碼"
+        GOOGLE = "google", "Google 登入"
+        # 註冊成功即自動登入（EmailRegisterView 直接簽發 JWT），視為獨立入口
+        REGISTER = "register", "Email 註冊"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="login_events",
+        db_index=True,
+    )
+    method = models.CharField(max_length=16, choices=Method.choices, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} {self.get_method_display()} {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class PasswordResetToken(models.Model):
     """忘記密碼用的單次有效 token。
 

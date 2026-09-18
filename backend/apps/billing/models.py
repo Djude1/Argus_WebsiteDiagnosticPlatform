@@ -141,6 +141,87 @@ class PurchaseOrder(models.Model):
         return f"Order #{self.pk} {self.user.username} {self.plan_id} NT${self.price_ntd}"
 
 
+class SubscriptionPlan(models.Model):
+    """訂閱方案（輕量訂閱制：無週期扣款，月繳方案清單供前端顯示）。"""
+
+    code = models.SlugField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    monthly_price_ntd = models.PositiveIntegerField()
+    monthly_coins = models.PositiveIntegerField()
+    # 前端顯示用的特色清單（JSON 陣列，如 ["每月 300 點", "優先掃描"]）
+    features = models.JSONField(default=list, blank=True)
+    badge = models.CharField(max_length=32, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "monthly_price_ntd"]
+
+    def clean(self) -> None:
+        if self.monthly_price_ntd < 1:
+            raise ValidationError("monthly_price_ntd 必須大於 0")
+        if self.monthly_coins < 1:
+            raise ValidationError("monthly_coins 必須大於 0")
+
+    def __str__(self) -> str:
+        return f"{self.name} (NT${self.monthly_price_ntd}/月={self.monthly_coins}c)"
+
+
+class UserSubscription(models.Model):
+    """使用者訂閱（OneToOne；輕量版：無週期扣款，靠 lazy 結算逐月補發）。
+
+    - `periods_remaining`：已付費但尚未贈點的期數（每月 settle 消耗 1）
+    - `current_period_end`：下次贈點時間；全部期數發完後等同名義到期日
+    - `last_grant_period`：最近一次已贈點的期別（如 "2026-09"），冪等用
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "生效中"
+        CANCELLED = "cancelled", "已取消"
+        EXPIRED = "expired", "已到期"
+
+    class Source(models.TextChoices):
+        ADMIN_GRANT = "admin_grant", "管理員授予"
+        ECPAY_TEST = "ecpay_test", "綠界測試付款"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subscription",
+    )
+    plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.PROTECT,
+        related_name="subscriptions",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
+    )
+    periods_remaining = models.PositiveSmallIntegerField(default=1)
+    started_at = models.DateTimeField(auto_now_add=True)
+    current_period_end = models.DateTimeField(help_text="下次贈點時間")
+    last_grant_period = models.CharField(
+        max_length=7,
+        blank=True,
+        help_text='最近一次已贈點期別，如 "2026-09"（同月冪等用）',
+    )
+    source = models.CharField(max_length=16, choices=Source.choices)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} {self.plan.code} {self.status} 剩 {self.periods_remaining} 期"
+
+
 class CoinTransaction(models.Model):
     """每一筆 coin 異動的審計紀錄（不可竄改）。
 
@@ -161,6 +242,7 @@ class CoinTransaction(models.Model):
         FIXGEN_GRANT = "fixgen_grant", "修正產出額度贈與"
         FIXGEN_CHARGE = "fixgen_charge", "修正產出扣款"
         FIXGEN_REFUND = "fixgen_refund", "修正產出退款"
+        SUBSCRIPTION_GRANT = "subscription_grant", "訂閱月贈點"
 
     wallet = models.ForeignKey(
         CoinWallet,

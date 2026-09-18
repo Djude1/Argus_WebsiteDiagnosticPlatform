@@ -2,7 +2,14 @@ import re
 
 from rest_framework import serializers
 
-from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan, PurchaseOrder
+from apps.billing.models import (
+    CoinTransaction,
+    CoinWallet,
+    PricingPlan,
+    PurchaseOrder,
+    SubscriptionPlan,
+    UserSubscription,
+)
 
 TAX_ID_PATTERN = re.compile(r"^\d{8}$")  # 台灣統編 8 碼數字
 # 手機條碼：首碼 /，後 7 碼為大寫字母/數字/+-.（共 8 碼）
@@ -157,6 +164,57 @@ class PurchaseRequestSerializer(serializers.Serializer):
             attrs["carrier_type"] = carrier_type
             attrs["carrier_id"] = carrier_id
         return attrs
+
+
+class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    """公開訂閱方案清單（whitelist 欄位）。"""
+
+    class Meta:
+        model = SubscriptionPlan
+        fields = [
+            "id",
+            "code",
+            "name",
+            "monthly_price_ntd",
+            "monthly_coins",
+            "features",
+            "badge",
+            "sort_order",
+        ]
+
+
+class UserSubscriptionSerializer(serializers.ModelSerializer):
+    """自己的訂閱狀態（whitelist 欄位）。"""
+
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    plan_code = serializers.CharField(source="plan.code", read_only=True)
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+
+    class Meta:
+        model = UserSubscription
+        fields = [
+            "status",
+            "status_label",
+            "plan_code",
+            "plan_name",
+            "periods_remaining",
+            "started_at",
+            "current_period_end",
+            "cancelled_at",
+        ]
+
+
+class SubscribeRequestSerializer(serializers.Serializer):
+    plan_code = serializers.SlugField()
+
+    def validate_plan_code(self, value: str) -> str:
+        try:
+            self.context["plan"] = SubscriptionPlan.objects.get(
+                code=value, is_active=True,
+            )
+        except SubscriptionPlan.DoesNotExist as exc:
+            raise serializers.ValidationError("找不到該訂閱方案或方案已停用。") from exc
+        return value
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):

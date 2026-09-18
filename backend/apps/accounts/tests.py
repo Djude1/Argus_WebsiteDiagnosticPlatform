@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import PasswordResetToken
+from apps.accounts.models import LoginEvent, PasswordResetToken
 
 
 @override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
@@ -324,3 +324,75 @@ class EmailAuthTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
+class LoginEventTests(APITestCase):
+    """登入成功事件記錄：三個實際登入入口（帳密／Google／註冊）各寫一筆。"""
+
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="event@example.com",
+            email="event@example.com",
+            password="FakePass123!",
+        )
+
+    def test_email_login_records_event_with_ip_and_user_agent(self):
+        response = self.client.post(
+            "/api/auth/email-login/",
+            {"email": "event@example.com", "password": "FakePass123!"},
+            content_type="application/json",
+            HTTP_USER_AGENT="ArgusTestAgent/1.0",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        event = LoginEvent.objects.get(user=self.user)
+        self.assertEqual(event.method, LoginEvent.Method.PASSWORD)
+        self.assertIsNotNone(event.ip_address)
+        self.assertEqual(event.user_agent, "ArgusTestAgent/1.0")
+
+    def test_failed_login_records_no_event(self):
+        response = self.client.post(
+            "/api/auth/email-login/",
+            {"email": "event@example.com", "password": "wrong-password"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(LoginEvent.objects.filter(user=self.user).exists())
+
+    def test_register_records_event(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {"email": "brand-new@example.com", "password": "FakePass456!"},
+            content_type="application/json",
+            HTTP_USER_AGENT="ArgusTestAgent/1.0",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = get_user_model().objects.get(username="brand-new@example.com")
+        event = user.login_events.get()
+        self.assertEqual(event.method, LoginEvent.Method.REGISTER)
+        self.assertIsNotNone(event.ip_address)
+
+    @patch("apps.accounts.views.id_token.verify_oauth2_token")
+    def test_google_login_records_event(self, mock_verify):
+        mock_verify.return_value = {
+            "email": "google-user@example.com",
+            "email_verified": True,
+        }
+
+        response = self.client.post(
+            reverse("google-login"),
+            {"credential": "fake-token"},
+            format="json",
+            HTTP_USER_AGENT="ArgusTestAgent/1.0",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user = get_user_model().objects.get(username="google-user@example.com")
+        event = user.login_events.get()
+        self.assertEqual(event.method, LoginEvent.Method.GOOGLE)
+        self.assertIsNotNone(event.ip_address)

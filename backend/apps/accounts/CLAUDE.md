@@ -20,6 +20,7 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 - 認證用 **JWT**（`rest_framework_simplejwt`），**不是 session**。Access token 只存在前端記憶體；refresh token 只放 HttpOnly cookie，禁止寫入 localStorage。
 - Refresh 每次使用都原子輪替並撤銷舊 token；登出、變更密碼、完成密碼重設都撤銷 refresh token。
 - 每次登入都呼叫 `billing.services.grant_monthly_bonus_if_needed`（本月未領則補 200 coin）。
+- 三個實際登入入口（`EmailLoginView` / `GoogleLoginView` / `EmailRegisterView`）成功後都寫一筆 `LoginEvent`（method/password|google|register、IP 用 `config.client_ip.resolve_client_ip`、UA），並觸發 `billing.services.settle_subscription_safe`（訂閱 lazy 結算）；兩者都包 try/except，失敗不影響登入回應。後台查詢走 `GET /api/admin/users/<id>/login-events/`。
 - `auth_provider` 由 `has_usable_password()` 推斷（`google` / `email`）。
 - dev-login 後門已移除，勿復活。
 - `email-login/` 的狀態碼必須分開：**帳密錯誤回 401**，**欄位缺漏回 400**。

@@ -45,6 +45,10 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `charge_fixgen_generation(user, scan_job)` | 觸發修正產出前計費：額度內 0 元消耗、額度外扣 `ARGUS_COIN_FIXGEN_GENERATION` 固定點數 | 否 |
 | `refund_fixgen_generation(user, scan_job)` | 產生失敗退費：點數退點、額度返還（amount=0） | ✅ 無可退回 None |
 | `is_paid_tier(user)` | free/paid 二級自動判定（曾購點數包或完成付費掃描即 paid） | 純查詢 |
+| `grant_subscription(user, plan, periods, *, source, admin_actor=None)` | 建立或延長訂閱（periods_remaining 累加；首次 current_period_end=now；admin 操作傳 admin_actor 寫 AdminAuditLog） | 否 |
+| `settle_subscription(user)` | 訂閱 lazy 結算：到期期數逐月補發 `monthly_coins`（kind=subscription_grant）；cancelled 只補已開始的當期；期數歸零且過期 → expired | ✅ 交易鎖＋last_grant_period 同期不重發 |
+| `cancel_subscription(user)` | status=cancelled＋cancelled_at（冪等；當期權益保留到期滿） | ✅ 重複取消不動 |
+| `settle_subscription_safe(user)` | settle 的輕量包裝：失敗只記 log（登入／API 進場觸發用） | — |
 
 ---
 
@@ -65,6 +69,15 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 - `SimulatePaid=1` 是綠界後台測試 ReturnURL 的模擬通知，不代表消費者付款，必須回 `1|OK` 但禁止入點。
 - HashKey / HashIV 只放 `.env`，不得寫進程式、測試 fixture、log 或前端。
 
+## 輕量訂閱（無週期扣款、無新基礎設施）
+
+- Model：`SubscriptionPlan`（方案清單，seed migration 建立內建方案）/ `UserSubscription`（OneToOne；`periods_remaining` 預付期數、`current_period_end` 下次贈點時間、`last_grant_period` 同月冪等）。
+- lazy 結算：沒有 celery beat——`settle_subscription` 掛在①登入成功後②`wallet/` 與 `subscription/*` API 進場時（用 `settle_subscription_safe`，失敗只 log）。
+- 端點：`GET /api/billing/subscription/plans/`（公開）、`GET /api/billing/subscription/`（自己；無訂閱回 null）、`POST /api/billing/subscription/subscribe/`、`POST /api/billing/subscription/cancel/`。
+- `subscribe/` 行為比照 purchase：`ARGUS_PAYMENT_MODE != "ecpay_test"` 回 503 不入點；`ecpay_test` 模擬首月一次付款（不接綠界定期定額），直接 `grant_subscription`＋`settle_subscription` 入帳。
+- 月份前進用 `_advance_month`（calendar 安全，1/31 → 2/28），禁止手寫 `month + 1`。
+- 後台調整：`POST /api/admin/users/<id>/subscription/`（grant/cancel，寫 `AdminAuditLog(action=subscription_adjust)`）；`GET /api/admin/subscriptions/plans/`（方案唯讀）。
+
 ---
 
 ## CoinTransaction.kind 枚舉值
@@ -83,6 +96,7 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `fixgen_grant` | 修正產出額度贈與（amount=0，付費掃描附贈） |
 | `fixgen_charge` | 修正產出扣款（額度內 amount=0、額度外負數固定點數） |
 | `fixgen_refund` | 修正產出退款（點數退正數、額度返還 amount=0） |
+| `subscription_grant` | 訂閱月贈點（每月 `monthly_coins`，由 settle_subscription 補發） |
 
 ---
 
