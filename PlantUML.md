@@ -1,5 +1,7 @@
 # Argus UML 圖集
 
+> **⚠ 歷史素材（2026-09-19 標記）**：本檔為系統手冊 v3 時代（2026-06 前）的圖集，**部分圖已與程式碼不符**——例如狀態機圖含 Draft／Validating／finalizing 等不存在的狀態、ER 圖缺 FixOutput／ReportVerification／SiteRebuild／LoginEvent／訂閱相關資料表。**現行權威版本＝[`專題文件生成/設計文件_圖表與成本模組.md`](專題文件生成/設計文件_圖表與成本模組.md)**（依程式碼逐項查證重寫，並附與本檔的差異對照表）。本檔僅供歷史參考與圖檔維護（`專題文件生成/*.png` 的原始碼），新文件請勿直接取用本檔圖形。
+
 本文件收錄 `Argus_系統手冊_第三章優化版.docx` 與後續系統手冊圖說可使用的 PlantUML 原始碼。為了相容 PlantUML 1.2026.4beta4，本文件不在圖內使用 `title` 指令，圖名統一放在 Markdown 標題中。
 
 ## 圖 3-1-1 Argus SaaS 分層系統架構圖
