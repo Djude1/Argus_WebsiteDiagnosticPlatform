@@ -686,6 +686,28 @@ class AdminSubscriptionTests(APITestCase):
         ).get()
         self.assertEqual(log.admin_actor, self.admin)
 
+    def test_get_returns_null_without_subscription(self):
+        response = self.client.get(
+            reverse("admin-user-subscription", args=[self.alice.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["subscription"])
+
+    def test_get_returns_current_subscription(self):
+        self.client.post(
+            reverse("admin-user-subscription", args=[self.alice.id]),
+            {"action": "grant", "plan_code": "sub-admin-test", "periods": 2},
+            format="json",
+        )
+        response = self.client.get(
+            reverse("admin-user-subscription", args=[self.alice.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sub = response.data["subscription"]
+        self.assertEqual(sub["plan_code"], "sub-admin-test")
+        # 開通 2 期後 view 會立即結算首月（贈點入帳），剩餘期數為 1
+        self.assertEqual(sub["periods_remaining"], 1)
+
     def test_cancel_without_subscription_returns_404(self):
         response = self.client.post(
             reverse("admin-user-subscription", args=[self.alice.id]),

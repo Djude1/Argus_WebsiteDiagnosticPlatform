@@ -353,15 +353,26 @@ def user_login_events(request, user_id: int):
     return Response({"events": AdminLoginEventSerializer(events, many=True).data})
 
 
-@api_view(["POST"])
+@api_view(["GET", "POST"])
 @permission_classes([permissions.IsAdminUser])
 def user_subscription(request, user_id: int):
-    """管理指定使用者的訂閱：action=grant 授予期數、action=cancel 取消。
+    """管理指定使用者的訂閱：GET 查看現況；POST action=grant 授予期數、action=cancel 取消。
 
     點數異動一律走 billing.services（grant/cancel/settle），不直接動錢包。
     """
     user_model = get_user_model()
     target = get_object_or_404(user_model, pk=user_id)
+
+    if request.method == "GET":
+        sub = getattr(target, "subscription", None)
+        return Response(
+            {
+                "subscription": (
+                    AdminUserSubscriptionSerializer(sub).data if sub else None
+                )
+            }
+        )
+
     serializer = AdminSubscriptionActionSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     action = serializer.validated_data["action"]

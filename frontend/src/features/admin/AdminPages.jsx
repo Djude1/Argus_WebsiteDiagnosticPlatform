@@ -15,6 +15,7 @@ import {
   fetchAdminDomains,
   fetchAdminSubscriptionPlans,
   fetchUserLoginEvents,
+  fetchUserSubscription,
 } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
@@ -656,7 +657,7 @@ function AdminUserDetailPage() {
   const [feedback, setFeedback] = useState(null);
   // 登入記錄（最近 50 筆；null = 載入中）
   const [loginEvents, setLoginEvents] = useState(null);
-  // 訂閱管理：後端僅在開通／取消動作後回傳訂閱現況（無獨立讀取端點）
+  // 訂閱管理：進入頁面載入現況（GET），開通／取消動作後以回應即時更新
   const [subscription, setSubscription] = useState(null);
   const [plans, setPlans] = useState([]);
   const [subPlanCode, setSubPlanCode] = useState("");
@@ -675,8 +676,8 @@ function AdminUserDetailPage() {
   }
   useEffect(() => { load(); /* eslint-disable-line */ }, [userId]);
 
-  // 登入事件與訂閱方案清單隨使用者切換載入（失敗不擋頁面）；
-  // 訂閱現況顯示也一併重置，避免切到別位使用者時殘留上一位的狀態
+  // 登入事件、訂閱方案清單與訂閱現況隨使用者切換載入（失敗不擋頁面）；
+  // 各狀態也一併重置，避免切到別位使用者時殘留上一位的資料
   useEffect(() => {
     setLoginEvents(null);
     setSubscription(null);
@@ -684,6 +685,9 @@ function AdminUserDetailPage() {
     fetchUserLoginEvents(userId)
       .then((data) => setLoginEvents(data.events || []))
       .catch(() => setLoginEvents([]));
+    fetchUserSubscription(userId)
+      .then((data) => setSubscription(data.subscription || null))
+      .catch(() => {});
     fetchAdminSubscriptionPlans()
       .then((data) => {
         setPlans(data.plans || []);
@@ -854,7 +858,7 @@ function AdminUserDetailPage() {
             )}
           </dl>
         ) : (
-          <p className="admin-empty">尚未顯示訂閱現況：後台會在開通或取消後顯示最新狀態。</p>
+          <p className="admin-empty">此使用者目前沒有訂閱（或仍在載入）。</p>
         )}
         <form className="admin-sub-form" onSubmit={handleGrantSubscription}>
           <select

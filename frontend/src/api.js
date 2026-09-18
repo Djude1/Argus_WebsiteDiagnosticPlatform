@@ -91,6 +91,12 @@ export async function fetchUserLoginEvents(userId) {
   return response.data;
 }
 
+// 指定使用者的訂閱現況；回傳 { subscription }（無訂閱時 subscription=null）
+export async function fetchUserSubscription(userId) {
+  const response = await api.get(`/admin/users/${userId}/subscription/`);
+  return response.data;
+}
+
 // 後台調整訂閱：action=grant 需 planCode 與 periods（1-36）、action=cancel 不需；
 // 兩者皆回傳 { subscription }（取消但無訂閱時 404）
 export async function adminUserSubscriptionAction(userId, action, planCode = null, periods = 1) {
