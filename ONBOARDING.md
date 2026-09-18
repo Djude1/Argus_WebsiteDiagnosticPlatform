@@ -168,10 +168,10 @@ Argus/
 │   │   ├── celery.py
 │   │   └── asgi.py / wsgi.py
 │   └── apps/               ← 8 個 app
-│       ├── accounts/       ← User model（繼承 AbstractUser）+ Google OAuth + Email 註冊/登入 + 改密碼
-│       ├── scans/          ← 核心：ScanJob、Page、Finding、AgentSession、AgentStep、AuthorizationConsent、crawler、scanners、reports、nuclei_scanner、cancellation
+│       ├── accounts/       ← User model（繼承 AbstractUser）+ Google OAuth + Email 註冊/登入 + 改密碼 + LoginEvent 登入記錄
+│       ├── scans/          ← 核心：ScanJob、Page、Finding、AgentSession、AgentStep、AuthorizationConsent、VerifiedDomain（網域所有權驗證）、crawler、scanners、reports、nuclei_scanner、cancellation、domain_verification、security/waf_scanner
 │       ├── agent/          ← Hermes-Agent：providers/tools/loop/runner/findings
-│       ├── billing/        ← CoinWallet、CoinTransaction、PricingPlan、PurchaseOrder + service 唯一寫入入口
+│       ├── billing/        ← CoinWallet、CoinTransaction（11 kind）、PricingPlan、PurchaseOrder、SubscriptionPlan、UserSubscription + service 唯一寫入入口（含訂閱冪等月結算）
 │       ├── reviews/        ← 已驗證 PlatformReview + 官方回覆 + 修訂/檢舉治理
 │       ├── admin_api/      ← React /admin 用的 API + AdminAuditLog model + IsSuperuser
 │       ├── content/        ← CMS：ProjectFeature、TeamMember、AppRelease
@@ -207,10 +207,10 @@ Argus/
 
 | app | 是什麼 | 關鍵檔 |
 |---|---|---|
-| `accounts` | User 模型；Email 登入/註冊、可選 Google OAuth、記憶體 access + HttpOnly refresh cookie、密碼重設；refresh 原子輪替，登出/變更密碼/重設會撤銷 token | `views.py` `models.py` |
-| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`；Playwright BFS 爬蟲、四維 scanner、Word 報告、主動式資安 probe、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` |
+| `accounts` | User 模型；Email 登入/註冊、可選 Google OAuth、記憶體 access + HttpOnly refresh cookie、密碼重設；refresh 原子輪替，登出/變更密碼/重設會撤銷 token；`LoginEvent` 記錄每次登入（方法/IP/UA，admin 可查時間軸） | `views.py` `models.py` |
+| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`/`VerifiedDomain`；Playwright BFS 爬蟲、四維 scanner、Word 報告、主動式資安 probe（**需先通過網域所有權驗證：DNS TXT/meta tag/HTML 檔三選一，90 天效期**）、WAF 阻擋偵測、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` `domain_verification.py` |
 | `agent` | Phase 2 Hermes-Agent：MiniMax/GLM/Gemini provider chain + 8 個 tool schema + observe-think-act loop + token 安全閘；預設 `ARGUS_AGENT_ENABLED=false` 不啟用避免燒 token | `providers.py` `tools.py` `loop.py` `runner.py` |
-| `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點 | `ecpay.py` `models.py` `services.py` `views.py` |
+| `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點；輕量訂閱（`SubscriptionPlan`/`UserSubscription`，月費→每月贈點，惰性冪等結算，admin 可開通/取消） | `ecpay.py` `models.py` `services.py` `views.py` |
 | `reviews` | 已驗證平台評論：完成掃描才可發表、`PlatformReview` OneToOne、本人可編修/刪除；`ReviewResponse` 單一官方回覆、`ReviewRevision` 修訂稽核、`ReviewReport` 檢舉治理 | `models.py` `views.py` |
 | `admin_api` | React /admin 用的 API；`IsAdminUser` 保護（`/me` 是 `IsAuthenticated`）；`AdminAuditLog` model + `IsSuperuser` 權限 + audit-log endpoint；service hook 自動寫 audit | `views.py` `permissions.py` `models.py` |
 | `content` | CMS：`ProjectFeature` / `TeamMember` / `AppRelease`，公開 API 給公開頁用（features/team/releases/milestones）；React /admin 的 CMS 編輯後前台秒生效 | `models.py` `views.py` `admin.py` |
@@ -235,17 +235,19 @@ Argus/
 | `/dashboard` | `DashboardPage` | 個人總覽 |
 | `/scans` `/scans/:id` `/scans/:id/topology` | `ScanLayout` | 掃描列表/詳情/拓撲圖 |
 | `/history` | `HistoryPage` | 同網址歷次分數 |
-| `/billing` | `BillingPage` | 3 步驟結帳 wizard |
+| `/domains` | `DomainVerifyPage` | 網域所有權驗證精靈（DNS TXT/meta/驗證檔三方法＋即時驗證；主動掃描閘門） |
+| `/billing` | `BillingPage` | 月訂閱方案面板＋3 步驟結帳 wizard |
 | `/settings` | `SettingsPage` | 錢包概覽 |
 
 ### 6.2 React /admin（深色 sidebar）
 | 路徑 | 看得到 |
 |---|---|
 | `/admin/overview` | staff（含 6 stat card + 14 天 SVG mini chart + AI provider 用量 + Top 10 AI 用戶） |
-| `/admin/users` `/admin/users/:id` | staff（含調 coin 表單） |
+| `/admin/users` `/admin/users/:id` | staff（含調 coin 表單、訂閱開通/取消、登入記錄時間軸） |
 | `/admin/transactions` | staff |
 | `/admin/reviews` | staff（官方單一回覆、待回覆/檢舉/隱藏篩選與公開狀態治理） |
 | `/admin/scans` `/admin/scans/:id` | staff |
+| `/admin/domains` | staff（網域所有權驗證審核：搜尋/篩選/人工核准/否決含備註） |
 | `/admin/content` | staff（**3 tab inline CRUD**：特色 / 成員 / 版本） |
 | `/admin/plans` | staff（**inline CRUD** 編輯 PricingPlan） |
 | `/admin/audit-log` | **superuser** |
@@ -298,6 +300,10 @@ Argus/
 | GET | `/api/history/` | auth | — | 同網址歷次 |
 | GET | `/api/audit/` | auth | — | （保留，目前前台未用） |
 | GET | `/api/findings-by-category/` | auth | — | 跨掃描分類聚合（DashboardPage 用） |
+| GET | `/api/scans/domains/` | auth | — | 我的網域驗證清單（狀態/效期/is_effectively_verified） |
+| POST | `/api/scans/domains/` | auth | body：`domain` | 新增網域→發 token＋三方法 instructions（重複 409 帶現況） |
+| POST | `/api/scans/domains/{id}/verify/` | auth | body：`method`=`dns_txt`\|`meta_tag`\|`html_file` | 執行驗證（成功→verified 90 天；失敗回 last_error） |
+| DELETE | `/api/scans/domains/{id}/` | auth | — | 刪除自己的網域（他人 404） |
 
 **`POST /api/scans/` body 參數（`ScanJobCreateSerializer`）：**
 
@@ -305,7 +311,7 @@ Argus/
 |---|---|---|---|---|
 | `url` | string（≤2048） | ✅ | — | 目標網址 |
 | `authorization_confirmed` | bool | ✅ | — | 必須為 `true`，否則 400（確認擁有網站或已取得書面授權） |
-| `scan_mode` | enum `passive`/`active` | — | `passive` | 掃描模式 |
+| `scan_mode` | enum `passive`/`active` | — | `passive` | 掃描模式；**`active` 另需目標網域通過所有權驗證（見 `/api/scans/domains/`）** |
 | `active_testing_authorized` | bool | — | `false` | `scan_mode=active` 時必須為 `true` |
 | `third_party_reconfirmed` | bool | — | `false` | 網域疑似第三方/敏感產業時必須為 `true` |
 | `max_depth` | int（≥1） | — | `ARGUS_DEFAULT_MAX_DEPTH`（3） | 爬蟲深度 |
@@ -319,6 +325,10 @@ Argus/
 | GET | `/api/billing/plans/` | auth | — | 4 個方案 |
 | POST | `/api/billing/purchase/` | auth | body（`PurchaseRequestSerializer`）見下表 | 結帳並入帳 coin |
 | GET | `/api/billing/orders/` | auth | — | 我的訂單 |
+| GET | `/api/billing/subscription/plans/` | open | — | 訂閱方案清單（含 payment_mode/subscribe_enabled） |
+| GET | `/api/billing/subscription/` | auth | — | 我的訂閱（無則 `subscription: null`；進場觸發冪等月結算） |
+| POST | `/api/billing/subscription/subscribe/` | auth | body：`plan_code` | 訂閱（付費模式 disabled→503；ecpay_test 模擬首月） |
+| POST | `/api/billing/subscription/cancel/` | auth | — | 取消訂閱（當期權益保留到期滿） |
 
 **`POST /api/billing/purchase/` body 參數（`PurchaseRequestSerializer`）：**
 
@@ -365,6 +375,12 @@ Argus/
 | GET | `/api/admin/users/` | staff | query：`q?`、`page?` | 使用者列表 |
 | GET | `/api/admin/users/{id}/` | staff | path：`user_id` | 詳情含 wallet + 交易 + ai_usage |
 | POST | `/api/admin/users/{id}/adjust-coin/` | staff | body：`delta`（int，可正負）、`note?`（≤255） | 調 coin（會寫 audit） |
+| GET | `/api/admin/users/{id}/login-events/` | staff | — | 該使用者登入記錄（最近 50 筆；method/ip/ua 白名單） |
+| GET | `/api/admin/users/{id}/subscription/` | staff | — | 該使用者訂閱現況（無則 null） |
+| POST | `/api/admin/users/{id}/subscription/` | staff | body：`action`=`grant`\|`cancel`、grant 另需 `plan_code`、`periods`（1–36） | 開通/延長或取消訂閱（寫 `subscription_adjust` audit） |
+| GET | `/api/admin/subscriptions/plans/` | staff | — | 訂閱方案清單（含停用；唯讀） |
+| GET | `/api/admin/domains/` | staff | query：`q?`、`status?`、`page?` | 全部網域驗證清單 |
+| POST | `/api/admin/domains/{id}/override/` | staff | body：`approve`（bool）、`note?` | 人工核准（視同通過）/否決（寫 `domain_override` audit） |
 | GET | `/api/admin/transactions/` | staff | query：`kind?`、`user_id?`、`page?` | 交易紀錄 |
 | GET | `/api/admin/reviews/` | staff | query：`pending?`、`reported?`、`status=published\|hidden`、`page?` | 評論治理清單與總數/平均/待回覆/待審檢舉統計 |
 | POST / DELETE | `/api/admin/reviews/{id}/reply/` | staff | POST body：`reply`（1–2000） | 新增、更新或移除單一 `ReviewResponse`；不得改原評分 |
@@ -427,10 +443,14 @@ User (accounts.User，繼承 AbstractUser，沒加欄位)
  │    │    └── steps → AgentStep[]
  │    ├── authorization_consent → AuthorizationConsent (OneToOne)
  │    └── coin_transactions → CoinTransaction[]（透過 scan_job FK）
+ ├── verified_domains → VerifiedDomain[]（網域所有權驗證；unique(user,domain)）
+ ├── login_events → LoginEvent[]（登入記錄：method/ip/user_agent）
+ ├── subscription → UserSubscription (OneToOne；輕量訂閱)
  ├── admin_audit_logs → AdminAuditLog[] (as actor)
  ├── admin_audit_logs_received → AdminAuditLog[] (as target)
 
 PricingPlan（4 個 seed：starter/standard/advanced/flagship）
+SubscriptionPlan（3 個 seed：sub-lite 199/300、sub-pro 499/900、sub-team 999/2000）
 ProjectFeature / TeamMember / AppRelease / ProjectMilestone（CMS，公開頁用）
 Announcement（公告：type=permanent/temporary、active_days、is_active）
 ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留，不再有公開端點）
@@ -438,14 +458,17 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 
 ### 重要欄位速查
 - `CoinWallet`: balance / total_purchased_ntd / total_scans_used / last_bonus_year+month
-- `CoinTransaction`: 欄位 `kind`（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust）、`amount`、`balance_after`、`scan_job`/`plan`/`admin_actor` FK（皆 nullable）、`note`（審計不可改）
+- `CoinTransaction`: 欄位 `kind`（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust / rebuild_hold / rebuild_refund / fixgen_grant / fixgen_charge / fixgen_refund / subscription_grant）、`amount`、`balance_after`、`scan_job`/`plan`/`admin_actor` FK（皆 nullable）、`note`（審計不可改）
 - `PurchaseOrder.status`: pending → paid / cancelled；含 price_ntd/coin_amount 快照、`invoice_type`(personal/company)、`carrier_type`(cloud/mobile_barcode/citizen_digital)、`carrier_id`
+- `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
+- `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**
+- `LoginEvent`: method（password/google/register）、ip_address、user_agent、created_at；寫入包 try/except 不影響登入
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled
 - `ScanJob.progress`（JSON）: `{pages_done, pages_total, phase, phase_started_at}`
-- `Finding`: severity (critical/high/medium/low/info)、category (seo/aeo/geo/security/ux)、bounding_box、ai_handoff_prompt
+- `Finding`: severity (critical/high/medium/low/info)、category (seo/aeo/geo/security/ux)、bounding_box、ai_handoff_prompt、rule_id（如 `waf_block_detected`＝WAF 阻擋偵測）
 - `PlatformReview`: user OneToOne、rating（1-5）、title、comment、show_partial_email、status（published/hidden）、experience_at；`display_name` 與 `is_featured` 僅保留舊資料相容，公開作者只會顯示匿名標籤或後端產生的遮罩 Email
 - `ReviewResponse`: review OneToOne、author、body；`ReviewRevision` 保存本人編修前版本；`ReviewReport` 保存檢舉與 pending/resolved/dismissed
-- `AdminAuditLog`: 欄位 `admin_actor`、`target_user`、`action`（coin_adjust / review_reply / review_moderate / review_delete / user_toggle_staff / other）、`target_object_repr`、`payload`（JSON，非 `detail`）
+- `AdminAuditLog`: 欄位 `admin_actor`、`target_user`、`action`（coin_adjust / review_reply / review_moderate / review_delete / user_toggle_staff / subscription_adjust / domain_override / other）、`target_object_repr`、`payload`（JSON，非 `detail`）
 
 ---
 
