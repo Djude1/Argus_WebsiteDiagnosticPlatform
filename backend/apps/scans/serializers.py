@@ -11,13 +11,22 @@ from apps.billing.services import (
     get_or_create_wallet,
     hold_for_scan,
 )
-from apps.scans.models import AuthorizationConsent, Finding, FixOutput, Page, ScanJob
+from apps.scans.domain_verification import DomainValidationError, normalize_domain
+from apps.scans.models import (
+    AuthorizationConsent,
+    Finding,
+    FixOutput,
+    Page,
+    ScanJob,
+    VerifiedDomain,
+)
 from apps.scans.services import (
     assert_public_http_url,
     get_hostname,
     get_origin,
     is_obvious_third_party,
     normalize_url,
+    user_owns_domain,
 )
 
 
@@ -97,6 +106,19 @@ class ScanJobCreateSerializer(serializers.Serializer):
             )
 
         hostname = get_hostname(normalized_url)
+        # 主動測試的技術性授權閘門：目標網域必須先通過網域所有權驗證
+        # （宣告式勾選 active_testing_authorized 仍保留，兩者並存）。
+        if attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and not user_owns_domain(
+            request.user, hostname
+        ):
+            raise serializers.ValidationError(
+                {
+                    "url": (
+                        f"主動測試僅限已通過網域所有權驗證的網站，"
+                        f"請先到網域驗證頁完成 {hostname} 的所有權驗證。"
+                    )
+                }
+            )
         if is_obvious_third_party(hostname) and not attrs["third_party_reconfirmed"]:
             raise serializers.ValidationError(
                 {
@@ -268,3 +290,82 @@ class FixOutputSerializer(serializers.ModelSerializer):
         if obj.status != FixOutput.Status.READY:
             return []
         return list(obj.artifacts.keys())
+
+
+# ============================================================
+# 網域所有權驗證（VerifiedDomain）
+# ============================================================
+
+
+class VerifiedDomainSerializer(serializers.ModelSerializer):
+    """已驗證網域的讀取模型（whitelist；不含 admin 內部欄位）。"""
+
+    is_effectively_verified = serializers.BooleanField(read_only=True)
+    days_until_expiry = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VerifiedDomain
+        fields = [
+            "id",
+            "domain",
+            "status",
+            "method",
+            "verified_at",
+            "expires_at",
+            "last_checked_at",
+            "last_error",
+            "admin_override",
+            "is_effectively_verified",
+            "days_until_expiry",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_days_until_expiry(self, obj) -> int | None:
+        if obj.expires_at is None:
+            return None
+        from django.utils import timezone
+
+        return (obj.expires_at - timezone.now()).days
+
+
+class VerifiedDomainCreateSerializer(serializers.Serializer):
+    """建立待驗證網域：正規化＋SSRF 域檢查（重複檢查與 409 由 view 處理）。"""
+
+    domain = serializers.CharField(max_length=255, trim_whitespace=True)
+
+    def validate_domain(self, value: str) -> str:
+        try:
+            normalized = normalize_domain(value)
+        except DomainValidationError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        # 與掃描目標同一套公開位址政策：拒絕內網／localhost／非公開解析結果
+        try:
+            assert_public_http_url(f"https://{normalized}/")
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return normalized
+
+
+class DomainVerifySerializer(serializers.Serializer):
+    method = serializers.ChoiceField(choices=VerifiedDomain.Method.choices)
+
+
+def build_verification_instructions(domain: str, token: str) -> dict:
+    """產生三種驗證方法的設定說明（給前端直接複製）。"""
+    return {
+        "dns_txt": {
+            "record_name": f"_argus-verification.{domain}",
+            "record_type": "TXT",
+            "value": f"argus-site-verification={token}",
+        },
+        "meta_tag": {
+            "snippet": f'<meta name="argus-site-verification" content="{token}">',
+            "location": "網站首頁 HTML 的 <head> 內",
+        },
+        "html_file": {
+            "path": "/.well-known/argus-verification.txt",
+            "url": f"https://{domain}/.well-known/argus-verification.txt",
+            "content": token,
+        },
+    }

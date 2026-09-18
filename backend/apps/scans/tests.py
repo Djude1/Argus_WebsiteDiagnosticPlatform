@@ -28,7 +28,7 @@ from apps.scans.crawler import (
     classify_cf_challenge,
     compute_min_interval,
 )
-from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
+from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob, VerifiedDomain
 from apps.scans.reports import build_scan_report, get_severity_display, mask_pii_evidence
 from apps.scans.scanners import (
     PageAnalysisInput,
@@ -442,6 +442,20 @@ class ScanJobApiTests(APITestCase):
         self.assertEqual(ScanJob.objects.count(), 0)
 
     def test_active_scan_with_extra_authorization_is_recorded(self):
+        # 主動測試閘門：目標網域必須先通過所有權驗證（2026-09 新增的技術性驗證）
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        VerifiedDomain.objects.create(
+            user=self.user,
+            domain="example.com",
+            token="a" * 32,
+            status=VerifiedDomain.Status.VERIFIED,
+            method=VerifiedDomain.Method.DNS_TXT,
+            verified_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=90),
+        )
         response = self.client.post(
             self.url,
             {

@@ -34,6 +34,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
 | `katana_scanner.py` | Katana 全站 JS/端點探索封裝；時間、大小、同主機與 RPS 預算 | 在單頁、passive 或未授權模式執行 |
+| `domain_verification.py` | 網域所有權驗證引擎：token 產生、網域正規化、DNS TXT／meta tag／HTML 檔三種驗證、`run_verification()` 更新 `VerifiedDomain` | 修改 `ScanJob.status`、繞過 `assert_public_http_url` SSRF 檢查 |
 | `security/` | 深度主動式資安檢查（SSL/TLS、Cookie、CORS、CSP 品質、敏感檔外洩探測、硬編碼秘鑰偵測、OWASP 對映、Kali 工具）| 修改 ScanJob.status、呼叫 billing |
 
 ### 掃描範圍與工具矩陣
@@ -48,6 +49,19 @@ queued → crawling → scanning → [agent_testing] → completed
 | 全網站 + active 且已授權 | 已爬 URL | 是 | 是 | 是（另受總開關控制） | 可執行既有同源候選驗證 |
 
 Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只有 1 RPS，必須改為依序執行。單頁不得用 Katana、敏感路徑字典或 Agent 擴張成全站掃描。
+
+### 網域所有權驗證閘門（VerifiedDomain，2026-09）
+
+主動測試（`scan_mode=active`）除了宣告式勾選 `active_testing_authorized`，還必須通過**技術性**網域所有權驗證——兩道閘門並存，缺一不可：
+
+- 閘門位置：`ScanJobCreateSerializer.validate`（API 層）與 `ScanJob.clean()`（model 層）都檢查；判定函式為 `services.user_owns_domain(user, hostname)`
+- 有效判定：`VerifiedDomain.is_effectively_verified`＝`admin_override=True`（管理員人工核准）**或**（`status=verified` 且 `expires_at > now`，TTL 預設 90 天，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）
+- 子網域涵蓋：對 `example.com` 驗證通過，`www.example.com` 等子網域也可主動掃描；不做 eTLD+1 萃取，以完整 hostname／父網域比對
+- 三種驗證方法共用一支 token（`argus-site-verification=<token>`）：DNS TXT（`_argus-verification.<domain>`，重試 3 次×timeout 5 秒）／首頁 meta 標籤（HTML 前 64KB 需同時出現標籤名與 token）／驗證檔（`/.well-known/argus-verification.txt` 內容等於 token）
+- HTTP 驗證抓取先過 `assert_public_http_url` SSRF 檢查、串流讀取上限 5MB；DNS 查詢走 dnspython
+- 使用者 API：`/api/scans/domains/`（list／create＋instructions／`<id>/verify/`／delete；重複建立回 409 帶現況）
+- 管理端人工審核：`/api/admin/domains/` 與 `/api/admin/domains/<id>/override/`（approve=人工核准、reject=rejected；寫 `AdminAuditLog` action=`domain_override`）
+- passive 掃描不受此閘門限制
 
 ### 資安邊界（重要）
 
@@ -342,5 +356,6 @@ docker exec argus-worker-1 katana -version
 | `crawler.py` 呼叫任何 billing 函式 | 職責分離 |
 | `playwright install` 不加 `PLAYWRIGHT_BROWSERS_PATH` | 污染全域路徑 |
 | Nuclei/Katana 主動工具需 `scan_mode=active AND active_testing_authorized`，並遵守單頁／全網站矩陣 | 未授權或超出使用者選擇範圍的主動測試 |
+| 主動掃描（`scan_mode=active`）目標 hostname 未通過網域所有權驗證（`user_owns_domain`） | 宣告式授權不足以證明所有權；必須先完成 VerifiedDomain 驗證或 admin 人工核准 |
 | 直接 `ScanJob.objects.filter(...).update(status=...)` | 繞過 signal，狀態不一致 |
 | 把本機 eager smoke test 當成完整掃描整合 | 未涵蓋 Redis／worker／PostgreSQL，驗證不完整 |

@@ -23,6 +23,7 @@ from apps.billing.services import (
     get_or_create_wallet,
     refund_full_for_scan,
 )
+from apps.scans.domain_verification import generate_token, run_verification
 from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
 from apps.scans.models import (
     AuthorizationConsent,
@@ -31,11 +32,13 @@ from apps.scans.models import (
     Page,
     ReportVerification,
     ScanJob,
+    VerifiedDomain,
 )
 from apps.scans.process_runner import _terminate_process_tree
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
 from apps.scans.serializers import (
+    DomainVerifySerializer,
     FindingSerializer,
     FixOutputSerializer,
     PageSerializer,
@@ -43,6 +46,9 @@ from apps.scans.serializers import (
     ScanJobCreateSerializer,
     ScanJobSerializer,
     ScanJobStatusSerializer,
+    VerifiedDomainCreateSerializer,
+    VerifiedDomainSerializer,
+    build_verification_instructions,
 )
 from apps.scans.services import get_client_ip
 from apps.scans.tasks import (
@@ -511,6 +517,77 @@ class FindingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
         if scan_id:
             queryset = queryset.filter(scan_job_id=scan_id)
         return queryset
+
+
+class VerifiedDomainViewSet(viewsets.ModelViewSet):
+    """網域所有權驗證：列出／建立／刪除自己的網域，並觸發驗證。
+
+    物件級權限：queryset 一律以 request.user 過濾，別人的網域直接 404。
+    """
+
+    http_method_names = ["get", "post", "delete", "head", "options"]
+    permission_classes = [IsAuthenticated]
+    pagination_class = ScansPagination
+
+    def get_queryset(self):
+        return VerifiedDomain.objects.filter(user=self.request.user).order_by("-created_at")
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return VerifiedDomainCreateSerializer
+        if self.action == "verify":
+            return DomainVerifySerializer
+        return VerifiedDomainSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        domain = serializer.validated_data["domain"]
+        existing = VerifiedDomain.objects.filter(user=request.user, domain=domain).first()
+        if existing is not None:
+            # 重複建立回 409 並帶現況，前端可直接顯示「此網域已存在」
+            return Response(
+                {
+                    "detail": "此網域已加入驗證清單。",
+                    "domain": VerifiedDomainSerializer(existing).data,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        verified_domain = VerifiedDomain.objects.create(
+            user=request.user,
+            domain=domain,
+            token=generate_token(),
+        )
+        output_serializer = VerifiedDomainSerializer(verified_domain)
+        return Response(
+            {
+                **output_serializer.data,
+                "token": verified_domain.token,
+                "instructions": build_verification_instructions(
+                    verified_domain.domain, verified_domain.token
+                ),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"])
+    def verify(self, request, pk=None):
+        """執行指定方法的驗證，回最新狀態與失敗原因（last_error）。"""
+        verified_domain = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ok = run_verification(verified_domain, serializer.validated_data["method"])
+        return Response(
+            {
+                **VerifiedDomainSerializer(verified_domain).data,
+                "verified": ok,
+            }
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        verified_domain = self.get_object()
+        verified_domain.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================

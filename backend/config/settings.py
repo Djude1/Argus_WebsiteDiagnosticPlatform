@@ -325,6 +325,10 @@ ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"
 ARGUS_AUTO_QUEUE_SCANS = env_bool("ARGUS_AUTO_QUEUE_SCANS", default=not DEBUG)
+# 網域所有權驗證通過後的有效天數（主動測試閘門以此判斷是否過期）
+ARGUS_DOMAIN_VERIFICATION_TTL_DAYS = int(
+    os.getenv("ARGUS_DOMAIN_VERIFICATION_TTL_DAYS", "90")
+)
 
 # Katana 補充型資安爬蟲（Docker 執行，不污染本機環境）
 # 前提：本機需有 Docker Desktop 並已 pull 過 projectdiscovery/katana

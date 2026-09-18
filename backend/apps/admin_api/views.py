@@ -39,7 +39,9 @@ from apps.admin_api.serializers import (
     AdminUserDetailSerializer,
     AdminUserListSerializer,
     AdminUserSubscriptionSerializer,
+    AdminVerifiedDomainSerializer,
     AnnouncementSerializer,
+    DomainOverrideSerializer,
 )
 from apps.billing.models import (
     CoinTransaction,
@@ -55,7 +57,7 @@ from apps.billing.services import (
     settle_subscription,
 )
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
-from apps.scans.models import AgentSession, ScanJob
+from apps.scans.models import AgentSession, ScanJob, VerifiedDomain
 
 PAGE_SIZE = 25
 
@@ -667,6 +669,73 @@ def scan_detail(request, scan_id: int):
         "category_scores": scan.category_scores,
         "error_message": scan.error_message,
     })
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAdminUser])
+def domains_list(request):
+    """網域所有權驗證清單（含使用者、狀態、人工核准狀態）。"""
+    qs = (
+        VerifiedDomain.objects.select_related("user", "admin_actor")
+        .order_by("-created_at")
+    )
+    search = (request.query_params.get("q") or "").strip()
+    if search:
+        qs = qs.filter(
+            Q(domain__icontains=search) | Q(user__username__icontains=search)
+        )
+    status_filter = request.query_params.get("status")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    items, page, total_pages, total = _paginate(request, qs)
+    return Response({
+        "domains": AdminVerifiedDomainSerializer(items, many=True).data,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def domain_override(request, domain_id: int):
+    """網域驗證人工審核：approve=True 人工核准（同效果於驗證通過）；
+    approve=False 否決（status=rejected、取消人工核准）。
+    """
+    verified_domain = get_object_or_404(
+        VerifiedDomain.objects.select_related("user"), pk=domain_id,
+    )
+    serializer = DomainOverrideSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    approve = serializer.validated_data["approve"]
+    note = serializer.validated_data.get("note") or ""
+
+    verified_domain.admin_actor = request.user
+    verified_domain.admin_note = note[:255]
+    if approve:
+        verified_domain.admin_override = True
+    else:
+        verified_domain.admin_override = False
+        verified_domain.status = VerifiedDomain.Status.REJECTED
+    verified_domain.save()
+
+    log_admin_action(
+        admin_actor=request.user,
+        action=AdminAuditLog.Action.DOMAIN_OVERRIDE,
+        target_user=verified_domain.user,
+        target_repr=(
+            f"{verified_domain.domain} 人工{'核准' if approve else '否決'}"
+            f"（{verified_domain.user.username}）"
+        ),
+        payload={
+            "domain_id": verified_domain.id,
+            "domain": verified_domain.domain,
+            "approve": approve,
+            "note": note[:255],
+        },
+    )
+    verified_domain.refresh_from_db()
+    return Response(AdminVerifiedDomainSerializer(verified_domain).data)
 
 
 @api_view(["GET"])

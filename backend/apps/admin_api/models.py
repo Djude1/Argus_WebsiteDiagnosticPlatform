@@ -17,6 +17,7 @@ class AdminAuditLog(models.Model):
         REVIEW_MODERATE = "review_moderate", "審核評論"
         REVIEW_DELETE = "review_delete", "刪除評論"
         USER_TOGGLE_STAFF = "user_toggle_staff", "切換管理員身份"
+        DOMAIN_OVERRIDE = "domain_override", "網域驗證人工審核"
         OTHER = "other", "其他"
 
     admin_actor = models.ForeignKey(

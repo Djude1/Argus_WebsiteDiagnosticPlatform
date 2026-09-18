@@ -9,12 +9,12 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | URL 前綴 | Django App | 主要端點 |
 |---|---|---|
 | `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/` |
-| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`、`audit/`、`findings-by-category/` |
+| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
-| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`、`reviews/`、`orders/`、`audit-log/`、`announcements/*`、`cms/*` |
+| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`audit-log/`、`announcements/*`、`cms/*` |
 | `/favicon.svg` | 靜態資產 | 直接服務被 Git 追蹤的 `frontend/public/favicon.svg`，不依賴 frontend build |
 | `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
 | `/` ～ `/*` | SPA fallback | 回傳 `frontend/dist/index.html`，由 React Router 處理 |
@@ -64,6 +64,20 @@ artifacts（JSON）：json_ld / og_meta / llms_txt / faq_schema，
   各含 content＋逐欄位 fields 標註（verified/placeholder/rule/extracted/partial）
 → 產生走 apps/scans/fixgen/（ARGUS_FIXGEN_*、預設關閉）；
   事實政策三級驗證確保絕不編造（識別類不符→佔位符【請填寫：…】）
+```
+
+**VerifiedDomain**（`apps/scans/models.py`）
+```
+網域所有權驗證（主動測試的技術性閘門）
+user FK + domain（正規化小寫）UniqueConstraint(user, domain)
+status：pending / verified / rejected / expired
+method：dns_txt / meta_tag / html_file（最後成功的方法）
+token（32 hex）、verified_at、expires_at（驗證成功=now+90 天，
+  TTL 設定 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS）
+is_effectively_verified：admin_override 或（verified 且未過期）
+→ scan_mode=active 的 ScanJob.clean() 與 ScanJobCreateSerializer 都以此閘門；
+  引擎在 apps/scans/domain_verification.py；管理端人工審核走
+  /api/admin/domains/<id>/override/（audit action=domain_override）
 ```
 
 **CoinWallet**（`apps/billing/models.py`）

@@ -2,6 +2,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Case, F, IntegerField, Value, When
+from django.utils import timezone
+
+from apps.scans.services import get_hostname, user_owns_domain
 
 
 class ScanJob(models.Model):
@@ -68,12 +71,20 @@ class ScanJob(models.Model):
         ]
 
     def clean(self) -> None:
+        # 檢查順序固定：先宣告式授權，再網域所有權驗證（兩道閘門並存）。
         if self.scan_mode == self.ScanMode.ACTIVE and not self.active_testing_authorized:
             raise ValidationError("主動測試必須先取得額外授權。")
         if self.max_depth < 1:
             raise ValidationError("最大深度必須至少為 1。")
         if self.max_pages < 1:
             raise ValidationError("最大頁數必須至少為 1。")
+        if self.scan_mode == self.ScanMode.ACTIVE and self.user_id:
+            hostname = get_hostname(self.normalized_url or self.original_url or "")
+            if hostname and not user_owns_domain(self.user, hostname):
+                raise ValidationError(
+                    f"主動測試僅限已通過網域所有權驗證的網站，"
+                    f"請先到網域驗證頁完成 {hostname} 的所有權驗證。"
+                )
 
     def __str__(self) -> str:
         return f"{self.origin} ({self.status})"
@@ -376,5 +387,90 @@ class FixOutput(models.Model):
 
     def __str__(self) -> str:
         return f"FixOutput<{self.pk}> scan={self.scan_job_id} {self.status}"
+
+
+class VerifiedDomain(models.Model):
+    """網域所有權驗證（主動測試的技術性閘門）。
+
+    使用者以 DNS TXT / meta tag / HTML 檔三種方法證明自己控制該網域；
+    驗證通過後 `expires_at` 前可用於主動掃描（`is_effectively_verified`）。
+    admin_override=True 代表管理員人工核准（人工審核機制），同等生效。
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "待驗證"
+        VERIFIED = "verified", "已驗證"
+        REJECTED = "rejected", "已否決"
+        EXPIRED = "expired", "已過期"
+
+    class Method(models.TextChoices):
+        DNS_TXT = "dns_txt", "DNS TXT 記錄"
+        META_TAG = "meta_tag", "HTML meta 標籤"
+        HTML_FILE = "html_file", "驗證檔案"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="verified_domains",
+        db_index=True,
+    )
+    domain = models.CharField(max_length=255, db_index=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    # 目前（最後一次成功）通過的驗證方法
+    method = models.CharField(
+        max_length=16,
+        choices=Method.choices,
+        blank=True,
+        default="",
+    )
+    token = models.CharField(max_length=64)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+    # 管理員人工核准／否決（人工審核機制）
+    admin_override = models.BooleanField(default=False)
+    admin_actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="domain_overrides",
+    )
+    admin_note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "domain"],
+                name="unique_verified_domain_per_user",
+            ),
+        ]
+
+    @classmethod
+    def ttl_days(cls) -> int:
+        """驗證有效天數（ARGUS_DOMAIN_VERIFICATION_TTL_DAYS，預設 90）。"""
+        return settings.ARGUS_DOMAIN_VERIFICATION_TTL_DAYS
+
+    @property
+    def is_effectively_verified(self) -> bool:
+        """掃描閘門的唯一判斷點：人工核准或（已驗證且未過期）。"""
+        if self.admin_override:
+            return True
+        return (
+            self.status == self.Status.VERIFIED
+            and self.expires_at is not None
+            and self.expires_at > timezone.now()
+        )
+
+    def __str__(self) -> str:
+        return f"{self.domain} ({self.status})"
 
 

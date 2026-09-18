@@ -16,9 +16,9 @@ React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意
 前端 `AdminLayout` 依 `me.is_superuser` 顯示「操作日誌📜 / 公告管理📢」，與後端 `IsSuperuser` 一致。（django-admin 已移除，不再有第二後台。）
 
 ## 關鍵檔案 / 端點（`/api/admin/`）
-- `views.py`：`overview`、`users`、`users/<id>`、`users/<id>/adjust-coin`、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、`orders`、`dashboard`、`audit-log`、`announcements/*`
+- `views.py`：`overview`、`users`、`users/<id>`、`users/<id>/adjust-coin`、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、`domains`（網域所有權驗證清單）、`domains/<id>/override`（人工核准／否決網域驗證）、`orders`、`dashboard`、`audit-log`、`announcements/*`
 - `cms_views.py`：`cms/(features|team|releases|plans)` 寫入端點（ModelViewSet）
-- `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_delete` / `user_toggle_staff` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
+- `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_delete` / `user_toggle_staff` / `domain_override` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
 - `serializers.py`：輸出欄位 **whitelist**
 
 ## 重點

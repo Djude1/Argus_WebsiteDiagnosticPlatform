@@ -15,6 +15,7 @@ dependencies = [
     "dnspython>=2.8.0",
     "google-auth>=2.53.0",
     "gunicorn>=23,<24",
+    "httpx>=0.28.1",
     "kubernetes>=35.0,<36",
     "matplotlib>=3.11.1",
     "pillow>=12.2.0",

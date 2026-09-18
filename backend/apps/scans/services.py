@@ -141,3 +141,42 @@ def is_obvious_third_party(hostname: str) -> bool:
 def get_client_ip(request) -> str:
     return resolve_client_ip(request)
 
+
+def registrable_domain(url_or_origin: str) -> str:
+    """從 URL 或 origin 抽出 hostname（小寫）。
+
+    刻意簡化：不做 eTLD+1 萃取，完整 hostname 就是閘門比對單位；
+    子網域涵蓋（www.example.com 對 example.com 驗證）由 user_owns_domain 處理。
+    """
+    return (urlparse((url_or_origin or "").strip()).hostname or "").lower().rstrip(".")
+
+
+def user_owns_domain(user, hostname: str) -> bool:
+    """該 user 是否對 hostname 持有有效的網域所有權驗證。
+
+    比對規則：verified domain 等於 hostname 本身，或 hostname 是其子網域
+    （hostname.endswith("." + domain)，例：www.example.com 對 example.com）。
+    有效判定走 VerifiedDomain.is_effectively_verified（人工核准或已驗證未過期）。
+    """
+    if not user or not user.id or not hostname:
+        return False
+    # 延遲 import：models 反向 import 本模組（ScanJob.clean 用到），頂層互 import 會循環
+    from apps.scans.models import VerifiedDomain
+
+    hostname = hostname.lower().rstrip(".")
+    candidates = (
+        hostname,
+        # 父網域候選：a.b.example.com → 依序嘗試 b.example.com / example.com，
+        # 讓「對註冊域驗證一次、子網域全部涵蓋」不用精確知道 eTLD+1 邊界
+        *{
+            hostname.split(".", i)[-1]
+            for i in range(1, hostname.count("."))
+        },
+    )
+    domains = set(VerifiedDomain.objects.filter(user=user, domain__in=candidates))
+    return any(
+        vd.is_effectively_verified
+        and (hostname == vd.domain or hostname.endswith(f".{vd.domain}"))
+        for vd in domains
+    )
+

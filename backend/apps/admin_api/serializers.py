@@ -10,7 +10,7 @@ from apps.billing.models import (
     UserSubscription,
 )
 from apps.reviews.models import PlatformReview, ReviewResponse
-from apps.scans.models import ScanJob
+from apps.scans.models import ScanJob, VerifiedDomain
 
 
 class AdminUserListSerializer(serializers.Serializer):
@@ -297,3 +297,32 @@ class AdminSubscriptionActionSerializer(serializers.Serializer):
                     {"plan_code": "找不到該訂閱方案。"},
                 ) from exc
         return attrs
+
+
+class AdminVerifiedDomainSerializer(serializers.ModelSerializer):
+    """後台網域驗證清單（whitelist：只帶 username，不輸出 email 等個資）。"""
+
+    username = serializers.CharField(source="user.username", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    method_label = serializers.CharField(source="get_method_display", read_only=True)
+    admin_actor_username = serializers.CharField(
+        source="admin_actor.username", read_only=True, default=None,
+    )
+    is_effectively_verified = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = VerifiedDomain
+        fields = [
+            "id", "username", "domain",
+            "status", "status_label", "method", "method_label",
+            "verified_at", "expires_at", "last_checked_at", "last_error",
+            "admin_override", "admin_actor_username", "admin_note",
+            "is_effectively_verified", "created_at",
+        ]
+
+
+class DomainOverrideSerializer(serializers.Serializer):
+    """網域驗證人工審核：approve=True 人工核准；approve=False 否決。"""
+
+    approve = serializers.BooleanField()
+    note = serializers.CharField(max_length=255, allow_blank=True, required=False)
