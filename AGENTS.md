@@ -145,7 +145,7 @@ cd frontend ; .\build-node22.ps1 ; cd ..
 # 套用 migration
 uv run python backend/manage.py migrate
 
-# 後端測試（約 252 項，以實跑數字為準）
+# 後端測試（約 1020 項，以實跑數字為準）
 uv run python backend/manage.py test apps
 
 # 單一 app 測試（例如 billing）
