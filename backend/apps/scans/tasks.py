@@ -48,6 +48,7 @@ from apps.scans.security.secret_scanner import build_secret_finding, detect_secr
 from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
+from apps.scans.security.waf_scanner import detect_waf_block
 from apps.scans.services import assert_public_http_url
 
 logger = logging.getLogger(__name__)
@@ -594,6 +595,12 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             + analyze_js_libraries(crawled_pages)
             + analyze_services(crawled_pages)
         )
+        # WAF／防護機制封鎖偵測（被動：統計已落地 Page 的 403/429 與 challenge 特徵，
+        # 達閾值才產出單一 info finding，未達閾值回 None 不打擾使用者）
+        waf_block_finding = detect_waf_block(scan_job)
+        if waf_block_finding:
+            deep_security_findings.append(waf_block_finding)
+            append_log(scan_job_id, "偵測到 WAF／防護機制封鎖跡象，已新增說明 finding")
         deep_security_findings = [owasp_mapper.tag(f) for f in deep_security_findings]
         for finding in deep_security_findings:
             Finding.objects.create(scan_job=scan_job, page=None, **finding)
