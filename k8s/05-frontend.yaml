@@ -45,6 +45,13 @@ data:
         default_type image/svg+xml;
         try_files /favicon.svg =404;
       }
+      # Vite hashed 資產缺檔一律 404，不可 fallback 回 index.html：否則滾動更新
+      # 空窗期內對新 chunk 的請求會拿到 200 + HTML，而 Cloudflare 按副檔名快取、
+      # 不看 content-type，就會把 HTML 當成該資產存起來（實測 max-age=14400）。
+      # 與 frontend/nginx.conf 同一條規則，兩邊必須同步修改。
+      location /assets/ {
+        try_files $uri =404;
+      }
       location / {
         try_files $uri $uri/ /index.html;
       }
@@ -64,6 +71,11 @@ spec:
     metadata:
       labels:
         app: frontend
+      annotations:
+        # 上面的 frontend-nginx ConfigMap 是以 subPath 掛載的，改了不會同步到既有
+        # pod，也沒有 configMapGenerator 的 name hash 可觸發滾動更新。每次修改
+        # default.conf 都必須把這個數字 +1，否則設定不會生效。
+        argus.io/nginx-conf-revision: "2"
     spec:
       containers:
         - name: frontend
