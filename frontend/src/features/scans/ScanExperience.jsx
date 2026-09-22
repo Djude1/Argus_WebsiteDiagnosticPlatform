@@ -17,6 +17,8 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { api } from "../../api";
+import argusLoaderStill from "../../assets/argus-loader-still.webp";
+import argusLoader from "../../assets/argus-loader.webp";
 import NavActions from "../../components/navigation/NavActions.jsx";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
@@ -110,7 +112,11 @@ function CrawlingAnimation({
   return (
     <div className={`crawl-anim ${compact ? "is-compact" : ""}`}>
       <div className="crawl-anim-header">
-        <span className="crawl-anim-spider" aria-hidden="true"><current.Icon className="crawl-anim-glyph" /></span>
+        {/* Argus 之眼：掃描進行中的品牌 loader；偏好減少動態者自動換靜態首幀 */}
+        <picture className="crawl-anim-eye">
+          <source media="(prefers-reduced-motion: reduce)" srcSet={argusLoaderStill} />
+          <img className="crawl-anim-eye-img" src={argusLoader} alt="" width="256" height="256" />
+        </picture>
         <div className="crawl-anim-text">
           <div className="crawl-anim-title">{current.label}中...</div>
           {hint ? <div className="crawl-anim-hint">{hint}</div> : null}

@@ -2081,26 +2081,29 @@
     @apply flex items-center gap-3;
   }
 
-  .crawl-anim-spider {
-    @apply text-3xl;
-    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.55));
-    animation: spider-bob 1.4s ease-in-out infinite;
+  /* Argus 之眼 loader：掃描進行中的品牌動畫。
+     原稿是深 navy 底的霓虹眼，在淺色卡片上做成獨立「掃描視窗」以保留對比。 */
+  .crawl-anim-eye {
+    @apply relative block shrink-0 overflow-hidden rounded-xl;
+    width: 56px;
+    height: 56px;
+    background: var(--argus-navy-950);
+    border: 1px solid rgba(103, 232, 249, 0.45);
+    box-shadow:
+      0 0 14px rgba(34, 211, 238, 0.45),
+      inset 0 0 12px rgba(56, 189, 248, 0.25);
   }
 
-  .crawl-anim.is-compact .crawl-anim-spider {
-    @apply text-2xl;
+  .crawl-anim.is-compact .crawl-anim-eye {
+    width: 44px;
+    height: 44px;
   }
 
-  .crawl-anim-glyph {
-    display: block;
-    width: 30px;
-    height: 30px;
-    color: #38bdf8;
-  }
-
-  .crawl-anim.is-compact .crawl-anim-glyph {
-    width: 24px;
-    height: 24px;
+  .crawl-anim-eye-img {
+    @apply block h-full w-full;
+    object-fit: cover;
+    /* 原稿四周留白較多，略放大讓眼睛填滿視窗 */
+    transform: scale(1.14);
   }
 
   .crawl-anim-text {
@@ -2283,11 +2286,6 @@
 
   .crawl-phase.phase-done .crawl-phase-label {
     @apply text-emerald-600;
-  }
-
-  @keyframes spider-bob {
-    0%, 100% { transform: translateY(0) rotate(-4deg); }
-    50% { transform: translateY(-5px) rotate(4deg); }
   }
 
   @keyframes phase-bob {
