@@ -255,11 +255,11 @@ INFO = "info"
 
 ## 6. 完整實作計畫
 
-詳見 [`docs/superpowers/plans/2026-08-30-scan-report-overhaul.md`](superpowers/plans/2026-08-30-scan-report-overhaul.md)。
+詳見 [`docs/scan-report-improvement-plan-2026-08-30.md`](scan-report-improvement-plan-2026-08-30.md)。
 
-涵蓋 4 個 Phase 共 13 個 Task，每個 Task 都用 TDD 方式（failing test → 實作 → verify → commit）：
+涵蓋 4 個 Phase 共 12 個 Task，每個 Task 都用 TDD 方式（failing test → 實作 → verify → commit）：
 
-- **Phase 1**（P0 核心修正）：Task 1.1-1.5（priority_score / ordering / grouping / scoring）
+- **Phase 1**（P0 核心修正）：Task 1.1-1.4（priority_score / ordering / grouping / scoring）
 - **Phase 2**（合規與防偽）：Task 2.1-2.4（ReportVerification / verify 端點 / verify 頁 / 修 F1）
 - **Phase 3**（報告結構與樣式）：Task 3.1-3.2（logo PNG / 重寫 reports.py）
 - **Phase 4**（工程優化）：Task 4.1-4.2（快取 / 整合測試）

@@ -1497,7 +1497,7 @@ git commit -m "test(scans): 加報告整合測試，鎖定排序/去重/SHA-256 
 
 # 總計
 
-- **Phase 1**：5 tasks（核心 bug 修正）
+- **Phase 1**：4 tasks（核心 bug 修正）
 - **Phase 2**：4 tasks（合規與防偽）
 - **Phase 3**：2 tasks（報告重寫，工作量最大）
 - **Phase 4**：2 tasks（工程優化）
