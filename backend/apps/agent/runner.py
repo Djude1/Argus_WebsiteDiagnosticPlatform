@@ -58,10 +58,17 @@ SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資�
    最可能存在注入風險（例如接受使用者輸入的查詢、搜尋、篩選端點），對每一個
    呼叫 probe_sql_injection(url) 進行 SQL injection 主動驗證。系統會自動判定，
    確認可注入時記錄為 critical 漏洞（確認後你無需再 report_ux_issue）。
-3. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
-4. 全部完成或無法繼續時呼叫 finish 並附短總結。
+3. 對看起來「應該需要登入才能存取」的端點（個人資料、訂單、購物車、後台管理、
+   內部 API 等），呼叫 probe_unauthorized_access(url) 以匿名請求重放：若匿名
+   仍取得實質資料（非 401/403、非空回應），這就是未授權存取漏洞——用
+   report_security_issue 回報，evidence 附上你觀察到的回應內容。
+4. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、
+   明文密碼等）也用 report_security_issue 回報並附證據；不要臆測，只報親眼所見。
+5. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
+6. 全部完成或無法繼續時呼叫 finish 並附短總結。
 
-限制：只對本站同源 URL 使用 probe_sql_injection；跨站或無參數 URL 會被系統拒絕。
+限制：只對本站同源 URL 使用 probe_sql_injection 與 probe_unauthorized_access；
+跨站 URL、無 query 參數的 SQLi 目標會被系統拒絕。
 不要繞過驗證、不要操作他站資源。"""
 
 

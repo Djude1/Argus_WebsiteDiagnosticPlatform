@@ -15,6 +15,24 @@ def _eval_headers(headers: dict, url: str) -> list[dict]:
             remediation="移除 X-Powered-By 標頭。",
             evidence=f"X-Powered-By: {xpb}", impact_area="vulnerability",
         ))
+    # 資訊蒐集型標頭：不直接可利用，但替攻擊者省下偵察功夫（版控、招聘路徑、
+    # 生成器、框架版本）。真實網站常見的通用指紋，非針對特定站。
+    disclosure_headers = (
+        ("x-recruiting", "header-x-recruiting", "招聘標頭揭露內部路徑", "info"),
+        ("x-generator", "header-x-generator", "X-Generator 標頭洩露生成器資訊", "info"),
+        ("x-aspnet-version", "header-x-aspnet-version", "X-AspNet-Version 洩露框架版本", "low"),
+        ("x-aspnetmvc-version", "header-x-aspnet-version", "X-AspNet-Version 洩露框架版本", "low"),
+    )
+    for key, rule_id, title, severity in disclosure_headers:
+        value = headers.get(key, "")
+        if value:
+            out.append(make_finding(
+                category="security", severity=severity, rule_id=rule_id,
+                title=title,
+                description=f"回應標頭 {key} 洩露了內部資訊：{value}",
+                remediation=f"移除 {key} 回應標頭；正式環境最小化資訊揭露。",
+                evidence=f"{key}: {value}", impact_area="vulnerability",
+            ))
     acao = headers.get("access-control-allow-origin", "")
     acac = headers.get("access-control-allow-credentials", "")
     if acao == "*":

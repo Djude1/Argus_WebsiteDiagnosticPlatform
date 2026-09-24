@@ -253,6 +253,8 @@ class ToolSchemaTests(TestCase):
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
+            "probe_unauthorized_access",
+            "report_security_issue",
             "finish",
         }
         self.assertEqual(names, expected)

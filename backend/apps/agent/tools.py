@@ -167,6 +167,62 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "probe_unauthorized_access",
+            "description": (
+                "以『不帶任何登入憑證』的乾淨請求重放一個同源 API 端點，驗證它是否"
+                "允許未授權存取。適用在：你在網路流量（get_network_requests）看到需要"
+                "登入才會觸發的端點（訂單、個人資料、後台 API），想確認匿名存取是否"
+                "也拿得到資料。回傳匿名請求的狀態碼、內容類型與回應片段——**由你判斷**"
+                "回傳內容是否屬於應受保護的資料；確認是漏洞時用 report_security_issue"
+                "回報並附上本次觀察作為證據。跨站 URL 會被拒絕。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "要驗證的完整同源 URL",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "report_security_issue",
+            "description": (
+                "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
+                "敏感資料外洩、錯誤訊息洩漏內部資訊）。必須附上你親眼觀察到的證據"
+                "（回應片段、狀態碼、畫面內容），不可以臆測。攻擊性驗證請用 "
+                "probe_sql_injection / probe_unauthorized_access，不要自行組攻擊 payload。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "severity": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low", "info"],
+                    },
+                    "title": {"type": "string"},
+                    "description": {
+                        "type": "string", "description": "問題描述與為什麼是風險",
+                    },
+                    "evidence": {
+                        "type": "string",
+                        "description": "實際觀察到的證據（回應片段、截圖內容等）",
+                    },
+                    "remediation": {"type": "string"},
+                    "url": {"type": "string", "description": "發現問題的端點 URL（選填）"},
+                },
+                "required": ["severity", "title", "description", "evidence"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finish",
             "description": "完成本次任務並結束。當你已經回報完所有發現或無法繼續時呼叫。",
             "parameters": {
@@ -184,15 +240,18 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 # Task 6：依授權模式動態組裝 tool schemas，並遮罩持久化的 tool 資料
 # ---------------------------------------------------------------------------
 def build_tool_schemas(allow_sqlmap: bool) -> list[dict[str, Any]]:
-    """依 deep_mode（active + authorized）決定是否把 probe_sql_injection 交給 LLM。
+    """依 deep_mode（active + authorized）決定哪些主動驗證工具交給 LLM。
 
     回傳獨立深拷貝，避免共用 mutable schema 被意外修改。被排除的 tool 不會
-    出現在 provider 的 tool_choice 清單，LLM 無法呼叫。
+    出現在 provider 的 tool_choice 清單，LLM 無法呼叫。主動探測類
+    （probe_sql_injection / probe_unauthorized_access）一律 deep_mode only；
+    觀察回報類（report_security_issue）全模式可用。
     """
+    deep_only = {"probe_sql_injection", "probe_unauthorized_access"}
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
-        if allow_sqlmap or schema["function"]["name"] != "probe_sql_injection"
+        if allow_sqlmap or schema["function"]["name"] not in deep_only
     ]
 
 
@@ -203,7 +262,7 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
     一律經 redact_url_query_values 遮罩；其他 tool 的參數原樣回傳（淺拷貝）。
     """
     clean = dict(arguments or {})
-    if tool_name == "probe_sql_injection" and "url" in clean:
+    if tool_name in {"probe_sql_injection", "probe_unauthorized_access"} and "url" in clean:
         clean["url"] = redact_url_query_values(str(clean["url"]))
     return clean
 
@@ -227,6 +286,20 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
                 if isinstance(req, dict)
             ],
         }
+    if tool_name == "probe_unauthorized_access":
+        raw = result or {}
+        safe: dict[str, Any] = {
+            "status": raw.get("status"),
+            "content_type": raw.get("content_type"),
+            "body_length": raw.get("body_length"),
+        }
+        if raw.get("body_snippet"):
+            safe["body_snippet"] = redact_url_query_values(str(raw["body_snippet"]))
+        if raw.get("blocked"):
+            safe["blocked"] = raw["blocked"]
+        if raw.get("error"):
+            safe["error"] = raw["error"]
+        return safe
     if tool_name != "probe_sql_injection":
         return dict(result or {})
     raw = result or {}
@@ -328,6 +401,10 @@ class ToolExecutor:
                 return self._report_ux_issue(args)
             if name == "probe_sql_injection":
                 return await self._probe_sql_injection(args.get("url", ""))
+            if name == "probe_unauthorized_access":
+                return await self._probe_unauthorized_access(args.get("url", ""))
+            if name == "report_security_issue":
+                return self._report_security_issue(args)
             if name == "finish":
                 return ToolOutcome(
                     ok=True,
@@ -443,6 +520,117 @@ class ToolExecutor:
             "url": self.page.url,
         }
         return ToolOutcome(ok=True, result={"reported": True, "title": title}, issue=payload)
+
+    async def _probe_unauthorized_access(self, url: str) -> ToolOutcome:
+        """以無憑證的乾淨請求重放同源端點，驗證是否允許未授權存取。
+
+        安全約束：
+        - 強制**同源**（比對 scan_job.origin），與 _probe_sql_injection 同邊界。
+        - 工具本身只在 deep_mode（active＋authorized）暴露 schema（build_tool_schemas）；
+          runtime 再檢查一次 scan_mode/authorized，防 schema 外洩路徑。
+        - 僅發一次普通 GET（scanner UA、無 cookie／token），不帶任何攻擊 payload；
+          回應片段經 redact_url_query_values 後才回給 LLM 與持久化。
+
+        回傳原始觀察（status／content_type／長度／片段）；**不由工具判定漏洞**——
+        是否屬於應受保護資料由 agent 判斷後以 report_security_issue 回報，
+        證據由 agent 附上，維持「證據鏈由觀察組成」的契約。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import urlparse
+
+        from django.conf import settings as dj_settings
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
+            )
+
+        import httpx
+
+        def _fetch() -> dict[str, Any]:
+            # 不帶 cookie／Authorization：匿名重放。redirect 不跟隨，避免 open-redirect
+            # 把探針導向他站；timeout 短，失敗即回結構化錯誤。
+            with httpx.Client(
+                headers={"User-Agent": dj_settings.ARGUS_SCANNER_USER_AGENT},
+                timeout=10.0,
+                follow_redirects=False,
+            ) as client:
+                r = client.get(url)
+            snippet = (r.text or "")[:400]
+            return {
+                "status": r.status_code,
+                "content_type": r.headers.get("content-type", ""),
+                "body_length": len(r.content or b""),
+                "body_snippet": snippet,
+            }
+
+        try:
+            observation = await asyncio.to_thread(_fetch)
+        except Exception as exc:  # noqa: BLE001 — 網路失敗回結構化錯誤不炸迴圈
+            return ToolOutcome(
+                ok=False, result={"error": f"request_failed:{exc.__class__.__name__}"}
+            )
+        observation["body_snippet"] = redact_url_query_values(
+            str(observation.get("body_snippet", ""))
+        )
+        return ToolOutcome(ok=True, result=observation)
+
+    def _report_security_issue(self, args: dict[str, Any]) -> ToolOutcome:
+        """把 agent 觀察到的資安問題組成 security finding（走 probe_sql_injection
+        同一條 security_finding 落地鏈，由 loop → persist_agent_security_findings 寫入）。
+
+        觀察型回報的 severity 上限 high：critical 保留給工具確認的漏洞
+        （sqlmap confirmed），與計分契約「證據等級」的設計一致。
+        """
+        from apps.scans.scanners import make_finding
+
+        severity = str(args.get("severity", "low")).lower()
+        if severity == "critical":
+            severity = "high"
+        if severity not in {"high", "medium", "low", "info"}:
+            severity = "low"
+        title = (args.get("title") or "").strip()[:255]
+        description = (args.get("description") or "").strip()[:5000]
+        evidence = (args.get("evidence") or "").strip()[:5000]
+        remediation = (args.get("remediation") or "").strip()[:5000]
+        url = (args.get("url") or "").strip()
+        if not title or not description or not evidence:
+            return ToolOutcome(
+                ok=False, result={"error": "missing_required_fields"}
+            )
+
+        safe_url = redact_url_query_values(url) if url else ""
+        full_description = description + (f"（觀察端點：{safe_url}）" if safe_url else "")
+        finding = make_finding(
+            category="security",
+            severity=severity,
+            rule_id="agent-observed-security",
+            title=title,
+            description=(
+                f"Hermes-Agent 在實際操作與 probe 觀察中發現：{full_description} "
+                "此為 AI agent 帶證據的觀察型回報；攻擊性驗證結論另見工具確認項。"
+            ),
+            remediation=remediation or "依證據內容對應的存取控制／資料保護強化。",
+            evidence=evidence,
+            impact_area="vulnerability",
+        )
+        return ToolOutcome(ok=True, result={"reported": title}, security_finding=finding)
 
     async def _probe_sql_injection(self, url: str) -> ToolOutcome:
         """LLM 自主觸發的授權範圍內 SQLi 主動驗證。
