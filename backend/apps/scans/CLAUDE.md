@@ -274,7 +274,16 @@ playwright install chromium
 
 所有掃描入口、redirect、子資源與 WebSocket 都必須經 `services.py` 的公開 HTTP 目標政策；禁止 localhost、非 global IP、userinfo 與非 80/443 port。應用層驗證仍不能消除 DNS rebinding 的解析/連線競態，production 必須另以受控 egress proxy / firewall 阻擋 private、loopback、link-local 與 metadata 網段。
 
-主 frame navigation 與 WebSocket 在送出前還必須符合 `ScanJob.origin`；公開 CDN 子資源可通過 public HTTP policy，但不可把主頁或 WebSocket 擴張到其他 origin。Nuclei 必須啟用 `-lna`、`-ni`、`-pt http` 並使用授權 User-Agent；Katana 必須使用 exact-origin `-cs`，不可只用僅限制 hostname 的 `fqdn`。
+主 frame navigation 與 WebSocket 在送出前還必須符合 `ScanJob.origin`；公開 CDN 子資源可通過 public HTTP policy，但不可把主頁或 WebSocket 擴張到其他 origin。Nuclei 必須啟用 `-ni`、`-pt http` 並使用授權 User-Agent；`-lna`（= `-restrict-local-network-access`，封鎖私網連線的 SSRF 防護）**預設必須開**，僅在 `ARGUS_ALLOW_PRIVATE_TARGETS`（DEBUG only，掃 Docker 網路內受控目標如 Juice Shop）時由 `nuclei_scanner.py` 自動移除。Katana 必須使用 exact-origin `-cs`，不可只用僅限制 hostname 的 `fqdn`。
+
+### 私網目標旁路（ARGUS_ALLOW_PRIVATE_TARGETS，2026-09-25）
+
+本機／隔離 demo 掃 Docker 網路內受控測試目標（OWASP Juice Shop 等）用：
+
+- **runtime 雙條件**：`services.allow_private_targets()` ＝ 開關開啟 **且** `settings.DEBUG`——正式環境誤設 env 也不生效；`scans.E002`（`checks.py`）另在部署檢查提早報錯。
+- 放行範圍：私網 IP、localhost、單標籤 hostname（如 `juice-shop`）、非標準 port；**userinfo、無法解析的 hostname 仍拒絕**。
+- 套用點全部集中走 `services.assert_public_http_url`（crawler、agent runner、掃描／網域驗證 serializer）；`domain_verification.normalize_domain` 同步放行單標籤／IP／localhost；`nuclei_scanner` 於旁路時移除 `-lna`。
+- 環境：疊加 `docker-compose.juice.yml`（web/worker 設 DEBUG＋旁路＋Agent 開啟，與 K8s 正式環境功能面一致；另含 `ARGUS_AGENT_MAX_TOKENS=150000` 與 `ARGUS_NUCLEI_DEEP_TIMEOUT=900` 的 demo 調幅）。
 
 ---
 

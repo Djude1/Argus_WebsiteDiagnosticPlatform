@@ -1,0 +1,42 @@
+# 本機 Juice Shop 測試環境 overlay——用完整 Celery/Redis/PostgreSQL 鏈路
+# （與 K8s 正式環境相同的功能面：ARGUS_AGENT_ENABLED=true、Kali disabled）
+# 掃描 Docker 網路內的 OWASP Juice Shop（http://juice-shop:3000）。
+#
+# 啟動（疊加 dev：web 以 runserver+DEBUG 跑，db 帳號固定本機值）：
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.juice.yml up -d --build
+#
+# 私網旁路 ARGUS_ALLOW_PRIVATE_TARGETS 受雙重保護：
+#   1. runtime 強制 DEBUG 雙條件（services._allow_private_targets）
+#   2. 部署檢查 scans.E002（非 DEBUG 開啟即 error）
+# 因此本檔同時給 web/worker 疊加 DJANGO_DEBUG=true——僅供隔離的本機 demo，
+# 不得用於任何對外環境。
+#
+# 掃描目標：http://juice-shop:3000（容器對容器；主機瀏覽器看 http://localhost:3000）
+# 主動掃描需先完成網域驗證：以管理員對 VerifiedDomain "juice-shop" 做 admin override。
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    # 固定版次可重現時改用具體 tag（例如 v17.x.x），避免 latest 漂移
+    container_name: argus-juice-shop-1
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  web:
+    environment:
+      DJANGO_DEBUG: "true"
+      ARGUS_ALLOW_PRIVATE_TARGETS: "true"
+
+  worker:
+    environment:
+      DJANGO_DEBUG: "true"
+      ARGUS_ALLOW_PRIVATE_TARGETS: "true"
+      # 與 K8s 正式環境一致：Hermes-Agent 開啟（providers 由 .env 的 API key 決定）
+      ARGUS_AGENT_ENABLED: "true"
+      # MiniMax-M3 為思考型模型，token 消耗明顯高於 M2.7（實測 17 步 >63k）；
+      # demo 環境放寬上限讓 agent 跑完，正式環境維持預設 60k 成本控制
+      ARGUS_AGENT_MAX_TOKENS: "150000"
+      # 2 RPS 下 Nuclei 全模板掃描超過預設 300 秒；demo 掃受控靶機放寬到 15 分，
+      # 正式環境維持 300 秒（保護公網目標站的既有取捨）
+      ARGUS_NUCLEI_DEEP_TIMEOUT: "900"

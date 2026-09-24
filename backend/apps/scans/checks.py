@@ -16,3 +16,17 @@ def check_eager_is_debug_only(app_configs, **kwargs):
             )
         ]
     return []
+
+
+@register(deploy=True)
+def check_private_targets_is_debug_only(app_configs, **kwargs):
+    """私網目標旁路只允許 DEBUG 本機／隔離 demo；正式環境維持公開目標政策。"""
+    if getattr(settings, "ARGUS_ALLOW_PRIVATE_TARGETS", False) and not settings.DEBUG:
+        return [
+            Error(
+                "ARGUS_ALLOW_PRIVATE_TARGETS 只能用於 DEBUG 本機／隔離 demo；"
+                "正式環境必須維持公開 HTTP(S) 目標政策。",
+                id="scans.E002",
+            )
+        ]
+    return []

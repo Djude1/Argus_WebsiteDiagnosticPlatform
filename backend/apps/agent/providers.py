@@ -209,8 +209,10 @@ class _OpenAICompatibleProvider(ChatProvider):
 
 
 class MiniMaxProvider(_OpenAICompatibleProvider):
+    # 2026-06 發佈的 M3 與 M2.7 同價、同一 OpenAI 相容 API，
+    # agentic 能力大幅領先（SWE-bench Verified 80.5 vs 56.2）。
     name = "minimax"
-    default_model = "MiniMax-M2.7"
+    default_model = "MiniMax-M3"
     api_key_env = "MINIMAX_API_KEY"
     base_url = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.io/v1").rstrip("/")
 

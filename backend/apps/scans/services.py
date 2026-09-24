@@ -3,6 +3,7 @@ import socket
 from urllib.parse import urlparse
 
 from config.client_ip import resolve_client_ip
+from django.conf import settings
 
 OBVIOUS_THIRD_PARTY_DOMAINS = {
     "google.com",
@@ -60,15 +61,29 @@ def _resolve_host_ips(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.I
     return sorted(ips, key=lambda item: (item.version, int(item)))
 
 
+def allow_private_targets() -> bool:
+    """是否開啟本機／隔離 demo 的私網目標旁路（ARGUS_ALLOW_PRIVATE_TARGETS）。
+
+    runtime 強制雙條件：開關開啟 **且** DEBUG；正式環境即使誤設環境變數也不生效
+    （scans.E002 另在部署檢查提早報警）。開啟時放行私網、localhost、
+    單標籤 hostname 與非標準 port，供 Docker 網路內的受控測試目標使用。
+    """
+    return bool(getattr(settings, "ARGUS_ALLOW_PRIVATE_TARGETS", False)) and settings.DEBUG
+
+
 def resolve_public_host_ips(hostname: str) -> list[str]:
-    """解析並回傳可固定連線的公開 IP；任一非公開結果都拒絕。"""
+    """解析並回傳可固定連線的公開 IP；任一非公開結果都拒絕。
+
+    旁路開啟時仍要求可解析，但不檢查 is_global。
+    """
+    allow_private = allow_private_targets()
     try:
         literal_ip = ipaddress.ip_address(hostname)
     except ValueError:
         ips = _resolve_host_ips(hostname)
     else:
         ips = [literal_ip]
-    if any(_is_blocked_ip(ip) for ip in ips):
+    if not allow_private and any(_is_blocked_ip(ip) for ip in ips):
         raise PublicScanTargetError("掃描目標不允許內網、保留或非公開位址。")
     return [str(ip) for ip in ips]
 
@@ -84,21 +99,26 @@ def normalize_url(raw_url: str) -> str:
 
 
 def assert_public_http_url(raw_url: str) -> str:
-    """正規化 URL，並確認每一筆 DNS 結果都是公開位址。"""
+    """正規化 URL，並確認每一筆 DNS 結果都是公開位址。
+
+    ARGUS_ALLOW_PRIVATE_TARGETS（僅限 DEBUG）開啟時，放行 localhost、
+    私網位址、單標籤 hostname 與非標準 port；DNS 仍須可解析。
+    """
+    allow_private = allow_private_targets()
     raw_parsed, _, _ = _parse_url(raw_url)
     if raw_parsed.username is not None or raw_parsed.password is not None:
         raise PublicScanTargetError("掃描網址不可包含帳號或密碼。")
     normalized = normalize_url(raw_url)
     parsed, hostname, port = _parse_url(normalized)
-    if not hostname or hostname in {"localhost", "ip6-localhost"}:
+    if not hostname or (hostname in {"localhost", "ip6-localhost"} and not allow_private):
         raise PublicScanTargetError("掃描目標不允許 localhost 或內網位址。")
-    if port is not None and port not in PUBLIC_WEB_PORTS:
+    if port is not None and port not in PUBLIC_WEB_PORTS and not allow_private:
         raise PublicScanTargetError("掃描目標只允許標準 HTTP／HTTPS 連接埠。")
 
     try:
         literal_ip = ipaddress.ip_address(hostname)
     except ValueError:
-        if "." not in hostname:
+        if "." not in hostname and ":" not in hostname and not allow_private:
             raise PublicScanTargetError("請輸入完整且可解析的公開網域。") from None
         try:
             hostname.encode("idna")

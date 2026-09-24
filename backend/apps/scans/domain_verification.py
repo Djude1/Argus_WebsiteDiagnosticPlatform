@@ -18,7 +18,7 @@ import dns.resolver
 import httpx
 from django.utils import timezone
 
-from apps.scans.services import assert_public_http_url
+from apps.scans.services import allow_private_targets, assert_public_http_url
 
 # DNS 查詢參數：本機 DNS 已知會間歇失敗，固定重試 3 次、每次 timeout 5 秒
 DNS_ATTEMPTS = 3
@@ -46,6 +46,10 @@ def normalize_domain(raw: str) -> str:
     接受帶 scheme／path 的 URL（抽 hostname）；拒絕 IP、localhost 與
     非 FQDN（無點）輸入——比照 services 公開掃描目標政策的精神，
     驗證目標必須是公開註冊網域。
+
+    ARGUS_ALLOW_PRIVATE_TARGETS（僅限 DEBUG）開啟時，放行 localhost、
+    單標籤 hostname 與 IP，供 Docker 網路內的受控測試目標（例如
+    juice-shop）完成網域驗證閘門。
     """
     value = (raw or "").strip()
     if not value:
@@ -58,15 +62,17 @@ def normalize_domain(raw: str) -> str:
         raise DomainValidationError("請輸入有效的網域。") from exc
     if not hostname:
         raise DomainValidationError("請輸入有效的網域。")
-    if hostname in {"localhost", "ip6-localhost"}:
+    bypass = allow_private_targets()
+    if hostname in {"localhost", "ip6-localhost"} and not bypass:
         raise DomainValidationError("不允許驗證 localhost。")
-    try:
-        ipaddress.ip_address(hostname)
-    except ValueError:
-        pass
-    else:
-        raise DomainValidationError("請輸入網域，不支援以 IP 位址驗證。")
-    if "." not in hostname:
+    if not bypass:
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            pass
+        else:
+            raise DomainValidationError("請輸入網域，不支援以 IP 位址驗證。")
+    if "." not in hostname and ":" not in hostname and not bypass:
         raise DomainValidationError("請輸入完整網域（需包含頂級域，例：example.com）。")
     try:
         hostname.encode("idna")

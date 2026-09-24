@@ -58,6 +58,23 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
 ```
 
+### Juice Shop 靶機測試環境（完整整合＋私網旁路）
+
+掃本機 Docker 網路內的 OWASP Juice Shop（自主測試能力 benchmark 用）：
+
+```powershell
+# 啟動：argus 全堆疊＋juice-shop 容器；web/worker 疊加 DEBUG＋ARGUS_ALLOW_PRIVATE_TARGETS
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.juice.yml up -d --build
+
+# 加碼 demo 攻擊鏈（Kali docker backend；worker 掛 docker.sock，僅隔離環境）：
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.juice.yml -f docker-compose.attack.yml up -d --build web worker
+```
+
+- 掃描目標 `http://juice-shop:3000`（主機瀏覽器看 `http://localhost:3000`）；功能面與 K8s 正式環境一致（Agent 開啟、Kali disabled），疊加 attack 時才開 Kali。
+- 私網旁路受雙重保護：runtime `allow_private_targets()` 要求 DEBUG＋開關（`services.py`），部署檢查 `scans.E002`。主動掃描仍需通過網域驗證閘門（`juice-shop` 走 admin override）。
+- Nuclei 私網封鎖（`-lna`）在旁路開啟時自動移除；全模板掃描的時間預算由 `ARGUS_NUCLEI_DEEP_TIMEOUT` 控制（demo 疊加 900，正式預設 300）。
+- 操作紀錄與實測數據見 `log/2026-09-25_juice-shop-local-testenv.md` 與 `docs/competitive-positioning.md`。
+
 ## 3. 其他常被漏掉的前置條件
 
 | 項目 | 檢查／處理 | 漏掉時常見現象 |

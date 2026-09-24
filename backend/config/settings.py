@@ -329,11 +329,18 @@ ARGUS_AUTO_QUEUE_SCANS = env_bool("ARGUS_AUTO_QUEUE_SCANS", default=not DEBUG)
 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS = int(
     os.getenv("ARGUS_DOMAIN_VERIFICATION_TTL_DAYS", "90")
 )
+# 本機／隔離 demo 旁路：放行私網位址、localhost、單標籤 hostname 與非標準 port，
+# 供 Docker 網路內的受控測試目標（例如 OWASP Juice Shop）使用。
+# 僅限 DEBUG 環境（scans.E002 鎖定）；正式環境一律維持公開目標政策。
+ARGUS_ALLOW_PRIVATE_TARGETS = env_bool("ARGUS_ALLOW_PRIVATE_TARGETS", default=False)
 
 # Katana 補充型資安爬蟲（Docker 執行，不污染本機環境）
 # 前提：本機需有 Docker Desktop 並已 pull 過 projectdiscovery/katana
 KATANA_DOCKER_IMAGE = os.getenv("KATANA_DOCKER_IMAGE", "projectdiscovery/katana:latest")
 KATANA_TIMEOUT = int(os.getenv("KATANA_TIMEOUT", "90"))  # subprocess 超時（秒）
+# Nuclei deep 模式硬逾時（秒）。2 RPS 下全模板掃描可能超過預設 300 秒；
+# 本機／隔離 demo 掃受控目標（如 Juice Shop）可透過環境變數放寬。
+ARGUS_NUCLEI_DEEP_TIMEOUT = int(os.getenv("ARGUS_NUCLEI_DEEP_TIMEOUT", "300"))
 
 # Phase 2 Hermes-Agent 上限（避免 token 失控與無限循環）
 ARGUS_AGENT_MAX_STEPS = int(os.getenv("ARGUS_AGENT_MAX_STEPS", "20"))

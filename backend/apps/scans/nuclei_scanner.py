@@ -20,6 +20,7 @@ from apps.scans.cancellation import ScanCancelled
 from apps.scans.process_runner import run_cancellable_process
 from apps.scans.scan_logger import append_log
 from apps.scans.security.redaction import redact_pii_in_text, redact_url_query_values
+from apps.scans.services import allow_private_targets
 
 _PRIORITY: dict[str, float] = {
     "critical": 90.0,
@@ -62,7 +63,7 @@ def run_nuclei(
         append_log(scan_job_id, "Nuclei binary 未安裝，略過", level="warn")
         return []
 
-    hard_timeout = 300 if deep else 60
+    hard_timeout = getattr(settings, "ARGUS_NUCLEI_DEEP_TIMEOUT", 300) if deep else 60
     mode_label = "主動完整" if deep else "受限精選"
     effective_rate_limit = max(
         int(rate_limit if rate_limit is not None else (2 if deep else 5)),
@@ -90,7 +91,10 @@ def run_nuclei(
         "-silent",
         "-no-stdin",
         "-duc",
-        "-lna",
+        # -lna = -restrict-local-network-access：封鎖對私網位址的連線（SSRF 防護）。
+        # 僅在本機／隔離 demo 的私網旁路（ARGUS_ALLOW_PRIVATE_TARGETS，DEBUG only）
+        # 開啟時移除，讓 Nuclei 能掃 Docker 網路內的受控測試目標（例如 Juice Shop）。
+        *([] if allow_private_targets() else ["-lna"]),
         "-ni",
         "-dr",
         "-or",
