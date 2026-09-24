@@ -325,6 +325,9 @@ async def scroll_to_bottom(page) -> None:
 
 _CONTEXT_RECYCLE_EVERY = 15
 _PAGE_RETRY_LIMIT = 1
+# 被動收集的 same-origin XHR/fetch 端點上限（去重後）；預防長輪詢/socket.io
+# 之類的高頻端點把清單撐爆
+_MAX_API_ENDPOINTS = 80
 
 
 async def _close_playwright_resources(*resources) -> None:
@@ -440,18 +443,23 @@ async def crawl_site(
     max_pages: int,
     respect_robots: bool,
     progress_callback=None,
-) -> tuple[list[dict], dict, dict]:
+) -> tuple[list[dict], dict, dict, list[str]]:
     """爬整站。
 
     progress_callback：可選的 async callable，每爬完一頁（含失敗/被擋）就會呼叫
     `await progress_callback(pages_done, pages_total_estimated)`，
     讓上層即時寫進 ScanJob.progress 供前端輪詢顯示百分比與 ETA。
     callback 失敗不影響爬蟲本身。
+
+    回傳第四個值 discovered_endpoints：爬取過程中瀏覽器**被動發出**的
+    same-origin XHR/fetch 端點（SPA 的 API 呼叫不在 <a href> 裡，只有
+    攔截真實流量才看得到）。僅觀察既有請求，不新增任何連線。
     """
     warnings: dict = {"blocked_urls": [], "failed_urls": []}
     visited: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(start_url, 0)])
     pages: list[dict] = []
+    api_endpoints: set[str] = set()
     robot_parser = load_robot_parser(origin)
     min_interval = compute_min_interval(
         scan_mode,
@@ -499,6 +507,21 @@ async def crawl_site(
                     # new_page() 納入 try：context/browser 偶發損壞時只讓這一頁失敗，
                     # 不會讓例外冒出迴圈外、害已爬到的所有頁面全部遺失。
                     page = await context.new_page()
+                    # SPA 的 API 呼叫只存在於真實瀏覽器流量：被動攔截 same-origin
+                    # XHR/fetch 端點，供 Nuclei/sqlmap/Agent 作為攻擊面輸入。
+                    # 這裡不發任何新請求，只是觀察頁面自己發出的流量。
+                    def _on_response(resp, _origin=origin, _sink=api_endpoints):
+                        try:
+                            if resp.request.resource_type not in {"xhr", "fetch"}:
+                                return
+                            if url_origin(resp.url) != _origin:
+                                return
+                            if len(_sink) < _MAX_API_ENDPOINTS:
+                                _sink.add(resp.url)
+                        except Exception:
+                            pass
+
+                    page.on("response", _on_response)
                     page_stage = "navigation"
                     response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                     # 不再等待 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠
@@ -701,4 +724,4 @@ async def crawl_site(
                     break
         finally:
             await _close_playwright_resources(context, browser)
-    return pages, warnings, site_signals
+    return pages, warnings, site_signals, sorted(api_endpoints)

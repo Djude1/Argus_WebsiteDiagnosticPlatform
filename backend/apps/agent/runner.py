@@ -46,14 +46,18 @@ DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開
 
 # 僅在 deep_mode（active + authorized）使用：資安優先的任務指示，讓 agent 先做 SQLi 主動驗證。
 # 置於任務最前面（第一優先），避免 agent 把 token 預算耗在 UX 探索上而沒機會 probe。
+# 只描述「可用什麼工具觀察到什麼」，不給特定端點答案——發現端點是 agent 自己的工作。
 SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】，已開啟頁面 {url}。
 
 請**最優先**完成以下資安驗證步驟（在任何 UX 測試之前）：
-1. 呼叫 get_dom_summary，找出頁面上所有帶 query 參數（URL 含 ?xxx=）的連結或端點
-   （特別留意搜尋、商品查詢類，如 /api/products/search?q=、?id= 等）。
-2. 對每一個「本站同源、且帶參數」的可疑端點，呼叫 probe_sql_injection(url) 進行
-   SQL injection 主動驗證。系統會自動判定並在確認可注入時記錄為 critical 漏洞
-   （確認後你無需再 report_ux_issue）。
+1. 呼叫 get_network_requests 取得本頁瀏覽器實際發出的 API 請求（XHR/fetch）；
+   也可用 get_dom_summary 觀察互動元素。SPA 的後端端點（如 /rest/、/api/）
+   通常只出現在網路流量裡，不出現在頁面連結裡；操作頁面（搜尋、篩選、登入等）
+   之後再呼叫一次 get_network_requests 可以觀察到新觸發的端點。
+2. 從觀察到的端點中，自行判斷哪些「本站同源、且帶 query 參數（URL 含 ?xxx=）」
+   最可能存在注入風險（例如接受使用者輸入的查詢、搜尋、篩選端點），對每一個
+   呼叫 probe_sql_injection(url) 進行 SQL injection 主動驗證。系統會自動判定，
+   確認可注入時記錄為 critical 漏洞（確認後你無需再 report_ux_issue）。
 3. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
 4. 全部完成或無法繼續時呼叫 finish 並附短總結。
 

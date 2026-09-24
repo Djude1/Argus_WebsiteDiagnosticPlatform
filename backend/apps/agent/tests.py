@@ -249,6 +249,7 @@ class ToolSchemaTests(TestCase):
             "scroll",
             "get_visible_text",
             "get_dom_summary",
+            "get_network_requests",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",

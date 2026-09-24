@@ -263,7 +263,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             f"開始爬取，最大深度 {scan_job.max_depth}，最大頁數 {scan_job.max_pages}",
         )
         runtime_stage = "crawl"
-        crawled_pages, warnings, site_signals = _run_async(
+        crawled_pages, warnings, site_signals, discovered_endpoints = _run_async(
             lambda: crawl_site(
                 start_url=scan_job.normalized_url,
                 origin=scan_job.origin,
@@ -277,6 +277,12 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         )
         warnings = redact_warning_summary(warnings)
         append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
+        if discovered_endpoints:
+            append_log(
+                scan_job_id,
+                f"爬取期間觀察到 {len(discovered_endpoints)} 個 same-origin API 端點"
+                "（XHR/fetch 被動攔截，供主動工具作為攻擊面輸入）",
+            )
         runtime_stage = "analysis"
         if warnings:
             for k, v in warnings.items():
@@ -389,12 +395,21 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # 被動模式不發 Nuclei/Katana 探針；單頁主動只讓 Nuclei 掃輸入頁，
         # 不啟動 Katana 整站探索。
         raise_if_cancelled(scan_job_id)
-        # 收集已爬取的頁面 URL（排除被阻擋的頁面），整批餵給 Nuclei
+        # 收集已爬取的頁面 URL（排除被阻擋的頁面），整批餵給 Nuclei。
+        # discovered_endpoints 是爬取期間被動攔截到的 same-origin XHR/fetch 端點
+        # （SPA 的 API 攻擊面），併入後 Nuclei 與 sqlmap 候選都能拿到帶參數端點。
         crawled_urls = [
             assert_public_http_url(p["url"])
             for p in crawled_pages
             if not p.get("blocked_reason")
         ]
+        for endpoint in discovered_endpoints:
+            try:
+                normalized_endpoint = assert_public_http_url(endpoint)
+            except ValueError:
+                continue
+            if normalized_endpoint not in crawled_urls:
+                crawled_urls.append(normalized_endpoint)
         validated_target = assert_public_http_url(scan_job.normalized_url)
         katana_findings: list[dict] = []
         katana_tech: list[str] = []

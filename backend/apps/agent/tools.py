@@ -16,6 +16,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -25,6 +26,7 @@ from apps.scans.security.kali_contracts import redact_url_query_values
 DEFAULT_ACTION_TIMEOUT_MS = 5000
 MAX_TEXT_BYTES = 4000
 MAX_DOM_NODES = 80
+_MAX_NETWORK_LOG = 200  # 被動網路觀察上限（socket.io 高頻輪詢會快速填充）
 
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -86,6 +88,29 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_dom_summary",
             "description": "取得頁面互動元素摘要（最多前 80 個，含 tag、role、可見文字）。",
             "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_network_requests",
+            "description": (
+                "列出本頁載入與操作過程中，瀏覽器實際發出的 same-origin API 請求"
+                "（XHR/fetch，含 method、URL、狀態碼，最新在前）。SPA 的後端端點"
+                "（如 /rest/、/api/ 與帶 ?query= 參數的網址）只會出現在這裡，"
+                "不會出現在 DOM 連結裡。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50,
+                        "description": "最多回傳幾筆（預設 20）",
+                    },
+                },
+            },
         },
     },
     {
@@ -189,6 +214,19 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
     probe_sql_injection 的 result 只保留 confirmed / blocked / error / correlation_id，
     移除 target URL 與任何額外欄位（note 等），避免 raw URL 或中介資料外洩。
     """
+    if tool_name == "get_network_requests":
+        raw = result or {}
+        return {
+            "total_logged": raw.get("total_logged", 0),
+            "requests": [
+                {
+                    **req,
+                    "url": redact_url_query_values(str(req.get("url", ""))),
+                }
+                for req in raw.get("requests", [])
+                if isinstance(req, dict)
+            ],
+        }
     if tool_name != "probe_sql_injection":
         return dict(result or {})
     raw = result or {}
@@ -241,6 +279,32 @@ class ToolExecutor:
         # probe_sql_injection 需要 scan_job.id / origin（同源檢查 + 授權鎖）
         self.scan_job = scan_job
         self._screenshot_counter = 0
+        # 被動網路觀察：SPA 的 API 端點只存在於真實流量，agent 靠這個「看到」
+        # 頁面自己發出的 XHR/fetch（不發任何新請求）。
+        self._network_log: list[dict[str, Any]] = []
+        if scan_job is not None:
+            self.page.on("response", self._on_network_response)
+
+    def _on_network_response(self, response) -> None:
+        """收集 same-origin XHR/fetch 進 network log；任何例外靜默忽略。"""
+        try:
+            if response.request.resource_type not in {"xhr", "fetch"}:
+                return
+            origin = getattr(self.scan_job, "origin", "") or ""
+            req_url = response.url or ""
+            if urlsplit(origin).hostname != urlsplit(req_url).hostname:
+                return
+            if len(self._network_log) >= _MAX_NETWORK_LOG:
+                self._network_log.pop(0)
+            self._network_log.append(
+                {
+                    "method": response.request.method,
+                    "url": req_url,
+                    "status": response.status,
+                }
+            )
+        except Exception:
+            pass
 
     async def run(self, name: str, args: dict[str, Any]) -> ToolOutcome:
         try:
@@ -256,6 +320,8 @@ class ToolExecutor:
                 return await self._get_visible_text()
             if name == "get_dom_summary":
                 return await self._get_dom_summary()
+            if name == "get_network_requests":
+                return self._get_network_requests(args)
             if name == "take_screenshot":
                 return await self._take_screenshot()
             if name == "report_ux_issue":
@@ -304,6 +370,17 @@ class ToolExecutor:
             "() => document.body && document.body.innerText ? document.body.innerText : ''"
         )
         return ToolOutcome(ok=True, result={"text": _truncate(str(text))})
+
+    def _get_network_requests(self, args: dict[str, Any]) -> ToolOutcome:
+        """回傳被動收集的 same-origin API 請求（最新在前）。"""
+        try:
+            limit = max(1, min(int(args.get("limit", 20)), 50))
+        except (TypeError, ValueError):
+            limit = 20
+        recent = list(reversed(self._network_log))[:limit]
+        return ToolOutcome(
+            ok=True, result={"requests": recent, "total_logged": len(self._network_log)}
+        )
 
     async def _get_dom_summary(self) -> ToolOutcome:
         # 注意：JS 模板內 .slice(0, 60) 那行因 JSON 結構需保持單行；用 noqa 略過 ruff 行長檢查
