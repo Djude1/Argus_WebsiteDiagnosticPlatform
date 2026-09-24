@@ -239,9 +239,13 @@ class DockerSqlmapExecutor:
         # hostname 為 key（忽略 port），若沿用舊 session，同 host 前次失敗的判定會
         # 被 resume 而短路成「not injectable」，污染後續掃描。強制每次掃描獨立且
         # 不吃舊 session。
+        # --level=3：預設 level 1 對「空值 query 參數」（如 SPA 初始載入的 ?q=）
+        # 會在數秒內直接跳過、誤判不可注入；level 3 擴大參數測試面向，
+        # risk 維持 1——不做 OR 型注入，避免資料損壞風險。
         rc, out, err = _docker_exec(
             [
                 "sqlmap", "-u", target.url, "--batch", "--flush-session",
+                "--level=3", "--risk=1",
                 f"--output-dir=/tmp/sqlmap_{scan_job_id}_{target.index}",
             ],
             timeout=timeout,

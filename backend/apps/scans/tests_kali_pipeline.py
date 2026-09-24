@@ -53,7 +53,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
             ),
             mock.patch(
                 "apps.scans.tasks.crawl_site",
-                new=mock.AsyncMock(return_value=([], {}, {})),
+                new=mock.AsyncMock(return_value=([], {}, {}, [])),
             ),
             mock.patch("apps.scans.tasks.run_katana", return_value=([], [])),
             mock.patch("apps.scans.tasks.run_nuclei", return_value=[]),
@@ -163,7 +163,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
     def test_zero_pages_excludes_seo_aeo_from_tested_categories(self):
         """爬蟲 0 頁時，seo/aeo 只來自 analyze_page（頁面層級），根本沒頁面可分析；
         若仍計入 overall_score 平均，等於把「沒測」誤當「零問題」灌高總分（與上方
-        UX 的 tested_categories 把關同理）。setUp 的 crawl_site 預設回 ([], {}, {})。
+        UX 的 tested_categories 把關同理）。setUp 的 crawl_site 預設回 ([], {}, {}, [])。
         """
         captured: dict = {}
 
@@ -220,7 +220,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
         }]
         with mock.patch(
             "apps.scans.tasks.crawl_site",
-            new=mock.AsyncMock(return_value=(fake_pages, {}, {})),
+            new=mock.AsyncMock(return_value=(fake_pages, {}, {}, [])),
         ), mock.patch(
             "apps.scans.tasks.analyze_page", return_value=[]
         ), mock.patch(

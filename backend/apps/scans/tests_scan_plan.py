@@ -95,7 +95,7 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
             ),
             "crawl": mock.patch(
                 "apps.scans.tasks.crawl_site",
-                new=mock.AsyncMock(return_value=([], {}, {})),
+                new=mock.AsyncMock(return_value=([], {}, {}, [])),
             ),
             "katana": mock.patch(
                 "apps.scans.tasks.run_katana",

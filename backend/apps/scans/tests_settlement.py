@@ -46,7 +46,7 @@ class ScanSettlementFailureTests(TransactionTestCase):
             ),
             mock.patch(
                 "apps.scans.tasks.crawl_site",
-                new=mock.AsyncMock(return_value=([], {}, {})),
+                new=mock.AsyncMock(return_value=([], {}, {}, [])),
             ),
             mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),
             mock.patch("apps.scans.tasks.analyze_cookies", return_value=[]),
