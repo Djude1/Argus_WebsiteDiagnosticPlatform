@@ -1,0 +1,48 @@
+# Juice Shop 攻擊面打通與 agent 能力強化（第二波）
+
+**日期**：2026-09-25
+**操作者**：ZCode（GLM-5.3）
+
+## 變更內容
+
+四個 commit（1747060／183d15e／4af38de／本次）：
+
+1. **`1747060` 攻擊面打通三件套**
+   - `crawler.py`：`crawl_site` 每頁掛 `page.on("response")` 被動收集 same-origin XHR/fetch 端點（上限 80、零新請求），回傳值擴為 4 元組
+   - `tasks.py`：`discovered_endpoints` 併入 `crawled_urls`，自動流向 Nuclei extra_urls 與 sqlmap 候選
+   - `agent/tools.py`：新增 `get_network_requests` 工具（ToolExecutor 被動記錄 same-origin XHR/fetch，method/URL/status，上限 200；持久化前 `redact_url_query_values` 遮罩）
+   - `agent/runner.py`：`SECURITY_FIRST_PROMPT` 改為描述工具能力（SPA 端點在流量裡），移除舊版具體端點例子——給感知不給答案
+2. **`183d15e` 字典補強**：`ftp`／`ftp/`／`metrics` 進 BUILTIN_SENSITIVE_PATHS；新增 `exposure-endpoint-metrics` 分類（Prometheus 純文字輸出無法靠目錄列表判定）
+3. **`4af38de` sqlmap --level=3**：裸 `--batch` 對空值 query 參數（`?q=`）2~3 秒即誤判不可注入；level 3 實測可確認 boolean-based blind SQLi。demo 疊加 `AGENT_MAX_STEPS=40`／`MAX_TOKENS=250k`
+4. **`（本次）` agent 反空轉＋token 壓縮＋目錄列表格式**
+   - `loop.py`：`_compact_stale_tool_results`（每種觀察工具只留最新全量快照）；`_inject_stall_hint_if_needed`（連續 ≥4 次同型 click/type_text 注入一次策略導正）
+   - `exposure_scanner.py`：`_looks_like_directory_listing` 補 Express serve-index 的 `<title>listing directory` 格式
+   - `docs/research-dast-llm-pentest-2026.md`（新增）與 `docs/competitive-positioning.md`（更新對打數據）
+
+## 原因
+
+使用者目標：對手以經典 GitHub 工具整合即能重現應用層攻擊（SQLi／存取控制），
+Argus 串接 AI agent 必須更強。#11 診斷：攻擊工具「有執行但攻擊面為零」——
+SPA 的 API 端點不在爬蟲結果，sqlmap 候選全是無參數首頁；agent 的
+SECURITY_FIRST_PROMPT 要它找的帶參數連結在 SPA DOM 裡不存在。
+
+## 影響範圍
+
+- 所有 SPA 網站的主動掃描（攻擊面輸入從「頁面連結」擴及「真實 API 流量」）
+- sqlmap 驗證品質（level 3；正式環境同樣生效——風險維持 risk=1 無 OR 注入）
+- Agent 迴圈的 token 效率與空轉防護（正式環境同樣生效）
+- `crawl_site` 回傳簽名變更（4 元組）：三個測試檔 mock 已同步
+
+## 驗證方式
+
+- 掃描 #12：XHR 攔截生效（觀察到 10 端點）但 sqlmap 裸參數誤判；agent 22 步被 20 上限切斷
+- 掃描 #13：**SQLi CRITICAL 首次工具確認**（2 target confirmed=True）＋ metrics 洩漏；agent 32 步爆 token（260k）→ 診斷出快照累積與 selector 空轉
+- 掃描 #14（最終）：**18 findings（1C+2H+8M+5L+2I；報告合併同名 rule_id 後 17）**——SQLi critical＋目錄列表 ×2（Express 格式修正生效）＋metrics；**agent 36 步 169k tokens 完整完成＋回報 1 UX issue**（進到忘記密碼流程）
+- 報告 #14：17 頁 Word 下載 OK；視覺驗收 17/17 頁 pass（SQLi critical 紅標＋sqlmap 證據＋修補建議齊備；中文圖表正常）
+- 測試：agent 42＋exposure 20＋kali pipeline/tools/settlement/scan_plan 49 全過；全套（背景）見任務紀錄
+
+## 已知限制與後續
+
+- 存取控制類（跨帳號讀寫、負數數量）需登入態多角色測試——後續功能（agent 帶認證 context）
+- 對手「Unix 時間戳／/public/／x-recruiting」資訊類未涵蓋——屬 header fingerprint 加強項
+- 建議下一波：whatweb（指紋→CVE）＋ffuf（內容發現）整合（調研結論，優先於 wapiti/Nikto/ZAP）

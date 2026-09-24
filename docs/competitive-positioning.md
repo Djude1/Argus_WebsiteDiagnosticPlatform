@@ -51,37 +51,57 @@
   3. **自主性**：從送出 URL 到結論，需要多少人為介入（Argus：零）
   4. **交付物**：報告完整性、可轉寄性、可驗證性（防偽指紋）
 
-### 本地實測紀錄（2026-09-25，掃描 #9/#10/#11）
+### 本地實測紀錄（2026-09-25，掃描 #9→#14 迭代）
 
-三輪掃描同一靶機（`http://juice-shop:3000`，active＋authorized、全網站模式、
-max_pages=15），功能面＝K8s 正式環境（Redis/Celery/PostgreSQL/Playwright/
-Nuclei v3.8.0/Katana v1.1.2/Hermes-Agent 開啟）＋疊加 demo 攻擊鏈（Kali docker
-backend、sqlmap 1.10.6）。
+同一靶機（`http://juice-shop:3000`，active＋authorized、全網站、max_pages=15），
+Docker 完整堆疊＝K8s 正式功能面（Agent 開啟）＋demo 攻擊鏈（Kali docker backend）。
 
-| 指標 | #9（首輪） | #10（修 Nuclei 私網封鎖） | #11（最終：900s＋Kali＋M3） |
+| 指標 | #11（首輪完成） | #13（攻擊面打通） | #14（最終） |
 |---|---|---|---|
-| 完整掃描耗時 | 約 2.3 分 | 約 7.2 分 | 約 18 分 |
-| findings 總數 | 13 | 13 | **16**（2 高/7 中/5 低/2 資訊） |
-| security 分數 | 9/100 | 9/100 | 9/100（靶機滿漏洞，低分＝偵測正確） |
-| Hermes-Agent | 爆 token 上限中止（63,086>60,000） | 17 步完成、0 issues | **20 步完成、3 個 UX findings** |
-| Kali sqlmap | disabled（K8s 基線） | disabled | **執行 3 target**（首頁無 query 參數，confirmed=False） |
-| 授權閘門 | VerifiedDomain admin override 走正式 API 流程（AdminAuditLog 留痕） | 同左 | 同左 |
+| findings（DB／報告合併後） | 16／16 | 15／14 | **18／17**（1C+2H+7M+5L+2I） |
+| 應用層攻擊命中 | 0 | **SQLi critical（sqlmap 確認 ×2 target）** | SQLi critical ＋ 目錄列表 ×2 ＋ metrics 洩漏 |
+| Hermes-Agent | 20 步完成、3 UX | 32 步爆 token（260k） | **36 步完整完成（169k）＋1 UX issue** |
+| 總分 | 65 | 61 | 70 |
 
-Agent 發現的 3 項（僅 #11，模型升級 M2.7→M3 後出現；同 token 量下 M2.7 兩輪皆 0）：
+**#14 偵測清單 vs 對手 12 項**（同靶機直接對打）：
 
-1. 搜尋按鈕無法被點擊（互動無回應）— medium
-2. Cookie 同意橫幅文案語意不清 — medium
-3. 「dismiss cookie message」按鈕無法被點擊 — low
+| 類別 | 對手（經典工具整合） | Argus #14 |
+|---|---|---|
+| SQL injection | 已重現 ×2（登入＋搜尋） | **已由 sqlmap 工具確認**（boolean-based blind、SQLite、證據鏈完整） |
+| 存取控制（跨帳號/負數） | 已重現 ×3 | 未涵蓋（需登入態測試，後續功能） |
+| 目錄列表 `/ftp/` | 已確認 | **已確認**（HTTP 200＋目錄列表證據） |
+| 監控 `/metrics` | 未確認 | **已確認**（Prometheus 輸出片段為證） |
+| CSP／CORS | 已確認／待驗證 | **已確認**（回應標頭直證） |
+| 傳輸層（HTTPS/HSTS） | 無 | **已確認** ×2 |
+| DNS 層（SPF/DMARC） | 無 | **已確認** ×2 |
+| 敏感檔（security.txt） | 無 | **已確認** |
+| 動態 UX（AI agent） | 無 | **1 項**（agent 進到忘記密碼流程實測） |
+| SEO/GEO/AEO | 無 | 6 項 |
+| 證據可驗證性 | 工具報告 | 每項帶 rule_id→OWASP/CWE＋報告防偽編號＋SHA-256 查驗 |
 
-報告：16 頁 Word（329 KB），視覺驗收 16/16 通過（圖表 CJK 正常、嚴重度色塊
-一致、發現數自洽）；防偽編號＋內容 SHA-256 指紋＋公開查驗端點 `matches=True`
-實測通過。樣本存於 `log_assets_juice/`。
+**調研佐證**（`docs/research-dast-llm-pentest-2026.md`）：ZAP 2.17 full-scan
+對同一靶機僅 5 類全組態級（0 注入）——「整合經典工具」的天花板就是組態層；
+我們在組態層數量超越（8+ 項）、且注入層有工具確認的 critical。
 
-**已知覆蓋限制（誠實面對）**：Juice Shop 是 Angular SPA，BFS 爬蟲僅得 2 個唯一
-URL——深層 API 端點（`/rest/products/search?q=` 等）不在種子內，故 Nuclei
-與 sqlmap 的有效輸入面受限。Nuclei 全模板在 2 RPS 預算下需 50+ 分鐘，900 秒
-上限內必然截斷（產品對目標站的保護取捨）。改善方向（後續功能）：使用者在建立
-掃描時可附 seed URL 清單，直接餵給 Nuclei/Katana/sqlmap 候選。
+### 攻擊面打通的三個關鍵工程（2026-09-25 第二波）
+
+#11→#14 的提升不是調參，是三個泛化能力（任何 SPA 網站同樣生效）：
+
+1. **爬蟲被動攔截 XHR/fetch 端點**（crawler.py）：SPA 的 API 呼叫只在真實
+   瀏覽器流量裡；攔截後自動流入 Nuclei extra_urls 與 sqlmap 候選——
+   `search?q=` 就是這樣進入攻擊面的（零新請求，純觀察）。
+2. **Agent 網路感知工具 `get_network_requests`**（tools.py）：agent 能「看到」
+   頁面發出的 API 請求（method/URL/status），自行判斷哪些值得 probe——
+   給眼睛不給答案，陌生網站同樣適用。#14 實測 agent 第 1 步就呼叫它，
+   第 3 步即對 `search?q=` 發動 probe。
+3. **sqlmap `--level=3`**：裸 `--batch`（level 1）對空值 query 參數
+   （SPA 初始載入的 `?q=`）會在數秒內誤判不可注入。
+4. **Agent 反空轉與 token 壓縮**（loop.py）：歷史 DOM／文字快照每種只留
+   最新一份（32 步 260k → 36 步 169k）；連續 ≥4 次同型動作注入策略
+   導正（PentAGI Reflector 概念）——#14 agent 首次完整跑完並回報。
+
+仍未涵蓋（誠實面）：存取控制類（跨帳號讀寫、負數數量）需要登入態的
+多角色測試，屬後續功能（agent 帶認證 context 的腳本化流程）。
 
 ## 4. 模型升級（MiniMax-M2.7 → MiniMax-M3，2026-09-25 已落地）
 
