@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -428,7 +429,9 @@ def validate_findings_with_kali(
                     "使用參數化查詢（prepared statements）或 ORM，"
                     "對所有使用者輸入做嚴格驗證與轉義，並以最小權限資料庫帳號連線。"
                 ),
-                evidence="",
+                evidence=json.dumps(
+                    dict(execution.result.evidence_summary), ensure_ascii=False
+                ),
                 evidence_json={"evidence_summary": dict(execution.result.evidence_summary)},
                 impact_area="vulnerability",
                 confidence=1.0,
