@@ -11,4 +11,4 @@ chmod +x "檔案名稱.sh"
 Shell：Powershell
 賦予執行權限並啟動：
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-.\hxxking.ps1
+.\"檔案名稱.ps1"
