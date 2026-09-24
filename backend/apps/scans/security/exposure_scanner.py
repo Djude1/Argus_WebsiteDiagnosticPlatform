@@ -53,6 +53,9 @@ BUILTIN_SENSITIVE_PATHS: tuple[str, ...] = (
     "wp-config.php", "wp-config-old.txt", "wp-config.php.bak",
     # 資訊洩露
     "phpinfo.txt", "phpinfo.php", "info.php", "server-status", "server-info",
+    # 檔案傳輸目錄與監控指標：上線殘留的 FTP 目錄（目錄列表）與 Prometheus
+    # metrics 外露都是真實網站常見的偵察情報洩漏
+    "ftp", "ftp/", "metrics",
     ".DS_Store", "ds_store.txt", "Thumbs.db", "Thumbs.db.txt",
     # 記錄檔
     "access.log", "error.log", "errors.log", "debug.log", "wp-content/debug.log",
@@ -157,6 +160,11 @@ _CLASSIFIERS: tuple[tuple[tuple[str, ...], str, str, str, str, str, str], ...] =
      "伺服器狀態頁",
      "server-status 會洩漏所有即時請求、內部 IP 與存取路徑，可被用來偵察。",
      "於伺服器設定限制 server-status 只允許本機或特定 IP 存取。"),
+    (("metrics", "prometheus"), "metrics", "medium", "exposure-endpoint-metrics",
+     "監控 / 指標端點",
+     "公開的 /metrics（Prometheus 等）會洩漏內部路由、版本、資源用量與業務指標，"
+     "是攻擊者偵察的高價值情報來源。",
+     "將指標端點限制於內部網路或加上認證（如 Prometheus 的 basic_auth / mTLS）。"),
     (("swagger", "openapi", "api-docs", "graphql"), "apidoc", "medium", "exposure-file-apidoc",
      "API 文件 / 端點",
      "公開的 API 文件會揭露所有端點與參數，若 API 缺乏授權，攻擊者可照表操課。",
