@@ -217,7 +217,12 @@ def classify_exposure(url: str) -> dict | None:
 
 def _looks_like_directory_listing(body: str) -> bool:
     low = (body or "")[:2000].lower()
-    return "index of /" in low or "<title>index of" in low
+    # Apache: <title>Index of /...；Express serve-index: <title>listing directory /...
+    return (
+        "index of /" in low
+        or "<title>index of" in low
+        or "<title>listing directory" in low
+    )
 
 
 # 預期回傳 HTML 的檔案型態；其餘型態若回 HTML body，多半是 SPA soft-404 fallback

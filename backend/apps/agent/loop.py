@@ -93,6 +93,70 @@ class HermesAgent:
         self._security_findings: list[dict[str, Any]] = []
         self._total_tokens = 0
         self._step_counter = 0  # AgentStep DB 流水號，與 LLM round 解耦
+        # 空轉偵測（PentAGI Reflector 概念的輕量版）：連續同名工具呼叫計數
+        self._last_tool_name = ""
+        self._consecutive_same_tool = 0
+        self._stall_hint_given = False
+
+    # 觀察型工具的回應很大（DOM 80 節點／整頁文字／請求清單），舊快照每輪
+    # 重複計入 prompt tokens 是 context 爆炸的主因（實測 32 步累積 260k）。
+    _BULKY_OBSERVATION_TOOLS = {"get_dom_summary", "get_visible_text", "get_network_requests"}
+    _STALL_HINT_THRESHOLD = 4
+
+    def _compact_stale_tool_results(self) -> None:
+        """每種觀察工具只保留最新一份全量快照，較舊的換成佔位字串。
+
+        只改 content、不動 tool_call_id／結構，維持 OpenAI messages
+        規範的配對完整性；舊快照本來就過時，對後續推理沒有保留價值。
+        """
+        keep: dict[str, str] = {}
+        for msg in self._messages:
+            if (
+                msg.get("role") == "tool"
+                and msg.get("name") in self._BULKY_OBSERVATION_TOOLS
+                and "tool_call_id" in msg
+            ):
+                keep[msg["name"]] = msg["tool_call_id"]
+        for msg in self._messages:
+            if (
+                msg.get("role") == "tool"
+                and msg.get("name") in self._BULKY_OBSERVATION_TOOLS
+                and msg.get("tool_call_id") != keep.get(msg.get("name"))
+            ):
+                msg["content"] = "[較舊的頁面快照已省略；需要最新狀態請再次呼叫工具]"
+
+    def _record_tool_for_stall_detection(self, tool_name: str) -> None:
+        if tool_name == self._last_tool_name:
+            self._consecutive_same_tool += 1
+        else:
+            self._last_tool_name = tool_name
+            self._consecutive_same_tool = 1
+
+    def _inject_stall_hint_if_needed(self) -> None:
+        """連續多次同一動作型工具（如反覆換 selector click 同一區塊）時導正。
+
+        只在停滯事件首次發生插入一條提醒；計數隨即重置，再次空轉才會
+        再觸發。觀察型工具（DOM／網路／截圖）不算停滯。
+        """
+        if (
+            self._consecutive_same_tool >= self._STALL_HINT_THRESHOLD
+            and self._last_tool_name in {"click", "type_text"}
+            and not self._stall_hint_given
+        ):
+            self._messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "系統提醒：你已連續多次執行相同的動作但似乎沒有明顯進展。"
+                        "請先停下來用 get_dom_summary 確認目前頁面的實際狀態，"
+                        "再決定：換一個完全不同的探索方向（例如其他選單功能或"
+                        "表單），或直接 finish 回報目前為止的發現與觀察。"
+                        "不要繼續對同一個元素嘗試不同的 selector。"
+                    ),
+                }
+            )
+            self._stall_hint_given = True
+            self._consecutive_same_tool = 0
 
     async def run(self, task_prompt: str) -> AgentRunResult:
         from asgiref.sync import sync_to_async
@@ -112,6 +176,8 @@ class HermesAgent:
                 if self._total_tokens > self.max_tokens:
                     error = f"token_budget_exceeded({self._total_tokens}>{self.max_tokens})"
                     break
+                self._compact_stale_tool_results()
+                self._inject_stall_hint_if_needed()
 
                 response = await sync_to_async(self._call_provider)()
                 self._total_tokens += response.total_tokens
@@ -161,6 +227,7 @@ class HermesAgent:
                             "content": json.dumps(outcome.result, ensure_ascii=False)[:4000],
                         }
                     )
+                    self._record_tool_for_stall_detection(tc.name)
                     if outcome.issue:
                         self._issues.append(outcome.issue)
                     if outcome.security_finding:
