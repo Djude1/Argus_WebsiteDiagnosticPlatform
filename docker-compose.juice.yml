@@ -43,3 +43,7 @@ services:
       # 2 RPS 下 Nuclei 全模板掃描超過預設 300 秒；demo 掃受控靶機放寬到 15 分，
       # 正式環境維持 300 秒（保護公網目標站的既有取捨）
       ARGUS_NUCLEI_DEEP_TIMEOUT: "900"
+      # sqlmap --level=3 對單一 target 的完整驗證時間浮動大（實測 87~120+ 秒），
+      # 預設 120 秒會在邊緣超時（#15 兩度 timeout 導致 critical 時有時無）；
+      # demo 提高到 240 秒，正式環境維持 120 秒
+      ARGUS_KALI_TIMEOUT: "240"
