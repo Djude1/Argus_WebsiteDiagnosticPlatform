@@ -1,3 +1,4 @@
+.sh 檔案注意事項：
 運行環境：Linux/WSL
 Shell：bash
 賦予執行權限並啟動：
@@ -5,3 +6,9 @@ Shell：bash
 chmod +x "檔案名稱.sh"
 ./"檔案名稱.sh"
 "不要打這行、不要打(Bash)、檔案也不用加"""
+
+.ps1 檔案注意事項：
+Shell：Powershell
+賦予執行權限並啟動：
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\hxxking.ps1
