@@ -46,3 +46,32 @@ SECURITY_FIRST_PROMPT 要它找的帶參數連結在 SPA DOM 裡不存在。
 - 存取控制類（跨帳號讀寫、負數數量）需登入態多角色測試——後續功能（agent 帶認證 context）
 - 對手「Unix 時間戳／/public/／x-recruiting」資訊類未涵蓋——屬 header fingerprint 加強項
 - 建議下一波：whatweb（指紋→CVE）＋ffuf（內容發現）整合（調研結論，優先於 wapiti/Nikto/ZAP）
+
+---
+
+## 追記（第三波：#15→#16，未授權存取驗證與穩定性）
+
+**變更**（commit 7df2f38／a3d1055 前後／證據修復）：
+- `probe_unauthorized_access(url)`：無 cookie/token 匿名重放同源端點，回應觀察
+  （status/content-type/片段，遮罩後）由 agent 判斷是否未授權存取——同源閘＋
+  deep_mode schema 隔離＋runtime 再驗、不跟隨 redirect、單次 GET
+- `report_security_issue`：觀察型資安回報（critical 封頂 high、必填缺失拒絕、
+  URL query 遮罩），走 persist_agent_security_findings 落地鏈
+- header_scanner：x-recruiting／x-generator／x-aspnet-version 指紋規則
+- sqlmap timeout 120→240s（demo）：level3 完整驗證 87~120+ 秒浮動，
+  #15 兩度邊緣超時導致 critical 時有時無
+- kali_tools evidence 修復：fallback SQLi finding 的 evidence 原為空字串
+  （報告「檢測依據」空白），改填 json.dumps(evidence_summary)
+
+**驗證**：
+- #15：header-x-recruiting 生效；agent 8 步精準完成（3 個 unauthorized probe
+  判斷正確零誤報）；但 sqlmap 120s 邊緣超時 ×2 → critical 消失（發現根因）
+- #16（最終）：**22 findings（2C+3H+9M+5L+3I）**——SQLi critical ×2 穩定重現；
+  agent-observed ×3（Admin 端點未授權 high／version 洩漏 medium／500 堆疊
+  low，全部帶證據）；agent 25 步 66k tokens
+- 報告 #16：17 頁，視覺抽查＋evidence 回填後重產驗證（SQLite/techniques
+  文字已進入檢測依據區塊）
+- 測試：kali_tools/pipeline＋agent 78 項全過；ruff 全過
+
+**狀態**：本波累計 9 個 commit（d64b618 起），皆在本地未 push（使用者指示
+push 最後才要求）。

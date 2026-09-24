@@ -51,57 +51,61 @@
   3. **自主性**：從送出 URL 到結論，需要多少人為介入（Argus：零）
   4. **交付物**：報告完整性、可轉寄性、可驗證性（防偽指紋）
 
-### 本地實測紀錄（2026-09-25，掃描 #9→#14 迭代）
+### 本地實測紀錄（2026-09-25，掃描 #9→#16 迭代）
 
 同一靶機（`http://juice-shop:3000`，active＋authorized、全網站、max_pages=15），
 Docker 完整堆疊＝K8s 正式功能面（Agent 開啟）＋demo 攻擊鏈（Kali docker backend）。
 
-| 指標 | #11（首輪完成） | #13（攻擊面打通） | #14（最終） |
-|---|---|---|---|
-| findings（DB／報告合併後） | 16／16 | 15／14 | **18／17**（1C+2H+7M+5L+2I） |
-| 應用層攻擊命中 | 0 | **SQLi critical（sqlmap 確認 ×2 target）** | SQLi critical ＋ 目錄列表 ×2 ＋ metrics 洩漏 |
-| Hermes-Agent | 20 步完成、3 UX | 32 步爆 token（260k） | **36 步完整完成（169k）＋1 UX issue** |
-| 總分 | 65 | 61 | 70 |
+| 指標 | #11（首輪完成） | #13（攻擊面打通） | #14（反空轉） | **#16（最終）** |
+|---|---|---|---|---|
+| findings（DB／報告合併後） | 16／16 | 15／14 | 18／17 | **22／18**（2C+3H+9M+5L+3I） |
+| 應用層攻擊命中 | 0 | SQLi critical | ＋目錄列表×2＋metrics | **＋未授權存取×3＋x-recruiting** |
+| Hermes-Agent | 20 步 3 UX | 32 步爆 token | 36 步完成 1 issue | **25 步 66k：probe 序列＋帶證據回報×3** |
+| 總分 | 65 | 61 | 70 | 72 |
 
-**#14 偵測清單 vs 對手 12 項**（同靶機直接對打）：
+**#16 偵測清單 vs 對手 12 項**（同靶機直接對打）：
 
-| 類別 | 對手（經典工具整合） | Argus #14 |
+| 類別 | 對手（經典工具整合） | Argus #16 |
 |---|---|---|
-| SQL injection | 已重現 ×2（登入＋搜尋） | **已由 sqlmap 工具確認**（boolean-based blind、SQLite、證據鏈完整） |
-| 存取控制（跨帳號/負數） | 已重現 ×3 | 未涵蓋（需登入態測試，後續功能） |
-| 目錄列表 `/ftp/` | 已確認 | **已確認**（HTTP 200＋目錄列表證據） |
-| 監控 `/metrics` | 未確認 | **已確認**（Prometheus 輸出片段為證） |
-| CSP／CORS | 已確認／待驗證 | **已確認**（回應標頭直證） |
-| 傳輸層（HTTPS/HSTS） | 無 | **已確認** ×2 |
-| DNS 層（SPF/DMARC） | 無 | **已確認** ×2 |
-| 敏感檔（security.txt） | 無 | **已確認** |
-| 動態 UX（AI agent） | 無 | **1 項**（agent 進到忘記密碼流程實測） |
-| SEO/GEO/AEO | 無 | 6 項 |
+| SQL injection | 已重現 ×2（登入＋搜尋） | **sqlmap 工具確認 ×2**（boolean/stacked/time-based/union 四技法、SQLite，證據鏈完整） |
+| 存取控制（未授權存取） | 已重現 ×3（跨帳號/負數） | **agent-observed ×3**：Admin application-configuration 未授權（high）、application-version（medium）、500 錯誤頁洩漏路由堆疊（low）——agent 匿名重放＋帶證據判斷，零誤報 |
+| 目錄列表 `/ftp/` | 已確認 | **已確認**（×2，Apache 與 Express 格式都支援） |
+| 監控 `/metrics` | 未確認 | **已確認** |
+| CSP／CORS | 已確認／待驗證 | **已確認** |
+| 資訊類 headers（x-recruiting 等） | 資訊性 | **已確認**（x-recruiting＋x-powered-by 類指紋規則） |
+| 傳輸層（HTTPS/HSTS）／DNS 層（SPF/DMARC）／敏感檔 | 無 | **已確認** ×5 |
+| 動態 UX／SEO/GEO/AEO | 無 | 7 項 |
 | 證據可驗證性 | 工具報告 | 每項帶 rule_id→OWASP/CWE＋報告防偽編號＋SHA-256 查驗 |
 
 **調研佐證**（`docs/research-dast-llm-pentest-2026.md`）：ZAP 2.17 full-scan
-對同一靶機僅 5 類全組態級（0 注入）——「整合經典工具」的天花板就是組態層；
-我們在組態層數量超越（8+ 項）、且注入層有工具確認的 critical。
+對同一靶機僅 5 類全組態級（0 注入、0 存取控制）——「整合經典工具」的天花板；
+Argus #16 在組態層數量超越、注入層有工具確認 critical、存取控制層有 agent
+帶證據的未授權存取發現。
 
-### 攻擊面打通的三個關鍵工程（2026-09-25 第二波）
+### 攻擊面打通的關鍵工程（2026-09-25 第二波）
 
-#11→#14 的提升不是調參，是三個泛化能力（任何 SPA 網站同樣生效）：
+#11→#16 的提升不是調參，是六個泛化能力（任何網站同樣生效）：
 
 1. **爬蟲被動攔截 XHR/fetch 端點**（crawler.py）：SPA 的 API 呼叫只在真實
    瀏覽器流量裡；攔截後自動流入 Nuclei extra_urls 與 sqlmap 候選——
    `search?q=` 就是這樣進入攻擊面的（零新請求，純觀察）。
 2. **Agent 網路感知工具 `get_network_requests`**（tools.py）：agent 能「看到」
-   頁面發出的 API 請求（method/URL/status），自行判斷哪些值得 probe——
-   給眼睛不給答案，陌生網站同樣適用。#14 實測 agent 第 1 步就呼叫它，
-   第 3 步即對 `search?q=` 發動 probe。
-3. **sqlmap `--level=3`**：裸 `--batch`（level 1）對空值 query 參數
-   （SPA 初始載入的 `?q=`）會在數秒內誤判不可注入。
+   頁面發出的 API 請求，自行判斷哪些值得 probe——給眼睛不給答案。
+   #16 實測 agent 第 1 步就呼叫它、第 3 步即對 `search?q=` 發動 probe。
+3. **sqlmap `--level=3` ＋充足 timeout**：裸 `--batch`（level 1）對空值
+   query 參數會在數秒內誤判不可注入；level 3 的完整驗證需 87~120+ 秒，
+   120 秒 timeout 會邊緣超時（demo 提高到 240 秒消除時有時無）。
 4. **Agent 反空轉與 token 壓縮**（loop.py）：歷史 DOM／文字快照每種只留
-   最新一份（32 步 260k → 36 步 169k）；連續 ≥4 次同型動作注入策略
-   導正（PentAGI Reflector 概念）——#14 agent 首次完整跑完並回報。
+   最新一份（32 步 260k → 36 步 169k）；連續 ≥4 次同型動作注入策略導正。
+5. **`probe_unauthorized_access`**：以無憑證的乾淨請求匿名重放同源端點，
+   「是否屬於應受保護資料」由 agent 判斷——#16 命中 Admin 端點未授權
+   存取（high）且零誤報（判斷 Quantitys 等公開資料不構成漏洞）。
+6. **`report_security_issue` 觀察型回報**：帶證據的 agent 資安發現落地
+   （severity 封頂 high——critical 保留給工具確認等級）＋ header 指紋
+   規則補強（x-recruiting/x-generator/x-aspnet-version）。
 
-仍未涵蓋（誠實面）：存取控制類（跨帳號讀寫、負數數量）需要登入態的
-多角色測試，屬後續功能（agent 帶認證 context 的腳本化流程）。
+仍未涵蓋（誠實面）：跨帳號讀寫（IDOR）與負數數量需要兩個登入帳號的
+比對測試，屬後續功能（agent 帶認證 context 的多角色流程）。
 
 ## 4. 模型升級（MiniMax-M2.7 → MiniMax-M3，2026-09-25 已落地）
 
