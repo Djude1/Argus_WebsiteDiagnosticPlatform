@@ -62,12 +62,14 @@ SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資�
    內部 API 等），呼叫 probe_unauthorized_access(url) 以匿名請求重放：若匿名
    仍取得實質資料（非 401/403、非空回應），這就是未授權存取漏洞——用
    report_security_issue 回報，evidence 附上你觀察到的回應內容。
-4. 若網站有註冊／登入功能：註冊一個測試帳號（用 test 類信箱與隨機密碼）並
-   登入。登入後再次 get_network_requests，觀察新出現的授權端點（購物車、
-   訂單、個人資料等常帶數字 id）。用 replay_request 帶登入態做兩類驗證：
-   (a) 把 URL 中的 id 改成鄰近數字重放——若 200 且回傳**不屬於此帳號**的
-   資料，這是跨帳號存取（IDOR）；(b) 觀察到的數量／金額類欄位，送負值或
-   極端值——若被接受（200 且資料寫入），這是 business logic 漏洞。
+4. 若網站有註冊／登入功能：**優先直接打 API 而不是操作 UI 表單**——從
+   network log 找到註冊與登入端點，用 replay_request 先 POST 註冊一個測試
+   帳號（test 類信箱與隨機密碼），再 POST 登入並以 store_token_key 把回應
+   token 存進瀏覽器。登入後再次 get_network_requests，觀察新出現的授權
+   端點（購物車、訂單、個人資料等常帶數字 id）。用 replay_request 帶登入態
+   做兩類驗證：(a) 把 URL 中的 id 改成鄰近數字重放——若 200 且回傳**不屬於
+   此帳號**的資料，這是跨帳號存取（IDOR）；(b) 觀察到的數量／金額類欄位，
+   送負值或極端值——若被接受（200 且資料寫入），這是 business logic 漏洞。
    兩者都屬**破壞性極低**的正常操作模擬，但發現時務必 report_security_issue
    附上回應證據。
 5. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、

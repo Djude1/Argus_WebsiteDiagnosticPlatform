@@ -200,6 +200,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "能否讀到他人資源（IDOR），或把數量／金額欄位改成負值、極端值"
                 "測試是否被接受（business logic）。method 限 GET／POST；"
                 "確認漏洞時用 report_security_issue 附上回應證據。"
+                "註冊／登入也建議直接以此工具打 API（比操作 UI 表單快得多）："
+                "POST 註冊端點建帳號、POST 登入端點拿 token，並用 "
+                "store_token_key 把回應中的 token 存進瀏覽器，之後的重放就會"
+                "自動帶著登入態。"
             ),
             "parameters": {
                 "type": "object",
@@ -211,6 +215,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "description": (
                             "POST 的 JSON body（選填）；仿照 network log 中"
                             "該端點原本的 body 結構修改"
+                        ),
+                    },
+                    "store_token_key": {
+                        "type": "string",
+                        "description": (
+                            "（選填）若預期回應 JSON 含 token（常見於登入端點），"
+                            "提供 localStorage 鍵名，工具會把 token 寫入，"
+                            "例如 token 或 access_token"
                         ),
                     },
                 },
@@ -335,6 +347,8 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
             safe["error"] = raw["error"]
         if raw.get("authenticated") is not None:
             safe["authenticated"] = raw.get("authenticated")
+        if raw.get("token_stored") is not None:
+            safe["token_stored"] = raw.get("token_stored")
         return safe
     if tool_name != "probe_sql_injection":
         return dict(result or {})
@@ -441,7 +455,10 @@ class ToolExecutor:
                 return await self._probe_unauthorized_access(args.get("url", ""))
             if name == "replay_request":
                 return await self._replay_request(
-                    args.get("url", ""), args.get("method", "GET"), args.get("body")
+                    args.get("url", ""),
+                    args.get("method", "GET"),
+                    args.get("body"),
+                    args.get("store_token_key", ""),
                 )
             if name == "report_security_issue":
                 return self._report_security_issue(args)
@@ -632,7 +649,11 @@ class ToolExecutor:
         return ToolOutcome(ok=True, result=observation)
 
     async def _replay_request(
-        self, url: str, method: str, body: dict[str, Any] | None
+        self,
+        url: str,
+        method: str,
+        body: dict[str, Any] | None,
+        store_token_key: str = "",
     ) -> ToolOutcome:
         """以目前頁面的登入態重放同源請求（帶 session cookie 與 localStorage token）。
 
@@ -720,10 +741,36 @@ class ToolExecutor:
             return ToolOutcome(
                 ok=False, result={"error": f"request_failed:{exc.__class__.__name__}"}
             )
+        # 登入端點支援：回應 JSON 裡的 token 寫入 localStorage，讓 agent 的
+        # 後續重放自動帶登入態（SPA 慣例）。token 不回傳給 LLM、不持久化。
+        token_stored = False
+        if store_token_key:
+            try:
+                data = json.loads(observation.get("body_snippet") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                data = {}
+            token_value = (
+                ((data.get("authentication") or {}).get("token"))
+                or data.get("token")
+                or data.get("access_token")
+                or data.get("accessToken")
+                or ""
+            )
+            if token_value:
+                try:
+                    await self.page.evaluate(
+                        "([k, v]) => localStorage.setItem(k, v)",
+                        [store_token_key, str(token_value)],
+                    )
+                    token_stored = True
+                except Exception:
+                    pass
         observation["body_snippet"] = redact_url_query_values(
             str(observation.get("body_snippet", ""))
         )
         observation["authenticated"] = bool(token or cookies)
+        if store_token_key:
+            observation["token_stored"] = token_stored
         return ToolOutcome(ok=True, result=observation)
 
     def _report_security_issue(self, args: dict[str, Any]) -> ToolOutcome:
