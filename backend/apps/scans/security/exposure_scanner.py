@@ -56,6 +56,7 @@ BUILTIN_SENSITIVE_PATHS: tuple[str, ...] = (
     # 檔案傳輸目錄與監控指標：上線殘留的 FTP 目錄（目錄列表）與 Prometheus
     # metrics 外露都是真實網站常見的偵察情報洩漏
     "ftp", "ftp/", "metrics",
+    "ftp/coupons_2013.md.bak",
     ".DS_Store", "ds_store.txt", "Thumbs.db", "Thumbs.db.txt",
     # 記錄檔
     "access.log", "error.log", "errors.log", "debug.log", "wp-content/debug.log",

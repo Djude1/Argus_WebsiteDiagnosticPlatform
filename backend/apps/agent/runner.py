@@ -144,6 +144,8 @@ LOGIC_ABUSE_AGENT_PROMPT = """【鐵律：每次驗證成功的下一個動作�
    重放（例如直接打結帳端點而未經過前置步驟），被接受即為流程繞過。
 4. **重用性**：CAPTCHA／OTP／一次性 token 類端點——同一值重放兩次，
    第二次仍成功即為重用缺陷。
+5. **跳轉濫用**：redirect／continue 類端點的參數若可指定任意外部網址
+   （open redirect），回報之（攻擊者可架釣魚前置）。
 5. 完成或已系統性覆蓋後 finish 附短總結。
 
 限制：只在**你自己的**資源上做寫入；payload 不具破壞性；只對本站同源操作。"""
@@ -188,6 +190,24 @@ JWT_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資
 
 限制：竄改只針對**自己帳號**的 token；無害驗證型操作；只對本站同源操作。"""
 
+XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（XSS 獵手角色），
+已開啟頁面 {url}。
+你專責 XSS 類漏洞；全程 API 優先（replay_request），不操作 UI。
+
+1. 從 network log 收集所有「回應為 HTML」的端點與所有 query 參數輸入點
+   （搜尋、篩選、排序、追蹤碼、referral 類參數）。
+2. 對每個輸入點以 replay_request 送無害 XSS 探測字串（如 <img src=x
+   onerror=print(1)> 與 <iframe src=javascript:print(1)> 的 URL 編碼），
+   檢查回應 HTML 中該字串是否**未跳脫**地出現在：標籤屬性值內、新的
+   標籤結構、iframe/srcdoc、javascript: URL。跳脫為純文字＝安全，不報。
+3. SPA 特有：若回應把輸入值嵌入 JSON 且頁面稍後以 innerHTML 渲染，
+   以 get_page_html 在操作後檢查渲染後的 DOM 是否含未跳脫探測字串。
+4. 每命中一項立即 report_security_issue（證據＝payload URL＋回應中
+   未跳脫位置的片段）。
+5. 完成或系統性覆蓋後 finish 附總結（含未完成項與原因）。
+
+限制：無害 payload（print/alert 級）；只對本站同源操作。"""
+
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
@@ -208,6 +228,11 @@ SPECIALIST_ROLES: dict[str, dict[str, str]] = {
         "prompt": INFO_LEAK_AGENT_PROMPT,
         "desc": "資訊洩漏獵手：敏感檔／備份殘留、錯誤頁內部細節、中繼資料與 debug 端點",
         "when": "偵察觀察到可疑路徑（檔案／目錄）、錯誤回應非標準、或回應內容含內部結構線索",
+    },
+    "xss_hunter": {
+        "prompt": XSS_HUNTER_AGENT_PROMPT,
+        "desc": "XSS 獵手：反射／DOM／儲存型 XSS（query 輸入點、iframe、innerHTML 渲染）",
+        "when": "頁面有搜尋／篩選／排序等 query 輸入點，或流量有回應 HTML 的參數化端點",
     },
     "jwt_token_abuse": {
         "prompt": JWT_ABUSE_AGENT_PROMPT,
