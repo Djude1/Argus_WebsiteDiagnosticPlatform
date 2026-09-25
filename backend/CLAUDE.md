@@ -14,7 +14,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
-| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`audit-log/`、`announcements/*`、`cms/*` |
+| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`（+ `<id>/cancel/`、`<id>/requeue/`）、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`health/`、`audit-log/`、`announcements/*`、`cms/*` |
 | `/favicon.svg` | 靜態資產 | 直接服務被 Git 追蹤的 `frontend/public/favicon.svg`，不依賴 frontend build |
 | `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
 | `/` ～ `/*` | SPA fallback | 回傳 `frontend/dist/index.html`，由 React Router 處理 |
@@ -123,7 +123,7 @@ ip_address、user_agent、created_at
 ```
 admin_actor FK（staff user）、target_user FK（nullable）、
 action（coin_adjust / subscription_adjust / review_reply / review_moderate /
-  review_delete / user_toggle_staff / other）、
+  review_delete / user_toggle_staff / domain_override / scan_control / other）、
 target_object_repr、payload（JSON）、created_at
 → 透過 log_admin_action() 集中寫入（調整點數、調整訂閱、回覆評論等）
 ```
