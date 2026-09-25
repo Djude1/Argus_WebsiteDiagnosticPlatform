@@ -105,7 +105,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/reviews` | `ReviewsPage`（`PublicLayout`） | 日／夜主題同步的科技評論頁；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
 | `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
-| `/admin/overview` | `AdminOverviewPage` | 後台總覽 |
+| `/admin/overview` | `AdminOverviewPage` | 待辦中心：第一屏為可點的待辦卡片（排隊逾時／今日失敗／待審檢舉／待回覆評論，點擊帶篩選跳轉），其後為今日脈搏、14 天趨勢、總量統計與成本明細 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理 |
 | `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 點數調整 |
 | `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
@@ -135,6 +135,9 @@ D:\nodejs\npm.cmd install 套件名
 | `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |
 | `src/features/admin/AdminOrdersPage.jsx` | 訂單管理頁（接上後端既有的 `/admin/orders/`）|
+| `src/features/admin/AdminOverviewPage.jsx` | 待辦中心（後台首頁）|
+| `src/components/admin/AdminStatCard.jsx` | 統計卡與內嵌 sparkline |
+| `src/components/admin/AdminMiniChart.jsx` | 後台多序列折線圖 |
 | `src/components/admin/AdminModal.jsx` | 後台統一 modal 與 `AdminField` 表單欄位（label／hint／error 三段式）|
 | `src/components/admin/AdminStates.jsx` | 後台載入骨架、空狀態與區塊級錯誤狀態 |
 | `src/components/admin/AdminPagination.jsx` | 後台共用分頁 |

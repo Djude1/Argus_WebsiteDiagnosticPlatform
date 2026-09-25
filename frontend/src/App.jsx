@@ -16,6 +16,7 @@ const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
+const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
 
 const RequireAuth = lazyNamed(loadAuthPages, "RequireAuth");
 const LoginPage = lazyNamed(loadAuthPages, "LoginPage");
@@ -42,7 +43,7 @@ const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
 const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
-const AdminOverviewPage = lazyNamed(loadAdminPages, "AdminOverviewPage");
+const AdminOverviewPage = lazyNamed(loadAdminOverview, "AdminOverviewPage");
 const AdminUsersPage = lazyNamed(loadAdminPages, "AdminUsersPage");
 const AdminUserDetailPage = lazyNamed(loadAdminPages, "AdminUserDetailPage");
 const AdminTransactionsPage = lazyNamed(loadAdminPages, "AdminTransactionsPage");

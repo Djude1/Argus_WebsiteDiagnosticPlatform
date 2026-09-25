@@ -61,6 +61,19 @@ from apps.scans.models import AgentSession, ScanJob, VerifiedDomain
 
 PAGE_SIZE = 25
 
+# 「排隊逾時」的判定門檻（分鐘）。
+# 這是近似值：真正判斷 Celery worker 死活需要探測 broker，那是另一個層級的工作
+# （見 docs/environment-preflight.md）。這裡只用 ScanJob 停在 queued 的時間差來
+# 推論「訊息可能沒被消費」，足以讓管理員注意到異常並進一步查。
+STUCK_SCAN_THRESHOLD_MINUTES = 10
+
+# 進行中的掃描狀態（queued 之後、終態之前）
+IN_PROGRESS_SCAN_STATUSES = (
+    ScanJob.Status.CRAWLING,
+    ScanJob.Status.SCANNING,
+    ScanJob.Status.AGENT_TESTING,
+)
+
 # 後台表格可排序欄位白名單（前端欄位名 → ORM 欄位）。
 # 只列真正存在於資料庫（或已 annotate）的欄位；serializer 算出來的值無法排序，
 # 例如 ScanJob.duration_sec 由 started_at/completed_at 現算，刻意不開放。
@@ -126,7 +139,9 @@ def _paginate(request, queryset):
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def overview(request):
-    """後台首頁概覽：核心統計 + 最新活動。"""
+    """後台首頁：待辦（triage）＋ 核心統計 ＋ 最新活動。"""
+    from datetime import timedelta
+
     user_model = get_user_model()
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -170,7 +185,35 @@ def overview(request):
         sessions=Count("id"),
     )
 
+    # ---- 待辦（triage）：後台首頁要回答「現在有什麼需要我處理」----
+    stuck_cutoff = now - timedelta(minutes=STUCK_SCAN_THRESHOLD_MINUTES)
+    stuck_qs = ScanJob.objects.filter(
+        status=ScanJob.Status.QUEUED, created_at__lt=stuck_cutoff,
+    )
+    stuck_count = stuck_qs.count()
+    oldest_stuck = stuck_qs.order_by("created_at").values_list(
+        "created_at", flat=True,
+    ).first()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     return Response({
+        "triage": {
+            "scans_stuck": stuck_count,
+            "scans_stuck_threshold_min": STUCK_SCAN_THRESHOLD_MINUTES,
+            # 最久的那一筆已等多久，讓管理員判斷嚴重程度而不只看筆數
+            "scans_stuck_oldest_at": oldest_stuck.isoformat() if oldest_stuck else None,
+            "scans_failed_today": ScanJob.objects.filter(
+                status=ScanJob.Status.FAILED, created_at__gte=today_start,
+            ).count(),
+            "scans_in_progress": ScanJob.objects.filter(
+                status__in=IN_PROGRESS_SCAN_STATUSES,
+            ).count(),
+            "reviews_pending": pending_reviews,
+            "reports_pending": ReviewReport.objects.filter(
+                status=ReviewReport.Status.PENDING,
+            ).count(),
+            "scans_today": ScanJob.objects.filter(created_at__gte=today_start).count(),
+        },
         "totals": {
             "users": total_users,
             "wallets": total_wallets,

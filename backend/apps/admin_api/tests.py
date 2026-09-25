@@ -772,3 +772,83 @@ class OrderingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         balances = [u["balance"] for u in response.data["users"]]
         self.assertEqual(balances, sorted(balances))
+
+
+class TriageTests(APITestCase):
+    """後台首頁的待辦統計。
+
+    首頁的價值在於回答「現在有什麼要處理」，所以這些數字必須正確——
+    誤報會讓管理員追不存在的問題，漏報則讓卡住的掃描沒人發現。
+    """
+
+    def setUp(self):
+        self.admin = _make_user("admin", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.owner = _make_user("owner")
+
+    def _triage(self):
+        response = self.client.get(reverse("admin-overview"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data["triage"]
+
+    def test_recent_queued_scan_is_not_counted_as_stuck(self):
+        _make_scan(self.owner, status=ScanJob.Status.QUEUED)
+        triage = self._triage()
+        self.assertEqual(triage["scans_stuck"], 0)
+        self.assertIsNone(triage["scans_stuck_oldest_at"])
+
+    def test_queued_scan_past_threshold_is_stuck(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        scan = _make_scan(self.owner, status=ScanJob.Status.QUEUED)
+        # created_at 有 auto_now_add，只能建立後直接改寫
+        overdue = timezone.now() - timedelta(minutes=30)
+        ScanJob.objects.filter(pk=scan.pk).update(created_at=overdue)
+
+        triage = self._triage()
+        self.assertEqual(triage["scans_stuck"], 1)
+        self.assertIsNotNone(triage["scans_stuck_oldest_at"])
+
+    def test_in_progress_excludes_queued_and_terminal_states(self):
+        _make_scan(self.owner, status=ScanJob.Status.QUEUED)
+        _make_scan(self.owner, status=ScanJob.Status.CRAWLING)
+        _make_scan(self.owner, status=ScanJob.Status.SCANNING)
+        _make_scan(self.owner, status=ScanJob.Status.AGENT_TESTING)
+        _make_scan(self.owner, status=ScanJob.Status.COMPLETED)
+        _make_scan(self.owner, status=ScanJob.Status.CANCELLED)
+
+        self.assertEqual(self._triage()["scans_in_progress"], 3)
+
+    def test_triage_contract_matches_frontend_usage(self):
+        """待辦中心用到的欄位一個都不能少。
+
+        前端 AdminOverviewPage 直接取用這些鍵；少一個不會噴錯，只會靜靜顯示
+        undefined，所以用測試把契約鎖住。
+        """
+        triage = self._triage()
+        for key in (
+            "scans_stuck",
+            "scans_stuck_threshold_min",
+            "scans_stuck_oldest_at",
+            "scans_failed_today",
+            "scans_in_progress",
+            "reviews_pending",
+            "reports_pending",
+            "scans_today",
+        ):
+            self.assertIn(key, triage, f"triage 缺少 {key}")
+
+    def test_failed_today_counts_only_today(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        today = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        old = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        ScanJob.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=3),
+        )
+        self.assertEqual(self._triage()["scans_failed_today"], 1)
+        self.assertIsNotNone(today.pk)
