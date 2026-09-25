@@ -739,7 +739,11 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             try:
                 from apps.agent.runner import run_agent_for_scan
 
-                agent_result = _run_async(lambda: run_agent_for_scan(scan_job))
+                agent_result = _run_async(
+                    lambda: run_agent_for_scan(
+                        scan_job, recon_intel=discovered_endpoints
+                    )
+                )
                 if agent_result:
                     agent_meta = {
                         "status": agent_result.status,

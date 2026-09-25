@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -124,6 +125,63 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
 限制：payload 一律用無害查詢型（alert/print 級），不要嘗試刪除、修改
 資料的 payload；只對本站同源操作。"""
 
+LOGIC_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（商業邏輯濫用角色），
+已開啟頁面 {url}。
+你專責 business logic 類漏洞；不負責 IDOR／SQLi（其他角色已涵蓋）。
+
+1. 先取得登入態：從 network log 找註冊／登入端點，replay_request 打 API
+   註冊測試帳號並登入（store_token_key 存 token）；登入回應／whoami 類
+   端點會給你自己的資源 id（例如 bid），後續寫入測試用它。
+2. **數值邊界**：對數量／金額／折扣／庫存類欄位（加購物車、結帳、優惠券），
+   以 replay_request 送負值、零、極大值、小數——被接受（200 且寫入）即為
+   business logic 漏洞；**寫入後重新 GET 該資源確認資料真的變了**，
+   連同驗證結果 report_security_issue。
+3. **流程順序**：觀察到的多步驟流程（結帳、付款、密碼重設）——嘗試跳步
+   重放（例如直接打結帳端點而未經過前置步驟），被接受即為流程繞過。
+4. **重用性**：CAPTCHA／OTP／一次性 token 類端點——同一值重放兩次，
+   第二次仍成功即為重用缺陷。
+5. 完成或已系統性覆蓋後 finish 附短總結。
+
+限制：只在**你自己的**資源上做寫入；payload 不具破壞性；只對本站同源操作。"""
+
+# deep_mode 的 specialist 角色庫——orchestrator 依偵察情報動態挑選派工
+# （pentest-ai-agents 的 swarm-orchestrator 概念：角色是工具箱，不是固定清單）
+SPECIALIST_ROLES: dict[str, dict[str, str]] = {
+    "auth_idor": {
+        "prompt": AUTH_AGENT_PROMPT,
+        "desc": "認證與越權：API 註冊登入、跨帳號讀取／寫入（IDOR，含 PUT/PATCH 更新端點）",
+    },
+    "injection": {
+        "prompt": INJECT_AGENT_PROMPT,
+        "desc": "輸入點注入：登入繞過 SQLi payload、XSS 反射／儲存探測、錯誤訊息洩漏",
+    },
+    "logic_abuse": {
+        "prompt": LOGIC_ABUSE_AGENT_PROMPT,
+        "desc": "商業邏輯：負數／極端值寫入、流程順序繞過、CAPTCHA/OTP 重用",
+    },
+}
+
+ORCHESTRATOR_PROMPT = """你是滲透測試指揮官。先遣偵察 agent 已完成對目標 {origin} 的初步測試，
+以下是它的情報。你的工作：決定派哪些專家角色進行第二波深入測試，
+並給每位專家一句針對本次情況的任務提示（brief）——brief 可以引用你看到的
+具體線索（可疑端點、未覆蓋的面相），讓專家不用從零探索。
+
+【偵察總結】
+{recon_summary}
+
+【偵察已回報的發現】
+{findings_list}
+
+【掃描期間被動觀察到的同源 API 端點（部分）】
+{endpoints}
+
+【可用專家角色】
+{roles_desc}
+
+規則：依情報挑選真正需要的角色（可全部、可部分；無價值的角色不派）；
+brief 一到三句、指向具體線索；不指定攻擊細節，讓專家自行判斷。
+只回 JSON，格式：{{"dispatch": [{{"role": "角色名", "brief": "任務提示"}}]}}"""
+
 
 def _origin_key(url: str) -> tuple[str, str, int | None]:
     parsed = urlsplit(url)
@@ -175,6 +233,7 @@ async def run_agent_for_scan(
     scan_job: ScanJob,
     chain: ProviderChain | None = None,
     task_prompt: str | None = None,
+    recon_intel: list[str] | None = None,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
 
@@ -254,13 +313,49 @@ async def run_agent_for_scan(
     if task_prompt is not None:
         prompts: list[str] = [task_prompt]
     elif deep_mode:
-        # 雙 role 分工（序列執行：同一掃描目標的 RPS 與 Kali 預算是全域共享，
-        # 並行會讓兩個 session 的請求互相擠壓；序列讓每個 role 在乾淨 context 專注跑）
-        prompts = [
-            RECON_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
-            AUTH_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
-            INJECT_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
+        # 指揮官模式：recon 固定先跑 → orchestrator 依情報動態挑 specialist
+        # → 各自乾淨 session 深入 → 合併。序列執行（RPS 與 Kali 預算全域共享）。
+        recon_prompt = RECON_AGENT_PROMPT.format(
+            origin=scan_job.origin, url=target_url
+        )
+        recon_result = await _run_session(recon_prompt)
+
+        dispatch = await _orchestrate_dispatch(
+            chain=chain,
+            scan_job=scan_job,
+            recon_result=recon_result,
+            recon_intel=recon_intel or [],
+        )
+        specialist_prompts = []
+        for item in dispatch:
+            role_def = SPECIALIST_ROLES.get(item["role"])
+            if role_def is None:
+                continue
+            prompt = role_def["prompt"].format(
+                origin=scan_job.origin, url=target_url
+            )
+            brief = (item.get("brief") or "").strip()
+            if brief:
+                prompt += f"\n\n【指揮官任務提示】{brief}"
+            specialist_prompts.append(prompt)
+        if not specialist_prompts:  # orchestrator 失效時的安全網：全派
+            specialist_prompts = [
+                role["prompt"].format(origin=scan_job.origin, url=target_url)
+                for role in SPECIALIST_ROLES.values()
+            ]
+
+        results = [recon_result] + [
+            await _run_session(p) for p in specialist_prompts
         ]
+        result = _merge(results)
+
+        if result and result.issues:
+            await sync_to_async(persist_agent_issues)(scan_job, result.issues)
+        if result and result.security_findings:
+            await sync_to_async(persist_agent_security_findings)(
+                scan_job, result.security_findings
+            )
+        return result
     else:
         prompts = [
             DEFAULT_TASK_PROMPT_TEMPLATE.format(
@@ -278,6 +373,59 @@ async def run_agent_for_scan(
             scan_job, result.security_findings
         )
     return result
+
+
+async def _orchestrate_dispatch(
+    *,
+    chain: ProviderChain,
+    scan_job: ScanJob,
+    recon_result: AgentRunResult,
+    recon_intel: list[str],
+) -> list[dict[str, str]]:
+    """指揮官決策：recon 情報 → 挑 specialist＋各別 brief。
+
+    單輪結構化生成（chain.chat_text）；JSON 解析失敗回空清單，呼叫端
+    有全派的安全網。情報全部來自本次掃描的觀察，黑箱合規。
+    """
+
+    def _decide() -> list[dict[str, str]]:
+        findings_titles = [
+            f.title
+            for f in scan_job.findings.filter(
+                rule_id__in=("agent-observed-security", "kali-sqlmap-sqli")
+            )[:20]
+        ]
+        prompt = ORCHESTRATOR_PROMPT.format(
+            origin=scan_job.origin,
+            recon_summary=(recon_result.final_summary or "（無）")[:1500],
+            findings_list=("\n".join(f"- {t}" for t in findings_titles) or "（無）"),
+            endpoints=("\n".join(f"- {u}" for u in recon_intel[:15]) or "（無）"),
+            roles_desc="\n".join(
+                f"- {name}: {defn['desc']}" for name, defn in SPECIALIST_ROLES.items()
+            ),
+        )
+        response = chain.chat_text(prompt=prompt, temperature=0.1, max_tokens=1200)
+        import json as _json
+
+        try:
+            data = _json.loads(
+                (response.content or "").strip().removeprefix("```json").removesuffix("```")
+            )
+        except (ValueError, AttributeError):
+            return []
+        dispatch = data.get("dispatch") if isinstance(data, dict) else None
+        if not isinstance(dispatch, list):
+            return []
+        return [
+            {"role": str(d.get("role", "")), "brief": str(d.get("brief", ""))}
+            for d in dispatch
+            if isinstance(d, dict) and d.get("role") in SPECIALIST_ROLES
+        ]
+
+    try:
+        return await asyncio.to_thread(_decide)
+    except Exception:  # noqa: BLE001 — orchestrator 失敗交由安全網全派
+        return []
 
 
 def _pick_starting_page(scan_job: ScanJob):
