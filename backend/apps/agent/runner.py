@@ -144,19 +144,68 @@ LOGIC_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
 限制：只在**你自己的**資源上做寫入；payload 不具破壞性；只對本站同源操作。"""
 
 # deep_mode 的 specialist 角色庫——orchestrator 依偵察情報動態挑選派工
-# （pentest-ai-agents 的 swarm-orchestrator 概念：角色是工具箱，不是固定清單）
+# （pentest-ai-agents 的 swarm-orchestrator＋NousResearch/hermes-agent 的
+# 能力目錄化概念：每個角色帶 desc＋when，指揮官從目錄「知道手中有什麼、
+# 何時用」；dispatch_specialist 的 role enum 也由本目錄動態生成）
+INFO_LEAK_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（資訊洩漏獵手角色），
+已開啟頁面 {url}。
+你專責「資訊洩漏」面的深入挖掘。
+
+1. 從 network log 找出所有回應過的端點，逐一以 replay_request 重放並檢查
+   回應內容：找**不該對外公開的資訊**——內部路徑、堆疊、SQL 片段、
+   帳號清單、設定值、金鑰格式字串、備份內容。
+2. 對偵察提示或自行觀察到的可疑路徑（檔案、目錄、隱藏端點）以
+   replay_request GET 探測；回 200 且內容非 SPA fallback 即記錄。
+3. 錯誤路徑測試：對 API 端點送不完整／型別錯誤的請求，檢查錯誤回應
+   是否洩漏框架版本、內部 IP、檔案路徑。
+4. 每項發現 report_security_issue，evidence 附回應片段（遮罩後）。
+5. 完成或系統性覆蓋後 finish 附短總結。
+
+限制：只讀取型操作（GET／只讀重放）；只對本站同源操作。"""
+
+JWT_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（Token 檢視角色），
+已開啟頁面 {url}。
+你專責驗證 token／session 的處理弱點。
+
+1. 登入取得 token（API 註冊測試帳號＋登入，store_token_key 存入）；
+   登入回應的 token 若為 JWT（eyJ 開頭），解讀其 payload（第二段
+   base64）內容：是否含密碼雜湊、敏感個人欄位、內部識別碼——有即
+   report_security_issue 附欄位清單。
+2. 簽章／過期驗證：用 replay_request 帶**竄改後**的 token（改 payload
+   一個字元、或以無效簽章）打需要授權的端點——若仍 200，代表簽章
+   未驗證（嚴重）。
+3. 權杖傳輸面：檢查 Set-Cookie 屬性（HttpOnly／Secure／SameSite）與
+   token 存放位置（localStorage 的 XSS 被竊風險——若網站同時有 XSS
+   面則在報告中註明加乘風險）。
+4. 每項發現 report_security_issue 附證據；完成後 finish 附短總結。
+
+限制：竄改只針對**自己帳號**的 token；無害驗證型操作；只對本站同源操作。"""
+
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
         "desc": "認證與越權：API 註冊登入、跨帳號讀取／寫入（IDOR，含 PUT/PATCH 更新端點）",
+        "when": "偵察發現登入／註冊端點，或流量有帶數字 id 的授權資源（購物車、訂單、個人資料）",
     },
     "injection": {
         "prompt": INJECT_AGENT_PROMPT,
-        "desc": "輸入點注入：登入繞過 SQLi payload、XSS 反射／儲存探測、錯誤訊息洩漏",
+        "desc": "輸入點注入：登入繞過 SQLi payload、XSS 反射／儲存探測",
+        "when": "有登入表單（繞過測試）或頁面含輸入框／搜尋／留言等反射面",
     },
     "logic_abuse": {
         "prompt": LOGIC_ABUSE_AGENT_PROMPT,
         "desc": "商業邏輯：負數／極端值寫入、流程順序繞過、CAPTCHA/OTP 重用",
+        "when": "流量有數量／金額／折扣類欄位、多步驟流程（結帳、密碼重設）、驗證碼端點",
+    },
+    "info_leak": {
+        "prompt": INFO_LEAK_AGENT_PROMPT,
+        "desc": "資訊洩漏獵手：敏感檔／備份殘留、錯誤頁內部細節、中繼資料與 debug 端點",
+        "when": "偵察觀察到可疑路徑（檔案／目錄）、錯誤回應非標準、或回應內容含內部結構線索",
+    },
+    "jwt_token_abuse": {
+        "prompt": JWT_ABUSE_AGENT_PROMPT,
+        "desc": "Token 檢視：JWT payload 敏感欄位、簽章／過期是否被驗、session/cookie 屬性",
+        "when": "登入流程使用 token（Bearer／localStorage）或 Set-Cookie 出現",
     },
 }
 
@@ -289,7 +338,11 @@ async def run_agent_for_scan(
                     executor=executor,
                     chain=chain,
                     tool_schemas=build_tool_schemas(
-                        deep_mode, orchestrator=orchestrator
+                        deep_mode,
+                        orchestrator=orchestrator,
+                        specialist_roles=(
+                            SPECIALIST_ROLES if orchestrator else None
+                        ),
                     ),
                 )
                 return await agent.run(task_prompt=role_prompt)
@@ -376,7 +429,7 @@ async def run_agent_for_scan(
                 "\n".join(f"- {u}" for u in (recon_intel or [])[:15]) or "（無）"
             ),
             roles_desc="\n".join(
-                f"- {name}: {defn['desc']}"
+                f"- {name}: {defn['desc']}\n  派用時機：{defn['when']}"
                 for name, defn in SPECIALIST_ROLES.items()
             ),
         )

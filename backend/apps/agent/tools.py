@@ -307,7 +307,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 # Task 6：依授權模式動態組裝 tool schemas，並遮罩持久化的 tool 資料
 # ---------------------------------------------------------------------------
 def build_tool_schemas(
-    allow_sqlmap: bool, orchestrator: bool = False
+    allow_sqlmap: bool,
+    orchestrator: bool = False,
+    specialist_roles: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """依模式組裝 tool schemas。
 
@@ -315,16 +317,34 @@ def build_tool_schemas(
     - orchestrator：指揮官模式——只留 dispatch_specialist／finish／
       report_security_issue（調度職責，不親自測試；specialist 不帶
       dispatch，防無限遞迴）
+    - specialist_roles：角色目錄（name → {desc, when, ...}）。指揮官模式
+      會把 role enum 與「何時派用」說明動態填入 dispatch_specialist 的
+      schema——這是指揮官「知道自己手中有什麼」的機制（hermes-agent 的
+      能力目錄化概念）
     回傳獨立深拷貝，避免共用 mutable schema 被意外修改。
     """
     deep_only = {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
-        return [
+        schemas = [
             copy.deepcopy(s)
             for s in TOOL_SCHEMAS
             if s["function"]["name"] in keep
         ]
+        if specialist_roles:
+            role_names = sorted(specialist_roles.keys())
+            catalog = "\n".join(
+                f"- {name}: {defn.get('desc', '')}（派用時機：{defn.get('when', '')}）"
+                for name, defn in specialist_roles.items()
+            )
+            for schema in schemas:
+                if schema["function"]["name"] == "dispatch_specialist":
+                    schema["function"]["parameters"]["properties"]["role"] = {
+                        "type": "string",
+                        "enum": role_names,
+                        "description": f"可用專家角色：\n{catalog}",
+                    }
+        return schemas
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
