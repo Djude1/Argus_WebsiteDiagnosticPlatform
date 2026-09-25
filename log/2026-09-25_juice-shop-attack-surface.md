@@ -153,3 +153,37 @@ agent 或工具主動重現），另獨有 JWT 洩漏（#20/#21）、錯誤頁�
 **漏洞級對打終局**：Argus 11 項（SQLi×2＋讀取 IDOR×2＋寫入 IDOR＋admin
 config＋ftp×2＋metrics＋security.txt＋recruiting）vs 對手 10 項——黑箱、
 全自動、每項帶證據；負數另以 #22 軌跡佐證。
+
+---
+
+## 追記（第七波：指揮官 subagent 模式定稿——#26/#27）
+
+**變更**（4 commit）：
+- 真·subagent：dispatch_specialist tool（指揮官 session 內派工、結果即時回流、
+  可多輪追加）；specialist 不帶 dispatch（防遞迴）
+- specialist 角色目錄 3→5（auth_idor/injection/logic_abuse＋新 info_leak、
+  jwt_token_abuse），每角色帶 desc＋when；dispatch schema 的 role enum 由
+  目錄動態生成——指揮官「知道手中有什麼、何時用」（hermes-agent 能力
+  目錄化＋pentest-ai-agents when-to-use 慣例）
+- 四 repo 查證結論進 research 文件（strix 獨立 CLI 不適嵌入、shannon
+  AGPL＋需源碼、pentest-ai-agents 是 prompt 集非 runtime、Scanners-Box
+  選型參考）；架構決策＝runtime 自研＋知識層借鑑
+
+**#26（外層編排三 role 對照）**：25 findings（1C+8H）——inject role 首航
+即中**登入 SQLi 繞過**（' OR 1=1-- 取得 JWT，×2 high）＋負數進 findings
+（與寫入 IDOR 合併）＋CAPTCHA 自答漏洞。對手 12 項全覆蓋。
+
+**#27（subagent 指揮官模式）**：**31 findings（1C+8H+13M）歷史新高**。
+session 证据：recon(22步)→orchestrator(11步內 dispatch×10)→10 個
+specialist session。新命中：負數獨立 high、search SQLi 完整 UNION
+資料庫傾印（Users 表）、/api/Challenges 64KB 漏洞地圖未授權、
+SecurityQuestions/Feedbacks email hints 洩漏、Express 錯誤路徑 ×2。
+
+**調校項（誠實）**：orchestrator 每角色派 2 輪（共 10 specialist），
+總 token ~165 萬/掃描——需在 prompt 收斂（例如「同角色原則上一次」）；
+部分 specialist token 爆（320k/個）但全有產出。
+
+**終局對打**：漏洞級（排除組態類）Argus #27 ≈ 14 項 vs 對手 10 項，
+涵蓋對手全部類別（SQLi×3、IDOR 讀/寫、負數、ftp、metrics、時間戳近似、
+資訊類），另獨有 Challenges 地圖洩漏、CAPTCHA 自答、資料庫傾印證據、
+SecurityQuestions/Feedbacks 洩漏——全黑箱、全自動、逐項帶證據。
