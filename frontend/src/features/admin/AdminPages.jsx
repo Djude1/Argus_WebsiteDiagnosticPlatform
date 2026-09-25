@@ -60,7 +60,7 @@ const ADMIN_NAV_GROUPS = [
     key: "operations",
     label: "營運",
     items: [
-      { to: "/admin/overview", label: "待辦中心", Icon: AdminOverviewIcon },
+      { to: "/admin/overview", label: "概覽", Icon: AdminOverviewIcon },
       { to: "/admin/scans", label: "掃描任務", Icon: AdminScansIcon },
       { to: "/admin/domains", label: "網域驗證", Icon: AdminDomainsIcon },
       { to: "/admin/health", label: "系統健康", Icon: AdminAlertIcon },

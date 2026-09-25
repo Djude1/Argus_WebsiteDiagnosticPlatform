@@ -3,7 +3,6 @@ import { NavLink, useNavigate } from "react-router-dom";
 
 import { api } from "../../api";
 import {
-  AdminAlertIcon,
   AdminOrdersIcon,
   AdminReviewsIcon,
   AdminScansIcon,
@@ -15,35 +14,16 @@ import {
 import { AdminMiniChart } from "../../components/admin/AdminMiniChart.jsx";
 import { AdminSparkline, AdminStatCard } from "../../components/admin/AdminStatCard.jsx";
 import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates.jsx";
-import { STATUS_LABELS, StatusDoneGlyph } from "../../shared/AppShared.jsx";
-import { formatDateTime, formatNtd, formatNumber, formatRelative } from "../../shared/formatters.js";
+import { STATUS_LABELS } from "../../shared/AppShared.jsx";
+import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
 
-// 後台首頁：待辦中心。
+// 後台首頁：概覽。
 //
-// 改建原因（見 2026-09-25 重構規劃 §4-1）：原本的「概覽」是六張總量統計卡 ＋
-// 趨勢圖 ＋ 用量分佈，全部是「已經發生的事」，沒有任何元素回答「現在該處理什麼」。
-// 待回覆評論與待審檢舉有數字卻點不進去，卡住的掃描則完全看不到。
+// 資訊順序：今日脈搏 → 14 天趨勢 → 總量統計 → 成本與明細。
 //
-// 現在的資訊順序是：① 待辦 ② 今日脈搏 ③ 趨勢 ④ 成本與明細。
-// 每張待辦卡片都是帶著篩選參數的連結，點下去直接落在已篩好的列表。
-
-function TriageCard({ icon, label, count, hint, to, tone, navigate }) {
-  const active = count > 0;
-  return (
-    <button
-      type="button"
-      className={`admin-triage-card tone-${active ? tone : "idle"}`}
-      onClick={() => navigate(to)}
-      aria-label={`${label}：${count} 筆，點擊查看`}
-    >
-      <span className="admin-triage-icon" aria-hidden="true">{icon}</span>
-      <span className="admin-triage-count">{formatNumber(count, "0")}</span>
-      <span className="admin-triage-label">{label}</span>
-      {/* 只有筆數看不出嚴重程度，補上「最久的已等多久」這類脈絡 */}
-      <span className="admin-triage-hint">{active ? hint : "沒有待處理"}</span>
-    </button>
-  );
-}
+// 註：曾短暫改建為「待辦中心」（第一屏為四張可點的待辦卡片），依使用者
+// 2026-09-25 的要求移除，頁面回到概覽形式。後端 overview 的 triage 區塊仍
+// 保留且仍被使用——「今日」那一區的今日掃描數與進行中筆數來自它。
 
 export function AdminOverviewPage() {
   const [data, setData] = useState(null);
@@ -93,78 +73,19 @@ export function AdminOverviewPage() {
     ...(dash.provider_breakdown || []).map((r) => r.tokens), 1,
   );
 
-  const cards = [
-    {
-      key: "stuck",
-      icon: <AdminAlertIcon />,
-      label: "排隊逾時",
-      count: triage.scans_stuck || 0,
-      hint: triage.scans_stuck_oldest_at
-        ? `最久一筆已等 ${formatRelative(triage.scans_stuck_oldest_at).replace("前", "")}`
-        : `超過 ${triage.scans_stuck_threshold_min} 分鐘未開始`,
-      to: "/admin/scans?status=queued",
-      tone: "bad",
-    },
-    {
-      key: "failed",
-      icon: <AdminScansIcon />,
-      label: "今日失敗掃描",
-      count: triage.scans_failed_today || 0,
-      hint: "點擊查看失敗原因",
-      to: "/admin/scans?status=failed",
-      tone: "bad",
-    },
-    {
-      key: "reports",
-      icon: <AdminAlertIcon />,
-      label: "待審檢舉",
-      count: triage.reports_pending || 0,
-      hint: "使用者檢舉待處理",
-      to: "/admin/reviews?filter=reported",
-      tone: "warn",
-    },
-    {
-      key: "replies",
-      icon: <AdminReviewsIcon />,
-      label: "待回覆評論",
-      count: triage.reviews_pending || 0,
-      hint: "尚無官方回覆",
-      to: "/admin/reviews?filter=pending",
-      tone: "warn",
-    },
-  ];
-  const allClear = cards.every((card) => card.count === 0);
-
   return (
     <div className="admin-page">
       <header className="admin-page-head">
         <div>
-          <h1>待辦中心</h1>
-          <p>需要處理的事項，以及系統整體狀態</p>
+          <h1>概覽</h1>
+          <p>系統整體狀態與最近 14 天活動</p>
         </div>
         <button type="button" className="admin-btn ghost" onClick={load}>
           重新整理
         </button>
       </header>
 
-      {/* ---- ① 待辦：第一屏只放「要做的事」 ---- */}
-      <section className="admin-triage-grid" aria-label="待處理事項">
-        {cards.map((card) => (
-          <TriageCard key={card.key} {...card} navigate={navigate} />
-        ))}
-      </section>
-
-      {allClear && (
-        <div className="admin-empty-state tone-good">
-          <span className="admin-empty-state-icon" aria-hidden="true"><StatusDoneGlyph /></span>
-          <p className="admin-empty-state-title">目前沒有待處理事項</p>
-          <p className="admin-empty-state-desc">
-            沒有卡住或失敗的掃描，評論也都已回覆與審核完畢。
-          </p>
-        </div>
-      )}
-
-      {/* ---- ② 今日脈搏：正在發生的事 ---- */}
+      {/* ---- 今日脈搏：正在發生的事 ---- */}
       <section className="admin-panel">
         <div className="admin-panel-head-row">
           <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>今日</h3>
@@ -190,7 +111,7 @@ export function AdminOverviewPage() {
         </div>
       </section>
 
-      {/* ---- ③ 趨勢 ---- */}
+      {/* ---- 趨勢 ---- */}
       <section className="admin-panel">
         <div className="admin-panel-head-row">
           <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>最近 14 天活動</h3>
@@ -211,7 +132,7 @@ export function AdminOverviewPage() {
         />
       </section>
 
-      {/* ---- ④ 總量統計：降到趨勢之後，它們不是每日決策依據 ---- */}
+      {/* ---- 總量統計 ---- */}
       <div className="admin-stat-grid">
         <AdminStatCard
           label="累計營收"
@@ -244,7 +165,7 @@ export function AdminOverviewPage() {
         />
       </div>
 
-      {/* ---- ⑤ 成本與明細 ---- */}
+      {/* ---- 成本與明細 ---- */}
       <div className="admin-grid-2col">
         <section className="admin-panel">
           <h3><span className="admin-panel-icon-chip"><AdminTokensIcon /></span>AI Provider 用量分佈</h3>

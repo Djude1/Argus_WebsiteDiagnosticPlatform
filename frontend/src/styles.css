@@ -6219,61 +6219,6 @@
     color: #0c4a6e;
   }
 
-  /* --- 待辦中心：第一屏的可點卡片 --- */
-  .admin-triage-grid {
-    @apply grid gap-3;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  }
-  .admin-triage-card {
-    @apply flex flex-col items-start gap-0.5 rounded-2xl p-4 text-left transition;
-    background: var(--admin-surface);
-    border: 1px solid var(--admin-border);
-    border-left-width: 3px;
-    border-left-color: var(--admin-border-strong);
-    cursor: pointer;
-  }
-  .admin-triage-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px -16px rgba(15, 23, 42, 0.35);
-  }
-  .admin-triage-card:focus-visible {
-    outline: 2px solid var(--admin-accent);
-    outline-offset: 2px;
-  }
-  .admin-triage-icon {
-    @apply mb-1 inline-flex items-center justify-center;
-    width: 22px;
-    height: 22px;
-    color: var(--admin-text-muted);
-  }
-  .admin-triage-count {
-    @apply text-3xl font-bold leading-none;
-    color: var(--admin-text);
-    font-variant-numeric: tabular-nums;
-  }
-  .admin-triage-label {
-    @apply mt-1 text-sm font-semibold;
-    color: var(--admin-text);
-  }
-  .admin-triage-hint {
-    @apply text-xs;
-    color: var(--admin-text-muted);
-  }
-  /* 有待辦才上色；數字為 0 時保持中性，避免整排都在喊「注意我」 */
-  .admin-triage-card.tone-bad {
-    border-left-color: var(--tone-bad);
-    background: linear-gradient(180deg, rgba(239, 68, 68, 0.05), var(--admin-surface) 60%);
-  }
-  .admin-triage-card.tone-bad .admin-triage-count,
-  .admin-triage-card.tone-bad .admin-triage-icon { color: #b91c1c; }
-  .admin-triage-card.tone-warn {
-    border-left-color: var(--tone-medium);
-    background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), var(--admin-surface) 60%);
-  }
-  .admin-triage-card.tone-warn .admin-triage-count,
-  .admin-triage-card.tone-warn .admin-triage-icon { color: #b45309; }
-  .admin-triage-card.tone-idle .admin-triage-count { color: var(--admin-text-muted); }
-
   /* --- 今日脈搏 --- */
   .admin-pulse-row {
     @apply grid gap-3;
@@ -6293,9 +6238,6 @@
     color: var(--admin-text-muted-sunken);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .admin-triage-card:hover { transform: none; }
-  }
 
   /* --- 可排序表頭 --- */
   .admin-table thead th.admin-th-sortable { padding: 0; }
