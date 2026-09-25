@@ -53,6 +53,10 @@ from apps.scans.services import assert_public_http_url
 
 logger = logging.getLogger(__name__)
 
+# Nuclei extra_urls 中帶參數 API 端點的上限：模板掃描對 API 端點命中率低，
+# 全塞只會把 1 RPS 的時間預算炸掉（#23 實測 12 URL × 全模板掃掛死）
+_NUCLEI_MAX_ENDPOINT_URLS = 3
+
 
 def _new_event_loop_with_retry():
     """Windows 偶發 WinError 10013 時，只重試尚未開始工作的 event loop 建立。"""
@@ -397,19 +401,26 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         raise_if_cancelled(scan_job_id)
         # 收集已爬取的頁面 URL（排除被阻擋的頁面），整批餵給 Nuclei。
         # discovered_endpoints 是爬取期間被動攔截到的 same-origin XHR/fetch 端點
-        # （SPA 的 API 攻擊面），併入後 Nuclei 與 sqlmap 候選都能拿到帶參數端點。
-        crawled_urls = [
+        # （SPA 的 API 攻擊面）。
+        page_urls = [
             assert_public_http_url(p["url"])
             for p in crawled_pages
             if not p.get("blocked_reason")
         ]
+        endpoint_urls: list[str] = []
         for endpoint in discovered_endpoints:
             try:
                 normalized_endpoint = assert_public_http_url(endpoint)
             except ValueError:
                 continue
-            if normalized_endpoint not in crawled_urls:
-                crawled_urls.append(normalized_endpoint)
+            if normalized_endpoint not in page_urls and normalized_endpoint not in endpoint_urls:
+                endpoint_urls.append(normalized_endpoint)
+        # sqlmap 候選＝全部（query 篩選在 validate_findings_with_kali）；
+        # Nuclei 只吃頁面 URL＋前幾個帶參數端點——模板掃描對 API 端點命中率低，
+        # 全塞只會把 1 RPS 的時間預算炸掉（#23 實測 12 URL × 全模板掛死）
+        nuclei_urls = page_urls + [
+            u for u in endpoint_urls if "?" in u
+        ][:_NUCLEI_MAX_ENDPOINT_URLS]
         validated_target = assert_public_http_url(scan_job.normalized_url)
         katana_findings: list[dict] = []
         katana_tech: list[str] = []
@@ -449,7 +460,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         validated_target,
                         scan_job_id,
                         deep=True,
-                        extra_urls=crawled_urls,
+                        extra_urls=nuclei_urls,
                         rate_limit=1,
                     )
                 except ScanCancelled:
@@ -477,7 +488,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         validated_target,
                         scan_job_id,
                         deep=True,
-                        extra_urls=crawled_urls,
+                        extra_urls=nuclei_urls,
                         rate_limit=nuclei_rps,
                     )
                 try:
@@ -544,7 +555,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             detected_wafs = [t for t in katana_tech if any(w in t.lower() for w in _WAF_KEYWORDS)]
             if detected_wafs:
                 waf_names = "、".join(detected_wafs)
-                scanned_count = len(crawled_urls) + 1  # entry URL + crawled
+                scanned_count = len(page_urls) + 1  # entry URL + crawled
                 nuclei_findings = [{
                     "category": "security",
                     "severity": "info",
@@ -778,7 +789,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         if execution_plan.run_kali:
             raise_if_cancelled(scan_job_id)
             try:
-                kali_findings = validate_findings_with_kali(scan_job_id, crawled_urls)
+                kali_findings = validate_findings_with_kali(scan_job_id, page_urls + endpoint_urls)
             except ScanCancelled:
                 raise
             except Exception as exc:  # noqa: BLE001 — 非 cancel 的基礎設施失敗只 silent-fail
