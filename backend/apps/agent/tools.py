@@ -772,6 +772,13 @@ class ToolExecutor:
         observation["body_snippet"] = redact_url_query_values(
             str(observation.get("body_snippet", ""))
         )
+        # JWT 一串幾百字元只會灌爆 context 又遮住後面的有用欄位（如登入回應
+        # 的 bid）；壓縮成長度標記，token 本體 agent 不需要
+        observation["body_snippet"] = re.sub(
+            r"eyJ[A-Za-z0-9._-]{80,}",
+            lambda m: f"[JWT len={len(m.group(0))}]",
+            str(observation["body_snippet"]),
+        )
         observation["authenticated"] = bool(token or cookies)
         if store_token_key:
             observation["token_stored"] = token_stored
