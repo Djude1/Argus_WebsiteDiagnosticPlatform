@@ -425,6 +425,85 @@ class ActiveScanDomainGateTests(APITestCase):
         scan_job.clean()  # 有驗證後不得再 raise
 
 
+@override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
+class StaffDomainGateBypassTests(APITestCase):
+    """管理員測試旁路：staff／superuser 免網域驗證即可主動掃描。
+
+    能力等同 admin_override 人工核准，省去建列＋後台核准兩步；
+    一般使用者不受影響（對照組見 ActiveScanDomainGateTests）。
+    """
+
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="staff-tester",
+            email="staff@example.com",
+            password="safe-test-password",
+            is_staff=True,
+        )
+        CoinWallet.objects.filter(user=self.staff).update(balance=10000)
+        self.url = reverse("scan-list")
+
+    def _post_active(self):
+        return self.client.post(
+            self.url,
+            {
+                "url": "https://example.com/",
+                "authorization_confirmed": True,
+                "scan_mode": ScanJob.ScanMode.ACTIVE,
+                "active_testing_authorized": True,
+            },
+            format="json",
+        )
+
+    def test_staff_active_scan_without_verification_passes(self):
+        self.client.force_authenticate(self.staff)
+        response = self._post_active()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # 不得因旁路順便建立任何 VerifiedDomain 紀錄
+        self.assertEqual(VerifiedDomain.objects.count(), 0)
+
+    def test_superuser_active_scan_without_verification_passes(self):
+        superuser = get_user_model().objects.create_superuser(
+            username="super-tester",
+            email="super@example.com",
+            password="safe-test-password",
+        )
+        CoinWallet.objects.filter(user=superuser).update(balance=10000)
+        self.client.force_authenticate(superuser)
+        response = self._post_active()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_staff_model_clean_bypasses_gate_too(self):
+        scan_job = ScanJob(
+            user=self.staff,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            scan_mode=ScanJob.ScanMode.ACTIVE,
+            active_testing_authorized=True,
+        )
+        scan_job.clean()  # staff 不得 raise
+
+    def test_staff_flag_alone_does_not_skip_declaration_gate(self):
+        # 旁路只略過網域驗證；宣告式授權勾選（active_testing_authorized）仍必須
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(
+            self.url,
+            {
+                "url": "https://example.com/",
+                "authorization_confirmed": True,
+                "scan_mode": ScanJob.ScanMode.ACTIVE,
+                "active_testing_authorized": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("額外取得授權", str(response.data))
+
+
 class AdminDomainOverrideTests(APITestCase):
     def setUp(self):
         self.admin = get_user_model().objects.create_user(

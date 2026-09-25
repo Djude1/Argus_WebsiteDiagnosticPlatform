@@ -242,6 +242,9 @@ function ScanJobForm({ onCreated }) {
   const navigate = useNavigate();
   const wallet = useArgusStore((s) => s.wallet);
   const fetchWallet = useArgusStore((s) => s.fetchWallet);
+  const me = useArgusStore((s) => s.me);
+  // 後端 user_owns_domain 對 staff／superuser 一律放行（管理員測試旁路）
+  const staffDomainBypass = Boolean(me && (me.is_staff || me.is_superuser));
 
   // 只抓一次已驗證網域清單（提示用途；失敗時安靜略過，後端仍會擋主動模式）
   useEffect(() => {
@@ -508,7 +511,7 @@ function ScanJobForm({ onCreated }) {
           我同意進行侵入式測試，並理解系統會限制 RPS ≤ 2。
         </label>
       )}
-      {activeMode && !matchedVerifiedDomain && (
+      {activeMode && !matchedVerifiedDomain && !staffDomainBypass && (
         <div className="scan-domain-warning" role="alert">
           <p className="scan-domain-warning-title">⚠ 主動式測試需要先通過網域驗證</p>
           <p className="scan-domain-warning-text">
@@ -524,6 +527,13 @@ function ScanJobForm({ onCreated }) {
           >
             前往網域驗證 →
           </button>
+        </div>
+      )}
+      {activeMode && !matchedVerifiedDomain && staffDomainBypass && (
+        <div className="scan-verified-badge" role="status">
+          <span className="scan-verified-dot" aria-hidden="true" />
+          管理員測試模式：已略過網域驗證閘門
+          <span className="scan-verified-note">掃描紀錄仍歸屬您的帳號</span>
         </div>
       )}
       {error && <p className="error-text">{error}</p>}

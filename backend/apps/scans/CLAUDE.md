@@ -61,6 +61,7 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 - HTTP 驗證抓取先過 `assert_public_http_url` SSRF 檢查、串流讀取上限 5MB；DNS 查詢走 dnspython
 - 使用者 API：`/api/scans/domains/`（list／create＋instructions／`<id>/verify/`／delete；重複建立回 409 帶現況）
 - 管理端人工審核：`/api/admin/domains/` 與 `/api/admin/domains/<id>/override/`（approve=人工核准、reject=rejected；寫 `AdminAuditLog` action=`domain_override`）
+- **管理員測試旁路（2026-09-26）**：`user_owns_domain` 對 `is_staff`／`is_superuser` 一律放行——能力等同 admin_override 人工核准，省去「先建網域紀錄、再到後台核准」兩步，供管理員直接對受控測試目標（Juice Shop 等）主動掃描；不建立任何 VerifiedDomain 紀錄，掃描與授權紀錄仍歸屬管理員帳號，宣告式授權勾選（`active_testing_authorized`）與其他 SSRF／範圍閘門不受影響；前端對 staff 以「管理員測試模式」徽章取代未驗證警告
 - passive 掃描不受此閘門限制
 
 ### 資安邊界（重要）
@@ -380,6 +381,6 @@ docker exec argus-worker-1 katana -version
 | `crawler.py` 呼叫任何 billing 函式 | 職責分離 |
 | `playwright install` 不加 `PLAYWRIGHT_BROWSERS_PATH` | 污染全域路徑 |
 | Nuclei/Katana 主動工具需 `scan_mode=active AND active_testing_authorized`，並遵守單頁／全網站矩陣 | 未授權或超出使用者選擇範圍的主動測試 |
-| 主動掃描（`scan_mode=active`）目標 hostname 未通過網域所有權驗證（`user_owns_domain`） | 宣告式授權不足以證明所有權；必須先完成 VerifiedDomain 驗證或 admin 人工核准 |
+| 主動掃描（`scan_mode=active`）目標 hostname 未通過網域所有權驗證（`user_owns_domain`；staff／superuser 的測試旁路除外，見上） | 宣告式授權不足以證明所有權；必須先完成 VerifiedDomain 驗證或 admin 人工核准 |
 | 直接 `ScanJob.objects.filter(...).update(status=...)` | 繞過 signal，狀態不一致 |
 | 把本機 eager smoke test 當成完整掃描整合 | 未涵蓋 Redis／worker／PostgreSQL，驗證不完整 |

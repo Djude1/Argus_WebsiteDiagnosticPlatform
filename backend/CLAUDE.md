@@ -77,7 +77,9 @@ token（32 hex）、verified_at、expires_at（驗證成功=now+90 天，
 is_effectively_verified：admin_override 或（verified 且未過期）
 → scan_mode=active 的 ScanJob.clean() 與 ScanJobCreateSerializer 都以此閘門；
   引擎在 apps/scans/domain_verification.py；管理端人工審核走
-  /api/admin/domains/<id>/override/（audit action=domain_override）
+  /api/admin/domains/<id>/override/（audit action=domain_override）；
+  staff／superuser 由 services.user_owns_domain 直接放行（管理員測試旁路，
+  2026-09-26：等同人工核准但不建 VerifiedDomain 紀錄）
 ```
 
 **CoinWallet**（`apps/billing/models.py`）

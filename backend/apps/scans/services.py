@@ -177,9 +177,16 @@ def user_owns_domain(user, hostname: str) -> bool:
     比對規則：verified domain 等於 hostname 本身，或 hostname 是其子網域
     （hostname.endswith("." + domain)，例：www.example.com 對 example.com）。
     有效判定走 VerifiedDomain.is_effectively_verified（人工核准或已驗證未過期）。
+
+    staff／superuser 一律通過（管理員測試旁路）：能力上等同後台人工核准
+    （admin_override），只是省去「先建網域紀錄、再到後台核准」兩步，讓管理員
+    可直接對受控測試目標（例：Docker 內的 Juice Shop）主動掃描；掃描與授權
+    紀錄仍歸屬管理員帳號，一般使用者不受影響。
     """
     if not user or not user.id or not hostname:
         return False
+    if user.is_staff or user.is_superuser:
+        return True
     # 延遲 import：models 反向 import 本模組（ScanJob.clean 用到），頂層互 import 會循環
     from apps.scans.models import VerifiedDomain
 
