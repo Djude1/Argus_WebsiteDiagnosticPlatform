@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -191,6 +192,35 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "replay_request",
+            "description": (
+                "以『目前頁面的登入態』重放一個同源 API 請求（自動帶上瀏覽器 "
+                "session 的 token／cookie）。用途：在 get_network_requests 看過某端點"
+                "的原始請求後，修改內容重放——例如把 URL 中的 id 換成鄰近值測試"
+                "能否讀到他人資源（IDOR），或把數量／金額欄位改成負值、極端值"
+                "測試是否被接受（business logic）。method 限 GET／POST；"
+                "確認漏洞時用 report_security_issue 附上回應證據。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "完整同源 URL"},
+                    "method": {"type": "string", "enum": ["GET", "POST"]},
+                    "body": {
+                        "type": "object",
+                        "description": (
+                            "POST 的 JSON body（選填）；仿照 network log 中"
+                            "該端點原本的 body 結構修改"
+                        ),
+                    },
+                },
+                "required": ["url", "method"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_security_issue",
             "description": (
                 "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
@@ -247,7 +277,7 @@ def build_tool_schemas(allow_sqlmap: bool) -> list[dict[str, Any]]:
     （probe_sql_injection / probe_unauthorized_access）一律 deep_mode only；
     觀察回報類（report_security_issue）全模式可用。
     """
-    deep_only = {"probe_sql_injection", "probe_unauthorized_access"}
+    deep_only = {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
@@ -262,7 +292,11 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
     一律經 redact_url_query_values 遮罩；其他 tool 的參數原樣回傳（淺拷貝）。
     """
     clean = dict(arguments or {})
-    if tool_name in {"probe_sql_injection", "probe_unauthorized_access"} and "url" in clean:
+    if (
+        tool_name
+        in {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
+        and "url" in clean
+    ):
         clean["url"] = redact_url_query_values(str(clean["url"]))
     return clean
 
@@ -286,7 +320,7 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
                 if isinstance(req, dict)
             ],
         }
-    if tool_name == "probe_unauthorized_access":
+    if tool_name in {"probe_unauthorized_access", "replay_request"}:
         raw = result or {}
         safe: dict[str, Any] = {
             "status": raw.get("status"),
@@ -299,6 +333,8 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
             safe["blocked"] = raw["blocked"]
         if raw.get("error"):
             safe["error"] = raw["error"]
+        if raw.get("authenticated") is not None:
+            safe["authenticated"] = raw.get("authenticated")
         return safe
     if tool_name != "probe_sql_injection":
         return dict(result or {})
@@ -403,6 +439,10 @@ class ToolExecutor:
                 return await self._probe_sql_injection(args.get("url", ""))
             if name == "probe_unauthorized_access":
                 return await self._probe_unauthorized_access(args.get("url", ""))
+            if name == "replay_request":
+                return await self._replay_request(
+                    args.get("url", ""), args.get("method", "GET"), args.get("body")
+                )
             if name == "report_security_issue":
                 return self._report_security_issue(args)
             if name == "finish":
@@ -589,6 +629,101 @@ class ToolExecutor:
         observation["body_snippet"] = redact_url_query_values(
             str(observation.get("body_snippet", ""))
         )
+        return ToolOutcome(ok=True, result=observation)
+
+    async def _replay_request(
+        self, url: str, method: str, body: dict[str, Any] | None
+    ) -> ToolOutcome:
+        """以目前頁面的登入態重放同源請求（帶 session cookie 與 localStorage token）。
+
+        agent 在 deep_mode（active＋authorized）已授權滲透範圍內，用此工具對
+        已觀察過的 API 端點做「修改後重放」：改 id 測 IDOR、改數值測 business
+        logic。工具只負責帶憑證發送與回傳觀察（遮罩後）；漏洞判定由 agent
+        以 report_security_issue 附證據回報。
+
+        安全約束：同源閘（比對 scan_job.origin）＋ deep_mode runtime 再驗；
+        method 限 GET／POST（不允許 PUT/DELETE 等破壞性操作）；不跟隨 redirect。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import urlparse
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+
+        method = (method or "GET").upper()
+        if method not in ("GET", "POST"):
+            return ToolOutcome(ok=False, result={"error": "method_not_allowed"})
+
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
+            )
+
+        # 取得目前 session 的憑證：cookie（傳統 session）＋ localStorage 的
+        # token（SPA JWT 慣例鍵名）。取不到屬正常（未登入），匿名重放仍可執行。
+        try:
+            token = await self.page.evaluate(
+                "() => { const keys = ['token','jwt','access_token','auth_token','id_token'];"
+                " for (const k of keys) { const v = localStorage.getItem(k);"
+                " if (v) return v.replace(/^\"|\"$/g, ''); } return ''; }"
+            )
+        except Exception:
+            token = ""
+        token = str(token or "")
+        try:
+            cookies = await self.page.context.cookies()
+        except Exception:
+            cookies = []
+
+        import httpx
+
+        def _fetch() -> dict[str, Any]:
+            headers = {"User-Agent": settings.ARGUS_SCANNER_USER_AGENT}
+            if token:
+                # Bearer 優先；站方若用其他 scheme，cookie 仍會帶上
+                headers["Authorization"] = f"Bearer {token}"
+            jar = {
+                c["name"]: c["value"]
+                for c in cookies
+                if c.get("name") and c.get("value")
+            }
+            with httpx.Client(
+                headers=headers, cookies=jar, timeout=10.0, follow_redirects=False
+            ) as client:
+                if method == "POST":
+                    r = client.post(url, json=body or {})
+                else:
+                    r = client.get(url)
+            return {
+                "status": r.status_code,
+                "content_type": r.headers.get("content-type", ""),
+                "body_length": len(r.content or b""),
+                "body_snippet": (r.text or "")[:400],
+            }
+
+        try:
+            observation = await asyncio.to_thread(_fetch)
+        except Exception as exc:  # noqa: BLE001 — 網路失敗回結構化錯誤不炸迴圈
+            return ToolOutcome(
+                ok=False, result={"error": f"request_failed:{exc.__class__.__name__}"}
+            )
+        observation["body_snippet"] = redact_url_query_values(
+            str(observation.get("body_snippet", ""))
+        )
+        observation["authenticated"] = bool(token or cookies)
         return ToolOutcome(ok=True, result=observation)
 
     def _report_security_issue(self, args: dict[str, Any]) -> ToolOutcome:

@@ -254,6 +254,7 @@ class ToolSchemaTests(TestCase):
             "report_ux_issue",
             "probe_sql_injection",
             "probe_unauthorized_access",
+            "replay_request",
             "report_security_issue",
             "finish",
         }

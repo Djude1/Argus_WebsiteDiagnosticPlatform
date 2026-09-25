@@ -62,13 +62,21 @@ SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資�
    內部 API 等），呼叫 probe_unauthorized_access(url) 以匿名請求重放：若匿名
    仍取得實質資料（非 401/403、非空回應），這就是未授權存取漏洞——用
    report_security_issue 回報，evidence 附上你觀察到的回應內容。
-4. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、
+4. 若網站有註冊／登入功能：註冊一個測試帳號（用 test 類信箱與隨機密碼）並
+   登入。登入後再次 get_network_requests，觀察新出現的授權端點（購物車、
+   訂單、個人資料等常帶數字 id）。用 replay_request 帶登入態做兩類驗證：
+   (a) 把 URL 中的 id 改成鄰近數字重放——若 200 且回傳**不屬於此帳號**的
+   資料，這是跨帳號存取（IDOR）；(b) 觀察到的數量／金額類欄位，送負值或
+   極端值——若被接受（200 且資料寫入），這是 business logic 漏洞。
+   兩者都屬**破壞性極低**的正常操作模擬，但發現時務必 report_security_issue
+   附上回應證據。
+5. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、
    明文密碼等）也用 report_security_issue 回報並附證據；不要臆測，只報親眼所見。
-5. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
-6. 全部完成或無法繼續時呼叫 finish 並附短總結。
+6. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
+7. 全部完成或無法繼續時呼叫 finish 並附短總結。
 
-限制：只對本站同源 URL 使用 probe_sql_injection 與 probe_unauthorized_access；
-跨站 URL、無 query 參數的 SQLi 目標會被系統拒絕。
+限制：只對本站同源 URL 使用 probe_sql_injection、probe_unauthorized_access
+與 replay_request；跨站 URL、無 query 參數的 SQLi 目標會被系統拒絕。
 不要繞過驗證、不要操作他站資源。"""
 
 
