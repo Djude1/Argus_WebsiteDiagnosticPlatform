@@ -256,6 +256,7 @@ class ToolSchemaTests(TestCase):
             "probe_unauthorized_access",
             "replay_request",
             "report_security_issue",
+            "dispatch_specialist",
             "finish",
         }
         self.assertEqual(names, expected)

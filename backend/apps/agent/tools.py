@@ -265,6 +265,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "dispatch_specialist",
+            "description": (
+                "（指揮官專用）派出一位專家 subagent 執行深入測試，等待其完成後"
+                "回傳結果摘要（發現清單＋狀態）。你可以根據每位專家的結果決定"
+                "是否追加派出其他專家。角色與職責見任務說明。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "role": {
+                        "type": "string",
+                        "description": "專家角色名稱（見任務說明的可用角色清單）",
+                    },
+                    "brief": {
+                        "type": "string",
+                        "description": "給該專家的任務提示：指向你觀察到的具體線索（一到三句）",
+                    },
+                },
+                "required": ["role", "brief"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finish",
             "description": "完成本次任務並結束。當你已經回報完所有發現或無法繼續時呼叫。",
             "parameters": {
@@ -281,15 +306,25 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Task 6：依授權模式動態組裝 tool schemas，並遮罩持久化的 tool 資料
 # ---------------------------------------------------------------------------
-def build_tool_schemas(allow_sqlmap: bool) -> list[dict[str, Any]]:
-    """依 deep_mode（active + authorized）決定哪些主動驗證工具交給 LLM。
+def build_tool_schemas(
+    allow_sqlmap: bool, orchestrator: bool = False
+) -> list[dict[str, Any]]:
+    """依模式組裝 tool schemas。
 
-    回傳獨立深拷貝，避免共用 mutable schema 被意外修改。被排除的 tool 不會
-    出現在 provider 的 tool_choice 清單，LLM 無法呼叫。主動探測類
-    （probe_sql_injection / probe_unauthorized_access）一律 deep_mode only；
-    觀察回報類（report_security_issue）全模式可用。
+    - allow_sqlmap（deep_mode）：主動探測工具（probe_*／replay_request）可用
+    - orchestrator：指揮官模式——只留 dispatch_specialist／finish／
+      report_security_issue（調度職責，不親自測試；specialist 不帶
+      dispatch，防無限遞迴）
+    回傳獨立深拷貝，避免共用 mutable schema 被意外修改。
     """
     deep_only = {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
+    if orchestrator:
+        keep = {"dispatch_specialist", "finish", "report_security_issue"}
+        return [
+            copy.deepcopy(s)
+            for s in TOOL_SCHEMAS
+            if s["function"]["name"] in keep
+        ]
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
@@ -395,12 +430,16 @@ class ToolExecutor:
         screenshot_dir: str,
         action_timeout_ms: int = DEFAULT_ACTION_TIMEOUT_MS,
         scan_job=None,
+        specialist_dispatcher=None,
     ):
         self.page = page
         self.screenshot_dir = screenshot_dir
         self.action_timeout_ms = action_timeout_ms
         # probe_sql_injection 需要 scan_job.id / origin（同源檢查 + 授權鎖）
         self.scan_job = scan_job
+        # 指揮官模式：dispatch_specialist tool 的實作由 runner 注入
+        # （async fn(role, brief) -> dict 摘要）；specialist 自身不帶（防遞迴）
+        self.specialist_dispatcher = specialist_dispatcher
         self._screenshot_counter = 0
         # 被動網路觀察：SPA 的 API 端點只存在於真實流量，agent 靠這個「看到」
         # 頁面自己發出的 XHR/fetch（不發任何新請求）。
@@ -462,6 +501,15 @@ class ToolExecutor:
                 )
             if name == "report_security_issue":
                 return self._report_security_issue(args)
+            if name == "dispatch_specialist":
+                if self.specialist_dispatcher is None:
+                    return ToolOutcome(
+                        ok=False, result={"error": "dispatcher_not_available"}
+                    )
+                outcome_data = await self.specialist_dispatcher(
+                    str(args.get("role", "")), str(args.get("brief", ""))
+                )
+                return ToolOutcome(ok=bool(outcome_data), result=outcome_data)
             if name == "finish":
                 return ToolOutcome(
                     ok=True,
