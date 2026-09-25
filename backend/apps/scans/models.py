@@ -1,10 +1,30 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.signing import Signer
 from django.db import models
 from django.db.models import Case, F, IntegerField, Value, When
 from django.utils import timezone
 
 from apps.scans.services import get_hostname, user_owns_domain
+
+# authenticated scan：測試帳密以 Signer（SECRET_KEY 簽章）加密存 DB，
+# 僅 agent runtime 解開用於登入；不進報告／log／findings／API 回應
+_scan_signer = Signer(salt="argus-scan-test-auth")
+
+
+def encrypt_test_auth(value: str) -> str:
+    if not value:
+        return ""
+    return _scan_signer.sign(value)
+
+
+def decrypt_test_auth(signed: str) -> str:
+    if not signed:
+        return ""
+    try:
+        return _scan_signer.unsign(signed)
+    except Exception:
+        return ""
 
 
 class ScanJob(models.Model):
@@ -43,9 +63,13 @@ class ScanJob(models.Model):
         db_index=True,
     )
     max_depth = models.PositiveSmallIntegerField(default=3)
-    max_pages = models.PositiveIntegerField(default=50)
+    max_pages = models.PositiveSmallIntegerField(default=50)
     respect_robots = models.BooleanField(default=True)
     active_testing_authorized = models.BooleanField(default=False)
+    # authenticated scan（選填）：無公開註冊／註冊需驗證的網站，
+    # agent 無法自建帳號，auth 類測試靠使用者提供的測試帳密延續
+    test_auth_email_encrypted = models.TextField(blank=True, default="")
+    test_auth_password_encrypted = models.TextField(blank=True, default="")
     overall_score = models.PositiveSmallIntegerField(null=True, blank=True)
     category_scores = models.JSONField(default=dict, blank=True)
     top_actions = models.JSONField(default=list, blank=True)

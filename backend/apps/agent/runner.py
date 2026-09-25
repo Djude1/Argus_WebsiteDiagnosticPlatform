@@ -446,6 +446,19 @@ async def run_agent_for_scan(
             brief = (brief or "").strip()
             if brief:
                 prompt += f"\n\n【指揮官任務提示】{brief}"
+            # authenticated scan：使用者提供的測試帳密（Signer 解密，僅注入
+            # prompt 用於登入；不落地、不進 log/findings）——無公開註冊的
+            # 真實網站，auth 角色改用此帳密登入而非自註冊
+            from apps.scans.models import decrypt_test_auth
+            _email = decrypt_test_auth(scan_job.test_auth_email_encrypted)
+            _pwd = decrypt_test_auth(scan_job.test_auth_password_encrypted)
+            if _email and _pwd and role in ("auth_idor", "logic_abuse"):
+                prompt += (
+                    "\n\n【平台提供的測試帳號】"
+                    f"email: {_email} / password: {_pwd}\n"
+                    "優先用這組帳號登入（replay_request POST 登入端點＋"
+                    "store_token_key），不必自註冊。"
+                )
             # report 紀律（所有 specialist 通用）：觀察到就要立即落地，
             # 避免做到一半 token 用盡、發現跟著消失（#28 損耗點）
             prompt += (

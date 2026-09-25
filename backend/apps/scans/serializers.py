@@ -19,6 +19,7 @@ from apps.scans.models import (
     Page,
     ScanJob,
     VerifiedDomain,
+    encrypt_test_auth,
 )
 from apps.scans.services import (
     assert_public_http_url,
@@ -73,6 +74,11 @@ class ScanJobCreateSerializer(serializers.Serializer):
         max_value=settings.ARGUS_DEFAULT_MAX_PAGES,
     )
     respect_robots = serializers.BooleanField(default=True)
+    # authenticated scan（選填）：測試帳密以 Signer 加密入 DB，不回傳、不進報告
+    test_auth_email = serializers.CharField(required=False, allow_blank=True,
+                                            write_only=True, max_length=255)
+    test_auth_password = serializers.CharField(required=False, allow_blank=True,
+                                               write_only=True, max_length=255)
 
     def validate(self, attrs: dict) -> dict:
         if not attrs["authorization_confirmed"]:
@@ -147,6 +153,12 @@ class ScanJobCreateSerializer(serializers.Serializer):
             max_pages=validated_data["max_pages"],
             respect_robots=validated_data["respect_robots"],
             active_testing_authorized=validated_data["active_testing_authorized"],
+            test_auth_email_encrypted=encrypt_test_auth(
+                validated_data.get("test_auth_email", "")
+            ),
+            test_auth_password_encrypted=encrypt_test_auth(
+                validated_data.get("test_auth_password", "")
+            ),
         )
         AuthorizationConsent.objects.create(
             scan_job=scan_job,
