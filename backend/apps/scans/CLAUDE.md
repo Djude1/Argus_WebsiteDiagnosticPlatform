@@ -283,7 +283,22 @@ playwright install chromium
 - **runtime 雙條件**：`services.allow_private_targets()` ＝ 開關開啟 **且** `settings.DEBUG`——正式環境誤設 env 也不生效；`scans.E002`（`checks.py`）另在部署檢查提早報錯。
 - 放行範圍：私網 IP、localhost、單標籤 hostname（如 `juice-shop`）、非標準 port；**userinfo、無法解析的 hostname 仍拒絕**。
 - 套用點全部集中走 `services.assert_public_http_url`（crawler、agent runner、掃描／網域驗證 serializer）；`domain_verification.normalize_domain` 同步放行單標籤／IP／localhost；`nuclei_scanner` 於旁路時移除 `-lna`。
-- 環境：疊加 `docker-compose.juice.yml`（web/worker 設 DEBUG＋旁路＋Agent 開啟，與 K8s 正式環境功能面一致；另含 `ARGUS_AGENT_MAX_TOKENS=150000` 與 `ARGUS_NUCLEI_DEEP_TIMEOUT=900` 的 demo 調幅）。
+- 環境：疊加 `docker-compose.juice.yml`（web/worker 設 DEBUG＋旁路＋Agent 開啟，與 K8s 正式環境功能面一致；demo 調幅見 `docs/hermes-agent-architecture.md` §6）。
+
+### Authenticated scan（test_auth_*，2026-09-26）
+
+無公開註冊（或註冊需 email 驗證/CAPTCHA）的網站，agent 無法自建帳號——
+建立掃描可選填 `test_auth_email/password`（serializer write_only；
+`ScanJob.test_auth_*_encrypted` 以 Django Signer 加密），agent runtime
+解密後僅注入 auth 類 specialist 的 prompt 用於登入；**不進** API 回應、
+log、findings、報告。migration 0016。
+
+### SPA 攻擊面管道（2026-09-25）
+
+`crawl_site` 被動攔截 same-origin XHR/fetch 端點（第 4 回傳值）→
+`tasks.py` 併入：sqlmap 候選＝全部端點；Nuclei extra_urls＝頁面＋帶
+query 端點前 3 個（`_NUCLEI_MAX_ENDPOINT_URLS`，全塞會炸時間預算）。
+Agent 端同能力＝`get_network_requests` 工具（見架構文件 §3）。
 
 ---
 
