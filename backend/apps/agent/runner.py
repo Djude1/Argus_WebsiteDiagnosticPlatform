@@ -44,52 +44,60 @@ DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開
 
 請不要操作他站資源、不要繞過驗證、不要送出破壞性 payload。"""
 
-# 僅在 deep_mode（active + authorized）使用：資安優先的任務指示，讓 agent 先做 SQLi 主動驗證。
-# 置於任務最前面（第一優先），避免 agent 把 token 預算耗在 UX 探索上而沒機會 probe。
-# 只描述「可用什麼工具觀察到什麼」，不給特定端點答案——發現端點是 agent 自己的工作。
-SECURITY_FIRST_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】，已開啟頁面 {url}。
+# 僅在 deep_mode（active + authorized）使用：雙 session 分工滲透（pentest-ai-agents
+# 的 role 化概念）。單 session 塞全部工作會互相搶步數（#17~#22 實測：recon 的
+# probe 序列與 auth 的登入後測試擠在同一 context，token 上限先爆），拆成
+# 偵察／認證攻擊兩個角色，各自專屬提示詞與乾淨 context，序列執行後合併結果。
+# 只描述「可用什麼工具觀察到什麼」，不給特定端點答案。
+RECON_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（偵察角色），
+已開啟頁面 {url}。
+你只負責「未登入狀態」的偵察與驗證；不要註冊或登入帳號（那是另一位 agent 的工作）。
 
-請**最優先**完成以下資安驗證步驟（在任何 UX 測試之前）：
 1. 呼叫 get_network_requests 取得本頁瀏覽器實際發出的 API 請求（XHR/fetch）；
    也可用 get_dom_summary 觀察互動元素。SPA 的後端 API 端點通常只出現在
-   網路流量裡，不出現在頁面連結裡；操作頁面（搜尋、篩選、登入等）
-   之後再呼叫一次 get_network_requests 可以觀察到新觸發的端點。
+   網路流量裡，不出現在頁面連結裡。
 2. 從觀察到的端點中，自行判斷哪些「本站同源、且帶 query 參數（URL 含 ?xxx=）」
    最可能存在注入風險（例如接受使用者輸入的查詢、搜尋、篩選端點），對每一個
    呼叫 probe_sql_injection(url) 進行 SQL injection 主動驗證。系統會自動判定，
-   確認可注入時記錄為 critical 漏洞（確認後你無需再 report_ux_issue）。
+   確認可注入時記錄為 critical 漏洞（確認後你無需再 report）。
 3. 對看起來「應該需要登入才能存取」的端點（個人資料、訂單、購物車、後台管理、
    內部 API 等），呼叫 probe_unauthorized_access(url) 以匿名請求重放：若匿名
    仍取得實質資料（非 401/403、非空回應），這就是未授權存取漏洞——用
    report_security_issue 回報，evidence 附上你觀察到的回應內容。
-4. 若網站有註冊／登入功能：**優先直接打 API 而不是操作 UI 表單**——從
+4. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、
+   回應中的敏感欄位等）也用 report_security_issue 回報並附證據；不要臆測。
+5. 完成、或已系統性覆蓋以上三類後，呼叫 finish 附短總結。
+
+限制：只對本站同源 URL 使用 probe 工具；跨站 URL、無 query 參數的 SQLi
+目標會被系統拒絕。"""
+
+AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（認證攻擊角色），
+已開啟頁面 {url}。
+你負責「登入後」的存取控制與 business logic 驗證。
+
+1. 若網站有註冊／登入功能：**優先直接打 API 而不是操作 UI 表單**——從
    network log 找到註冊與登入端點，用 replay_request 先 POST 註冊一個測試
    帳號（test 類信箱與隨機密碼），再 POST 登入並以 store_token_key 把回應
    token 存進瀏覽器。登入後再次 get_network_requests，觀察新出現的授權
-   端點（購物車、訂單、個人資料等常帶數字 id）。用 replay_request 帶登入態
-   做兩類驗證：(a) 把 URL 中的 id 改成鄰近數字重放——若 200 且回傳**不屬於
-   此帳號**的資料，這是跨帳號存取（IDOR）；讀取型之外，更新類端點
-   （PUT/PATCH，如修改購物車項目、個人資料）也以同法改 id 測試——若能
-   成功修改**他人**的資源，這是更嚴重的寫入型 IDOR。(b) 觀察到的數量／
-   金額類欄位，送負值或極端值——若被接受（200 且資料寫入），這是
-   business logic 漏洞。
-   另外，登入／帳號類端點本身也值得以 replay_request 送標準的 SQL
-   injection 登入繞過探測值（如信箱欄填 ' OR 1=1-- 之類的無害查詢型
-   payload）——若回應異常成功（回傳 token／登入成功），即為登入繞過
-   漏洞，report 時附上請求與回應證據。
-   注意：寫入型測試（如加購物車）要先用**你自己的**資源 id——登入回應或
-   whoami 類端點通常會回傳你帳號的 id 與購物車／資源 id（例如 bid 欄位），
-   用那個值，不要用別人的 id（會被擋）也不要用猜的。
-   兩者都屬**破壞性極低**的正常操作模擬，但發現時務必 report_security_issue
-   附上回應證據。
-5. 過程中觀察到的其他資安線索（敏感資料顯示在頁面、錯誤訊息洩漏內部路徑、
-   明文密碼等）也用 report_security_issue 回報並附證據；不要臆測，只報親眼所見。
-6. 完成資安驗證後，若還有 token 額度，再簡單做基本 UX 觀察並 report_ux_issue。
-7. 全部完成或無法繼續時呼叫 finish 並附短總結。
+   端點（購物車、訂單、個人資料等常帶數字 id）。
+2. 跨帳號存取（IDOR）：把 URL 中的 id 改成鄰近數字或 1 重放——若 200 且回傳
+   **不屬於此帳號**的資料，即為讀取型 IDOR。讀取型之外，更新類端點
+   （PUT/PATCH，如修改購物車項目、個人資料）也以同法改 id 測試——若能成功
+   修改**他人**的資源，這是更嚴重的寫入型 IDOR。兩種發現都立即
+   report_security_issue，附上請求與回應證據。
+3. Business logic：觀察到的數量／金額類欄位，送負值或極端值——若被接受
+   （200 且資料寫入），這是 business logic 漏洞；寫入後重新 GET 該資源
+   確認資料真的變了，連同驗證結果一起 report_security_issue。
+4. 登入繞過：登入端點本身以 replay_request 送標準的 SQL injection 登入繞過
+   探測值（如信箱欄填 ' OR 1=1-- 之類的無害查詢型 payload）——若回應異常
+   成功（回傳 token／登入成功），即為登入繞過漏洞，report 時附請求與回應。
+5. 完成、或已系統性覆蓋以上後呼叫 finish 附短總結。
 
-限制：只對本站同源 URL 使用 probe_sql_injection、probe_unauthorized_access
-與 replay_request；跨站 URL、無 query 參數的 SQLi 目標會被系統拒絕。
-不要繞過驗證、不要操作他站資源。"""
+注意：寫入型測試先用**你自己的**資源 id——登入回應或 whoami 類端點通常會
+回傳你帳號的 id 與購物車／資源 id（例如 bid 欄位），用那個值，不要猜；
+對「他人」的寫入測試只在更新端點（PUT/PATCH）上做，不要對他人資源做
+建立或刪除。
+限制：只對本站同源 URL 操作；不要操作他站資源。"""
 
 
 def _origin_key(url: str) -> tuple[str, str, int | None]:
@@ -166,38 +174,76 @@ async def run_agent_for_scan(
         scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
         and scan_job.active_testing_authorized
     )
+
+    async def _run_session(role_prompt: str) -> AgentRunResult:
+        """單一 role session：獨立 browser context（乾淨 localStorage／cookie）
+        與獨立 LLM messages——兩個 role 互不污染、各自完整預算上限。"""
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                headless=True,
+                **playwright_launch_kwargs(),
+            )
+            try:
+                context = await _make_agent_context(browser, scan_job.origin)
+                page = await context.new_page()
+                await page.goto(
+                    target_url, wait_until="domcontentloaded", timeout=30000
+                )
+                executor = ToolExecutor(
+                    page=page, screenshot_dir=str(media_dir), scan_job=scan_job
+                )
+                agent = HermesAgent(
+                    scan_job=scan_job,
+                    executor=executor,
+                    chain=chain,
+                    tool_schemas=build_tool_schemas(deep_mode),
+                )
+                return await agent.run(task_prompt=role_prompt)
+            finally:
+                await browser.close()
+
+    def _merge(results: list[AgentRunResult]) -> AgentRunResult:
+        """合併多 role 的結果：issues/findings 串聯（persist 層依 description
+        去重）；status 只要有一個 completed 就算 completed；error 串聯標注角色。"""
+        if len(results) == 1:
+            return results[0]
+        return AgentRunResult(
+            session_id=results[0].session_id,
+            status=(
+                "completed"
+                if any(r.status == "completed" for r in results)
+                else results[0].status
+            ),
+            steps=sum(r.steps for r in results),
+            total_tokens=sum(r.total_tokens for r in results),
+            issues=[i for r in results for i in r.issues],
+            security_findings=[f for r in results for f in r.security_findings],
+            final_summary=" || ".join(
+                f"[{idx}] {r.final_summary[:200]}" for idx, r in enumerate(results)
+            ),
+            error="; ".join(
+                f"role{idx}:{r.error}" for idx, r in enumerate(results) if r.error
+            ),
+        )
+
     if task_prompt is not None:
-        prompt = task_prompt
+        prompts: list[str] = [task_prompt]
     elif deep_mode:
-        prompt = SECURITY_FIRST_PROMPT.format(origin=scan_job.origin, url=target_url)
+        # 雙 role 分工（序列執行：同一掃描目標的 RPS 與 Kali 預算是全域共享，
+        # 並行會讓兩個 session 的請求互相擠壓；序列讓每個 role 在乾淨 context 專注跑）
+        prompts = [
+            RECON_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
+            AUTH_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
+        ]
     else:
-        prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
-            origin=scan_job.origin, url=target_url
-        )
-
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=True,
-            **playwright_launch_kwargs(),
-        )
-        try:
-            context = await _make_agent_context(browser, scan_job.origin)
-            page = await context.new_page()
-            await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
-
-            executor = ToolExecutor(
-                page=page, screenshot_dir=str(media_dir), scan_job=scan_job
+        prompts = [
+            DEFAULT_TASK_PROMPT_TEMPLATE.format(
+                origin=scan_job.origin, url=target_url
             )
-            # Task 6：只在 deep_mode（active + authorized）才把 probe_sql_injection 暴露給 LLM
-            agent = HermesAgent(
-                scan_job=scan_job,
-                executor=executor,
-                chain=chain,
-                tool_schemas=build_tool_schemas(deep_mode),
-            )
-            result = await agent.run(task_prompt=prompt)
-        finally:
-            await browser.close()
+        ]
+
+    results = [await _run_session(p) for p in prompts]
+    result = _merge(results)
 
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)
