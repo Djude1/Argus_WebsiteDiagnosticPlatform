@@ -4,6 +4,22 @@ import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
+import argusEyeStill from "../../assets/argus-eye-still.webp";
+import argusEye from "../../assets/argus-eye.webp";
+import { ScanPipeline } from "../../components/public/ScanPipeline.jsx";
+import {
+  ChartIcon,
+  CoinIcon,
+  DocIcon,
+  EyeIcon,
+  FlagIcon,
+  GlobeIcon,
+  LockIcon,
+  MagnifierIcon,
+  RobotIcon,
+  ShieldIcon,
+  SpiderIcon,
+} from "../../shared/LineIcons.jsx";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
 import TechMarquee from "../../components/public/TechMarquee.jsx";
 
@@ -128,56 +144,81 @@ const PROJECT_STACK_POINTS = [
   "Docker 容器化，Argo CD 部署到 Kubernetes",
 ];
 
+// 數字以原始碼實測為準（2026-09-25）。寫小了等於自己把工程量砍掉，
+// 寫大了評委一查就破功——這幾個都能在 repo 裡數出來。
 const PROJECT_PLATFORM_STATS = [
-  { label: "Django Apps", value: "8", hint: "accounts / scans / agent / billing / reviews / admin_api / content / insights" },
-  { label: "資料模型", value: "20+", hint: "ScanJob、Finding、CoinWallet、PurchaseOrder…" },
-  { label: "自動化測試", value: "250+", hint: "API / 權限 / billing 流程 / 圖片上傳" },
-  { label: "REST 端點", value: "40+", hint: "billing / reviews / content / admin / scans / insights" },
+  { label: "Django Apps", value: "9", hint: "accounts / scans / agent / billing / reviews / admin_api / content / insights / rebuild" },
+  { label: "資料模型", value: "32", hint: "ScanJob、Finding、FixOutput、VerifiedDomain、CoinWallet、PurchaseOrder…" },
+  { label: "自動化測試", value: "1,053", hint: "API / 權限 / 計費流程 / 掃描鏈路 / 後台稽核" },
+  { label: "REST 端點", value: "65", hint: "scans / billing / reviews / content / insights / admin" },
+];
+
+// 首頁的產品預覽視窗：模擬一次掃描進行中的畫面。
+//
+// 這是示意畫面不是真實掃描，所以標題列標了「示意」——首頁放一個看起來像
+// 真實資料的東西卻不說明，等於誤導。
+//
+// 四筆 finding 對應真實規則：HTTPS（security）、JSON-LD（geo）、
+// alt 屬性（seo）、llms.txt（geo/AEO），嚴重度也照實際的評分權重排。
+const DEMO_FINDINGS = [
+  { sev: "high", tag: "HIGH", cat: "SECURITY", title: "頁面未使用 HTTPS", meta: "影響 3 個頁面" },
+  { sev: "medium", tag: "MED", cat: "GEO", title: "缺少 JSON-LD 結構化資料", meta: "AI 無法辨識實體" },
+  { sev: "low", tag: "LOW", cat: "SEO", title: "圖片缺 alt 屬性", meta: "3 張圖片" },
+  { sev: "info", tag: "INFO", cat: "AEO", title: "建議加 llms.txt 給 AI 爬蟲", meta: "尚未建立" },
 ];
 
 function ProjectScanDemo() {
   return (
-    <div className="project-demo">
-      <div className="project-demo-window">
-        <div className="project-demo-title-bar">
-          <span className="project-demo-dot project-demo-dot-r" />
-          <span className="project-demo-dot project-demo-dot-y" />
-          <span className="project-demo-dot project-demo-dot-g" />
-          <span className="project-demo-url">argus.example.com / 掃描中…</span>
+    <div className="demo-win">
+      <div className="demo-bar">
+        <span className="demo-dot demo-dot-r" />
+        <span className="demo-dot demo-dot-y" />
+        <span className="demo-dot demo-dot-g" />
+        <span className="demo-url">
+          <LockIcon className="demo-url-icon" />
+          argus.example.com
+        </span>
+        <span className="demo-tag">示意</span>
+      </div>
+
+      <div className="demo-body">
+        <div className="demo-phase">
+          <span className="demo-phase-icon"><SpiderIcon /></span>
+          <span className="demo-phase-text">
+            <strong>爬取中</strong>
+            <span className="demo-phase-sub">12 / 50 頁 · 已用 00:42</span>
+          </span>
+          <span className="demo-live">
+            <span className="demo-live-dot" />
+            即時
+          </span>
         </div>
-        <div className="project-demo-body">
-          <div className="project-demo-phase">
-            <span className="project-demo-phase-icon">🕷️</span>
-            <span>爬蟲中… 12 / 50 頁</span>
-            <span className="project-demo-progress">
-              <span className="project-demo-progress-fill" />
-            </span>
-          </div>
-          <ul className="project-demo-findings">
-            <li className="project-demo-finding sev-high">
-              <span className="project-demo-finding-sev">HIGH</span>
-              <span className="project-demo-finding-title">頁面未使用 HTTPS</span>
-            </li>
-            <li className="project-demo-finding sev-medium">
-              <span className="project-demo-finding-sev">MED</span>
-              <span className="project-demo-finding-title">缺少 JSON-LD 結構化資料</span>
-            </li>
-            <li className="project-demo-finding sev-low">
-              <span className="project-demo-finding-sev">LOW</span>
-              <span className="project-demo-finding-title">圖片缺 alt 屬性 ×3</span>
-            </li>
-            <li className="project-demo-finding sev-info">
-              <span className="project-demo-finding-sev">INFO</span>
-              <span className="project-demo-finding-title">建議加 llms.txt 給 AI 爬蟲</span>
-            </li>
-          </ul>
+
+        <div className="demo-progress" role="presentation">
+          <span className="demo-progress-fill" />
         </div>
+
+        <ul className="demo-findings">
+          {DEMO_FINDINGS.map((f, i) => (
+            <li
+              className={`demo-finding sev-${f.sev}`}
+              key={f.title}
+              style={{ animationDelay: `${0.5 + i * 0.45}s` }}
+            >
+              <span className="demo-sev">{f.tag}</span>
+              <span className="demo-finding-main">
+                <span className="demo-finding-title">{f.title}</span>
+                <span className="demo-finding-meta">{f.meta}</span>
+              </span>
+              <span className="demo-cat">{f.cat}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
 }
 
-// 後台 CMS 可編輯前，先用這份 fallback；API 拉到資料就會覆蓋掉
 const PROJECT_FEATURES_FALLBACK = [
   { id: -1, icon: "🕷️", title: "BFS 深度爬蟲", description: "以 Playwright 驅動的 BFS 爬蟲，自動探索整站結構。" },
   { id: -2, icon: "🔍", title: "四維安全掃描", description: "涵蓋 SEO、AEO、GEO、Security 四個維度的全面分析。" },
@@ -185,6 +226,43 @@ const PROJECT_FEATURES_FALLBACK = [
   { id: -4, icon: "📊", title: "即時進度追蹤", description: "掃描進度即時更新，支援多任務並行管理。" },
   { id: -5, icon: "📝", title: "Word 報告匯出", description: "一鍵產生專業 Word 格式掃描報告，方便交付客戶。" },
   { id: -6, icon: "💎", title: "點數計費系統", description: "靈活的 Coin 計費模式，按頁計費，精準控制成本。" },
+];
+
+// 核心功能的內容來自 CMS（/content/features/），管理員在後台填的是 emoji。
+// 首頁改用描邊圖示後，這張表把 emoji 對映到對應圖示；沒對到的用放大鏡當預設。
+// 不直接改 CMS 欄位型別，是為了不動到後台既有的編輯流程。
+const FEATURE_ICON_BY_EMOJI = {
+  "🕷️": SpiderIcon, "🕷": SpiderIcon,
+  "🔍": MagnifierIcon, "🔎": MagnifierIcon,
+  "🤖": RobotIcon,
+  "📊": ChartIcon, "📈": ChartIcon,
+  "📝": DocIcon, "📄": DocIcon, "📃": DocIcon,
+  "💎": CoinIcon, "💰": CoinIcon, "🪙": CoinIcon,
+  "🔐": LockIcon, "🔒": LockIcon,
+  "🛡️": ShieldIcon, "🛡": ShieldIcon,
+  "🌐": GlobeIcon,
+  "👀": EyeIcon, "👁": EyeIcon,
+  "🚀": FlagIcon, "🎯": FlagIcon,
+};
+
+// 安全邊界：每一項都對應實際程式，不是文宣口號
+const PROJECT_SAFETY = [
+  {
+    key: "consent", tone: "cyan", Icon: LockIcon, title: "授權確認",
+    desc: "每次任務記錄 IP、時間、User-Agent 與授權勾選狀態；第三方或敏感網域要求二次確認。",
+  },
+  {
+    key: "same-origin", tone: "teal", Icon: GlobeIcon, title: "同網域邏輯",
+    desc: "爬蟲與 finding 證據只限授權目標的同網域頁面，不會跨域追蹤或污染他站。",
+  },
+  {
+    key: "ssrf", tone: "violet", Icon: ShieldIcon, title: "SSRF 應用層防護",
+    desc: "入口、轉址、子資源與 WebSocket 均檢查公開位址；正式環境仍須搭配出站網路政策。",
+  },
+  {
+    key: "passive", tone: "amber", Icon: EyeIcon, title: "預設被動模式",
+    desc: "預設不做破壞性或主動式漏洞攻擊；主動模式需額外勾選、通過網域驗證且記入稽核軌跡。",
+  },
 ];
 
 function ProjectPage() {
@@ -214,16 +292,28 @@ function ProjectPage() {
           <span className="hero-corner br" />
         </div>
         <div className="public-hero-content">
-          <img src={brandLogo} className="public-hero-logo" alt="ARGUS" />
+          {/* 品牌識別：會動的 Argus 之眼 ＋ 藝術字。
+              之眼用 <picture>，偏好減少動態者自動換靜態首幀且不下載動態版。 */}
+          <div className="public-hero-brand">
+            <picture className="public-hero-eye">
+              <source media="(prefers-reduced-motion: reduce)" srcSet={argusEyeStill} />
+              <img src={argusEye} alt="" width="256" height="202" />
+            </picture>
+            <span className="public-hero-wordmark" aria-label="ARGUS">
+              {"ARGUS".split("").map((ch, i) => (
+                <span key={`${ch}-${i}`} style={{ animationDelay: `${i * 0.08}s` }}>{ch}</span>
+              ))}
+            </span>
+          </div>
           <span className="public-hero-eyebrow">掃描 · 洞察 · 證據</span>
           <h1 className="public-hero-title">
             一鍵看見<span className="hero-grad">網站的所有問題</span>
           </h1>
           <p className="public-hero-sub">
-            把網站問題整理成可以執行的改善順序。
-            整合全站爬蟲、四維靜態掃描與 LLM Agent 行為測試，
-            為你授權的網站產出可互動報告與 Word 文件，
-            並輸出結構化 Prompt 帶去 ChatGPT / Claude 取得修補方向。
+            輸入網址，找出網站在<strong>搜尋、體驗與資安</strong>上的問題，並排好該先處理哪一個。
+          </p>
+          <p className="public-hero-sub is-highlight">
+            不只列出問題——修正要用的檔案，直接生給你。
           </p>
           <div className="public-hero-actions">
             <NavLink to="/login" className="public-cta-primary">登入進行詳細檢查 →</NavLink>
@@ -232,47 +322,31 @@ function ProjectPage() {
         </div>
       </section>
 
+      {/* 產品預覽緊接 hero：先讓訪客看到東西長什麼樣，再談安全邊界與規模 */}
+      <section className="public-section public-section-demo">
+        <ProjectScanDemo />
+      </section>
+
       <section className="public-section">
         <header className="public-section-head">
           <h2>安全邊界</h2>
-          <p>不是文宣口號，每一項都對應實際程式碼</p>
+          <p>每一項都對應實際程式碼，不是文宣</p>
         </header>
-        <div className="public-feature-grid">
-          <article className="public-feature-card">
-            <div className="public-feature-icon">🔐</div>
-            <h3 className="public-feature-title">授權確認</h3>
-            <p className="public-feature-desc">
-              每次任務記錄 IP、時間、User-Agent 與授權勾選狀態；第三方或敏感網域要求二次確認。
-            </p>
-          </article>
-          <article className="public-feature-card">
-            <div className="public-feature-icon">🌐</div>
-            <h3 className="public-feature-title">同網域邏輯</h3>
-            <p className="public-feature-desc">
-              爬蟲與 finding 證據只限授權目標的同網域頁面，不會跨域追蹤或污染他站。
-            </p>
-          </article>
-          <article className="public-feature-card">
-            <div className="public-feature-icon">🛡️</div>
-            <h3 className="public-feature-title">SSRF 應用層防護</h3>
-            <p className="public-feature-desc">
-              入口、轉址、子資源與 WebSocket 均檢查公開位址；正式環境仍須搭配出站網路政策。
-            </p>
-          </article>
-          <article className="public-feature-card">
-            <div className="public-feature-icon">👀</div>
-            <h3 className="public-feature-title">預設被動模式</h3>
-            <p className="public-feature-desc">
-              Phase 1 不做破壞性或主動式漏洞攻擊；主動模式需額外勾選且記入稽核軌跡。
-            </p>
-          </article>
+        <div className="public-panel-grid">
+          {PROJECT_SAFETY.map((item) => (
+            <article className="public-panel" data-tone={item.tone} key={item.key}>
+              <span className="public-panel-icon"><item.Icon /></span>
+              <h3 className="public-panel-title">{item.title}</h3>
+              <p className="public-panel-desc">{item.desc}</p>
+            </article>
+          ))}
         </div>
       </section>
 
       <section className="public-section">
         <header className="public-section-head">
           <h2>平台規模</h2>
-          <p>不是 demo 玩具，是真實量產規格</p>
+          <p>這些數字都能在原始碼裡數出來</p>
         </header>
         <div className="project-stats-grid">
           {PROJECT_PLATFORM_STATS.map((s) => (
@@ -286,26 +360,27 @@ function ProjectPage() {
       </section>
 
       <section className="public-section">
-        <header className="public-section-head">
-          <h2>它怎麼運作</h2>
-          <p>輸入網址 → 爬蟲 → 四維掃描 → 互動報告</p>
-        </header>
-        <ProjectScanDemo />
+        <ScanPipeline />
       </section>
 
       <section className="public-section">
         <header className="public-section-head">
           <h2>核心功能</h2>
-          <p>從爬蟲到 LLM Agent，端到端解決方案</p>
+          <p>從爬取到修正產出，一條龍完成</p>
         </header>
-        <div className="public-feature-grid">
-          {features.map((f) => (
-            <article key={f.id} className="public-feature-card">
-              <div className="public-feature-icon">{f.icon || "✨"}</div>
-              <h3 className="public-feature-title">{f.title}</h3>
-              <p className="public-feature-desc">{f.description}</p>
-            </article>
-          ))}
+        <div className="public-panel-grid">
+          {features.map((f, i) => {
+            // CMS 存的是 emoji；對不到就退回放大鏡，不讓畫面缺圖示
+            const Icon = FEATURE_ICON_BY_EMOJI[f.icon] || MagnifierIcon;
+            const tone = ["cyan", "teal", "violet", "amber"][i % 4];
+            return (
+              <article className="public-panel" data-tone={tone} key={f.id}>
+                <span className="public-panel-icon"><Icon /></span>
+                <h3 className="public-panel-title">{f.title}</h3>
+                <p className="public-panel-desc">{f.description}</p>
+              </article>
+            );
+          })}
           {features.length === 0 && (
             <p className="public-empty">尚未設定功能介紹。</p>
           )}
@@ -322,7 +397,7 @@ function ProjectPage() {
             {milestones.map((m, idx) => (
               <li key={m.id} className={`project-timeline-item ${idx === 0 ? "is-first" : ""}`}>
                 <div className="project-timeline-marker">
-                  <span className="project-timeline-icon">{m.icon || "🚩"}</span>
+                  <span className="project-timeline-icon"><FlagIcon /></span>
                 </div>
                 <div className="project-timeline-body">
                   <div className="project-timeline-date">
@@ -585,7 +660,7 @@ function PurchasePage() {
       <section className="public-section">
         <header className="public-section-head">
           <h2>為什麼選 Argus</h2>
-          <p>我們、自己做、市面其他工具的對比</p>
+          <p>Argus、自己做、市面工具，三者比一比</p>
         </header>
         <div className="public-compare-wrap">
           <table className="public-compare-table">

@@ -23,16 +23,31 @@ import {
   useConfirmDialogs,
   useDialogFocus,
 } from "../../shared/AppShared.jsx";
+import {
+  ChartIcon,
+  ClockIcon,
+  CoinIcon,
+  GearIcon,
+  GlobeIcon,
+  HomeIcon,
+  MagnifierIcon,
+  StarIcon,
+} from "../../shared/LineIcons.jsx";
 
+// 圖示改用 shared/LineIcons 的描邊圖示，與首頁鏈路圖同一套視覺語言。
+// 不再用 emoji：不同作業系統長相不一，大小與基線也對不齊。
+// 圖示用 shared/LineIcons 的雙色調圖示，與首頁同一套視覺語言。
+// tone 依語意給色而不是隨機配：驗證＝teal（安全）、購點與評論＝amber（金幣／星）、
+// 設定＝slate（中性，不該搶注意力）。核心動作（首頁／掃描）維持品牌 cyan。
 const NAV_ITEMS = [
-  { to: "/project", label: "首頁", emoji: "🏠" },
-  { to: "/dashboard", label: "Dashboard", emoji: "📊" },
-  { to: "/scans", label: "掃描", emoji: "🔍" },
-  { to: "/domains", label: "網域驗證", emoji: "🌐" },
-  { to: "/history", label: "歷史", emoji: "📈" },
-  { to: "/billing", label: "購點", emoji: "💎" },
-  { to: "/reviews", label: "評論", emoji: "⭐" },
-  { to: "/settings", label: "設定", emoji: "⚙️" },
+  { to: "/project", label: "首頁", Icon: HomeIcon, tone: "cyan" },
+  { to: "/dashboard", label: "Dashboard", Icon: ChartIcon, tone: "violet" },
+  { to: "/scans", label: "掃描", Icon: MagnifierIcon, tone: "cyan" },
+  { to: "/domains", label: "網域驗證", Icon: GlobeIcon, tone: "teal" },
+  { to: "/history", label: "歷史", Icon: ClockIcon, tone: "sky" },
+  { to: "/billing", label: "購點", Icon: CoinIcon, tone: "amber" },
+  { to: "/reviews", label: "評論", Icon: StarIcon, tone: "rose" },
+  { to: "/settings", label: "設定", Icon: GearIcon, tone: "slate" },
 ];
 
 function TopNav() {
@@ -67,7 +82,7 @@ function TopNav() {
                 `argus-nav-link ${isActive ? "active" : ""}`
               }
             >
-              <span aria-hidden="true">{item.emoji}</span>
+              <span className="argus-nav-icon" data-tone={item.tone}><item.Icon /></span>
               <span>{item.label}</span>
             </NavLink>
           ))}
