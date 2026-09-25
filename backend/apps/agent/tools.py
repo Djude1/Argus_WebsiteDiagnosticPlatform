@@ -733,6 +733,9 @@ class ToolExecutor:
                 "content_type": r.headers.get("content-type", ""),
                 "body_length": len(r.content or b""),
                 "body_snippet": (r.text or "")[:400],
+                # token 抽取必須用完整回應：JWT 常超過 snippet 的 400 字元，
+                # 截斷字串會讓 json.loads 失敗、token 永遠存不進去
+                "_full_body": r.text or "",
             }
 
         try:
@@ -744,9 +747,10 @@ class ToolExecutor:
         # 登入端點支援：回應 JSON 裡的 token 寫入 localStorage，讓 agent 的
         # 後續重放自動帶登入態（SPA 慣例）。token 不回傳給 LLM、不持久化。
         token_stored = False
+        full_body = observation.pop("_full_body", "")
         if store_token_key:
             try:
-                data = json.loads(observation.get("body_snippet") or "{}")
+                data = json.loads(full_body or "{}")
             except (json.JSONDecodeError, TypeError):
                 data = {}
             token_value = (
