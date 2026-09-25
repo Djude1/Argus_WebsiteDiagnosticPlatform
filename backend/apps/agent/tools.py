@@ -117,6 +117,65 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "get_page_html",
+            "description": (
+                "取得目前頁面的原始 HTML（截斷至前 8000 字元）。用於檢查"
+                " HTML 註釋洩漏、hidden 欄位、inline script 內的敏感值、"
+                "meta 標籤等渲染文字看不到的內容。"
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_storage",
+            "description": (
+                "列出目前瀏覽器 context 的 localStorage 鍵值與 cookies"
+                "（名稱＋值長度＋屬性；值經遮罩）。用於檢查 token／敏感"
+                "資料的存放位置與 cookie 旗標（HttpOnly/Secure/SameSite）。"
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_response_headers",
+            "description": (
+                "以無憑證請求 GET 一個同源 URL，回傳其回應 headers"
+                "（安全標頭、CORS、Set-Cookie、伺服器指紋等）。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "完整同源 URL"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "decode_jwt",
+            "description": (
+                "解碼一個 JWT 字串的 header 與 payload（base64，不驗簽）。"
+                "用於檢查 payload 內的敏感欄位（密碼雜湊、個人資料）、"
+                "alg、過期時間等。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "token": {"type": "string", "description": "JWT 字串（eyJ 開頭）"},
+                },
+                "required": ["token"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "take_screenshot",
             "description": "對目前 viewport 截圖並儲存，回傳檔案路徑。",
             "parameters": {"type": "object", "properties": {}},
@@ -504,6 +563,14 @@ class ToolExecutor:
                 return await self._get_dom_summary()
             if name == "get_network_requests":
                 return self._get_network_requests(args)
+            if name == "get_page_html":
+                return await self._get_page_html()
+            if name == "get_storage":
+                return await self._get_storage()
+            if name == "get_response_headers":
+                return await self._get_response_headers(args.get("url", ""))
+            if name == "decode_jwt":
+                return self._decode_jwt(args.get("token", ""))
             if name == "take_screenshot":
                 return await self._take_screenshot()
             if name == "report_ux_issue":
@@ -582,6 +649,94 @@ class ToolExecutor:
         recent = list(reversed(self._network_log))[:limit]
         return ToolOutcome(
             ok=True, result={"requests": recent, "total_logged": len(self._network_log)}
+        )
+
+    async def _get_page_html(self) -> ToolOutcome:
+        """原始 HTML（截斷）：注釋洩漏／hidden 欄位／inline 敏感值。"""
+        try:
+            html = await self.page.content()
+        except Exception as exc:  # noqa: BLE001
+            return ToolOutcome(ok=False, result={"error": exc.__class__.__name__})
+        return ToolOutcome(ok=True, result={"html": str(html)[:8000]})
+
+    async def _get_storage(self) -> ToolOutcome:
+        """localStorage＋cookies 盤點（值遮罩為長度，不外洩內容）。"""
+        try:
+            entries = await self.page.evaluate(
+                "() => Object.entries(localStorage).map(([k, v]) =>"
+                " ({key: k, length: (v || '').length}))"
+            )
+        except Exception:  # noqa: BLE001
+            entries = []
+        try:
+            cookies = await self.page.context.cookies()
+        except Exception:  # noqa: BLE001
+            cookies = []
+        safe_cookies = [
+            {
+                "name": c.get("name", ""),
+                "length": len(str(c.get("value", ""))),
+                "httponly": bool(c.get("httpOnly")),
+                "secure": bool(c.get("secure")),
+                "samesite": c.get("sameSite", ""),
+            }
+            for c in cookies
+        ]
+        return ToolOutcome(
+            ok=True, result={"localStorage": entries, "cookies": safe_cookies}
+        )
+
+    async def _get_response_headers(self, url: str) -> ToolOutcome:
+        """匿名 GET 同源 URL，回傳回應 headers（安全標頭／指紋檢查用）。"""
+        from urllib.parse import urlparse
+
+        if self.scan_job is not None:
+            parsed = urlparse(url or "")
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                return ToolOutcome(ok=False, result={"error": "invalid_url"})
+            target_origin = f"{parsed.scheme}://{parsed.hostname}"
+            if parsed.port:
+                target_origin = f"{target_origin}:{parsed.port}"
+            if target_origin != self.scan_job.origin:
+                return ToolOutcome(ok=False, result={"error": "cross_origin_forbidden"})
+
+        import httpx
+
+        def _fetch() -> dict[str, Any]:
+            with httpx.Client(
+                headers={"User-Agent": settings.ARGUS_SCANNER_USER_AGENT},
+                timeout=10.0,
+                follow_redirects=False,
+            ) as client:
+                r = client.get(url)
+            return {"status": r.status_code, "headers": dict(r.headers)}
+
+        try:
+            observation = await asyncio.to_thread(_fetch)
+        except Exception as exc:  # noqa: BLE001
+            return ToolOutcome(
+                ok=False, result={"error": f"request_failed:{exc.__class__.__name__}"}
+            )
+        return ToolOutcome(ok=True, result=observation)
+
+    def _decode_jwt(self, token: str) -> ToolOutcome:
+        """解 JWT header/payload（base64；不驗簽）。token 不回傳不持久化。"""
+        import base64
+
+        parts = (token or "").split(".")
+        if len(parts) < 2:
+            return ToolOutcome(ok=False, result={"error": "not_a_jwt"})
+
+        def _b64(seg: str) -> dict[str, Any]:
+            pad = "=" * (-len(seg) % 4)
+            try:
+                decoded = base64.urlsafe_b64decode(seg + pad).decode("utf-8", "ignore")
+                return json.loads(decoded) if decoded else {}
+            except (ValueError, json.JSONDecodeError):
+                return {"_raw": decoded[:200] if decoded else ""}
+
+        return ToolOutcome(
+            ok=True, result={"header": _b64(parts[0]), "payload": _b64(parts[1])}
         )
 
     async def _get_dom_summary(self) -> ToolOutcome:

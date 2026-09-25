@@ -47,6 +47,9 @@ DEFAULT_SYSTEM_PROMPT = """你是 Argus 平台的 Hermes 動態 UX 測試 Agent�
   必須呼叫 report_ux_issue，並提供修補方向（不要給程式碼）。
 - 若已完成任務或無法繼續，呼叫 finish 並附短總結。
 - 不要嘗試繞過任何驗證、不要操作他站資源、不要送出任何破壞性 payload。
+- finish 的 summary 必須包含兩部分：(1) 已完成測試與發現摘要；
+  (2) **未能完成的測試與原因**（缺少什麼工具／被目標拒絕／逾時／找不到入口），
+  這些資訊會用於改善測試能力，請誠實具體描述。
 """
 
 
@@ -98,9 +101,15 @@ class HermesAgent:
         self._consecutive_same_tool = 0
         self._stall_hint_given = False
 
-    # 觀察型工具的回應很大（DOM 80 節點／整頁文字／請求清單），舊快照每輪
+    # 觀察型工具的回應很大（DOM 80 節點／整頁文字／請求清單／HTML），舊快照每輪
     # 重複計入 prompt tokens 是 context 爆炸的主因（實測 32 步累積 260k）。
-    _BULKY_OBSERVATION_TOOLS = {"get_dom_summary", "get_visible_text", "get_network_requests"}
+    _BULKY_OBSERVATION_TOOLS = {
+        "get_dom_summary",
+        "get_visible_text",
+        "get_network_requests",
+        "get_page_html",
+        "get_storage",
+    }
     _STALL_HINT_THRESHOLD = 4
 
     def _compact_stale_tool_results(self) -> None:

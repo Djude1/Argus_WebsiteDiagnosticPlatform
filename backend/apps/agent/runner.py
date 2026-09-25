@@ -158,8 +158,10 @@ INFO_LEAK_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資
    replay_request GET 探測；回 200 且內容非 SPA fallback 即記錄。
 3. 錯誤路徑測試：對 API 端點送不完整／型別錯誤的請求，檢查錯誤回應
    是否洩漏框架版本、內部 IP、檔案路徑。
-4. 每項發現 report_security_issue，evidence 附回應片段（遮罩後）。
-5. 完成或系統性覆蓋後 finish 附短總結。
+4. 也可用 get_page_html 檢查頁面原始碼（注釋／hidden 欄位／inline 敏感值）、
+   get_response_headers 檢查安全標頭與伺服器指紋。
+5. 每項發現 report_security_issue，evidence 附回應片段（遮罩後）。
+6. 完成或系統性覆蓋後 finish 附短總結。
 
 限制：只讀取型操作（GET／只讀重放）；只對本站同源操作。"""
 
@@ -168,9 +170,9 @@ JWT_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資
 你專責驗證 token／session 的處理弱點。
 
 1. 登入取得 token（API 註冊測試帳號＋登入，store_token_key 存入）；
-   登入回應的 token 若為 JWT（eyJ 開頭），解讀其 payload（第二段
-   base64）內容：是否含密碼雜湊、敏感個人欄位、內部識別碼——有即
-   report_security_issue 附欄位清單。
+   登入回應的 token 若為 JWT（eyJ 開頭），用 decode_jwt 解讀 payload：
+   是否含密碼雜湊、敏感個人欄位、內部識別碼——有即 report_security_issue
+   附欄位清單；get_storage 可檢查 token 存放與 cookie 屬性。
 2. 簽章／過期驗證：用 replay_request 帶**竄改後**的 token（改 payload
    一個字元、或以無效簽章）打需要授權的端點——若仍 200，代表簽章
    未驗證（嚴重）。

@@ -751,6 +751,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         "tokens": agent_result.total_tokens,
                         "issues_reported": len(agent_result.issues),
                         "error": agent_result.error,
+                        # agent 自述的受阻報告（缺工具／被拒／逾時），
+                        # 供賽後能力改善分析（feedback loop）
+                        "feedback": (agent_result.final_summary or "")[:1000],
                     }
                     _write_progress(
                         scan_job.id,
