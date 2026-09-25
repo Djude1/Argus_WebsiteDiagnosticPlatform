@@ -75,3 +75,31 @@ SECURITY_FIRST_PROMPT 要它找的帶參數連結在 SPA DOM 裡不存在。
 
 **狀態**：本波累計 9 個 commit（d64b618 起），皆在本地未 push（使用者指示
 push 最後才要求）。
+
+---
+
+## 追記（第四波：#17→#21，登入態重放與 IDOR 自主發現）
+
+**變更**（5 個 commit）：
+- replay_request(url, method, body, store_token_key)：帶 agent session
+  （localStorage token＋context cookies）重放同源請求；登入回應 token 寫回
+  localStorage 形成認證閉環；method 限 GET/POST；JWT 於 snippet 壓縮為
+  [JWT len=N]（省 context 且讓 bid 等欄位可見）
+- SECURITY_FIRST_PROMPT：優先 API 註冊登入（不操作 UI 表單）、寫入測試
+  先取自有資源 id——方法論引導
+- demo：AGENT_MAX_STEPS 40→64、TOKENS 250k→320k
+
+**迭代實錄**（每輪診斷→修正）：
+- #17：agent 自主完成 UI 註冊（15 步）但 40 步耗盡在登入表單
+- #18：mat-select 泥沼（58 步 329k 爆）→ 改設計：API 註冊登入
+- #19：API 註冊登入 4 步閉環；但 token 抽取用截斷 snippet parse 失敗
+  （JWT 700+ 字元 > 400 上限）→ 修為完整回應 parse
+- #20：**IDOR 自主發現 ×2**（basket 跨帳號讀＋Users 全站列舉，皆 high）、
+  **JWT 內含 password hash（agent 超越預期的自主發現）**；負數差 bid
+- #21：23 findings 穩定重現；負數仍差自有 bid 推導（quantity=-100 重放
+  被 Invalid BasketId 擋）——原語手動驗證可寫入，agent 推導待精進
+
+**最終格局（#21，23 findings：1C+4H+9M+6L+3I）**：對手 12 項中，
+SQLi（工具確認 critical）、跨帳號讀取（IDOR ×2）、未授權存取 ×3、
+目錄列表、metrics、CSP、CORS、資訊 headers 全部覆蓋；另獨有 JWT 洢漏、
+錯誤頁 ×3、傳輸/DNS 層 ×4、UX/SEO ×7。報告 17 頁（ARGUS-21 編號）。

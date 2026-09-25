@@ -51,36 +51,48 @@
   3. **自主性**：從送出 URL 到結論，需要多少人為介入（Argus：零）
   4. **交付物**：報告完整性、可轉寄性、可驗證性（防偽指紋）
 
-### 本地實測紀錄（2026-09-25，掃描 #9→#16 迭代）
+### 本地實測紀錄（2026-09-25，掃描 #9→#21 迭代）
 
 同一靶機（`http://juice-shop:3000`，active＋authorized、全網站、max_pages=15），
 Docker 完整堆疊＝K8s 正式功能面（Agent 開啟）＋demo 攻擊鏈（Kali docker backend）。
 
-| 指標 | #11（首輪完成） | #13（攻擊面打通） | #14（反空轉） | **#16（最終）** |
+| 指標 | #11 | #14 | #16 | **#20/#21（最終）** |
 |---|---|---|---|---|
-| findings（DB／報告合併後） | 16／16 | 15／14 | 18／17 | **22／18**（2C+3H+9M+5L+3I） |
-| 應用層攻擊命中 | 0 | SQLi critical | ＋目錄列表×2＋metrics | **＋未授權存取×3＋x-recruiting** |
-| Hermes-Agent | 20 步 3 UX | 32 步爆 token | 36 步完成 1 issue | **25 步 66k：probe 序列＋帶證據回報×3** |
-| 總分 | 65 | 61 | 70 | 72 |
+| findings | 16 | 18 | 22 | **23（1C+4~5H+8~9M）** |
+| 應用層攻擊命中 | 0 | SQLi＋列表＋metrics | ＋未授權×3＋指紋 | **＋IDOR ×2＋JWT 洩漏 hash＋錯誤頁 ×3** |
+| Agent 能力 | 20 步 3 UX | 36 步反空轉 | 25 步帶證據回報 | **API 自註冊登入＋帶憑證重放＋IDOR 自主判定** |
 
-**#16 偵測清單 vs 對手 12 項**（同靶機直接對打）：
+**#20/#21 的里程碑**（`replay_request` 登入態重放原語，commit 鏈見 log）：
 
-| 類別 | 對手（經典工具整合） | Argus #16 |
+1. **跨帳號 IDOR 自主發現（high ×2）**：agent API 自註冊（POST /api/Users）→
+   API 登入（token 寫入 localStorage）→ 改 id 重放 `/rest/basket/{1,2}`（admin
+   與 jim 的購物車）→ 200 帶他人資料 → 正確回報 IDOR——**對手的核心項目
+   「跨帳號讀取購物車」以全自動方式重現**；另中 `/api/Users/:id` 全站帳號
+   列舉（含所有人 email）
+2. **agent 超越預期的發現（high）**：登入回應的 **JWT payload 內含 password
+   hash**——非任何人提示、agent 自主從回應內容判斷的真實漏洞
+3. 負數數量（business logic）：agent 已執行 `quantity=-100` 重放但用錯
+   自有 basket id 被擋——原語與工具皆就緒（手動驗證 200 可寫入），
+   agent 的自有資源 id 推導待精進（誠實記錄）
+
+**#21 偵測清單 vs 對手 12 項**（同靶機直接對打）：
+
+| 類別 | 對手（經典工具整合） | Argus #21 |
 |---|---|---|
-| SQL injection | 已重現 ×2（登入＋搜尋） | **sqlmap 工具確認 ×2**（boolean/stacked/time-based/union 四技法、SQLite，證據鏈完整） |
-| 存取控制（未授權存取） | 已重現 ×3（跨帳號/負數） | **agent-observed ×3**：Admin application-configuration 未授權（high）、application-version（medium）、500 錯誤頁洩漏路由堆疊（low）——agent 匿名重放＋帶證據判斷，零誤報 |
-| 目錄列表 `/ftp/` | 已確認 | **已確認**（×2，Apache 與 Express 格式都支援） |
-| 監控 `/metrics` | 未確認 | **已確認** |
-| CSP／CORS | 已確認／待驗證 | **已確認** |
-| 資訊類 headers（x-recruiting 等） | 資訊性 | **已確認**（x-recruiting＋x-powered-by 類指紋規則） |
-| 傳輸層（HTTPS/HSTS）／DNS 層（SPF/DMARC）／敏感檔 | 無 | **已確認** ×5 |
-| 動態 UX／SEO/GEO/AEO | 無 | 7 項 |
-| 證據可驗證性 | 工具報告 | 每項帶 rule_id→OWASP/CWE＋報告防偽編號＋SHA-256 查驗 |
+| SQL injection | 已重現 ×2 | **sqlmap 工具確認**（critical，四技法證據鏈） |
+| 存取控制：跨帳號讀取 | 已重現 | **IDOR ×2 自主發現**（basket＋全站帳號列舉） |
+| 存取控制：未授權存取 | 部分未確認 | **×3**（Admin config high 等）＋Quantitys 庫存外洩 |
+| 存取控制：跨帳號寫入／負數 | 已重現 | 原語就緒、agent 待精進（差自有 bid 推導） |
+| JWT 敏感資料／錯誤訊息洩漏 | 無 | **×4**（hash in JWT＋錯誤頁 ×3，agent 自主） |
+| 目錄列表／metrics／CSP／CORS／資訊 headers | 部分有 | **全部已確認** |
+| 傳輸層／DNS 層／敏感檔 | 無 | **已確認** ×5 |
+| 動態 UX／SEO/GEO | 無 | 7 項 |
+| 證據可驗證性 | 工具報告 | rule_id→OWASP/CWE＋防偽編號＋SHA-256 查驗 |
 
 **調研佐證**（`docs/research-dast-llm-pentest-2026.md`）：ZAP 2.17 full-scan
 對同一靶機僅 5 類全組態級（0 注入、0 存取控制）——「整合經典工具」的天花板；
-Argus #16 在組態層數量超越、注入層有工具確認 critical、存取控制層有 agent
-帶證據的未授權存取發現。
+Argus 在組態、注入、存取控制三層都有自動化命中，且存取控制層是 LLM agent
+自主完成（對手形態最接近 Burp/Autorize 的人驅動半自動）。
 
 ### 攻擊面打通的關鍵工程（2026-09-25 第二波）
 
@@ -103,9 +115,45 @@ Argus #16 在組態層數量超越、注入層有工具確認 critical、存取�
 6. **`report_security_issue` 觀察型回報**：帶證據的 agent 資安發現落地
    （severity 封頂 high——critical 保留給工具確認等級）＋ header 指紋
    規則補強（x-recruiting/x-generator/x-aspnet-version）。
+7. **`replay_request` 登入態重放**：API 自註冊＋登入（token 寫入
+   localStorage，JWT 於 snippet 中壓縮）＋帶憑證重放——IDOR（改 id）、
+   business logic（改值）的通用原語；UI 表單泥沼（Angular mat-select
+   讓 #17/#18 各耗 38/58 步）由 API 路徑取代（4 步閉環）。
 
-仍未涵蓋（誠實面）：跨帳號讀寫（IDOR）與負數數量需要兩個登入帳號的
-比對測試，屬後續功能（agent 帶認證 context 的多角色流程）。
+### CVE 對應的設計（回答「能不能列 CVE」）
+
+兩條既有路徑，指紋→CVE 全離線（NVD public domain / Retire.js 規則庫 vendored）：
+
+| 路徑 | 輸入 | 比對庫 | 輸出 |
+|---|---|---|---|
+| `service_cve_scanner` | Server／X-Powered-By 版本指紋 | vendored NVD DB（`manage.py refresh_backend_cve_db` 更新） | per-CVE findings（severity 取最高、critical 封頂 high） |
+| `js_library_scanner` | 頁面 `<script>` 的庫版本 | vendored Retire.js 規則庫 | per-CVE findings（A06/CWE-1104） |
+
+Juice Shop 靶機上沒有可中的 CVE 屬**正確行為**：它不回 Server／X-Powered-By
+（實渗無版本指紋可抽取），JS 庫版本無已知未修 CVE，靶機自身（v20.0.0）不在
+NVD。真實網站帶版本指紋（nginx/PHP/Angular/jQuery 等）時即自動產出 CVE 清單。
+加分方向（後續）：把 agent 發現的「版本資訊端點」（如 application-version）
+接進 service_cve_scanner 的指紋輸入，擴大真實站的可中範圍。
+
+### IDOR／business logic 的偵測方法論（2026-09-25 補）
+
+本地原語驗證（curl 實測 Juice Shop）：B 帳號 token 讀他人 basket → **200
+帶他人資料**（跨帳號讀取成立）；自己 basket POST `quantity=-5` → **200
+且寫入**（負數成立）。兩者的共同前提＝「登入態＋請求修改重放」。
+
+| 方法 | 誰能做到 | 自動化程度 |
+|---|---|---|
+| ZAP full-scan（傳統 DAST） | ✗（學術實測對 Juice Shop 0 邏輯類；官方 Access Control Testing 需手動錄雙 session 比對） | 手動設定 |
+| Burp + Autorize 外掛（經典 GitHub 專案） | 半自動 IDOR（攔低權請求用他人 session 重放比對）；負數仍需手動 Repeater | 人驅動 |
+| **Argus Hermes-Agent（replay_request）** | agent 自註冊登入 → 改 id 重放（IDOR）／改數值重放（logic）→ 帶證據回報 | **全自動** |
+
+推論：對手「用一個經典 GitHub 專案就找到」的最可能形態＝Burp/Autorize
+式的**人驅動半自動**；通用 DAST 不可能自動抓到這兩類。我們的形態是
+LLM agent 自主完成同樣的原語操作，且方法對任何網站泛化（非靶機腳本）。
+
+仍未涵蓋（誠實面）：**雙帳號視野比對**（A 建資料、B 盲改他人資料的
+「寫入型 IDOR」需要兩個帳號的授權矩陣差分）——目前 agent 用單帳號的
+「改 id 讀取」已覆蓋讀取型；寫入型屬後續功能（agent 開兩個 context）。
 
 ## 4. 模型升級（MiniMax-M2.7 → MiniMax-M3，2026-09-25 已落地）
 
