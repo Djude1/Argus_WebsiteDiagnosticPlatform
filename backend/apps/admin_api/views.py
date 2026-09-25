@@ -9,6 +9,7 @@ from datetime import timedelta
 
 from django.conf import settings as dj_settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import (
     BooleanField,
     Case,
@@ -920,10 +921,36 @@ def scan_requeue(request, scan_id: int):
         )
 
     previous_status = scan.status
-    scan.status = ScanJob.Status.QUEUED
-    scan.error_message = ""
-    scan.progress = {}
-    scan.save(update_fields=["status", "error_message", "progress", "updated_at"])
+    previous_error = scan.error_message
+    # 上次的執行日誌 worker 進場時就會清空（tasks.py 的條件更新帶 scan_log=[]），
+    # 所以在清除之前先把失敗原因留進 audit payload——那是不可竄改的，
+    # 比留在會被覆寫的 ScanJob 欄位上可靠。
+    previous_log_tail = (scan.scan_log or [])[-5:]
+
+    with transaction.atomic():
+        # 必須清掉舊的 Page／Finding 再重跑。
+        # Page 有 UniqueConstraint(["scan_job", "url"])，而 tasks.py 用的是
+        # Page.objects.create()（非 update_or_create、也沒有 ignore_conflicts），
+        # 不清除的話重跑到第一個重複 URL 就會 IntegrityError。
+        # Finding 沒有 unique constraint，不清除則會累加成重複結果與錯誤評分。
+        deleted_pages, _ = scan.pages.all().delete()
+        deleted_findings, _ = scan.findings.all().delete()
+
+        scan.status = ScanJob.Status.QUEUED
+        scan.error_message = ""
+        scan.progress = {}
+        # 上一輪的衍生結果全部失效，留著會讓重跑期間的畫面顯示舊分數
+        scan.overall_score = None
+        scan.category_scores = {}
+        scan.top_actions = []
+        scan.warning_summary = {}
+        scan.crawl_checkpoint = {}
+        scan.completed_at = None
+        scan.save(update_fields=[
+            "status", "error_message", "progress",
+            "overall_score", "category_scores", "top_actions",
+            "warning_summary", "crawl_checkpoint", "completed_at", "updated_at",
+        ])
 
     try:
         run_scan_job.delay(scan.id)
@@ -946,6 +973,11 @@ def scan_requeue(request, scan_id: int):
             "from_status": previous_status,
             "charged": 0,
             "note": "依產品決策，重排不重複扣點",
+            # 清除前保留下來的診斷資料
+            "previous_error": previous_error,
+            "previous_log_tail": previous_log_tail,
+            "cleared_pages": deleted_pages,
+            "cleared_findings": deleted_findings,
         },
     )
     return Response({"status": scan.status, "charged": 0})

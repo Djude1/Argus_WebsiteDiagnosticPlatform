@@ -14,7 +14,7 @@ from apps.admin_api.models import AdminAuditLog
 from apps.billing.models import CoinTransaction, CoinWallet
 from apps.billing.services import purchase_plan
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
-from apps.scans.models import ScanJob
+from apps.scans.models import Finding, Page, ScanJob
 
 
 def _make_user(username, *, staff=False, **extra):
@@ -946,6 +946,75 @@ class ScanControlTests(APITestCase):
         self.assertEqual(scan.status, ScanJob.Status.QUEUED)
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, before, "重排不得扣款")
+
+    def test_requeue_clears_existing_pages_so_rerun_does_not_violate_unique(self):
+        """這是上一版漏掉的測試層。
+
+        Page 有 UniqueConstraint(["scan_job", "url"])，而 tasks.py 用的是
+        Page.objects.create()。不清除舊頁面的話，重排一個「爬了幾頁才失敗」
+        的掃描，第一個重複 URL 就會 IntegrityError。
+        """
+        scan = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        Page.objects.create(
+            scan_job=scan, url="https://example.com/a",
+            final_url="https://example.com/a", origin="https://example.com",
+        )
+        Page.objects.create(
+            scan_job=scan, url="https://example.com/b",
+            final_url="https://example.com/b", origin="https://example.com",
+        )
+        self.assertEqual(scan.pages.count(), 2)
+
+        with patch("apps.admin_api.views.run_scan_job.delay"):
+            response = self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(scan.pages.count(), 0, "舊頁面未清除，重跑會撞 unique constraint")
+
+        # 清除後相同 URL 必須能再建立——模擬 worker 重新爬到同一頁
+        Page.objects.create(
+            scan_job=scan, url="https://example.com/a",
+            final_url="https://example.com/a", origin="https://example.com",
+        )
+        self.assertEqual(scan.pages.count(), 1)
+
+    def test_requeue_clears_findings_so_results_do_not_accumulate(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        Finding.objects.create(
+            scan_job=scan, category="seo", severity="medium",
+            title="舊發現", description="", remediation="",
+        )
+        with patch("apps.admin_api.views.run_scan_job.delay"):
+            self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        self.assertEqual(scan.findings.count(), 0, "舊 findings 未清除會累加成重複結果")
+
+    def test_requeue_resets_stale_derived_results(self):
+        """上一輪的分數與警告留著，重跑期間畫面會顯示舊結果。"""
+        scan = _make_scan(
+            self.owner, status=ScanJob.Status.FAILED,
+            overall_score=42, category_scores={"seo": 50},
+            top_actions=[{"title": "舊"}], warning_summary={"blocked_urls": [1]},
+        )
+        with patch("apps.admin_api.views.run_scan_job.delay"):
+            self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        scan.refresh_from_db()
+        self.assertIsNone(scan.overall_score)
+        self.assertEqual(scan.category_scores, {})
+        self.assertEqual(scan.top_actions, [])
+        self.assertEqual(scan.warning_summary, {})
+
+    def test_requeue_preserves_failure_reason_in_audit_log(self):
+        """worker 進場時會清空 scan_log，所以失敗原因必須先進稽核紀錄。"""
+        scan = _make_scan(
+            self.owner, status=ScanJob.Status.FAILED,
+            error_message="Playwright timeout",
+        )
+        with patch("apps.admin_api.views.run_scan_job.delay"):
+            self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.SCAN_CONTROL,
+        ).latest("created_at")
+        self.assertEqual(log.payload["previous_error"], "Playwright timeout")
+        self.assertIn("cleared_pages", log.payload)
 
     def test_cannot_requeue_completed_scan(self):
         """completed 可重排等於提供免費的重新掃描，必須擋下。"""
