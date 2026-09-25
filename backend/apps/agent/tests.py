@@ -254,6 +254,7 @@ class ToolSchemaTests(TestCase):
             "get_storage",
             "get_response_headers",
             "decode_jwt",
+            "run_nuclei",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",

@@ -158,6 +158,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "run_nuclei",
+            "description": (
+                "以 Nuclei 模板引擎對同源 URL 做快掃（CVE／misconfig／"
+                "exposure／default-login 模板庫）。適合你對特定端點或技術"
+                "指紋有假設時指定 tags 精準掃（如 cve、exposure、"
+                "misconfig、technology），比全模板掃快。回傳命中模板的"
+                "id/severity/名稱——命中即以 report_security_issue 附"
+                "模板 id 與證據回報。限 GET 型探測，deep_mode 授權內。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "完整同源 URL"},
+                    "tags": {
+                        "type": "string",
+                        "description": "逗號分隔模板 tags（選填，如 cve,misconfig）",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "decode_jwt",
             "description": (
                 "解碼一個 JWT 字串的 header 與 payload（base64，不驗簽）。"
@@ -384,7 +409,12 @@ def build_tool_schemas(
       能力目錄化概念）
     回傳獨立深拷貝，避免共用 mutable schema 被意外修改。
     """
-    deep_only = {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
+    deep_only = {
+        "probe_sql_injection",
+        "probe_unauthorized_access",
+        "replay_request",
+        "run_nuclei",
+    }
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
         schemas = [
@@ -574,6 +604,10 @@ class ToolExecutor:
                 return await self._get_response_headers(args.get("url", ""))
             if name == "decode_jwt":
                 return self._decode_jwt(args.get("token", ""))
+            if name == "run_nuclei":
+                return await self._run_nuclei(
+                    args.get("url", ""), args.get("tags", "")
+                )
             if name == "take_screenshot":
                 return await self._take_screenshot()
             if name == "report_ux_issue":
@@ -721,6 +755,78 @@ class ToolExecutor:
                 ok=False, result={"error": f"request_failed:{exc.__class__.__name__}"}
             )
         return ToolOutcome(ok=True, result=observation)
+
+    async def _run_nuclei(self, url: str, tags: str) -> ToolOutcome:
+        """agent 自主的 Nuclei 指定模板快掃（worker 本機 binary）。
+
+        與 pipeline 的全模板掃（900s）互補：agent 對特定端點／技術指紋有
+        假設時，帶 tags 精準掃（120s 上限）。gating＝deep_mode＋同源，
+        與 replay_request 同邊界；JSONL 摘要回傳（template id/severity/
+        name），命中由 agent report。
+        """
+        from urllib.parse import urlparse
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden"},
+            )
+
+        import subprocess
+
+        cmd = [
+            "nuclei", "-u", url, "-j", "-silent", "-no-stdin", "-duc",
+            "-ni", "-dr", "-or",
+            "-H", f"User-Agent: {settings.ARGUS_SCANNER_USER_AGENT}",
+            "-timeout", "8", "-rl", "5", "-c", "5",
+            "-severity", "critical,high,medium",
+            "-etags", "dos,fuzz,creds-stuffing,token-spray",
+        ]
+        if tags:
+            cmd += ["-tags", ",".join(t.strip() for t in tags.split(",") if t.strip())]
+
+        def _scan() -> list[dict[str, Any]]:
+            try:
+                proc = subprocess.run(  # noqa: S603 — list 形式＋固定參數
+                    cmd, capture_output=True, text=True, timeout=120,
+                )
+            except subprocess.TimeoutExpired:
+                return [{"error": "timeout"}]
+            hits = []
+            for line in (proc.stdout or "").splitlines():
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                info = rec.get("info") or {}
+                hits.append({
+                    "template_id": rec.get("template-id") or rec.get("templateID", ""),
+                    "severity": info.get("severity", ""),
+                    "name": info.get("name", ""),
+                    "type": rec.get("type", ""),
+                })
+            return hits
+
+        try:
+            hits = await asyncio.to_thread(_scan)
+        except Exception as exc:  # noqa: BLE001
+            return ToolOutcome(
+                ok=False, result={"error": f"scan_failed:{exc.__class__.__name__}"}
+            )
+        return ToolOutcome(ok=True, result={"hits": hits[:20], "total": len(hits)})
 
     def _decode_jwt(self, token: str) -> ToolOutcome:
         """解 JWT header/payload（base64；不驗簽）。token 不回傳不持久化。"""
