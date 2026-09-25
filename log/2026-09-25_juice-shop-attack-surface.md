@@ -272,3 +272,20 @@ ponytail 效率紀律入 system prompt。#32 跑全開版（watchdog 監看）�
 
 #32 新亮點：負數「price inversion」表述、Challenges 自指金鑰
 （passwordHashLeakChallenge）洩漏、ftp 403 白名單訊息洩漏。
+
+## 追記（#33 收斂版——歷史新高定稿）
+
+三補強（步數盒 60／終局收斂提示／orchestrator 首步強制派工）全部生效：
+- orchestrator 7 步 6 派工（首步 tool_choice 鎖定根除零派工）
+- 6/7 specialist 乾淨完成（僅 role7 觸 500k；#32 是 3 角色爆）
+- **51 findings（1C+24H+12M）**——盒不傷反增（#30 43 → #33 51）
+
+新類別命中（對手清單無對應）：
+- **Mass-assignment 提權**：POST /api/Users 帶 role=admin 建管理員
+- **CAPTCHA 答案洩漏**（/rest/captcha/ 回應自含答案）
+- JWT localStorage→XSS 竊取鏈（攻擊鏈級觀察）
+- WAF 頁洩漏內部容器 IP、Recycles 讀取 IDOR
+
+計分終局：同口徑 24 vs 對手 9，**領先 15**（目標 +3 超額五倍）。
+交付：argus_scan33_report_final.docx／_security_report.md／
+_attack_flow.md（773 行）。
