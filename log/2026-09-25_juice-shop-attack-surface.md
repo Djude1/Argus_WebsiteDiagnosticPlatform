@@ -103,3 +103,26 @@ push 最後才要求）。
 SQLi（工具確認 critical）、跨帳號讀取（IDOR ×2）、未授權存取 ×3、
 目錄列表、metrics、CSP、CORS、資訊 headers 全部覆蓋；另獨有 JWT 洢漏、
 錯誤頁 ×3、傳輸/DNS 層 ×4、UX/SEO ×7。報告 17 頁（ARGUS-21 編號）。
+
+---
+
+## 追記（第五波：#22 黑箱最終驗證）
+
+**作弊稽核**（使用者要求的黑箱標準）：
+- 記憶：agent `_messages` 每次 run 重建、AgentSession 每掃描新建、provider 無狀態——零跨掃描記憶
+- 情報輸入＝全部當次觀察：crawler XHR 攔截（本掃描流量）、network log（agent 本 session）、replay 即時回應
+- 環境層（非 agent 輸入）：VerifiedDomain admin override、demo 帳號——與 agent 無關
+- 移除兩處 prompt 殘留的「如 /rest/、/api/」路徑例子（commit 黑箱稽核）——至此 prompt 僅含方法論與工具描述
+
+**#22 結果（黑箱）**：22 findings 全部重現（SQLi critical、IDOR、Users 全站
+列舉、Admin config 未授權、目錄列表、metrics、指紋 headers）——無路徑提示
+下 agent 自主找到同樣漏洞，黑箱成立。
+
+**負數（business logic）**：agent 步驟 54-56 完整重現——探索自有 basket 11
+→ POST quantity=-100（200，寫入）→ GET basket/11 驗證內容已變（529 bytes、
+Products 已填充）——**已重現且自行驗證**，僅 report 動作被 token 上限
+（331k>320k）截斷；完整軌跡存 AgentStep（scan 22 steps 54-56）。
+
+**最終格局**：對手 12 項全部有對應偵測（其中 SQLi/IDOR/未授權/負數為
+agent 或工具主動重現），另獨有 JWT 洩漏（#20/#21）、錯誤頁洩漏、
+傳輸/DNS/UX/SEO 維度與報告防偽。
