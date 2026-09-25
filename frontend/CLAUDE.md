@@ -91,7 +91,7 @@ D:\nodejs\npm.cmd install 套件名
 
 | 分組 | 項目 |
 |---|---|
-| 營運 | 待辦中心、掃描任務、網域驗證 |
+| 營運 | 待辦中心、掃描任務、網域驗證、系統健康 |
 | 客戶 | 使用者、訂單、點數交易 |
 | 內容與社群 | 評論治理、網站內容、公告（superuser）|
 | 系統 | 方案與定價、系統資訊、操作日誌（superuser）|
@@ -125,7 +125,8 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄 |
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理 |
-| `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角） |
+| `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角）；含終止與重排處置、`top_actions`、`warning_summary` |
+| `/admin/health` | `AdminHealthPage` | 系統健康即時探測（Celery ping／Redis PING／佇列深度／近一小時成功率），每項附判定依據 |
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理 |
@@ -151,6 +152,7 @@ D:\nodejs\npm.cmd install 套件名
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |
 | `src/features/admin/AdminOrdersPage.jsx` | 訂單管理頁（接上後端既有的 `/admin/orders/`）|
 | `src/features/admin/AdminOverviewPage.jsx` | 待辦中心（後台首頁）|
+| `src/features/admin/AdminHealthPage.jsx` | 系統健康頁 |
 | `src/components/admin/AdminStatCard.jsx` | 統計卡與內嵌 sparkline |
 | `src/components/admin/AdminMiniChart.jsx` | 後台多序列折線圖 |
 | `src/components/admin/AdminModal.jsx` | 後台統一 modal 與 `AdminField` 表單欄位（label／hint／error 三段式）|

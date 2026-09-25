@@ -14,6 +14,7 @@ urlpatterns = [
     path("cms/", include(cms_router.urls)),
     path("me/", views.me, name="admin-me"),
     path("settings/", views.system_settings, name="admin-settings"),
+    path("health/", views.system_health, name="admin-health"),
     path("overview/", views.overview, name="admin-overview"),
     path("users/", views.users_list, name="admin-users"),
     path("users/<int:user_id>/", views.user_detail, name="admin-user-detail"),

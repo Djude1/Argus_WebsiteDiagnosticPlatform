@@ -5,7 +5,9 @@
 """
 
 import os
+from datetime import timedelta
 
+from django.conf import settings as dj_settings
 from django.contrib.auth import get_user_model
 from django.db.models import (
     BooleanField,
@@ -142,8 +144,6 @@ def _paginate(request, queryset):
 @permission_classes([permissions.IsAdminUser])
 def overview(request):
     """後台首頁：待辦（triage）＋ 核心統計 ＋ 最新活動。"""
-    from datetime import timedelta
-
     user_model = get_user_model()
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -950,6 +950,118 @@ def scan_requeue(request, scan_id: int):
     return Response({"status": scan.status, "charged": 0})
 
 
+def _probe_celery_workers():
+    """以 Celery control ping 探測 worker。
+
+    回傳 (status, detail, workers)。status 為 ok / warn / bad。
+    刻意設短 timeout：這個端點是給人看的儀表板，不值得讓管理員等。
+    """
+    try:
+        from config.celery import app as celery_app
+
+        replies = celery_app.control.ping(timeout=1.5) or []
+    except Exception as exc:  # noqa: BLE001 — 探測失敗本身就是要回報的結果
+        return "bad", f"無法連線至 broker：{exc.__class__.__name__}", []
+    if not replies:
+        return "bad", "沒有任何 worker 回應 ping", []
+    names = [name for reply in replies for name in reply]
+    return "ok", f"{len(names)} 個 worker 回應", names
+
+
+def _probe_redis():
+    """對 Celery broker 使用的 Redis 做一次 PING。"""
+    url = getattr(dj_settings, "CELERY_BROKER_URL", "") or ""
+    if not url.startswith("redis"):
+        return "warn", "broker 不是 Redis，略過探測"
+    try:
+        import redis  # Celery 的相依套件，不另外安裝
+
+        client = redis.from_url(url, socket_connect_timeout=1.5, socket_timeout=1.5)
+        client.ping()
+        return "ok", "PING 成功"
+    except Exception as exc:  # noqa: BLE001
+        return "bad", f"PING 失敗：{exc.__class__.__name__}"
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAdminUser])
+def system_health(request):
+    """掃描鏈路的即時健康檢查。
+
+    把 docs/environment-preflight.md 裡的人工檢查變成畫面。每一項都標明
+    「依據什麼判定」，避免變成一排無法追查的綠燈。
+
+    注意：這是即時探測，不是歷史監控。它回答「現在通不通」，不回答
+    「過去一小時壞過幾次」。
+    """
+    now = timezone.now()
+    checks = []
+
+    celery_status, celery_detail, workers = _probe_celery_workers()
+    checks.append({
+        "key": "celery",
+        "label": "Celery worker",
+        "status": celery_status,
+        "detail": celery_detail,
+        "basis": "control.ping(timeout=1.5s)",
+        "extra": {"workers": workers},
+    })
+
+    redis_status, redis_detail = _probe_redis()
+    checks.append({
+        "key": "redis",
+        "label": "Redis broker",
+        "status": redis_status,
+        "detail": redis_detail,
+        "basis": "redis PING",
+    })
+
+    # 佇列深度：停在 queued 的掃描數量。worker 正常時這個數字應該很快歸零。
+    queued = ScanJob.objects.filter(status=ScanJob.Status.QUEUED).count()
+    stuck = ScanJob.objects.filter(
+        status=ScanJob.Status.QUEUED,
+        created_at__lt=now - timedelta(minutes=STUCK_SCAN_THRESHOLD_MINUTES),
+    ).count()
+    checks.append({
+        "key": "queue",
+        "label": "掃描佇列",
+        "status": "bad" if stuck else ("warn" if queued > 5 else "ok"),
+        "detail": f"{queued} 筆排隊中，其中 {stuck} 筆已逾時",
+        "basis": f"ScanJob.status=queued，逾時門檻 {STUCK_SCAN_THRESHOLD_MINUTES} 分鐘",
+    })
+
+    # 近一小時成功率：只在有樣本時判定，樣本不足不亂給顏色
+    hour_ago = now - timedelta(hours=1)
+    recent = ScanJob.objects.filter(
+        created_at__gte=hour_ago,
+        status__in=[ScanJob.Status.COMPLETED, ScanJob.Status.FAILED],
+    )
+    total_recent = recent.count()
+    failed_recent = recent.filter(status=ScanJob.Status.FAILED).count()
+    if total_recent == 0:
+        rate_status, rate_detail = "unknown", "近一小時沒有完成或失敗的掃描，無法判定"
+    else:
+        success_pct = round((total_recent - failed_recent) / total_recent * 100)
+        rate_status = "ok" if success_pct >= 90 else ("warn" if success_pct >= 70 else "bad")
+        rate_detail = f"成功率 {success_pct}%（{total_recent - failed_recent}/{total_recent}）"
+    checks.append({
+        "key": "success_rate",
+        "label": "近一小時掃描成功率",
+        "status": rate_status,
+        "detail": rate_detail,
+        "basis": "ScanJob 近 1 小時的 completed vs failed",
+    })
+
+    # 整體狀態取最壞的一項；unknown 不影響整體判定
+    severity = {"ok": 0, "unknown": 0, "warn": 1, "bad": 2}
+    overall = max(checks, key=lambda c: severity[c["status"]])["status"]
+    return Response({
+        "checked_at": now.isoformat(),
+        "overall": "ok" if severity[overall] == 0 else overall,
+        "checks": checks,
+    })
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def me(request):
@@ -971,8 +1083,6 @@ def system_settings(request):
 
     只 expose 影響業務行為的設定；機密（SECRET_KEY、API KEY、密碼）一律不回。
     """
-    from django.conf import settings as dj_settings
-
     def has(name: str) -> bool:
         return bool(getattr(dj_settings, name, "") or "")
 

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -5,6 +6,7 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -800,10 +802,6 @@ class TriageTests(APITestCase):
         self.assertIsNone(triage["scans_stuck_oldest_at"])
 
     def test_queued_scan_past_threshold_is_stuck(self):
-        from datetime import timedelta
-
-        from django.utils import timezone
-
         scan = _make_scan(self.owner, status=ScanJob.Status.QUEUED)
         # created_at 有 auto_now_add，只能建立後直接改寫
         overdue = timezone.now() - timedelta(minutes=30)
@@ -843,10 +841,6 @@ class TriageTests(APITestCase):
             self.assertIn(key, triage, f"triage 缺少 {key}")
 
     def test_failed_today_counts_only_today(self):
-        from datetime import timedelta
-
-        from django.utils import timezone
-
         today = _make_scan(self.owner, status=ScanJob.Status.FAILED)
         old = _make_scan(self.owner, status=ScanJob.Status.FAILED)
         ScanJob.objects.filter(pk=old.pk).update(
@@ -980,3 +974,65 @@ class ScanControlTests(APITestCase):
         ).latest("created_at")
         self.assertEqual(log.payload["operation"], "requeue")
         self.assertEqual(log.payload["charged"], 0)
+
+
+class SystemHealthTests(APITestCase):
+    """系統健康檢查。
+
+    這頁的價值在於「綠燈可信」。所以每一項都要有明確判定依據，而且探測
+    失敗時必須誠實回報 bad，不能因為 broker 連不上就整個端點噴 500。
+    """
+
+    def setUp(self):
+        self.admin = _make_user("admin", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.owner = _make_user("owner")
+
+    def _health(self):
+        response = self.client.get(reverse("admin-health"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data
+
+    def test_non_staff_blocked(self):
+        self.client.force_authenticate(_make_user("normal"))
+        response = self.client.get(reverse("admin-health"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_returns_all_four_checks_with_basis(self):
+        data = self._health()
+        keys = [c["key"] for c in data["checks"]]
+        self.assertEqual(keys, ["celery", "redis", "queue", "success_rate"])
+        for check in data["checks"]:
+            # 沒有判定依據的綠燈是不可信的綠燈
+            self.assertTrue(check["basis"], f"{check['key']} 缺少判定依據")
+
+    def test_broker_unreachable_reports_bad_not_500(self):
+        with patch(
+            "apps.admin_api.views._probe_celery_workers",
+            return_value=("bad", "無法連線至 broker：ConnectionError", []),
+        ):
+            data = self._health()
+        celery = next(c for c in data["checks"] if c["key"] == "celery")
+        self.assertEqual(celery["status"], "bad")
+        self.assertEqual(data["overall"], "bad")
+
+    def test_success_rate_is_unknown_without_samples(self):
+        data = self._health()
+        rate = next(c for c in data["checks"] if c["key"] == "success_rate")
+        self.assertEqual(rate["status"], "unknown")
+
+    def test_success_rate_computed_from_recent_scans(self):
+        for _ in range(9):
+            _make_scan(self.owner, status=ScanJob.Status.COMPLETED)
+        _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        rate = next(c for c in self._health()["checks"] if c["key"] == "success_rate")
+        self.assertEqual(rate["status"], "ok")
+        self.assertIn("90%", rate["detail"])
+
+    def test_stuck_queue_marks_queue_check_bad(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.QUEUED)
+        ScanJob.objects.filter(pk=scan.pk).update(
+            created_at=timezone.now() - timedelta(minutes=30),
+        )
+        queue = next(c for c in self._health()["checks"] if c["key"] == "queue")
+        self.assertEqual(queue["status"], "bad")

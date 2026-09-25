@@ -17,6 +17,7 @@ const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
+const loadAdminHealth = () => import("./features/admin/AdminHealthPage.jsx");
 
 const RequireAuth = lazyNamed(loadAuthPages, "RequireAuth");
 const LoginPage = lazyNamed(loadAuthPages, "LoginPage");
@@ -48,6 +49,7 @@ const AdminUsersPage = lazyNamed(loadAdminPages, "AdminUsersPage");
 const AdminUserDetailPage = lazyNamed(loadAdminPages, "AdminUserDetailPage");
 const AdminTransactionsPage = lazyNamed(loadAdminPages, "AdminTransactionsPage");
 const AdminOrdersPage = lazyNamed(loadAdminOrders, "AdminOrdersPage");
+const AdminHealthPage = lazyNamed(loadAdminHealth, "AdminHealthPage");
 const AdminReviewsPage = lazyNamed(loadAdminPages, "AdminReviewsPage");
 const AdminScansPage = lazyNamed(loadAdminPages, "AdminScansPage");
 const AdminScanDetailPage = lazyNamed(loadAdminPages, "AdminScanDetailPage");
@@ -176,6 +178,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/admin/users/:userId" element={<AdminUserDetailPage />} />
             <Route path="/admin/transactions" element={<AdminTransactionsPage />} />
             <Route path="/admin/orders" element={<AdminOrdersPage />} />
+            <Route path="/admin/health" element={<AdminHealthPage />} />
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
             <Route path="/admin/scans" element={<AdminScansPage />} />
             <Route path="/admin/scans/:scanId" element={<AdminScanDetailPage />} />

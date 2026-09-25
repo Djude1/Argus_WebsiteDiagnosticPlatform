@@ -6163,6 +6163,55 @@
   .admin-page-head-links { @apply flex flex-wrap items-center gap-2; }
 
   /* 列表被縮限在某個範圍時的提示條。沒有它，管理員會以為系統只有這幾筆資料 */
+  /* --- 系統健康 --- */
+  .admin-health-summary {
+    @apply flex items-center gap-3 rounded-2xl p-4;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-left-width: 4px;
+  }
+  .admin-health-summary.tone-ok { border-left-color: var(--tone-good); }
+  .admin-health-summary.tone-warn { border-left-color: var(--tone-medium); }
+  .admin-health-summary.tone-bad { border-left-color: var(--tone-bad); }
+  .admin-health-summary-icon {
+    @apply inline-flex items-center justify-center;
+    width: 28px; height: 28px;
+    color: var(--admin-text-muted);
+  }
+  .admin-health-summary.tone-ok .admin-health-summary-icon { color: var(--tone-good); }
+  .admin-health-summary.tone-warn .admin-health-summary-icon { color: #b45309; }
+  .admin-health-summary.tone-bad .admin-health-summary-icon { color: #b91c1c; }
+  .admin-health-summary-title { @apply text-sm font-bold; color: var(--admin-text); }
+  .admin-health-summary-time { @apply text-xs; color: var(--admin-text-muted); }
+
+  .admin-health-list { @apply flex flex-col; list-style: none; margin: 0; padding: 0; }
+  .admin-health-row {
+    @apply flex items-start gap-3 py-3;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .admin-health-row:last-child { border-bottom: none; }
+  .admin-health-badge {
+    @apply inline-flex shrink-0 items-center justify-center rounded-full text-xs font-bold;
+    width: 22px; height: 22px;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-health-row.tone-ok .admin-health-badge { background: rgba(16,185,129,.14); color: #047857; }
+  .admin-health-row.tone-warn .admin-health-badge { background: rgba(245,158,11,.16); color: #b45309; }
+  .admin-health-row.tone-bad .admin-health-badge { background: rgba(239,68,68,.14); color: #b91c1c; }
+  .admin-health-body { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
+  .admin-health-label {
+    @apply flex flex-wrap items-center gap-2 text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-health-state {
+    @apply rounded px-1.5 py-0.5 text-xs font-medium;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-health-detail { @apply text-sm; color: var(--admin-text-muted); }
+  .admin-health-basis { @apply text-xs; color: var(--admin-text-muted); opacity: .85; }
+
   .admin-scope-note {
     @apply flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm;
     background: rgba(56, 189, 248, 0.10);
