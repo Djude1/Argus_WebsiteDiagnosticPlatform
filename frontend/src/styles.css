@@ -3064,9 +3064,21 @@
   }
 
   .admin-nav {
-    @apply flex flex-1 flex-col gap-0.5;
+    @apply flex flex-1 flex-col;
+    gap: 14px;
     padding: 12px 10px;
     overflow-y: auto;
+  }
+  .admin-nav-group > div {
+    @apply flex flex-col gap-0.5;
+  }
+  /* 分組標題：刻意低對比且小字——它是掃視時的錨點，不是可點的項目，
+     權重高過連結反而會誤導 */
+  .admin-nav-group-label {
+    @apply px-3 pb-1.5 text-[0.65rem] font-bold uppercase;
+    letter-spacing: 0.14em;
+    color: rgba(148, 163, 184, 0.7);
+    margin: 0;
   }
   .admin-nav-link {
     @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium;

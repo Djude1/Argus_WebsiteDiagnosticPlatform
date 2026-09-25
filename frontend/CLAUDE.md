@@ -85,6 +85,19 @@ D:\nodejs\npm.cmd install 套件名
 
 ---
 
+## 後台側欄導覽分組
+
+側欄依「使用者來後台做什麼」分為四組，每組 3 項（定義見 `AdminPages.jsx` 的 `ADMIN_NAV_GROUPS`）：
+
+| 分組 | 項目 |
+|---|---|
+| 營運 | 待辦中心、掃描任務、網域驗證 |
+| 客戶 | 使用者、訂單、點數交易 |
+| 內容與社群 | 評論治理、網站內容、公告（superuser）|
+| 系統 | 方案與定價、系統資訊、操作日誌（superuser）|
+
+`superuserOnly` 的項目對 staff **完全不顯示**（不是 disabled）；整組被濾空時連分組標題一起隱藏。
+
 ## 前端路由地圖
 
 > 所有根路由定義在 `App.jsx`；實際頁面元件位於下方對應 feature 檔。
@@ -116,6 +129,8 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理 |
+| `/admin/settings` | `AdminSettingsPage` | 系統資訊（唯讀；敏感值只顯示「已設定／未設定」布林，不輸出實際值）|
+| `/admin/announcements` | `AdminAnnouncementsPage` | 公告管理（superuser 限定）|
 | `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁 |
 
 ## 核心檔案

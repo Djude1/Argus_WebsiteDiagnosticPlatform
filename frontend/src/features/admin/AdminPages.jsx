@@ -47,17 +47,51 @@ import {
   AdminAlertIcon,
 } from "../../components/admin/AdminIcons.jsx";
 
-const ADMIN_NAV_ITEMS = [
-  { to: "/admin/overview", label: "概覽", Icon: AdminOverviewIcon },
-  { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
-  { to: "/admin/scans", label: "掃描", Icon: AdminScansIcon },
-  { to: "/admin/domains", label: "網域", Icon: AdminDomainsIcon },
-  { to: "/admin/orders", label: "訂單", Icon: AdminOrdersIcon },
-  { to: "/admin/transactions", label: "交易", Icon: AdminTransactionsIcon },
-  { to: "/admin/plans", label: "方案", Icon: AdminPlansIcon },
-  { to: "/admin/content", label: "內容", Icon: AdminContentIcon },
-  { to: "/admin/reviews", label: "評論", Icon: AdminReviewsIcon },
-  { to: "/admin/settings", label: "設定", Icon: AdminSettingsIcon },
+// 側欄導覽依「使用者來後台做什麼」分組，而非依資料表分。
+//
+// 改建原因：原本是 10 項平鋪（superuser 12 項），超過專案 argus-ui-design skill
+// 訂的 5–7 項上限，掃視成本高且看不出彼此關係。分組後每組 3 項，四組對應四種
+// 到訪目的：處理今天的事、回應客戶、維護內容、調整系統。
+//
+// superuserOnly 的項目對 staff 完全不顯示（不是 disabled）——看得到卻點不了
+// 只會製造挫折。
+const ADMIN_NAV_GROUPS = [
+  {
+    key: "operations",
+    label: "營運",
+    items: [
+      { to: "/admin/overview", label: "待辦中心", Icon: AdminOverviewIcon },
+      { to: "/admin/scans", label: "掃描任務", Icon: AdminScansIcon },
+      { to: "/admin/domains", label: "網域驗證", Icon: AdminDomainsIcon },
+    ],
+  },
+  {
+    key: "customers",
+    label: "客戶",
+    items: [
+      { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
+      { to: "/admin/orders", label: "訂單", Icon: AdminOrdersIcon },
+      { to: "/admin/transactions", label: "點數交易", Icon: AdminTransactionsIcon },
+    ],
+  },
+  {
+    key: "content",
+    label: "內容與社群",
+    items: [
+      { to: "/admin/reviews", label: "評論治理", Icon: AdminReviewsIcon },
+      { to: "/admin/content", label: "網站內容", Icon: AdminContentIcon },
+      { to: "/admin/announcements", label: "公告", Icon: AdminAnnouncementsIcon, superuserOnly: true },
+    ],
+  },
+  {
+    key: "system",
+    label: "系統",
+    items: [
+      { to: "/admin/plans", label: "方案與定價", Icon: AdminPlansIcon },
+      { to: "/admin/settings", label: "系統資訊", Icon: AdminSettingsIcon },
+      { to: "/admin/audit-log", label: "操作日誌", Icon: AdminAuditLogIcon, superuserOnly: true },
+    ],
+  },
 ];
 
 function activateAdminRow(event, action) {
@@ -150,10 +184,13 @@ function AdminLayout() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [drawerOpen]);
-  // 超級管理員額外看到「操作日誌」分頁
-  const navItems = me?.is_superuser
-    ? [...ADMIN_NAV_ITEMS, { to: "/admin/audit-log", label: "操作日誌", Icon: AdminAuditLogIcon }, { to: "/admin/announcements", label: "公告管理", Icon: AdminAnnouncementsIcon }]
-    : ADMIN_NAV_ITEMS;
+  // 依權限過濾；整組都被濾掉時連標題一起不顯示，避免出現空的分組標題
+  const navGroups = ADMIN_NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.superuserOnly || me?.is_superuser),
+    }))
+    .filter((group) => group.items.length > 0);
   return (
     <div className="admin-shell">
       <header className="admin-mobile-header">
@@ -190,18 +227,27 @@ function AdminLayout() {
           <span className="admin-brand-sub">管理後台</span>
         </button>
         <nav className="admin-nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `admin-nav-link ${isActive ? "active" : ""}`
-              }
-              onClick={closeDrawer}
-            >
-              <item.Icon className="admin-nav-icon" />
-              <span>{item.label}</span>
-            </NavLink>
+          {navGroups.map((group) => (
+            <div className="admin-nav-group" key={group.key}>
+              <p className="admin-nav-group-label" id={`admin-nav-${group.key}`}>
+                {group.label}
+              </p>
+              <div role="group" aria-labelledby={`admin-nav-${group.key}`}>
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `admin-nav-link ${isActive ? "active" : ""}`
+                    }
+                    onClick={closeDrawer}
+                  >
+                    <item.Icon className="admin-nav-icon" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="admin-sidebar-footer">
@@ -1892,7 +1938,7 @@ function AdminSettingsPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1>系統設定（唯讀）</h1>
+        <h1>系統資訊</h1>
         <p>{data.note}</p>
       </header>
       <Section title="計費" rows={Object.entries(data.billing)} />
