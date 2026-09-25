@@ -34,9 +34,9 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 |---|---|---|
 | `get_or_create_wallet(user)` | 取得或建立錢包 | ✅ |
 | `grant_monthly_bonus_if_needed(user)` | 月贈點 200 coin | ✅ 同月第二次不執行 |
-| `estimate_scan_cost(max_pages)` | 估算掃描所需 coin（`max_pages × coin_per_page`） | 純計算 |
-| `hold_for_scan(user, scan_job)` | 掃描開始前預扣（`max_pages × 10` coin） | 否 |
-| `settle_scan_actual(user, scan_job, actual_pages)` | 掃描完成後結算，退還差額 | 否 |
+| `estimate_scan_cost(max_pages, categories=None)` | 估算掃描所需 coin（`max_pages × 勾選維度數 × ARGUS_COIN_PER_CATEGORY`；categories 省略＝五維全選，全選價與舊每頁定價相同） | 純計算 |
+| `hold_for_scan(user, scan_job)` | 掃描開始前預扣（`max_pages × 維度數 × 每維單價`） | 否 |
+| `settle_scan_actual(user, scan_job, actual_pages)` | 掃描完成後結算，依實際頁數 × 同組維度退還差額 | 否 |
 | `refund_full_for_scan(user, scan_job, *, reason)` | 取消或失敗時全退 | ✅ 可重複呼叫 |
 | `purchase_plan(user, plan)` | 購買方案入帳 | 否 |
 | `admin_adjust(*, target_user, delta, admin_actor, note)` | 管理員手動調整 | 否 |
@@ -49,6 +49,15 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `settle_subscription(user)` | 訂閱 lazy 結算：到期期數逐月補發 `monthly_coins`（kind=subscription_grant）；cancelled 只補已開始的當期；期數歸零且過期 → expired | ✅ 交易鎖＋last_grant_period 同期不重發 |
 | `cancel_subscription(user)` | status=cancelled＋cancelled_at（冪等；當期權益保留到期滿） | ✅ 重複取消不動 |
 | `settle_subscription_safe(user)` | settle 的輕量包裝：失敗只記 log（登入／API 進場觸發用） | — |
+
+---
+
+## 掃描維度計費（2026-09-26）
+
+- 費用＝`頁數 × 勾選維度數 × ARGUS_COIN_PER_CATEGORY`（預設 2；五維全選＝每頁 10 coin，與舊 `ARGUS_COIN_PER_PAGE` 定價等價——該設定已移除，wallet API 改暴露 `coin_per_category`）
+- 維度清單事實來源在 `apps/scans.models.ALL_CATEGORIES`；`ScanJob.effective_categories` 過濾未知值、空集合退回全開（舊資料相容）
+- hold 與 settle 用**同一組維度**計價：預扣與結算不對稱會導致多退或少退
+- 未勾維度＝該維度不掃描、不計分（`tested_categories` 交集，見 scans/CLAUDE.md）
 
 ---
 

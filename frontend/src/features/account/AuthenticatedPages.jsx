@@ -328,7 +328,7 @@ function DashboardPage() {
         <StatTile
           label="點數餘額"
           animateValue={wallet?.balance || 0}
-          hint={`≈ 還能掃 ${Math.floor((wallet?.balance || 0) / (wallet?.coin_per_page || 10)).toLocaleString()} 頁 · 累積花費 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
+          hint={`≈ 還能掃 ${Math.floor((wallet?.balance || 0) / ((wallet?.coin_per_category || 2) * 5)).toLocaleString()} 頁（五維全選） · 累積花費 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
           tone="violet"
         />
         <StatTile
@@ -1099,7 +1099,7 @@ function BillingPage() {
           <p className="billing-checkout-eyebrow">ARGUS ONE-TIME CHECKOUT</p>
           <h2 className="billing-checkout-title">單次購買點數</h2>
           <p className="billing-checkout-subtitle">
-            單次加值、立即入點；每爬一頁使用 {wallet?.coin_per_page ?? 10} coin，依序完成方案、資料與訂單確認。
+            單次加值、立即入點；掃描按維度計費（每頁每維度 {wallet?.coin_per_category ?? 2} coin），依序完成方案、資料與訂單確認。
           </p>
         </div>
         <div className="billing-wallet-summary" aria-label={`目前餘額 ${wallet?.balance?.toLocaleString() ?? "載入中"} coin`}>

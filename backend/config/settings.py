@@ -408,9 +408,10 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 
 # 點數制度（取代舊的 UserScanQuota 月次數配額）
 # - 每月自動發放給所有使用者的贈點
-# - 每爬一個頁面的單價（建立掃描時以 max_pages × 此值預扣，完成後依實際頁數退差）
+# - 掃描按「維度」計費：費用＝頁數 × 勾選維度數 × 此值，建立時預扣、
+#   完成後依實際頁數退差（五維全選＝每頁 10 coin，與舊每頁定價相同）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
-ARGUS_COIN_PER_PAGE = int(os.getenv("ARGUS_COIN_PER_PAGE", "10"))
+ARGUS_COIN_PER_CATEGORY = int(os.getenv("ARGUS_COIN_PER_CATEGORY", "2"))
 # 網頁複刻的計費：預扣上限 → 依 agent 回報的實際用量結算退差額，
 # 與掃描的 hold_for_scan / settle_scan_actual 同一套模式。
 #

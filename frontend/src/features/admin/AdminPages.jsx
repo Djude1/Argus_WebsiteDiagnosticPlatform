@@ -2064,7 +2064,7 @@ function planEconomics(plan) {
   const cost = Number((coin * COIN_COST_NTD).toFixed(1));
   const margin = price - cost;
   const marginPct = price > 0 ? Math.round((margin / price) * 100) : 0;
-  // pages = coin（每頁 10 coin 是 settings 的 ARGUS_COIN_PER_PAGE）
+  // pages = coin（五維全選每頁 10 coin＝5 維 × ARGUS_COIN_PER_CATEGORY）
   // 但這裡是「使用者能掃幾頁」直觀感受，所以直接顯示 coin / 10
   const pagesEstimate = Math.floor(coin / 10);
   return { cost, margin, marginPct, pagesEstimate };

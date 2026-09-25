@@ -339,20 +339,22 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         element_boxes=page_data["element_boxes"],
                         html_only=page_data["html_only"],
                         layout_metrics=page_data.get("layout_metrics") or {},
-                    )
+                    ),
+                    categories=scan_job.effective_categories,
                 )
                 all_findings.extend(page_findings)
                 for finding in page_findings:
                     Finding.objects.create(scan_job=scan_job, page=page, **finding)
                 # Inline/HTML 硬編碼秘鑰偵測（被動：只分析已抓到的 HTML，不發額外請求）
-                page_secrets = detect_secrets_in_text(page.html)
-                secret_finding = build_secret_finding(
-                    page_secrets, page.final_url or page.url, source="inline_html"
-                )
-                if secret_finding:
-                    secret_finding = owasp_mapper.tag(secret_finding)
-                    Finding.objects.create(scan_job=scan_job, page=page, **secret_finding)
-                    all_findings.append(secret_finding)
+                if "security" in scan_job.effective_categories:
+                    page_secrets = detect_secrets_in_text(page.html)
+                    secret_finding = build_secret_finding(
+                        page_secrets, page.final_url or page.url, source="inline_html"
+                    )
+                    if secret_finding:
+                        secret_finding = owasp_mapper.tag(secret_finding)
+                        Finding.objects.create(scan_job=scan_job, page=page, **secret_finding)
+                        all_findings.append(secret_finding)
             # 不論是否被阻擋，已處理一頁就更新 progress；同時當作 cancel 檢查點
             _write_progress(
                 scan_job.id,
@@ -378,7 +380,12 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # HTTPS/HSTS/CSP/X-Frame-Options/X-Content-Type-Options 是伺服器設定，整站幾乎一致；
         # 對每頁各自呼叫 analyze_security() 只會得到同一組問題的多份複本，且會把 SECURITY
         # 分數依頁數不成比例地往下拖。改為對整批頁面只評估一次、page=None 的站台層級 finding。
-        site_level_security_findings = analyze_security_site_level(crawled_pages)
+        # 未勾「資安」維度時整段跳過（使用者只買 SEO/GEO 等維度時不產生資安發現）。
+        site_level_security_findings = (
+            analyze_security_site_level(crawled_pages)
+            if "security" in scan_job.effective_categories
+            else []
+        )
         for finding in site_level_security_findings:
             Finding.objects.create(scan_job=scan_job, page=None, **finding)
         all_findings.extend(site_level_security_findings)
@@ -713,12 +720,17 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             + (f"，技術棧：{', '.join(katana_tech)}" if katana_tech else ""),
         )
 
-        # 站台層級的 GEO FAST 檢查（llms.txt、AI 爬蟲可存取性）
-        site_findings = analyze_site_signals(site_signals)
+        # 站台層級的 GEO FAST 檢查（llms.txt、AI 爬蟲可存取性）；未勾 GEO 維度時跳過
+        site_findings = (
+            analyze_site_signals(site_signals)
+            if "geo" in scan_job.effective_categories
+            else []
+        )
         for finding in site_findings:
             Finding.objects.create(scan_job=scan_job, page=None, **finding)
         all_findings.extend(site_findings)
-        append_log(scan_job_id, f"站台訊號分析完成：{len(site_findings)} 項發現")
+        if "geo" in scan_job.effective_categories:
+            append_log(scan_job_id, f"站台訊號分析完成：{len(site_findings)} 項發現")
 
         # Phase 2：可選的 Hermes-Agent 動態 UX 測試
         # 預設 ARGUS_AGENT_ENABLED=False；只在使用者明確啟用時才跑，避免每次掃描都消耗 LLM token。
@@ -840,6 +852,10 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             tested_categories.add("ux")
         if agent_meta and agent_meta.get("status") != "error":
             tested_categories.add("ux")
+        # 維度選擇的最後防線：沒勾的維度一律視為未評估。即使上游某處仍產出
+        # 該維度的量測（如 UX 的 layout_metrics 在爬蟲階段一律收集），
+        # 不在勾選內就不得進 category_scores——「沒買」不能被算成「測過」。
+        tested_categories &= scan_job.effective_categories
         # 0 頁是「掃描實質失效」的強信號：在 warning_summary 標記 + scan_log 警告，
         # 避免 overall_score（此時只反映站台層級）被誤讀為「網站安全」。
         if not crawled_pages:

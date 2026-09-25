@@ -70,19 +70,27 @@ def grant_monthly_bonus_if_needed(user) -> CoinTransaction | None:
     )
 
 
-def estimate_scan_cost(max_pages: int) -> int:
-    """掃描預估點數：max_pages × 每頁單價。"""
-    return int(max_pages) * settings.ARGUS_COIN_PER_PAGE
+def estimate_scan_cost(max_pages: int, categories=None) -> int:
+    """掃描預估點數：max_pages × 勾選維度數 × 每維單價。
+
+    categories 為 None（內部舊呼叫）或空集合時視同五維全選，
+    與導入維度計費前的「max_pages × ARGUS_COIN_PER_PAGE」等價。
+    """
+    # 延遲 import：ALL_CATEGORIES 的事實來源在 scans.models，頂層 import 會循環
+    from apps.scans.models import ALL_CATEGORIES
+
+    selected = {c for c in (categories or []) if c in ALL_CATEGORIES} or set(ALL_CATEGORIES)
+    return int(max_pages) * len(selected) * settings.ARGUS_COIN_PER_CATEGORY
 
 
 @transaction.atomic
 def hold_for_scan(user, scan_job) -> CoinTransaction:
-    """建立掃描時先預扣 max_pages × coin_per_page。
+    """建立掃描時先預扣 max_pages × 勾選維度數 × 每維單價。
 
     呼叫者已驗證餘額足夠（serializer.validate），這裡再加一層 row-level lock
     確保並發建立時不會超扣。若不足會 raise InsufficientCoinError。
     """
-    cost = estimate_scan_cost(scan_job.max_pages)
+    cost = estimate_scan_cost(scan_job.max_pages, scan_job.effective_categories)
     wallet = CoinWallet.objects.select_for_update().get(user=user)
     if wallet.balance < cost:
         raise InsufficientCoinError(required=cost, balance=wallet.balance)
@@ -95,7 +103,10 @@ def hold_for_scan(user, scan_job) -> CoinTransaction:
         kind=CoinTransaction.Kind.SCAN_HOLD,
         balance_after=new_balance,
         scan_job=scan_job,
-        note=f"建立掃描預扣（max_pages={scan_job.max_pages}）",
+        note=(
+            f"建立掃描預扣（max_pages={scan_job.max_pages}，"
+            f"{len(scan_job.effective_categories)} 維度）"
+        ),
     )
 
 
@@ -313,7 +324,7 @@ def refund_rebuild(user, site_rebuild, *, reason: str) -> CoinTransaction | None
 
 @transaction.atomic
 def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | None:
-    """掃描完成：依實際頁數退差額（max_pages - actual_pages）× coin_per_page。
+    """掃描完成：依實際頁數 × 勾選維度數退還差額。
 
     同時將 wallet.total_scans_used 累計 +1。
     冪等：若已存在此 scan 的 SCAN_REFUND 交易（本函式的差額退款、無退款標記、
@@ -329,7 +340,7 @@ def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | N
     ).exists():
         return None
 
-    actual_cost = max(0, int(actual_pages)) * settings.ARGUS_COIN_PER_PAGE
+    actual_cost = estimate_scan_cost(max(0, int(actual_pages)), scan_job.effective_categories)
     outstanding = _sum_holds(wallet, scan_job.id)
     refund_amount = max(0, outstanding - actual_cost)
 

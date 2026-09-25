@@ -43,6 +43,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 狀態機：queued → crawling → scanning → [agent_testing] → completed
                                                         ↘ failed / cancelled
 欄位重點：original_url、status、scan_mode（passive/active）、
+         categories（掃描維度多選，預設五維全開；費用＝頁數 ×
+         維度數 × ARGUS_COIN_PER_CATEGORY，主動模式必須勾資安；
+         effective_categories 過濾未知值、空集合退回全開）、
          max_depth、max_pages、progress（JSON 即時進度）、
          overall_score、category_scores（JSON）、top_actions（JSON）
 ```

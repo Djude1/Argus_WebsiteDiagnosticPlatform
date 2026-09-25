@@ -578,7 +578,7 @@ const PURCHASE_FAQ = [
   },
   {
     q: "如何計算所需點數？",
-    a: "每爬一個頁面 10 coin。建立掃描時依「最大頁數」預扣，完成後依實際頁數退回未使用的部分。",
+    a: "掃描按維度計費：每頁每維度 2 coin，只勾需要的維度即省費用（五維全選＝每頁 10 coin）。建立時依「最大頁數」預扣，完成後依實際頁數退回未使用的部分。",
   },
   {
     q: "支援哪些付款方式？",
@@ -642,7 +642,7 @@ function PurchasePage() {
             <span className="hero-grad">按頁付費</span>，永久有效
           </h1>
           <p className="public-hero-sub">
-            每爬一頁 10 coin，新會員每月自動贈送 200 coin；買越多越划算，
+            掃描按維度計費，每頁每維度 2 coin、只勾選需要的項目；新會員每月自動贈送 200 coin；買越多越划算，
             點數不會過期，失敗或取消自動全額退回。
           </p>
           <div className="public-hero-actions">

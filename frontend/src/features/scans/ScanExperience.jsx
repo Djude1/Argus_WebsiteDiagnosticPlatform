@@ -45,6 +45,16 @@ const SCAN_POLL_INTERVAL_MS = 2000;
 const LIST_POLL_INTERVAL_MS = 3000;
 const MAX_SITE_SCAN_PAGES = 50;
 
+// 掃描維度選項（value 必須與後端 ALL_CATEGORIES 一致）
+const SCAN_CATEGORY_OPTIONS = [
+  { value: "seo", label: "SEO", desc: "搜尋引擎優化" },
+  { value: "aeo", label: "AEO", desc: "AI 答案引擎可讀性" },
+  { value: "geo", label: "GEO", desc: "生成式搜尋整備" },
+  { value: "ux", label: "UX", desc: "行動版版面" },
+  { value: "security", label: "資安檢測", desc: "被動資安；主動測試必勾" },
+];
+const DEFAULT_SCAN_CATEGORIES = SCAN_CATEGORY_OPTIONS.map((option) => option.value);
+
 // localStorage 暫存表單草稿的 key
 const SCAN_DRAFT_KEY = "argus_scan_draft_v1";
 
@@ -234,6 +244,8 @@ function ScanJobForm({ onCreated }) {
   );
   const [activeMode, setActiveMode] = useState(initial.activeMode || false);
   const [activeAuthorized, setActiveAuthorized] = useState(initial.activeAuthorized || false);
+  // 掃描維度多選（至少一項；費用＝頁數 × 勾選維度數 × 每維單價）
+  const [categories, setCategories] = useState(initial.categories || DEFAULT_SCAN_CATEGORIES);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [estimating, setEstimating] = useState(false);
@@ -286,11 +298,27 @@ function ScanJobForm({ onCreated }) {
     );
   }, [verifiedDomains, urlHostname]);
 
-  const coinPerPage = wallet?.coin_per_page ?? 10;
+  const coinPerCategory = wallet?.coin_per_category ?? 2;
+  const coinPerPage = coinPerCategory * categories.length;
   const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
   const estimatedCost = effectivePages * coinPerPage;
   const balance = wallet?.balance ?? 0;
   const insufficient = balance < estimatedCost;
+  const securitySelected = categories.includes("security");
+
+  function toggleCategory(value) {
+    const next = categories.includes(value)
+      ? categories.filter((item) => item !== value)
+      : [...categories, value];
+    if (next.length === 0) return; // 至少保留一個維度
+    setCategories(next);
+    setEstimate(null);
+    // 主動測試屬資安維度：取消資安時連動關閉主動模式與其授權勾選
+    if (!next.includes("security")) {
+      setActiveMode(false);
+      setActiveAuthorized(false);
+    }
+  }
 
   useEffect(() => {
     saveScanDraft({
@@ -300,8 +328,9 @@ function ScanJobForm({ onCreated }) {
       thirdPartyReconfirmed,
       activeMode,
       activeAuthorized,
+      categories,
     });
-  }, [scope, url, authorizationConfirmed, thirdPartyReconfirmed, activeMode, activeAuthorized]);
+  }, [scope, url, authorizationConfirmed, thirdPartyReconfirmed, activeMode, activeAuthorized, categories]);
 
   useEffect(() => {
     if (!submitting) return undefined;
@@ -326,6 +355,7 @@ function ScanJobForm({ onCreated }) {
         third_party_reconfirmed: thirdPartyReconfirmed,
         scan_mode: activeMode ? "active" : "passive",
         active_testing_authorized: activeMode && activeAuthorized,
+        categories,
         max_pages: scope === "single" ? 1 : MAX_SITE_SCAN_PAGES,
         max_depth: scope === "single" ? 1 : 3,
       };
@@ -335,6 +365,7 @@ function ScanJobForm({ onCreated }) {
       setThirdPartyReconfirmed(false);
       setActiveMode(false);
       setActiveAuthorized(false);
+      setCategories(DEFAULT_SCAN_CATEGORIES);
       setEstimate(null);
       setScope("site");
       clearScanDraft();
@@ -361,7 +392,11 @@ function ScanJobForm({ onCreated }) {
     setEstimate(null);
     setError("");
     try {
-      const res = await api.post("/estimate/", { url, max_pages: effectivePages });
+      const res = await api.post("/estimate/", {
+        url,
+        max_pages: effectivePages,
+        categories,
+      });
       setEstimate(res.data);
     } catch (err) {
       setError(apiErrorMessage(err, "預估費用失敗，請確認網址格式正確。"));
@@ -405,6 +440,37 @@ function ScanJobForm({ onCreated }) {
             <span className="scope-desc">從入口出發爬同網域多頁，產出完整健檢報告</span>
             <span className="scope-meta">最多 {MAX_SITE_SCAN_PAGES} 頁，依實際爬到頁數計費</span>
           </button>
+        </div>
+      </div>
+
+      {/* 掃描維度：逐項勾選，費用按勾選維度數計算 */}
+      <div>
+        <p className="text-xs font-semibold text-slate-600 mb-1">
+          掃描維度（至少一項）
+        </p>
+        <p className="text-xs text-slate-500 mb-2">
+          費用＝每頁每維度 {coinPerCategory} coin。已選 {categories.length} 維 →
+          每頁 {coinPerPage} coin{categories.length === 5 ? "（全選價）" : "，少勾維度即省費用"}。
+        </p>
+        <div className="category-grid">
+          {SCAN_CATEGORY_OPTIONS.map(({ value, label, desc }) => {
+            const on = categories.includes(value);
+            return (
+              <button
+                type="button"
+                key={value}
+                className={`scope-card category-card ${on ? "active" : ""}`}
+                onClick={() => toggleCategory(value)}
+                aria-pressed={on}
+              >
+                <span className="scope-title">{label}</span>
+                <span className="scope-desc">{desc}</span>
+                <span className="scope-meta">
+                  {on ? `＋${coinPerCategory} coin／頁` : "未選"}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -493,13 +559,15 @@ function ScanJobForm({ onCreated }) {
         />
         若此網站看似第三方或敏感產業，我已再次確認授權。
       </label>
-      <label className="checkbox-row">
+      <label className={`checkbox-row ${securitySelected ? "" : "opacity-60"}`}>
         <input
           type="checkbox"
           checked={activeMode}
           onChange={(event) => setActiveMode(event.target.checked)}
+          disabled={!securitySelected}
         />
         啟用主動式資安測試模式。
+        {!securitySelected && "（需先勾選「資安檢測」維度）"}
       </label>
       {activeMode && (
         <label className="checkbox-row warning">

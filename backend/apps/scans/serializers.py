@@ -13,6 +13,7 @@ from apps.billing.services import (
 )
 from apps.scans.domain_verification import DomainValidationError, normalize_domain
 from apps.scans.models import (
+    ALL_CATEGORIES,
     AuthorizationConsent,
     Finding,
     FixOutput,
@@ -31,6 +32,15 @@ from apps.scans.services import (
 )
 
 
+def _categories_field() -> serializers.ListField:
+    """掃描維度多選欄位（ALL_CATEGORIES 至少勾一；費用按勾選數計）。"""
+    return serializers.ListField(
+        child=serializers.ChoiceField(choices=ALL_CATEGORIES),
+        default=list(ALL_CATEGORIES),
+        allow_empty=False,
+    )
+
+
 class ScanEstimateSerializer(serializers.Serializer):
     """純計費估算；只做語法驗證，不解析 DNS、也不連線目標網站。"""
 
@@ -40,6 +50,7 @@ class ScanEstimateSerializer(serializers.Serializer):
         min_value=1,
         max_value=settings.ARGUS_DEFAULT_MAX_PAGES,
     )
+    categories = _categories_field()
 
     def validate_url(self, value: str) -> str:
         try:
@@ -67,6 +78,7 @@ class ScanJobCreateSerializer(serializers.Serializer):
         choices=ScanJob.ScanMode.choices,
         default=ScanJob.ScanMode.PASSIVE,
     )
+    categories = _categories_field()
     max_depth = serializers.IntegerField(default=settings.ARGUS_DEFAULT_MAX_DEPTH, min_value=1)
     max_pages = serializers.IntegerField(
         default=settings.ARGUS_DEFAULT_MAX_PAGES,
@@ -91,16 +103,18 @@ class ScanJobCreateSerializer(serializers.Serializer):
         except ValueError as exc:
             raise serializers.ValidationError({"url": str(exc)}) from exc
 
-        # 點數檢查（取代舊的月次數配額）：以 max_pages × coin_per_page 預估
+        # 點數檢查（取代舊的月次數配額）：以 max_pages × 勾選維度數 × 每維單價預估
         request = self.context["request"]
         wallet = get_or_create_wallet(request.user)
-        estimated = estimate_scan_cost(attrs["max_pages"])
+        attrs["categories"] = [c for c in ALL_CATEGORIES if c in set(attrs["categories"])]
+        estimated = estimate_scan_cost(attrs["max_pages"], attrs["categories"])
         if wallet.balance < estimated:
             raise serializers.ValidationError(
                 {
                     "coin": (
-                        f"coin 不足：此次掃描需 {estimated} coin（{attrs['max_pages']} 頁 × "
-                        f"{settings.ARGUS_COIN_PER_PAGE}），目前餘額 {wallet.balance}。"
+                        f"coin 不足：此次掃描需 {estimated} coin"
+                        f"（{attrs['max_pages']} 頁 × {len(attrs['categories'])} 維度 × "
+                        f"{settings.ARGUS_COIN_PER_CATEGORY}），目前餘額 {wallet.balance}。"
                         f"請前往購點頁面儲值。"
                     )
                 }
@@ -109,6 +123,11 @@ class ScanJobCreateSerializer(serializers.Serializer):
         if attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and not attrs["active_testing_authorized"]:
             raise serializers.ValidationError(
                 {"active_testing_authorized": "主動式資安測試必須額外取得授權。"}
+            )
+        # 主動測試＝資安維度的深入檢查，未勾「資安」不得開主動模式
+        if attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and "security" not in attrs["categories"]:
+            raise serializers.ValidationError(
+                {"categories": "主動測試屬資安檢測，必須勾選「資安」維度。"}
             )
 
         hostname = get_hostname(normalized_url)
@@ -149,6 +168,7 @@ class ScanJobCreateSerializer(serializers.Serializer):
             normalized_url=validated_data["normalized_url"],
             origin=validated_data["origin"],
             scan_mode=validated_data["scan_mode"],
+            categories=validated_data["categories"],
             max_depth=validated_data["max_depth"],
             max_pages=validated_data["max_pages"],
             respect_robots=validated_data["respect_robots"],
@@ -191,6 +211,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "origin",
             "status",
             "scan_mode",
+            "categories",
             "max_depth",
             "max_pages",
             "respect_robots",

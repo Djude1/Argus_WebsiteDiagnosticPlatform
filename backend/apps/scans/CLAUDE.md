@@ -39,9 +39,7 @@ queued → crawling → scanning → [agent_testing] → completed
 
 ### 掃描範圍與工具矩陣
 
-產品範圍只有兩種：前端以 `max_pages=1` 表示**單頁**，其餘合法值表示**全網站**。`passive/active` 是探測授權層級，不是第三種掃描範圍。所有工具閘門集中由 `scan_plan.py` 決定：
-
-| 範圍與授權 | Nuclei | Katana | 敏感路徑探測 | Hermes-Agent | Kali |
+產品範圍只有兩種：前端以 `max_pages=1` 表示**單頁**，其餘合法值表示**全網站**。`passive/active` 是探測授權層級，不是第三種掃描範圍。所有工具閘門集中由 `scan_plan.py` 決定：| 範圍與授權 | Nuclei | Katana | 敏感路徑探測 | Hermes-Agent | Kali |
 |---|---:|---:|---:|---:|---:|
 | 單頁 + passive | 否 | 否 | 否 | 否 | 否 |
 | 全網站 + passive | 否 | 否 | 否 | 否 | 否 |
@@ -49,6 +47,15 @@ queued → crawling → scanning → [agent_testing] → completed
 | 全網站 + active 且已授權 | 已爬 URL | 是 | 是 | 是（另受總開關控制） | 可執行既有同源候選驗證 |
 
 Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只有 1 RPS，必須改為依序執行。單頁不得用 Katana、敏感路徑字典或 Agent 擴張成全站掃描。
+
+### 掃描維度選擇（ScanJob.categories，2026-09-26）
+
+使用者逐項勾選掃描維度（`ALL_CATEGORIES`＝seo/aeo/geo/ux/security，至少一項、預設全選），**費用＝頁數 × 勾選維度數 × `ARGUS_COIN_PER_CATEGORY`**（預設 2，五維全選＝每頁 10 coin 與舊定價等價）：
+
+- 事實來源：`models.ALL_CATEGORIES`；`ScanJob.effective_categories` 過濾未知值、空集合退回全開（migration 0017 讓既有資料列預設五維全選，行為不變）
+- 閘門：serializer（`categories` ListField 至少一項）與 `ScanJob.clean()`（**主動模式必須勾資安**）雙層檢查；`rerun_scan` replay 沿用 `effective_categories`
+- 派工：`analyze_page(page_input, categories=...)` 過濾頁面級子分析（管理頁/二進位資源的 security 檢查也受資安維度控制）；tasks.py 對「秘鑰偵測、站台層級資安、站台訊號 GEO」按維度跳過
+- 計分最後防線：`tested_categories &= scan_job.effective_categories`——沒勾的維度即使有量測（UX layout_metrics 在爬蟲一律收集）也不得進 `category_scores`，報告顯示「未評估」
 
 ### 網域所有權驗證閘門（VerifiedDomain，2026-09）
 
@@ -306,9 +313,9 @@ Agent 端同能力＝`get_network_requests` 工具（見架構文件 §3）。
 ## Coin 扣點流程（與 billing 整合）
 
 ```
-建立掃描 → hold_for_scan(max_pages × 10 coin)
+建立掃描 → hold_for_scan(max_pages × 勾選維度數 × 每維單價)
   ↓ worker 完成
-settle_scan_actual(actual_pages × 10 coin)  ← 退差額
+settle_scan_actual(actual_pages × 同組維度數 × 每維單價)  ← 退差額
   ↓ 若失敗/取消
 refund_full_for_scan(scan)  ← 全退（冪等）
 ```

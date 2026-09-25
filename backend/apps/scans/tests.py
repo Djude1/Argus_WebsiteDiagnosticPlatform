@@ -2,6 +2,7 @@ import asyncio
 import os
 import subprocess
 import sys
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -10,15 +11,17 @@ from config.client_ip import resolve_client_ip
 from config.egress import playwright_launch_kwargs
 from config.proxy_headers import TrustedProxyHeadersMiddleware
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from docx import Document
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.billing.models import CoinWallet
+from apps.billing.models import CoinTransaction, CoinWallet
 from apps.scans.crawler import (
     _close_playwright_resources,
     _enforce_public_request,
@@ -412,6 +415,91 @@ class ScanJobApiTests(APITestCase):
         self.assertIn("status", response.data)
         self.assertIn("normalized_url", response.data)
         self.assertNotIn("authorization_confirmed", response.data)
+
+    def test_create_scan_without_categories_defaults_to_all(self):
+        response = self.client.post(
+            self.url,
+            {"url": "https://example.com/", "authorization_confirmed": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            set(ScanJob.objects.get().effective_categories),
+            {"seo", "aeo", "geo", "ux", "security"},
+        )
+
+    def test_create_scan_partial_categories_stored_and_charged(self):
+        response = self.client.post(
+            self.url,
+            {
+                "url": "https://example.com/",
+                "authorization_confirmed": True,
+                "categories": ["seo", "geo"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        scan_job = ScanJob.objects.get()
+        self.assertEqual(scan_job.categories, ["seo", "geo"])
+        # 預設 max_pages=50：50 頁 × 2 維 × 2 coin = 200
+        hold = scan_job.coin_transactions.get(kind=CoinTransaction.Kind.SCAN_HOLD)
+        self.assertEqual(hold.amount, -200)
+
+    def test_create_scan_rejects_empty_categories(self):
+        response = self.client.post(
+            self.url,
+            {
+                "url": "https://example.com/",
+                "authorization_confirmed": True,
+                "categories": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ScanJob.objects.count(), 0)
+
+    def test_active_mode_requires_security_category(self):
+        # 未通過網域驗證會先撞網域閘門，故先建已驗證網域讓測試聚焦在維度規則
+        VerifiedDomain.objects.create(
+            user=self.user,
+            domain="example.com",
+            token="0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+            status=VerifiedDomain.Status.VERIFIED,
+            method=VerifiedDomain.Method.DNS_TXT,
+            verified_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=90),
+        )
+        response = self.client.post(
+            self.url,
+            {
+                "url": "https://example.com/",
+                "authorization_confirmed": True,
+                "scan_mode": "active",
+                "active_testing_authorized": True,
+                "categories": ["seo", "geo"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("資安", str(response.data))
+        self.assertEqual(ScanJob.objects.count(), 0)
+
+    def test_model_clean_rejects_active_without_security(self):
+        scan_job = ScanJob(
+            user=self.user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            scan_mode=ScanJob.ScanMode.ACTIVE,
+            active_testing_authorized=True,
+            categories=["seo"],
+        )
+        with self.assertRaises(ValidationError):
+            scan_job.clean()
 
     def test_obvious_third_party_requires_reconfirmation(self):
         response = self.client.post(
@@ -1282,8 +1370,8 @@ class EstimateScanTests(APITestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
-    @override_settings(ARGUS_COIN_PER_PAGE=7)
-    def test_estimate_uses_billing_coin_per_page_setting(self):
+    @override_settings(ARGUS_COIN_PER_CATEGORY=7)
+    def test_estimate_uses_billing_coin_per_category_setting(self):
         resp = self.client.post(
             "/api/estimate/",
             {"url": "https://example.com/", "max_pages": 2},
@@ -1293,9 +1381,33 @@ class EstimateScanTests(APITestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["estimated_pages"], 2)
-        self.assertEqual(resp.data["estimated_cost"], 14)
+        # 未帶 categories＝五維全選：2 頁 × 5 維 × 7 = 70
+        self.assertEqual(resp.data["estimated_cost"], 70)
         self.assertEqual(resp.data["confidence"], "maximum")
         self.assertEqual(resp.data["method"], "billing_cap")
+
+    def test_estimate_counts_selected_categories(self):
+        resp = self.client.post(
+            "/api/estimate/",
+            {"url": "https://example.com/", "max_pages": 10, "categories": ["seo", "geo"]},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        # 10 頁 × 2 維 × 2 coin = 40
+        self.assertEqual(resp.data["estimated_cost"], 40)
+        self.assertEqual(resp.data["categories"], ["seo", "geo"])
+
+    def test_estimate_rejects_empty_or_unknown_categories(self):
+        for bad in ([], ["seo", "bogus"]):
+            resp = self.client.post(
+                "/api/estimate/",
+                {"url": "https://example.com/", "max_pages": 5, "categories": bad},
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.token}",
+            )
+            self.assertEqual(resp.status_code, 400, msg=bad)
 
     @patch("apps.scans.services.socket.getaddrinfo")
     def test_estimate_does_not_resolve_dns_or_contact_target(self, getaddrinfo):

@@ -445,7 +445,18 @@ def parse_html_signals(html: str) -> HtmlSignalParser:
     return parser
 
 
-def analyze_page(page_input: PageAnalysisInput) -> list[dict]:
+def analyze_page(page_input: PageAnalysisInput, categories: set[str] | None = None) -> list[dict]:
+    """單頁四維＋資安分析。categories 指定時只跑勾選維度（None＝全部）。
+
+    維度對應：seo/aeo→analyze_seo/aeo、geo→analyze_geo(_fast)＋站台訊號、
+    security→analyze_security/analyze_data_exposure（管理頁與二進位資源的
+    安全檢查也屬 security）、ux→analyze_ux（行動版版面）。
+    """
+    wanted = set(categories) if categories is not None else None
+
+    def runs(category: str) -> bool:
+        return wanted is None or category in wanted
+
     parser = parse_html_signals(page_input.html)
     findings: list[dict] = []
 
@@ -454,24 +465,31 @@ def analyze_page(page_input: PageAnalysisInput) -> list[dict]:
     # 二進位/媒體資源（.apk、.pdf 等）沒有頁面內容，不做 SEO/AEO/GEO 分析；
     # 安全頭部仍檢查，因為這些檔案的下載仍需 HSTS / X-Content-Type-Options 等保護。
     if is_binary_resource(target_url):
-        findings.extend(analyze_security(page_input, parser))
+        if runs("security"):
+            findings.extend(analyze_security(page_input, parser))
         return findings
 
     # 管理後台/登入頁不對外索引，SEO/AEO/GEO 評分對其無意義；
     # 但 SECURITY 檢查（CSRF token、安全頭部）對後台反而更關鍵，必須保留。
     # PII 偵測也保留：後台頁面意外外洩個資反而更嚴重。
     if is_admin_path(target_url):
-        findings.extend(analyze_security(page_input, parser))
-        findings.extend(analyze_data_exposure(page_input))
+        if runs("security"):
+            findings.extend(analyze_security(page_input, parser))
+            findings.extend(analyze_data_exposure(page_input))
         return findings
 
-    findings.extend(analyze_seo(page_input, parser))
-    findings.extend(analyze_aeo(page_input, parser))
-    findings.extend(analyze_geo(page_input, parser))
-    findings.extend(analyze_geo_fast(page_input, parser))
-    findings.extend(analyze_security(page_input, parser))
-    findings.extend(analyze_data_exposure(page_input))
-    findings.extend(analyze_ux(page_input))
+    if runs("seo"):
+        findings.extend(analyze_seo(page_input, parser))
+    if runs("aeo"):
+        findings.extend(analyze_aeo(page_input, parser))
+    if runs("geo"):
+        findings.extend(analyze_geo(page_input, parser))
+        findings.extend(analyze_geo_fast(page_input, parser))
+    if runs("security"):
+        findings.extend(analyze_security(page_input, parser))
+        findings.extend(analyze_data_exposure(page_input))
+    if runs("ux"):
+        findings.extend(analyze_ux(page_input))
     return findings
 
 

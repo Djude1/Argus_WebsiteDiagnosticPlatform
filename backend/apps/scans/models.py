@@ -12,6 +12,16 @@ from apps.scans.services import get_hostname, user_owns_domain
 _scan_signer = Signer(salt="argus-scan-test-auth")
 
 
+# 掃描維度全集合（與 Finding.Category 對齊）。使用者建立掃描時逐項勾選，
+# 至少勾一項；計費＝頁數 × 勾選維度數 × ARGUS_COIN_PER_CATEGORY。
+ALL_CATEGORIES = ["seo", "aeo", "geo", "ux", "security"]
+
+
+def default_categories() -> list[str]:
+    """新掃描預設五維全開（行為與維度計費前一致，全選價＝舊每頁價）。"""
+    return list(ALL_CATEGORIES)
+
+
 def encrypt_test_auth(value: str) -> str:
     if not value:
         return ""
@@ -62,6 +72,9 @@ class ScanJob(models.Model):
         default=ScanMode.PASSIVE,
         db_index=True,
     )
+    # 本次掃描要評估的維度（ALL_CATEGORIES 子集，至少一項）；
+    # 空值／未知值一律視同全開（舊資料與內部呼叫的相容行為）
+    categories = models.JSONField(default=default_categories)
     max_depth = models.PositiveSmallIntegerField(default=3)
     max_pages = models.PositiveSmallIntegerField(default=50)
     respect_robots = models.BooleanField(default=True)
@@ -109,6 +122,18 @@ class ScanJob(models.Model):
                     f"主動測試僅限已通過網域所有權驗證的網站，"
                     f"請先到網域驗證頁完成 {hostname} 的所有權驗證。"
                 )
+        # 主動測試＝資安維度的深入檢查，未勾「資安」不得開主動模式
+        if (
+            self.scan_mode == self.ScanMode.ACTIVE
+            and "security" not in self.effective_categories
+        ):
+            raise ValidationError("主動測試屬資安檢測，必須勾選「資安」維度。")
+
+    @property
+    def effective_categories(self) -> set[str]:
+        """本次掃描實際評估的維度。過濾未知值；空集合退回全開（舊資料相容）。"""
+        effective = {c for c in (self.categories or []) if c in ALL_CATEGORIES}
+        return effective or set(ALL_CATEGORIES)
 
     def __str__(self) -> str:
         return f"{self.origin} ({self.status})"

@@ -1170,7 +1170,7 @@ def system_settings(request):
     return Response({
         "billing": {
             "ARGUS_MONTHLY_BONUS_COINS": dj_settings.ARGUS_MONTHLY_BONUS_COINS,
-            "ARGUS_COIN_PER_PAGE": dj_settings.ARGUS_COIN_PER_PAGE,
+            "ARGUS_COIN_PER_CATEGORY": dj_settings.ARGUS_COIN_PER_CATEGORY,
         },
         "agent": {
             "ARGUS_AGENT_ENABLED": dj_settings.ARGUS_AGENT_ENABLED,

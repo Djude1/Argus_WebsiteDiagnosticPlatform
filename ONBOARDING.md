@@ -321,7 +321,7 @@ Argus/
 ### 7.3 點數與訂單（billing）
 | Method | 端點 | 權限 | request 參數 | 說明 |
 |---|---|---|---|---|
-| GET | `/api/billing/wallet/` | auth | — | 我的錢包（餘額 + 最近 20 筆 tx + `coin_per_page`） |
+| GET | `/api/billing/wallet/` | auth | — | 我的錢包（餘額 + 最近 20 筆 tx + `coin_per_category`，掃描費用＝頁數 × 勾選維度數 × 此值） |
 | GET | `/api/billing/plans/` | auth | — | 4 個方案 |
 | POST | `/api/billing/purchase/` | auth | body（`PurchaseRequestSerializer`）見下表 | 結帳並入帳 coin |
 | GET | `/api/billing/orders/` | auth | — | 我的訂單 |

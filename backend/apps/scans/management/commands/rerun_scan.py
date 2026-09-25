@@ -53,7 +53,8 @@ class Command(BaseCommand):
                     headers=page.headers,
                     element_boxes=page.element_boxes,
                     html_only=page.html_only_text,
-                )
+                ),
+                categories=scan_job.effective_categories,
             )
             for finding in page_findings:
                 Finding.objects.create(scan_job=scan_job, page=page, **finding)
@@ -73,12 +74,19 @@ class Command(BaseCommand):
             }
             for page in scan_job.pages.all()
         ]
-        site_level_findings = analyze_security_site_level(site_level_pages)
-        for finding in site_level_findings:
-            Finding.objects.create(scan_job=scan_job, page=None, **finding)
-        all_findings.extend(site_level_findings)
+        # 未勾「資安」維度的掃描，replay 也不得產生站台層級資安 findings
+        if "security" in scan_job.effective_categories:
+            site_level_findings = analyze_security_site_level(site_level_pages)
+            for finding in site_level_findings:
+                Finding.objects.create(scan_job=scan_job, page=None, **finding)
+            all_findings.extend(site_level_findings)
 
-        overall_score, category_scores, top_actions = calculate_scores(all_findings)
+        tested = {c for c in ("seo", "aeo", "geo", "ux", "security") if any(
+            f.get("category") == c for f in all_findings
+        )} or None
+        overall_score, category_scores, top_actions = calculate_scores(
+            all_findings, tested_categories=tested
+        )
         scan_job.overall_score = overall_score
         scan_job.category_scores = category_scores
         scan_job.top_actions = top_actions

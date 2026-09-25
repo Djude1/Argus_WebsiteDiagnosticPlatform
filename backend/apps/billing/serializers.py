@@ -72,7 +72,7 @@ class CoinTransactionSerializer(serializers.ModelSerializer):
 
 class CoinWalletSerializer(serializers.ModelSerializer):
     recent_transactions = serializers.SerializerMethodField()
-    coin_per_page = serializers.SerializerMethodField()
+    coin_per_category = serializers.SerializerMethodField()
 
     class Meta:
         model = CoinWallet
@@ -80,7 +80,7 @@ class CoinWalletSerializer(serializers.ModelSerializer):
             "balance",
             "total_purchased_ntd",
             "total_scans_used",
-            "coin_per_page",
+            "coin_per_category",
             "recent_transactions",
             "updated_at",
         ]
@@ -89,10 +89,10 @@ class CoinWalletSerializer(serializers.ModelSerializer):
         qs = obj.transactions.all()[:20]
         return CoinTransactionSerializer(qs, many=True).data
 
-    def get_coin_per_page(self, obj):
+    def get_coin_per_category(self, obj):
         from django.conf import settings as dj_settings
 
-        return dj_settings.ARGUS_COIN_PER_PAGE
+        return dj_settings.ARGUS_COIN_PER_CATEGORY
 
 
 class PurchaseRequestSerializer(serializers.Serializer):

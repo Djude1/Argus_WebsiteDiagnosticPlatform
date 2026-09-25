@@ -93,13 +93,14 @@ def _make_user(username="alice", email=None):
     )
 
 
-def _make_scan(user, max_pages=10):
+def _make_scan(user, max_pages=10, categories=None):
     return ScanJob.objects.create(
         user=user,
         original_url="https://example.com/",
         normalized_url="https://example.com/",
         origin="https://example.com",
         max_pages=max_pages,
+        categories=categories or ["seo", "aeo", "geo", "ux", "security"],
     )
 
 
@@ -128,9 +129,19 @@ class WalletSignalTests(APITestCase):
 
 
 class CostEstimationTests(APITestCase):
-    def test_estimate_uses_max_pages_times_coin_per_page(self):
+    def test_estimate_full_categories_matches_legacy_per_page_price(self):
+        # 未指定 categories（內部舊呼叫）＝五維全選＝每頁 10 coin，與舊定價等價
         self.assertEqual(estimate_scan_cost(10), 100)
         self.assertEqual(estimate_scan_cost(50), 500)
+        self.assertEqual(estimate_scan_cost(10, ["seo", "aeo", "geo", "ux", "security"]), 100)
+
+    def test_estimate_counts_selected_categories(self):
+        # 只勾 SEO+GEO：10 頁 × 2 維 × 2 coin = 40
+        self.assertEqual(estimate_scan_cost(10, ["seo", "geo"]), 40)
+        # 重複值計一次；未知值忽略；空集合視同全選
+        self.assertEqual(estimate_scan_cost(10, ["seo", "seo", "bogus"]), 20)
+        self.assertEqual(estimate_scan_cost(10, []), 100)
+        self.assertEqual(estimate_scan_cost(10, None), 100)
 
 
 class ScanHoldRefundTests(APITestCase):
@@ -154,6 +165,15 @@ class ScanHoldRefundTests(APITestCase):
         scan = _make_scan(self.user, max_pages=200)  # 需 2000 coin，有 1000
         with self.assertRaises(InsufficientCoinError):
             hold_for_scan(self.user, scan)
+
+    def test_partial_categories_hold_and_settle_cheaper(self):
+        # 只勾 SEO+GEO：10 頁 × 2 維 × 2 coin = 40（五維全選要 100）
+        scan = _make_scan(self.user, max_pages=10, categories=["seo", "geo"])
+        hold_for_scan(self.user, scan)  # 1000 - 40 = 960
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 960)
+        # 實際 4 頁 × 2 維 × 2 = 16，退差 24 → 984
+        settle_scan_actual(self.user, scan, actual_pages=4)
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 984)
 
     def test_full_refund_on_failure_restores_balance(self):
         scan = _make_scan(self.user, max_pages=10)
@@ -258,7 +278,7 @@ class BillingAPITests(APITestCase):
         response = self.client.get(reverse("billing-wallet"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["balance"], 200)
-        self.assertEqual(response.data["coin_per_page"], 10)
+        self.assertEqual(response.data["coin_per_category"], 2)
         self.assertEqual(len(response.data["recent_transactions"]), 1)
 
     def test_plans_endpoint_returns_four_active_plans(self):

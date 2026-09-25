@@ -808,9 +808,11 @@ def estimate_scan(request):
     serializer = ScanEstimateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     max_pages = serializer.validated_data["max_pages"]
+    categories = serializer.validated_data["categories"]
     return Response({
         "estimated_pages": max_pages,
-        "estimated_cost": estimate_scan_cost(max_pages),
+        "categories": categories,
+        "estimated_cost": estimate_scan_cost(max_pages, categories),
         "confidence": "maximum",
         "method": "billing_cap",
     })
