@@ -198,6 +198,19 @@
      與 Argus 的識別無關，也是後台看起來像通用模板的主因。 */
   --admin-sidebar-from: var(--argus-navy-950);
   --admin-sidebar-to: var(--argus-navy-800);
+  /* S7：深色主題需要的其餘語意 token（此處為亮色值，深色值見檔案下方的
+     :root[data-theme="dark"] 區塊）。側欄本身恆為深色，不使用這組。 */
+  --admin-border-solid: #e2e8f0;
+  --admin-text-secondary: #475569;
+  --admin-accent-strong: #0e7490;
+  --admin-accent-soft-bg: #ecfeff;
+  --admin-tone-good-text: #047857;
+  --admin-tone-warn-text: #b45309;
+  --admin-tone-bad-text: #b91c1c;
+  --admin-tone-good-bg: rgba(16, 185, 129, 0.12);
+  --admin-tone-warn-bg: rgba(245, 158, 11, 0.14);
+  --admin-tone-bad-bg: rgba(239, 68, 68, 0.12);
+  --admin-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.12);
   --argus-brand-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M12 4c1.25 4.85 3.15 6.75 8 8-4.85 1.25-6.75 3.15-8 8-1.25-4.85-3.15-6.75-8-8 4.85-1.25 6.75-3.15 8-8Z'/%3E%3C/svg%3E");
 
   /* 圓角 */
@@ -2994,7 +3007,7 @@
     display: grid;
     grid-template-columns: 256px 1fr;
     min-height: 100vh;
-    color: #1e293b;
+    color: var(--admin-text);
   }
   .admin-mobile-header,
   .admin-drawer-backdrop {
@@ -3005,13 +3018,13 @@
   .admin-error,
   .admin-forbidden {
     @apply mx-auto mt-20 max-w-md rounded-2xl p-8 text-center;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: #1e293b;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-solid);
+    color: var(--admin-text);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
-  .admin-forbidden h2 { @apply text-xl font-bold mb-2; color: #0f172a; }
-  .admin-forbidden p { @apply text-sm; color: #475569; }
+  .admin-forbidden h2 { @apply text-xl font-bold mb-2; color: var(--admin-text); }
+  .admin-forbidden p { @apply text-sm; color: var(--admin-text-secondary); }
   .admin-error { color: #be123c; }
 
   /* --- Sidebar (dark gradient) --- */
@@ -3167,12 +3180,12 @@
   }
   .admin-page-head h1 {
     @apply text-2xl font-bold;
-    color: #0f172a;
+    color: var(--admin-text);
     letter-spacing: 0.02em;
   }
   .admin-page-head p {
     @apply mt-1 text-sm;
-    color: #64748b;
+    color: var(--admin-text-muted);
   }
   /* 即時監控狀態徽章：呼應 Argus（全視之眼）品牌敘事，唯一允許在後台常駐的動效——傳達真實系統狀態，非裝飾 */
   .admin-status-badge {
@@ -3181,7 +3194,7 @@
     border-radius: 999px;
     background: rgba(14, 165, 233, 0.08);
     border: 1px solid rgba(14, 165, 233, 0.25);
-    color: #0e7490;
+    color: var(--admin-accent-strong);
     white-space: nowrap;
   }
   .admin-status-dot {
@@ -3202,12 +3215,12 @@
   .admin-back-link {
     @apply mb-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition;
     background: transparent;
-    color: #0e7490;
+    color: var(--admin-accent-strong);
     border: none;
     cursor: pointer;
   }
   .admin-back-link:hover {
-    background: #ecfeff;
+    background: var(--admin-accent-soft-bg);
   }
 
   /* --- Stat grid --- */
@@ -3240,7 +3253,7 @@
   .admin-stat-card {
     border-radius: 18px;
     padding: 20px;
-    background: #ffffff;
+    background: var(--admin-surface);
     border: 1px solid rgba(15, 23, 42, 0.07);
     position: relative;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.12);
@@ -3271,7 +3284,7 @@
   }
   .admin-stat-value {
     @apply mt-2 text-3xl font-bold;
-    color: #0f172a;
+    color: var(--admin-text);
     letter-spacing: -0.015em;
     font-variant-numeric: tabular-nums;
   }
@@ -3296,7 +3309,7 @@
   .admin-panel {
     border-radius: 18px;
     padding: 20px;
-    background: #ffffff;
+    background: var(--admin-surface);
     border: 1px solid rgba(15, 23, 42, 0.07);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.1);
     position: relative;
@@ -3307,7 +3320,7 @@
   }
   .admin-panel h3 {
     @apply mb-4 flex items-center gap-2.5 text-base font-bold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-panel-icon-chip {
     @apply inline-flex shrink-0 items-center justify-center;
@@ -3344,9 +3357,9 @@
   }
   .admin-table thead th {
     @apply px-3 py-2 text-left text-xs uppercase tracking-wider font-semibold;
-    color: #64748b;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    color: var(--admin-text-muted);
+    background: var(--admin-surface-sunken);
+    border-bottom: 1px solid var(--admin-border-solid);
   }
   .admin-table thead th.num,
   .admin-table tbody td.num {
@@ -3357,8 +3370,8 @@
   .admin-cell-mono { width: 280px; font-family: monospace; color: #94a3b8; }
   .admin-table tbody td {
     @apply px-3 py-2.5;
-    color: #334155;
-    border-bottom: 1px solid #f1f5f9;
+    color: var(--admin-text-secondary);
+    border-bottom: 1px solid var(--admin-surface-sunken);
   }
   .admin-table tbody tr.clickable { cursor: pointer; transition: background 0.15s; }
   .admin-table tbody tr.clickable:hover {
@@ -3374,18 +3387,18 @@
   }
   .admin-cell-primary {
     @apply font-semibold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-cell-secondary {
     @apply text-xs;
     color: #94a3b8;
   }
   .admin-log-payload { margin-top: 4px; }
-  .admin-log-payload summary { cursor: pointer; color: #0e7490; font-size: 11px; }
+  .admin-log-payload summary { cursor: pointer; color: var(--admin-accent-strong); font-size: 11px; }
   .admin-log-payload pre { font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
   .admin-coin {
     @apply font-bold;
-    color: #0e7490;
+    color: var(--admin-accent-strong);
   }
   .truncate {
     max-width: 280px;
@@ -3408,8 +3421,8 @@
   }
   .admin-status {
     @apply inline-block rounded-full px-2 py-0.5 text-xs font-semibold;
-    background: #f1f5f9;
-    color: #475569;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-secondary);
   }
   .admin-status.completed { background: rgba(16, 185, 129, 0.12); color: var(--tone-good); }
   .admin-status.failed { background: rgba(239, 68, 68, 0.12); color: var(--tone-bad); }
@@ -3417,14 +3430,14 @@
   .admin-status.scanning,
   .admin-status.agent_testing,
   .admin-status.queued { background: rgba(14, 165, 233, 0.12); color: var(--argus-cyan-dot); }
-  .admin-status.cancelled { background: #f1f5f9; color: #475569; }
+  .admin-status.cancelled { background: var(--admin-surface-sunken); color: var(--admin-text-secondary); }
 
   /* --- Inputs & forms --- */
   .admin-input {
     @apply rounded-lg px-3 py-2 text-sm transition;
-    background: #ffffff;
+    background: var(--admin-surface);
     border: 1px solid #cbd5e1;
-    color: #0f172a;
+    color: var(--admin-text);
     outline: none;
   }
   .admin-input::placeholder { color: #94a3b8; }
@@ -3435,19 +3448,19 @@
   .admin-input.wide { flex: 1; }
   .admin-btn {
     @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
-    background: #ffffff;
-    color: #0e7490;
+    background: var(--admin-surface);
+    color: var(--admin-accent-strong);
     border: 1px solid #67e8f9;
     cursor: pointer;
   }
   .admin-btn:hover {
-    background: #ecfeff;
+    background: var(--admin-accent-soft-bg);
     border-color: #06b6d4;
     box-shadow: 0 2px 6px rgba(6, 182, 212, 0.15);
   }
   .admin-btn.primary {
     background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-    color: #fff;
+    color: var(--admin-surface);
     border: none;
   }
   .admin-btn.primary:hover {
@@ -3468,7 +3481,7 @@
   }
   .admin-checkbox {
     @apply inline-flex items-center gap-2 text-sm;
-    color: #334155;
+    color: var(--admin-text-secondary);
     cursor: pointer;
   }
   .admin-checkbox input {
@@ -3481,14 +3494,14 @@
     @apply grid gap-y-2 text-sm;
     grid-template-columns: 120px 1fr;
   }
-  .admin-dl dt { color: #64748b; }
-  .admin-dl dd { color: #0f172a; }
+  .admin-dl dt { color: var(--admin-text-muted); }
+  .admin-dl dd { color: var(--admin-text); }
 
   .admin-balance-big {
     @apply mb-3 text-4xl font-bold;
-    color: #0e7490;
+    color: var(--admin-accent-strong);
   }
-  .admin-balance-big span { @apply ml-1 text-base; color: #64748b; }
+  .admin-balance-big span { @apply ml-1 text-base; color: var(--admin-text-muted); }
   .admin-balance-big.tight { margin-bottom: 0; }
 
   /* --- Adjust form --- */
@@ -3500,36 +3513,36 @@
   }
   .admin-quick-btn {
     @apply rounded-full px-3 py-1 text-xs transition;
-    background: #f1f5f9;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-secondary);
+    border: 1px solid var(--admin-border-solid);
     cursor: pointer;
   }
   .admin-quick-btn:hover {
-    background: #ecfeff;
-    color: #0e7490;
+    background: var(--admin-accent-soft-bg);
+    color: var(--admin-accent-strong);
     border-color: #67e8f9;
   }
   .admin-feedback {
     @apply mt-3 rounded-lg px-3 py-2 text-sm;
   }
-  .admin-feedback.tone-good { background: #d1fae5; color: #047857; }
-  .admin-feedback.tone-bad { background: #fee2e2; color: #b91c1c; }
+  .admin-feedback.tone-good { background: #d1fae5; color: var(--admin-tone-good-text); }
+  .admin-feedback.tone-bad { background: #fee2e2; color: var(--admin-tone-bad-text); }
 
   /* --- Pagination --- */
   .admin-pagination {
     @apply mt-4 flex items-center justify-center gap-4 text-sm;
-    color: #64748b;
+    color: var(--admin-text-muted);
   }
   .admin-pagination button {
     @apply rounded-md px-3 py-1.5 transition;
-    background: #ffffff;
-    color: #0e7490;
+    background: var(--admin-surface);
+    color: var(--admin-accent-strong);
     border: 1px solid #cbd5e1;
     cursor: pointer;
   }
   .admin-pagination button:hover:not(:disabled) {
-    background: #ecfeff;
+    background: var(--admin-accent-soft-bg);
     border-color: #67e8f9;
   }
   .admin-pagination button:disabled {
@@ -3540,8 +3553,8 @@
   /* --- Reviews 治理區 --- */
   .admin-review {
     @apply rounded-2xl p-5 mb-3;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-solid);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
   }
   .admin-review.is-pending {
@@ -3551,7 +3564,7 @@
     box-shadow: inset 3px 0 0 #ef4444, 0 1px 3px rgba(15, 23, 42, 0.04);
   }
   .admin-review.is-hidden {
-    background: #f8fafc;
+    background: var(--admin-surface-sunken);
     opacity: 0.88;
   }
   .admin-review-head {
@@ -3559,7 +3572,7 @@
   }
   .admin-review-user {
     @apply font-semibold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-review-time {
     @apply text-xs;
@@ -3598,25 +3611,25 @@
   }
   .admin-review-title {
     @apply mb-1 text-base font-bold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-review-body {
     @apply mb-2 text-sm whitespace-pre-line;
-    color: #334155;
+    color: var(--admin-text-secondary);
     line-height: 1.7;
   }
   .admin-review-public-name {
     @apply mb-4 text-xs;
-    color: #64748b;
+    color: var(--admin-text-muted);
   }
   .admin-review-reply-section {
     @apply flex flex-col gap-2 rounded-xl p-3;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border-solid);
   }
   .admin-review-reply-field {
     @apply flex flex-col gap-1 text-xs font-semibold;
-    color: #475569;
+    color: var(--admin-text-secondary);
   }
   .admin-reply-input {
     min-height: 76px;
@@ -3627,7 +3640,7 @@
   }
   .admin-review-existing-reply {
     @apply mt-2 text-xs;
-    color: #047857;
+    color: var(--admin-tone-good-text);
   }
   /* --- Scan detail category scores --- */
   .admin-cat-scores {
@@ -3636,12 +3649,12 @@
   }
   .admin-cat-score-item {
     @apply rounded-xl p-3 text-center;
-    background: #ecfeff;
+    background: var(--admin-accent-soft-bg);
     border: 1px solid #67e8f9;
   }
   .admin-cat-score-label {
     @apply text-xs uppercase tracking-wider;
-    color: #0e7490;
+    color: var(--admin-accent-strong);
   }
   .admin-cat-score-value {
     @apply mt-1 text-2xl font-bold;
@@ -3650,7 +3663,7 @@
   .admin-error-pre {
     @apply rounded-lg p-3 text-xs overflow-auto;
     background: #fef2f2;
-    color: #b91c1c;
+    color: var(--admin-tone-bad-text);
     border: 1px solid #fecaca;
     font-family: ui-monospace, monospace;
     max-height: 200px;
@@ -4112,7 +4125,7 @@
   .admin-panel-head-actions a.admin-btn { text-decoration: none; }
   .admin-chart-legend {
     @apply flex flex-wrap gap-3 text-xs;
-    color: #475569;
+    color: var(--admin-text-secondary);
   }
   .admin-chart-legend span {
     @apply inline-flex items-center gap-1;
@@ -4127,7 +4140,7 @@
   .admin-chart-legend i.tone-good { background: var(--tone-good); }
   .admin-chart-legend i.tone-amber { background: var(--tone-medium); }
   .admin-mini-chart { display: block; }
-  .admin-mini-chart-dot { stroke: #fff; stroke-width: 1.5; }
+  .admin-mini-chart-dot { stroke: var(--admin-surface); stroke-width: 1.5; }
 
   .admin-provider-bars {
     @apply flex flex-col gap-2;
@@ -4140,14 +4153,14 @@
   }
   .admin-provider-name {
     @apply font-semibold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-provider-model {
     color: #94a3b8;
   }
   .admin-provider-track {
     @apply h-3 flex-1 overflow-hidden rounded-full;
-    background: #e2e8f0;
+    background: var(--admin-border-solid);
   }
   .admin-provider-fill {
     @apply h-full rounded-full;
@@ -4159,7 +4172,7 @@
   }
   .admin-provider-tokens {
     @apply font-semibold;
-    color: #0e7490;
+    color: var(--admin-accent-strong);
   }
   .admin-provider-sessions {
     color: #94a3b8;
@@ -5782,14 +5795,14 @@
   }
   .admin-tab {
     @apply rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer;
-    background: #ffffff;
-    color: #64748b;
-    border: 1px solid #e2e8f0;
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    border: 1px solid var(--admin-border-solid);
   }
-  .admin-tab:hover { background: #ecfeff; color: #0e7490; border-color: #67e8f9; }
+  .admin-tab:hover { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); border-color: #67e8f9; }
   .admin-tab.active {
     background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
-    color: #fff;
+    color: var(--admin-surface);
     border-color: transparent;
     box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
   }
@@ -5806,7 +5819,7 @@
     padding: 16px;
   }
   .admin-modal {
-    background: #ffffff;
+    background: var(--admin-surface);
     border-radius: 16px;
     box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
     max-width: 560px;
@@ -5815,32 +5828,32 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    color: #1e293b;
+    color: var(--admin-text);
   }
   .admin-modal-head {
     @apply flex items-center justify-between px-5 py-4;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--admin-border-solid);
   }
   .admin-modal-head h4 {
     @apply text-lg font-bold;
-    color: #0f172a;
+    color: var(--admin-text);
   }
   .admin-modal-close {
     @apply inline-flex h-8 w-8 items-center justify-center rounded-full text-xl transition;
     background: transparent;
-    color: #64748b;
+    color: var(--admin-text-muted);
     border: none;
     cursor: pointer;
   }
-  .admin-modal-close:hover { background: #f1f5f9; color: #0f172a; }
+  .admin-modal-close:hover { background: var(--admin-surface-sunken); color: var(--admin-text); }
   .admin-modal-body {
     @apply space-y-3 overflow-y-auto px-5 py-4;
     flex: 1;
   }
   .admin-modal-foot {
     @apply flex items-center justify-end gap-2 px-5 py-4;
-    border-top: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border-top: 1px solid var(--admin-border-solid);
+    background: var(--admin-surface-sunken);
   }
 
   /* modal 尺寸：收斂自原本 .ann-modal 的 sm / lg */
@@ -5965,7 +5978,7 @@
   }
   .admin-error-state-detail {
     @apply text-xs;
-    color: #b91c1c;
+    color: var(--admin-tone-bad-text);
     word-break: break-word;
   }
 
@@ -6014,11 +6027,11 @@
   }
   .admin-order-status.tone-good {
     background: rgba(16, 185, 129, 0.12);
-    color: #047857;
+    color: var(--admin-tone-good-text);
   }
   .admin-order-status.tone-warn {
     background: rgba(245, 158, 11, 0.14);
-    color: #b45309;
+    color: var(--admin-tone-warn-text);
   }
 
   /* modal 內的次級標題 */
@@ -6116,11 +6129,11 @@
   }
   .admin-warn-count.tone-warn {
     background: rgba(245, 158, 11, 0.16);
-    color: #b45309;
+    color: var(--admin-tone-warn-text);
   }
   .admin-warn-count.tone-bad {
     background: rgba(239, 68, 68, 0.14);
-    color: #b91c1c;
+    color: var(--admin-tone-bad-text);
   }
   .admin-warn-label {
     @apply font-semibold;
@@ -6179,8 +6192,8 @@
     color: var(--admin-text-muted);
   }
   .admin-health-summary.tone-ok .admin-health-summary-icon { color: var(--tone-good); }
-  .admin-health-summary.tone-warn .admin-health-summary-icon { color: #b45309; }
-  .admin-health-summary.tone-bad .admin-health-summary-icon { color: #b91c1c; }
+  .admin-health-summary.tone-warn .admin-health-summary-icon { color: var(--admin-tone-warn-text); }
+  .admin-health-summary.tone-bad .admin-health-summary-icon { color: var(--admin-tone-bad-text); }
   .admin-health-summary-title { @apply text-sm font-bold; color: var(--admin-text); }
   .admin-health-summary-time { @apply text-xs; color: var(--admin-text-muted); }
 
@@ -6196,9 +6209,9 @@
     background: var(--admin-surface-sunken);
     color: var(--admin-text-muted-sunken);
   }
-  .admin-health-row.tone-ok .admin-health-badge { background: rgba(16,185,129,.14); color: #047857; }
-  .admin-health-row.tone-warn .admin-health-badge { background: rgba(245,158,11,.16); color: #b45309; }
-  .admin-health-row.tone-bad .admin-health-badge { background: rgba(239,68,68,.14); color: #b91c1c; }
+  .admin-health-row.tone-ok .admin-health-badge { background: rgba(16,185,129,.14); color: var(--admin-tone-good-text); }
+  .admin-health-row.tone-warn .admin-health-badge { background: rgba(245,158,11,.16); color: var(--admin-tone-warn-text); }
+  .admin-health-row.tone-bad .admin-health-badge { background: rgba(239,68,68,.14); color: var(--admin-tone-bad-text); }
   .admin-health-body { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
   .admin-health-label {
     @apply flex flex-wrap items-center gap-2 text-sm font-semibold;
@@ -6956,12 +6969,12 @@
 
 /* ===== AdminAnnouncementsPage / AdminPlansPage 共用：與 .admin-panel 同一材質語言（白底/柔和陰影），非獨立深色卡片 ===== */
 .admin-add-btn {
-  padding: .5rem 1rem; border: none; border-radius: 8px; color: #fff; cursor: pointer; font-weight: 600;
+  padding: .5rem 1rem; border: none; border-radius: 8px; color: var(--admin-surface); cursor: pointer; font-weight: 600;
   background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
 }
 .admin-ann-list { display: flex; flex-direction: column; gap: .75rem; }
 .admin-ann-card {
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px solid rgba(15, 23, 42, .07);
   border-radius: 16px;
   padding: 1rem 1.25rem;
@@ -6969,13 +6982,13 @@
 }
 .admin-ann-card.inactive { opacity: .6; }
 .admin-ann-card-header { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
-.admin-ann-title { font-weight: 600; color: #0f172a; }
+.admin-ann-title { font-weight: 600; color: var(--admin-text); }
 .admin-ann-type { font-size: .75rem; padding: .15rem .5rem; border-radius: 4px; }
 .admin-ann-type.permanent { background: rgba(239,68,68,.1); color: #dc2626; }
 .admin-ann-type.temporary { background: rgba(14, 165, 233, .1); color: #0891b2; }
-.admin-ann-preview { color: #64748b; font-size: .85rem; margin: 0 0 .75rem; }
+.admin-ann-preview { color: var(--admin-text-muted); font-size: .85rem; margin: 0 0 .75rem; }
 .admin-ann-actions { display: flex; align-items: center; gap: .75rem; }
-.admin-ann-actions button { padding: .3rem .75rem; border: 1px solid rgba(15,23,42,.12); border-radius: 6px; background: transparent; color: #475569; cursor: pointer; font-size: .85rem; }
+.admin-ann-actions button { padding: .3rem .75rem; border: 1px solid rgba(15,23,42,.12); border-radius: 6px; background: transparent; color: var(--admin-text-secondary); cursor: pointer; font-size: .85rem; }
 .admin-ann-actions button.danger { border-color: rgba(239,68,68,.3); color: #dc2626; }
 .status-active { color: var(--tone-good); font-size: .8rem; font-weight: 600; }
 .status-inactive { color: #94a3b8; font-size: .8rem; }
@@ -7005,17 +7018,17 @@
 .admin-sub-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
 .admin-sub-tab {
   padding: .4rem 1rem; border: 1px solid rgba(15,23,42,.12);
-  border-radius: 8px; background: transparent; color: #64748b; cursor: pointer;
+  border-radius: 8px; background: transparent; color: var(--admin-text-muted); cursor: pointer;
 }
 .admin-sub-tab.active {
   background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-  border-color: transparent; color: #fff; font-weight: 600;
+  border-color: transparent; color: var(--admin-surface); font-weight: 600;
 }
 
 /* ===== Admin Plans Cards：與 .admin-panel 同一材質語言 ===== */
 .admin-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 1rem; }
 .admin-plan-card {
-  background: #ffffff;
+  background: var(--admin-surface);
   border: 1px solid rgba(15, 23, 42, .07);
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 24px -16px rgba(15, 23, 42, .12);
@@ -7025,42 +7038,42 @@
 .admin-plan-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(15,23,42,.05), 0 18px 36px -18px rgba(15,23,42,.18); }
 .admin-plan-card.is-inactive { opacity: .6; }
 .admin-plan-badge {
-  position: absolute; top: .75rem; right: .75rem; color: #fff; font-size: .7rem; padding: .2rem .5rem; border-radius: 999px;
+  position: absolute; top: .75rem; right: .75rem; color: var(--admin-surface); font-size: .7rem; padding: .2rem .5rem; border-radius: 999px;
   background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
 }
-.admin-plan-name { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0; }
+.admin-plan-name { font-size: 1.1rem; font-weight: 700; color: var(--admin-text); margin: 0; }
 .admin-plan-price { font-size: 1.5rem; font-weight: 700; color: var(--argus-cyan-dot); letter-spacing: -0.01em; margin: 0; }
 .admin-plan-coin { color: var(--tone-good); font-weight: 600; margin: 0; }
-.admin-plan-rate { color: #64748b; font-size: .8rem; margin: 0; }
-.admin-plan-desc { color: #64748b; font-size: .8rem; margin: 0; }
+.admin-plan-rate { color: var(--admin-text-muted); font-size: .8rem; margin: 0; }
+.admin-plan-desc { color: var(--admin-text-muted); font-size: .8rem; margin: 0; }
 .admin-plan-actions { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
-.admin-plan-actions button { padding: .3rem .75rem; border: 1px solid rgba(15,23,42,.12); border-radius: 6px; background: transparent; color: #475569; cursor: pointer; font-size: .85rem; }
+.admin-plan-actions button { padding: .3rem .75rem; border: 1px solid rgba(15,23,42,.12); border-radius: 6px; background: transparent; color: var(--admin-text-secondary); cursor: pointer; font-size: .85rem; }
 .admin-plan-actions button.danger { border-color: rgba(239,68,68,.3); color: #dc2626; }
 .admin-plan-econ {
   display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem;
   margin: .35rem 0 0; padding: .5rem .65rem;
-  background: #f8fafc;
+  background: var(--admin-surface-sunken);
   border: 1px dashed rgba(15, 23, 42, .12);
   border-radius: 8px;
   font-size: .8rem;
 }
 .admin-plan-econ dt { color: #94a3b8; margin: 0; }
-.admin-plan-econ dd { color: #0f172a; margin: 0; }
+.admin-plan-econ dd { color: var(--admin-text); margin: 0; }
 .admin-plan-econ dd.tone-good { color: var(--tone-good); }
-.admin-plan-econ dd.tone-warn { color: #b45309; }
+.admin-plan-econ dd.tone-warn { color: var(--admin-tone-warn-text); }
 .admin-plan-econ dd.tone-bad { color: var(--tone-bad); }
 
 .admin-plan-econ-preview {
   font-size: .85rem; padding: .55rem .75rem; border-radius: 8px;
-  background: #f8fafc; border: 1px solid rgba(15, 23, 42, .1);
-  color: #475569;
+  background: var(--admin-surface-sunken); border: 1px solid rgba(15, 23, 42, .1);
+  color: var(--admin-text-secondary);
 }
-.admin-plan-econ-preview.tone-good { color: #047857; border-color: rgba(16, 185, 129, .35); }
-.admin-plan-econ-preview.tone-warn { color: #b45309; border-color: rgba(245, 158, 11, .35); }
-.admin-plan-econ-preview.tone-bad { color: #b91c1c; border-color: rgba(239, 68, 68, .35); }
+.admin-plan-econ-preview.tone-good { color: var(--admin-tone-good-text); border-color: rgba(16, 185, 129, .35); }
+.admin-plan-econ-preview.tone-warn { color: var(--admin-tone-warn-text); border-color: rgba(245, 158, 11, .35); }
+.admin-plan-econ-preview.tone-bad { color: var(--admin-tone-bad-text); border-color: rgba(239, 68, 68, .35); }
 
 .admin-page-note {
-  color: #475569; font-size: .85rem; margin: .25rem 0 1rem;
+  color: var(--admin-text-secondary); font-size: .85rem; margin: .25rem 0 1rem;
   padding: .6rem .85rem;
   background: rgba(14, 165, 233, .06);
   border-left: 3px solid var(--argus-cyan-dot);
@@ -13644,7 +13657,7 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   align-items: center;
   gap: 0.4rem;
   font-size: 0.8rem;
-  color: #475569;
+  color: var(--admin-text-secondary);
   font-weight: 600;
 }
 .admin-sub-periods .admin-input { width: 76px; }
@@ -13695,12 +13708,12 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   font-weight: 700;
 }
 .admin-login-method.method-password { background: #e0f2fe; color: #0369a1; }
-.admin-login-method.method-google { background: #ecfeff; color: #0e7490; }
+.admin-login-method.method-google { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); }
 .admin-login-method.method-register { background: #e0e7ff; color: #4338ca; }
 .admin-login-ip {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.78rem;
-  color: #334155;
+  color: var(--admin-text-secondary);
 }
 .admin-login-time { font-size: 0.75rem; color: #94a3b8; }
 .admin-login-ua {
@@ -13720,16 +13733,16 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   font-size: 0.72rem;
   font-weight: 700;
 }
-.admin-domain-status.is-pending { background: #fef3c7; color: #b45309; }
-.admin-domain-status.is-verified { background: #d1fae5; color: #047857; }
-.admin-domain-status.is-rejected { background: #fee2e2; color: #b91c1c; }
-.admin-domain-status.is-expired { background: #f1f5f9; color: #64748b; }
+.admin-domain-status.is-pending { background: #fef3c7; color: var(--admin-tone-warn-text); }
+.admin-domain-status.is-verified { background: #d1fae5; color: var(--admin-tone-good-text); }
+.admin-domain-status.is-rejected { background: #fee2e2; color: var(--admin-tone-bad-text); }
+.admin-domain-status.is-expired { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
 .admin-domain-status.is-effective { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35); }
 .admin-domain-effective {
   margin-left: 0.4rem;
   font-size: 0.7rem;
   font-weight: 700;
-  color: #047857;
+  color: var(--admin-tone-good-text);
   white-space: nowrap;
 }
 .admin-domain-review {
@@ -13750,4 +13763,189 @@ details[open] .scan-log-summary::before { transform: rotate(90deg); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ========================================
+   S7：後台深色主題
+   只覆寫 --admin-* 語意 token，不逐條改規則——這也是先前把 101 個 admin
+   規則塊的硬編碼色值換成 token 的目的。
+   側欄不在此列：它恆為深色（--admin-sidebar-*），兩種主題下外觀一致。
+
+   預設主題為 dark（store.js），因此後台預設也是深色；使用者可在側欄底部
+   或前台導覽列切換，兩處共用同一個 data-theme 開關。
+   ======================================== */
+:root[data-theme="dark"] {
+  --admin-canvas: #070d1c;
+  --admin-surface: #0f1729;
+  --admin-surface-sunken: #0b1220;
+  --admin-border: rgba(148, 163, 184, 0.14);
+  --admin-border-strong: rgba(148, 163, 184, 0.26);
+  --admin-border-solid: #1e293b;
+  --admin-text: #e2e8f0;
+  --admin-text-secondary: #cbd5e1;
+  --admin-text-muted: #94a3b8;
+  --admin-text-muted-sunken: #a3b2c7;
+  --admin-accent: #38bdf8;
+  --admin-accent-strong: #67e8f9;
+  --admin-accent-soft-bg: rgba(56, 189, 248, 0.12);
+  /* 狀態文字在深底上要提亮，否則 #047857 這類深色在 #0f1729 上幾乎看不見 */
+  --admin-tone-good-text: #34d399;
+  --admin-tone-warn-text: #fbbf24;
+  --admin-tone-bad-text: #fb7185;
+  --admin-tone-good-bg: rgba(16, 185, 129, 0.16);
+  --admin-tone-warn-bg: rgba(245, 158, 11, 0.16);
+  --admin-tone-bad-bg: rgba(239, 68, 68, 0.16);
+  --admin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -18px rgba(0, 0, 0, 0.7);
+}
+
+/* 深色下仍寫死的少數個案：表頭、錯誤區塊與 hover 底色原本綁亮色 */
+:root[data-theme="dark"] .admin-table thead th {
+  background: var(--admin-surface-sunken);
+  border-bottom-color: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.06);
+}
+:root[data-theme="dark"] .admin-error-state {
+  background: rgba(239, 68, 68, 0.10);
+  border-color: rgba(239, 68, 68, 0.32);
+}
+:root[data-theme="dark"] .admin-error-state-title { color: #fda4af; }
+:root[data-theme="dark"] .admin-error-state-detail { color: #fca5a5; }
+:root[data-theme="dark"] .admin-error-pre {
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text-secondary);
+}
+:root[data-theme="dark"] .admin-scope-note {
+  background: rgba(56, 189, 248, 0.10);
+  border-color: rgba(56, 189, 248, 0.30);
+  color: #bae6fd;
+}
+:root[data-theme="dark"] .admin-tech-chip { color: #7dd3fc; }
+:root[data-theme="dark"] .admin-order-status.tone-good {
+  background: var(--admin-tone-good-bg);
+  color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-order-status.tone-warn {
+  background: var(--admin-tone-warn-bg);
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-warn-count.tone-warn {
+  background: var(--admin-tone-warn-bg);
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-warn-count.tone-bad {
+  background: var(--admin-tone-bad-bg);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-ok .admin-health-badge {
+  background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-warn .admin-health-badge {
+  background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-bad .admin-health-badge {
+  background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-health-summary.tone-warn .admin-health-summary-icon {
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-health-summary.tone-bad .admin-health-summary-icon {
+  color: var(--admin-tone-bad-text);
+}
+/* 統計卡與面板的固有陰影在深底上會變成黑塊，改用 token */
+:root[data-theme="dark"] .admin-stat-card,
+:root[data-theme="dark"] .admin-panel {
+  box-shadow: var(--admin-shadow-card);
+  border-color: var(--admin-border);
+}
+
+/* 深色補完：上述 token 覆寫之外，仍寫死亮色的個案（狀態藥丸、輸入框邊框、
+   表格 hover、登入方式徽章等）。逐一列出而非全域反轉，避免破壞語意色。 */
+:root[data-theme="dark"] .admin-input,
+:root[data-theme="dark"] .admin-pagination button {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-border-solid);
+  color: var(--admin-text);
+}
+:root[data-theme="dark"] .admin-input::placeholder { color: var(--admin-text-muted); }
+:root[data-theme="dark"] .admin-table tbody tr.clickable:hover {
+  background: rgba(56, 189, 248, 0.07);
+}
+:root[data-theme="dark"] .admin-btn {
+  background: var(--admin-surface-sunken);
+  border-color: rgba(103, 232, 249, 0.28);
+  color: var(--admin-accent-strong);
+}
+:root[data-theme="dark"] .admin-btn:hover { background: rgba(56, 189, 248, 0.12); }
+:root[data-theme="dark"] .admin-btn.danger {
+  background: var(--admin-tone-bad-bg);
+  border-color: rgba(239, 68, 68, 0.40);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-feedback.tone-good {
+  background: var(--admin-tone-good-bg);
+  color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-feedback.tone-bad {
+  background: var(--admin-tone-bad-bg);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-panel-danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.30);
+}
+:root[data-theme="dark"] .admin-domain-status.is-verified {
+  background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-domain-status.is-rejected {
+  background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-domain-status.is-pending {
+  background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-login-method.method-password {
+  background: rgba(56, 189, 248, 0.14); color: #7dd3fc;
+}
+:root[data-theme="dark"] .admin-login-method.method-register {
+  background: rgba(99, 102, 241, 0.18); color: #a5b4fc;
+}
+:root[data-theme="dark"] .admin-login-timeline::before {
+  background: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-empty-state {
+  border-color: var(--admin-border-strong);
+}
+:root[data-theme="dark"] .admin-modal { background: var(--admin-surface); }
+:root[data-theme="dark"] .admin-modal-head,
+:root[data-theme="dark"] .admin-modal-foot {
+  border-color: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-modal-foot { background: var(--admin-surface-sunken); }
+:root[data-theme="dark"] .admin-modal-backdrop { background: rgba(2, 6, 18, 0.72); }
+:root[data-theme="dark"] .admin-segmented { background: var(--admin-surface-sunken); }
+:root[data-theme="dark"] .admin-segment.active { background: var(--admin-surface); }
+
+/* 後台側欄的主題切換按鈕 */
+.admin-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.admin-theme-toggle:hover {
+  background: rgba(56, 189, 248, 0.10);
+  color: #e0f2fe;
+}
+.admin-theme-toggle:focus-visible {
+  outline: 2px solid var(--argus-cyan);
+  outline-offset: 1px;
 }

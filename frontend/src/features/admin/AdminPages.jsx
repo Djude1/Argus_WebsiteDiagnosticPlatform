@@ -131,7 +131,7 @@ function RequireAdmin({ children }) {
 }
 
 function AdminLayout() {
-  const { setToken, me, replayIntro } = useArgusStore();
+  const { setToken, me, replayIntro, theme, toggleTheme } = useArgusStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -252,6 +252,15 @@ function AdminLayout() {
           ))}
         </nav>
         <div className="admin-sidebar-footer">
+          <button
+            type="button"
+            className="admin-theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "切換為淺色主題" : "切換為深色主題"}
+          >
+            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+            <span>{theme === "dark" ? "淺色主題" : "深色主題"}</span>
+          </button>
           <NavLink to="/dashboard" className="admin-side-link" onClick={closeDrawer}>
             ← 回前台
           </NavLink>

@@ -51,6 +51,8 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 - Admin 後台深色 sidebar 顏色使用 CSS 變數（定義在 `styles.css` 頂部 `:root`）
 - **禁止使用 inline style**（除非動態計算值，如進度條寬度）
 - 後台樣式一律使用 `--admin-*` 語意 token（定義在 `:root`，由品牌色衍生）；不得再寫死 `#0f172a`／`#1e293b` 這類泛用 slate 色值
+- **後台支援深色主題**：深色值以 `:root[data-theme="dark"]` 覆寫 `--admin-*` token，**不逐條改規則**。新增後台樣式時請用 token；若非用固定色不可，須同時在檔案末端的深色區塊補上對應覆寫
+- 側欄（`.admin-sidebar` / `.admin-nav*` / `.admin-brand*`）**恆為深色**，不隨主題切換，其色值刻意不使用 `--admin-*` token
 
 ---
 
