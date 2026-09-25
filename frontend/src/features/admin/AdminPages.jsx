@@ -881,9 +881,9 @@ function AdminUserDetailPage() {
             <dt>方案</dt><dd>{subscription.plan_name}（{subscription.plan_code}）</dd>
             <dt>狀態</dt><dd>{subscription.status_label}</dd>
             <dt>剩餘期數</dt><dd>{subscription.periods_remaining} 期</dd>
-            <dt>下次贈點時間</dt><dd>{new Date(subscription.current_period_end).toLocaleString("zh-Hant")}</dd>
+            <dt>下次贈點時間</dt><dd>{formatDateTime(subscription.current_period_end)}</dd>
             {subscription.cancelled_at && (
-              <><dt>取消時間</dt><dd>{new Date(subscription.cancelled_at).toLocaleString("zh-Hant")}</dd></>
+              <><dt>取消時間</dt><dd>{formatDateTime(subscription.cancelled_at)}</dd></>
             )}
           </dl>
         ) : (
@@ -947,7 +947,7 @@ function AdminUserDetailPage() {
                   </span>
                   <span className="admin-login-ip">{event.ip_address || "IP 未記錄"}</span>
                   <time className="admin-login-time">
-                    {new Date(event.created_at).toLocaleString("zh-Hant")}
+                    {formatDateTime(event.created_at)}
                   </time>
                 </div>
                 <p className="admin-login-ua" title={event.user_agent}>{event.user_agent || "—"}</p>
@@ -1151,7 +1151,7 @@ function AdminDomainsPage() {
                       )}
                     </td>
                     <td>{domain.method ? domain.method_label : "—"}</td>
-                    <td>{domain.expires_at ? new Date(domain.expires_at).toLocaleString("zh-Hant") : "—"}</td>
+                    <td>{formatDateTime(domain.expires_at)}</td>
                     <td className="admin-cell-secondary">
                       {domain.admin_override
                         ? `${domain.admin_actor_username ? `by ${domain.admin_actor_username}` : "是"}${domain.admin_note ? ` · ${domain.admin_note}` : ""}`
