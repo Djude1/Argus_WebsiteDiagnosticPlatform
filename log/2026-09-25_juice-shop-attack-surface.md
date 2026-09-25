@@ -216,3 +216,26 @@ agent 全模組作弊稽核（零記憶／零目標特定路徑／payload=工具
 類別覆蓋（SQLi×2／IDOR 讀寫／負數／ftp／metrics／CSP／CORS／資訊類），
 另獨有寫入 IDOR 兩態＋負數獨立項＋security.txt。全程黑箱、單次、
 自動、逐項帶可重現證據。
+
+---
+
+## 追記（第九波：#29→#30——深度廣度合體，計分領先 14）
+
+**#29 診斷**（40 findings 廣度爆發但丟 IDOR/負數）：auth_idor 玩 UI 52 步
+零回報；logic_abuse 完成全部寫入驗證但爆 token 未 report；specialist 誤呼
+dispatch。三修：auth_idor 全程 API 禁 UI、logic_abuse 鐵律（驗證成功的
+下一個動作就是 report）、build_tool_schemas 非 orchestrator 遮 dispatch。
+
+**#30 結果（43 findings：1C+18H+17M）**——合體成功：
+- IDOR 全回歸（basket＋Users 全體＋Users/{id}）
+- 登入繞過升級：admin 完整帳號接管（decode_jwt 驗證身分）
+- 新大項：商品竄改（客戶覆寫任意商品）＋負數價格商品建立
+- JWT payload password hash 洩漏（jwt 角色首中）
+- 廣度保持：email 洩漏 ×3、Challenges、Quantitys、SecurityQuestions、
+  continue-code、repeat-notification 濫用、錯誤頁 ×3
+
+**計分（與對手同口徑、排除內網環境項）**：對手 9 項全覆蓋，
+同口徑 23 項、**領先 14 項**（目標 +3 達成）。
+
+交付：argus_scan30_report_final.docx／_security_report.md／
+_attack_flow.md（449 行軌跡）。
