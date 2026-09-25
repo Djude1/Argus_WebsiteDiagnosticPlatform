@@ -208,6 +208,10 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
 
 限制：無害 payload（print/alert 級）；只對本站同源操作。"""
 
+# specialist 步數盒：強制在有限步數內收斂（#30~#32：無限深挖是
+# findings 流失主因，token 上限加多大都會爆）
+_SPECIALIST_MAX_STEPS = 60
+
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
@@ -379,6 +383,14 @@ async def run_agent_for_scan(
                         specialist_roles=(
                             SPECIALIST_ROLES if orchestrator else None
                         ),
+                    ),
+                    # specialist 步數時間盒（#32 實測 token 上限非解，
+                    # 步數收斂才是）；orchestrator 首步強制派工
+                    max_steps=(
+                        _SPECIALIST_MAX_STEPS if not orchestrator else None
+                    ),
+                    forced_first_tool=(
+                        "dispatch_specialist" if orchestrator else None
                     ),
                 )
                 return await agent.run(task_prompt=role_prompt)

@@ -84,6 +84,7 @@ class HermesAgent:
         max_tokens: int | None = None,
         system_prompt: str | None = None,
         tool_schemas: list[dict[str, Any]] | None = None,
+        forced_first_tool: str | None = None,
     ):
         self.scan_job = scan_job
         self.executor = executor
@@ -93,6 +94,7 @@ class HermesAgent:
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         # Task 6：依授權模式決定是否暴露 probe_sql_injection；預設全工具（向下相容）
         self.tool_schemas = tool_schemas if tool_schemas is not None else TOOL_SCHEMAS
+        self.forced_first_tool = forced_first_tool
         self._messages: list[dict[str, Any]] = []
         self._issues: list[dict[str, Any]] = []
         self._security_findings: list[dict[str, Any]] = []
@@ -102,6 +104,7 @@ class HermesAgent:
         self._last_tool_name = ""
         self._consecutive_same_tool = 0
         self._stall_hint_given = False
+        self._endgame_hint_given = False
 
     # 觀察型工具的回應很大（DOM 80 節點／整頁文字／請求清單／HTML），舊快照每輪
     # 重複計入 prompt tokens 是 context 爆炸的主因（實測 32 步累積 260k）。
@@ -142,6 +145,26 @@ class HermesAgent:
         else:
             self._last_tool_name = tool_name
             self._consecutive_same_tool = 1
+
+    def _inject_endgame_hint_if_needed(self, round_no: int) -> None:
+        """剩餘步數收斂提示：接近 max_steps 時強制把未報發現落地。
+
+        #30~#32 實測：specialist 常在步數/token 上限前仍持續深挖，
+        未 report 的發現整批遺失——終局提示一次（不重複注入）。
+        """
+        remaining = self.max_steps - round_no
+        if remaining == 10 and not self._endgame_hint_given:
+            self._messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"系統提醒：你只剩約 {remaining} 步。立即停止新的探索——"
+                        "把目前已確認但尚未回報的發現逐一 report_security_issue，"
+                        "然後 finish。未回報的發現會全部遺失。"
+                    ),
+                }
+            )
+            self._endgame_hint_given = True
 
     def _inject_stall_hint_if_needed(self) -> None:
         """連續多次同一動作型工具（如反覆換 selector click 同一區塊）時導正。
@@ -189,6 +212,7 @@ class HermesAgent:
                     break
                 self._compact_stale_tool_results()
                 self._inject_stall_hint_if_needed()
+                self._inject_endgame_hint_if_needed(_round_no)
 
                 response = await sync_to_async(self._call_provider)()
                 self._total_tokens += response.total_tokens
@@ -277,12 +301,20 @@ class HermesAgent:
         )
 
     def _call_provider(self) -> ChatResponse:
+        # 指揮官模式首輪強制派工：M3 讀完情報傾向直接文字收尾（#28/#32
+        # 實測零 dispatch），首輪鎖定 dispatch_specialist 打斷該傾向
+        tool_choice = "auto"
+        if self.forced_first_tool and self._step_counter == 0:
+            tool_choice = {
+                "type": "function",
+                "function": {"name": self.forced_first_tool},
+            }
         return self.chain.chat_with_tools(
             messages=self._messages,
             tools=self.tool_schemas,
             temperature=0.2,
             max_tokens=1024,
-            tool_choice="auto",
+            tool_choice=tool_choice,
         )
 
     def _create_session(self) -> AgentSession:
