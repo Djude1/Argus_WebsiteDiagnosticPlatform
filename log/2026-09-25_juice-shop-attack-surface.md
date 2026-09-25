@@ -258,3 +258,17 @@ _attack_flow.md（449 行軌跡）。
 **全開配置**（使用者：專題平台 token 不省）：800k tokens／120 步、
 orchestrator 允許全派＋二輪、第 6 角色 xss_hunter 首航、caveman/
 ponytail 效率紀律入 system prompt。#32 跑全開版（watchdog 監看）。
+
+## 追記（#32 全開版實驗結論）
+
+31 findings（1C+6H）。結論三條：
+1. **token 無上限≠更好**：800k 仍有 3 角色爆（M3 無限深挖單一面相）；
+   #30（500k 版）43 findings 仍為最佳錨點。正解＝specialist 步數時間盒
+   （步數到強制收斂 report），非加 token——列下輪修正。
+2. **orchestrator 派工不穩**（#28/#32 皆 1 步結束；#29/30/31 正常）——
+   M3 讀完情報傾向直接文字收尾。安全網全派有效兜底（等效固定全開）。
+3. **xss_hunter 首航 0 中**：Juice Shop XSS（rank tracking／chatbot 等）
+   不在 query 反射淺面，需登入後深頁操作——列後續（authenticated 深頁）。
+
+#32 新亮點：負數「price inversion」表述、Challenges 自指金鑰
+（passwordHashLeakChallenge）洩漏、ftp 403 白名單訊息洩漏。
