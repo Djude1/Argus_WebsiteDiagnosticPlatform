@@ -97,8 +97,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_network_requests",
             "description": (
                 "列出本頁載入與操作過程中，瀏覽器實際發出的 same-origin API 請求"
-                "（XHR/fetch，含 method、URL、狀態碼，最新在前）。SPA 的後端端點"
-                "（如 /rest/、/api/ 與帶 ?query= 參數的網址）只會出現在這裡，"
+                "（XHR/fetch，含 method、URL、狀態碼，最新在前）。SPA 的後端"
+                " API 端點（含帶 ?query= 參數的網址）只會出現在這裡，"
                 "不會出現在 DOM 連結裡。"
             ),
             "parameters": {
