@@ -99,7 +99,9 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
 回傳你帳號的 id 與購物車／資源 id（例如 bid 欄位），用那個值，不要猜；
 對「他人」的寫入測試只在更新端點（PUT/PATCH）上做，不要對他人資源做
 建立或刪除。
-限制：只對本站同源 URL 操作；不要操作他站資源。"""
+限制：**全程只用 API 工具（replay_request／get_network_requests），不要使用
+click／type_text 操作頁面 UI**——表單操作極耗步數且你已有更快的 API 路徑。
+只對本站同源 URL 操作；不要操作他站資源。"""
 
 INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（注入攻擊角色），
 已開啟頁面 {url}。
@@ -125,7 +127,9 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
 限制：payload 一律用無害查詢型（alert/print 級），不要嘗試刪除、修改
 資料的 payload；只對本站同源操作。"""
 
-LOGIC_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（商業邏輯濫用角色），
+LOGIC_ABUSE_AGENT_PROMPT = """【鐵律：每次驗證成功的下一個動作就是 report_security_issue，
+不是繼續下一個測試——未回報的發現等於不存在。】
+你正在對 {origin} 進行【已授權的主動資安測試】（商業邏輯濫用角色），
 已開啟頁面 {url}。
 你專責 business logic 類漏洞；不負責 IDOR／SQLi（其他角色已涵蓋）。
 

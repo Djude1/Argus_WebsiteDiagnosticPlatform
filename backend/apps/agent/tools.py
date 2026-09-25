@@ -406,10 +406,11 @@ def build_tool_schemas(
                         "description": f"可用專家角色：\n{catalog}",
                     }
         return schemas
+    specialist_hidden = deep_only | {"dispatch_specialist"}
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
-        if allow_sqlmap or schema["function"]["name"] not in deep_only
+        if allow_sqlmap or schema["function"]["name"] not in specialist_hidden
     ]
 
 
