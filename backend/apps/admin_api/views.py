@@ -24,6 +24,7 @@ from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from apps.admin_api import system_metrics
 from apps.admin_api.models import AdminAuditLog, Announcement, log_admin_action
 from apps.admin_api.permissions import IsSuperuser
 from apps.admin_api.serializers import (
@@ -950,6 +951,22 @@ def scan_requeue(request, scan_id: int):
     return Response({"status": scan.status, "charged": 0})
 
 
+def _probe_database():
+    """對預設資料庫做一次最輕量的往返。
+
+    放進鏈路的第一節：掃描要能建立就得先寫得進 DB，DB 掛了後面全不用談。
+    """
+    from django.db import connection
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        return "ok", f"連線正常（{connection.vendor}）"
+    except Exception as exc:  # noqa: BLE001
+        return "bad", f"查詢失敗：{exc.__class__.__name__}"
+
+
 def _probe_celery_workers():
     """以 Celery control ping 探測 worker。
 
@@ -997,10 +1014,23 @@ def system_health(request):
     now = timezone.now()
     checks = []
 
+    # 鏈路順序即掃描實際流經的環節：
+    #   建立掃描寫入 DB → 派工訊息進 Redis → worker 取件 → 佇列消化 → 實際執行
+    db_status, db_detail = _probe_database()
+    checks.append({
+        "key": "database",
+        "label": "資料庫",
+        "chain_label": "資料庫",
+        "status": db_status,
+        "detail": db_detail,
+        "basis": "SELECT 1",
+    })
+
     celery_status, celery_detail, workers = _probe_celery_workers()
     checks.append({
         "key": "celery",
         "label": "Celery worker",
+        "chain_label": "Worker",
         "status": celery_status,
         "detail": celery_detail,
         "basis": "control.ping(timeout=1.5s)",
@@ -1011,6 +1041,7 @@ def system_health(request):
     checks.append({
         "key": "redis",
         "label": "Redis broker",
+        "chain_label": "Redis",
         "status": redis_status,
         "detail": redis_detail,
         "basis": "redis PING",
@@ -1025,6 +1056,7 @@ def system_health(request):
     checks.append({
         "key": "queue",
         "label": "掃描佇列",
+        "chain_label": "佇列",
         "status": "bad" if stuck else ("warn" if queued > 5 else "ok"),
         "detail": f"{queued} 筆排隊中，其中 {stuck} 筆已逾時",
         "basis": f"ScanJob.status=queued，逾時門檻 {STUCK_SCAN_THRESHOLD_MINUTES} 分鐘",
@@ -1047,6 +1079,7 @@ def system_health(request):
     checks.append({
         "key": "success_rate",
         "label": "近一小時掃描成功率",
+        "chain_label": "掃描執行",
         "status": rate_status,
         "detail": rate_detail,
         "basis": "ScanJob 近 1 小時的 completed vs failed",
@@ -1055,10 +1088,26 @@ def system_health(request):
     # 整體狀態取最壞的一項；unknown 不影響整體判定
     severity = {"ok": 0, "unknown": 0, "warn": 1, "bad": 2}
     overall = max(checks, key=lambda c: severity[c["status"]])["status"]
+
+    # 鏈路圖的節點順序（與 checks 的 key 對應），前端據此畫流程
+    chain_order = ["database", "redis", "celery", "queue", "success_rate"]
+    by_key = {c["key"]: c for c in checks}
+    chain = [by_key[k] for k in chain_order if k in by_key]
+
     return Response({
         "checked_at": now.isoformat(),
         "overall": "ok" if severity[overall] == 0 else overall,
         "checks": checks,
+        "chain": [
+            {
+                "key": c["key"],
+                "label": c.get("chain_label") or c["label"],
+                "status": c["status"],
+                "detail": c["detail"],
+            }
+            for c in chain
+        ],
+        "system": system_metrics.collect(),
     })
 
 

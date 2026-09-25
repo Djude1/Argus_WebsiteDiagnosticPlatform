@@ -128,7 +128,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理 |
 | `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角）；含終止與重排處置、`top_actions`、`warning_summary` |
-| `/admin/health` | `AdminHealthPage` | 系統健康即時探測（Celery ping／Redis PING／佇列深度／近一小時成功率），每項附判定依據 |
+| `/admin/health` | `AdminHealthPage` | 系統健康：動態掃描鏈路圖（資料庫→Redis→Worker→佇列→掃描執行，斷點之後停止流動）＋ 系統資源（CPU／記憶體／磁碟／網路／運行時間）＋ 逐項判定依據；預設每 15 秒自動更新 |
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理 |
@@ -155,6 +155,8 @@ D:\nodejs\npm.cmd install 套件名
 | `src/features/admin/AdminOrdersPage.jsx` | 訂單管理頁（接上後端既有的 `/admin/orders/`）|
 | `src/features/admin/AdminOverviewPage.jsx` | 概覽（後台首頁）|
 | `src/features/admin/AdminHealthPage.jsx` | 系統健康頁 |
+| `src/components/admin/AdminScanChain.jsx` | 掃描鏈路圖（節點狀態＋流動動畫，斷點後停止）|
+| `src/components/admin/AdminSystemStats.jsx` | 系統資源卡片（含容器／主機量測範圍標示）|
 | `src/components/admin/AdminStatCard.jsx` | 統計卡與內嵌 sparkline |
 | `src/components/admin/AdminMiniChart.jsx` | 後台多序列折線圖 |
 | `src/components/admin/AdminModal.jsx` | 後台統一 modal 與 `AdminField` 表單欄位（label／hint／error 三段式）|

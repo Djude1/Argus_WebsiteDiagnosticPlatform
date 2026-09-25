@@ -1001,10 +1001,51 @@ class SystemHealthTests(APITestCase):
     def test_returns_all_four_checks_with_basis(self):
         data = self._health()
         keys = [c["key"] for c in data["checks"]]
-        self.assertEqual(keys, ["celery", "redis", "queue", "success_rate"])
+        self.assertEqual(keys, ["database", "celery", "redis", "queue", "success_rate"])
         for check in data["checks"]:
             # 沒有判定依據的綠燈是不可信的綠燈
             self.assertTrue(check["basis"], f"{check['key']} 缺少判定依據")
+
+    def test_chain_follows_actual_scan_pipeline_order(self):
+        """鏈路節點順序必須是掃描實際流經的環節，順序錯了圖就會說謊。"""
+        chain = [n["key"] for n in self._health()["chain"]]
+        self.assertEqual(
+            chain, ["database", "redis", "celery", "queue", "success_rate"],
+        )
+        for node in self._health()["chain"]:
+            self.assertTrue(node["label"], "鏈路節點缺少標籤")
+            self.assertIn(node["status"], ("ok", "warn", "bad", "unknown"))
+
+    def test_database_check_present_and_ok_in_tests(self):
+        db = next(c for c in self._health()["checks"] if c["key"] == "database")
+        self.assertEqual(db["status"], "ok")
+        self.assertEqual(db["basis"], "SELECT 1")
+
+    def test_system_block_has_all_sections(self):
+        """前端 AdminSystemStats 直接取用這些鍵；缺一個只會靜靜顯示空白。"""
+        system = self._health()["system"]
+        for key in ("cpu", "memory", "disk", "network", "uptime", "hostname"):
+            self.assertIn(key, system, f"system 缺少 {key}")
+
+    def test_metrics_declare_scope_so_host_numbers_are_not_mistaken_for_pod(self):
+        """CPU 與記憶體必須標明是容器還是主機的數字。
+
+        後端跑在 K8s pod 裡，拿宿主機的記憶體當 Argus 的使用率會嚴重誤導。
+        """
+        system = self._health()["system"]
+        for key in ("cpu", "memory"):
+            metric = system[key]
+            if metric.get("available"):
+                self.assertIn(metric.get("scope"), ("container", "host"))
+
+    def test_unavailable_metric_reports_reason_instead_of_crashing(self):
+        with patch(
+            "apps.admin_api.system_metrics.read_memory",
+            return_value={"available": False, "reason": "測試用"},
+        ):
+            system = self._health()["system"]
+        self.assertFalse(system["memory"]["available"])
+        self.assertEqual(system["memory"]["reason"], "測試用")
 
     def test_broker_unreachable_reports_bad_not_500(self):
         with patch(
