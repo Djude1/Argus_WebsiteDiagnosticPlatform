@@ -126,3 +126,30 @@ Products 已填充）——**已重現且自行驗證**，僅 report 動作被 t
 **最終格局**：對手 12 項全部有對應偵測（其中 SQLi/IDOR/未授權/負數為
 agent 或工具主動重現），另獨有 JWT 洩漏（#20/#21）、錯誤頁洩漏、
 傳輸/DNS/UX/SEO 維度與報告防偽。
+
+---
+
+## 追記（第六波：多 session 分工與寫入型 IDOR）
+
+**變更**：
+- deep_mode 改雙 session 分工（RECON_AGENT_PROMPT／AUTH_AGENT_PROMPT，
+  pentest-ai-agents role 化概念）：獨立 browser context 與 LLM messages、
+  序列執行、_merge 合併（findings 串聯＋persist 去重）
+- replay_request method 加 PUT/PATCH（寫入型 IDOR 的 update 端點）
+- Nuclei extra_urls 限帶參數端點前 3 個（#23 全塞 12 URL × 全模板掛死；
+  process-tree terminate 對 Go 程序未生效的 kill bug 另案）
+- GitHub 直查「對手可能是什麼」：IDOR 工具最高 46★（Burp ext）、business
+  logic scanner 零結果、juice-shop 自動解僅 0★ 寫死腳本——「經典專案全自動
+  找到 IDOR/負數」不成立；結論寫入 competitive-positioning.md
+
+**#24 結果（雙 session，22 findings：2C+5H+9M+3L+3I）**：
+- **寫入型 IDOR（high）自主發現**——POST /api/BasketItems/ 不帶 BasketId 時
+  寫入任意既有 basket（證據：自己無 basket → 無 id POST → 200 建立在
+  他人 basket）＝對手「跨帳號修改他人購物車」的全自動重現
+- 讀取型 IDOR ×2（basket＋Users 含管理員）穩定重現
+- auth role 56 步耗盡於 IDOR 探索，負數未測（#22 軌跡為證）；登入繞過
+  payload 未觸發（列為待補）
+
+**漏洞級對打終局**：Argus 11 項（SQLi×2＋讀取 IDOR×2＋寫入 IDOR＋admin
+config＋ftp×2＋metrics＋security.txt＋recruiting）vs 對手 10 項——黑箱、
+全自動、每項帶證據；負數另以 #22 軌跡佐證。

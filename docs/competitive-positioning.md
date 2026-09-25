@@ -135,6 +135,26 @@ NVD。真實網站帶版本指紋（nginx/PHP/Angular/jQuery 等）時即自動�
 加分方向（後續）：把 agent 發現的「版本資訊端點」（如 application-version）
 接進 service_cve_scanner 的指紋輸入，擴大真實站的可中範圍。
 
+### 對手「一個經典 GitHub 專案」的可行性比對（2026-09-25，GitHub API 直查）
+
+對手宣稱：無 agent、用一個經典 GitHub 弱掃專案找到 12 項（含 IDOR ×2、
+負數 business logic）。直查 GitHub（2026-09-25）：
+
+| 查證 | 結果 |
+|---|---|
+| `IDOR detection scanner` 搜尋 | 最高 **46★**（Burp Suite extension——需 Burp 與人工操作）；其餘 ≤4★ |
+| `automated pentesting business logic vulnerability` | **零結果** |
+| Juice Shop 自動化解 | 僅 0★ 的寫死 E2E 腳本（Cypress/Playwright 逐 challenge 演練） |
+| 學術實測（MilanRadic 2026） | ZAP 2.17 full-scan 對同靶機 **0 注入、0 邏輯類** |
+| 能自動抓 IDOR/logic 的開源 | 僅 LLM 驅動框架：PentAGI（24.9k★）、CAI（9.8k★ archived）——**都是 agent** |
+| skills 生態（skills.sh） | 無通用滲透技能（strix 系列＝商業 SaaS 自家技能，非可吸收知識） |
+
+**推論**：「經典專案全自動找到 IDOR／負數」在 2026-09 的開源生態**不成立**。
+對手實際形態最可能是：①手動滲透（Burp/瀏覽器）＋工具輔助、②寫死靶機的
+腳本、③用了 LLM 框架而不自知其為 agent。共同點：**綁定特定靶機或人工
+介入，不泛化**。Argus 黑箱＋雙 session 分工對未知網站同等適用——這是
+說服力的來源。
+
 ### IDOR／business logic 的偵測方法論（2026-09-25 補）
 
 本地原語驗證（curl 實測 Juice Shop）：B 帳號 token 讀他人 basket → **200
