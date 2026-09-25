@@ -1490,29 +1490,112 @@ function AdminScanWarnings({ summary }) {
   );
 }
 
+// 掃描進行中與可重排的狀態集合；與後端 admin_api/views.py 的判定一致
+const CANCELLABLE_STATUSES = ["queued", "crawling", "scanning", "agent_testing"];
+const REQUEUEABLE_STATUSES = ["failed", "cancelled"];
+
 function AdminScanDetailPage() {
   const { scanId } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
-  useEffect(() => {
-    api.get(`/admin/scans/${scanId}/`)
-      .then((r) => setData(r.data))
-      .catch(() => setError("找不到此掃描"));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const response = await api.get(`/admin/scans/${scanId}/`);
+      setData(response.data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || "找不到此掃描");
+    }
   }, [scanId]);
 
-  if (error) return <div className="admin-error">{error}</div>;
-  if (!data) return <div className="admin-loading">載入中…</div>;
+  useEffect(() => { load(); }, [load]);
+
+  async function handleCancel() {
+    const ok = await confirmDialog(
+      "確定終止這個掃描嗎？worker 會在下一個檢查點停下，預扣的點數會全額退回使用者。",
+      { danger: true },
+    );
+    if (!ok) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const response = await api.post(`/admin/scans/${scanId}/cancel/`);
+      setFeedback({
+        tone: "good",
+        message: response.data.refunded > 0
+          ? `已終止，退回 ${response.data.refunded} coin。`
+          : "已終止（此掃描沒有待退的預扣）。",
+      });
+      await load();
+    } catch (err) {
+      notifyDialog(err?.response?.data?.detail || "終止失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRequeue() {
+    const ok = await confirmDialog(
+      "確定重新排入佇列嗎？依產品決策重排不會再次扣點，等同免費重跑一次，"
+      + "這個動作會寫入操作日誌。",
+      { danger: false },
+    );
+    if (!ok) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await api.post(`/admin/scans/${scanId}/requeue/`);
+      setFeedback({ tone: "good", message: "已重新排入佇列，未扣點。" });
+      await load();
+    } catch (err) {
+      notifyDialog(err?.response?.data?.detail || "重排失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="admin-page">
+        <AdminErrorState message="無法載入掃描" detail={error} onRetry={load} />
+      </div>
+    );
+  }
+  if (!data) return <div className="admin-page"><AdminSkeleton variant="detail" rows={3} /></div>;
   const s = data.scan;
+  const canCancel = CANCELLABLE_STATUSES.includes(s.status);
+  const canRequeue = REQUEUEABLE_STATUSES.includes(s.status);
 
   return (
     <div className="admin-page">
       <button type="button" className="admin-back-link" onClick={() => navigate("/admin/scans")}>← 回掃描列表</button>
       <header className="admin-page-head">
-        <h1>掃描 #{s.id}</h1>
-        <p>{s.origin} · {s.username}</p>
+        <div>
+          <h1>掃描 #{s.id}</h1>
+          <p>{s.origin} · {s.username}</p>
+        </div>
+        <div className="admin-page-head-links">
+          {canCancel && (
+            <button type="button" className="admin-btn danger" disabled={busy} onClick={handleCancel}>
+              {busy ? "處理中…" : "終止掃描"}
+            </button>
+          )}
+          {canRequeue && (
+            <button type="button" className="admin-btn primary" disabled={busy} onClick={handleRequeue}>
+              {busy ? "處理中…" : "重新排入佇列"}
+            </button>
+          )}
+        </div>
       </header>
+
+      {feedback && (
+        <div className={`admin-feedback tone-${feedback.tone}`}>{feedback.message}</div>
+      )}
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
@@ -1592,7 +1675,15 @@ function AdminScanDetailPage() {
         <NavLink to={`/scans/${s.id}`} className="admin-btn">
           以使用者視角查看詳情報告 →
         </NavLink>
+        {/* 已完成的掃描其預扣已結算，不適用 refund_full_for_scan；
+            要補償得走使用者頁的「調整點數」，不另做第二套退款路徑。 */}
+        {s.user_id && (
+          <NavLink to={`/admin/users/${s.user_id}`} className="admin-btn">
+            查看使用者 / 調整點數 →
+          </NavLink>
+        )}
       </div>
+      {dialogHost}
     </div>
   );
 }

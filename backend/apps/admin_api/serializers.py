@@ -167,7 +167,8 @@ class AdminScanJobSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScanJob
         fields = [
-            "id", "username", "origin",
+            # user_id 供後台從掃描直接跳到使用者詳情（調整點數在那裡）
+            "id", "user_id", "username", "origin",
             "status", "scan_mode",
             "overall_score", "pages_count", "findings_count",
             "max_pages", "duration_sec",

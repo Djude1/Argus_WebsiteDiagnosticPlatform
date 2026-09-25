@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import override_settings
@@ -7,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.admin_api.models import AdminAuditLog
-from apps.billing.models import CoinTransaction
+from apps.billing.models import CoinTransaction, CoinWallet
 from apps.billing.services import purchase_plan
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 from apps.scans.models import ScanJob
@@ -890,3 +892,91 @@ class UserScansTests(APITestCase):
         origins = [s["origin"] for s in response.data["scans"]]
         self.assertEqual(len(origins), 2)
         self.assertNotIn("https://bob.example", origins)
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+class ScanControlTests(APITestCase):
+    """管理員的掃描處置：終止與重排。
+
+    重排不重複扣點（2026-09-25 產品決策）。由於失敗／取消的掃描在 tasks.py
+    一律已自動退款，重排實際上是免費重跑，因此每次都必須留下稽核軌跡。
+    """
+
+    def setUp(self):
+        self.admin = _make_user("admin", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.owner = _make_user("owner")
+
+    def test_cancel_in_progress_scan(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.CRAWLING)
+        response = self.client.post(reverse("admin-scan-cancel", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, ScanJob.Status.CANCELLED)
+
+    def test_scan_serializer_exposes_user_id_for_admin_navigation(self):
+        """掃描詳情要能跳到使用者頁調整點數，缺 user_id 會讓連結靜默消失。"""
+        scan = _make_scan(self.owner, status=ScanJob.Status.COMPLETED)
+        response = self.client.get(reverse("admin-scan-detail", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["scan"]["user_id"], self.owner.id)
+
+    def test_cannot_cancel_completed_scan(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.COMPLETED)
+        response = self.client.post(reverse("admin-scan-cancel", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, ScanJob.Status.COMPLETED)
+
+    def test_cancel_writes_audit_log(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.QUEUED)
+        self.client.post(reverse("admin-scan-cancel", args=[scan.id]))
+        log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.SCAN_CONTROL,
+        ).latest("created_at")
+        self.assertEqual(log.payload["operation"], "cancel")
+        self.assertEqual(log.target_user, self.owner)
+
+    def test_requeue_failed_scan_does_not_charge(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        wallet = CoinWallet.objects.get(user=self.owner)
+        before = wallet.balance
+
+        with patch("apps.admin_api.views.run_scan_job.delay") as dispatch:
+            response = self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+            dispatch.assert_called_once_with(scan.id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["charged"], 0)
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, ScanJob.Status.QUEUED)
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, before, "重排不得扣款")
+
+    def test_cannot_requeue_completed_scan(self):
+        """completed 可重排等於提供免費的重新掃描，必須擋下。"""
+        scan = _make_scan(self.owner, status=ScanJob.Status.COMPLETED)
+        response = self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_requeue_restores_status_when_dispatch_fails(self):
+        """派工失敗不能把掃描留在假的 queued，否則它會永遠卡住。"""
+        scan = _make_scan(self.owner, status=ScanJob.Status.FAILED)
+        with patch(
+            "apps.admin_api.views.run_scan_job.delay",
+            side_effect=RuntimeError("broker down"),
+        ):
+            response = self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, ScanJob.Status.FAILED)
+
+    def test_requeue_writes_audit_log_because_it_is_free(self):
+        scan = _make_scan(self.owner, status=ScanJob.Status.CANCELLED)
+        with patch("apps.admin_api.views.run_scan_job.delay"):
+            self.client.post(reverse("admin-scan-requeue", args=[scan.id]))
+        log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.SCAN_CONTROL,
+        ).latest("created_at")
+        self.assertEqual(log.payload["operation"], "requeue")
+        self.assertEqual(log.payload["charged"], 0)

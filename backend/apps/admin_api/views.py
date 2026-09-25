@@ -54,10 +54,12 @@ from apps.billing.services import (
     admin_adjust,
     cancel_subscription,
     grant_subscription,
+    refund_full_for_scan,
     settle_subscription,
 )
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
 from apps.scans.models import AgentSession, ScanJob, VerifiedDomain
+from apps.scans.tasks import run_scan_job
 
 PAGE_SIZE = 25
 
@@ -856,6 +858,96 @@ def domain_override(request, domain_id: int):
     )
     verified_domain.refresh_from_db()
     return Response(AdminVerifiedDomainSerializer(verified_domain).data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def scan_cancel(request, scan_id: int):
+    """管理員終止進行中的掃描。
+
+    與使用者端 `/api/scans/<id>/cancel/` 走同一套合作式機制：只設
+    status=CANCELLED，worker 在下一個檢查點自行停下，不強制中斷行程。
+    退款交由 `billing.services.refund_full_for_scan`（冪等），
+    絕不直接操作 CoinWallet／CoinTransaction。
+    """
+    scan = get_object_or_404(ScanJob.objects.select_related("user"), pk=scan_id)
+    cancellable = {ScanJob.Status.QUEUED, *IN_PROGRESS_SCAN_STATUSES}
+    if scan.status not in cancellable:
+        return Response(
+            {"detail": f"掃描已結束（{scan.get_status_display()}），無法終止。"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    scan.status = ScanJob.Status.CANCELLED
+    scan.save(update_fields=["status", "updated_at"])
+    refund = refund_full_for_scan(scan.user, scan, reason="管理員終止")
+    log_admin_action(
+        admin_actor=request.user,
+        action=AdminAuditLog.Action.SCAN_CONTROL,
+        target_user=scan.user,
+        target_repr=f"ScanJob#{scan.id} {scan.origin}",
+        payload={
+            "operation": "cancel",
+            "refunded": refund.amount if refund else 0,
+        },
+    )
+    return Response({
+        "status": scan.status,
+        "refunded": refund.amount if refund else 0,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def scan_requeue(request, scan_id: int):
+    """把失敗／已終止的掃描重新排入佇列。
+
+    **不重複扣點**（2026-09-25 產品決策）。由於 tasks.py 在失敗、取消、超時、
+    回收與排程失敗時一律呼叫 refund_full_for_scan，這些掃描的預扣早已退回，
+    因此重排等同「免費重跑一次」——這是刻意的：使用者不該為我們這邊失敗的
+    同一次掃描付兩次錢。也因為是免費重跑，每一次都會寫入 AdminAuditLog
+    留下可稽核的軌跡。
+
+    只允許從 failed／cancelled 重排；completed 不得重排，否則等於提供
+    免費的重新掃描。
+    """
+    scan = get_object_or_404(ScanJob.objects.select_related("user"), pk=scan_id)
+    requeueable = {ScanJob.Status.FAILED, ScanJob.Status.CANCELLED}
+    if scan.status not in requeueable:
+        return Response(
+            {"detail": f"只有失敗或已終止的掃描可以重排（目前為 {scan.get_status_display()}）。"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    previous_status = scan.status
+    scan.status = ScanJob.Status.QUEUED
+    scan.error_message = ""
+    scan.progress = {}
+    scan.save(update_fields=["status", "error_message", "progress", "updated_at"])
+
+    try:
+        run_scan_job.delay(scan.id)
+    except Exception:  # noqa: BLE001 — 派工失敗要把狀態還原，不能留在假的 queued
+        scan.status = previous_status
+        scan.error_message = "重排時無法派工至背景佇列。"
+        scan.save(update_fields=["status", "error_message", "updated_at"])
+        return Response(
+            {"detail": "無法派工至背景佇列，狀態已還原。請確認 Celery worker 是否運作中。"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    log_admin_action(
+        admin_actor=request.user,
+        action=AdminAuditLog.Action.SCAN_CONTROL,
+        target_user=scan.user,
+        target_repr=f"ScanJob#{scan.id} {scan.origin}",
+        payload={
+            "operation": "requeue",
+            "from_status": previous_status,
+            "charged": 0,
+            "note": "依產品決策，重排不重複扣點",
+        },
+    )
+    return Response({"status": scan.status, "charged": 0})
 
 
 @api_view(["GET"])
