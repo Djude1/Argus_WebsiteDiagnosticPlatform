@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Navigate,
   NavLink,
@@ -22,8 +22,10 @@ import brandLogo from "../../assets/brand-logo.webp";
 import { STATUS_LABELS, StatusDoneGlyph, useConfirmDialogs } from "../../shared/AppShared.jsx";
 import { AdminField, AdminModal } from "../../components/admin/AdminModal.jsx";
 import { AdminPagination } from "../../components/admin/AdminPagination.jsx";
+import { AdminSortableTh } from "../../components/admin/AdminSortableTh.jsx";
 import { AdminEmptyState, AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates.jsx";
 import { formatDateTime, formatDuration, formatNtd, formatNumber } from "../../shared/formatters.js";
+import { useListQuery } from "../../shared/useListQuery.js";
 import {
   AdminOverviewIcon,
   AdminUsersIcon,
@@ -585,25 +587,41 @@ function AdminOverviewPage() {
   );
 }
 
+const USERS_QUERY_DEFAULTS = { page: 1, q: "", ordering: "-date_joined" };
+
 function AdminUsersPage() {
   const navigate = useNavigate();
+  const { params, setParam, setParams, resetFilters, hasFilters } = useListQuery(USERS_QUERY_DEFAULTS);
+  const { page, q, ordering } = params;
   const [data, setData] = useState(null);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searchDraft, setSearchDraft] = useState(q);
 
-  async function load() {
-    const response = await api.get("/admin/users/", {
-      params: { q: search, page },
-    });
-    setData(response.data);
-  }
+  useEffect(() => { setSearchDraft(q); }, [q]);
 
-  useEffect(() => { load(); /* eslint-disable-line */ }, [page]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get("/admin/users/", {
+        params: { q: q || undefined, page, ordering },
+      });
+      setData(response.data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || "無法載入使用者");
+    } finally {
+      setLoading(false);
+    }
+  }, [q, page, ordering]);
+
+  useEffect(() => { load(); }, [load]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
-    setPage(1);
-    load();
+    // 只改網址，由 load 的 useCallback 依賴觸發重載；
+    // 原本 setPage(1) + load() 會因 page 閉包是舊值而連送兩次請求
+    setParams({ q: searchDraft.trim() });
   }
 
   return (
@@ -617,25 +635,30 @@ function AdminUsersPage() {
         <input
           className="admin-input"
           placeholder="搜尋 email、姓名或帳號"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          aria-label="搜尋使用者"
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
         />
         <button className="admin-btn" type="submit">搜尋</button>
+        {hasFilters && (
+          <button type="button" className="admin-btn ghost" onClick={resetFilters}>清除篩選</button>
+        )}
       </form>
 
-      {!data && <div className="admin-loading">載入中…</div>}
-      {data && (
+      {error && <AdminErrorState message="無法載入使用者" detail={error} onRetry={load} />}
+      {!error && loading && <AdminSkeleton variant="table" rows={8} label="載入使用者中" />}
+      {!error && !loading && data && (
         <>
           <div className="admin-table-scroll">
             <table className="admin-table">
             <thead>
               <tr>
-                <th>使用者</th>
+                <AdminSortableTh field="username" ordering={ordering} onChange={(o) => setParam("ordering", o)}>使用者</AdminSortableTh>
                 <th>email</th>
-                <th className="num">餘額</th>
-                <th className="num">累積購買</th>
-                <th className="num">掃描數</th>
-                <th>最近登入</th>
+                <AdminSortableTh field="balance" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>餘額</AdminSortableTh>
+                <AdminSortableTh field="total_purchased_ntd" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>累積購買</AdminSortableTh>
+                <AdminSortableTh field="total_scans_used" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>掃描數</AdminSortableTh>
+                <AdminSortableTh field="last_login" ordering={ordering} onChange={(o) => setParam("ordering", o)}>最近登入</AdminSortableTh>
               </tr>
             </thead>
             <tbody>
@@ -656,19 +679,21 @@ function AdminUsersPage() {
                     <div className="admin-cell-secondary">@{u.username} {u.is_staff && <span className="admin-staff-chip">staff</span>}</div>
                   </td>
                   <td>{u.email}</td>
-                  <td className="num"><span className="admin-coin">{u.balance.toLocaleString()}</span></td>
-                  <td className="num">{u.total_purchased_ntd > 0 ? `NT$ ${u.total_purchased_ntd.toLocaleString()}` : "—"}</td>
+                  <td className="num"><span className="admin-coin">{formatNumber(u.balance)}</span></td>
+                  <td className="num">{u.total_purchased_ntd > 0 ? formatNtd(u.total_purchased_ntd) : "—"}</td>
                   <td className="num">{u.total_scans_used}</td>
                   <td>{u.last_login ? formatDateTime(u.last_login) : "從未"}</td>
                 </tr>
               ))}
               {data.users.length === 0 && (
-                <tr><td colSpan="6" className="admin-empty">沒有符合的使用者</td></tr>
+                <tr><td colSpan="6" className="admin-empty">
+                  {hasFilters ? "沒有符合條件的使用者" : "尚無使用者"}
+                </td></tr>
               )}
             </tbody>
             </table>
           </div>
-          <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />
+          <AdminPagination page={data.page} totalPages={data.total_pages} total={data.total} onChange={(n) => setParam("page", n)} />
         </>
       )}
     </div>
@@ -1203,18 +1228,30 @@ function AdminDomainsPage() {
   );
 }
 
-function AdminTransactionsPage({ embedded }) {
-  const [data, setData] = useState(null);
-  const [page, setPage] = useState(1);
-  const [kind, setKind] = useState("");
+const TRANSACTIONS_QUERY_DEFAULTS = { page: 1, kind: "", ordering: "-created_at" };
 
-  async function load() {
-    const response = await api.get("/admin/transactions/", {
-      params: { page, kind: kind || undefined },
-    });
-    setData(response.data);
-  }
-  useEffect(() => { load(); /* eslint-disable-line */ }, [page, kind]);
+function AdminTransactionsPage() {
+  const { params, setParam, resetFilters, hasFilters } = useListQuery(TRANSACTIONS_QUERY_DEFAULTS);
+  const { page, kind, ordering } = params;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get("/admin/transactions/", {
+        params: { page, kind: kind || undefined, ordering },
+      });
+      setData(response.data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || "無法載入交易紀錄");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, kind, ordering]);
+  useEffect(() => { load(); }, [load]);
 
   const KIND_OPTIONS = [
     { v: "", label: "全部類型" },
@@ -1225,37 +1262,44 @@ function AdminTransactionsPage({ embedded }) {
     { v: "admin_adjust", label: "管理員調整" },
   ];
 
-  const content = (
-    <>
-      {!embedded && (
-        <header className="admin-page-head">
-          <h1>交易紀錄</h1>
-          <p>所有 coin 異動的審計紀錄</p>
-        </header>
-      )}
+  return (
+    <div className="admin-page">
+      <header className="admin-page-head">
+        <h1>交易紀錄</h1>
+        <p>所有 coin 異動的審計紀錄</p>
+      </header>
 
       <div className="admin-filter-bar">
         <select
           className="admin-input"
+          aria-label="交易類型"
           value={kind}
-          onChange={(e) => { setKind(e.target.value); setPage(1); }}
+          onChange={(e) => setParam("kind", e.target.value)}
         >
           {KIND_OPTIONS.map((o) => (
             <option key={o.v} value={o.v}>{o.label}</option>
           ))}
         </select>
+        {hasFilters && (
+          <button type="button" className="admin-btn ghost" onClick={resetFilters}>清除篩選</button>
+        )}
       </div>
 
-      {!data && <div className="admin-loading">載入中…</div>}
-      {data && (
+      {error && <AdminErrorState message="無法載入交易紀錄" detail={error} onRetry={load} />}
+      {!error && loading && <AdminSkeleton variant="table" rows={8} label="載入交易中" />}
+      {!error && !loading && data && (
         <>
           <div className="admin-table-scroll">
             <table className="admin-table">
             <thead>
               <tr>
-                <th>時間</th><th>使用者</th><th>類型</th>
-                <th className="num">變動</th><th className="num">餘額</th>
-                <th>來源</th><th>備註</th>
+                <AdminSortableTh field="created_at" ordering={ordering} onChange={(o) => setParam("ordering", o)}>時間</AdminSortableTh>
+                {/* 這欄實際顯示交易對象（掃描網址或方案名），原欄名「使用者」與內容不符 */}
+                <th>來源對象</th>
+                <th>類型</th>
+                <AdminSortableTh field="amount" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>變動</AdminSortableTh>
+                <AdminSortableTh field="balance_after" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>餘額</AdminSortableTh>
+                <th>操作者 / 方案</th><th>備註</th>
               </tr>
             </thead>
             <tbody>
@@ -1276,25 +1320,25 @@ function AdminTransactionsPage({ embedded }) {
             </tbody>
             </table>
           </div>
-          <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />
+          <AdminPagination page={data.page} totalPages={data.total_pages} total={data.total} onChange={(n) => setParam("page", n)} />
         </>
       )}
-    </>
+    </div>
   );
-
-  if (embedded) return content;
-  return <div className="admin-page">{content}</div>;
 }
 
+const REVIEWS_QUERY_DEFAULTS = { page: 1, filter: "all" };
+
 function AdminReviewsPage() {
+  // filter 進網址，待辦中心才能用 /admin/reviews?filter=reported 帶著篩選跳過來
+  const { params, setParam } = useListQuery(REVIEWS_QUERY_DEFAULTS);
+  const { page, filter } = params;
   const [data, setData] = useState(null);
-  const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState("all");
   const [draftReplies, setDraftReplies] = useState({});
   const [busyId, setBusyId] = useState(null);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
-  async function load() {
+  const load = useCallback(async () => {
     const response = await api.get("/admin/reviews/", {
       params: {
         page,
@@ -1307,8 +1351,8 @@ function AdminReviewsPage() {
     setDraftReplies(Object.fromEntries(
       response.data.reviews.map((review) => [review.id, review.response?.body || ""]),
     ));
-  }
-  useEffect(() => { load(); /* eslint-disable-line */ }, [page, filter]);
+  }, [page, filter]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleReply(review) {
     const reply = (draftReplies[review.id] || "").trim();
@@ -1381,7 +1425,7 @@ function AdminReviewsPage() {
           <select
             className="admin-input"
             value={filter}
-            onChange={(event) => { setFilter(event.target.value); setPage(1); }}
+            onChange={(event) => setParam("filter", event.target.value)}
           >
             <option value="all">全部評論</option>
             <option value="pending">只看待回覆</option>
@@ -1508,52 +1552,65 @@ function AdminReviewsPage() {
       {data && data.reviews.length === 0 && (
         <div className="admin-empty admin-panel">沒有符合條件的評論</div>
       )}
-      {data && <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />}
+      {data && <AdminPagination page={data.page} totalPages={data.total_pages} total={data.total} onChange={(n) => setParam("page", n)} />}
       {dialogHost}
     </div>
   );
 }
-function AdminScansPage({ embedded }) {
-  const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState(1);
+const SCANS_QUERY_DEFAULTS = { page: 1, q: "", status: "", ordering: "-created_at" };
 
-  async function load() {
-    const response = await api.get("/admin/scans/", {
-      params: { q: search, status: statusFilter || undefined, page },
-    });
-    setData(response.data);
-  }
-  useEffect(() => { load(); /* eslint-disable-line */ }, [page, statusFilter]);
+function AdminScansPage() {
+  const navigate = useNavigate();
+  const { params, setParam, setParams, resetFilters, hasFilters } = useListQuery(SCANS_QUERY_DEFAULTS);
+  const { page, q, status: statusFilter, ordering } = params;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searchDraft, setSearchDraft] = useState(q);
+
+  useEffect(() => { setSearchDraft(q); }, [q]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get("/admin/scans/", {
+        params: { q: q || undefined, status: statusFilter || undefined, page, ordering },
+      });
+      setData(response.data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || "無法載入掃描任務");
+    } finally {
+      setLoading(false);
+    }
+  }, [q, statusFilter, page, ordering]);
+  useEffect(() => { load(); }, [load]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
-    setPage(1);
-    load();
+    setParams({ q: searchDraft.trim() });
   }
 
-  const content = (
-    <>
-      {!embedded && (
-        <header className="admin-page-head">
-          <h1>掃描</h1>
-          <p>所有使用者的掃描任務</p>
-        </header>
-      )}
+  return (
+    <div className="admin-page">
+      <header className="admin-page-head">
+        <h1>掃描</h1>
+        <p>所有使用者的掃描任務</p>
+      </header>
 
       <form className="admin-search-bar" onSubmit={handleSearchSubmit}>
         <input
           className="admin-input"
           placeholder="搜尋網址或使用者"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          aria-label="搜尋掃描"
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
         />
         <select
           className="admin-input"
+          aria-label="掃描狀態"
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          onChange={(e) => setParam("status", e.target.value)}
         >
           <option value="">全部狀態</option>
           {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -1561,18 +1618,26 @@ function AdminScansPage({ embedded }) {
           ))}
         </select>
         <button className="admin-btn" type="submit">搜尋</button>
+        {hasFilters && (
+          <button type="button" className="admin-btn ghost" onClick={resetFilters}>清除篩選</button>
+        )}
       </form>
 
-      {!data && <div className="admin-loading">載入中…</div>}
-      {data && (
+      {error && <AdminErrorState message="無法載入掃描任務" detail={error} onRetry={load} />}
+      {!error && loading && <AdminSkeleton variant="table" rows={8} label="載入掃描中" />}
+      {!error && !loading && data && (
         <>
           <div className="admin-table-scroll">
             <table className="admin-table">
             <thead>
               <tr>
-                <th>時間</th><th>使用者</th><th>網址</th>
+                <AdminSortableTh field="created_at" ordering={ordering} onChange={(o) => setParam("ordering", o)}>時間</AdminSortableTh>
+                <th>使用者</th><th>網址</th>
                 <th>狀態</th><th>模式</th>
-                <th className="num">分數</th><th className="num">頁數</th><th className="num">問題</th>
+                <AdminSortableTh field="overall_score" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>分數</AdminSortableTh>
+                <AdminSortableTh field="pages_count" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>頁數</AdminSortableTh>
+                <AdminSortableTh field="findings_count" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>問題</AdminSortableTh>
+                {/* 耗時不可排序：duration_sec 是 serializer 由 started_at/completed_at 現算的，資料庫無此欄位 */}
                 <th className="num">耗時</th>
               </tr>
             </thead>
@@ -1597,7 +1662,7 @@ function AdminScansPage({ embedded }) {
                   <td className="num">{s.overall_score ?? "—"}</td>
                   <td className="num">{s.pages_count}</td>
                   <td className="num">{s.findings_count}</td>
-                  <td className="num">{s.duration_sec ? `${s.duration_sec}s` : "—"}</td>
+                  <td className="num">{formatDuration(s.duration_sec)}</td>
                 </tr>
               ))}
               {data.scans.length === 0 && (
@@ -1606,14 +1671,11 @@ function AdminScansPage({ embedded }) {
             </tbody>
             </table>
           </div>
-          <AdminPagination page={data.page} totalPages={data.total_pages} onChange={setPage} />
+          <AdminPagination page={data.page} totalPages={data.total_pages} total={data.total} onChange={(n) => setParam("page", n)} />
         </>
       )}
-    </>
+    </div>
   );
-
-  if (embedded) return content;
-  return <div className="admin-page">{content}</div>;
 }
 
 // 爬取警告面板。warning_summary 的結構由 crawler.py 決定：
@@ -2464,42 +2526,27 @@ function AdminAnnouncementsPage() {
 }
 
 function AdminAuditLogPage() {
-  const [tab, setTab] = useState("audit");
   const me = useArgusStore((s) => s.me);
 
   if (!me?.is_superuser) {
     return <div className="admin-error">需要超級管理員權限才能查看。</div>;
   }
 
-  const TABS = [
-    { key: "audit", label: "操作紀錄" },
-    { key: "transactions", label: "交易紀錄" },
-    { key: "scans", label: "掃描紀錄" },
-  ];
-
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1 className="admin-page-title">操作日誌</h1>
-        <p>操作/交易/掃描紀錄（僅超級管理員可見）</p>
+        <div>
+          <h1 className="admin-page-title">操作日誌</h1>
+          <p>管理員操作的稽核軌跡（僅超級管理員可見）</p>
+        </div>
+        <div className="admin-page-head-links">
+          <NavLink to="/admin/transactions" className="admin-btn ghost">點數交易 →</NavLink>
+          <NavLink to="/admin/scans" className="admin-btn ghost">掃描紀錄 →</NavLink>
+        </div>
       </header>
 
-      <div className="admin-sub-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`admin-sub-tab ${tab === t.key ? "active" : ""}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       <div className="admin-panel">
-        {tab === "audit" && <AuditLogTab />}
-        {tab === "transactions" && <AdminTransactionsPage embedded />}
-        {tab === "scans" && <AdminScansPage embedded />}
+        <AuditLogTab />
       </div>
     </div>
   );

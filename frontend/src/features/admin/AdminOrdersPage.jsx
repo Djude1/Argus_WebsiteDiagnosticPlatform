@@ -10,7 +10,9 @@ import {
   AdminErrorState,
   AdminSkeleton,
 } from "../../components/admin/AdminStates.jsx";
+import { AdminSortableTh } from "../../components/admin/AdminSortableTh.jsx";
 import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
+import { useListQuery } from "../../shared/useListQuery.js";
 
 // 訂單管理。
 //
@@ -33,6 +35,15 @@ const STATUS_TONE = {
   cancelled: "muted",
 };
 
+// 網址參數預設值；與預設相同的值不會寫進 query string
+const QUERY_DEFAULTS = {
+  page: 1,
+  q: "",
+  status: "",
+  invoice_type: "",
+  ordering: "-created_at",
+};
+
 const INVOICE_OPTIONS = [
   { value: "", label: "全部發票類型" },
   { value: "personal", label: "個人發票" },
@@ -50,15 +61,17 @@ function OrderStatusBadge({ status, label }) {
 }
 
 export function AdminOrdersPage() {
+  const { params, setParam, setParams, resetFilters, hasFilters } = useListQuery(QUERY_DEFAULTS);
+  const { page, q, status, invoice_type: invoiceType, ordering } = params;
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [submittedSearch, setSubmittedSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [invoiceType, setInvoiceType] = useState("");
-  const [page, setPage] = useState(1);
+  // 輸入框是本地暫存，送出才進網址——每打一個字就改網址會塞爆 history
+  const [searchDraft, setSearchDraft] = useState(q);
   const [detail, setDetail] = useState(null);
+
+  // 從網址還原（例如從詳情頁返回、或別人貼過來的連結）時同步輸入框
+  useEffect(() => { setSearchDraft(q); }, [q]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,9 +80,10 @@ export function AdminOrdersPage() {
       const response = await api.get("/admin/orders/", {
         params: {
           page,
-          q: submittedSearch || undefined,
+          q: q || undefined,
           status: status || undefined,
           invoice_type: invoiceType || undefined,
+          ordering,
         },
       });
       setData(response.data);
@@ -79,26 +93,17 @@ export function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, submittedSearch, status, invoiceType]);
+  }, [page, q, status, invoiceType, ordering]);
 
   useEffect(() => { load(); }, [load]);
 
   function handleSearchSubmit(event) {
     event.preventDefault();
-    // 只改 state、由 useCallback 觸發重載，避免原本 setPage(1) + load() 併發送兩次請求
-    setPage(1);
-    setSubmittedSearch(search.trim());
+    setParams({ q: searchDraft.trim() });
   }
 
-  const hasFilter = Boolean(submittedSearch || status || invoiceType);
-
-  function clearFilters() {
-    setSearch("");
-    setSubmittedSearch("");
-    setStatus("");
-    setInvoiceType("");
-    setPage(1);
-  }
+  const hasFilter = hasFilters;
+  const clearFilters = resetFilters;
 
   return (
     <div className="admin-page">
@@ -117,7 +122,7 @@ export function AdminOrdersPage() {
             role="tab"
             aria-selected={status === tab.value}
             className={`admin-segment ${status === tab.value ? "active" : ""}`}
-            onClick={() => { setStatus(tab.value); setPage(1); }}
+            onClick={() => setParam("status", tab.value)}
           >
             {tab.label}
           </button>
@@ -129,14 +134,14 @@ export function AdminOrdersPage() {
           className="admin-input"
           placeholder="搜尋 email、姓名、公司名或統編"
           aria-label="搜尋訂單"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
         />
         <select
           className="admin-input"
           aria-label="發票類型"
           value={invoiceType}
-          onChange={(event) => { setInvoiceType(event.target.value); setPage(1); }}
+          onChange={(event) => setParam("invoice_type", event.target.value)}
         >
           {INVOICE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -172,11 +177,11 @@ export function AdminOrdersPage() {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>時間</th>
+                  <AdminSortableTh field="created_at" ordering={ordering} onChange={(o) => setParam("ordering", o)}>時間</AdminSortableTh>
                   <th>使用者</th>
                   <th>方案</th>
-                  <th className="num">金額</th>
-                  <th className="num">Coin</th>
+                  <AdminSortableTh field="price_ntd" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>金額</AdminSortableTh>
+                  <AdminSortableTh field="coin_amount" ordering={ordering} onChange={(o) => setParam("ordering", o)} numeric>Coin</AdminSortableTh>
                   <th>狀態</th>
                   <th>發票</th>
                 </tr>
@@ -219,7 +224,7 @@ export function AdminOrdersPage() {
             page={data.page}
             totalPages={data.total_pages}
             total={data.total}
-            onChange={setPage}
+            onChange={(next) => setParam("page", next)}
           />
         </>
       )}

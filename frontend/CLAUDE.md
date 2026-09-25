@@ -50,6 +50,7 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 - 命名採 BEM-like：`.頁面名-元素名`（例如 `.admin-panel`、`.scan-card`）
 - Admin 後台深色 sidebar 顏色使用 CSS 變數（定義在 `styles.css` 頂部 `:root`）
 - **禁止使用 inline style**（除非動態計算值，如進度條寬度）
+- 後台樣式一律使用 `--admin-*` 語意 token（定義在 `:root`，由品牌色衍生）；不得再寫死 `#0f172a`／`#1e293b` 這類泛用 slate 色值
 
 ---
 
@@ -107,14 +108,15 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/overview` | `AdminOverviewPage` | 後台總覽 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理 |
 | `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 點數調整 |
-| `/admin/transactions` | `AdminTransactionsPage` | 交易紀錄 |
+| `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
+| `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄 |
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理 |
 | `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角） |
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決） |
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理 |
-| `/admin/audit-log` | `AdminAuditLogPage` | 操作紀錄（superuser 限定） |
+| `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁 |
 
 ## 核心檔案
 
@@ -132,6 +134,13 @@ D:\nodejs\npm.cmd install 套件名
 | `src/features/public/PublicPages.jsx` | 專案、免費工具、團隊、購買介紹與下載等公開頁 |
 | `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁 |
+| `src/features/admin/AdminOrdersPage.jsx` | 訂單管理頁（接上後端既有的 `/admin/orders/`）|
+| `src/components/admin/AdminModal.jsx` | 後台統一 modal 與 `AdminField` 表單欄位（label／hint／error 三段式）|
+| `src/components/admin/AdminStates.jsx` | 後台載入骨架、空狀態與區塊級錯誤狀態 |
+| `src/components/admin/AdminPagination.jsx` | 後台共用分頁 |
+| `src/components/admin/AdminSortableTh.jsx` | 可排序表頭（排序由後端 `ordering` 參數完成）|
+| `src/shared/formatters.js` | 日期／時間／數字／金額格式化，禁止在 JSX 直接寫 `toLocaleString` |
+| `src/shared/useListQuery.js` | 列表頁的搜尋／篩選／排序／分頁狀態與網址同步 |
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
 | `src/components/navigation/NavActions.jsx` | 登入後導覽列的通知與帳號操作 |

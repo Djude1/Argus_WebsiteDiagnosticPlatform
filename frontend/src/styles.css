@@ -6148,6 +6148,29 @@
     color: var(--admin-text);
   }
   .admin-input-narrow { max-width: 120px; }
+  .admin-page-head-links { @apply flex flex-wrap items-center gap-2; }
+
+  /* --- 可排序表頭 --- */
+  .admin-table thead th.admin-th-sortable { padding: 0; }
+  .admin-sort-btn {
+    @apply inline-flex w-full items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .admin-table thead th.num .admin-sort-btn { justify-content: flex-end; }
+  .admin-sort-btn:hover { color: var(--admin-text); }
+  .admin-sort-btn.is-active { color: var(--admin-accent); }
+  .admin-sort-arrow {
+    font-size: 0.85em;
+    opacity: 0.45;
+  }
+  .admin-sort-btn.is-active .admin-sort-arrow { opacity: 1; }
+  .admin-sort-btn:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: -2px;
+  }
 
   @media (max-width: 640px) {
     .admin-field-row { grid-template-columns: 1fr; }
