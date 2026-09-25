@@ -19,7 +19,11 @@ import {
 } from "../../api";
 import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
-import { STATUS_LABELS, StatusDoneGlyph, useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
+import { STATUS_LABELS, StatusDoneGlyph, useConfirmDialogs } from "../../shared/AppShared.jsx";
+import { AdminField, AdminModal } from "../../components/admin/AdminModal.jsx";
+import { AdminPagination } from "../../components/admin/AdminPagination.jsx";
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates.jsx";
+import { formatDateTime, formatDuration, formatNtd, formatNumber } from "../../shared/formatters.js";
 import {
   AdminOverviewIcon,
   AdminUsersIcon,
@@ -45,6 +49,7 @@ const ADMIN_NAV_ITEMS = [
   { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
   { to: "/admin/scans", label: "掃描", Icon: AdminScansIcon },
   { to: "/admin/domains", label: "網域", Icon: AdminDomainsIcon },
+  { to: "/admin/orders", label: "訂單", Icon: AdminOrdersIcon },
   { to: "/admin/transactions", label: "交易", Icon: AdminTransactionsIcon },
   { to: "/admin/plans", label: "方案", Icon: AdminPlansIcon },
   { to: "/admin/content", label: "內容", Icon: AdminContentIcon },
@@ -512,7 +517,10 @@ function AdminOverviewPage() {
 
       <div className="admin-grid-2col">
         <section className="admin-panel">
-          <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>最近購買</h3>
+          <div className="admin-panel-head-row">
+            <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>最近購買</h3>
+            <NavLink to="/admin/orders" className="admin-panel-more">查看訂單 →</NavLink>
+          </div>
           {data.recent_purchases.length === 0 ? (
             <p className="admin-empty">尚無購買紀錄</p>
           ) : (
@@ -522,9 +530,49 @@ function AdminOverviewPage() {
               <tbody>
                 {data.recent_purchases.map((tx) => (
                   <tr key={tx.id}>
-                    <td>{new Date(tx.created_at).toLocaleString("zh-Hant")}</td>
+                    <td>{formatDateTime(tx.created_at)}</td>
                     <td>{tx.plan_name || "—"}</td>
-                    <td className="num">+{tx.amount} coin</td>
+                    <td className="num">+{formatNumber(tx.amount)} coin</td>
+                  </tr>
+                ))}
+              </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* 後端 overview 一直有回傳 recent_scans，前端先前未使用 */}
+        <section className="admin-panel">
+          <div className="admin-panel-head-row">
+            <h3><span className="admin-panel-icon-chip"><AdminScansIcon /></span>最近掃描</h3>
+            <NavLink to="/admin/scans" className="admin-panel-more">查看全部 →</NavLink>
+          </div>
+          {(data.recent_scans || []).length === 0 ? (
+            <p className="admin-empty">尚無掃描紀錄</p>
+          ) : (
+            <div className="admin-table-scroll">
+              <table className="admin-table compact">
+              <thead><tr><th>時間</th><th>網址</th><th>狀態</th></tr></thead>
+              <tbody>
+                {data.recent_scans.map((scan) => (
+                  <tr
+                    key={scan.id}
+                    className="clickable"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/admin/scans/${scan.id}`)}
+                    onKeyDown={(event) => activateAdminRow(
+                      event,
+                      () => navigate(`/admin/scans/${scan.id}`),
+                    )}
+                  >
+                    <td>{formatDateTime(scan.created_at)}</td>
+                    <td className="truncate" title={scan.origin}>{scan.origin}</td>
+                    <td>
+                      <span className={`admin-status ${scan.status}`}>
+                        {STATUS_LABELS[scan.status]?.label || scan.status}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -533,25 +581,6 @@ function AdminOverviewPage() {
           )}
         </section>
       </div>
-    </div>
-  );
-}
-
-function AdminPagination({ page, totalPages, onChange }) {
-  if (totalPages <= 1) return null;
-  return (
-    <div className="admin-pagination">
-      <button
-        type="button"
-        disabled={page <= 1}
-        onClick={() => onChange(page - 1)}
-      >← 上一頁</button>
-      <span>{page} / {totalPages}</span>
-      <button
-        type="button"
-        disabled={page >= totalPages}
-        onClick={() => onChange(page + 1)}
-      >下一頁 →</button>
     </div>
   );
 }
@@ -630,7 +659,7 @@ function AdminUsersPage() {
                   <td className="num"><span className="admin-coin">{u.balance.toLocaleString()}</span></td>
                   <td className="num">{u.total_purchased_ntd > 0 ? `NT$ ${u.total_purchased_ntd.toLocaleString()}` : "—"}</td>
                   <td className="num">{u.total_scans_used}</td>
-                  <td>{u.last_login ? new Date(u.last_login).toLocaleString("zh-Hant") : "從未"}</td>
+                  <td>{u.last_login ? formatDateTime(u.last_login) : "從未"}</td>
                 </tr>
               ))}
               {data.users.length === 0 && (
@@ -789,8 +818,8 @@ function AdminUserDetailPage() {
           <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>基本資料</h3>
           <dl className="admin-dl">
             <dt>狀態</dt><dd>{user.is_active ? "啟用" : "停用"} {user.is_staff && <span className="admin-staff-chip">staff</span>} {user.is_superuser && <span className="admin-super-chip">superuser</span>}</dd>
-            <dt>註冊時間</dt><dd>{new Date(user.date_joined).toLocaleString("zh-Hant")}</dd>
-            <dt>最後登入</dt><dd>{user.last_login ? new Date(user.last_login).toLocaleString("zh-Hant") : "從未"}</dd>
+            <dt>註冊時間</dt><dd>{formatDateTime(user.date_joined)}</dd>
+            <dt>最後登入</dt><dd>{user.last_login ? formatDateTime(user.last_login) : "從未"}</dd>
           </dl>
         </section>
 
@@ -975,7 +1004,7 @@ function AdminUserDetailPage() {
           <tbody>
             {user.recent_transactions.map((tx) => (
               <tr key={tx.id}>
-                <td>{new Date(tx.created_at).toLocaleString("zh-Hant")}</td>
+                <td>{formatDateTime(tx.created_at)}</td>
                 <td>{tx.kind_label}</td>
                 <td className={`num ${tx.amount > 0 ? "tx-pos" : "tx-neg"}`}>{tx.amount > 0 ? "+" : ""}{tx.amount}</td>
                 <td className="num">{tx.balance_after}</td>
@@ -1232,7 +1261,7 @@ function AdminTransactionsPage({ embedded }) {
             <tbody>
               {data.transactions.map((tx) => (
                 <tr key={tx.id}>
-                  <td>{new Date(tx.created_at).toLocaleString("zh-Hant")}</td>
+                  <td>{formatDateTime(tx.created_at)}</td>
                   <td>{tx.scan_origin || (tx.plan_name ? `購買 ${tx.plan_name}` : "—")}</td>
                   <td>{tx.kind_label}</td>
                   <td className={`num ${tx.amount > 0 ? "tx-pos" : "tx-neg"}`}>{tx.amount > 0 ? "+" : ""}{tx.amount}</td>
@@ -1382,7 +1411,7 @@ function AdminReviewsPage() {
                 <span className="admin-cell-secondary"> @{review.username}</span>
               </div>
               <div className="admin-review-time">
-                {new Date(review.created_at).toLocaleString("zh-Hant")}
+                {formatDateTime(review.created_at)}
                 {review.updated_at !== review.created_at && " · 使用者已編輯"}
               </div>
             </div>
@@ -1470,7 +1499,7 @@ function AdminReviewsPage() {
 
           {review.response && (
             <div className="admin-review-existing-reply">
-              <StatusDoneGlyph className="admin-inline-glyph" /> 官方回覆最後更新於 {new Date(review.response.updated_at).toLocaleString("zh-Hant")}
+              <StatusDoneGlyph className="admin-inline-glyph" /> 官方回覆最後更新於 {formatDateTime(review.response.updated_at)}
               {review.response.author_username ? ` · ${review.response.author_username}` : ""}
             </div>
           )}
@@ -1560,7 +1589,7 @@ function AdminScansPage({ embedded }) {
                     () => navigate(`/admin/scans/${s.id}`),
                   )}
                 >
-                  <td>{new Date(s.created_at).toLocaleString("zh-Hant")}</td>
+                  <td>{formatDateTime(s.created_at)}</td>
                   <td>{s.username}</td>
                   <td className="truncate" title={s.origin}>{s.origin}</td>
                   <td><span className={`admin-status ${s.status}`}>{STATUS_LABELS[s.status]?.label || s.status}</span></td>
@@ -1585,6 +1614,63 @@ function AdminScansPage({ embedded }) {
 
   if (embedded) return content;
   return <div className="admin-page">{content}</div>;
+}
+
+// 爬取警告面板。warning_summary 的結構由 crawler.py 決定：
+//   { blocked_urls: [{url, reason}], failed_urls: [{url, reason}],
+//     screenshot_failures: [...], tech_stack: [...] }
+// 清單可能很長，預設收合只顯示筆數，展開才列出明細。
+function AdminScanWarnings({ summary }) {
+  const groups = [
+    { key: "blocked_urls", label: "被阻擋的 URL", hint: "robots.txt / 403 / 429", tone: "warn" },
+    { key: "failed_urls", label: "抓取失敗的 URL", hint: "連線或解析失敗", tone: "bad" },
+    { key: "screenshot_failures", label: "截圖失敗", hint: "頁面有抓到，但截圖沒成功", tone: "warn" },
+  ];
+  const present = groups.filter((g) => (summary?.[g.key] || []).length > 0);
+  const techStack = summary?.tech_stack || [];
+  if (present.length === 0 && techStack.length === 0) return null;
+
+  return (
+    <section className="admin-panel">
+      <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>爬取警告</h3>
+
+      {techStack.length > 0 && (
+        <div className="admin-tech-stack">
+          <span className="admin-cell-secondary">偵測到的技術棧：</span>
+          {techStack.map((tech, index) => (
+            <span className="admin-tech-chip" key={`${tech}-${index}`}>
+              {typeof tech === "string" ? tech : JSON.stringify(tech)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {present.map((group) => {
+        const rows = summary[group.key];
+        return (
+          <details className="admin-warn-group" key={group.key}>
+            <summary>
+              <span className={`admin-warn-count tone-${group.tone}`}>{rows.length}</span>
+              <span className="admin-warn-label">{group.label}</span>
+              <span className="admin-cell-secondary">{group.hint}</span>
+            </summary>
+            <ul className="admin-warn-list">
+              {rows.map((row, index) => (
+                <li key={`${group.key}-${index}`}>
+                  <code className="admin-warn-url">
+                    {typeof row === "string" ? row : (row.url || JSON.stringify(row))}
+                  </code>
+                  {row && row.reason && (
+                    <span className="admin-warn-reason">{row.reason}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </section>
+  );
 }
 
 function AdminScanDetailPage() {
@@ -1617,9 +1703,9 @@ function AdminScanDetailPage() {
           <dl className="admin-dl">
             <dt>狀態</dt><dd><span className={`admin-status ${s.status}`}>{STATUS_LABELS[s.status]?.label || s.status}</span></dd>
             <dt>模式</dt><dd>{s.scan_mode === "active" ? "主動測試" : "被動偵測"}</dd>
-            <dt>建立時間</dt><dd>{new Date(s.created_at).toLocaleString("zh-Hant")}</dd>
-            <dt>完成時間</dt><dd>{s.completed_at ? new Date(s.completed_at).toLocaleString("zh-Hant") : "—"}</dd>
-            <dt>耗時</dt><dd>{s.duration_sec ? `${s.duration_sec} 秒` : "—"}</dd>
+            <dt>建立時間</dt><dd>{formatDateTime(s.created_at)}</dd>
+            <dt>完成時間</dt><dd>{formatDateTime(s.completed_at)}</dd>
+            <dt>耗時</dt><dd>{formatDuration(s.duration_sec)}</dd>
           </dl>
         </section>
 
@@ -1648,6 +1734,36 @@ function AdminScanDetailPage() {
         </section>
       )}
 
+      {/* 優先處置建議：後端已依 priority_score 降冪排好 */}
+      {(data.top_actions || []).length > 0 && (
+        <section className="admin-panel">
+          <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>優先處置建議（{data.top_actions.length}）</h3>
+          <ol className="admin-top-actions">
+            {data.top_actions.map((action, index) => (
+              <li className="admin-top-action" key={`${action.title}-${index}`}>
+                <span className="admin-top-action-rank">{index + 1}</span>
+                <div className="admin-top-action-body">
+                  <div className="admin-top-action-title">{action.title}</div>
+                  <div className="admin-top-action-meta">
+                    <span className={`severity ${action.severity}`}>{action.severity}</span>
+                    <span className={`category-pill cat-${action.category}`}>
+                      {String(action.category || "").toUpperCase()}
+                    </span>
+                    <span className="admin-cell-secondary">
+                      priority {Math.round(action.priority_score || 0)}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* 爬取警告：被 robots/403/429 擋掉與抓取失敗的 URL。
+          分數偏低時多半能在這裡找到原因（爬不到頁就評不了分）。 */}
+      <AdminScanWarnings summary={data.warning_summary} />
+
       {data.error_message && (
         <section className="admin-panel admin-panel-danger">
           <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>錯誤訊息</h3>
@@ -1673,7 +1789,6 @@ function AdminCmsManager({ schema }) {
   const [draft, setDraft] = useState({});
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
-  const dialogRef = useDialogFocus(Boolean(editing), cancel);
   const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   async function load() {
@@ -1805,23 +1920,21 @@ function AdminCmsManager({ schema }) {
       </div>
 
       {/* 編輯 form modal */}
-      {editing && (
-        <div className="admin-modal-backdrop" onClick={cancel}>
-          <form
-            ref={dialogRef}
-            className="admin-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={editing === "new" ? `新增${schema.title}` : `編輯${schema.title}`}
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={save}
-          >
-            <div className="admin-modal-head">
-              <h4>{editing === "new" ? `新增${schema.title}` : `編輯 #${editing.id}`}</h4>
-              <button type="button" className="admin-modal-close" onClick={cancel}>×</button>
-            </div>
-            <div className="admin-modal-body">
+      <AdminModal
+        open={Boolean(editing)}
+        onClose={cancel}
+        onSubmit={save}
+        title={editing === "new" ? `新增${schema.title}` : `編輯 #${editing?.id}`}
+        footer={
+          <>
+            <button type="button" className="admin-btn" onClick={cancel}>取消</button>
+            <button type="submit" className="admin-btn primary" disabled={busy}>
+              {busy ? "儲存中…" : "儲存"}
+            </button>
+          </>
+        }
+      >
+        <>
               {schema.fields.map((f) => (
                 <div key={f.key} className="wizard-field">
                   <label htmlFor={`cms-${f.key}`}>
@@ -1875,19 +1988,11 @@ function AdminCmsManager({ schema }) {
                   )}
                 </div>
               ))}
-              {feedback && (
-                <div className={`admin-feedback tone-${feedback.tone}`}>{feedback.message}</div>
-              )}
-            </div>
-            <div className="admin-modal-foot">
-              <button type="button" className="admin-btn" onClick={cancel}>取消</button>
-              <button type="submit" className="admin-btn primary" disabled={busy}>
-                {busy ? "儲存中…" : "儲存"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+        {feedback && (
+          <div className={`admin-feedback tone-${feedback.tone}`}>{feedback.message}</div>
+        )}
+        </>
+      </AdminModal>
     </section>
     {dialogHost}
     </>
@@ -2107,7 +2212,6 @@ function AdminPlansPage() {
   const [plans, setPlans] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
-  const dialogRef = useDialogFocus(Boolean(editing), () => setEditing(null));
   const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   useEffect(() => {
@@ -2145,7 +2249,7 @@ function AdminPlansPage() {
     <div className="admin-page">
       <header className="admin-page-head">
         <h1 className="admin-page-title">方案管理</h1>
-        <button className="admin-add-btn" onClick={openNew}>＋ 新增方案</button>
+        <button className="admin-btn primary" onClick={openNew}>＋ 新增方案</button>
       </header>
 
       <p className="admin-page-note">
@@ -2188,46 +2292,49 @@ function AdminPlansPage() {
         {!plans.length && <div className="admin-empty">尚無方案</div>}
       </div>
 
-      {editing && (
-        <div className="ann-backdrop" onClick={() => setEditing(null)}>
-          <div
-            ref={dialogRef}
-            className="ann-modal sm"
-            role="dialog"
-            aria-modal="true"
-            aria-label={editing === "new" ? "新增方案" : "編輯方案"}
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="ann-modal-header">
-              <h2 className="ann-modal-title">{editing === "new" ? "新增方案" : "編輯方案"}</h2>
-            </header>
-            <div className="ann-modal-body">
-              <input className="input" placeholder="名稱" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <div className="ann-form-row">
-                <input className="input" type="number" placeholder="價格 NT$" value={form.price_ntd || 0} onChange={(e) => setForm({ ...form, price_ntd: Number(e.target.value) })} />
-                <input className="input" type="number" placeholder="Coin 數" value={form.coin_amount || 0} onChange={(e) => setForm({ ...form, coin_amount: Number(e.target.value) })} />
-              </div>
-              <input className="input" placeholder="徽章（選填）" value={form.badge || ""} onChange={(e) => setForm({ ...form, badge: e.target.value })} />
-              <textarea className="input" rows={3} placeholder="描述" value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              {(() => {
-                const e = planEconomics(form);
-                const tone = e.marginPct >= 80 ? "good" : e.marginPct >= 50 ? "warn" : "bad";
-                return (
-                  <div className={`admin-plan-econ-preview tone-${tone}`}>
-                    內部成本 NT$ {e.cost} · 毛利 NT$ {e.margin}（{e.marginPct}%） · ≈ {e.pagesEstimate} 頁
-                  </div>
-                );
-              })()}
-              <label><input type="checkbox" checked={form.is_active !== false} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用</label>
-            </div>
-            <footer className="ann-modal-footer">
-              <button type="button" className="ann-btn-dismiss" onClick={() => setEditing(null)}>取消</button>
-              <button type="button" className="ann-btn-confirm" onClick={handleSave}>儲存</button>
-            </footer>
-          </div>
+      <AdminModal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={editing === "new" ? "新增方案" : "編輯方案"}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="admin-btn" onClick={() => setEditing(null)}>取消</button>
+            <button type="button" className="admin-btn primary" onClick={handleSave}>儲存</button>
+          </>
+        }
+      >
+        <AdminField id="plan-name" label="方案名稱" required>
+          <input id="plan-name" className="admin-input" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </AdminField>
+        <div className="admin-field-row">
+          <AdminField id="plan-price" label="價格 NT$" required>
+            <input id="plan-price" className="admin-input" type="number" value={form.price_ntd || 0} onChange={(e) => setForm({ ...form, price_ntd: Number(e.target.value) })} />
+          </AdminField>
+          <AdminField id="plan-coin" label="Coin 數" required>
+            <input id="plan-coin" className="admin-input" type="number" value={form.coin_amount || 0} onChange={(e) => setForm({ ...form, coin_amount: Number(e.target.value) })} />
+          </AdminField>
         </div>
-      )}
+        <AdminField id="plan-badge" label="徽章" hint="選填，顯示在方案卡片右上角">
+          <input id="plan-badge" className="admin-input" value={form.badge || ""} onChange={(e) => setForm({ ...form, badge: e.target.value })} />
+        </AdminField>
+        <AdminField id="plan-desc" label="描述">
+          <textarea id="plan-desc" className="admin-input" rows={3} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </AdminField>
+        {(() => {
+          const e = planEconomics(form);
+          const tone = e.marginPct >= 80 ? "good" : e.marginPct >= 50 ? "warn" : "bad";
+          const toneLabel = e.marginPct >= 80 ? "健康" : e.marginPct >= 50 ? "偏低" : "須重新定價";
+          return (
+            <div className={`admin-plan-econ-preview tone-${tone}`}>
+              內部成本 {formatNtd(e.cost)} · 毛利 {formatNtd(e.margin)}（{e.marginPct}%，{toneLabel}） · ≈ {formatNumber(e.pagesEstimate)} 頁
+            </div>
+          );
+        })()}
+        <label className="admin-checkbox">
+          <input type="checkbox" checked={form.is_active !== false} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用
+        </label>
+      </AdminModal>
       {dialogHost}
     </div>
   );
@@ -2251,7 +2358,6 @@ function AdminAnnouncementsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: "", content: "", type: "temporary", active_days: 7, is_active: true });
   const me = useArgusStore((s) => s.me);
-  const dialogRef = useDialogFocus(Boolean(editing), () => setEditing(null));
   const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   function loadList() {
@@ -2293,7 +2399,7 @@ function AdminAnnouncementsPage() {
     <div className="admin-page">
       <header className="admin-page-head">
         <h1 className="admin-page-title">公告管理</h1>
-        <button className="admin-add-btn" onClick={openNew}>＋ 新增公告</button>
+        <button className="admin-btn primary" onClick={openNew}>＋ 新增公告</button>
       </header>
 
       {loading ? <div className="admin-loading">載入中…</div> : (
@@ -2320,39 +2426,38 @@ function AdminAnnouncementsPage() {
         </div>
       )}
 
-      {editing && (
-        <div className="ann-backdrop" onClick={() => setEditing(null)}>
-          <div
-            ref={dialogRef}
-            className="ann-modal lg"
-            role="dialog"
-            aria-modal="true"
-            aria-label={editing === "new" ? "新增公告" : "編輯公告"}
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="ann-modal-header">
-              <h2 className="ann-modal-title">{editing === "new" ? "新增公告" : "編輯公告"}</h2>
-            </header>
-            <div className="ann-modal-body">
-              <input className="input" placeholder="標題" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-              <textarea className="input" rows={6} placeholder="內容" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
-              <div className="ann-form-radio-group">
-                <label><input type="radio" name="type" checked={form.type === "temporary"} onChange={() => setForm({ ...form, type: "temporary" })} /> 臨時公告</label>
-                <label><input type="radio" name="type" checked={form.type === "permanent"} onChange={() => setForm({ ...form, type: "permanent" })} /> 常駐公告</label>
-              </div>
-              {form.type === "temporary" && (
-                <label>顯示天數：<input className="input ann-input-days" type="number" min={1} max={365} value={form.active_days} onChange={(e) => setForm({ ...form, active_days: Number(e.target.value) })} /></label>
-              )}
-              <label><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用</label>
-            </div>
-            <footer className="ann-modal-footer">
-              <button type="button" className="ann-btn-dismiss" onClick={() => setEditing(null)}>取消</button>
-              <button type="button" className="ann-btn-confirm" onClick={handleSave}>儲存</button>
-            </footer>
-          </div>
-        </div>
-      )}
+      <AdminModal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={editing === "new" ? "新增公告" : "編輯公告"}
+        size="lg"
+        footer={
+          <>
+            <button type="button" className="admin-btn" onClick={() => setEditing(null)}>取消</button>
+            <button type="button" className="admin-btn primary" onClick={handleSave}>儲存</button>
+          </>
+        }
+      >
+        <AdminField id="ann-title" label="標題" required>
+          <input id="ann-title" className="admin-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </AdminField>
+        <AdminField id="ann-content" label="內容" required>
+          <textarea id="ann-content" className="admin-input" rows={6} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+        </AdminField>
+        <fieldset className="admin-radio-group">
+          <legend className="admin-field-label">公告類型</legend>
+          <label><input type="radio" name="type" checked={form.type === "temporary"} onChange={() => setForm({ ...form, type: "temporary" })} /> 臨時公告</label>
+          <label><input type="radio" name="type" checked={form.type === "permanent"} onChange={() => setForm({ ...form, type: "permanent" })} /> 常駐公告</label>
+        </fieldset>
+        {form.type === "temporary" && (
+          <AdminField id="ann-days" label="顯示天數" hint="超過天數後自動停止顯示">
+            <input id="ann-days" className="admin-input admin-input-narrow" type="number" min={1} max={365} value={form.active_days} onChange={(e) => setForm({ ...form, active_days: Number(e.target.value) })} />
+          </AdminField>
+        )}
+        <label className="admin-checkbox">
+          <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> 啟用
+        </label>
+      </AdminModal>
       {dialogHost}
     </div>
   );
@@ -2444,7 +2549,7 @@ function AuditLogTab() {
             <tbody>
               {data.logs.map((log) => (
                 <tr key={log.id}>
-                  <td>{new Date(log.created_at).toLocaleString("zh-Hant")}</td>
+                  <td>{formatDateTime(log.created_at)}</td>
                   <td><span className="admin-status">{log.action_label}</span></td>
                   <td><strong>{log.actor_username || "(已刪除)"}</strong></td>
                   <td>{log.target_username || "—"}</td>

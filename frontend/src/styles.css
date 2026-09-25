@@ -181,6 +181,23 @@
   --argus-admin-bg-1: #e7eef8;
   --argus-admin-bg-2: #d9e6f3;
   --argus-admin-bg-3: #cce0f0;
+
+  /* 後台語意 token（S0）。全部由上方品牌色衍生，不另立色系。
+     canvas 改為單一平色：大面積資料頁用漸層只會讓白卡片的對比忽強忽弱。 */
+  --admin-canvas: #eef3f9;
+  --admin-surface: #ffffff;
+  --admin-surface-sunken: #f4f7fb;
+  --admin-border: rgba(15, 23, 42, 0.08);
+  --admin-border-strong: rgba(15, 23, 42, 0.14);
+  --admin-text: #0f172a;
+  --admin-text-muted: #64748b;
+  /* sunken 底上的次要文字：#64748b 在 #f4f7fb 上只有 4.43:1，未達 AA 4.5，故加深 */
+  --admin-text-muted-sunken: #5a6b80;
+  --admin-accent: var(--argus-cyan-dot);
+  /* sidebar 改用品牌 navy；原本的 #0f172a→#1e293b 是 Tailwind slate 預設值，
+     與 Argus 的識別無關，也是後台看起來像通用模板的主因。 */
+  --admin-sidebar-from: var(--argus-navy-950);
+  --admin-sidebar-to: var(--argus-navy-800);
   --argus-brand-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M12 4c1.25 4.85 3.15 6.75 8 8-4.85 1.25-6.75 3.15-8 8-1.25-4.85-3.15-6.75-8-8 4.85-1.25 6.75-3.15 8-8Z'/%3E%3C/svg%3E");
 
   /* 圓角 */
@@ -3000,8 +3017,8 @@
   /* --- Sidebar (dark gradient) --- */
   .admin-sidebar {
     @apply flex flex-col;
-    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-    border-right: 1px solid rgba(51, 65, 85, 0.5);
+    background: linear-gradient(180deg, var(--admin-sidebar-from) 0%, var(--admin-sidebar-to) 100%);
+    border-right: 1px solid rgba(56, 189, 248, 0.16);
     padding: 0;
     position: sticky;
     top: 0;
@@ -3126,7 +3143,7 @@
   .admin-main {
     padding: 32px 36px;
     overflow-x: auto;
-    background: linear-gradient(160deg, var(--argus-admin-bg-1) 0%, var(--argus-admin-bg-2) 55%, var(--argus-admin-bg-3) 100%);
+    background: var(--admin-canvas);
     min-height: 100vh;
   }
   .admin-page {
@@ -5812,6 +5829,328 @@
     @apply flex items-center justify-end gap-2 px-5 py-4;
     border-top: 1px solid #e2e8f0;
     background: #f8fafc;
+  }
+
+  /* modal 尺寸：收斂自原本 .ann-modal 的 sm / lg */
+  .admin-modal.is-sm { max-width: 480px; }
+  .admin-modal.is-md { max-width: 560px; }
+  .admin-modal.is-lg { max-width: 720px; }
+  .admin-modal-title {
+    @apply text-lg font-bold;
+    color: var(--admin-text);
+    margin: 0;
+  }
+
+  /* --- AdminField：label / hint / error 三段式表單欄位 --- */
+  .admin-field {
+    @apply flex flex-col gap-1;
+  }
+  .admin-field-label {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-field-required { color: var(--tone-bad); }
+  .admin-field-hint {
+    @apply text-xs;
+    color: var(--admin-text-muted);
+  }
+  .admin-field-error {
+    @apply text-xs font-medium;
+    color: var(--tone-bad);
+  }
+  .admin-field.has-error .admin-input {
+    border-color: var(--tone-bad);
+  }
+
+  /* --- 骨架：高度貼近真實內容，避免資料進來時版面位移 --- */
+  .admin-skeleton { @apply w-full; }
+  .admin-skeleton.is-card {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .admin-skeleton-card,
+  .admin-skeleton-block {
+    @apply flex flex-col gap-2 rounded-2xl p-5;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-skeleton-block { margin-bottom: 16px; }
+  .admin-skeleton-table {
+    @apply overflow-hidden rounded-xl;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+  }
+  .admin-skeleton-row {
+    @apply flex items-center gap-4 px-3;
+    height: 44px;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .admin-skeleton-row:last-child { border-bottom: none; }
+  .admin-skeleton-row.is-head {
+    height: 36px;
+    background: var(--admin-surface-sunken);
+  }
+  .admin-skeleton-bar {
+    @apply block rounded;
+    height: 10px;
+    background: linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.18) 0%,
+      rgba(148, 163, 184, 0.32) 50%,
+      rgba(148, 163, 184, 0.18) 100%
+    );
+    background-size: 200% 100%;
+    animation: admin-skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+  .admin-skeleton-bar.tall { height: 22px; }
+  .admin-skeleton-bar.w-25 { width: 25%; }
+  .admin-skeleton-bar.w-30 { width: 30%; }
+  .admin-skeleton-bar.w-40 { width: 40%; }
+  .admin-skeleton-bar.w-55 { width: 55%; }
+  .admin-skeleton-bar.w-70 { width: 70%; }
+  .admin-skeleton-bar.w-90 { width: 90%; }
+  @keyframes admin-skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* --- 空狀態：圖示 + 說明 + 出口，取代單行「尚無資料」 --- */
+  .admin-empty-state {
+    @apply flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-10 text-center;
+    background: var(--admin-surface);
+    border: 1px dashed var(--admin-border-strong);
+  }
+  .admin-empty-state-icon {
+    @apply inline-flex items-center justify-center;
+    width: 40px;
+    height: 40px;
+    color: var(--admin-accent);
+  }
+  .admin-empty-state-title {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-empty-state-desc {
+    @apply text-xs;
+    color: var(--admin-text-muted);
+    max-width: 420px;
+  }
+  /* 無待辦是好消息，用成功色而非灰色呈現 */
+  .admin-empty-state.tone-good { border-color: rgba(16, 185, 129, 0.35); }
+  .admin-empty-state.tone-good .admin-empty-state-icon { color: var(--tone-good); }
+
+  /* --- 錯誤狀態：區塊級，永遠留有下一步 --- */
+  .admin-error-state {
+    @apply flex flex-col items-start gap-2 rounded-2xl p-5;
+    background: #fef2f2;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+  }
+  .admin-error-state.is-compact { @apply p-3; }
+  .admin-error-state-title {
+    @apply text-sm font-semibold;
+    color: #991b1b;
+  }
+  .admin-error-state-detail {
+    @apply text-xs;
+    color: #b91c1c;
+    word-break: break-word;
+  }
+
+  /* 表格數字欄位等寬對齊：沒有它，金額與點數在列與列之間會左右跳動 */
+  .admin-table .num,
+  .admin-stat-value,
+  .admin-balance-big {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- 分段切換：取代下拉選單，讓狀態分佈一眼可見且一鍵可切 --- */
+  .admin-segmented {
+    @apply inline-flex flex-wrap gap-1 rounded-xl p-1;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-segment {
+    @apply rounded-lg px-3.5 py-1.5 text-sm font-semibold transition;
+    background: transparent;
+    color: var(--admin-text-muted-sunken);
+    border: none;
+    cursor: pointer;
+  }
+  .admin-segment:hover { color: var(--admin-text); }
+  .admin-segment.active {
+    background: var(--admin-surface);
+    color: var(--admin-accent);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+  .admin-segment:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 1px;
+  }
+
+  /* --- 訂單狀態：色 + 圓點 + 文字三重編碼 --- */
+  .admin-order-status {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-order-status-dot {
+    @apply inline-block rounded-full;
+    width: 6px;
+    height: 6px;
+    background: currentColor;
+  }
+  .admin-order-status.tone-good {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+  }
+  .admin-order-status.tone-warn {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+  }
+
+  /* modal 內的次級標題 */
+  .admin-modal-subhead {
+    @apply mt-1 text-xs font-bold uppercase tracking-wider;
+    color: var(--admin-text-muted);
+  }
+
+  /* 次要按鈕：與 primary 拉開視覺權重，一個畫面只留一個主要 CTA */
+  .admin-btn.ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-btn.ghost:hover {
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text);
+  }
+
+  .admin-pagination-total {
+    color: var(--admin-text-muted);
+    font-size: 0.75rem;
+  }
+  .admin-pagination.is-single {
+    @apply flex justify-end;
+  }
+
+  /* 面板右上的「看更多」連結 */
+  .admin-panel-more {
+    @apply text-xs font-semibold;
+    color: var(--admin-accent);
+    text-decoration: none;
+  }
+  .admin-panel-more:hover { text-decoration: underline; }
+
+  /* --- 掃描詳情：優先處置建議 --- */
+  .admin-top-actions {
+    @apply flex flex-col gap-2;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: none;
+  }
+  .admin-top-action {
+    @apply flex items-start gap-3 rounded-xl p-3;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-top-action-rank {
+    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-xs font-bold;
+    width: 24px;
+    height: 24px;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-strong);
+    color: var(--admin-text-muted-sunken);
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-top-action-body { @apply flex min-w-0 flex-1 flex-col gap-1.5; }
+  .admin-top-action-title {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-top-action-meta { @apply flex flex-wrap items-center gap-2; }
+
+  /* --- 掃描詳情：爬取警告 --- */
+  .admin-tech-stack {
+    @apply mb-3 flex flex-wrap items-center gap-1.5;
+  }
+  .admin-tech-chip {
+    @apply rounded-md px-2 py-0.5 text-xs font-medium;
+    background: rgba(56, 189, 248, 0.12);
+    color: #0369a1;
+  }
+  .admin-warn-group {
+    @apply rounded-xl;
+    border: 1px solid var(--admin-border);
+    margin-bottom: 8px;
+  }
+  .admin-warn-group > summary {
+    @apply flex cursor-pointer items-center gap-2 px-3 py-2 text-sm;
+    list-style: none;
+  }
+  .admin-warn-group > summary::-webkit-details-marker { display: none; }
+  .admin-warn-group > summary::before {
+    content: "▸";
+    color: var(--admin-text-muted);
+    transition: transform 0.15s ease;
+  }
+  .admin-warn-group[open] > summary::before { transform: rotate(90deg); }
+  .admin-warn-count {
+    @apply inline-flex items-center justify-center rounded-md px-1.5 text-xs font-bold;
+    min-width: 22px;
+    height: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-warn-count.tone-warn {
+    background: rgba(245, 158, 11, 0.16);
+    color: #b45309;
+  }
+  .admin-warn-count.tone-bad {
+    background: rgba(239, 68, 68, 0.14);
+    color: #b91c1c;
+  }
+  .admin-warn-label {
+    @apply font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-warn-list {
+    @apply flex flex-col gap-1 px-3 pb-3;
+    list-style: none;
+    margin: 0;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .admin-warn-list li {
+    @apply flex flex-wrap items-baseline gap-2 text-xs;
+  }
+  .admin-warn-url {
+    @apply rounded px-1.5 py-0.5;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text);
+    word-break: break-all;
+  }
+  .admin-warn-reason { color: var(--admin-text-muted); }
+
+  /* 表單列：兩欄並排（價格 / Coin 這類成對欄位） */
+  .admin-field-row {
+    @apply grid gap-3;
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-radio-group {
+    @apply flex flex-wrap items-center gap-4;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .admin-radio-group label {
+    @apply inline-flex items-center gap-1.5 text-sm;
+    color: var(--admin-text);
+  }
+  .admin-input-narrow { max-width: 120px; }
+
+  @media (max-width: 640px) {
+    .admin-field-row { grid-template-columns: 1fr; }
   }
 
   /* --- 安裝 APP chip（PWA install prompt） --- */
