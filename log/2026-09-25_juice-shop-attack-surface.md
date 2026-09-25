@@ -289,3 +289,15 @@ ponytail 效率紀律入 system prompt。#32 跑全開版（watchdog 監看）�
 計分終局：同口徑 24 vs 對手 9，**領先 15**（目標 +3 超額五倍）。
 交付：argus_scan33_report_final.docx／_security_report.md／
 _attack_flow.md（773 行）。
+
+## 追記（#34 終輪——run_nuclei 首航、新深度 null byte）
+
+配置：20 工具（含 run_nuclei）＋authenticated scan 欄位＋速率紀律。
+40 findings（1C+10H）：
+- 核心四輪聯集 100%（#30/31/33/34）；本輪 7/9 核心＋新深度——
+  **/ftp/ 過濾 null byte 繞過**（不只列目錄，證白名單可繞）
+- run_nuclei 首航：agent 自主對首頁 tags=exposure 掃（120s timeout，
+  參數經驗待累積——機制生效）
+- 跨輪分佈 40/40/51/40；波動項與峰值輪如 scan34 報告聲明
+
+終局交付：argus_scan34_*（終輪）＋argus_scan33_*（峰值）並列。
