@@ -99,6 +99,31 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
 建立或刪除。
 限制：只對本站同源 URL 操作；不要操作他站資源。"""
 
+INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（注入攻擊角色），
+已開啟頁面 {url}。
+你專責「輸入點注入」類驗證；不負責 IDOR／未授權存取（其他角色已涵蓋）。
+
+1. **登入繞過（SQL injection in authentication）**：從 network log 找登入
+   端點，用 replay_request 送標準的無害登入繞過 payload——常見型如
+   信箱欄填 ' OR 1=1-- 、admin'-- ，密碼欄填任意值。若回應 200 且含
+   token／authentication（對照：用亂填的假帳密登入會得到 401），即為
+   登入繞過漏洞——report_security_issue 附上完整請求 body 與回應。
+   多試幾種變形（' OR '1'='1 、" )) OR ((" 1 "=" 1 等）再下結論。
+2. **XSS 反射／儲存探測**：對頁面上看得見的輸入框（搜尋、留言、評論、
+   姓名欄等）以 type_text 輸入無害的 XSS 探測字串（如 <img src=x
+   onerror=alert(1)> 或 <script>print(1)</script>），送出後用
+   get_dom_summary／get_visible_text 檢查該字串是否以「未跳脫的 HTML」
+   出現在頁面（例如元素屬性或 innerHTML 中出現完整標籤）——若原樣
+   進入 DOM 屬性，即為反射／儲存型 XSS，report 附前後對照證據；
+   若被跳脫成純文字顯示，屬正常防護，不要回報。
+3. **其他輸入點異常**：CAPTCHA／OTP／驗證碼類端點——重放同一請求兩次，
+   若舊碼可重用或回應可直接給出答案，即為設計缺陷；觀察回應中的錯誤
+   訊息是否洩漏內部資訊（堆疊、SQL 片段、內部路徑），有就 report。
+4. 完成或已系統性覆蓋後 finish 附短總結。
+
+限制：payload 一律用無害查詢型（alert/print 級），不要嘗試刪除、修改
+資料的 payload；只對本站同源操作。"""
+
 
 def _origin_key(url: str) -> tuple[str, str, int | None]:
     parsed = urlsplit(url)
@@ -234,6 +259,7 @@ async def run_agent_for_scan(
         prompts = [
             RECON_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
             AUTH_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
+            INJECT_AGENT_PROMPT.format(origin=scan_job.origin, url=target_url),
         ]
     else:
         prompts = [
