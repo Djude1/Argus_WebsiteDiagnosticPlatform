@@ -187,3 +187,32 @@ SecurityQuestions/Feedbacks email hints 洩漏、Express 錯誤路徑 ×2。
 涵蓋對手全部類別（SQLi×3、IDOR 讀/寫、負數、ftp、metrics、時間戳近似、
 資訊類），另獨有 Challenges 地圖洩漏、CAPTCHA 自答、資料庫傾印證據、
 SecurityQuestions/Feedbacks 洩漏——全黑箱、全自動、逐項帶證據。
+
+---
+
+## 追記（第八波：#28 一次定生死——黑箱終局驗證）
+
+**掃前補強**（使用者指示：payload 屬工具論保留；補齊缺工具；加 feedback）：
+- 4 新工具：get_page_html／get_storage／get_response_headers／decode_jwt
+  （皆通用；storage 值遮罩為長度；jwt 不回傳 token 本體）
+- report_security_issue 注入 7-Question Gate 精神（回報前自問兩題）
+- DEFAULT_SYSTEM_PROMPT：finish summary 必含「未能完成的測試與原因」；
+  tasks.py 以 feedback 鍵寫入 warning_summary['agent']（DB/API only）
+- bug-hunter 類 repo 查證（Agentic-Bug-Hunter／Claude-BugHunter）進 research
+
+**黑箱程序**：靶機容器重啟（記憶體 DB 清空、歷次殘留帳號排除）→
+agent 全模組作弊稽核（零記憶／零目標特定路徑／payload=工具論）→ 單次掃描。
+
+**#28 結果（24 findings：1C+8H+8M+4L+3I，overall 72）**：
+- SQLi critical（sqlmap 四技法）＋登入繞過 high（帶 401 控制組對照）
+- IDOR 三態全中：讀取（GET basket）＋修改（PUT BasketItems）＋新增
+  （POST 帶他人 basket_id）——比前輪更完整
+- 負數 high（獨立落地，寫入持久化為證）
+- 組態類＋ftp×2＋metrics＋security.txt＋recruiting
+- feedback 機制首航生效：recon 自述 /ftp/quarantine/ 子目錄線索
+  （未落地為 finding——機制正確捕獲「發現未報」案例，列下輪修正）
+
+**漏洞級對打終局（#28）**：16 項資安（1-16）vs 對手 12 項；對手全部
+類別覆蓋（SQLi×2／IDOR 讀寫／負數／ftp／metrics／CSP／CORS／資訊類），
+另獨有寫入 IDOR 兩態＋負數獨立項＋security.txt。全程黑箱、單次、
+自動、逐項帶可重現證據。
