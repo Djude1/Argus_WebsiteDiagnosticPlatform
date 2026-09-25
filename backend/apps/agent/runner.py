@@ -80,8 +80,10 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
    帳號（test 類信箱與隨機密碼），再 POST 登入並以 store_token_key 把回應
    token 存進瀏覽器。登入後再次 get_network_requests，觀察新出現的授權
    端點（購物車、訂單、個人資料等常帶數字 id）。
-2. 跨帳號存取（IDOR）：把 URL 中的 id 改成鄰近數字或 1 重放——若 200 且回傳
-   **不屬於此帳號**的資料，即為讀取型 IDOR。讀取型之外，更新類端點
+2. 跨帳號存取（IDOR，系統性遍歷）：把 network log 中**每一個**帶數字 id 的
+   資源端點（購物車、訂單、錢包、留言、評論、回收、個人資料……）的 id 改成
+   1、2 與你自己 id 以外的值重放——200 且回傳**不屬於此帳號**的資料即為
+   讀取型 IDOR，逐一記錄。讀取型之外，更新類端點
    （PUT/PATCH，如修改購物車項目、個人資料）也以同法改 id 測試——若能成功
    修改**他人**的資源，這是更嚴重的寫入型 IDOR。兩種發現都立即
    report_security_issue，附上請求與回應證據。
@@ -109,13 +111,12 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
    token／authentication（對照：用亂填的假帳密登入會得到 401），即為
    登入繞過漏洞——report_security_issue 附上完整請求 body 與回應。
    多試幾種變形（' OR '1'='1 、" )) OR ((" 1 "=" 1 等）再下結論。
-2. **XSS 反射／儲存探測**：對頁面上看得見的輸入框（搜尋、留言、評論、
-   姓名欄等）以 type_text 輸入無害的 XSS 探測字串（如 <img src=x
-   onerror=alert(1)> 或 <script>print(1)</script>），送出後用
-   get_dom_summary／get_visible_text 檢查該字串是否以「未跳脫的 HTML」
-   出現在頁面（例如元素屬性或 innerHTML 中出現完整標籤）——若原樣
-   進入 DOM 屬性，即為反射／儲存型 XSS，report 附前後對照證據；
-   若被跳脫成純文字顯示，屬正常防護，不要回報。
+2. **XSS 反射探測（API 優先，不要操作 UI 表單）**：多數輸入點是
+   GET 端點的 query 參數（從 network log 找）——以 replay_request 直接
+   送含無害探測字串的 URL（如 <img src=x onerror=alert(1)> 級），
+   檢查回應中該字串是否**未跳脫地**出現在 HTML 屬性或標籤位置
+   （原樣完整標籤＝反射型 XSS；跳脫成純文字＝正常防護，不回報）。
+   只有在端點只能由 UI 觸發時才用 type_text，並立即送出檢查。
 3. **其他輸入點異常**：CAPTCHA／OTP／驗證碼類端點——重放同一請求兩次，
    若舊碼可重用或回應可直接給出答案，即為設計缺陷；觀察回應中的錯誤
    訊息是否洩漏內部資訊（堆疊、SQL 片段、內部路徑），有就 report。
@@ -231,7 +232,10 @@ ORCHESTRATOR_PROMPT = """你是滲透測試指揮官。先遣偵察 agent 已完
 - 依情報派真正需要的角色；brief 指向你觀察到的具體線索（可疑端點、
   未覆蓋的面相），一到三句，讓專家不用從零探索；不指定攻擊細節。
 - 每位專家的結果摘要會回報給你；發現不足或面相未覆蓋時可追加派工。
-- 你自己不直接測試網站（沒有瀏覽器工具）；完成調度後 finish 附總結。"""
+- 你自己不直接測試網站（沒有瀏覽器工具）。
+- **未呼叫 dispatch_specialist 至少一次就 finish 視為任務失敗**；依情報選擇
+  適合的角色（通常 2～4 個），逐位派出、看結果、必要時追加。
+- 完成調度後 finish 附總結。"""
 
 
 def _origin_key(url: str) -> tuple[str, str, int | None]:
@@ -400,6 +404,13 @@ async def run_agent_for_scan(
             brief = (brief or "").strip()
             if brief:
                 prompt += f"\n\n【指揮官任務提示】{brief}"
+            # report 紀律（所有 specialist 通用）：觀察到就要立即落地，
+            # 避免做到一半 token 用盡、發現跟著消失（#28 損耗點）
+            prompt += (
+                "\n\n【重要紀律】每確認一項問題就**立即** report，不要累積到"
+                "測試結束才一次回報——你的 token 預算可能在途中用盡，未回報的"
+                "發現會全部遺失。"
+            )
             specialist_result = await _run_session(prompt)
             specialist_results.append(specialist_result)
             titles = [
