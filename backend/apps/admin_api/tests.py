@@ -726,3 +726,49 @@ class AdminSubscriptionTests(APITestCase):
         self.assertIn("sub-lite", codes)
         self.assertIn("sub-pro", codes)
         self.assertIn("sub-team", codes)
+
+
+class OrderingTests(APITestCase):
+    """後台列表的 `ordering` 白名單排序。
+
+    排序必須在資料庫層做：分頁是 server side（PAGE_SIZE=25），若只排當頁
+    會讓管理員以為看到的是全域最大／最小的幾筆。
+    """
+
+    def setUp(self):
+        self.admin = _make_user("admin", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.owner = _make_user("owner")
+        # 刻意用非時間順序的分數，確保排序結果不是剛好等於預設的 -created_at
+        self.low = _make_scan(self.owner, origin="https://low.example", overall_score=10)
+        self.high = _make_scan(self.owner, origin="https://high.example", overall_score=90)
+        self.mid = _make_scan(self.owner, origin="https://mid.example", overall_score=50)
+
+    def _scores(self, params):
+        response = self.client.get(reverse("admin-scans"), params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [s["overall_score"] for s in response.data["scans"]]
+
+    def test_default_ordering_is_newest_first(self):
+        response = self.client.get(reverse("admin-scans"))
+        origins = [s["origin"] for s in response.data["scans"]]
+        self.assertEqual(origins[0], "https://mid.example")
+
+    def test_ascending_ordering_by_whitelisted_field(self):
+        self.assertEqual(self._scores({"ordering": "overall_score"}), [10, 50, 90])
+
+    def test_descending_ordering_with_minus_prefix(self):
+        self.assertEqual(self._scores({"ordering": "-overall_score"}), [90, 50, 10])
+
+    def test_unknown_field_falls_back_to_default_instead_of_erroring(self):
+        # 白名單外的欄位不該回 500，也不該讓任意欄位洩漏到 ORM
+        response = self.client.get(reverse("admin-scans"), {"ordering": "user__password"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        origins = [s["origin"] for s in response.data["scans"]]
+        self.assertEqual(origins[0], "https://mid.example")
+
+    def test_users_ordering_traverses_wallet_relation(self):
+        response = self.client.get(reverse("admin-users"), {"ordering": "balance"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        balances = [u["balance"] for u in response.data["users"]]
+        self.assertEqual(balances, sorted(balances))

@@ -61,6 +61,54 @@ from apps.scans.models import AgentSession, ScanJob, VerifiedDomain
 
 PAGE_SIZE = 25
 
+# 後台表格可排序欄位白名單（前端欄位名 → ORM 欄位）。
+# 只列真正存在於資料庫（或已 annotate）的欄位；serializer 算出來的值無法排序，
+# 例如 ScanJob.duration_sec 由 started_at/completed_at 現算，刻意不開放。
+USERS_ORDERING = {
+    "date_joined": "date_joined",
+    "last_login": "last_login",
+    "username": "username",
+    "balance": "coin_wallet__balance",
+    "total_purchased_ntd": "coin_wallet__total_purchased_ntd",
+    "total_scans_used": "coin_wallet__total_scans_used",
+}
+SCANS_ORDERING = {
+    "created_at": "created_at",
+    "overall_score": "overall_score",
+    "pages_count": "pages_count",
+    "findings_count": "findings_count",
+}
+TRANSACTIONS_ORDERING = {
+    "created_at": "created_at",
+    "amount": "amount",
+    "balance_after": "balance_after",
+}
+ORDERS_ORDERING = {
+    "created_at": "created_at",
+    "paid_at": "paid_at",
+    "price_ntd": "price_ntd",
+    "coin_amount": "coin_amount",
+}
+
+
+def _apply_ordering(request, queryset, allowed: dict, default: str):
+    """依 `ordering` 查詢參數排序；只接受白名單欄位。
+
+    後台表格要能依金額、耗時、問題數等欄位排序，但分頁是 server side
+    （PAGE_SIZE=25），若讓前端只排當頁會給出「這就是最大的幾筆」的錯誤印象，
+    所以排序必須在資料庫層做。
+
+    `allowed` 是「前端欄位名 → ORM 欄位名」的白名單，避免任意欄位注入；
+    `ordering` 前綴 `-` 代表降冪。無值或不在白名單時退回 `default`。
+    """
+    raw = (request.query_params.get("ordering") or "").strip()
+    descending = raw.startswith("-")
+    key = raw[1:] if descending else raw
+    field = allowed.get(key)
+    if not field:
+        return queryset.order_by(default)
+    return queryset.order_by(f"-{field}" if descending else field)
+
 
 def _paginate(request, queryset):
     """簡單 offset/limit 分頁；回傳 (items_slice, page, total_pages, total_count)。"""
@@ -241,10 +289,7 @@ def dashboard(request):
 @permission_classes([permissions.IsAdminUser])
 def orders_list(request):
     """訂單列表（搜尋 buyer_email/姓名/公司/統編 + status/invoice_type 篩選）。"""
-    qs = (
-        PurchaseOrder.objects.select_related("user", "plan")
-        .order_by("-created_at")
-    )
+    qs = PurchaseOrder.objects.select_related("user", "plan")
     search = (request.query_params.get("q") or "").strip()
     if search:
         qs = qs.filter(
@@ -260,6 +305,7 @@ def orders_list(request):
     invoice_type = request.query_params.get("invoice_type")
     if invoice_type:
         qs = qs.filter(invoice_type=invoice_type)
+    qs = _apply_ordering(request, qs, ORDERS_ORDERING, "-created_at")
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "orders": AdminPurchaseOrderSerializer(items, many=True).data,
@@ -273,7 +319,7 @@ def orders_list(request):
 @permission_classes([permissions.IsAdminUser])
 def users_list(request):
     user_model = get_user_model()
-    qs = user_model.objects.select_related("coin_wallet").order_by("-date_joined")
+    qs = user_model.objects.select_related("coin_wallet")
     search = (request.query_params.get("q") or "").strip()
     if search:
         qs = qs.filter(
@@ -282,6 +328,7 @@ def users_list(request):
             | Q(first_name__icontains=search)
             | Q(last_name__icontains=search)
         )
+    qs = _apply_ordering(request, qs, USERS_ORDERING, "-date_joined")
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "users": AdminUserListSerializer(items, many=True).data,
@@ -432,6 +479,7 @@ def transactions_list(request):
     user_id = request.query_params.get("user_id")
     if user_id:
         qs = qs.filter(wallet__user_id=user_id)
+    qs = _apply_ordering(request, qs, TRANSACTIONS_ORDERING, "-created_at")
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "transactions": AdminCoinTransactionSerializer(items, many=True).data,
@@ -654,6 +702,7 @@ def scans_list(request):
     status_filter = request.query_params.get("status")
     if status_filter:
         qs = qs.filter(status=status_filter)
+    qs = _apply_ordering(request, qs, SCANS_ORDERING, "-created_at")
     items, page, total_pages, total = _paginate(request, qs)
     return Response({
         "scans": AdminScanJobSerializer(items, many=True).data,
