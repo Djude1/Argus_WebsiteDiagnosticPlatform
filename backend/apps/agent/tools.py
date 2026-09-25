@@ -209,7 +209,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "url": {"type": "string", "description": "完整同源 URL"},
-                    "method": {"type": "string", "enum": ["GET", "POST"]},
+                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH"]},
                     "body": {
                         "type": "object",
                         "description": (
@@ -678,7 +678,7 @@ class ToolExecutor:
             return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
 
         method = (method or "GET").upper()
-        if method not in ("GET", "POST"):
+        if method not in ("GET", "POST", "PUT", "PATCH"):
             return ToolOutcome(ok=False, result={"error": "method_not_allowed"})
 
         parsed = urlparse(url or "")
@@ -726,6 +726,10 @@ class ToolExecutor:
             ) as client:
                 if method == "POST":
                     r = client.post(url, json=body or {})
+                elif method == "PUT":
+                    r = client.put(url, json=body or {})
+                elif method == "PATCH":
+                    r = client.patch(url, json=body or {})
                 else:
                     r = client.get(url)
             return {
