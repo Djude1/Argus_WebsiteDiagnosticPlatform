@@ -36,10 +36,10 @@ services:
       ARGUS_AGENT_ENABLED: "true"
       # MiniMax-M3 為思考型模型，token 消耗明顯高於 M2.7（實測 17 步 >63k）；
       # demo 環境放寬上限讓 agent 跑完，正式環境維持預設 60k 成本控制
-      ARGUS_AGENT_MAX_TOKENS: "500000"
+      ARGUS_AGENT_MAX_TOKENS: "800000"
       # M3 探索更深入：22 步被預設 20 步切斷（117k tokens、0 issues）；
       # demo 放寬到 40 步讓它完成探索＋回報，正式環境維持 20 步
-      ARGUS_AGENT_MAX_STEPS: "80"
+      ARGUS_AGENT_MAX_STEPS: "120"
       # 2 RPS 下 Nuclei 全模板掃描超過預設 300 秒；demo 掃受控靶機放寬到 15 分，
       # 正式環境維持 300 秒（保護公網目標站的既有取捨）
       ARGUS_NUCLEI_DEEP_TIMEOUT: "900"
