@@ -410,6 +410,19 @@ def user_detail(request, user_id: int):
             for r in by_provider
         ],
     }
+    # 該使用者的最近掃描。
+    # 客服最常見的問題是「我的掃描失敗了／被扣點了」，先前要從使用者詳情
+    # 切到掃描頁再搜一次網址才找得到，這裡直接帶出來。
+    recent_scans = (
+        ScanJob.objects.filter(user=user)
+        .annotate(
+            findings_count=Count("findings", distinct=True),
+            pages_count=Count("pages", distinct=True),
+        )
+        .order_by("-created_at")[:10]
+    )
+    data["recent_scans"] = AdminScanJobSerializer(recent_scans, many=True).data
+    data["scans_total"] = ScanJob.objects.filter(user=user).count()
     return Response(data)
 
 
@@ -745,6 +758,10 @@ def scans_list(request):
     status_filter = request.query_params.get("status")
     if status_filter:
         qs = qs.filter(status=status_filter)
+    # 依使用者 id 精確篩選（q 是模糊搜尋，同名或 email 相似時會撈到別人）
+    user_filter = request.query_params.get("user")
+    if user_filter:
+        qs = qs.filter(user_id=user_filter)
     qs = _apply_ordering(request, qs, SCANS_ORDERING, "-created_at")
     items, page, total_pages, total = _paginate(request, qs)
     return Response({

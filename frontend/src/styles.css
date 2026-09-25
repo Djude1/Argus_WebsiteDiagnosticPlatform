@@ -6162,6 +6162,14 @@
   .admin-input-narrow { max-width: 120px; }
   .admin-page-head-links { @apply flex flex-wrap items-center gap-2; }
 
+  /* 列表被縮限在某個範圍時的提示條。沒有它，管理員會以為系統只有這幾筆資料 */
+  .admin-scope-note {
+    @apply flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm;
+    background: rgba(56, 189, 248, 0.10);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    color: #0c4a6e;
+  }
+
   /* --- 待辦中心：第一屏的可點卡片 --- */
   .admin-triage-grid {
     @apply grid gap-3;

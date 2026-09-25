@@ -702,6 +702,61 @@ function AdminUserDetailPage() {
         </section>
       )}
 
+      {/* 該使用者的掃描紀錄：客服處理「掃描失敗卻被扣點」時的第一手資料。
+          先前要切到掃描頁再搜一次網址才找得到。 */}
+      <section className="admin-panel">
+        <div className="admin-panel-head-row">
+          <h3>
+            <span className="admin-panel-icon-chip"><AdminScansIcon /></span>
+            掃描紀錄（{formatNumber(user.scans_total, "0")}）
+          </h3>
+          {user.scans_total > 0 && (
+            <NavLink to={`/admin/scans?user=${user.id}`} className="admin-panel-more">
+              查看全部 →
+            </NavLink>
+          )}
+        </div>
+        {(user.recent_scans || []).length === 0 ? (
+          <p className="admin-empty">此使用者尚未建立任何掃描</p>
+        ) : (
+          <div className="admin-table-scroll">
+            <table className="admin-table compact">
+              <thead>
+                <tr>
+                  <th>時間</th><th>網址</th><th>狀態</th>
+                  <th className="num">分數</th><th className="num">問題</th>
+                </tr>
+              </thead>
+              <tbody>
+                {user.recent_scans.map((scan) => (
+                  <tr
+                    key={scan.id}
+                    className="clickable"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/admin/scans/${scan.id}`)}
+                    onKeyDown={(event) => activateAdminRow(
+                      event,
+                      () => navigate(`/admin/scans/${scan.id}`),
+                    )}
+                  >
+                    <td>{formatDateTime(scan.created_at)}</td>
+                    <td className="truncate" title={scan.origin}>{scan.origin}</td>
+                    <td>
+                      <span className={`admin-status ${scan.status}`}>
+                        {STATUS_LABELS[scan.status]?.label || scan.status}
+                      </span>
+                    </td>
+                    <td className="num">{scan.overall_score ?? "—"}</td>
+                    <td className="num">{scan.findings_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <section className="admin-panel">
         <h3><span className="admin-panel-icon-chip"><AdminOrdersIcon /></span>最近 30 筆交易</h3>
         <div className="admin-table-scroll">
@@ -1240,12 +1295,14 @@ function AdminReviewsPage() {
     </div>
   );
 }
-const SCANS_QUERY_DEFAULTS = { page: 1, q: "", status: "", ordering: "-created_at" };
+// user 是從使用者詳情「查看全部」帶過來的精確篩選；必須列在預設裡，
+// 否則 useListQuery 不會讀它，網址帶著參數但列表不會套用（靜默失效）。
+const SCANS_QUERY_DEFAULTS = { page: 1, q: "", status: "", user: "", ordering: "-created_at" };
 
 function AdminScansPage() {
   const navigate = useNavigate();
   const { params, setParam, setParams, resetFilters, hasFilters } = useListQuery(SCANS_QUERY_DEFAULTS);
-  const { page, q, status: statusFilter, ordering } = params;
+  const { page, q, status: statusFilter, user: userFilter, ordering } = params;
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1258,7 +1315,13 @@ function AdminScansPage() {
     setError(null);
     try {
       const response = await api.get("/admin/scans/", {
-        params: { q: q || undefined, status: statusFilter || undefined, page, ordering },
+        params: {
+          q: q || undefined,
+          status: statusFilter || undefined,
+          user: userFilter || undefined,
+          page,
+          ordering,
+        },
       });
       setData(response.data);
     } catch (err) {
@@ -1266,7 +1329,7 @@ function AdminScansPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, statusFilter, page, ordering]);
+  }, [q, statusFilter, userFilter, page, ordering]);
   useEffect(() => { load(); }, [load]);
 
   function handleSearchSubmit(e) {
@@ -1305,6 +1368,15 @@ function AdminScansPage() {
           <button type="button" className="admin-btn ghost" onClick={resetFilters}>清除篩選</button>
         )}
       </form>
+
+      {userFilter && (
+        <div className="admin-scope-note">
+          <span>目前只顯示單一使用者的掃描</span>
+          <button type="button" className="admin-btn ghost" onClick={() => setParam("user", "")}>
+            顯示全部使用者
+          </button>
+        </div>
+      )}
 
       {error && <AdminErrorState message="無法載入掃描任務" detail={error} onRetry={load} />}
       {!error && loading && <AdminSkeleton variant="table" rows={8} label="載入掃描中" />}

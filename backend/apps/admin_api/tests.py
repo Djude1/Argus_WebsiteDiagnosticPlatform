@@ -852,3 +852,41 @@ class TriageTests(APITestCase):
         )
         self.assertEqual(self._triage()["scans_failed_today"], 1)
         self.assertIsNotNone(today.pk)
+
+
+class UserScansTests(APITestCase):
+    """使用者詳情的掃描紀錄，與掃描列表的精確使用者篩選。
+
+    服務的是客服流程：使用者回報「掃描失敗但被扣點」時，要能從使用者一路
+    看到他的掃描，而不必切頁再搜一次網址。
+    """
+
+    def setUp(self):
+        self.admin = _make_user("admin", staff=True)
+        self.client.force_authenticate(self.admin)
+        self.alice = _make_user("alice")
+        self.bob = _make_user("bob")
+        _make_scan(self.alice, origin="https://alice-one.example")
+        _make_scan(self.alice, origin="https://alice-two.example")
+        _make_scan(self.bob, origin="https://bob.example")
+
+    def test_user_detail_includes_recent_scans_and_total(self):
+        response = self.client.get(reverse("admin-user-detail", args=[self.alice.id]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        origins = [s["origin"] for s in response.data["recent_scans"]]
+        self.assertEqual(len(origins), 2)
+        self.assertNotIn("https://bob.example", origins)
+        self.assertEqual(response.data["scans_total"], 2)
+
+    def test_user_with_no_scans_gets_empty_list_not_missing_key(self):
+        carol = _make_user("carol")
+        response = self.client.get(reverse("admin-user-detail", args=[carol.id]))
+        self.assertEqual(response.data["recent_scans"], [])
+        self.assertEqual(response.data["scans_total"], 0)
+
+    def test_scans_list_user_filter_is_exact_not_fuzzy(self):
+        response = self.client.get(reverse("admin-scans"), {"user": self.alice.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        origins = [s["origin"] for s in response.data["scans"]]
+        self.assertEqual(len(origins), 2)
+        self.assertNotIn("https://bob.example", origins)
