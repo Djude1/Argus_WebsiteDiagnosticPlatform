@@ -239,3 +239,22 @@ dispatch。三修：auth_idor 全程 API 禁 UI、logic_abuse 鐵律（驗證成
 
 交付：argus_scan30_report_final.docx／_security_report.md／
 _attack_flow.md（449 行軌跡）。
+
+---
+
+## 追記（第十波：#31 穩定性驗證＋全開配置 #32）
+
+**#30 vs #31 比對**（compare_stability.py，容器內執行）：
+- 43 vs 40 findings；重疊 18（title 逐字），實質同漏洞重疊約 30
+- **核心類別兩輪 100% 重現**：SQLi critical／登入繞過／IDOR 讀＋寫／
+  負數／ftp／metrics／Challenges／Feedbacks email／Quantitys／admin
+  config＋version／continue-code
+- 波動項（單輪出現）：JWT hash（僅 #30）、商品竄改＋負價商品（僅 #30）、
+  SecurityQuestions（僅 #30）——M3 非決定性行為，靠多輪取聯集
+- #31 新型態：**跨帳號結帳 Write-IDOR**（/rest/basket/{id}/checkout）
+
+**穩定性結論**：核心偵測可重現；specialist 深度探索項有波動；無回歸。
+
+**全開配置**（使用者：專題平台 token 不省）：800k tokens／120 步、
+orchestrator 允許全派＋二輪、第 6 角色 xss_hunter 首航、caveman/
+ponytail 效率紀律入 system prompt。#32 跑全開版（watchdog 監看）。
