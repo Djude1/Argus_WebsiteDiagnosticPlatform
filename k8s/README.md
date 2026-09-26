@@ -9,7 +9,7 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 
 ## GitOps 實際流程與狀態判讀
 
-1. push 到 `main` 後，Quality Gate 會檢查 backend、frontend、追蹤文字檔與 Kustomize manifests。
+1. push 到 `main` 後，Quality Gate 會檢查 backend、frontend（ESLint、TypeScript 型別、Vitest、build）、追蹤文字檔與 Kustomize manifests。前端 image build 前會重跑同一組前端檢查（由 `tests/test_ci_quality_gate_parity.py` 鎖定不得弱於 Quality Gate）。
 2. 改到 `backend/**`、`Dockerfile`、`pyproject.toml`、`uv.lock` 等 backend image 相依檔時，Backend Image workflow 才會 build / push image；`frontend/**` 由另一個 workflow 處理。只有 `k8s/**` 的變更不會建新 image。
 3. image 成功推送後，workflow 才會用 `kustomize edit set image` 更新 `k8s/kustomization.yaml`，並由 `github-actions[bot]` 把 image tag commit 回 `main`。Build 失敗時不會有 write-back commit。
 4. Argo CD 偵測 Git revision 後，是否自動套用取決於 Application 當下的 Auto Sync 設定；不可只看到 Git push 成功就宣稱部署完成。

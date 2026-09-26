@@ -61,6 +61,17 @@ jobs:
       - name: 安裝鎖定依賴
         working-directory: frontend
         run: npm ci --no-audit --no-fund
+      # .jsx 不經型別檢查：引用不存在的名稱時 build 照樣成功、要到瀏覽器才炸，
+      # 這類錯誤只有 lint 抓得到（2026-09-26 在 /free-tools 抓到一例）
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+      - name: TypeScript 型別檢查
+        working-directory: frontend
+        run: npm run typecheck
+      - name: 前端測試
+        working-directory: frontend
+        run: npm test
       - name: Production build
         working-directory: frontend
         run: npm run build

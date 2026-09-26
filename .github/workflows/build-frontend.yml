@@ -46,6 +46,10 @@ jobs:
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
+          # lint：.jsx 不經型別檢查，引用不存在的名稱 build 照樣成功、到瀏覽器才炸
+          npm run lint
+          npm run typecheck
+          npm test
           npm run build
 
       - name: 追蹤文字檔 UTF-8 與 GitOps 排隊契約

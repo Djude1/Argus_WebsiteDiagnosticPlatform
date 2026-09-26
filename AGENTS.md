@@ -154,6 +154,9 @@ uv run python backend/manage.py test apps.billing
 # Lint
 uv run ruff check backend
 
+# 前端檢查（CI 的 Quality Gate 與前端 image build 都會跑，push 前先在本機跑過）
+cd frontend ; npm run lint ; npm run typecheck ; npm test ; cd ..
+
 # Django 健康檢查
 uv run python backend/manage.py check
 

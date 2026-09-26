@@ -89,6 +89,20 @@ class QualityGateParityTest(unittest.TestCase):
         ):
             self.assertIn(required, actual, f"build-frontend.yml 缺少 {required}")
 
+    def test_frontend_image_build_runs_every_frontend_quality_check(self):
+        """Quality Gate 的前端檢查（lint／typecheck／test），image build 也必須跑。
+
+        否則 Quality Gate 紅燈時，前端 image 照樣建出來並 write-back 上線。
+        """
+        expected = _commands("quality.yml", "frontend")
+        actual = _commands("build-frontend.yml", "build")
+
+        missing = sorted(expected - actual - _QUALITY_ONLY)
+        self.assertEqual(
+            missing, [],
+            f"build-frontend.yml 的前端閘門弱於 Quality Gate，缺少：{missing}",
+        )
+
     def test_shared_check_scripts_are_used_by_both_sides(self):
         """斷言內容抽成腳本後，兩邊必須都呼叫同一支，否則等於沒抽。"""
         quality = _commands("quality.yml", "repository-text") | _commands(
