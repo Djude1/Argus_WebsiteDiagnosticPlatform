@@ -25,17 +25,19 @@ ScanJob(active+authorized)
 
 | role | 職責 | when（派用時機） |
 |---|---|---|
-| `auth_idor` | API 註冊登入、跨帳號讀/寫 IDOR（含 PUT/PATCH）；**全程 API 禁 UI** | 登入/註冊端點、帶 id 授權資源 |
-| `injection` | 登入繞過 SQLi payload、XSS 反射（**API 優先**） | 登入表單、query 輸入點 |
+| `auth_idor` | API 註冊登入、跨帳號讀/寫 IDOR（含 PUT/PATCH）、密碼重置鏈帳號接管（WSTG-ATHN-09）；**全程 API 禁 UI** | 登入/註冊/重置端點、帶 id 授權資源 |
+| `injection` | 登入繞過 SQLi、XSS 瀏覽器執行驗證（hash 路由）、家族化注入 probe_payload_injection（NoSQL/SSTi/XXE/指令/LFI） | 登入表單、query/JSON/XML 輸入面（SQL 探測≠家族覆蓋） |
 | `logic_abuse` | 負數/極端值、流程繞過、CAPTCHA/OTP 重用、open redirect；**鐵律＝驗證成功下一個動作就是 report** | 數量/金額欄位、多步流程、驗證碼 |
 | `info_leak` | 敏感檔/錯誤頁/中繼資料/debug 端點（只讀） | 可疑路徑、非標準錯誤回應 |
 | `xss_hunter` | 反射/DOM/儲存 XSS（query 輸入點、iframe、innerHTML 渲染後檢查） | query 輸入點、HTML 回應端點 |
 | `jwt_token_abuse` | JWT payload 敏感欄位（decode_jwt）、簽章/過期竄改重放、cookie 屬性 | token 型登入、Set-Cookie |
+| `file_upload` | 檔案上傳面（WSTG-BUSL-08）：副檔名/content-type/路徑穿越/大小邊界＋上傳後匿名直讀（replay files 參數） | multipart 流量、頁面上傳欄 |
+| `crypto` | JWT 偽造（forge_jwt：alg=none/HS256 弱密鑰清單）、簽章接受度四路測試、可預測隨機值 | eyJ token、優惠碼/驗證碼類回應 |
 
 authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密）
 自動注入 `auth_idor`／`logic_abuse` prompt——無公開註冊的真實站靠這個。
 
-## 3. 工具清單（ToolExecutor，22 個）
+## 3. 工具清單（ToolExecutor，23 個）
 
 **觀察（bulky，舊快照自動壓縮）**：`get_dom_summary`／`get_visible_text`／
 `get_network_requests`（same-origin XHR/fetch 被動攔截——SPA 端點主要來源）／

@@ -9,7 +9,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 ## 職責
 
 掃描後的動態測試（deep_mode＝active＋authorized 才全開）：recon agent →
-orchestrator agent（subagent 派工）→ specialist subagent（6 角色）。
+orchestrator agent（subagent 派工）→ specialist subagent（8 角色：auth_idor/injection/logic_abuse/info_leak/xss_hunter/jwt_token_abuse/file_upload/crypto）。
 `ARGUS_AGENT_ENABLED=false`（預設）時 `runner.run_agent_for_scan` 直接
 `return None`。
 
@@ -20,7 +20,7 @@ orchestrator agent（subagent 派工）→ specialist subagent（6 角色）。
 | `runner.py` | 流程編排：recon→orchestrator（首步 tool_choice 強制派工）→specialist；`SPECIALIST_ROLES` 角色目錄（desc＋when）；authenticated scan 帳密解密注入；`_merge` 結果合併 |
 | `providers.py` | `ChatProvider`／`ProviderChain`（**MiniMax-M3** 主力→GLM→Gemini 純文字 fallback）；`ProviderError` 只帶公開資訊 |
 | `loop.py` | `HermesAgent` tool-calling 迴圈；`_compact_stale_tool_results`（bulky 觀察快照壓縮）；`_inject_stall_hint`（連續 click 空轉導正）；`_inject_endgame_hint`（剩 10 步強制 report）；`forced_first_tool`（orchestrator 首步鎖定） |
-| `tools.py` | `ToolExecutor`：**22 個工具**（見架構文件清單）；deep_only 閘；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
+| `tools.py` | `ToolExecutor`：**23 個工具**（見架構文件清單）；deep_only 閘；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
 | `findings.py` | `persist_agent_issues`＋`persist_agent_security_findings`（description 去重；owasp tag） |
 
 ## 安全（硬規則）

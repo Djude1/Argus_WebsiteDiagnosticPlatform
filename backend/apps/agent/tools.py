@@ -333,6 +333,27 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                             "例如 token 或 access_token"
                         ),
                     },
+                    "files": {
+                        "type": "array",
+                        "maxItems": 2,
+                        "description": (
+                            "（選填）multipart 檔案上傳——請求改以"
+                            " multipart/form-data 發送，body 作為表單欄位。"
+                            "每項 {field: 表單欄位名, filename: 檔名（含副檔名，"
+                            "可帶繞過變體）, content: 檔案內容（純文字探測內容）, "
+                            "content_type: 宣告的 MIME}"
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "field": {"type": "string"},
+                                "filename": {"type": "string"},
+                                "content": {"type": "string"},
+                                "content_type": {"type": "string"},
+                            },
+                            "required": ["field", "filename", "content"],
+                        },
+                    },
                 },
                 "required": ["url", "method"],
             },
@@ -381,6 +402,42 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["url", "family", "method"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forge_jwt",
+            "description": (
+                "以給定的 payload 字典偽造 JWT（本地計算，不發請求）——"
+                "JWT 攻擊標準手法（jwt_tool／PortSwigger 方法論）："
+                "(1) alg=none 無簽 token（伺服器未驗簽即接受的經典缺陷）；"
+                "(2) HS256 以猜測密鑰簽名——secret 留空時自動用內建常見弱密鑰"
+                "清單各簽一組。回傳 token 清單，**由你**逐一以 replay_request 帶 "
+                "Authorization: Bearer 打受保護端點驗證是否被接受——被接受＝"
+                "簽章未驗證／弱密鑰，立即 report_security_issue。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "payload": {
+                        "type": "object",
+                        "description": (
+                            "JWT payload 字典（仿 decode_jwt 看到的結構改欄位，"
+                            "如 role/email/exp）"
+                        ),
+                    },
+                    "alg": {
+                        "type": "string",
+                        "enum": ["none", "HS256"],
+                    },
+                    "secret": {
+                        "type": "string",
+                        "description": "（HS256 選填）猜測密鑰；留空＝跑內建弱密鑰清單",
+                    },
+                },
+                "required": ["payload", "alg"],
             },
         },
     },
@@ -486,6 +543,7 @@ def build_tool_schemas(
         "run_nuclei",
         "navigate_and_observe",
         "probe_payload_injection",
+        "forge_jwt",
     }
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
@@ -535,6 +593,18 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
         and "url" in clean
     ):
         clean["url"] = redact_url_query_values(str(clean["url"]))
+    # multipart 檔案內容屬探測 payload，持久化只留描述性欄位＋內容長度
+    if tool_name == "replay_request" and isinstance(clean.get("files"), list):
+        clean["files"] = [
+            {
+                "field": f.get("field"),
+                "filename": f.get("filename"),
+                "content_type": f.get("content_type"),
+                "content_length": len(str(f.get("content") or "")),
+            }
+            for f in clean["files"]
+            if isinstance(f, dict)
+        ]
     return clean
 
 
@@ -676,6 +746,13 @@ _PAYLOAD_FAMILIES: dict[str, list[dict[str, Any]]] = {
 }
 
 
+# JWT 偽造用常見弱密鑰清單（jwt_tool/rockyou 精選——工具配備非答案）
+_WEAK_JWT_SECRETS = [
+    "secret", "key", "jwt_secret", "password", "changeme",
+    "123456", "jwt", "mysecret", "secretkey", "token_secret",
+]
+
+
 @dataclass
 class ToolOutcome:
     """單一 tool 執行結果。"""
@@ -770,6 +847,18 @@ class ToolExecutor:
                 return await self._get_response_headers(args.get("url", ""))
             if name == "decode_jwt":
                 return self._decode_jwt(args.get("token", ""))
+            if name == "forge_jwt":
+                if not (
+                    self.scan_job is not None
+                    and self.scan_job.scan_mode == self.scan_job.ScanMode.ACTIVE
+                    and self.scan_job.active_testing_authorized
+                ):
+                    return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+                return self._forge_jwt(
+                    args.get("payload") or {},
+                    str(args.get("alg", "none")),
+                    str(args.get("secret", "")),
+                )
             if name == "run_nuclei":
                 return await self._run_nuclei(
                     args.get("url", ""), args.get("tags", "")
@@ -799,6 +888,7 @@ class ToolExecutor:
                     args.get("method", "GET"),
                     args.get("body"),
                     args.get("store_token_key", ""),
+                    args.get("files"),
                 )
             if name == "report_security_issue":
                 return self._report_security_issue(args)
@@ -1408,6 +1498,7 @@ class ToolExecutor:
         method: str,
         body: dict[str, Any] | None,
         store_token_key: str = "",
+        files: list[dict[str, Any]] | None = None,
     ) -> ToolOutcome:
         """以目前頁面的登入態重放同源請求（帶 session cookie 與 localStorage token）。
 
@@ -1418,6 +1509,8 @@ class ToolExecutor:
 
         安全約束：同源閘（比對 scan_job.origin）＋ deep_mode runtime 再驗；
         method 限 GET／POST（不允許 PUT/DELETE 等破壞性操作）；不跟隨 redirect。
+        files 提供＝multipart/form-data（表單欄位=body；檔案內容限純文字
+        探測內容，每請求上限 2 檔）——上傳面測試（WSTG-BUSL-08）用。
         """
         if self.scan_job is None:
             return ToolOutcome(ok=False, result={"error": "no_scan_context"})
@@ -1434,6 +1527,19 @@ class ToolExecutor:
         method = (method or "GET").upper()
         if method not in ("GET", "POST", "PUT", "PATCH"):
             return ToolOutcome(ok=False, result={"error": "method_not_allowed"})
+
+        # multipart：method 強制 POST；檔案內容限純文字探測（非執行檔本體）
+        upload_files: list[tuple[str, tuple[str, str, str]]] = []
+        if files:
+            method = "POST"
+            for f in files[:2]:
+                if not isinstance(f, dict):
+                    continue
+                field = str(f.get("field") or "file")
+                filename = str(f.get("filename") or "probe.txt")[:120]
+                content = str(f.get("content") or "")[:8000]
+                ctype = str(f.get("content_type") or "text/plain")[:60]
+                upload_files.append((field, (filename, content, ctype)))
 
         parsed = urlparse(url or "")
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -1457,7 +1563,9 @@ class ToolExecutor:
             with httpx.Client(
                 headers=headers, cookies=jar, timeout=10.0, follow_redirects=False
             ) as client:
-                if method == "POST":
+                if upload_files:
+                    r = client.post(url, data=body or {}, files=upload_files)
+                elif method == "POST":
                     r = client.post(url, json=body or {})
                 elif method == "PUT":
                     r = client.put(url, json=body or {})
@@ -1520,6 +1628,59 @@ class ToolExecutor:
         if store_token_key:
             observation["token_stored"] = token_stored
         return ToolOutcome(ok=True, result=observation)
+
+    def _forge_jwt(
+        self, payload: dict[str, Any], alg: str, secret: str
+    ) -> ToolOutcome:
+        """本地偽造 JWT（jwt_tool 方法論）：alg=none 無簽／HS256 弱密鑰清單。
+
+        純本地計算不發請求；token 交回 agent 以 replay_request 驗證接受度。
+        deep_only＋runtime 再驗（run() 分派處）。
+        """
+        import base64
+        import hashlib
+        import hmac
+
+        def _b64e(data: bytes) -> str:
+            return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+        clean_payload = {
+            k: v for k, v in (payload or {}).items() if isinstance(k, str)
+        }
+        tokens: list[dict[str, Any]] = []
+
+        def _build(header: dict[str, Any], sig: str) -> None:
+            segments = [
+                _b64e(json.dumps(header, separators=(",", ":")).encode()),
+                _b64e(json.dumps(clean_payload, separators=(",", ":")).encode()),
+                sig,
+            ]
+            tokens.append(
+                {
+                    "secret_used": header.get("alg", ""),
+                    "token": ".".join(segments),
+                }
+            )
+
+        if alg == "none":
+            _build({"alg": "none", "typ": "JWT"}, "")
+        elif alg == "HS256":
+            secrets = [secret] if secret else _WEAK_JWT_SECRETS
+            for cand in secrets:
+                header = {"alg": "HS256", "typ": "JWT"}
+                signing_input = (
+                    _b64e(json.dumps(header, separators=(",", ":")).encode())
+                    + "."
+                    + _b64e(json.dumps(clean_payload, separators=(",", ":")).encode())
+                )
+                sig = hmac.new(
+                    cand.encode(), signing_input.encode(), hashlib.sha256
+                ).digest()
+                _build(header, _b64e(sig))
+        else:
+            return ToolOutcome(ok=False, result={"error": "unsupported_alg"})
+
+        return ToolOutcome(ok=True, result={"tokens": tokens[:11]})
 
     def _report_security_issue(self, args: dict[str, Any]) -> ToolOutcome:
         """把 agent 觀察到的資安問題組成 security finding（走 probe_sql_injection

@@ -257,6 +257,7 @@ class ToolSchemaTests(TestCase):
             "run_nuclei",
             "navigate_and_observe",
             "probe_payload_injection",
+            "forge_jwt",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -806,6 +807,86 @@ class ProbePayloadInjectionTests(TestCase):
         self.assertEqual(clean["family"], "ssti")
         self.assertEqual(clean["results"][0]["markers_hit"], ["49"])
         self.assertNotIn("payload", json.dumps(clean))
+
+
+class ForgeJwtTests(TestCase):
+    """forge_jwt：本地偽造（none／HS256 弱清單）＋deep_mode 閘。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="forgeuser", password="x")
+        self.scan_job = _make_scan_job(self.user)
+
+    def _executor(self, scan_job=None):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        return ToolExecutor(
+            page=page,
+            screenshot_dir="/tmp/agent",
+            scan_job=scan_job or self.scan_job,
+        )
+
+    def test_passive_mode_is_forbidden(self):
+        executor = self._executor()
+        outcome = asyncio.run(
+            executor.run("forge_jwt", {"payload": {"role": "admin"}, "alg": "none"})
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "not_authorized_mode")
+
+    def test_alg_none_produces_unsigned_token(self):
+        self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
+        self.scan_job.active_testing_authorized = True
+        self.scan_job.save()
+        executor = self._executor(self.scan_job)
+        outcome = asyncio.run(
+            executor.run("forge_jwt", {"payload": {"role": "admin"}, "alg": "none"})
+        )
+        self.assertTrue(outcome.ok)
+        tokens = outcome.result["tokens"]
+        self.assertEqual(len(tokens), 1)
+        self.assertEqual(tokens[0]["token"].count("."), 2)
+        self.assertTrue(tokens[0]["token"].endswith("."))  # 無簽章段
+        self.assertIn("admin", tokens[0]["token"])
+
+    def test_hs256_runs_weak_secret_list(self):
+        self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
+        self.scan_job.active_testing_authorized = True
+        self.scan_job.save()
+        executor = self._executor(self.scan_job)
+        outcome = asyncio.run(
+            executor.run("forge_jwt", {"payload": {"role": "admin"}, "alg": "HS256"})
+        )
+        self.assertTrue(outcome.ok)
+        self.assertEqual(len(outcome.result["tokens"]), 10)
+        # 每支都有非空簽章段且互不相同（不同密鑰）
+        sigs = {t["token"].split(".")[2] for t in outcome.result["tokens"]}
+        self.assertEqual(len(sigs), 10)
+        self.assertNotIn("", sigs)
+
+
+class MultipartRedactTests(TestCase):
+    """replay_request files 參數持久化遮罩：只留描述欄位＋內容長度。"""
+
+    def test_files_content_not_persisted(self):
+        clean = redact_tool_arguments(
+            "replay_request",
+            {
+                "url": "https://example.com/upload",
+                "method": "POST",
+                "files": [
+                    {
+                        "field": "avatar",
+                        "filename": "../evil.txt",
+                        "content": "x" * 5000,
+                        "content_type": "text/plain",
+                    }
+                ],
+            },
+        )
+        dumped = json.dumps(clean)
+        self.assertNotIn("xxxxx", dumped)
+        self.assertEqual(clean["files"][0]["content_length"], 5000)
+        self.assertEqual(clean["files"][0]["filename"], "../evil.txt")
 
 
 class SystemPromptDisciplineTests(TestCase):
