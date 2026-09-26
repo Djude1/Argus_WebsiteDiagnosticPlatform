@@ -105,6 +105,10 @@ M3 特性：思考型、探索深（步數上限會切斷）、行為非決定�
 4. **sqlmap 裸 `--batch` 對空值 `?q=` 兩秒誤判**——`--level=3`
 5. **單 session 塞全部工作必爆**——角色分工＋各乾淨 context
 6. **觀察到 ≠ 落地**——report 紀律（立即報）＋終局提示＋feedback 機制三重保險
+7. **工具進 schema ≠ 角色會用**——新工具需同步改角色提示詞與 `when` 能力目錄
+   （P0-3 prober 連兩輪 0 呼叫才打通：injection 提示詞＋when「家族只有此角色能測」）
+8. **SPA 驗證打前端路由不打 API URL**——API 回 JSON 不渲染；`/#/` hash 路由
+   才是執行現場（XSS 35 輪全滅的另一半根因）
 7. Express serve-index 目錄列表標題是 `listing directory`（非 Apache `Index of /`）——兩種都要認
 
 ## 8. 戰果基準（Juice Shop，黑箱）
