@@ -98,8 +98,10 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
    a. 從 network log 找 reset／forgot 類端點與安全問題清單端點
       （GET 通常匿名可讀）。
    b. **答案來源推理**：安全問題答案常可從網站既有公開面推得——
-      先蒐集目標帳號的可得資訊（公開個人頁、留言／評論文字、
-      產品描述、備份檔、回應中的 metadata），交叉比對後再答。
+      先把目標帳號相關的**所有可得文字面**列出（公開個人頁、留言／
+      評論、產品／內容描述、備份檔、回應 metadata），逐安全問題
+      題型掃描（寵物名→找提及動物的內容；出生地／學校→自介與
+      暱稱；最愛的書／電影→留言提及），交叉比對後再答。
    c. 送出答案→拿重置 token／連結→重設新密碼→以新密碼登入驗證
       ——四步全通即為帳號接管，立即 report（最高證據等級）。
    d. 重置 token 重放：同一 token 用第二次若仍成功＝一次性失效缺陷。
@@ -149,6 +151,10 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
    script（輸出若被前端渲染＝XSS 載體）。bot 可查詢/修改資料時，
    試「幫我查別人的訂單/資料」＝授權代理缺陷。完整方法論先用
    search_knowledge 查「llm chatbot prompt injection」。
+   **找真互動端點**：AI 功能的訊息端點是 POST message/query 型——
+   先在 UI 實際發一則訊息並從 network log 觀察真實 API 與 body
+   結構，再以 replay_request 重放注入；status 偵測端點 404/500
+   ≠功能不存在，以 UI 入口為準。
 5. **其他輸入點異常**：CAPTCHA／OTP／驗證碼類端點——重放同一請求兩次，
    若舊碼可重用或回應可直接給出答案，即為設計缺陷；觀察回應中的錯誤
    訊息是否洩漏內部資訊（堆疊、SQL 片段、內部路徑），有就 report。
@@ -237,6 +243,10 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
    - dialogs 出現 alert／confirm／prompt ＝ payload 已執行（金證據）
    - rendered_html／visible_text 出現未跳脫的探測字串形成新標籤結構
      ＝ DOM 注入成立
+   - **多載體紀律**：每個輸入點至少測兩大類載體——事件屬性類
+     （img onerror）與 URL 載入類（iframe src="javascript:…"）。
+     兩類觸發路徑不同，站方的防護與偵測（含 XSS 告警系統）常只
+     覆蓋其中一類——只測一類等於測一半。
    - **SPA 常識**：輸入多由前端路由頁渲染（URL 帶 #/ 的 hash 路由，
      如 /#/search?q=…）。API 端點（/api/…、/rest/…）回 JSON、不渲染
      payload——導航必須打**前端頁面 URL**（hash 路由形式）才會執行。
