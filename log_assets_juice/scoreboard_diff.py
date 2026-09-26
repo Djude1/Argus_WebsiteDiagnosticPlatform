@@ -21,9 +21,11 @@ PLACEHOLDER = {"Score Board", "Privacy Policy", "Privacy Policy Inspection", "Ma
 
 def _logs() -> list[str]:
     r = subprocess.run(
-        ["docker", "logs", CONTAINER], capture_output=True, text=True, timeout=60
+        ["docker", "logs", CONTAINER],
+        capture_output=True, text=True, timeout=60,
+        stderr=subprocess.STDOUT,  # 時間序混合流（node 輸出走 stderr）
     )
-    return (r.stdout or "").splitlines() + (r.stderr or "").splitlines()
+    return (r.stdout or "").splitlines()
 
 
 def mark() -> None:
