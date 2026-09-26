@@ -90,7 +90,7 @@ sleep 0.5
 echo -e "${RED}${BOLD}[BREACH CONFIRMED]${NC}"
 echo ""
 
-# Phase 5: 生成假 HTML 弱點報告
+# Phase 5: 生成 HTML 弱點報告
 log_report "Compiling cryptographic audit ledger..."
 sleep 0.5
 log_report "Rendering executive dashboard into HTML..."
