@@ -35,7 +35,7 @@ ScanJob(active+authorized)
 authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密）
 自動注入 `auth_idor`／`logic_abuse` prompt——無公開註冊的真實站靠這個。
 
-## 3. 工具清單（ToolExecutor，21 個）
+## 3. 工具清單（ToolExecutor，22 個）
 
 **觀察（bulky，舊快照自動壓縮）**：`get_dom_summary`／`get_visible_text`／
 `get_network_requests`（same-origin XHR/fetch 被動攔截——SPA 端點主要來源）／
@@ -55,6 +55,12 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
   誕生原因：#33/#34 XSS specialist 各 63/62 步 replay_request 0 發現——SPA 的
   HTTP 回應是空殼，「回應含 payload」永遠不成立；XSS 判定必須回到瀏覽器執行。
   邊界：runtime 同源再驗＋deep_mode 再驗（context route 主文件攔截仍是第一層）
+- `probe_payload_injection(url, family∈nosql/ssti/xxe/command/lfi, method, query_param?/
+  body+inject_field?)`——**家族化注入探測**（SQL 以外）：一次跑整組無害 payload
+  （$gt/$ne/$where、{{7*7}} 四型、XXE ENTITY、;echo 標記、路徑穿越 passwd），先打
+  baseline——marker 需「payload 回應出現且 baseline 不出現」才算命中（消回應本含
+  49/root: 雜訊）；帶登入態（與 replay 同憑證源）。誕生原因：#33/#34 ssti/xxe 0
+  觸碰、nosql 1-2 次觸碰——SQL probe 之外的注入面完全沒有探測原語。
 
 **回報/調度**：`report_security_issue`（critical 封頂 high；回報前自問
 「攻擊者現在能做到嗎？證據能重現嗎？」）／`report_ux_issue`／

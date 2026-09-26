@@ -256,6 +256,7 @@ class ToolSchemaTests(TestCase):
             "decode_jwt",
             "run_nuclei",
             "navigate_and_observe",
+            "probe_payload_injection",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -624,6 +625,187 @@ class ProbeSqlInjectionTests(TestCase):
         dumped = json.dumps(outcome.result)
         self.assertNotIn("secret", dumped)
         self.assertNotIn("https://example.com/s", dumped)
+
+
+class ProbePayloadInjectionTests(TestCase):
+    """probe_payload_injection：家族化注入探測——閘門＋baseline 命中判定。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="payuser", password="x")
+        self.scan_job = _make_scan_job(self.user)
+
+    def _deep(self) -> ScanJob:
+        self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
+        self.scan_job.active_testing_authorized = True
+        self.scan_job.save()
+        return self.scan_job
+
+    def _executor(self, scan_job):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        page.evaluate = AsyncMock(return_value="")
+        page.context = MagicMock()
+        page.context.cookies = AsyncMock(return_value=[])
+        return ToolExecutor(page=page, screenshot_dir="/tmp/agent", scan_job=scan_job), page
+
+    def test_passive_mode_is_forbidden(self):
+        executor, _ = self._executor(self.scan_job)
+        with patch("httpx.Client"):
+            outcome = asyncio.run(
+                executor.run(
+                    "probe_payload_injection",
+                    {
+                        "url": "https://example.com/s?q=1",
+                        "family": "ssti",
+                        "method": "GET",
+                        "query_param": "q",
+                    },
+                )
+            )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "not_authorized_mode")
+
+    def test_cross_origin_is_forbidden(self):
+        executor, _ = self._executor(self._deep())
+        outcome = asyncio.run(
+            executor.run(
+                "probe_payload_injection",
+                {
+                    "url": "https://evil.com/s?q=1",
+                    "family": "ssti",
+                    "method": "GET",
+                    "query_param": "q",
+                },
+            )
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "cross_origin_forbidden")
+
+    def test_unknown_family_rejected(self):
+        executor, _ = self._executor(self._deep())
+        outcome = asyncio.run(
+            executor.run(
+                "probe_payload_injection",
+                {
+                    "url": "https://example.com/s?q=1",
+                    "family": "rce",
+                    "method": "GET",
+                    "query_param": "q",
+                },
+            )
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "unknown_family")
+
+    def test_get_without_query_param_rejected(self):
+        executor, _ = self._executor(self._deep())
+        outcome = asyncio.run(
+            executor.run(
+                "probe_payload_injection",
+                {
+                    "url": "https://example.com/s?q=1",
+                    "family": "ssti",
+                    "method": "GET",
+                    "query_param": "missing",
+                },
+            )
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "no_such_query_param")
+
+    def test_post_without_inject_field_rejected(self):
+        executor, _ = self._executor(self._deep())
+        outcome = asyncio.run(
+            executor.run(
+                "probe_payload_injection",
+                {"url": "https://example.com/s", "family": "nosql", "method": "POST"},
+            )
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "missing_inject_field")
+
+    def test_marker_hits_require_baseline_absence(self):
+        """ssti：payload 回應含 49 且 baseline 不含 → markers_hit；baseline 已含則不算。"""
+        executor, _ = self._executor(self._deep())
+
+        class FakeResp:
+            def __init__(self, status, text):
+                self.status_code = status
+                self.text = text
+
+        client = MagicMock()
+        # urlencode 後 {{7*7}} → %7B%7B7*7%7D%7D——以未編碼的 { 判斷 payload URL
+        client.get = MagicMock(
+            side_effect=lambda url: FakeResp(
+                200, "total 49 items" if "%7B%7B7" in url else "plain response"
+            )
+        )
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=client)
+        cm.__exit__ = MagicMock(return_value=False)
+        with patch("httpx.Client", return_value=cm):
+            outcome = asyncio.run(
+                executor.run(
+                    "probe_payload_injection",
+                    {
+                        "url": "https://example.com/s?q=abc",
+                        "family": "ssti",
+                        "method": "GET",
+                        "query_param": "q",
+                    },
+                )
+            )
+        self.assertTrue(outcome.ok)
+        results = outcome.result["results"]
+        self.assertTrue(results)
+        # baseline（q=abc）不含 49 → mustache payload 命中
+        mustache = next(r for r in results if r["kind"] == "mustache")
+        self.assertIn("49", mustache["markers_hit"])
+
+    def test_marker_in_baseline_is_not_a_hit(self):
+        executor, _ = self._executor(self._deep())
+
+        class FakeResp:
+            def __init__(self, status, text):
+                self.status_code = status
+                self.text = text
+
+        client = MagicMock()
+        client.get = MagicMock(return_value=FakeResp(200, "page 49 of results"))
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=client)
+        cm.__exit__ = MagicMock(return_value=False)
+        with patch("httpx.Client", return_value=cm):
+            outcome = asyncio.run(
+                executor.run(
+                    "probe_payload_injection",
+                    {
+                        "url": "https://example.com/s?q=abc",
+                        "family": "ssti",
+                        "method": "GET",
+                        "query_param": "q",
+                    },
+                )
+            )
+        self.assertTrue(outcome.ok)
+        for r in outcome.result["results"]:
+            self.assertEqual(r["markers_hit"], [])
+
+    def test_redact_result_whitelists_fields(self):
+        clean = redact_tool_result(
+            "probe_payload_injection",
+            {
+                "family": "ssti",
+                "baseline": {"status": 200, "body_length": 30},
+                "results": [
+                    {"kind": "mustache", "status": 200, "body_length": 40, "markers_hit": ["49"]},
+                    {"kind": "erb", "error": "ConnectError"},
+                ],
+            },
+        )
+        self.assertEqual(clean["family"], "ssti")
+        self.assertEqual(clean["results"][0]["markers_hit"], ["49"])
+        self.assertNotIn("payload", json.dumps(clean))
 
 
 class SystemPromptDisciplineTests(TestCase):

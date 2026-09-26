@@ -341,6 +341,52 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "probe_payload_injection",
+            "description": (
+                "對一個同源端點做**家族化無害注入探測**（一次跑整組 payload），"
+                "涵蓋 SQL 以外的注入面：nosql（$gt/$ne 操作子）、ssti（模板"
+                " {{7*7}} 類）、xxe（XML 外部實體）、command（;echo 探測標記）、"
+                "lfi（路徑穿越讀系統檔）。回傳每個 payload 的狀態碼／回應長度／"
+                "命中標記（如 49＝模板求值、ARGUSCMDPROBE＝指令執行、root:＝"
+                "讀到 passwd）——**由你**依命中標記判定是否成立，成立時用 "
+                "report_security_issue 附證據回報。GET 給 query_param（其值會被"
+                "換成各 payload），POST 給 body＋inject_field。跨站 URL 會被拒絕。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "完整同源 URL（GET 需已含要注入的 query 參數）",
+                    },
+                    "family": {
+                        "type": "string",
+                        "enum": ["nosql", "ssti", "xxe", "command", "lfi"],
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST"],
+                    },
+                    "query_param": {
+                        "type": "string",
+                        "description": "（GET）URL 中要替換值的參數名",
+                    },
+                    "body": {
+                        "type": "object",
+                        "description": "（POST）JSON body（仿 network log 原始結構）",
+                    },
+                    "inject_field": {
+                        "type": "string",
+                        "description": "（POST）body 中要塞 payload 的欄位名",
+                    },
+                },
+                "required": ["url", "family", "method"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_security_issue",
             "description": (
                 "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
@@ -439,6 +485,7 @@ def build_tool_schemas(
         "replay_request",
         "run_nuclei",
         "navigate_and_observe",
+        "probe_payload_injection",
     }
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
@@ -483,6 +530,7 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
             "probe_unauthorized_access",
             "replay_request",
             "navigate_and_observe",
+            "probe_payload_injection",
         }
         and "url" in clean
     ):
@@ -549,6 +597,26 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
         if raw.get("error"):
             safe_nav["error"] = raw["error"]
         return safe_nav
+    if tool_name == "probe_payload_injection":
+        raw = result or {}
+        safe_probe: dict[str, Any] = {"family": raw.get("family")}
+        if isinstance(raw.get("baseline"), dict):
+            safe_probe["baseline"] = {
+                "status": raw["baseline"].get("status"),
+                "body_length": raw["baseline"].get("body_length"),
+            }
+        safe_probe["results"] = [
+            {
+                k: item.get(k)
+                for k in ("kind", "status", "body_length", "markers_hit", "error")
+                if item.get(k) is not None
+            }
+            for item in raw.get("results", [])
+            if isinstance(item, dict)
+        ]
+        if raw.get("error"):
+            safe_probe["error"] = raw["error"]
+        return safe_probe
     if tool_name != "probe_sql_injection":
         return dict(result or {})
     raw = result or {}
@@ -560,6 +628,52 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
     if raw.get("correlation_id"):
         safe["correlation_id"] = raw["correlation_id"]
     return safe
+
+
+# 家族化注入 payload（無害驗證導向；屬工具配備——payload/字典是給 agent
+# 的工具，非目標特定答案）。markers＝回應文本出現且 baseline 未出現才算命中
+_PAYLOAD_FAMILIES: dict[str, list[dict[str, Any]]] = {
+    "nosql": [
+        {"kind": "gt-empty", "payload": '{"$gt": ""}', "markers": ["MongoError", "BSON"]},
+        {"kind": "ne-null", "payload": '{"$ne": null}', "markers": ["MongoError", "BSON"]},
+        {
+            "kind": "where-true",
+            "payload": '{"$where": "1==1"}',
+            "markers": ["MongoError", "$where"],
+        },
+    ],
+    "ssti": [
+        {"kind": "mustache", "payload": "{{7*7}}", "markers": ["49"]},
+        {"kind": "dollar-brace", "payload": "${7*7}", "markers": ["49"]},
+        {"kind": "erb", "payload": "<%= 7*7 %>", "markers": ["49"]},
+        {"kind": "hash-brace", "payload": "#{7*7}", "markers": ["49"]},
+    ],
+    "xxe": [
+        {
+            "kind": "entity-file",
+            "payload": (
+                '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM '
+                '"file:///etc/hostname">]><r>&x;</r>'
+            ),
+            "markers": ["SAXParseException", "lxml", "XML parser error"],
+        },
+    ],
+    "command": [
+        {"kind": "semicolon", "payload": ";echo ARGUSCMDPROBE", "markers": ["ARGUSCMDPROBE"]},
+        {"kind": "pipe", "payload": "|echo ARGUSCMDPROBE", "markers": ["ARGUSCMDPROBE"]},
+        {"kind": "backtick", "payload": "`echo ARGUSCMDPROBE`", "markers": ["ARGUSCMDPROBE"]},
+        {"kind": "and-chain", "payload": "&&echo ARGUSCMDPROBE", "markers": ["ARGUSCMDPROBE"]},
+    ],
+    "lfi": [
+        {"kind": "dotdot-passwd", "payload": "../../../../etc/passwd", "markers": ["root:"]},
+        {"kind": "abs-passwd", "payload": "/etc/passwd", "markers": ["root:"]},
+        {
+            "kind": "filter-wrapper",
+            "payload": "php://filter/convert.base64-encode/resource=index",
+            "markers": ["PD9", "PGh0"],
+        },
+    ],
+}
 
 
 @dataclass
@@ -664,6 +778,15 @@ class ToolExecutor:
                 return await self._take_screenshot()
             if name == "navigate_and_observe":
                 return await self._navigate_and_observe(args.get("url", ""))
+            if name == "probe_payload_injection":
+                return await self._probe_payload_injection(
+                    args.get("url", ""),
+                    str(args.get("family", "")),
+                    str(args.get("method", "GET")).upper(),
+                    str(args.get("query_param", "")),
+                    args.get("body"),
+                    str(args.get("inject_field", "")),
+                )
             if name == "report_ux_issue":
                 return self._report_ux_issue(args)
             if name == "probe_sql_injection":
@@ -1014,6 +1137,167 @@ class ToolExecutor:
             },
         )
 
+    async def _session_credentials(self) -> tuple[str, list[dict[str, Any]]]:
+        """抽瀏覽器當前登入態（localStorage token＋cookies），重放/注入共用。"""
+        try:
+            token = await self.page.evaluate(
+                "() => { const keys = ['token','jwt','access_token','auth_token','id_token'];"
+                " for (const k of keys) { const v = localStorage.getItem(k);"
+                " if (v) return v.replace(/^\"|\"$/g, ''); } return ''; }"
+            )
+        except Exception:  # noqa: BLE001
+            token = ""
+        try:
+            cookies = await self.page.context.cookies()
+        except Exception:  # noqa: BLE001
+            cookies = []
+        return str(token or ""), cookies
+
+    def _http_headers_for(
+        self, token: str, cookies: list[dict[str, Any]]
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        headers = {"User-Agent": settings.ARGUS_SCANNER_USER_AGENT}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        jar = {
+            c["name"]: c["value"] for c in cookies if c.get("name") and c.get("value")
+        }
+        return headers, jar
+
+    async def _probe_payload_injection(
+        self,
+        url: str,
+        family: str,
+        method: str,
+        query_param: str,
+        body: dict[str, Any] | None,
+        inject_field: str,
+    ) -> ToolOutcome:
+        """家族化無害注入探測（nosql/ssti/xxe/command/lfi），一次跑整組 payload。
+
+        設計：
+        - 先打一次 baseline（原 URL／原 body），markers 必須「payload 回應出現
+          且 baseline 不出現」才算命中——消掉回應本來就含 49／root: 類雜訊
+        - 帶登入態（與 replay_request 同憑證來源），貼近真實攻擊條件
+        - 工具只回觀察（每 payload 的狀態/長度/命中標記）；成立與否由 agent
+          判定後 report_security_issue——維持觀察/判定分離契約
+        安全：同源閘＋deep_mode runtime 再驗（同 replay_request 三層）。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import (
+            parse_qsl,
+            urlencode,
+            urlparse,
+            urlsplit,
+            urlunsplit,
+        )
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+
+        if family not in _PAYLOAD_FAMILIES:
+            return ToolOutcome(ok=False, result={"error": "unknown_family"})
+        method = method or "GET"
+        if method not in ("GET", "POST"):
+            return ToolOutcome(ok=False, result={"error": "method_not_allowed"})
+
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
+            )
+
+        parts = urlsplit(url)
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        if method == "GET":
+            if not query_param or not any(k == query_param for k, _ in query_pairs):
+                return ToolOutcome(ok=False, result={"error": "no_such_query_param"})
+
+            def _target_url(payload: str) -> str:
+                new_qs = [
+                    (k, payload) if k == query_param else (k, v) for k, v in query_pairs
+                ]
+                return urlunsplit(parts._replace(query=urlencode(new_qs)))
+        else:
+            if not isinstance(body, dict) or not inject_field:
+                return ToolOutcome(ok=False, result={"error": "missing_inject_field"})
+
+        token, cookies = await self._session_credentials()
+        headers, jar = self._http_headers_for(token, cookies)
+
+        import httpx
+
+        def _send(target: str, m: str, b: dict[str, Any] | None) -> dict[str, Any]:
+            with httpx.Client(
+                headers=headers, cookies=jar, timeout=10.0, follow_redirects=False
+            ) as client:
+                if m == "POST":
+                    r = client.post(target, json=b or {})
+                else:
+                    r = client.get(target)
+            return {"status": r.status_code, "text": r.text or ""}
+
+        def _run_family() -> dict[str, Any]:
+            if method == "GET":
+                base = _send(url, "GET", None)
+            else:
+                base = _send(url, "POST", body)
+            base_text = base["text"]
+            results = []
+            for p in _PAYLOAD_FAMILIES[family]:
+                if method == "GET":
+                    target, send_body = _target_url(str(p["payload"])), None
+                    m = "GET"
+                else:
+                    send_body = dict(body)
+                    send_body[inject_field] = p["payload"]
+                    target, m = url, "POST"
+                try:
+                    resp = _send(target, m, send_body)
+                except Exception as exc:  # noqa: BLE001 — 單 payload 失敗不中斷整組
+                    results.append(
+                        {"kind": p["kind"], "error": exc.__class__.__name__}
+                    )
+                    continue
+                markers_hit = [
+                    mk
+                    for mk in p["markers"]
+                    if mk in resp["text"] and mk not in base_text
+                ]
+                results.append(
+                    {
+                        "kind": p["kind"],
+                        "status": resp["status"],
+                        "body_length": len(resp["text"]),
+                        "markers_hit": markers_hit,
+                    }
+                )
+            return {
+                "family": family,
+                "baseline": {"status": base["status"], "body_length": len(base_text)},
+                "results": results,
+            }
+
+        try:
+            observation = await asyncio.to_thread(_run_family)
+        except Exception as exc:  # noqa: BLE001
+            return ToolOutcome(
+                ok=False, result={"error": f"probe_failed:{exc.__class__.__name__}"}
+            )
+        return ToolOutcome(ok=True, result=observation)
+
     async def _take_screenshot(self) -> ToolOutcome:
         self._screenshot_counter += 1
         from pathlib import Path
@@ -1163,34 +1447,13 @@ class ToolExecutor:
                 result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
             )
 
-        # 取得目前 session 的憑證：cookie（傳統 session）＋ localStorage 的
-        # token（SPA JWT 慣例鍵名）。取不到屬正常（未登入），匿名重放仍可執行。
-        try:
-            token = await self.page.evaluate(
-                "() => { const keys = ['token','jwt','access_token','auth_token','id_token'];"
-                " for (const k of keys) { const v = localStorage.getItem(k);"
-                " if (v) return v.replace(/^\"|\"$/g, ''); } return ''; }"
-            )
-        except Exception:
-            token = ""
-        token = str(token or "")
-        try:
-            cookies = await self.page.context.cookies()
-        except Exception:
-            cookies = []
+        # 取得目前 session 的憑證（與 probe_payload_injection 共用）
+        token, cookies = await self._session_credentials()
 
         import httpx
 
         def _fetch() -> dict[str, Any]:
-            headers = {"User-Agent": settings.ARGUS_SCANNER_USER_AGENT}
-            if token:
-                # Bearer 優先；站方若用其他 scheme，cookie 仍會帶上
-                headers["Authorization"] = f"Bearer {token}"
-            jar = {
-                c["name"]: c["value"]
-                for c in cookies
-                if c.get("name") and c.get("value")
-            }
+            headers, jar = self._http_headers_for(token, cookies)
             with httpx.Client(
                 headers=headers, cookies=jar, timeout=10.0, follow_redirects=False
             ) as client:
