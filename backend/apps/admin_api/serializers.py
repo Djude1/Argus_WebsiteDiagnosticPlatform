@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import LoginEvent
@@ -46,9 +47,11 @@ class AdminUserListSerializer(serializers.Serializer):
 class AdminCoinTransactionSerializer(serializers.ModelSerializer):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
     scan_origin = serializers.SerializerMethodField()
-    plan_name = serializers.CharField(source="plan.name", read_only=True, default=None)
+    plan_name = serializers.CharField(
+        source="plan.name", read_only=True, allow_null=True, default=None,
+    )
     admin_actor_username = serializers.CharField(
-        source="admin_actor.username", read_only=True, default=None,
+        source="admin_actor.username", read_only=True, allow_null=True, default=None,
     )
 
     class Meta:
@@ -59,7 +62,7 @@ class AdminCoinTransactionSerializer(serializers.ModelSerializer):
             "admin_actor_username", "note", "created_at",
         ]
 
-    def get_scan_origin(self, obj):
+    def get_scan_origin(self, obj) -> str | None:
         return obj.scan_job.origin if obj.scan_job_id else None
 
 
@@ -80,12 +83,14 @@ class AdminUserDetailSerializer(AdminUserListSerializer):
     is_active = serializers.BooleanField()
     is_superuser = serializers.BooleanField()
 
+    @extend_schema_field(AdminWalletSummarySerializer(allow_null=True))
     def get_wallet(self, obj):
         w = getattr(obj, "coin_wallet", None)
         if not w:
             return None
         return AdminWalletSummarySerializer(w).data
 
+    @extend_schema_field(AdminCoinTransactionSerializer(many=True))
     def get_recent_transactions(self, obj):
         w = getattr(obj, "coin_wallet", None)
         if not w:
@@ -102,6 +107,15 @@ class AdjustCoinSerializer(serializers.Serializer):
         if value == 0:
             raise serializers.ValidationError("delta 不可為 0。")
         return value
+
+
+class AdminReviewOfficialResponseSerializer(serializers.Serializer):
+    """評論的官方回覆（AdminReviewSerializer.get_response 的輸出結構）。"""
+
+    body = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    author_username = serializers.CharField(allow_null=True)
 
 
 class AdminReviewSerializer(serializers.ModelSerializer):
@@ -137,6 +151,7 @@ class AdminReviewSerializer(serializers.ModelSerializer):
         u = obj.user
         return f"{u.first_name} {u.last_name}".strip() or u.username
 
+    @extend_schema_field(AdminReviewOfficialResponseSerializer(allow_null=True))
     def get_response(self, obj):
         try:
             response = obj.official_response
@@ -183,10 +198,10 @@ class AdminScanJobSerializer(serializers.ModelSerializer):
 
 class AdminAuditLogSerializer(serializers.ModelSerializer):
     actor_username = serializers.CharField(
-        source="admin_actor.username", read_only=True, default=None,
+        source="admin_actor.username", read_only=True, allow_null=True, default=None,
     )
     target_username = serializers.CharField(
-        source="target_user.username", read_only=True, default=None,
+        source="target_user.username", read_only=True, allow_null=True, default=None,
     )
     action_label = serializers.CharField(source="get_action_display", read_only=True)
 
@@ -307,7 +322,7 @@ class AdminVerifiedDomainSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     method_label = serializers.CharField(source="get_method_display", read_only=True)
     admin_actor_username = serializers.CharField(
-        source="admin_actor.username", read_only=True, default=None,
+        source="admin_actor.username", read_only=True, allow_null=True, default=None,
     )
     is_effectively_verified = serializers.BooleanField(read_only=True)
 

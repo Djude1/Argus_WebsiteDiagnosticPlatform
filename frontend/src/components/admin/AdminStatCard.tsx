@@ -3,7 +3,27 @@
 // 原本定義在 AdminPages.jsx 內部，概覽與評論治理都要用卻無法重用；抽出後
 // 兩處共用同一份，樣式不會再各自漂移。
 
-export function AdminStatCard({ label, value, hint, tone = "cyan", icon: Icon, hero = false, spark }) {
+import type { ComponentType, ReactNode } from "react";
+
+type AdminStatCardProps = {
+  label: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: string;
+  icon?: ComponentType;
+  hero?: boolean;
+  spark?: ReactNode;
+};
+
+export function AdminStatCard({
+  label,
+  value,
+  hint,
+  tone = "cyan",
+  icon: Icon,
+  hero = false,
+  spark,
+}: AdminStatCardProps) {
   return (
     <div className={`admin-stat-card tone-${tone}${hero ? " hero" : ""}`}>
       <div className="admin-stat-head">
@@ -21,15 +41,22 @@ export function AdminStatCard({ label, value, hint, tone = "cyan", icon: Icon, h
   );
 }
 
-export function AdminSparkline({ series, dataKey, color = "#0ea5e9", height = 40 }) {
+type AdminSparklineProps = {
+  series: Array<Record<string, number | string | null | undefined>> | null | undefined;
+  dataKey: string;
+  color?: string;
+  height?: number;
+};
+
+export function AdminSparkline({ series, dataKey, color = "#0ea5e9", height = 40 }: AdminSparklineProps) {
   if (!series || series.length < 2) return null;
   const w = 240;
-  const values = series.map((row) => row[dataKey] || 0);
+  const values = series.map((row) => Number(row[dataKey]) || 0);
   const maxV = Math.max(...values, 1);
   const minV = Math.min(...values, 0);
   const range = maxV - minV || 1;
   const step = w / (series.length - 1);
-  const yFor = (v) => height - ((v - minV) / range) * height;
+  const yFor = (v: number) => height - ((v - minV) / range) * height;
   const linePoints = values.map((v, i) => `${i * step},${yFor(v)}`).join(" ");
   const areaPoints = `0,${height} ${linePoints} ${w},${height}`;
   const gradId = `admin-spark-${dataKey}`;

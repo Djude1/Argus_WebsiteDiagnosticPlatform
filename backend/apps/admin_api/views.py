@@ -21,13 +21,19 @@ from django.db.models import (
 )
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import permissions, status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from apps.admin_api import system_metrics
 from apps.admin_api.models import AdminAuditLog, Announcement, log_admin_action
 from apps.admin_api.permissions import IsSuperuser
+from apps.admin_api.schema import (
+    AdminUserDetailResponseSerializer,
+    list_schema,
+    query_param,
+)
 from apps.admin_api.serializers import (
     AdjustCoinSerializer,
     AdminAuditLogSerializer,
@@ -332,6 +338,17 @@ def dashboard(request):
     })
 
 
+@list_schema(
+    name="AdminOrderListResponse",
+    key="orders",
+    child=AdminPurchaseOrderSerializer,
+    ordering=ORDERS_ORDERING,
+    filters=[
+        query_param("q", "模糊搜尋 buyer_email／姓名／公司／統編／使用者名稱"),
+        query_param("status", "訂單狀態"),
+        query_param("invoice_type", "發票類型"),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def orders_list(request):
@@ -362,6 +379,13 @@ def orders_list(request):
     })
 
 
+@list_schema(
+    name="AdminUserListResponse",
+    key="users",
+    child=AdminUserListSerializer,
+    ordering=USERS_ORDERING,
+    filters=[query_param("q", "模糊搜尋 username／email／姓名")],
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def users_list(request):
@@ -385,6 +409,7 @@ def users_list(request):
     })
 
 
+@extend_schema(responses=AdminUserDetailResponseSerializer)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def user_detail(request, user_id: int):
@@ -430,6 +455,16 @@ def user_detail(request, user_id: int):
     return Response(data)
 
 
+@extend_schema(
+    request=AdjustCoinSerializer,
+    responses={201: inline_serializer(
+        name="AdminAdjustCoinResponse",
+        fields={
+            "transaction": AdminCoinTransactionSerializer(),
+            "wallet_balance": serializers.IntegerField(),
+        },
+    )},
+)
 @api_view(["POST"])
 @permission_classes([permissions.IsAdminUser])
 def adjust_coin(request, user_id: int):
@@ -450,6 +485,10 @@ def adjust_coin(request, user_id: int):
     }, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(responses=inline_serializer(
+    name="AdminLoginEventsResponse",
+    fields={"events": AdminLoginEventSerializer(many=True)},
+))
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def user_login_events(request, user_id: int):
@@ -460,6 +499,21 @@ def user_login_events(request, user_id: int):
     return Response({"events": AdminLoginEventSerializer(events, many=True).data})
 
 
+@extend_schema(methods=["GET"], responses=inline_serializer(
+    name="AdminUserSubscriptionResponse",
+    fields={"subscription": AdminUserSubscriptionSerializer(allow_null=True)},
+))
+@extend_schema(
+    methods=["POST"],
+    request=AdminSubscriptionActionSerializer,
+    responses={200: inline_serializer(
+    name="AdminUserSubscriptionResponse",
+    fields={"subscription": AdminUserSubscriptionSerializer(allow_null=True)},
+), 201: inline_serializer(
+    name="AdminUserSubscriptionResponse",
+    fields={"subscription": AdminUserSubscriptionSerializer(allow_null=True)},
+)},
+)
 @api_view(["GET", "POST"])
 @permission_classes([permissions.IsAdminUser])
 def user_subscription(request, user_id: int):
@@ -519,6 +573,10 @@ def user_subscription(request, user_id: int):
     )
 
 
+@extend_schema(responses=inline_serializer(
+    name="AdminSubscriptionPlansResponse",
+    fields={"plans": AdminSubscriptionPlanSerializer(many=True)},
+))
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def subscription_plans(request):
@@ -527,6 +585,19 @@ def subscription_plans(request):
     return Response({"plans": AdminSubscriptionPlanSerializer(plans, many=True).data})
 
 
+@list_schema(
+    name="AdminTransactionListResponse",
+    key="transactions",
+    child=AdminCoinTransactionSerializer,
+    ordering=TRANSACTIONS_ORDERING,
+    filters=[
+        query_param(
+            "kind", "交易種類（CoinTransaction.kind）",
+            enum=list(CoinTransaction.Kind.values),
+        ),
+        query_param("user_id", "只看單一使用者的交易", type_=int),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def transactions_list(request):
@@ -591,6 +662,23 @@ def _reviews_with_status(queryset=None):
     )
 
 
+@list_schema(
+    name="AdminReviewListResponse",
+    key="reviews",
+    child=AdminReviewSerializer,
+    filters=[
+        query_param("pending", "只看待處理（1／true／yes）"),
+        query_param("status", "評論狀態 published／hidden"),
+        query_param("reported", "只看被檢舉（1／true／yes）"),
+    ],
+    extra_fields={
+        "overall_total": serializers.IntegerField(),
+        "avg_rating": serializers.FloatField(),
+        "pending_count": serializers.IntegerField(),
+        "reported_count": serializers.IntegerField(),
+        "hidden_count": serializers.IntegerField(),
+    },
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def reviews_list(request):
@@ -630,6 +718,10 @@ def reviews_list(request):
     })
 
 
+@extend_schema(
+    methods=["POST"], request=AdminReplyReviewSerializer, responses=AdminReviewSerializer,
+)
+@extend_schema(methods=["DELETE"], request=None, responses={204: None})
 @api_view(["POST", "DELETE"])
 @permission_classes([permissions.IsAdminUser])
 def reply_review(request, review_id: int):
@@ -676,6 +768,7 @@ def reply_review(request, review_id: int):
     return Response(AdminReviewSerializer(review).data)
 
 
+@extend_schema(request=AdminModerateReviewSerializer, responses=AdminReviewSerializer)
 @api_view(["PATCH"])
 @permission_classes([permissions.IsAdminUser])
 def moderate_review(request, review_id: int):
@@ -717,6 +810,18 @@ def moderate_review(request, review_id: int):
     return Response(AdminReviewSerializer(review).data)
 
 
+@list_schema(
+    name="AdminAuditLogListResponse",
+    key="logs",
+    child=AdminAuditLogSerializer,
+    filters=[
+        query_param(
+            "action", "稽核動作（AdminAuditLog.action）",
+            enum=list(AdminAuditLog.Action.values),
+        ),
+        query_param("actor_id", "只看單一管理員的操作", type_=int),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([IsSuperuser])
 def audit_log(request):
@@ -741,6 +846,17 @@ def audit_log(request):
     })
 
 
+@list_schema(
+    name="AdminScanListResponse",
+    key="scans",
+    child=AdminScanJobSerializer,
+    ordering=SCANS_ORDERING,
+    filters=[
+        query_param("q", "模糊搜尋 origin／使用者名稱／email"),
+        query_param("status", "掃描狀態"),
+        query_param("user", "依使用者 id 精確篩選（q 是模糊搜尋，會撈到同名的人）", type_=int),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def scans_list(request):
@@ -776,6 +892,18 @@ def scans_list(request):
     })
 
 
+@extend_schema(
+    responses=inline_serializer(
+        name="AdminScanDetailResponse",
+        fields={
+            "scan": AdminScanJobSerializer(),
+            "warning_summary": serializers.JSONField(),
+            "top_actions": serializers.JSONField(),
+            "category_scores": serializers.JSONField(),
+            "error_message": serializers.CharField(),
+        },
+    ),
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def scan_detail(request, scan_id: int):
@@ -795,6 +923,17 @@ def scan_detail(request, scan_id: int):
     })
 
 
+@list_schema(
+    name="AdminDomainListResponse",
+    key="domains",
+    child=AdminVerifiedDomainSerializer,
+    filters=[
+        query_param("q", "模糊搜尋網域／使用者"),
+        query_param(
+            "status", "驗證狀態", enum=list(VerifiedDomain.Status.values),
+        ),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAdminUser])
 def domains_list(request):
@@ -820,6 +959,7 @@ def domains_list(request):
     })
 
 
+@extend_schema(request=DomainOverrideSerializer, responses=AdminVerifiedDomainSerializer)
 @api_view(["POST"])
 @permission_classes([permissions.IsAdminUser])
 def domain_override(request, domain_id: int):
@@ -862,6 +1002,16 @@ def domain_override(request, domain_id: int):
     return Response(AdminVerifiedDomainSerializer(verified_domain).data)
 
 
+@extend_schema(
+    request=None,
+    responses=inline_serializer(
+        name="AdminScanCancelResponse",
+        fields={
+            "status": serializers.CharField(),
+            "refunded": serializers.IntegerField(help_text="退回的 coin；沒有待退預扣時為 0"),
+        },
+    ),
+)
 @api_view(["POST"])
 @permission_classes([permissions.IsAdminUser])
 def scan_cancel(request, scan_id: int):
@@ -898,6 +1048,16 @@ def scan_cancel(request, scan_id: int):
     })
 
 
+@extend_schema(
+    request=None,
+    responses=inline_serializer(
+        name="AdminScanRequeueResponse",
+        fields={
+            "status": serializers.CharField(),
+            "charged": serializers.IntegerField(help_text="依產品決策重排不重複扣點，恆為 0"),
+        },
+    ),
+)
 @api_view(["POST"])
 @permission_classes([permissions.IsAdminUser])
 def scan_requeue(request, scan_id: int):
@@ -1202,6 +1362,10 @@ def system_settings(request):
     })
 
 
+@extend_schema(responses=inline_serializer(
+    name="ActiveAnnouncementsResponse",
+    fields={"announcements": AnnouncementSerializer(many=True)},
+))
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def active_announcements(request):
@@ -1215,6 +1379,13 @@ def active_announcements(request):
     return Response({"announcements": AnnouncementSerializer(result, many=True).data})
 
 
+@extend_schema(methods=["GET"], responses=inline_serializer(
+    name="AnnouncementListResponse",
+    fields={"announcements": AnnouncementSerializer(many=True)},
+))
+@extend_schema(
+    methods=["POST"], request=AnnouncementSerializer, responses={201: AnnouncementSerializer},
+)
 @api_view(["GET", "POST"])
 @permission_classes([IsSuperuser])
 def announcements_admin(request):
@@ -1228,6 +1399,9 @@ def announcements_admin(request):
     return Response(AnnouncementSerializer(obj).data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(methods=["GET"], responses=AnnouncementSerializer)
+@extend_schema(methods=["PATCH"], request=AnnouncementSerializer, responses=AnnouncementSerializer)
+@extend_schema(methods=["DELETE"], responses={204: None})
 @api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsSuperuser])
 def announcement_detail(request, pk: int):

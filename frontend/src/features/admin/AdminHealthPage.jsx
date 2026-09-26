@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { AdminAlertIcon } from "../../components/admin/AdminIcons.jsx";
 import { AdminScanChain } from "../../components/admin/AdminScanChain.jsx";
-import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates.jsx";
+import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates";
 import { AdminSystemStats } from "../../components/admin/AdminSystemStats.jsx";
 import { formatDateTime } from "../../shared/formatters.js";
 

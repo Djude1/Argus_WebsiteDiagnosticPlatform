@@ -90,6 +90,9 @@ INSTALLED_APPS = [
     "apps.admin_api",
     "apps.content",
     "apps.insights",
+    # OpenAPI schema 產生器：前端的 API 型別由它產出的 schema 生成，
+    # 欄位對不上會變成前端的編譯錯誤而不是執行期的靜默失效
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -264,6 +267,7 @@ CACHES = {
 }
 
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
@@ -516,3 +520,22 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Argus 系統 <no-reply@arg
 # （admin_api 提供 CRUD endpoint）。`django.contrib.admin` 仍留在 INSTALLED_APPS：
 # 提供 LogEntry 等基礎設施並避免動到既有 migration，但已無對外 URL、無法存取。
 # 舊 jazzmin 設定常數已於 W4 移除（套件已 uv remove）
+
+
+# ---------------------------------------------------------------- OpenAPI
+# schema 只用來產生前端型別，不對外公開端點（下方 SERVE_* 全關）。
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Argus API",
+    "DESCRIPTION": "Argus 網站診斷平台的內部 API；此 schema 僅供前端產生 TypeScript 型別。",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # 不註冊 /api/schema/ 之類的對外路由——schema 以 manage.py spectacular 離線產生
+    "SERVE_PUBLIC": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    # 回應欄位一律必填（原因見 config/spectacular_hooks.py）；第一個是套件預設的 hook，要保留
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.spectacular_hooks.mark_response_fields_required",
+    ],
+    "SCHEMA_PATH_PREFIX": "/api",
+}

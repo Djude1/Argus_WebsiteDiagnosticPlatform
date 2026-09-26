@@ -4,7 +4,6 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { api } from "../../api";
 import {
   AdminOrdersIcon,
-  AdminReviewsIcon,
   AdminScansIcon,
   AdminTokensIcon,
   AdminTransactionsIcon,
@@ -12,8 +11,8 @@ import {
   AdminUsersIcon,
 } from "../../components/admin/AdminIcons.jsx";
 import { AdminMiniChart } from "../../components/admin/AdminMiniChart.jsx";
-import { AdminSparkline, AdminStatCard } from "../../components/admin/AdminStatCard.jsx";
-import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates.jsx";
+import { AdminSparkline, AdminStatCard } from "../../components/admin/AdminStatCard";
+import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates";
 import { STATUS_LABELS } from "../../shared/AppShared.jsx";
 import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
 

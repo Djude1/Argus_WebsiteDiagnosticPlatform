@@ -190,7 +190,8 @@ const DIALOG_FOCUSABLE_SELECTOR = [
 ].join(",");
 
 function useDialogFocus(isOpen, onClose) {
-  const dialogRef = useRef(null);
+  // JSDoc 型別只給 TS 呼叫端推導用（AdminModal.tsx），不影響執行
+  const dialogRef = useRef(/** @type {HTMLElement | null} */ (null));
   const closeRef = useRef(onClose);
   const previousFocusRef = useRef(null);
   closeRef.current = onClose;

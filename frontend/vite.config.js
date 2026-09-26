@@ -45,4 +45,12 @@ export default defineConfig({
   envDir: "..",
   // 預設 VITE_ 前綴外，額外把 GOOGLE_OAUTH_CLIENT_ID 暴露給前端，避免與後端重複設定
   envPrefix: ["VITE_", "GOOGLE_OAUTH_CLIENT_ID"],
+  test: {
+    // jsdom：元件測試要有 DOM；node 環境跑不了 render()
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./vitest.setup.ts"],
+    css: false,
+    include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx}"],
+  },
 });

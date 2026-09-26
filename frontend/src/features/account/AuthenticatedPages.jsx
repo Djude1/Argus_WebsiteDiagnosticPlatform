@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -21,7 +21,6 @@ import {
   StackedBar,
   apiErrorMessage,
   useConfirmDialogs,
-  useDialogFocus,
 } from "../../shared/AppShared.jsx";
 import {
   ChartIcon,
@@ -433,24 +432,6 @@ function DashboardPage() {
 // ============================================================
 // History 頁（同網址歷次分數）
 // ============================================================
-
-function Sparkline({ values }) {
-  if (!values.length) return <span className="text-slate-400">—</span>;
-  const w = 120;
-  const h = 32;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const step = values.length > 1 ? w / (values.length - 1) : 0;
-  const points = values
-    .map((v, i) => `${i * step},${h - ((v - min) / range) * (h - 6) - 3}`)
-    .join(" ");
-  return (
-    <svg width={w} height={h} className="sparkline">
-      <polyline points={points} fill="none" strokeWidth="2" />
-    </svg>
-  );
-}
 
 function HistoryPage() {
   const navigate = useNavigate();
@@ -1498,7 +1479,6 @@ function SettingsPage() {
   const navigate = useNavigate();
   const wallet = useArgusStore((s) => s.wallet);
   const setToken = useArgusStore((s) => s.setToken);
-  const [data, setData] = useState(null);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
   const [firstName, setFirstName] = useState("");
@@ -1520,7 +1500,6 @@ function SettingsPage() {
       setFirstName(r.data.first_name || "");
       setLastName(r.data.last_name || "");
     }).catch(() => {});
-    api.get("/dashboard/").then((r) => setData(r.data)).catch(() => {});
     fetchMySubscription()
       .then((r) => setSubscription(r.subscription || null))
       .catch(() => setSubscription(null));
@@ -1529,9 +1508,6 @@ function SettingsPage() {
   const balance = wallet?.balance ?? 0;
   const purchased = wallet?.total_purchased_ntd ?? 0;
   const scansUsed = wallet?.total_scans_used ?? 0;
-  const totalFindings = data
-    ? Object.values(data.severity_totals || {}).reduce((sum, n) => sum + n, 0)
-    : 0;
   const isEmailAccount = meData?.auth_provider === "email";
 
   async function handleSaveProfile(e) {

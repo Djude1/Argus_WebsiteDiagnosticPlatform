@@ -14,7 +14,7 @@ from apps.admin_api.models import AdminAuditLog
 from apps.billing.models import CoinTransaction, CoinWallet
 from apps.billing.services import purchase_plan
 from apps.reviews.models import PlatformReview, ReviewReport, ReviewResponse
-from apps.scans.models import Finding, Page, ScanJob
+from apps.scans.models import Finding, Page, ScanJob, VerifiedDomain
 
 
 def _make_user(username, *, staff=False, **extra):
@@ -1146,3 +1146,358 @@ class SystemHealthTests(APITestCase):
         )
         queue = next(c for c in self._health()["checks"] if c["key"] == "queue")
         self.assertEqual(queue["status"], "bad")
+
+
+class AdminOpenAPISchemaTests(APITestCase):
+    """鎖定後台列表端點的 OpenAPI 契約。
+
+    前端型別是從這份 schema 產生的，schema 錯了前端的型別就跟著錯，而且是
+    「編得過、跑起來也不會壞」的那種錯。這裡擋兩件實際發生過的事：
+
+    1. 端點沒被標註 → response 是空的，前端拿不到任何型別（admin_api 全是
+       function-based view，drf-spectacular 推導不出來）。
+    2. 信封與列表項目 serializer 撞名 → drf-spectacular 讓後者覆蓋前者，陣列
+       元素的 `$ref` 指回信封自己，型別變成無意義的遞迴結構，不報錯。
+       （`AdminUserListSerializer` 去掉 `Serializer` 後綴正好等於 `AdminUserList`。）
+    """
+
+    # 端點 → (信封 schema, 陣列欄位, 該欄位元素應指向的 schema)
+    LIST_CONTRACTS = {
+        "/api/admin/scans/": ("AdminScanListResponse", "scans", "AdminScanJob"),
+        "/api/admin/users/": ("AdminUserListResponse", "users", "AdminUserList"),
+        "/api/admin/transactions/": (
+            "AdminTransactionListResponse", "transactions", "AdminCoinTransaction",
+        ),
+        "/api/admin/audit-log/": ("AdminAuditLogListResponse", "logs", "AdminAuditLog"),
+        "/api/admin/domains/": ("AdminDomainListResponse", "domains", "AdminVerifiedDomain"),
+        "/api/admin/orders/": ("AdminOrderListResponse", "orders", "AdminPurchaseOrder"),
+        "/api/admin/reviews/": ("AdminReviewListResponse", "reviews", "AdminReview"),
+    }
+
+    @classmethod
+    def setUpTestData(cls):
+        from drf_spectacular.generators import SchemaGenerator
+
+        cls.schema = SchemaGenerator().get_schema(request=None, public=True)
+
+    def _envelope(self, path):
+        content = self.schema["paths"][path]["get"]["responses"]["200"]["content"]
+        return content["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
+
+    def test_list_endpoints_declare_their_response(self):
+        for path, (envelope, _, _) in self.LIST_CONTRACTS.items():
+            with self.subTest(path=path):
+                self.assertEqual(self._envelope(path), envelope)
+
+    def test_list_items_point_at_the_item_serializer_not_the_envelope(self):
+        schemas = self.schema["components"]["schemas"]
+        for path, (envelope, key, item) in self.LIST_CONTRACTS.items():
+            with self.subTest(path=path):
+                prop = schemas[envelope]["properties"][key]
+                ref = prop["items"]["$ref"].rsplit("/", 1)[-1]
+                self.assertNotEqual(ref, envelope, "陣列元素指回信封自己＝名稱撞到了")
+                self.assertEqual(ref, item)
+
+    def test_envelopes_carry_pagination_fields(self):
+        schemas = self.schema["components"]["schemas"]
+        for path, (envelope, _, _) in self.LIST_CONTRACTS.items():
+            with self.subTest(path=path):
+                props = schemas[envelope]["properties"]
+                for field in ("page", "total_pages", "total"):
+                    self.assertIn(field, props)
+
+    def test_scans_list_declares_the_user_filter(self):
+        """`?user=` 沒被宣告過一次，前端因此靜默不篩選；這裡把它釘住。"""
+        params = self.schema["paths"]["/api/admin/scans/"]["get"]["parameters"]
+        by_name = {p["name"]: p for p in params}
+        self.assertIn("user", by_name)
+        self.assertEqual(by_name["user"]["schema"]["type"], "integer")
+
+    def test_ordering_enum_matches_the_view_whitelist(self):
+        """schema 的 ordering enum 必須等於 `_apply_ordering` 實際接受的集合。"""
+        from apps.admin_api.views import SCANS_ORDERING
+
+        params = self.schema["paths"]["/api/admin/scans/"]["get"]["parameters"]
+        ordering = next(p for p in params if p["name"] == "ordering")
+        expected = {k for k in SCANS_ORDERING} | {f"-{k}" for k in SCANS_ORDERING}
+        self.assertEqual(set(ordering["schema"]["enum"]), expected)
+
+    def test_scan_job_serializer_exposes_user_id(self):
+        """少了 user_id，後台掃描列表連不到使用者頁——這也發生過。"""
+        props = self.schema["components"]["schemas"]["AdminScanJob"]["properties"]
+        self.assertIn("user_id", props)
+
+    def test_scan_control_endpoints_declare_their_response(self):
+        """cancel／requeue 的回傳前端會直接讀（退款金額、是否扣點），也要進 schema。"""
+        schemas = self.schema["components"]["schemas"]
+        for path, schema_name, field in (
+            ("/api/admin/scans/{scan_id}/cancel/", "AdminScanCancelResponse", "refunded"),
+            ("/api/admin/scans/{scan_id}/requeue/", "AdminScanRequeueResponse", "charged"),
+        ):
+            with self.subTest(path=path):
+                content = self.schema["paths"][path]["post"]["responses"]["200"]["content"]
+                ref = content["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
+                self.assertEqual(ref, schema_name)
+                self.assertIn(field, schemas[schema_name]["properties"])
+
+
+class AdminResponseMatchesSchemaTests(APITestCase):
+    """實際回傳的欄位必須等於 schema 宣告的欄位。
+
+    AdminOpenAPISchemaTests 只檢查 schema 本身；這裡打真的端點，拿回傳的鍵
+    跟 schema 比。user_detail 這類「serializer 輸出後在 view 裡再附加欄位」
+    的端點，schema 是手寫描述（schema.py），兩邊最容易漂移：view 多加一個欄位
+    而描述沒跟上，前端型別就少一個欄位；反過來則是前端以為有、實際沒有。
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        cls.schemas = schema["components"]["schemas"]
+
+    def setUp(self):
+        self.admin = _make_user("schema-admin", staff=True)
+        self.target = _make_user("schema-target")
+        self.client.force_authenticate(self.admin)
+        _make_scan(self.target)
+
+    def _props(self, name):
+        return set(self.schemas[name]["properties"])
+
+    def _assert_keys(self, payload, schema_name):
+        self.assertEqual(
+            set(payload), self._props(schema_name),
+            f"{schema_name}：實際回傳與 schema 宣告的欄位不同",
+        )
+        # 實際回傳 null 的欄位，schema 必須宣告可為 null；否則前端型別是 string，
+        # 程式照著寫 `.length`／`.toUpperCase()` 就會在執行期出錯
+        props = self.schemas[schema_name]["properties"]
+        for key, value in payload.items():
+            if value is None:
+                self.assertTrue(
+                    self._nullable(props[key]),
+                    f"{schema_name}.{key}：實際回傳 null，但 schema 未宣告 nullable",
+                )
+
+    @staticmethod
+    def _nullable(prop):
+        if prop.get("nullable"):
+            return True
+        return any(sub.get("nullable") for sub in prop.get("oneOf", []) + prop.get("allOf", []))
+
+    def test_user_detail(self):
+        # 先調一次點數，讓 recent_transactions 有內容可比對
+        adjust = self.client.post(
+            f"/api/admin/users/{self.target.pk}/adjust-coin/", {"delta": 50, "note": "t"},
+        )
+        self.assertEqual(adjust.status_code, 201)
+        self._assert_keys(adjust.data, "AdminAdjustCoinResponse")
+        self._assert_keys(adjust.data["transaction"], "AdminCoinTransaction")
+
+        data = self.client.get(f"/api/admin/users/{self.target.pk}/").data
+        self._assert_keys(data, "AdminUserDetailResponse")
+        self._assert_keys(data["wallet"], "AdminWalletSummary")
+        self._assert_keys(data["ai_usage"], "AdminAiUsage")
+        self._assert_keys(data["recent_scans"][0], "AdminScanJob")
+        self._assert_keys(data["recent_transactions"][0], "AdminCoinTransaction")
+
+    def test_user_list_item(self):
+        data = self.client.get("/api/admin/users/").data
+        self._assert_keys(data, "AdminUserListResponse")
+        self._assert_keys(data["users"][0], "AdminUserList")
+
+    def test_scan_list_and_detail(self):
+        data = self.client.get("/api/admin/scans/").data
+        self._assert_keys(data, "AdminScanListResponse")
+        self._assert_keys(data["scans"][0], "AdminScanJob")
+        detail = self.client.get(f"/api/admin/scans/{data['scans'][0]['id']}/").data
+        self._assert_keys(detail, "AdminScanDetailResponse")
+
+    def test_login_events_subscription_and_plans(self):
+        self._assert_keys(
+            self.client.get(f"/api/admin/users/{self.target.pk}/login-events/").data,
+            "AdminLoginEventsResponse",
+        )
+        self._assert_keys(
+            self.client.get(f"/api/admin/users/{self.target.pk}/subscription/").data,
+            "AdminUserSubscriptionResponse",
+        )
+        self._assert_keys(
+            self.client.get("/api/admin/subscriptions/plans/").data,
+            "AdminSubscriptionPlansResponse",
+        )
+
+    def test_reviews_reply_and_moderate(self):
+        review = PlatformReview.objects.create(user=self.target, rating=4, comment="不錯")
+
+        # 尚無官方回覆：response 為 null，schema 必須允許
+        listing = self.client.get("/api/admin/reviews/").data
+        self._assert_keys(listing, "AdminReviewListResponse")
+        self._assert_keys(listing["reviews"][0], "AdminReview")
+
+        replied = self.client.post(f"/api/admin/reviews/{review.pk}/reply/", {"reply": "感謝回饋"})
+        self.assertEqual(replied.status_code, 200)
+        self._assert_keys(replied.data, "AdminReview")
+        self._assert_keys(replied.data["response"], "AdminReviewOfficialResponse")
+
+        moderated = self.client.patch(
+            f"/api/admin/reviews/{review.pk}/moderate/", {"status": "hidden"}, format="json",
+        )
+        self.assertEqual(moderated.status_code, 200)
+        self._assert_keys(moderated.data, "AdminReview")
+
+    def test_transactions_list(self):
+        self.client.post(
+            f"/api/admin/users/{self.target.pk}/adjust-coin/", {"delta": 10, "note": "t"},
+        )
+        data = self.client.get("/api/admin/transactions/").data
+        self._assert_keys(data, "AdminTransactionListResponse")
+        self._assert_keys(data["transactions"][0], "AdminCoinTransaction")
+
+    def test_transaction_kind_filter_enum_matches_the_model(self):
+        """交易類型篩選的 enum 必須等於 CoinTransaction.Kind——前端下拉選單由它推導。"""
+        from drf_spectacular.generators import SchemaGenerator
+
+        from apps.billing.models import CoinTransaction
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        params = schema["paths"]["/api/admin/transactions/"]["get"]["parameters"]
+        kind = next(p for p in params if p["name"] == "kind")
+        self.assertEqual(set(kind["schema"]["enum"]), set(CoinTransaction.Kind.values))
+
+    def test_domains_list_and_override(self):
+        # 待驗證、尚未用任何方法驗證過的網域：method 為空，最容易踩到 null
+        domain = VerifiedDomain.objects.create(user=self.target, domain="example.org")
+        data = self.client.get("/api/admin/domains/").data
+        self._assert_keys(data, "AdminDomainListResponse")
+        self._assert_keys(data["domains"][0], "AdminVerifiedDomain")
+
+        approved = self.client.post(
+            f"/api/admin/domains/{domain.pk}/override/", {"approve": True, "note": "人工確認"},
+        )
+        self.assertEqual(approved.status_code, 200)
+        self._assert_keys(approved.data, "AdminVerifiedDomain")
+
+    def test_audit_log(self):
+        # 稽核紀錄僅超級管理員可看；先做一次會寫入稽核的操作
+        self.client.post(
+            f"/api/admin/users/{self.target.pk}/adjust-coin/", {"delta": 5, "note": "t"},
+        )
+        superuser = _make_user("schema-root", staff=True, is_superuser=True)
+        self.client.force_authenticate(superuser)
+        data = self.client.get("/api/admin/audit-log/").data
+        self._assert_keys(data, "AdminAuditLogListResponse")
+        self._assert_keys(data["logs"][0], "AdminAuditLog")
+
+    def test_audit_action_filter_enum_matches_the_model(self):
+        """稽核動作篩選的 enum 必須等於 AdminAuditLog.Action——前端下拉選單由它推導。"""
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        params = schema["paths"]["/api/admin/audit-log/"]["get"]["parameters"]
+        action = next(p for p in params if p["name"] == "action")
+        self.assertEqual(set(action["schema"]["enum"]), set(AdminAuditLog.Action.values))
+
+    def test_announcements(self):
+        superuser = _make_user("schema-ann-root", staff=True, is_superuser=True)
+        self.client.force_authenticate(superuser)
+        created = self.client.post(
+            "/api/admin/announcements/",
+            {"title": "維護", "content": "今晚維護", "type": "temporary", "active_days": 3},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        self._assert_keys(created.data, "Announcement")
+
+        listing = self.client.get("/api/admin/announcements/").data
+        self._assert_keys(listing, "AnnouncementListResponse")
+        self._assert_keys(listing["announcements"][0], "Announcement")
+
+        patched = self.client.patch(
+            f"/api/admin/announcements/{created.data['id']}/", {"is_active": False}, format="json",
+        )
+        self.assertEqual(patched.status_code, 200)
+        self._assert_keys(patched.data, "Announcement")
+
+        self._assert_keys(
+            self.client.get("/api/admin/announcements/active/").data, "ActiveAnnouncementsResponse",
+        )
+
+    def test_cms_list_endpoints_return_items_envelope(self):
+        """CMS 的 list 覆寫成 {"items": [...]}，schema 必須照實描述（原本描述成純陣列）。"""
+        for path, schema_name in (
+            ("/api/admin/cms/plans/", "PricingPlanListResponse"),
+            ("/api/admin/cms/features/", "ProjectFeatureListResponse"),
+            ("/api/admin/cms/team/", "TeamMemberListResponse"),
+            ("/api/admin/cms/releases/", "AppReleaseListResponse"),
+            ("/api/admin/cms/milestones/", "ProjectMilestoneListResponse"),
+        ):
+            with self.subTest(path=path):
+                self._assert_keys(self.client.get(path).data, schema_name)
+
+    def test_plan_list_exposes_coin_per_page(self):
+        """coin_per_page＝五維全選時一頁的費用，必須與計費本身的公式一致。"""
+        from django.conf import settings as dj_settings
+
+        from apps.billing.services import estimate_scan_cost
+        from apps.scans.models import ALL_CATEGORIES
+
+        data = self.client.get("/api/admin/cms/plans/").data
+        self.assertEqual(data["coin_per_page"], estimate_scan_cost(1))
+        self.assertEqual(
+            data["coin_per_page"], len(ALL_CATEGORIES) * dj_settings.ARGUS_COIN_PER_CATEGORY,
+        )
+
+    def test_plan_create_requires_code(self):
+        """前端表單曾漏掉 code，導致新增方案一律 400；鎖定這個必填條件讓前端對得上。"""
+        payload = {"name": "測試", "price_ntd": 100, "coin_amount": 100}
+        missing = self.client.post("/api/admin/cms/plans/", payload, format="json")
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("code", missing.data)
+        created = self.client.post(
+            "/api/admin/cms/plans/", {**payload, "code": "probe-plan"}, format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        self._assert_keys(created.data, "PricingPlanWrite")
+
+
+
+class CmsProtectedDeleteTests(APITestCase):
+    """刪除仍被引用（PROTECT 外鍵）的項目時，要回可讀的 409，而不是 500。
+
+    PurchaseOrder.plan 是 PROTECT：有訂單的方案刪不掉。原本 ProtectedError 沒被處理，
+    管理員看到的是 500 伺服器錯誤。
+    """
+
+    def setUp(self):
+        from apps.billing.models import PricingPlan, PurchaseOrder
+
+        self.admin = _make_user("cms-admin", staff=True, is_superuser=True)
+        self.client.force_authenticate(self.admin)
+        self.plan = PricingPlan.objects.create(
+            code="protected", name="p", price_ntd=100, coin_amount=100,
+        )
+        PurchaseOrder.objects.create(
+            user=_make_user("cms-buyer"), plan=self.plan, price_ntd=100, coin_amount=100,
+        )
+
+    def test_delete_referenced_plan_returns_409_with_guidance(self):
+        response = self.client.delete(f"/api/admin/cms/plans/{self.plan.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("停用", response.data["detail"])
+
+    def test_plan_still_exists_and_no_audit_log_written(self):
+        from apps.billing.models import PricingPlan
+
+        self.client.delete(f"/api/admin/cms/plans/{self.plan.pk}/")
+        self.assertTrue(PricingPlan.objects.filter(pk=self.plan.pk).exists())
+        self.assertFalse(AdminAuditLog.objects.filter(target_object_repr__startswith="delete").exists())
+
+    def test_unreferenced_plan_still_deletes(self):
+        from apps.billing.models import PricingPlan
+
+        free = PricingPlan.objects.create(code="free", name="f", price_ntd=0, coin_amount=10)
+        response = self.client.delete(f"/api/admin/cms/plans/{free.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

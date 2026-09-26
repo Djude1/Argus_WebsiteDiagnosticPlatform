@@ -3,16 +3,16 @@ import { NavLink } from "react-router-dom";
 
 import { api } from "../../api";
 import { AdminOrdersIcon } from "../../components/admin/AdminIcons.jsx";
-import { AdminModal } from "../../components/admin/AdminModal.jsx";
-import { AdminPagination } from "../../components/admin/AdminPagination.jsx";
+import { AdminModal } from "../../components/admin/AdminModal";
+import { AdminPagination } from "../../components/admin/AdminPagination";
 import {
   AdminEmptyState,
   AdminErrorState,
   AdminSkeleton,
-} from "../../components/admin/AdminStates.jsx";
-import { AdminSortableTh } from "../../components/admin/AdminSortableTh.jsx";
+} from "../../components/admin/AdminStates";
+import { AdminSortableTh } from "../../components/admin/AdminSortableTh";
 import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
-import { useListQuery } from "../../shared/useListQuery.js";
+import { useListQuery } from "../../shared/useListQuery";
 
 // 訂單管理。
 //

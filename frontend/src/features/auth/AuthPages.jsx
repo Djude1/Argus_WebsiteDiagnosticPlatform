@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
-import { apiErrorMessage } from "../../shared/AppShared.jsx";
 
 function RequireAuth({ children }) {
   const accessToken = useArgusStore((state) => state.accessToken);

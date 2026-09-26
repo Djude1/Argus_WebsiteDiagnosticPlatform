@@ -4,6 +4,8 @@
 // 錯誤則是整頁被一行字取代且沒有重試出口，使用者只能重新整理。這三個元件把狀態
 // 收斂成可預期的樣子，並讓錯誤永遠留有下一步。
 
+import type { ReactNode } from "react";
+
 /**
  * 骨架。variant：
  *   table  — 表格列（用 rows 控制筆數）
@@ -11,7 +13,13 @@
  *   detail — 詳情頁的區塊
  * 高度刻意貼近真實內容，避免資料載入後版面位移。
  */
-export function AdminSkeleton({ variant = "table", rows = 6, label = "載入中" }) {
+type AdminSkeletonProps = {
+  variant?: "table" | "card" | "detail";
+  rows?: number;
+  label?: string;
+};
+
+export function AdminSkeleton({ variant = "table", rows = 6, label = "載入中" }: AdminSkeletonProps) {
   const items = Array.from({ length: rows }, (_, index) => index);
   return (
     <div className={`admin-skeleton is-${variant}`} role="status" aria-live="polite">
@@ -55,6 +63,16 @@ export function AdminSkeleton({ variant = "table", rows = 6, label = "載入中"
  *   篩選後無結果：資料存在只是被篩掉了，給「清除篩選」的出口
  * 混為一談會讓人以為資料不見了。
  */
+type AdminEmptyStateProps = {
+  title: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  /** 與 onAction 同時存在才會顯示按鈕 */
+  actionLabel?: string;
+  onAction?: () => void;
+  tone?: string;
+};
+
 export function AdminEmptyState({
   title,
   description,
@@ -62,7 +80,7 @@ export function AdminEmptyState({
   actionLabel,
   onAction,
   tone = "neutral",
-}) {
+}: AdminEmptyStateProps) {
   return (
     <div className={`admin-empty-state tone-${tone}`}>
       {icon && <span className="admin-empty-state-icon" aria-hidden="true">{icon}</span>}
@@ -81,7 +99,14 @@ export function AdminEmptyState({
  * 錯誤狀態。預設是「區塊級」而非整頁級：一個面板載入失敗不該讓整頁消失，
  * 其他還拿得到的資訊仍應留在畫面上。onRetry 存在時一定顯示重試鍵。
  */
-export function AdminErrorState({ message, detail, onRetry, compact = false }) {
+type AdminErrorStateProps = {
+  message?: ReactNode;
+  detail?: ReactNode;
+  onRetry?: () => void;
+  compact?: boolean;
+};
+
+export function AdminErrorState({ message, detail, onRetry, compact = false }: AdminErrorStateProps) {
   return (
     <div className={`admin-error-state ${compact ? "is-compact" : ""}`} role="alert">
       <p className="admin-error-state-title">{message || "載入失敗"}</p>

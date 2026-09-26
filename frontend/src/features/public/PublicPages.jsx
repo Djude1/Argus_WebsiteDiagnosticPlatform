@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../../api";
@@ -765,6 +765,8 @@ function useInsightTool(endpoint) {
 }
 
 function FreeToolsPage() {
+  // 導流 CTA「登入建立完整掃描」要用；先前漏宣告，按鈕點了會丟 ReferenceError
+  const navigate = useNavigate();
   const [speedForm, setSpeedForm] = useState({
     url: "",
     authorization_confirmed: false,

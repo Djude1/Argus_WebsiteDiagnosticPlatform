@@ -11,8 +11,11 @@ import { useSearchParams } from "react-router-dom";
 //
 // 只有「非預設值」才寫進網址，避免乾淨的初始狀態拖著一長串 ?page=1&q=&status=。
 
-function readParams(searchParams, defaults) {
-  const result = {};
+function readParams<T extends Record<string, string | number>>(
+  searchParams: URLSearchParams,
+  defaults: T,
+): T {
+  const result: Record<string, string | number> = {};
   for (const [key, fallback] of Object.entries(defaults)) {
     const raw = searchParams.get(key);
     if (raw === null) {
@@ -24,21 +27,25 @@ function readParams(searchParams, defaults) {
       result[key] = raw;
     }
   }
-  return result;
+  return result as T;
 }
 
 /**
- * @param defaults 各參數的預設值，例如
- *        { page: 1, q: "", status: "", ordering: "-created_at" }
- * @returns {{
- *   params: object,              // 目前生效的值（已套用預設）
- *   setParam: (key, value) => void,
- *   setParams: (patch) => void,  // 一次改多個
- *   resetFilters: () => void,    // 回到全預設
- *   hasFilters: boolean,         // 是否有任何非預設值（分頁不算）
- * }}
+ * `defaults` 同時是「預設值」與「這個列表認得哪些參數」的唯一宣告。
+ *
+ * 型別上把它綁成泛型，`params` 與 `setParam` 的 key 都只能是 defaults 裡有的鍵——
+ * 這正是先前 `?user=` 靜默失效的成因：參數沒列進 defaults，hook 讀不到、
+ * 列表不套用篩選，但畫面看起來完全正常。現在拼錯或漏加會是編譯錯誤。
  */
-export function useListQuery(defaults) {
+export function useListQuery<T extends Record<string, string | number>>(
+  defaults: T,
+): {
+  params: T;
+  setParam: <K extends keyof T>(key: K, value: T[K]) => void;
+  setParams: (patch: Partial<T>) => void;
+  resetFilters: () => void;
+  hasFilters: boolean;
+} {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const params = useMemo(
@@ -48,11 +55,11 @@ export function useListQuery(defaults) {
     [searchParams, JSON.stringify(defaults)],
   );
 
-  const setParams = useCallback((patch) => {
+  const setParams = useCallback((patch: Partial<T>) => {
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       for (const [key, value] of Object.entries(patch)) {
-        const fallback = defaults[key];
+        const fallback = defaults[key as keyof T];
         // 與預設相同就從網址移除，網址只保留「使用者實際改過的東西」
         if (value === fallback || value === "" || value === null || value === undefined) {
           next.delete(key);
@@ -70,7 +77,12 @@ export function useListQuery(defaults) {
   }, [setSearchParams, JSON.stringify(defaults)]);
 
   const setParam = useCallback(
-    (key, value) => setParams({ [key]: value }),
+    // 計算屬性名在 TS 會被推成 { [x: string]: T[K] }，與 Partial<T> 不重疊，
+    // 因此先經 Partial<Record<keyof T, T[K]>> 再窄化，而不是粗暴轉 unknown
+    <K extends keyof T>(key: K, value: T[K]) => {
+      const patch = { [key]: value } as Partial<Record<keyof T, T[K]>>;
+      setParams(patch as Partial<T>);
+    },
     [setParams],
   );
 
@@ -80,7 +92,7 @@ export function useListQuery(defaults) {
 
   const hasFilters = useMemo(
     () => Object.entries(params).some(
-      ([key, value]) => key !== "page" && value !== defaults[key],
+      ([key, value]) => key !== "page" && value !== defaults[key as keyof T],
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [params, JSON.stringify(defaults)],
@@ -93,7 +105,7 @@ export function useListQuery(defaults) {
  * 切換排序方向。同一欄位再點一次就反向；換欄位時預設降冪
  * （後台大多數欄位——金額、分數、問題數——使用者要看的是最大的那幾筆）。
  */
-export function nextOrdering(current, field) {
+export function nextOrdering(current: string, field: string): string {
   if (current === `-${field}`) return field;
   if (current === field) return `-${field}`;
   return `-${field}`;

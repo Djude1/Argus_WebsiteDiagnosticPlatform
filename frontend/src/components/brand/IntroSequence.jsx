@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import brandLogo from "../../assets/brand-logo.webp";
 
@@ -145,7 +145,7 @@ function IntroSequence({ onComplete }) {
       octx.drawImage(imgRef, 0, 0, off.width, off.height);
       let data;
       try { data = octx.getImageData(0, 0, off.width, off.height).data; }
-      catch (e) { buildFallback(); return; }
+      catch { buildFallback(); return; }
       const w = off.width, h = off.height;
       const cornerIdx = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + w - 1) * 4];
       let tCount = 0;

@@ -21,6 +21,7 @@ React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意
 - `cms_views.py`：`cms/(features|team|releases|plans)` 寫入端點（ModelViewSet）
 - `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_moderate` / `review_delete` / `user_toggle_staff` / `domain_override` / `scan_control` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
 - `serializers.py`：輸出欄位 **whitelist**
+- `schema.py`：OpenAPI 標註工具（`list_schema()` / `query_param()`），前端型別由它產生的 schema 生成
 
 ## 重點
 - 調點數一律走 `billing.services.admin_adjust`，**禁止**直接改 `CoinWallet`。
@@ -34,6 +35,31 @@ React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意
 - **排序必須做在資料庫層**：分頁是 server side（`PAGE_SIZE=25`），只排當頁會讓管理員誤以為看到的是全域最大的幾筆。
 - **必須用白名單**：直接把查詢參數丟進 `order_by()` 等於開放任意欄位與關聯走訪。白名單外的值退回預設，不報錯。
 - `ScanJob.duration_sec` **不可排序**：它是 serializer 由 `started_at`／`completed_at` 現算的，資料庫無此欄位。
+
+## OpenAPI 標註（前端型別的來源）
+
+本模組全是 function-based view（`@api_view`），drf-spectacular **推導不出回傳型別**，
+沒標註的端點在 schema 裡是空的 `content`，前端就拿不到任何型別。列表端點一律用
+`schema.py` 的 `@list_schema(...)` 標註回傳信封與查詢參數。
+
+- **裝飾器順序**：`@list_schema` / `@extend_schema` 必須放在 **`@api_view` 之上**（最外層）。
+  放在下面不會報錯，schema 只是靜默地照樣空白。
+- **信封名稱一律 `…Response` 結尾**：drf-spectacular 會去掉 serializer 的 `Serializer`
+  後綴，`AdminUserListSerializer` → `AdminUserList`。信封若也叫這個名字，後者會覆蓋前者，
+  陣列元素的 `$ref` 指回信封自己——型別變成無意義的遞迴結構，而且不報錯。
+- 改了 serializer 或篩選參數後，要重新產生前端型別（指令見 `frontend/CLAUDE.md`）。
+- 非列表端點直接用 `@extend_schema(request=None, responses=inline_serializer(...))`；目前已標註 `scan_detail`、`scan_cancel`（`refunded`）、`scan_requeue`（`charged`）、`user_detail`、`adjust_coin`、`user_login_events`、`user_subscription`（GET／POST 分開標註）、`subscription_plans`、`reply_review`（POST／DELETE 分開）、`moderate_review`、`domain_override`；`domains` 的 `status` 篩選帶 `VerifiedDomain.Status` enum；`audit-log` 的 `action` 篩選帶 `AdminAuditLog.Action` enum。
+- **CMS ViewSet（`cms_views.py`）的 `list` 回傳 `{"items": [...]}` 而非純陣列**，drf-spectacular 推導不出來，已用 `_items_list_schema()` 逐一覆寫描述；方案列表另附 `coin_per_page`（＝`billing.services.estimate_scan_cost(1)`，即五維全選時一頁的費用），供後台試算成本——前端不得自行寫死每頁 coin 數（曾因寫死成 1 導致成本高估 10 倍）。
+- **CMS 刪除仍被 PROTECT 外鍵引用的項目回 409**（例：有訂單的購點方案），訊息引導改為停用；原本 `ProtectedError` 未處理會變成 500。
+- 公告端點（`announcements/`、`announcements/<id>/`、`announcements/active/`）已依 HTTP 方法分別標註；PATCH 由 drf-spectacular 自動產生全欄位選填的 `PatchedAnnouncementRequest`。
+- **篩選參數對應 model choices 時要帶 `enum=`**（例：交易 `kind` 用 `enum=list(CoinTransaction.Kind.values)`），前端型別才會是完整的聯集而不是 `string`；由契約測試比對 enum 與 model 一致。
+- **view 在 serializer 輸出後再附加欄位**（如 `user_detail` 附加 `ai_usage`／`recent_scans`／`scans_total`）：serializer 描述不到，要在 `schema.py` 另寫文件用 serializer（`AdminUserDetailResponseSerializer`），改 view 時一起改。
+- **`SerializerMethodField` 要標型別**：簡單值用回傳型別註記（`-> str | None`）；回傳巢狀 serializer 用 `@extend_schema_field(...)`。沒標的會變成 `string`／`unknown`。
+- **`source="x.y"` 搭配 `default=None` 的欄位必須加 `allow_null=True`**：關聯不存在時實際回傳 `null`，沒宣告的話 schema 寫 `string`，前端型別就是錯的（2026-09-26 修正 5 處）。
+- 回應 schema 的欄位一律標為必填（`config/spectacular_hooks.py`）：DRF 序列化 model instance 時一定輸出每個可讀欄位，drf-spectacular 預設卻會把「model 有 default」的欄位標成選填。
+- `AdminResponseMatchesSchemaTests` 打實際端點：**回傳的鍵集合必須等於 schema 欄位**，且**實際為 null 的欄位 schema 必須宣告 nullable**——手寫描述與 view 漂移、漏 `allow_null` 都會在這裡失敗。
+- 契約由 `tests.py` 的 `AdminOpenAPISchemaTests` 鎖定：端點有宣告回傳、陣列元素不指回信封、
+  `ordering` enum 等於 `_apply_ordering` 的白名單、`?user=` 與 `user_id` 都在。
 
 ## 掃描處置（cancel / requeue）
 

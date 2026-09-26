@@ -19,7 +19,6 @@ import "reactflow/dist/style.css";
 import { api, fetchVerifiedDomains } from "../../api";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
-import NavActions from "../../components/navigation/NavActions.jsx";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import FixOutputSection from "../../components/scans/FixOutputSection.jsx";

@@ -1,0 +1,33 @@
+{
+  // 漸進式導入：allowJs + checkJs=false，既有 .jsx 一律不檢查，
+  // 逐檔改名為 .ts／.tsx 才納入型別檢查。這樣不會一次噴出上千個錯誤而卡住。
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
+
+    "allowJs": true,
+    "checkJs": false,
+
+    // 嚴格模式全開。放寬只會讓型別變成裝飾品——先前兩次靜默失效
+    // （?user= 篩選沒生效、s.user_id 欄位不存在）正是 strict 會擋下的東西。
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+
+    // TypeScript 7 移除了 baseUrl，paths 一律用相對路徑
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "vite.config.js", "vitest.setup.ts"]
+}
