@@ -4,7 +4,6 @@ Start-Sleep -Seconds 1
 Write-Host "[!] FIREWALL DETECTED. INITIATING BYPASS PROTOCOL..." -ForegroundColor Yellow
 Start-Sleep -Seconds 1
 
-# 產生一個帶有動態數值的假進度條
 for ($i = 1; $i -le 100; $i++) {
     $hash = (New-Guid).ToString().Substring(0,18).ToUpper()
     $status = "DECRYPTING HASH: $hash"
