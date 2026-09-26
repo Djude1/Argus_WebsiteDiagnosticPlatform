@@ -38,7 +38,6 @@ for ($i = 0; $i -le 100; $i += (Get-Random -Min 1 -Max 5)) {
     $Hash = (New-Guid).Guid.Substring(0, 16).ToUpper()
     Update-HackerProgress $Activity1 $i "Current Hash: 0x$Hash... [1240/1400 keys tried]"
     
-    # 模擬偶爾的輸出以增加真實感
     if ($i -eq 50) { Write-HackerHost "  > Identified weak nonce pattern..." "Cyan" }
     Start-Sleep -Milliseconds (Get-Random -Min 30 -Max 120)
 }
