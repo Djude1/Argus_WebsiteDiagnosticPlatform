@@ -204,6 +204,11 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
    - dialogs 出現 alert／confirm／prompt ＝ payload 已執行（金證據）
    - rendered_html／visible_text 出現未跳脫的探測字串形成新標籤結構
      ＝ DOM 注入成立
+   - **SPA 常識**：輸入多由前端路由頁渲染（URL 帶 #/ 的 hash 路由，
+     如 /#/search?q=…）。API 端點（/api/…、/rest/…）回 JSON、不渲染
+     payload——導航必須打**前端頁面 URL**（hash 路由形式）才會執行。
+     不確定站台的 hash 路由長相時，先在站內操作一次該功能（type_text
+     ＋click 送出），從 page.url 觀察 URL 形式再組 payload URL。
 3. 純輸入框型（無對應 URL 參數）：type_text 填入探測字串、觸發送出
    （click 送出鈕或輸入框 Enter），再以 get_page_html／get_visible_text
    檢查渲染後結果。
