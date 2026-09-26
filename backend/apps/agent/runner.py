@@ -93,7 +93,19 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
 4. 登入繞過：登入端點本身以 replay_request 送標準的 SQL injection 登入繞過
    探測值（如信箱欄填 ' OR 1=1-- 之類的無害查詢型 payload）——若回應異常
    成功（回傳 token／登入成功），即為登入繞過漏洞，report 時附請求與回應。
-5. 完成、或已系統性覆蓋以上後呼叫 finish 附短總結。
+5. **密碼重置鏈（帳號接管，OWASP WSTG-ATHN-09 方法論）**：若目標有
+   忘記密碼／安全問題流程，走完整鏈驗證：
+   a. 從 network log 找 reset／forgot 類端點與安全問題清單端點
+      （GET 通常匿名可讀）。
+   b. **答案來源推理**：安全問題答案常可從網站既有公開面推得——
+      先蒐集目標帳號的可得資訊（公開個人頁、留言／評論文字、
+      產品描述、備份檔、回應中的 metadata），交叉比對後再答。
+   c. 送出答案→拿重置 token／連結→重設新密碼→以新密碼登入驗證
+      ——四步全通即為帳號接管，立即 report（最高證據等級）。
+   d. 重置 token 重放：同一 token 用第二次若仍成功＝一次性失效缺陷。
+   優先對「你自己註冊的測試帳號」走通全鏈證明流程缺陷；對他人
+   帳號只在答案已從公開資訊推得時驗證，不猜測爆破。
+6. 完成、或已系統性覆蓋以上後呼叫 finish 附短總結。
 
 注意：寫入型測試先用**你自己的**資源 id——登入回應或 whoami 類端點通常會
 回傳你帳號的 id 與購物車／資源 id（例如 bid 欄位），用那個值，不要猜；
@@ -130,8 +142,9 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
    訊息是否洩漏內部資訊（堆疊、SQL 片段、內部路徑），有就 report。
 5. 完成或已系統性覆蓋後 finish 附短總結。
 
-限制：payload 一律用無害查詢型（alert/print 級），不要嘗試刪除、修改
-資料的 payload；只對本站同源操作。"""
+限制：payload 限無害顯示型（alert()/print()/console.log 級，alert 為業界
+XSS 驗證標準訊號，優先用），不要嘗試刪除、修改資料的 payload；
+只對本站同源操作。"""
 
 LOGIC_ABUSE_AGENT_PROMPT = """【鐵律：每次驗證成功的下一個動作就是 report_security_issue，
 不是繼續下一個測試——未回報的發現等於不存在。】
@@ -205,8 +218,8 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
 1. 收集輸入點：get_network_requests 找帶 ?query 參數的 same-origin URL
    （搜尋、篩選、排序類），get_dom_summary 找頁面輸入框。
 2. 反射／DOM 型：把無害探測字串放進輸入點組成完整 URL（如
-   <img src=x onerror=print(1)>、<iframe src=javascript:print(1)>
-   的 URL 編碼），用 navigate_and_observe 導航過去：
+   <img src=x onerror=alert(1)>、<iframe src=javascript:alert(1)>
+   的 URL 編碼——業界 XSS 驗證標準 payload），用 navigate_and_observe 導航過去：
    - dialogs 出現 alert／confirm／prompt ＝ payload 已執行（金證據）
    - rendered_html／visible_text 出現未跳脫的探測字串形成新標籤結構
      ＝ DOM 注入成立
@@ -224,7 +237,10 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
    或渲染 DOM 中未跳脫位置的片段）。
 6. 覆蓋完所有輸入點後 finish 附總結（含未完成項與原因）。
 
-限制：無害 payload（print/alert 級）；只對本站同源操作。"""
+限制：payload 限「顯示型證據」——alert()／print()／console.log 級，
+不執行資料外傳或破壞動作。alert() 是業界 XSS 驗證標準訊號
+（Burp／OWASP 慣例，多數偵測系統也以 alert 觸發為基準），
+與 print() 同級無害，優先用它。只對本站同源操作。"""
 
 # specialist 步數盒：強制在有限步數內收斂（#30~#32：無限深挖是
 # findings 流失主因，token 上限加多大都會爆）
@@ -233,8 +249,14 @@ _SPECIALIST_MAX_STEPS = 60
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
-        "desc": "認證與越權：API 註冊登入、跨帳號讀取／寫入（IDOR，含 PUT/PATCH 更新端點）",
-        "when": "偵察發現登入／註冊端點，或流量有帶數字 id 的授權資源（購物車、訂單、個人資料）",
+        "desc": (
+            "認證與越權：API 註冊登入、跨帳號讀取／寫入（IDOR，含 PUT/PATCH"
+            " 更新端點）、密碼重置鏈帳號接管（WSTG-ATHN-09）"
+        ),
+        "when": (
+            "偵察發現登入／註冊端點、密碼重置／安全問題流程，或流量有帶"
+            "數字 id 的授權資源（購物車、訂單、個人資料）"
+        ),
     },
     "injection": {
         "prompt": INJECT_AGENT_PROMPT,
