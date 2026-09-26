@@ -113,16 +113,22 @@ INJECT_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安
    token／authentication（對照：用亂填的假帳密登入會得到 401），即為
    登入繞過漏洞——report_security_issue 附上完整請求 body 與回應。
    多試幾種變形（' OR '1'='1 、" )) OR ((" 1 "=" 1 等）再下結論。
-2. **XSS 反射探測（API 優先，不要操作 UI 表單）**：多數輸入點是
-   GET 端點的 query 參數（從 network log 找）——以 replay_request 直接
-   送含無害探測字串的 URL（如 <img src=x onerror=alert(1)> 級），
-   檢查回應中該字串是否**未跳脫地**出現在 HTML 屬性或標籤位置
-   （原樣完整標籤＝反射型 XSS；跳脫成純文字＝正常防護，不回報）。
-   只有在端點只能由 UI 觸發時才用 type_text，並立即送出檢查。
-3. **其他輸入點異常**：CAPTCHA／OTP／驗證碼類端點——重放同一請求兩次，
+2. **XSS 反射探測（瀏覽器執行驗證優先）**：多數輸入點是 query 參數
+   （從 network log 找）——把無害探測字串（<img src=x onerror=print(1)>
+   級）組進 URL，用 navigate_and_observe 導航到**前端頁面 URL**（SPA 的
+   輸入由 /#/ hash 路由頁渲染；API 端點回 JSON 不渲染，導航 API URL 驗
+   不了 XSS）。dialogs 出現 alert／confirm＝已執行；渲染 DOM 出現未跳脫
+   標籤＝注入成立。端點只能 UI 觸發時才 type_text 送出後檢查。
+3. **非 SQL 注入家族（NoSQL／模板 SSTi／XXE／指令注入／路徑穿越 LFI）**：
+   對每個可疑輸入點用 probe_payload_injection 一次跑整組家族 payload——
+   GET 端點給 query_param，POST 端點給 body＋inject_field。回傳的
+   markers_hit 非空（如 49＝模板求值成功、ARGUSCMDPROBE＝指令執行、
+   root:＝讀到系統檔）即為疑似命中，以 report_security_issue 附
+   payload kind 與命中標記回報。
+4. **其他輸入點異常**：CAPTCHA／OTP／驗證碼類端點——重放同一請求兩次，
    若舊碼可重用或回應可直接給出答案，即為設計缺陷；觀察回應中的錯誤
    訊息是否洩漏內部資訊（堆疊、SQL 片段、內部路徑），有就 report。
-4. 完成或已系統性覆蓋後 finish 附短總結。
+5. 完成或已系統性覆蓋後 finish 附短總結。
 
 限制：payload 一律用無害查詢型（alert/print 級），不要嘗試刪除、修改
 資料的 payload；只對本站同源操作。"""
@@ -232,7 +238,7 @@ SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     },
     "injection": {
         "prompt": INJECT_AGENT_PROMPT,
-        "desc": "輸入點注入：登入繞過 SQLi payload、XSS 反射／儲存探測",
+        "desc": "輸入點注入：登入繞過 SQLi、XSS 瀏覽器驗證、家族化注入（NoSQL/SSTi/XXE/指令/LFI）",
         "when": "有登入表單（繞過測試）或頁面含輸入框／搜尋／留言等反射面",
     },
     "logic_abuse": {
