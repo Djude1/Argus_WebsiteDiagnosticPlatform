@@ -239,7 +239,11 @@ SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "injection": {
         "prompt": INJECT_AGENT_PROMPT,
         "desc": "輸入點注入：登入繞過 SQLi、XSS 瀏覽器驗證、家族化注入（NoSQL/SSTi/XXE/指令/LFI）",
-        "when": "有登入表單（繞過測試）或頁面含輸入框／搜尋／留言等反射面",
+        "when": (
+            "有登入表單、搜尋／輸入框，或流量含 JSON body／XML／模板類參數。"
+            "注意：NoSQL／SSTi／XXE／指令／路徑穿越這些家族只有此角色的專用"
+            "工具能測——recon 的 SQLi 探測不代表已覆蓋它們"
+        ),
     },
     "logic_abuse": {
         "prompt": LOGIC_ABUSE_AGENT_PROMPT,
