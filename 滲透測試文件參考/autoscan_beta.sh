@@ -72,7 +72,7 @@ log_safe "HARDENED: SELinux namespace enforcement operational"
 echo ""
 sleep 0.5
 
-# Phase 4: 模擬 Payload 驗證
+# Phase 4: Payload 驗證
 log_audit "Running sandbox exploit simulations (Non-Destructive)..."
 payloads=(
   "bypassing memory canary token"
