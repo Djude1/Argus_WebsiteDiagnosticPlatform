@@ -1,0 +1,85 @@
+/* ========================================
+   App shell：深色 nav + 白底主內容
+   ======================================== */
+
+.argus-app {
+  @apply min-h-screen bg-slate-100;
+}
+
+.argus-main {
+  @apply w-full p-4 md:p-8;
+}
+
+.argus-main.with-nav {
+  @apply pt-6;
+}
+
+/* 深色高科技 nav */
+.argus-nav {
+  background: linear-gradient(135deg, var(--argus-navy-900) 0%, var(--argus-navy-800) 55%, var(--argus-navy-600) 100%);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 8px 24px -10px rgba(8, 47, 73, 0.55);
+}
+
+.argus-nav-inner {
+  @apply flex w-full flex-wrap items-center gap-4 px-4 py-3 md:px-8;
+}
+
+.argus-brand {
+  @apply flex items-center gap-3 text-white;
+}
+
+.argus-brand-glyph {
+  @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-lg font-bold;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.25), rgba(167, 139, 250, 0.25));
+  color: var(--argus-cyan-glow);
+  border: 1px solid rgba(103, 232, 249, 0.5);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.45);
+}
+
+.argus-brand-title {
+  @apply block text-lg font-bold tracking-[0.3em];
+  color: var(--argus-text-bright);
+}
+
+.argus-brand-sub {
+  @apply block text-[10px] uppercase tracking-[0.25em];
+  color: rgba(186, 230, 253, 0.6);
+}
+
+.argus-nav-links {
+  @apply ml-auto flex flex-wrap items-center gap-1;
+}
+
+.argus-nav-link {
+  @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition;
+  color: rgba(186, 230, 253, 0.75);
+}
+
+.argus-nav-link:hover {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--argus-text-bright);
+}
+
+.argus-nav-link.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(167, 139, 250, 0.18));
+  color: var(--argus-text-white);
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.45),
+    0 0 14px rgba(56, 189, 248, 0.25);
+}
+
+/* nav 登出按鈕 */
+.nav-logout-btn {
+  background: transparent;
+  border: 1px solid rgba(186, 230, 253, 0.3);
+  border-radius: 8px;
+  color: rgba(186, 230, 253, 0.9);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  transition: background 0.15s;
+}
+
+.nav-logout-btn:hover {
+  background: rgba(56, 189, 248, 0.12);
+}

@@ -1,0 +1,69 @@
+@layer components {
+  /* --- Dashboard charts --- */
+  .admin-panel-head-row {
+    @apply flex flex-wrap items-center justify-between gap-2 mb-3;
+  }
+  .admin-panel-head-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .admin-panel-head-actions a.admin-btn { text-decoration: none; }
+  .admin-chart-legend {
+    @apply flex flex-wrap gap-3 text-xs;
+    color: var(--admin-text-secondary);
+  }
+  .admin-chart-legend span {
+    @apply inline-flex items-center gap-1;
+  }
+  .admin-chart-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+  }
+  .admin-chart-legend i.tone-cyan { background: var(--argus-cyan-dot); }
+  .admin-chart-legend i.tone-good { background: var(--tone-good); }
+  .admin-chart-legend i.tone-amber { background: var(--tone-medium); }
+  .admin-mini-chart { display: block; }
+  .admin-mini-chart-dot { stroke: var(--admin-surface); stroke-width: 1.5; }
+
+  .admin-provider-bars {
+    @apply flex flex-col gap-2;
+  }
+  .admin-provider-row {
+    @apply flex items-center gap-3 text-sm;
+  }
+  .admin-provider-meta {
+    @apply flex w-32 flex-col text-xs;
+  }
+  .admin-provider-name {
+    @apply font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-provider-model {
+    color: #94a3b8;
+  }
+  .admin-provider-track {
+    @apply h-3 flex-1 overflow-hidden rounded-full;
+    background: var(--admin-border-solid);
+  }
+  .admin-provider-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, var(--argus-cyan-dot), var(--argus-cyan-glow));
+    transition: width 0.4s;
+  }
+  .admin-provider-stats {
+    @apply flex w-28 flex-col text-right text-xs;
+  }
+  .admin-provider-tokens {
+    @apply font-semibold;
+    color: var(--admin-accent-strong);
+  }
+  .admin-provider-sessions {
+    color: #94a3b8;
+  }
+
+  /* AI 使用量 - 使用者詳情頁 */
+  .admin-ai-summary {
+    @apply flex flex-wrap gap-8 mb-2;
+  }
+}

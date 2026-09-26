@@ -1,0 +1,310 @@
+/* ========================================
+   系統健康：掃描鏈路圖 ＋ 系統資源卡片
+   ======================================== */
+
+.admin-chain {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
+}
+.admin-chain-seg {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.admin-chain-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 10px;
+  min-width: 96px;
+  border-radius: 14px;
+  background: var(--admin-surface-sunken);
+  border: 1px solid var(--admin-border);
+  text-align: center;
+}
+.admin-chain-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-strong);
+  color: var(--admin-text-muted);
+}
+.admin-chain-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--admin-text);
+  white-space: nowrap;
+}
+.admin-chain-state {
+  font-size: 0.68rem;
+  color: var(--admin-text-muted);
+}
+.admin-chain-node.tone-ok { border-color: rgba(16, 185, 129, 0.35); }
+.admin-chain-node.tone-ok .admin-chain-dot {
+  background: var(--admin-tone-good-bg);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: var(--admin-tone-good-text);
+}
+.admin-chain-node.tone-warn { border-color: rgba(245, 158, 11, 0.40); }
+.admin-chain-node.tone-warn .admin-chain-dot {
+  background: var(--admin-tone-warn-bg);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: var(--admin-tone-warn-text);
+}
+.admin-chain-node.tone-bad { border-color: rgba(239, 68, 68, 0.45); }
+.admin-chain-node.tone-bad .admin-chain-dot {
+  background: var(--admin-tone-bad-bg);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: var(--admin-tone-bad-text);
+}
+
+/* 連接線：正常時有光點由左往右流動，斷點之後轉為靜態虛線 */
+.admin-chain-link {
+  position: relative;
+  flex: 1 1 24px;
+  min-width: 24px;
+  height: 2px;
+  margin: 0 4px;
+  display: flex;
+  align-items: center;
+}
+.admin-chain-link-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--admin-border-solid);
+}
+.admin-chain-link.is-flowing .admin-chain-link-track {
+  background: linear-gradient(
+    90deg,
+    var(--admin-border-solid) 0%,
+    var(--admin-accent) 45%,
+    var(--admin-accent) 55%,
+    var(--admin-border-solid) 100%
+  );
+  background-size: 220% 100%;
+  animation: admin-chain-flow 1.6s linear infinite;
+}
+.admin-chain-link.is-stalled .admin-chain-link-track {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--admin-border-solid) 0 4px,
+    transparent 4px 8px
+  );
+}
+.admin-chain-arrow {
+  position: absolute;
+  right: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--admin-text-muted);
+}
+.admin-chain-link.is-flowing .admin-chain-arrow { color: var(--admin-accent); }
+@keyframes admin-chain-flow {
+  0% { background-position: 100% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@media (max-width: 760px) {
+  /* 窄螢幕改為垂直堆疊；連接線轉為直向 */
+  .admin-chain { flex-direction: column; align-items: stretch; }
+  .admin-chain-seg { flex-direction: column; align-items: stretch; }
+  .admin-chain-node { min-width: 0; flex-direction: row; justify-content: flex-start; gap: 10px; text-align: left; }
+  .admin-chain-label { flex: 1; }
+  .admin-chain-link { width: 2px; height: 18px; min-width: 0; margin: 2px 0 2px 26px; }
+  .admin-chain-link.is-flowing .admin-chain-link-track {
+    background: linear-gradient(180deg, var(--admin-border-solid) 0%, var(--admin-accent) 50%, var(--admin-border-solid) 100%);
+    background-size: 100% 220%;
+    animation: admin-chain-flow-v 1.6s linear infinite;
+  }
+  .admin-chain-arrow { right: auto; left: -4px; top: auto; bottom: -6px; transform: rotate(90deg); }
+  @keyframes admin-chain-flow-v {
+    0% { background-position: 0 100%; }
+    100% { background-position: 0 -120%; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 關閉流動：方向改由箭頭與虛線表達，資訊不流失 */
+  .admin-chain-link.is-flowing .admin-chain-link-track {
+    animation: none;
+    background: var(--admin-accent);
+    opacity: 0.55;
+  }
+}
+
+/* --- 系統資源卡片 --- */
+.admin-sys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.admin-sys-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--admin-surface-sunken);
+  border: 1px solid var(--admin-border);
+}
+.admin-sys-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-sys-label { font-size: 0.8rem; font-weight: 600; color: var(--admin-text); }
+.admin-sys-scope {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-strong);
+  color: var(--admin-text-muted);
+}
+.admin-sys-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--admin-text);
+  font-variant-numeric: tabular-nums;
+}
+.admin-sys-value.sm { font-size: 1.1rem; }
+.admin-sys-unit { font-size: 0.9rem; font-weight: 600; color: var(--admin-text-muted); margin-left: 2px; }
+.admin-sys-pending { font-size: 0.85rem; font-weight: 500; color: var(--admin-text-muted); }
+.admin-sys-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--admin-border-solid);
+  overflow: hidden;
+}
+.admin-sys-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--admin-accent);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.admin-sys-card.tone-warn .admin-sys-bar-fill { background: var(--tone-medium); }
+.admin-sys-card.tone-bad .admin-sys-bar-fill { background: var(--tone-bad); }
+.admin-sys-card.tone-warn .admin-sys-value { color: var(--admin-tone-warn-text); }
+.admin-sys-card.tone-bad .admin-sys-value { color: var(--admin-tone-bad-text); }
+.admin-sys-foot { font-size: 0.7rem; color: var(--admin-text-muted); }
+.admin-sys-unavailable { font-size: 0.8rem; color: var(--admin-text-muted); padding: 8px 0; }
+.admin-sys-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: var(--admin-text-muted);
+}
+.admin-sys-meta strong { color: var(--admin-text-secondary); font-weight: 600; margin-right: 4px; }
+
+.admin-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--admin-text-muted);
+  cursor: pointer;
+}
+
+/* 深色補完：上述 token 覆寫之外，仍寫死亮色的個案（狀態藥丸、輸入框邊框、
+   表格 hover、登入方式徽章等）。逐一列出而非全域反轉，避免破壞語意色。 */
+:root[data-theme="dark"] .admin-input,
+:root[data-theme="dark"] .admin-pagination button {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-border-solid);
+  color: var(--admin-text);
+}
+:root[data-theme="dark"] .admin-input::placeholder { color: var(--admin-text-muted); }
+:root[data-theme="dark"] .admin-table tbody tr.clickable:hover {
+  background: rgba(56, 189, 248, 0.07);
+}
+:root[data-theme="dark"] .admin-btn {
+  background: var(--admin-surface-sunken);
+  border-color: rgba(103, 232, 249, 0.28);
+  color: var(--admin-accent-strong);
+}
+:root[data-theme="dark"] .admin-btn:hover { background: rgba(56, 189, 248, 0.12); }
+:root[data-theme="dark"] .admin-btn.danger {
+  background: var(--admin-tone-bad-bg);
+  border-color: rgba(239, 68, 68, 0.40);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-feedback.tone-good {
+  background: var(--admin-tone-good-bg);
+  color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-feedback.tone-bad {
+  background: var(--admin-tone-bad-bg);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-panel-danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.30);
+}
+:root[data-theme="dark"] .admin-domain-status.is-verified {
+  background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-domain-status.is-rejected {
+  background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-domain-status.is-pending {
+  background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-login-method.method-password {
+  background: rgba(56, 189, 248, 0.14); color: #7dd3fc;
+}
+:root[data-theme="dark"] .admin-login-method.method-register {
+  background: rgba(99, 102, 241, 0.18); color: #a5b4fc;
+}
+:root[data-theme="dark"] .admin-login-timeline::before {
+  background: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-empty-state {
+  border-color: var(--admin-border-strong);
+}
+:root[data-theme="dark"] .admin-modal { background: var(--admin-surface); }
+:root[data-theme="dark"] .admin-modal-head,
+:root[data-theme="dark"] .admin-modal-foot {
+  border-color: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-modal-foot { background: var(--admin-surface-sunken); }
+:root[data-theme="dark"] .admin-modal-backdrop { background: rgba(2, 6, 18, 0.72); }
+:root[data-theme="dark"] .admin-segmented { background: var(--admin-surface-sunken); }
+:root[data-theme="dark"] .admin-segment.active { background: var(--admin-surface); }
+
+/* 後台側欄的主題切換按鈕 */
+.admin-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.admin-theme-toggle:hover {
+  background: rgba(56, 189, 248, 0.10);
+  color: #e0f2fe;
+}
+.admin-theme-toggle:focus-visible {
+  outline: 2px solid var(--argus-cyan);
+  outline-offset: 1px;
+}

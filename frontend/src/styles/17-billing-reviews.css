@@ -1,0 +1,599 @@
+@layer components {
+  /* ============================================================
+     Coin / Billing / Reviews 樣式
+     ============================================================ */
+
+  /* 頂部 nav 內的 coin 餘額按鈕 */
+  .coin-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(236, 72, 153, 0.18));
+    color: #e0e7ff;
+    border: 1px solid rgba(165, 180, 252, 0.4);
+  }
+  .coin-chip:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(236, 72, 153, 0.32));
+    box-shadow: 0 0 14px rgba(165, 180, 252, 0.45);
+  }
+  .coin-chip-icon { font-size: 16px; }
+  .coin-chip-unit { @apply text-xs opacity-80; }
+
+  /* ScanJobForm 內的 coin 預估區塊 */
+  .coin-estimate {
+    @apply rounded-xl border bg-slate-50 px-4 py-3 text-sm space-y-1;
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+  .coin-estimate-row {
+    @apply flex items-center justify-between;
+  }
+  .coin-estimate-row strong {
+    @apply text-base font-bold text-indigo-600;
+  }
+  .coin-estimate-row.sub {
+    @apply text-xs text-slate-500;
+  }
+  .coin-estimate-cta {
+    @apply mt-2 w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-600;
+  }
+  .coin-estimate-hint {
+    @apply text-xs text-slate-500;
+  }
+  .coin-estimate.is-insufficient {
+    background: linear-gradient(135deg, rgba(254, 215, 170, 0.55), rgba(254, 202, 202, 0.5));
+    border-color: rgba(249, 115, 22, 0.4);
+  }
+  .coin-estimate.is-insufficient .coin-estimate-row strong {
+    @apply text-orange-700;
+  }
+
+  /* /billing 頁 */
+  .billing-balance-card {
+    @apply flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-200 bg-indigo-50/60 px-6 py-5;
+  }
+  .billing-balance-value {
+    @apply text-4xl font-bold text-indigo-700;
+  }
+  .billing-balance-value span {
+    @apply text-base font-semibold text-indigo-500;
+  }
+  .billing-balance-meta {
+    @apply flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600;
+  }
+  .billing-plan-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-4;
+  }
+  .billing-plan-card {
+    @apply relative flex flex-col gap-2 rounded-2xl border bg-white px-5 py-6 shadow-sm transition;
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+  .billing-plan-card:hover {
+    @apply -translate-y-1 shadow-lg;
+    border-color: rgba(99, 102, 241, 0.6);
+  }
+  .billing-plan-card.is-recommended {
+    border-color: rgba(99, 102, 241, 0.9);
+    background: linear-gradient(180deg, #ffffff 60%, rgba(238, 242, 255, 0.8) 100%);
+    box-shadow: 0 4px 20px -8px rgba(99, 102, 241, 0.35);
+  }
+  .billing-plan-badge {
+    @apply absolute right-4 top-4 rounded-full bg-rose-500 px-2.5 py-0.5 text-xs font-bold text-white;
+  }
+  .billing-plan-recommend {
+    @apply absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white shadow;
+  }
+  .billing-plan-name {
+    @apply text-lg font-bold text-slate-900;
+  }
+  .billing-plan-coin {
+    @apply text-3xl font-bold text-indigo-700;
+  }
+  .billing-plan-coin span {
+    @apply text-base font-semibold text-indigo-500;
+  }
+  .billing-plan-price {
+    @apply text-2xl font-bold text-slate-800;
+  }
+  .billing-plan-rate {
+    @apply text-xs text-slate-500;
+  }
+  .billing-plan-desc {
+    @apply mt-1 text-sm text-slate-600;
+  }
+  .billing-plan-button {
+    @apply mt-auto rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white transition hover:bg-indigo-700;
+  }
+  .billing-plan-button:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+  .billing-plan-card.is-recommended .billing-plan-button {
+    background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+  }
+  .billing-feedback {
+    @apply rounded-xl border px-4 py-3 text-sm;
+  }
+  .billing-feedback.tone-good {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+  }
+  .billing-feedback.tone-bad {
+    @apply border-rose-200 bg-rose-50 text-rose-700;
+  }
+  .billing-tx-table {
+    @apply mt-2 w-full text-sm;
+  }
+  .billing-tx-table thead tr {
+    @apply border-b text-xs uppercase text-slate-500;
+  }
+  .billing-tx-table th,
+  .billing-tx-table td {
+    @apply px-2 py-1.5 text-left;
+  }
+  .billing-tx-table .tx-pos { @apply font-semibold text-emerald-600; }
+  .billing-tx-table .tx-neg { @apply font-semibold text-rose-600; }
+
+  /* /billing 結帳頁：navy 品牌標頭 + 清楚分段的交易表單 */
+  .billing-checkout {
+    overflow: clip;
+    padding: 0;
+    border-color: rgba(14, 165, 233, 0.2);
+    background: linear-gradient(180deg, #f8fbff 0%, #f1f6fb 100%);
+    box-shadow: 0 18px 45px -32px rgba(8, 47, 73, 0.45);
+  }
+
+  .billing-checkout-header {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    overflow: hidden;
+    padding: 1.75rem;
+    color: #e0f2fe;
+    background:
+      radial-gradient(circle at 84% 10%, rgba(56, 189, 248, 0.24), transparent 28%),
+      linear-gradient(135deg, var(--argus-navy-950) 0%, var(--argus-navy-800) 62%, #0c2850 100%);
+    border-bottom: 1px solid rgba(103, 232, 249, 0.24);
+  }
+
+  .billing-checkout-header::after {
+    position: absolute;
+    z-index: -1;
+    right: 7%;
+    bottom: -70px;
+    width: 220px;
+    height: 120px;
+    content: "";
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.16);
+    filter: blur(34px);
+  }
+
+  .billing-checkout-heading {
+    min-width: 0;
+  }
+
+  .billing-checkout-eyebrow {
+    margin: 0 0 0.45rem;
+    color: var(--argus-cyan-glow);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+  }
+
+  .billing-checkout-title {
+    margin: 0;
+    color: #f8fafc;
+    font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+
+  .billing-checkout-subtitle {
+    max-width: 44rem;
+    margin: 0.55rem 0 0;
+    color: rgba(224, 242, 254, 0.72);
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .billing-wallet-summary {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: auto auto;
+    align-items: baseline;
+    gap: 0.1rem 0.45rem;
+    min-width: 9.5rem;
+    padding: 0.9rem 1.05rem;
+    border: 1px solid rgba(103, 232, 249, 0.3);
+    border-radius: 1rem;
+    background: rgba(7, 25, 55, 0.58);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 28px -20px rgba(34, 211, 238, 0.75);
+    backdrop-filter: blur(14px);
+  }
+
+  .billing-wallet-summary span:first-child {
+    grid-column: 1 / -1;
+    color: rgba(186, 230, 253, 0.68);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .billing-wallet-summary strong {
+    color: #ffffff;
+    font-size: 1.55rem;
+    line-height: 1;
+  }
+
+  .billing-wallet-summary span:last-child {
+    color: var(--argus-cyan-glow);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .billing-environment-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.25rem 1.75rem 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid;
+    border-radius: 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .billing-environment-notice.tone-test {
+    color: #854d0e;
+    border-color: rgba(245, 158, 11, 0.36);
+    background: linear-gradient(135deg, rgba(254, 243, 199, 0.9), rgba(240, 249, 255, 0.92));
+  }
+
+  .billing-environment-notice.tone-paused {
+    color: #475569;
+    border-color: rgba(148, 163, 184, 0.38);
+    background: rgba(248, 250, 252, 0.9);
+  }
+
+  .billing-environment-notice strong {
+    color: inherit;
+    font-weight: 800;
+  }
+
+  .billing-environment-chip {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.63rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+  }
+
+  .billing-step-content {
+    padding: 0 1.75rem 1.75rem;
+  }
+
+  /* /billing 頁：月訂閱與單次購點兩個面板的堆疊間距 */
+  .billing-page {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  /* /billing 訂閱區塊（沿用結帳面板材質；內容區直向排列） */
+  .billing-sub-body {
+    display: grid;
+    gap: 1.25rem;
+    padding-top: 1.25rem;
+  }
+
+  .billing-sub-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .billing-plan-features {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.25rem 0 0.5rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .billing-plan-features li {
+    position: relative;
+    padding-left: 1rem;
+    color: #475569;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+
+  .billing-plan-features li::before {
+    position: absolute;
+    top: 0.5em;
+    left: 0;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: var(--argus-cyan-dot);
+    box-shadow: 0 0 6px rgba(14, 165, 233, 0.55);
+    content: "";
+  }
+
+  .billing-sub-status {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(240, 249, 255, 0.9), rgba(248, 250, 252, 0.92));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  }
+
+  .billing-sub-status-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .billing-sub-status-name {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+
+  .billing-sub-status-badge {
+    padding: 0.2rem 0.6rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .billing-sub-status-badge.tone-good {
+    color: #047857;
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.12);
+  }
+
+  .billing-sub-status-badge.tone-warn {
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.12);
+  }
+
+  .billing-sub-status-badge.tone-neutral {
+    color: #475569;
+    border-color: rgba(148, 163, 184, 0.5);
+    background: rgba(148, 163, 184, 0.15);
+  }
+
+  .billing-sub-dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+  }
+
+  .billing-sub-dl div {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .billing-sub-dl dt {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .billing-sub-dl dd {
+    margin: 0;
+    color: #0f172a;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .billing-sub-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .billing-sub-cancel-btn {
+    padding: 0.55rem 1.2rem;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    border-radius: 0.75rem;
+    background: transparent;
+    color: #dc2626;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .billing-sub-cancel-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+  }
+
+  .billing-sub-cancel-btn:focus-visible {
+    outline: 2px solid rgba(239, 68, 68, 0.65);
+    outline-offset: 2px;
+  }
+
+  .billing-sub-cancel-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .billing-sub-renew-hint {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.85rem;
+  }
+
+  .billing-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .billing-form-section {
+    min-width: 0;
+    margin: 0;
+    padding: 1.15rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 10px 25px -24px rgba(15, 23, 42, 0.5);
+  }
+
+  .billing-form-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0 0.35rem;
+    color: #0f172a;
+    font-size: 0.98rem;
+    font-weight: 800;
+  }
+
+  .billing-form-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 0.55rem;
+    color: #f0f9ff;
+    background: linear-gradient(135deg, var(--argus-cyan-dot), #2563eb);
+    box-shadow: 0 5px 14px -7px rgba(14, 165, 233, 0.9);
+    font-size: 0.75rem;
+  }
+
+  .billing-form-description {
+    margin: 0.15rem 0 1rem;
+    color: #64748b;
+    font-size: 0.78rem;
+    line-height: 1.55;
+  }
+
+  .billing-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .billing-choice-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 4.65rem;
+    padding: 0.9rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.85rem;
+    color: #334155;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  }
+
+  .billing-choice-card:hover {
+    border-color: rgba(14, 165, 233, 0.58);
+    box-shadow: 0 8px 18px -16px rgba(14, 116, 144, 0.8);
+    transform: translateY(-1px);
+  }
+
+  .billing-choice-card:has(input:checked) {
+    color: #0c4a6e;
+    border-color: var(--argus-cyan-dot);
+    background: linear-gradient(135deg, rgba(236, 254, 255, 0.96), rgba(239, 246, 255, 0.96));
+    box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.12), 0 8px 20px -17px rgba(14, 165, 233, 0.9);
+  }
+
+  .billing-choice-card:focus-within {
+    outline: 3px solid rgba(56, 189, 248, 0.24);
+    outline-offset: 2px;
+  }
+
+  .billing-choice-card input[type="radio"] {
+    flex: 0 0 auto;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.1rem;
+    accent-color: var(--argus-cyan-dot);
+  }
+
+  .billing-choice-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .billing-choice-copy strong {
+    color: #0f172a;
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  .billing-choice-copy small {
+    color: #64748b;
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+
+  .billing-choice-card.is-compact {
+    min-height: 4.3rem;
+    padding: 0.8rem;
+  }
+
+  .billing-form-subsection {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .billing-subsection-heading {
+    margin-bottom: 0.65rem;
+    color: #334155;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+
+  .billing-carrier-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .billing-conditional-field {
+    max-width: 26rem;
+    margin-top: 0.9rem;
+  }
+
+  .billing-company-section {
+    padding-left: 0;
+  }
+
+  .billing-checkout .input {
+    min-height: 3rem;
+    border-radius: 0.75rem;
+    color: #0f172a;
+    background: #ffffff;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+
+  .billing-checkout .input:hover:not(:focus) {
+    border-color: #94a3b8;
+  }
+
+  .billing-checkout .input:focus {
+    border-color: var(--argus-cyan-dot);
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.13);
+  }
+
+  .billing-checkout .input.is-error {
+    border-color: #e11d48;
+    box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.1);
+  }
+}

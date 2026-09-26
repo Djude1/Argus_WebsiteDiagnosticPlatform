@@ -1,0 +1,209 @@
+@layer components {
+  /* ========================================
+     T15 拓撲圖頁面（React Flow 樹狀 layout + 自訂節點）
+     ======================================== */
+
+  .topology-panel {
+    @apply flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4;
+  }
+
+  .topology-header {
+    @apply space-y-2;
+  }
+
+  .topology-title-row {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  .topology-header h2 {
+    @apply text-lg font-bold text-slate-900;
+  }
+
+  .topology-host-pill {
+    @apply rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-semibold text-slate-700;
+  }
+
+  .topology-stats {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .topology-stat-chip {
+    @apply rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700;
+  }
+
+  .topology-stat-chip strong {
+    @apply mr-1 text-sm font-bold text-slate-900;
+  }
+
+  .topology-stat-chip.tone-bad {
+    @apply bg-rose-50 text-rose-700;
+  }
+
+  .topology-stat-chip.tone-bad strong {
+    @apply text-rose-800;
+  }
+
+  .topology-stat-chip.tone-medium {
+    @apply bg-amber-50 text-amber-800;
+  }
+
+  .topology-stat-chip.tone-medium strong {
+    @apply text-amber-900;
+  }
+
+  .topology-legend {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .legend-chip {
+    @apply rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700;
+  }
+
+  .legend-chip.tone-good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .legend-chip.tone-medium {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .legend-chip.tone-bad {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .topology-canvas {
+    @apply overflow-hidden rounded-xl border border-slate-200;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.08), transparent 55%),
+      radial-gradient(circle at 90% 90%, rgba(167, 139, 250, 0.06), transparent 60%),
+      linear-gradient(135deg, #f8fafc, #eef2f7);
+    height: 72vh;
+    min-height: 520px;
+  }
+
+  /* ----- 自訂節點：橫式卡片，icon + body 兩欄 ----- */
+  .topology-card {
+    @apply flex items-center gap-3 rounded-2xl border-2 bg-white px-3 py-2 shadow-sm transition;
+    width: 220px;
+    border-color: rgba(148, 163, 184, 0.5);
+    box-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.15);
+  }
+
+  .topology-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px -10px rgba(15, 23, 42, 0.35);
+  }
+
+  .topology-card.tone-good {
+    border-color: var(--tone-good);
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.18), 0 6px 14px -8px rgba(52, 211, 153, 0.4);
+  }
+
+  .topology-card.tone-medium {
+    border-color: var(--tone-medium);
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 6px 14px -8px rgba(251, 191, 36, 0.45);
+  }
+
+  .topology-card.tone-bad {
+    border-color: var(--tone-bad);
+    box-shadow: 0 0 0 1px rgba(251, 113, 133, 0.22), 0 8px 18px -8px rgba(251, 113, 133, 0.55);
+  }
+
+  /* 首頁節點：放大、藍色發光，更顯眼 */
+  .topology-card.is-root {
+    width: 240px;
+    border-color: var(--argus-cyan);
+    background: linear-gradient(135deg, #eff6ff, #ffffff);
+    box-shadow:
+      0 0 0 2px rgba(56, 189, 248, 0.25),
+      0 12px 24px -10px rgba(56, 189, 248, 0.5);
+  }
+
+  .topology-card.is-orphan {
+    border-style: dashed;
+    opacity: 0.92;
+  }
+
+  .topology-card-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl;
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  .topology-card.is-root .topology-card-icon {
+    background: rgba(56, 189, 248, 0.18);
+  }
+
+  .topology-card.tone-bad .topology-card-icon {
+    background: rgba(251, 113, 133, 0.15);
+  }
+
+  .topology-card.tone-medium .topology-card-icon {
+    background: rgba(251, 191, 36, 0.18);
+  }
+
+  .topology-card-body {
+    @apply flex min-w-0 flex-col gap-0.5;
+  }
+
+  .topology-card-title {
+    @apply truncate text-sm font-bold text-slate-900;
+    max-width: 150px;
+  }
+
+  .topology-card.is-root .topology-card-title {
+    @apply text-blue-700;
+  }
+
+  .topology-card-host {
+    @apply truncate font-mono text-[10px] text-slate-500;
+    max-width: 150px;
+  }
+
+  .topology-card-meta {
+    @apply mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-600;
+  }
+
+  .topology-status-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+    background: rgba(148, 163, 184, 0.6);
+  }
+
+  .topology-status-dot.tone-good {
+    background: var(--tone-good);
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+  }
+
+  .topology-status-dot.tone-medium {
+    background: var(--tone-medium);
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.7);
+  }
+
+  .topology-status-dot.tone-bad {
+    background: var(--tone-bad);
+    box-shadow: 0 0 6px rgba(251, 113, 133, 0.75);
+  }
+
+  .topology-sev-chip {
+    @apply ml-auto rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600;
+  }
+
+  .topology-card.tone-bad .topology-sev-chip {
+    @apply bg-rose-100 text-rose-700;
+  }
+
+  .topology-card.tone-medium .topology-sev-chip {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  /* React Flow handle 點：藏起來，靠 card 邊緣自然出入 */
+  .topology-handle {
+    opacity: 0;
+    width: 6px;
+    height: 6px;
+  }
+
+  /* MiniMap 圓角 */
+  .react-flow__minimap {
+    @apply rounded-xl border border-slate-200;
+  }
+}

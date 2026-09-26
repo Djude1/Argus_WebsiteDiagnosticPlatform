@@ -174,7 +174,7 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 中文字型要同時設 `run.font.name` 與 `w:eastAsia`（`_styled_run()` 已封裝），只設前者 Word 會對中文退回預設字型。
 
-`styles.css` 的 `--argus-cyan (#38bdf8)` 是為深色背景設計的，**印在白紙上對比不足**；報告標題用 `--argus-cyan-deep (#0c4a6e)`，cyan 只當強調線。
+前端 `styles/03-tokens.css` 的 `--argus-cyan (#38bdf8)` 是為深色背景設計的，**印在白紙上對比不足**；報告標題用 `--argus-cyan-deep (#0c4a6e)`，cyan 只當強調線。
 
 **`Finding.ai_explanation` / `ai_remediation` / `llm_model` / `llm_generated_at` 目前無任何寫入點**，報告不得聲稱有 AI 解釋。
 

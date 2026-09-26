@@ -1,0 +1,178 @@
+@layer components {
+  /* ========================================
+     掃描列表 sidebar 強化
+     ======================================== */
+
+  .scan-card {
+    @apply relative overflow-hidden;
+  }
+
+  .scan-card-stripe {
+    @apply absolute inset-y-0 left-0 w-1;
+    background: rgba(148, 163, 184, 0.4);
+  }
+
+  .scan-card-stripe.tone-good {
+    background: linear-gradient(180deg, var(--tone-good-bright), var(--tone-good));
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
+  .scan-card-stripe.tone-medium {
+    background: linear-gradient(180deg, var(--tone-medium-bright), var(--tone-medium));
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  }
+  .scan-card-stripe.tone-bad {
+    background: linear-gradient(180deg, var(--tone-bad-bright), var(--tone-bad));
+    box-shadow: 0 0 8px rgba(251, 113, 133, 0.5);
+  }
+
+  .scan-card-body {
+    @apply flex-1 space-y-1 pl-2;
+  }
+
+  .scan-card-origin {
+    @apply truncate font-mono text-sm font-semibold text-slate-900;
+  }
+
+  .scan-card-meta {
+    @apply flex items-center gap-2;
+  }
+
+  .scan-card-delta {
+    @apply rounded-full px-1.5 py-0.5 text-[10px] font-bold;
+  }
+
+  .scan-card-delta.tone-good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .scan-card-delta.tone-bad {
+    @apply bg-red-100 text-red-700;
+  }
+
+  /* ========================================
+     Settings 配額 panel
+     ======================================== */
+
+  .quota-panel {
+    @apply rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5;
+  }
+
+  .quota-panel-head {
+    @apply flex items-end justify-between gap-3;
+  }
+
+  .quota-label {
+    @apply text-xs uppercase tracking-[0.18em] text-slate-500;
+  }
+
+  .quota-value {
+    @apply mt-1 flex items-baseline gap-1;
+  }
+
+  .quota-used {
+    @apply text-4xl font-bold tabular-nums text-slate-900;
+  }
+
+  .quota-divider {
+    @apply text-2xl text-slate-400;
+  }
+
+  .quota-limit {
+    @apply text-2xl font-bold tabular-nums text-slate-500;
+  }
+
+  .quota-unit {
+    @apply ml-1 text-sm text-slate-500;
+  }
+
+  .quota-tone-badge {
+    @apply rounded-full px-3 py-1 text-sm font-bold tabular-nums;
+  }
+
+  .quota-tone-badge.tone-good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+  .quota-tone-badge.tone-medium {
+    @apply bg-amber-100 text-amber-700;
+  }
+  .quota-tone-badge.tone-bad {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .quota-progress {
+    @apply mt-3 h-3 overflow-hidden rounded-full bg-slate-200;
+  }
+
+  .quota-progress-fill {
+    @apply h-full rounded-full;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: bar-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .quota-progress-fill.tone-good {
+    background: linear-gradient(90deg, var(--tone-good-bright), var(--tone-good));
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
+  .quota-progress-fill.tone-medium {
+    background: linear-gradient(90deg, var(--tone-medium-bright), var(--tone-medium));
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  }
+  .quota-progress-fill.tone-bad {
+    background: linear-gradient(90deg, var(--tone-bad-bright), var(--tone-bad));
+    box-shadow: 0 0 8px rgba(251, 113, 133, 0.5);
+  }
+
+  .stat-card-glow {
+    @apply transition;
+  }
+
+  .stat-card-glow:hover {
+    @apply -translate-y-0.5 border-blue-300 shadow-md;
+  }
+
+  /* ========================================
+     History 圖表容器
+     ======================================== */
+
+  .history-chart {
+    @apply mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2;
+  }
+
+  /* ========================================
+     全域 hover 微互動
+     ======================================== */
+
+  .stat-tile {
+    transition: transform 0.2s, box-shadow 0.2s;
+    animation: fade-up 0.4s ease-out;
+  }
+
+  .stat-tile:hover {
+    transform: translateY(-2px);
+  }
+
+  .history-card,
+  .recent-row,
+  .timeline-body,
+  .finding-group {
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  }
+
+  .history-card:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  .scan-card {
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  }
+
+  .scan-card:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  .panel,
+  .dashboard-hero,
+  .stat-tile {
+    animation: fade-up 0.4s ease-out;
+  }
+}

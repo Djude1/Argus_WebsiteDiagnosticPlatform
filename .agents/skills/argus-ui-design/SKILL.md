@@ -1,6 +1,6 @@
 ---
 name: argus-ui-design
-description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效 / 前後台對應 / affordance / 返回導覽）。當你要新增或修改 Argus 任何前端介面時必讀——包含 frontend/src/App.jsx 的頁面與元件、styles.css 樣式、前台公開頁（public-shell）、React 後台（/admin/*）、新頁面或新元件、按鈕 / 導覽列 / 分頁 / 動畫 / 特效 / 配色 / 版面 / 互動、或任何「美化、調整版面、做動畫、改視覺」的需求時，先讀本 skill 再動手。
+description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效 / 前後台對應 / affordance / 返回導覽）。當你要新增或修改 Argus 任何前端介面時必讀——包含 frontend/src/App.jsx 的頁面與元件、styles.css／styles/*.css 樣式、前台公開頁（public-shell）、React 後台（/admin/*）、新頁面或新元件、按鈕 / 導覽列 / 分頁 / 動畫 / 特效 / 配色 / 版面 / 互動、或任何「美化、調整版面、做動畫、改視覺」的需求時，先讀本 skill 再動手。
 ---
 
 # Argus 前端 UI/UX 準則
@@ -14,7 +14,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 任一條成立就先讀本檔：
 
 - 在 `App.jsx` 新增 / 修改任何**頁面**或**元件**
-- 改 `styles.css`（配色、版面、動畫、按鈕、卡片、導覽）
+- 改 `styles.css` 或 `styles/*.css`（配色、版面、動畫、按鈕、卡片、導覽）
 - 碰前台公開頁（`.public-shell`）或 React 後台（`/admin/*`）
 - 使用者說「美化 / 做動畫 / 加特效 / 調版面 / 改視覺 / 不好看 / 不知道怎麼點」
 
@@ -33,7 +33,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 ## 1. 視覺語言：固定科技風（延伸現有 token，別發明新風格）
 
-專案 `styles.css` 的 `:root` 已建立科技風語言，**一律沿用、只擴充、不另起爐灶**：
+專案 `styles/03-tokens.css` 的 `:root` 已建立科技風語言，**一律沿用、只擴充、不另起爐灶**：
 
 | 角色 | 既有 token / 值 | 用途 |
 |---|---|---|
@@ -52,7 +52,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 - **字體**：標題用具科技感的 display 字體、內文用清晰易讀字體；前台公開頁字級已刻意放大（評審老花），延續 `.public-shell` 的放大規則，不要縮小。
 - **禁止 AI slop**：不要亮白底 + 紫漸層、不要 Inter/Arial 當招牌字、不要每次生成都換一套配色。Argus 的識別＝深藍 × 科技藍 × 玻璃光。
 
-> 樣式一律寫進 `styles.css`、用 CSS 變數、BEM-like 命名（`.頁面-元素`），**禁止 inline style**（動態計算值除外）。詳見 `frontend/CLAUDE.md`。
+> 樣式一律寫進 `styles/` 底下對應的區塊檔（入口 `styles.css` 依序匯入，**順序即覆寫優先序、不可重排**）、用 CSS 變數、BEM-like 命名（`.頁面-元素`），**禁止 inline style**（動態計算值除外）。詳見 `frontend/CLAUDE.md`。
 
 ---
 
@@ -131,7 +131,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 - `App.jsx` 只負責根路由、權限 wrapper 與 `React.lazy` 載入（約 170 行）；**頁面實作依 domain 放在 `src/features/<domain>/`**，共用 UI / hook 放 `src/components/` 或 `src/shared/`。
 - 新頁面放進對應的 `features/<domain>/` 檔案，新路由在 `App.jsx` 用 `lazyNamed()` 掛載以維持 route-level code splitting；**不得把頁面塞回 `App.jsx`**。
-- 樣式只寫 `styles.css`，BEM-like 命名，**禁止 inline style**（動態值除外）。
+- 樣式只寫 `styles/*.css`（經入口 `styles.css` 依序匯入，不可重排），BEM-like 命名，**禁止 inline style**（動態值除外）。
 - build 一律 `cd frontend ; .\build-node22.ps1`，**禁止 `npm run build`**（Node 24 + Rollup crash）。
 - API 走 `api.js` 的 axios instance，**禁止元件內直接 `fetch` / `axios`**。
 

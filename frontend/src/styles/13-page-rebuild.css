@@ -1,0 +1,346 @@
+@layer components {
+  /* ========================================
+     單頁複刻與優化（PageRebuildPanel）
+     沿用 top-actions-box 的卡片語言，視覺權重刻意低於「下載報告」——
+     這是輔助產出，不是這一頁的主要 CTA。
+     ======================================== */
+
+  .rebuild-box {
+    @apply rounded-2xl bg-gradient-to-br from-slate-50 to-cyan-50/60 p-4;
+  }
+
+  .rebuild-title {
+    @apply mb-1 text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-desc {
+    @apply mb-2 text-xs leading-relaxed text-slate-500;
+  }
+
+  .rebuild-action {
+    @apply mt-1.5 w-full py-1.5 text-xs;
+  }
+
+  .rebuild-status {
+    @apply mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700;
+  }
+
+  .rebuild-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-slate-400;
+  }
+
+  /* 進行中的三個狀態用同一個脈動，讓「還在跑」一眼可辨 */
+  .rebuild-dot.status-pending,
+  .rebuild-dot.status-snapshotting,
+  .rebuild-dot.status-optimizing {
+    @apply bg-sky-500;
+    animation: pulse-soft 1.4s ease-in-out infinite;
+  }
+
+  .rebuild-dot.status-succeeded {
+    @apply bg-emerald-500;
+  }
+
+  .rebuild-dot.status-failed {
+    @apply bg-amber-500;
+  }
+
+  .rebuild-note {
+    @apply mt-2 text-[11px] leading-relaxed text-slate-500;
+  }
+
+  .rebuild-note.error {
+    @apply text-red-600;
+  }
+
+  .rebuild-retry {
+    @apply mt-1.5 w-full text-[11px] font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-700;
+  }
+
+  /* AI 思考過程。進行中預設展開、完成後收起——跑的時候要看得到它在動，
+     結束後這塊就不該再佔版面。 */
+  .rebuild-trace {
+    @apply mt-2 rounded-xl border border-slate-200 bg-white/70 text-[11px];
+  }
+
+  .rebuild-trace summary {
+    @apply cursor-pointer select-none px-2 py-1.5 font-semibold text-slate-600 hover:text-slate-800;
+  }
+
+  .rebuild-trace-body {
+    @apply max-h-56 overflow-y-auto border-t border-slate-200 px-2 py-1.5;
+  }
+
+  .rebuild-trace-line {
+    @apply flex gap-1.5 py-0.5 leading-relaxed;
+  }
+
+  .rebuild-trace-icon {
+    @apply shrink-0 text-slate-400;
+  }
+
+  .rebuild-trace-line.kind-thinking {
+    @apply text-slate-500;
+  }
+
+  .rebuild-trace-line.kind-tool {
+    @apply font-mono text-[10px] text-sky-700;
+  }
+
+  .rebuild-trace-line.kind-text {
+    @apply text-slate-700;
+  }
+
+  .rebuild-open-workspace {
+    @apply mt-2 block text-center text-[11px] font-semibold text-sky-700 underline underline-offset-2 hover:text-sky-900;
+  }
+
+  /* ========================================
+     複刻工作區（獨立頁面）
+     側欄那 360px 放不下需要閱讀的思考流，所以獨立一頁：
+     左邊過程、右邊產出，寬度才夠。
+     ======================================== */
+
+  .rebuild-workspace {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .rebuild-ws-back {
+    @apply text-xs font-semibold text-slate-500 hover:text-slate-800;
+  }
+
+  .rebuild-ws-title {
+    @apply mt-1 text-lg font-bold text-slate-800;
+  }
+
+  .rebuild-ws-url {
+    @apply truncate text-xs text-slate-500;
+  }
+
+  .rebuild-ws-status {
+    @apply mt-1 flex items-center gap-1.5 text-sm font-semibold text-slate-700;
+  }
+
+  .rebuild-ws-grid {
+    @apply mt-4 grid gap-4 lg:grid-cols-2;
+  }
+
+  .rebuild-ws-pane {
+    @apply flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-3;
+  }
+
+  .rebuild-ws-pane-head {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
+
+  .rebuild-ws-pane-title {
+    @apply text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-ws-trace {
+    @apply max-h-[32rem] overflow-y-auto rounded-xl bg-white p-2;
+  }
+
+  .rebuild-ws-entry {
+    @apply mb-1.5 flex gap-2 rounded-lg px-2 py-1.5 text-xs leading-relaxed;
+  }
+
+  .rebuild-ws-entry-tag {
+    @apply shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold;
+  }
+
+  .rebuild-ws-entry-text {
+    @apply whitespace-pre-wrap break-words;
+  }
+
+  .rebuild-ws-entry.kind-thinking {
+    @apply bg-slate-50 text-slate-600;
+  }
+
+  .rebuild-ws-entry.kind-thinking .rebuild-ws-entry-tag {
+    @apply bg-slate-200 text-slate-600;
+  }
+
+  .rebuild-ws-entry.kind-tool {
+    @apply bg-sky-50 font-mono text-sky-800;
+  }
+
+  .rebuild-ws-entry.kind-tool .rebuild-ws-entry-tag {
+    @apply bg-sky-200 text-sky-800;
+  }
+
+  .rebuild-ws-entry.kind-text {
+    @apply bg-emerald-50 text-slate-800;
+  }
+
+  .rebuild-ws-entry.kind-text .rebuild-ws-entry-tag {
+    @apply bg-emerald-200 text-emerald-900;
+  }
+
+  .rebuild-ws-tabs {
+    @apply flex gap-1;
+  }
+
+  .rebuild-ws-tab {
+    @apply rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .rebuild-ws-tab.active {
+    @apply border-sky-500 bg-sky-50 text-sky-800;
+  }
+
+  /* 「有沒有改到東西」要一眼看見——這是使用者實際踩過的問題 */
+  .rebuild-ws-diff {
+    @apply mb-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold;
+  }
+
+  .rebuild-ws-diff.same {
+    @apply bg-amber-50 text-amber-800;
+  }
+
+  .rebuild-ws-diff.changed {
+    @apply bg-emerald-50 text-emerald-800;
+  }
+
+  .rebuild-ws-frame {
+    @apply h-[32rem] w-full rounded-xl border border-slate-200 bg-white;
+  }
+
+  .rebuild-ws-actions {
+    @apply mt-2 flex gap-2;
+  }
+
+  /* ── 即時狀態列 ──
+     跑久了要能分辨「還在想」與「卡住」，所以有脈動點、當前動作與經過秒數。 */
+  .rebuild-ws-live {
+    @apply mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600;
+  }
+
+  .rebuild-ws-live-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full bg-slate-400;
+  }
+
+  .rebuild-ws-live.is-live .rebuild-ws-live-dot {
+    @apply bg-sky-500;
+    animation: pulse-soft 1.1s ease-in-out infinite;
+  }
+
+  .rebuild-ws-live.is-done .rebuild-ws-live-dot {
+    @apply bg-emerald-500;
+  }
+
+  .rebuild-ws-live-meta {
+    @apply ml-auto font-mono text-[10px] text-slate-400;
+  }
+
+  /* ── 思考流 ──
+     等寬、淡色、連續流動。這是過程不是結論，視覺權重必須低於下方的回覆；
+     推理逐字接在同一段後面，不要切成一則一則的方框。 */
+  .rebuild-ws-trace {
+    @apply max-h-72 overflow-y-auto whitespace-pre-wrap break-words border-t border-slate-200 px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-400;
+  }
+
+  .rebuild-ws-think {
+    @apply inline;
+  }
+
+  .rebuild-ws-tool {
+    @apply my-1 block text-sky-700;
+  }
+
+  /* ── Agent 回覆 ──
+     結論。正常字級、正常行高，與上方等寬淡色的過程明確區隔。 */
+  .rebuild-ws-reply-head {
+    @apply mt-3 mb-1 text-sm font-bold text-slate-800;
+  }
+
+  .rebuild-ws-reply {
+    @apply whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-700;
+  }
+
+  /* ── 追問往返 ── */
+  .rebuild-ws-chat {
+    @apply mt-2 space-y-1;
+  }
+
+  /* 一輪＝思考過程（收合）+ 答案，兩者貼在一起視覺上才是同一件事。
+     輪與輪之間留白比輪內大，掃過去就看得出邊界在哪。 */
+  .rebuild-ws-turn-block {
+    @apply space-y-1 pt-1;
+  }
+
+  /* 過程的視覺權重必須低於答案：收合狀態只是一行淡色小字，不與結論搶注意力。
+     進行中那一輪加一點左側 accent，讓「現在正在想」和「以前想過」分得開。 */
+  .rebuild-ws-turn-trace {
+    @apply rounded-xl border border-slate-200 bg-slate-50;
+  }
+
+  .rebuild-ws-turn-trace > summary {
+    @apply cursor-pointer select-none px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700;
+  }
+
+  .rebuild-ws-turn-trace.is-live {
+    @apply border-sky-200 bg-sky-50/40;
+  }
+
+  .rebuild-ws-turn-trace.is-live > summary {
+    @apply text-sky-700;
+  }
+
+  .rebuild-ws-turn {
+    @apply whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-xs leading-relaxed;
+  }
+
+  .rebuild-ws-turn.role-user {
+    @apply bg-sky-50 text-sky-900;
+  }
+
+  .rebuild-ws-turn.role-agent {
+    @apply bg-slate-50 text-slate-700;
+  }
+
+  .rebuild-ws-turn-tag {
+    @apply mr-2 text-[10px] font-bold uppercase opacity-60;
+  }
+
+  .rebuild-ws-ask {
+    @apply mt-2 flex gap-2;
+  }
+
+  .rebuild-ws-ask-input {
+    @apply flex-1 resize-y text-xs;
+  }
+
+  .rebuild-ws-ask-note {
+    @apply mt-1 text-[10px] leading-relaxed text-slate-400;
+  }
+
+  /* 套用結果：使用者有權知道「它說要改 5 項、實際只套上 3 項」 */
+  .rebuild-ws-edits {
+    @apply mb-2 rounded-xl bg-white p-2;
+  }
+
+  .rebuild-ws-edits-title {
+    @apply mb-1 text-[11px] font-bold text-slate-700;
+  }
+
+  .rebuild-ws-edit {
+    @apply flex gap-2 py-0.5 text-[11px] leading-relaxed;
+  }
+
+  .rebuild-ws-edit-count {
+    @apply shrink-0 rounded px-1 font-mono text-[10px] font-bold;
+  }
+
+  .rebuild-ws-edit.ok .rebuild-ws-edit-count {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .rebuild-ws-edit.miss .rebuild-ws-edit-count {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .rebuild-ws-edit.miss {
+    @apply text-amber-800;
+  }
+}

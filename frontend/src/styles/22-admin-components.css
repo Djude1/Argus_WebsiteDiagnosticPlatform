@@ -1,0 +1,490 @@
+@layer components {
+  /* --- Admin CMS tab + modal --- */
+  .admin-tab-row {
+    @apply flex flex-wrap gap-2 mb-3;
+  }
+  .admin-tab {
+    @apply rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer;
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    border: 1px solid var(--admin-border-solid);
+  }
+  .admin-tab:hover { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); border-color: #67e8f9; }
+  .admin-tab.active {
+    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
+    color: var(--admin-surface);
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+  }
+
+  .admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .admin-modal {
+    background: var(--admin-surface);
+    border-radius: 16px;
+    box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--admin-text);
+  }
+  .admin-modal-head {
+    @apply flex items-center justify-between px-5 py-4;
+    border-bottom: 1px solid var(--admin-border-solid);
+  }
+  .admin-modal-head h4 {
+    @apply text-lg font-bold;
+    color: var(--admin-text);
+  }
+  .admin-modal-close {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-full text-xl transition;
+    background: transparent;
+    color: var(--admin-text-muted);
+    border: none;
+    cursor: pointer;
+  }
+  .admin-modal-close:hover { background: var(--admin-surface-sunken); color: var(--admin-text); }
+  .admin-modal-body {
+    @apply space-y-3 overflow-y-auto px-5 py-4;
+    flex: 1;
+  }
+  .admin-modal-foot {
+    @apply flex items-center justify-end gap-2 px-5 py-4;
+    border-top: 1px solid var(--admin-border-solid);
+    background: var(--admin-surface-sunken);
+  }
+
+  /* modal 尺寸：收斂自原本 .ann-modal 的 sm / lg */
+  .admin-modal.is-sm { max-width: 480px; }
+  .admin-modal.is-md { max-width: 560px; }
+  .admin-modal.is-lg { max-width: 720px; }
+  .admin-modal-title {
+    @apply text-lg font-bold;
+    color: var(--admin-text);
+    margin: 0;
+  }
+
+  /* --- AdminField：label / hint / error 三段式表單欄位 --- */
+  .admin-field {
+    @apply flex flex-col gap-1;
+  }
+  .admin-field-label {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-field-required { color: var(--tone-bad); }
+  .admin-field-hint {
+    @apply text-xs;
+    color: var(--admin-text-muted);
+  }
+  .admin-field-error {
+    @apply text-xs font-medium;
+    color: var(--tone-bad);
+  }
+  .admin-field.has-error .admin-input {
+    border-color: var(--tone-bad);
+  }
+
+  /* --- 骨架：高度貼近真實內容，避免資料進來時版面位移 --- */
+  .admin-skeleton { @apply w-full; }
+  .admin-skeleton.is-card {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .admin-skeleton-card,
+  .admin-skeleton-block {
+    @apply flex flex-col gap-2 rounded-2xl p-5;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-skeleton-block { margin-bottom: 16px; }
+  .admin-skeleton-table {
+    @apply overflow-hidden rounded-xl;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+  }
+  .admin-skeleton-row {
+    @apply flex items-center gap-4 px-3;
+    height: 44px;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .admin-skeleton-row:last-child { border-bottom: none; }
+  .admin-skeleton-row.is-head {
+    height: 36px;
+    background: var(--admin-surface-sunken);
+  }
+  .admin-skeleton-bar {
+    @apply block rounded;
+    height: 10px;
+    background: linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.18) 0%,
+      rgba(148, 163, 184, 0.32) 50%,
+      rgba(148, 163, 184, 0.18) 100%
+    );
+    background-size: 200% 100%;
+    animation: admin-skeleton-shimmer 1.4s ease-in-out infinite;
+  }
+  .admin-skeleton-bar.tall { height: 22px; }
+  .admin-skeleton-bar.w-25 { width: 25%; }
+  .admin-skeleton-bar.w-30 { width: 30%; }
+  .admin-skeleton-bar.w-40 { width: 40%; }
+  .admin-skeleton-bar.w-55 { width: 55%; }
+  .admin-skeleton-bar.w-70 { width: 70%; }
+  .admin-skeleton-bar.w-90 { width: 90%; }
+  @keyframes admin-skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* --- 空狀態：圖示 + 說明 + 出口，取代單行「尚無資料」 --- */
+  .admin-empty-state {
+    @apply flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-10 text-center;
+    background: var(--admin-surface);
+    border: 1px dashed var(--admin-border-strong);
+  }
+  .admin-empty-state-icon {
+    @apply inline-flex items-center justify-center;
+    width: 40px;
+    height: 40px;
+    color: var(--admin-accent);
+  }
+  .admin-empty-state-title {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-empty-state-desc {
+    @apply text-xs;
+    color: var(--admin-text-muted);
+    max-width: 420px;
+  }
+  /* 無待辦是好消息，用成功色而非灰色呈現 */
+  .admin-empty-state.tone-good { border-color: rgba(16, 185, 129, 0.35); }
+  .admin-empty-state.tone-good .admin-empty-state-icon { color: var(--tone-good); }
+
+  /* --- 錯誤狀態：區塊級，永遠留有下一步 --- */
+  .admin-error-state {
+    @apply flex flex-col items-start gap-2 rounded-2xl p-5;
+    background: #fef2f2;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+  }
+  .admin-error-state.is-compact { @apply p-3; }
+  .admin-error-state-title {
+    @apply text-sm font-semibold;
+    color: #991b1b;
+  }
+  .admin-error-state-detail {
+    @apply text-xs;
+    color: var(--admin-tone-bad-text);
+    word-break: break-word;
+  }
+
+  /* 表格數字欄位等寬對齊：沒有它，金額與點數在列與列之間會左右跳動 */
+  .admin-table .num,
+  .admin-stat-value,
+  .admin-balance-big {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- 分段切換：取代下拉選單，讓狀態分佈一眼可見且一鍵可切 --- */
+  .admin-segmented {
+    @apply inline-flex flex-wrap gap-1 rounded-xl p-1;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-segment {
+    @apply rounded-lg px-3.5 py-1.5 text-sm font-semibold transition;
+    background: transparent;
+    color: var(--admin-text-muted-sunken);
+    border: none;
+    cursor: pointer;
+  }
+  .admin-segment:hover { color: var(--admin-text); }
+  .admin-segment.active {
+    background: var(--admin-surface);
+    color: var(--admin-accent);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+  .admin-segment:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 1px;
+  }
+
+  /* --- 訂單狀態：色 + 圓點 + 文字三重編碼 --- */
+  .admin-order-status {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-order-status-dot {
+    @apply inline-block rounded-full;
+    width: 6px;
+    height: 6px;
+    background: currentColor;
+  }
+  .admin-order-status.tone-good {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--admin-tone-good-text);
+  }
+  .admin-order-status.tone-warn {
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--admin-tone-warn-text);
+  }
+
+  /* modal 內的次級標題 */
+  .admin-modal-subhead {
+    @apply mt-1 text-xs font-bold uppercase tracking-wider;
+    color: var(--admin-text-muted);
+  }
+
+  /* 次要按鈕：與 primary 拉開視覺權重，一個畫面只留一個主要 CTA */
+  .admin-btn.ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-btn.ghost:hover {
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text);
+  }
+
+  .admin-pagination-total {
+    color: var(--admin-text-muted);
+    font-size: 0.75rem;
+  }
+  .admin-pagination.is-single {
+    @apply flex justify-end;
+  }
+
+  /* 面板右上的「看更多」連結 */
+  .admin-panel-more {
+    @apply text-xs font-semibold;
+    color: var(--admin-accent);
+    text-decoration: none;
+  }
+  .admin-panel-more:hover { text-decoration: underline; }
+
+  /* --- 掃描詳情：優先處置建議 --- */
+  .admin-top-actions {
+    @apply flex flex-col gap-2;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: none;
+  }
+  .admin-top-action {
+    @apply flex items-start gap-3 rounded-xl p-3;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-top-action-rank {
+    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-xs font-bold;
+    width: 24px;
+    height: 24px;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-strong);
+    color: var(--admin-text-muted-sunken);
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-top-action-body { @apply flex min-w-0 flex-1 flex-col gap-1.5; }
+  .admin-top-action-title {
+    @apply text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-top-action-meta { @apply flex flex-wrap items-center gap-2; }
+
+  /* --- 掃描詳情：爬取警告 --- */
+  .admin-tech-stack {
+    @apply mb-3 flex flex-wrap items-center gap-1.5;
+  }
+  .admin-tech-chip {
+    @apply rounded-md px-2 py-0.5 text-xs font-medium;
+    background: rgba(56, 189, 248, 0.12);
+    color: #0369a1;
+  }
+  .admin-warn-group {
+    @apply rounded-xl;
+    border: 1px solid var(--admin-border);
+    margin-bottom: 8px;
+  }
+  .admin-warn-group > summary {
+    @apply flex cursor-pointer items-center gap-2 px-3 py-2 text-sm;
+    list-style: none;
+  }
+  .admin-warn-group > summary::-webkit-details-marker { display: none; }
+  .admin-warn-group > summary::before {
+    content: "▸";
+    color: var(--admin-text-muted);
+    transition: transform 0.15s ease;
+  }
+  .admin-warn-group[open] > summary::before { transform: rotate(90deg); }
+  .admin-warn-count {
+    @apply inline-flex items-center justify-center rounded-md px-1.5 text-xs font-bold;
+    min-width: 22px;
+    height: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-warn-count.tone-warn {
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--admin-tone-warn-text);
+  }
+  .admin-warn-count.tone-bad {
+    background: rgba(239, 68, 68, 0.14);
+    color: var(--admin-tone-bad-text);
+  }
+  .admin-warn-label {
+    @apply font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-warn-list {
+    @apply flex flex-col gap-1 px-3 pb-3;
+    list-style: none;
+    margin: 0;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .admin-warn-list li {
+    @apply flex flex-wrap items-baseline gap-2 text-xs;
+  }
+  .admin-warn-url {
+    @apply rounded px-1.5 py-0.5;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text);
+    word-break: break-all;
+  }
+  .admin-warn-reason { color: var(--admin-text-muted); }
+
+  /* 表單列：兩欄並排（價格 / Coin 這類成對欄位） */
+  .admin-field-row {
+    @apply grid gap-3;
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-radio-group {
+    @apply flex flex-wrap items-center gap-4;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .admin-radio-group label {
+    @apply inline-flex items-center gap-1.5 text-sm;
+    color: var(--admin-text);
+  }
+  .admin-input-narrow { max-width: 120px; }
+  .admin-page-head-links { @apply flex flex-wrap items-center gap-2; }
+
+  /* 列表被縮限在某個範圍時的提示條。沒有它，管理員會以為系統只有這幾筆資料 */
+  /* --- 系統健康 --- */
+  .admin-health-summary {
+    @apply flex items-center gap-3 rounded-2xl p-4;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-left-width: 4px;
+  }
+  .admin-health-summary.tone-ok { border-left-color: var(--tone-good); }
+  .admin-health-summary.tone-warn { border-left-color: var(--tone-medium); }
+  .admin-health-summary.tone-bad { border-left-color: var(--tone-bad); }
+  .admin-health-summary-icon {
+    @apply inline-flex items-center justify-center;
+    width: 28px; height: 28px;
+    color: var(--admin-text-muted);
+  }
+  .admin-health-summary.tone-ok .admin-health-summary-icon { color: var(--tone-good); }
+  .admin-health-summary.tone-warn .admin-health-summary-icon { color: var(--admin-tone-warn-text); }
+  .admin-health-summary.tone-bad .admin-health-summary-icon { color: var(--admin-tone-bad-text); }
+  .admin-health-summary-title { @apply text-sm font-bold; color: var(--admin-text); }
+  .admin-health-summary-time { @apply text-xs; color: var(--admin-text-muted); }
+
+  .admin-health-list { @apply flex flex-col; list-style: none; margin: 0; padding: 0; }
+  .admin-health-row {
+    @apply flex items-start gap-3 py-3;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .admin-health-row:last-child { border-bottom: none; }
+  .admin-health-badge {
+    @apply inline-flex shrink-0 items-center justify-center rounded-full text-xs font-bold;
+    width: 22px; height: 22px;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-health-row.tone-ok .admin-health-badge { background: rgba(16,185,129,.14); color: var(--admin-tone-good-text); }
+  .admin-health-row.tone-warn .admin-health-badge { background: rgba(245,158,11,.16); color: var(--admin-tone-warn-text); }
+  .admin-health-row.tone-bad .admin-health-badge { background: rgba(239,68,68,.14); color: var(--admin-tone-bad-text); }
+  .admin-health-body { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
+  .admin-health-label {
+    @apply flex flex-wrap items-center gap-2 text-sm font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-health-state {
+    @apply rounded px-1.5 py-0.5 text-xs font-medium;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-muted-sunken);
+  }
+  .admin-health-detail { @apply text-sm; color: var(--admin-text-muted); }
+  .admin-health-basis { @apply text-xs; color: var(--admin-text-muted); opacity: .85; }
+
+  .admin-scope-note {
+    @apply flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm;
+    background: rgba(56, 189, 248, 0.10);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    color: #0c4a6e;
+  }
+
+  /* --- 今日脈搏 --- */
+  .admin-pulse-row {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+  .admin-pulse {
+    @apply rounded-xl p-3;
+    background: var(--admin-surface-sunken);
+  }
+  .admin-pulse-value {
+    @apply text-2xl font-bold leading-tight;
+    color: var(--admin-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-pulse-label {
+    @apply text-xs;
+    color: var(--admin-text-muted-sunken);
+  }
+
+
+  /* --- 可排序表頭 --- */
+  .admin-table thead th.admin-th-sortable { padding: 0; }
+  .admin-sort-btn {
+    @apply inline-flex w-full items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .admin-table thead th.num .admin-sort-btn { justify-content: flex-end; }
+  .admin-sort-btn:hover { color: var(--admin-text); }
+  .admin-sort-btn.is-active { color: var(--admin-accent); }
+  .admin-sort-arrow {
+    font-size: 0.85em;
+    opacity: 0.45;
+  }
+  .admin-sort-btn.is-active .admin-sort-arrow { opacity: 1; }
+  .admin-sort-btn:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: -2px;
+  }
+
+  @media (max-width: 640px) {
+    .admin-field-row { grid-template-columns: 1fr; }
+  }
+}

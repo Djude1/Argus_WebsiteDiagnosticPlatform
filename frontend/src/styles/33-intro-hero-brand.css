@@ -1,0 +1,250 @@
+/* ============================================================
+   首次進站粒子過場動畫（IntroSequence）
+   移植自「過場動畫和網站設計範本/index.html」的青藍科技風 overlay；
+   播完淡出露出首頁。樣式自包含，不依賴其他 token。
+   ============================================================ */
+.argus-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(ellipse at center, #001428 0%, #000308 70%, #000 100%);
+  font-family: "Consolas", "Courier New", monospace;
+  color: #00d4ff;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  cursor: pointer;
+}
+.argus-intro--out {
+  opacity: 0;
+  pointer-events: none;
+}
+.argus-intro-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+.argus-intro-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.argus-intro-corner {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #00f7ff;
+  pointer-events: none;
+}
+.argus-intro-corner.tl { top: 16px; left: 16px; border-right: none; border-bottom: none; }
+.argus-intro-corner.tr { top: 16px; right: 16px; border-left: none; border-bottom: none; }
+.argus-intro-corner.bl { bottom: 16px; left: 16px; border-right: none; border-top: none; }
+.argus-intro-corner.br { bottom: 16px; right: 16px; border-left: none; border-top: none; }
+.argus-intro-hud {
+  position: absolute;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: #00f7ff;
+  line-height: 1.7;
+  font-weight: bold;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(0, 247, 255, 0.6);
+}
+.argus-intro-hud.tl { top: 32px; left: 32px; }
+.argus-intro-hud.tr { top: 32px; right: 32px; text-align: right; }
+.argus-intro-hud.br { bottom: 32px; right: 32px; text-align: right; }
+.argus-intro-hud .v { color: #fff; }
+.argus-intro-hud .dim { opacity: 0.55; }
+.argus-intro-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.argus-intro-hint {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(0, 247, 255, 0.75);
+  font-size: 12px;
+  letter-spacing: 4px;
+  font-weight: bold;
+  pointer-events: none;
+  animation: introHintPulse 1.8s ease-in-out infinite;
+}
+@keyframes introHintPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.95; } }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 偏好減少動態者：元件層已直接略過並 onComplete，這裡確保不殘留任何 overlay 畫面 */
+  .argus-intro { display: none; }
+}
+
+/* ============================================================
+   首頁 page2 科技主控台視覺（公開頁 hero 的 console 變體）
+   參考「過場動畫和網站設計範本/page2.html」：科技網格漂移 / 掃描線 / HUD 邊角 / 發光標題。
+   內容沿用 .public-shell 放大規則，解決 page2 原稿「字太小」的問題。
+   ============================================================ */
+.public-hero--console {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 60, 110, 0.45) 0%, rgba(6, 11, 31, 0) 60%),
+    radial-gradient(ellipse at center, #001a2e 0%, #050a1c 60%, #03060f 100%);
+  border-bottom: 1px solid rgba(0, 247, 255, 0.18);
+  overflow: hidden;
+}
+.public-hero--console .hero-grid {
+  position: absolute;
+  inset: -2px;
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: heroGridDrift 14s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes heroGridDrift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(48px, 48px); }
+}
+.public-hero--console .hero-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 247, 255, 0.55) 50%, transparent);
+  box-shadow: 0 0 18px rgba(0, 247, 255, 0.6);
+  animation: heroScan 6s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes heroScan {
+  0% { top: -4px; }
+  100% { top: 100%; }
+}
+.public-hero--console .hero-corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(0, 247, 255, 0.75);
+  box-shadow: 0 0 16px rgba(0, 247, 255, 0.4);
+  pointer-events: none;
+  z-index: 1;
+}
+.public-hero--console .hero-corner.tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+.public-hero--console .hero-corner.tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
+.public-hero--console .hero-corner.bl { bottom: 18px; left: 18px; border-right: none; border-top: none; }
+.public-hero--console .hero-corner.br { bottom: 18px; right: 18px; border-left: none; border-top: none; }
+.public-hero--console .public-hero-content { position: relative; z-index: 2; }
+.public-hero--console .public-hero-title {
+  color: #f2feff;
+  text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35);
+  animation: heroTitleGlow 3.2s ease-in-out infinite;
+}
+@keyframes heroTitleGlow {
+  0%, 100% { text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35); }
+  50% { text-shadow: 0 0 22px rgba(0, 247, 255, 0.85), 0 0 60px rgba(0, 247, 255, 0.55); }
+}
+.public-hero--console .public-hero-eyebrow {
+  color: #67e8f9;
+  text-shadow: 0 0 10px rgba(0, 247, 255, 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-hero--console .hero-grid,
+  .public-hero--console .hero-scan,
+  .public-hero--console .public-hero-title { animation: none; }
+}
+
+/* ============================================================
+   免費工具分頁籤（/free-tools）：一次顯示一個工具，避免頁面過長雜亂
+   ============================================================ */
+.insight-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+.insight-tab {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(103, 232, 249, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(8, 20, 40, 0.5);
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.insight-tab:hover {
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.6);
+}
+.insight-tab.active {
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+  border-color: rgba(34, 211, 238, 0.6);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(8, 145, 178, 0.6);
+}
+.insight-tab:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   品牌列：改為可點按鈕（點整塊 → 重播開場動畫）+ 用商標圖取代文字 glyph
+   ============================================================ */
+.public-brand,
+.argus-brand {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.public-brand-logo,
+.argus-brand-logo {
+  height: 64px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  filter: saturate(1.15) contrast(1.08) drop-shadow(0 4px 10px rgba(14, 165, 233, 0.22));
+}
+.public-brand-sub,
+.argus-brand-sub {
+  font-size: 1.02rem !important;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+}
+.argus-brand-sub { color: rgba(186, 230, 253, 0.9) !important; }
+.public-brand:focus-visible,
+.argus-brand:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+@media (max-width: 640px) {
+  .public-brand-logo,
+  .argus-brand-logo { height: 48px; }
+  .public-brand-sub,
+  .argus-brand-sub {
+    font-size: 0.78rem !important;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+}
+
+/* 全寬化後：限制 section 標題/描述行長，避免寬螢幕單行過長難讀；描述提高對比 */
+.public-section-head { max-width: 72ch; }
+.public-section-head p { color: #cbd5e1 !important; }

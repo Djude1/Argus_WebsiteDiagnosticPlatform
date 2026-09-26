@@ -1,0 +1,468 @@
+/* ===== Responsive polish：收斂手機版密度與可點擊範圍 ===== */
+
+/* TOP BAR（登入後 nav）：在 ≤1140px 就把連結列收到第二行（全寬、可橫向捲動），
+   避免 ~640–1133px 之間 nav 連結與 brand/dashboard 擠在一起、換行雜亂。
+   斷點刻意設在 1133px 之上，讓該區間呈現與手機一致的「連結獨佔一列」樣式。 */
+@media (max-width: 1140px) {
+  .argus-nav-inner {
+    gap: 0.625rem;
+    padding: 0.75rem;
+  }
+
+  .argus-brand {
+    min-width: 0;
+  }
+
+  .argus-brand-title {
+    font-size: 0.95rem;
+    letter-spacing: 0.18em;
+  }
+
+  .argus-brand-sub {
+    display: none;
+  }
+
+  .argus-nav-links {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.125rem;
+    scrollbar-width: none;
+  }
+
+  .argus-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .argus-nav-link {
+    flex: 0 0 auto;
+    padding: 0.55rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  .coin-chip,
+  .install-chip,
+  .nav-logout-btn {
+    padding: 0.5rem 0.65rem;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 900px) {
+  .argus-main {
+    padding: 0.875rem;
+  }
+
+  .argus-main.with-nav {
+    padding-top: 0.875rem;
+  }
+
+  .scan-layout.list-mode {
+    display: block;
+  }
+
+  .scan-layout.list-mode .scan-sidebar {
+    position: static;
+  }
+
+  .scan-content {
+    min-height: 0;
+    margin-top: 1rem;
+  }
+
+  .scope-grid,
+  .billing-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-checkout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-order-summary {
+    position: static;
+    grid-row: 1;
+  }
+
+  .billing-carrier-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell {
+    display: block;
+    min-width: 0;
+    padding-top: 56px;
+  }
+
+  .admin-mobile-header {
+    display: flex;
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 45;
+    height: 56px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+    color: #f8fafc;
+    background: #0f172a;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.2);
+  }
+
+  .admin-menu-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #f8fafc;
+    background: #1e293b;
+    font-size: 1.25rem;
+    cursor: pointer;
+  }
+
+  .admin-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 47;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15, 23, 42, 0.58);
+  }
+
+  .admin-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 48;
+    width: min(82vw, 288px);
+    height: 100dvh;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+
+  .admin-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .admin-main {
+    width: 100%;
+    min-width: 0;
+    padding: 1rem;
+    overflow-x: hidden;
+  }
+
+  .admin-page,
+  .admin-panel,
+  .admin-grid-2col {
+    min-width: 0;
+  }
+
+  .admin-grid-2col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-panel {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .admin-table {
+    width: max(100%, 680px);
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    border-radius: 14px;
+    padding: 1rem;
+  }
+
+  .admin-main {
+    padding: 0.75rem;
+  }
+
+  .public-shell {
+    font-size: 15px;
+  }
+
+  .public-shell .public-hero-title {
+    font-size: clamp(2rem, 12vw, 3rem);
+    line-height: 1.12;
+  }
+
+  .public-shell .public-hero-sub {
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+
+  .public-shell .public-section-head h2 {
+    font-size: 1.65rem;
+  }
+
+  .public-main {
+    padding: 0 0.75rem 2.5rem;
+  }
+
+  .public-page {
+    row-gap: 2rem;
+  }
+
+  .public-nav-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .public-brand {
+    min-width: 0;
+    gap: 0.42rem;
+  }
+
+  .public-brand-glyph {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.65rem;
+  }
+
+  .public-brand-title {
+    font-size: 0.88rem !important;
+    letter-spacing: 0.18em;
+  }
+
+  .public-brand-sub {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .public-nav-cta {
+    margin-left: 0;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
+  }
+
+  .public-nav-cta .public-cta-primary {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.82rem !important;
+    white-space: nowrap;
+  }
+
+  .public-nav-links {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-left: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: space-between;
+    gap: 0.15rem;
+    padding-bottom: 0.125rem;
+    scrollbar-width: none;
+  }
+
+  .public-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .public-nav-link {
+    flex: 0 0 auto;
+    padding: 0.48rem 0.42rem !important;
+    font-size: 0.86rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap;
+  }
+
+  .public-hero {
+    margin: 0 -0.75rem;
+    padding: 3.5rem 0 2.75rem;
+  }
+
+  .public-hero.compact {
+    padding: 3rem 0 2.25rem;
+  }
+
+  .public-hero-content {
+    padding: 0 1rem;
+  }
+
+  .project-demo-window,
+  .public-final-cta,
+  .public-compare-wrap,
+  .public-team-card-pro,
+  .public-feature-card,
+  .public-plan-card,
+  .insight-tool-card,
+  .insight-result-card {
+    border-radius: 14px;
+  }
+
+  .project-demo-body,
+  .public-feature-card,
+  .public-plan-card,
+  .public-team-card-pro,
+  .insight-tool-card,
+  .insight-result-card {
+    padding: 1rem;
+  }
+
+  .insight-tool-layout,
+  .verify-layout,
+  .insight-two-col,
+  .insight-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-score-row,
+  .insight-risk-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .insight-score {
+    width: 4.5rem;
+    height: 4.5rem;
+    font-size: 1.55rem;
+  }
+
+  .public-compare-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .public-compare-table {
+    min-width: 680px;
+  }
+
+  .wizard-nav,
+  .wizard-confirm-plan,
+  .wizard-success-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .login-submit,
+  .billing-plan-button,
+  .public-final-cta-btn {
+    width: 100%;
+  }
+
+  .billing-plan-card,
+  .scope-card,
+  .wizard-confirm-card {
+    border-radius: 14px;
+  }
+
+  .billing-checkout-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1.25rem;
+  }
+
+  .billing-wallet-summary {
+    width: 100%;
+  }
+
+  .billing-environment-notice,
+  .wizard-stepper {
+    margin-right: 1rem;
+    margin-left: 1rem;
+  }
+
+  .billing-environment-notice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .billing-step-content,
+  .wizard-checkout-grid {
+    padding-right: 1rem;
+    padding-left: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .wizard-stepper {
+    gap: 0.4rem;
+  }
+
+  .wizard-step {
+    display: flex;
+    min-height: 4.6rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.6rem 0.35rem;
+    text-align: center;
+  }
+
+  .wizard-step-circle {
+    width: 1.95rem;
+    height: 1.95rem;
+    border-radius: 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .wizard-step-copy {
+    align-items: center;
+  }
+
+  .wizard-step-kicker {
+    display: none;
+  }
+
+  .wizard-step-label {
+    font-size: 0.68rem;
+  }
+
+  .billing-field-grid,
+  .billing-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-form-intro h3 {
+    font-size: 1.05rem;
+  }
+
+  .billing-form-section,
+  .wizard-order-summary {
+    padding: 1rem;
+  }
+
+  .scan-estimate-result,
+  .coin-estimate-row {
+    align-items: stretch;
+  }
+
+  .scan-estimate-result {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .login-page {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+
+  .login-card {
+    margin-top: 10vh;
+    padding: 1.5rem;
+  }
+
+  .login-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

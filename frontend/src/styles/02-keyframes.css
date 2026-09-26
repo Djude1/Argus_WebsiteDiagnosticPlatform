@@ -1,0 +1,64 @@
+/* ========================================
+   全域動畫 keyframes
+   ======================================== */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bar-grow {
+  from { width: 0%; }
+}
+
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-circumference, 264);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes tech-marquee-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes tech-marquee-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+
+/* 偏好減少動態者：改成不捲動的靜態網格，並隱藏用來無縫循環的複製區塊 */
+@media (prefers-reduced-motion: reduce) {
+  .tech-marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .tech-marquee-col {
+    height: auto;
+    overflow: visible;
+  }
+  .tech-marquee-track { animation: none; }
+  .tech-marquee-group.is-clone { display: none; }
+  /* 進行中狀態改用靜態色點：脈動只是輔助訊號，狀態文字本身已經講清楚了 */
+  .rebuild-dot { animation: none; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

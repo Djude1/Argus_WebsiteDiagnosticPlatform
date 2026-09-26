@@ -1,0 +1,419 @@
+@layer components {
+  /* ========================================
+     Dashboard
+     ======================================== */
+
+  .dashboard-grid {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+
+  .dashboard-hero {
+    @apply col-span-full flex flex-wrap items-center justify-between gap-6 rounded-2xl p-6 text-white shadow-lg;
+    background: linear-gradient(135deg, var(--argus-navy-950) 0%, var(--argus-navy-800) 60%, var(--argus-indigo-900) 100%);
+    border: 1px solid rgba(103, 232, 249, 0.25);
+    box-shadow: 0 18px 40px -20px rgba(8, 47, 73, 0.7);
+  }
+
+  .dashboard-hero-title {
+    @apply text-3xl font-bold md:text-4xl;
+    color: var(--argus-text-bright);
+  }
+
+  .dashboard-hero-title span {
+    color: var(--argus-cyan-glow);
+    text-shadow: 0 0 18px rgba(34, 211, 238, 0.6);
+  }
+
+  .dashboard-hero-sub {
+    @apply mt-2 text-sm;
+    color: rgba(186, 230, 253, 0.7);
+  }
+
+  .dashboard-hero-text { @apply flex flex-col; }
+  .dashboard-hero-actions {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+  .dashboard-hero-actions .primary-button,
+  .dashboard-hero-actions .secondary-button {
+    @apply text-sm;
+  }
+
+  .stat-grid {
+    @apply col-span-full grid grid-cols-2 gap-3 md:grid-cols-4;
+  }
+
+  .stat-tile {
+    @apply rounded-2xl border p-4 text-white;
+    background: linear-gradient(160deg, var(--argus-navy-800) 0%, var(--argus-navy-700) 100%);
+    border-color: rgba(103, 232, 249, 0.2);
+  }
+
+  .stat-tile.tone-cyan {
+    border-color: rgba(34, 211, 238, 0.4);
+    box-shadow: 0 0 18px -6px rgba(34, 211, 238, 0.45);
+  }
+  .stat-tile.tone-violet {
+    border-color: rgba(167, 139, 250, 0.4);
+    box-shadow: 0 0 18px -6px rgba(167, 139, 250, 0.45);
+  }
+  .stat-tile.tone-amber {
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 18px -6px rgba(251, 191, 36, 0.4);
+  }
+  .stat-tile.tone-rose {
+    border-color: rgba(251, 113, 133, 0.45);
+    box-shadow: 0 0 18px -6px rgba(251, 113, 133, 0.5);
+  }
+
+  /* StatTile 變 button 時的可點 affordance（無 AI 味，只加 cursor + 輕量 hover） */
+  button.stat-tile.is-clickable {
+    @apply text-left w-full;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  button.stat-tile.is-clickable:hover {
+    transform: translateY(-2px);
+  }
+  button.stat-tile.is-clickable:focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.6);
+    outline-offset: 2px;
+  }
+
+  .stat-tile-label {
+    @apply text-xs uppercase tracking-[0.18em];
+    color: rgba(186, 230, 253, 0.82);
+  }
+
+  .stat-tile-value {
+    @apply mt-1 text-3xl font-bold;
+    color: var(--argus-text-white);
+  }
+
+  .stat-tile-hint {
+    @apply mt-1 text-xs;
+    color: rgba(186, 230, 253, 0.8);
+  }
+
+  .dashboard-panel {
+    @apply col-span-full;
+  }
+
+  .dashboard-panel-header {
+    @apply mb-3 flex items-center justify-between;
+  }
+
+  .dashboard-panel-header h3 {
+    @apply text-base font-bold text-slate-900;
+  }
+
+  /* Score ring */
+  .score-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+
+  .score-ring .ring-track {
+    stroke: rgba(148, 163, 184, 0.25);
+  }
+
+  .score-ring .ring-progress {
+    transition: stroke-dashoffset 0.6s ease;
+  }
+
+  .score-ring.tone-good .ring-progress {
+    stroke: var(--tone-good-bright);
+    filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.55));
+  }
+  .score-ring.tone-medium .ring-progress {
+    stroke: var(--tone-medium-bright);
+    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.55));
+  }
+  .score-ring.tone-bad .ring-progress {
+    stroke: var(--tone-bad-soft);
+    filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.55));
+  }
+
+  .score-ring-text {
+    @apply absolute inset-0 flex flex-col items-center justify-center text-center;
+  }
+
+  .score-ring-value {
+    @apply text-2xl font-bold;
+    color: var(--argus-text-bright);
+  }
+
+  .score-ring-label {
+    @apply text-[10px] uppercase tracking-[0.2em];
+    color: rgba(186, 230, 253, 0.55);
+  }
+
+  /* 白底面板內的 score ring 文字用深色 */
+  .panel .score-ring-value {
+    @apply text-slate-900;
+  }
+
+  .panel .score-ring-label {
+    color: rgba(71, 85, 105, 0.7);
+  }
+
+  .category-rings {
+    @apply mt-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5;
+  }
+
+  .category-ring-item {
+    @apply flex flex-col items-center gap-2;
+  }
+
+  .recent-list {
+    @apply space-y-2;
+  }
+
+  .recent-row {
+    @apply flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-blue-300;
+  }
+
+  .recent-origin {
+    @apply flex-1 truncate font-mono text-slate-700;
+  }
+
+  .recent-time {
+    @apply text-xs whitespace-nowrap;
+    color: #94a3b8;
+  }
+
+  /* ========================================
+     History 頁
+     ======================================== */
+
+  .history-grid {
+    @apply mt-3 grid gap-3 md:grid-cols-2;
+  }
+
+  .history-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .history-card-head {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .history-origin {
+    @apply truncate font-mono text-sm font-semibold text-slate-800;
+  }
+
+  .history-card-mid {
+    @apply mt-2 flex flex-wrap items-center gap-3;
+  }
+
+  .history-delta {
+    @apply rounded-full px-2 py-0.5 text-xs font-bold;
+  }
+
+  .history-delta.tone-good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+  .history-delta.tone-bad {
+    @apply bg-red-100 text-red-700;
+  }
+  .history-delta.tone-neutral {
+    @apply bg-slate-100 text-slate-500;
+  }
+
+  .sparkline polyline {
+    stroke: var(--argus-cyan);
+    filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.45));
+  }
+
+  .history-list {
+    @apply mt-3 space-y-1;
+  }
+
+  .history-row {
+    @apply flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left hover:bg-slate-50;
+    transition: background-color 0.2s, transform 0.18s;
+  }
+
+  /* 最新一次掃描特效：cyan 漸層底、邊框微光、輕微浮起，旁邊一顆「最新」chip 持續 pulse */
+  .history-row.is-latest {
+    @apply rounded-xl border border-cyan-300 px-3 py-2;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(99, 102, 241, 0.08));
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.25),
+      0 8px 18px -10px rgba(56, 189, 248, 0.5);
+    animation: latest-glow 2.8s ease-in-out infinite;
+  }
+
+  .history-row.is-latest:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 2px rgba(56, 189, 248, 0.4),
+      0 12px 22px -10px rgba(56, 189, 248, 0.6);
+  }
+
+  .history-row.is-older {
+    @apply opacity-80;
+  }
+
+  .history-latest-chip {
+    @apply mr-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white;
+    background: linear-gradient(135deg, var(--argus-cyan), #6366f1);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    animation: latest-chip-pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes latest-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 1px rgba(56, 189, 248, 0.25),
+        0 8px 18px -10px rgba(56, 189, 248, 0.45);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px rgba(56, 189, 248, 0.4),
+        0 10px 24px -8px rgba(56, 189, 248, 0.65);
+    }
+  }
+
+  @keyframes latest-chip-pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    }
+    50% {
+      transform: scale(1.06);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.85);
+    }
+  }
+
+  /* ========================================
+     Audit 頁
+     ======================================== */
+
+  .timeline {
+    @apply mt-3 space-y-3 border-l-2 border-slate-200 pl-5;
+  }
+
+  .timeline-item {
+    @apply relative;
+  }
+
+  .timeline-marker {
+    @apply absolute -left-[34px] flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-sm shadow;
+  }
+  .timeline-marker.tone-blue {
+    @apply bg-blue-100 text-blue-700;
+  }
+  .timeline-marker.tone-emerald {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+  .timeline-marker.tone-red {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .timeline-body {
+    @apply rounded-xl border border-slate-200 bg-white p-3;
+  }
+
+  .timeline-row {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .timeline-label {
+    @apply text-xs font-bold uppercase tracking-[0.18em] text-slate-700;
+  }
+
+  .timeline-time {
+    @apply text-xs text-slate-400;
+  }
+
+  .timeline-message {
+    @apply mt-1 text-sm text-slate-700;
+  }
+
+  .link-button {
+    @apply mt-1 text-xs font-semibold text-blue-600 hover:underline;
+  }
+
+  /* ========================================
+     Categories 頁
+     ======================================== */
+
+  .category-tabs {
+    @apply mb-4 flex flex-wrap gap-2;
+  }
+
+  .category-tab {
+    @apply inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-300;
+  }
+
+  .category-tab.active {
+    @apply border-blue-500 bg-blue-50 text-blue-900;
+  }
+
+  .category-tab.cat-security.active {
+    @apply border-red-500 bg-red-50 text-red-900;
+  }
+  .category-tab.cat-seo.active {
+    @apply border-indigo-500 bg-indigo-50 text-indigo-900;
+  }
+  .category-tab.cat-aeo.active {
+    @apply border-violet-500 bg-violet-50 text-violet-900;
+  }
+  .category-tab.cat-geo.active {
+    @apply border-cyan-500 bg-cyan-50 text-cyan-900;
+  }
+  .category-tab.cat-ux.active {
+    @apply border-emerald-500 bg-emerald-50 text-emerald-900;
+  }
+
+  .category-tab-label {
+    @apply font-semibold;
+  }
+
+  .category-tab-count {
+    @apply min-w-[28px] rounded-full bg-slate-100 px-2 py-0.5 text-center text-xs font-bold text-slate-600;
+  }
+
+  .category-issue-list {
+    @apply space-y-2;
+  }
+
+  .category-issue-row {
+    @apply flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3;
+  }
+
+  .category-issue-title {
+    @apply flex-1 truncate text-sm font-medium text-slate-800;
+  }
+
+  .category-issue-count {
+    @apply rounded-full bg-slate-100 px-3 py-0.5 text-sm font-bold text-slate-700;
+  }
+
+  /* ========================================
+     Settings 頁
+     ======================================== */
+
+  .settings-grid {
+    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4;
+  }
+
+  .settings-card {
+    @apply rounded-2xl border border-slate-200 bg-slate-50 p-4;
+  }
+
+  .settings-card-label {
+    @apply text-xs uppercase tracking-[0.18em] text-slate-500;
+  }
+
+  .settings-card-value {
+    @apply mt-1 text-2xl font-bold text-slate-900;
+  }
+
+  .settings-card-hint {
+    @apply mt-1 text-xs text-slate-500;
+  }
+
+  .settings-about {
+    @apply space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700;
+  }
+}

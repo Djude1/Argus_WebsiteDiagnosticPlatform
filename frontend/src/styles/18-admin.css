@@ -1,0 +1,685 @@
+@layer components {
+  /* ============================================================
+     /admin React 後台主題（淺色調、白卡片 + cyan accent）
+     ============================================================ */
+
+  .argus-app.is-admin-mode {
+    background: var(--argus-admin-bg-2);
+    min-height: 100vh;
+  }
+
+  .argus-main.is-admin {
+    padding: 0;
+    max-width: none;
+    background: transparent;
+  }
+
+  .admin-shell {
+    display: grid;
+    grid-template-columns: 256px 1fr;
+    min-height: 100vh;
+    color: var(--admin-text);
+  }
+  .admin-mobile-header,
+  .admin-drawer-backdrop {
+    display: none;
+  }
+
+  .admin-loading,
+  .admin-error,
+  .admin-forbidden {
+    @apply mx-auto mt-20 max-w-md rounded-2xl p-8 text-center;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-solid);
+    color: var(--admin-text);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .admin-forbidden h2 { @apply text-xl font-bold mb-2; color: var(--admin-text); }
+  .admin-forbidden p { @apply text-sm; color: var(--admin-text-secondary); }
+  .admin-error { color: #be123c; }
+
+  /* --- Sidebar (dark gradient) --- */
+  .admin-sidebar {
+    @apply flex flex-col;
+    background: linear-gradient(180deg, var(--admin-sidebar-from) 0%, var(--admin-sidebar-to) 100%);
+    border-right: 1px solid rgba(56, 189, 248, 0.16);
+    padding: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    box-shadow: 2px 0 24px -8px rgba(15, 23, 42, 0.25);
+  }
+  /* 科技主控台微光：sidebar 頂部一道靜態 cyan accent（克制、無動畫，符合後台冷靜原則） */
+  .admin-sidebar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.75), transparent);
+    pointer-events: none;
+  }
+
+  .admin-brand {
+    @apply flex flex-col items-start gap-2;
+    padding: 20px 14px;
+    border: none;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    background: transparent;
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+  .admin-brand:hover {
+    background: rgba(34, 211, 238, 0.06);
+  }
+  .admin-brand-logo {
+    height: 40px;
+    width: auto;
+    display: block;
+    flex-shrink: 0;
+  }
+  .admin-brand-sub {
+    @apply text-xs font-medium;
+    color: #22d3ee;
+    letter-spacing: 0.04em;
+  }
+
+  .admin-nav {
+    @apply flex flex-1 flex-col;
+    gap: 14px;
+    padding: 12px 10px;
+    overflow-y: auto;
+  }
+  .admin-nav-group > div {
+    @apply flex flex-col gap-0.5;
+  }
+  /* 分組標題：刻意低對比且小字——它是掃視時的錨點，不是可點的項目，
+     權重高過連結反而會誤導 */
+  .admin-nav-group-label {
+    @apply px-3 pb-1.5 text-[0.65rem] font-bold uppercase;
+    letter-spacing: 0.14em;
+    color: rgba(148, 163, 184, 0.7);
+    margin: 0;
+  }
+  .admin-nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium;
+    color: #94a3b8;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+  .admin-nav-link:hover {
+    background: rgba(51, 65, 85, 0.5);
+    color: #f1f5f9;
+    transform: translateX(2px);
+  }
+  .admin-nav-link.active {
+    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+    color: #ffffff;
+    box-shadow: 0 6px 16px -4px rgba(8, 145, 178, 0.5),
+                0 0 0 1px rgba(34, 211, 238, 0.2);
+  }
+  .admin-nav-link.active::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #cffafe;
+    box-shadow: 0 0 6px rgba(207, 250, 254, 0.7);
+  }
+  .admin-nav-emoji {
+    /* legacy class kept for backward compat; new SVG icon uses .admin-nav-icon */
+  }
+  .admin-nav-icon {
+    flex-shrink: 0;
+    color: var(--argus-icon-base);
+    transition: filter 0.15s ease;
+  }
+  .admin-nav-icon .accent {
+    color: var(--argus-icon-accent);
+  }
+  .admin-nav-link:hover .admin-nav-icon {
+    filter: brightness(1.18);
+  }
+  .admin-nav-link.active .admin-nav-icon {
+    color: var(--argus-icon-base-active);
+  }
+  .admin-nav-link.active .admin-nav-icon .accent {
+    color: var(--argus-icon-accent-active);
+  }
+
+  .admin-sidebar-footer {
+    @apply flex flex-col gap-1;
+    padding: 12px 10px 18px;
+    border-top: 1px solid rgba(51, 65, 85, 0.5);
+  }
+  .admin-side-link {
+    @apply flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .admin-side-link:hover {
+    background: rgba(51, 65, 85, 0.5);
+    color: #f1f5f9;
+  }
+  .admin-side-link:last-child:hover {
+    background: rgba(127, 29, 29, 0.3);
+    color: #fca5a5;
+  }
+
+  /* --- Main content --- */
+  .admin-main {
+    padding: 32px 36px;
+    overflow-x: auto;
+    background: var(--admin-canvas);
+    min-height: 100vh;
+  }
+  .admin-page {
+    @apply space-y-5;
+    max-width: 1280px;
+  }
+  .admin-page-head {
+    @apply flex flex-wrap items-start justify-between gap-3;
+  }
+  .admin-page-head h1 {
+    @apply text-2xl font-bold;
+    color: var(--admin-text);
+    letter-spacing: 0.02em;
+  }
+  .admin-page-head p {
+    @apply mt-1 text-sm;
+    color: var(--admin-text-muted);
+  }
+  /* 即時監控狀態徽章：呼應 Argus（全視之眼）品牌敘事，唯一允許在後台常駐的動效——傳達真實系統狀態，非裝飾 */
+  .admin-status-badge {
+    @apply inline-flex items-center gap-2 text-xs font-semibold;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    color: var(--admin-accent-strong);
+    white-space: nowrap;
+  }
+  .admin-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--tone-good);
+    animation: admin-status-pulse 2.4s ease-out infinite;
+  }
+  @keyframes admin-status-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+    70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .admin-status-dot { animation: none; }
+  }
+  .admin-back-link {
+    @apply mb-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition;
+    background: transparent;
+    color: var(--admin-accent-strong);
+    border: none;
+    cursor: pointer;
+  }
+  .admin-back-link:hover {
+    background: var(--admin-accent-soft-bg);
+  }
+
+  /* --- Stat grid --- */
+  /* ============================================================
+     Card 視覺語言（第三輪重設）：不靠頂部色條區分卡片，改靠材質
+     （柔和陰影／細邊框/圓角）、圖示自帶背景色塊、數字為視覺焦點、
+     版面（bento 式大小差異）建立層次與品牌識別。
+     ============================================================ */
+  .admin-stat-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .admin-stat-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  /* Overview 專用 bento 版面：首張卡（hero）跨兩欄，建立主次層次而非靠顏色 */
+  .admin-stat-grid--bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .admin-stat-card.hero {
+    grid-column: span 2;
+    padding: 24px;
+  }
+  @media (max-width: 900px) {
+    .admin-stat-grid--bento { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .admin-stat-grid--bento { grid-template-columns: 1fr; }
+    .admin-stat-card.hero { grid-column: span 1; }
+  }
+
+  .admin-stat-card {
+    border-radius: 18px;
+    padding: 20px;
+    background: var(--admin-surface);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    position: relative;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.12);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  .admin-stat-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(15, 23, 42, 0.11);
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 18px 36px -18px rgba(15, 23, 42, 0.18);
+  }
+  .admin-stat-head {
+    @apply flex items-start justify-between gap-3;
+  }
+  .admin-stat-icon-chip {
+    @apply inline-flex shrink-0 items-center justify-center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(14, 165, 233, 0.1);
+    color: var(--argus-cyan-dot);
+  }
+  .admin-stat-card.tone-good .admin-stat-icon-chip { background: rgba(16, 185, 129, 0.1); color: var(--tone-good); }
+  .admin-stat-card.tone-warn .admin-stat-icon-chip { background: rgba(245, 158, 11, 0.1); color: var(--tone-medium); }
+  .admin-stat-card.tone-bad .admin-stat-icon-chip { background: rgba(239, 68, 68, 0.1); color: var(--tone-bad); }
+  .admin-stat-label {
+    @apply text-xs font-medium uppercase tracking-wider;
+    color: #94a3b8;
+  }
+  .admin-stat-value {
+    @apply mt-2 text-3xl font-bold;
+    color: var(--admin-text);
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-stat-card.hero .admin-stat-value {
+    @apply text-4xl;
+  }
+  .admin-stat-hint {
+    @apply mt-1.5 text-xs;
+    color: #94a3b8;
+  }
+  .admin-stat-spark {
+    height: 40px;
+    margin-top: 14px;
+  }
+  .admin-stat-spark-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* --- Panels --- */
+  .admin-panel {
+    border-radius: 18px;
+    padding: 20px;
+    background: var(--admin-surface);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.1);
+    position: relative;
+    transition: box-shadow 0.2s ease;
+  }
+  .admin-panel:hover {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 16px 32px -18px rgba(15, 23, 42, 0.16);
+  }
+  .admin-panel h3 {
+    @apply mb-4 flex items-center gap-2.5 text-base font-bold;
+    color: var(--admin-text);
+  }
+  .admin-panel-icon-chip {
+    @apply inline-flex shrink-0 items-center justify-center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(14, 165, 233, 0.1);
+    color: var(--argus-cyan-dot);
+  }
+  .admin-panel-danger {
+    border-color: #fecdd3;
+    background: #fff1f2;
+  }
+  .admin-grid-2col {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+  .admin-empty {
+    @apply py-6 text-center text-sm;
+    color: #94a3b8;
+  }
+
+  /* --- Tables --- */
+  .admin-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .admin-table-spaced { margin-top: 12px; }
+  .admin-table {
+    @apply w-full text-sm;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .admin-table thead th {
+    @apply px-3 py-2 text-left text-xs uppercase tracking-wider font-semibold;
+    color: var(--admin-text-muted);
+    background: var(--admin-surface-sunken);
+    border-bottom: 1px solid var(--admin-border-solid);
+  }
+  .admin-table thead th.num,
+  .admin-table tbody td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-table thead th.col-actions { width: 120px; }
+  .admin-cell-mono { width: 280px; font-family: monospace; color: #94a3b8; }
+  .admin-table tbody td {
+    @apply px-3 py-2.5;
+    color: var(--admin-text-secondary);
+    border-bottom: 1px solid var(--admin-surface-sunken);
+  }
+  .admin-table tbody tr.clickable { cursor: pointer; transition: background 0.15s; }
+  .admin-table tbody tr.clickable:hover {
+    background: #f0f9ff;
+  }
+  .admin-table tbody tr.clickable:focus-visible {
+    outline: 3px solid #06b6d4;
+    outline-offset: -3px;
+  }
+  .admin-table.compact thead th,
+  .admin-table.compact tbody td {
+    @apply px-2 py-1.5 text-xs;
+  }
+  .admin-cell-primary {
+    @apply font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-cell-secondary {
+    @apply text-xs;
+    color: #94a3b8;
+  }
+  .admin-log-payload { margin-top: 4px; }
+  .admin-log-payload summary { cursor: pointer; color: var(--admin-accent-strong); font-size: 11px; }
+  .admin-log-payload pre { font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
+  .admin-coin {
+    @apply font-bold;
+    color: var(--admin-accent-strong);
+  }
+  .truncate {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tx-pos { color: var(--tone-good); font-weight: 600; }
+  .tx-neg { color: var(--tone-bad); font-weight: 600; }
+
+  .admin-staff-chip {
+    @apply ml-1 inline-block rounded-full px-1.5 py-0 text-[10px] font-bold;
+    background: rgba(14, 165, 233, 0.14);
+    color: var(--argus-cyan-deep);
+  }
+  .admin-super-chip {
+    @apply ml-1 inline-block rounded-full px-1.5 py-0 text-[10px] font-bold;
+    background: rgba(245, 158, 11, 0.16);
+    color: #92400e;
+  }
+  .admin-status {
+    @apply inline-block rounded-full px-2 py-0.5 text-xs font-semibold;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-secondary);
+  }
+  .admin-status.completed { background: rgba(16, 185, 129, 0.12); color: var(--tone-good); }
+  .admin-status.failed { background: rgba(239, 68, 68, 0.12); color: var(--tone-bad); }
+  .admin-status.crawling,
+  .admin-status.scanning,
+  .admin-status.agent_testing,
+  .admin-status.queued { background: rgba(14, 165, 233, 0.12); color: var(--argus-cyan-dot); }
+  .admin-status.cancelled { background: var(--admin-surface-sunken); color: var(--admin-text-secondary); }
+
+  /* --- Inputs & forms --- */
+  .admin-input {
+    @apply rounded-lg px-3 py-2 text-sm transition;
+    background: var(--admin-surface);
+    border: 1px solid #cbd5e1;
+    color: var(--admin-text);
+    outline: none;
+  }
+  .admin-input::placeholder { color: #94a3b8; }
+  .admin-input:focus {
+    border-color: #06b6d4;
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+  }
+  .admin-input.wide { flex: 1; }
+  .admin-btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+    background: var(--admin-surface);
+    color: var(--admin-accent-strong);
+    border: 1px solid #67e8f9;
+    cursor: pointer;
+  }
+  .admin-btn:hover {
+    background: var(--admin-accent-soft-bg);
+    border-color: #06b6d4;
+    box-shadow: 0 2px 6px rgba(6, 182, 212, 0.15);
+  }
+  .admin-btn.primary {
+    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+    color: var(--admin-surface);
+    border: none;
+  }
+  .admin-btn.primary:hover {
+    box-shadow: 0 4px 12px rgba(8, 145, 178, 0.32);
+  }
+  .admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .admin-btn.small { padding: 4px 10px; font-size: 12px; }
+  .admin-btn.small + .admin-btn.small { margin-left: 4px; }
+  .admin-btn.danger { color: #dc2626; border-color: #fecaca; }
+  .admin-icon-lg { font-size: 22px; }
+
+  .admin-search-bar {
+    @apply flex flex-wrap gap-2;
+  }
+  .admin-search-bar .admin-input { flex: 1; min-width: 220px; }
+  .admin-filter-bar {
+    @apply flex flex-wrap items-center gap-3;
+  }
+  .admin-checkbox {
+    @apply inline-flex items-center gap-2 text-sm;
+    color: var(--admin-text-secondary);
+    cursor: pointer;
+  }
+  .admin-checkbox input {
+    @apply h-4 w-4;
+    accent-color: #06b6d4;
+  }
+
+  /* --- Definition list (key-value) --- */
+  .admin-dl {
+    @apply grid gap-y-2 text-sm;
+    grid-template-columns: 120px 1fr;
+  }
+  .admin-dl dt { color: var(--admin-text-muted); }
+  .admin-dl dd { color: var(--admin-text); }
+
+  .admin-balance-big {
+    @apply mb-3 text-4xl font-bold;
+    color: var(--admin-accent-strong);
+  }
+  .admin-balance-big span { @apply ml-1 text-base; color: var(--admin-text-muted); }
+  .admin-balance-big.tight { margin-bottom: 0; }
+
+  /* --- Adjust form --- */
+  .admin-adjust-form .admin-adjust-row {
+    @apply flex flex-wrap gap-2;
+  }
+  .admin-quick-row {
+    @apply mt-2 flex flex-wrap gap-2;
+  }
+  .admin-quick-btn {
+    @apply rounded-full px-3 py-1 text-xs transition;
+    background: var(--admin-surface-sunken);
+    color: var(--admin-text-secondary);
+    border: 1px solid var(--admin-border-solid);
+    cursor: pointer;
+  }
+  .admin-quick-btn:hover {
+    background: var(--admin-accent-soft-bg);
+    color: var(--admin-accent-strong);
+    border-color: #67e8f9;
+  }
+  .admin-feedback {
+    @apply mt-3 rounded-lg px-3 py-2 text-sm;
+  }
+  .admin-feedback.tone-good { background: #d1fae5; color: var(--admin-tone-good-text); }
+  .admin-feedback.tone-bad { background: #fee2e2; color: var(--admin-tone-bad-text); }
+
+  /* --- Pagination --- */
+  .admin-pagination {
+    @apply mt-4 flex items-center justify-center gap-4 text-sm;
+    color: var(--admin-text-muted);
+  }
+  .admin-pagination button {
+    @apply rounded-md px-3 py-1.5 transition;
+    background: var(--admin-surface);
+    color: var(--admin-accent-strong);
+    border: 1px solid #cbd5e1;
+    cursor: pointer;
+  }
+  .admin-pagination button:hover:not(:disabled) {
+    background: var(--admin-accent-soft-bg);
+    border-color: #67e8f9;
+  }
+  .admin-pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* --- Reviews 治理區 --- */
+  .admin-review {
+    @apply rounded-2xl p-5 mb-3;
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-solid);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .admin-review.is-pending {
+    border-color: #fcd34d;
+  }
+  .admin-review.is-reported {
+    box-shadow: inset 3px 0 0 #ef4444, 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .admin-review.is-hidden {
+    background: var(--admin-surface-sunken);
+    opacity: 0.88;
+  }
+  .admin-review-head {
+    @apply flex flex-wrap items-start justify-between gap-2 mb-2;
+  }
+  .admin-review-user {
+    @apply font-semibold;
+    color: var(--admin-text);
+  }
+  .admin-review-time {
+    @apply text-xs;
+    color: #94a3b8;
+  }
+  .admin-review-rating {
+    @apply text-lg;
+    color: #f59e0b;
+    letter-spacing: 2px;
+  }
+
+  .admin-star-icon {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    vertical-align: -2px;
+    color: #f59e0b;
+  }
+
+  .admin-review-rating .admin-star-icon {
+    width: 18px;
+    height: 18px;
+    vertical-align: -3px;
+  }
+
+  .admin-bool-glyph,
+  .admin-inline-glyph {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    vertical-align: -2px;
+    color: #059669;
+  }
+  .admin-review-status-row {
+    @apply mb-3 flex flex-wrap items-center gap-2;
+  }
+  .admin-review-title {
+    @apply mb-1 text-base font-bold;
+    color: var(--admin-text);
+  }
+  .admin-review-body {
+    @apply mb-2 text-sm whitespace-pre-line;
+    color: var(--admin-text-secondary);
+    line-height: 1.7;
+  }
+  .admin-review-public-name {
+    @apply mb-4 text-xs;
+    color: var(--admin-text-muted);
+  }
+  .admin-review-reply-section {
+    @apply flex flex-col gap-2 rounded-xl p-3;
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border-solid);
+  }
+  .admin-review-reply-field {
+    @apply flex flex-col gap-1 text-xs font-semibold;
+    color: var(--admin-text-secondary);
+  }
+  .admin-reply-input {
+    min-height: 76px;
+    resize: vertical;
+  }
+  .admin-review-actions {
+    @apply flex flex-wrap justify-end gap-2;
+  }
+  .admin-review-existing-reply {
+    @apply mt-2 text-xs;
+    color: var(--admin-tone-good-text);
+  }
+  /* --- Scan detail category scores --- */
+  .admin-cat-scores {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+  .admin-cat-score-item {
+    @apply rounded-xl p-3 text-center;
+    background: var(--admin-accent-soft-bg);
+    border: 1px solid #67e8f9;
+  }
+  .admin-cat-score-label {
+    @apply text-xs uppercase tracking-wider;
+    color: var(--admin-accent-strong);
+  }
+  .admin-cat-score-value {
+    @apply mt-1 text-2xl font-bold;
+    color: #155e75;
+  }
+  .admin-error-pre {
+    @apply rounded-lg p-3 text-xs overflow-auto;
+    background: #fef2f2;
+    color: var(--admin-tone-bad-text);
+    border: 1px solid #fecaca;
+    font-family: ui-monospace, monospace;
+    max-height: 200px;
+  }
+  .admin-link-row {
+    @apply flex justify-end;
+  }
+}

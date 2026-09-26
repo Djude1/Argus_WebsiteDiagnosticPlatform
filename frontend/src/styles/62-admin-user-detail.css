@@ -1,0 +1,123 @@
+/* ===== Admin：使用者詳情「訂閱管理」「登入記錄」與網域管理頁 ===== */
+
+.admin-sub-current { margin-bottom: 0.5rem; }
+.admin-sub-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 0.9rem;
+}
+.admin-sub-form .admin-input:not(.admin-sub-periods .admin-input) { max-width: 340px; }
+.admin-sub-periods {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--admin-text-secondary);
+  font-weight: 600;
+}
+.admin-sub-periods .admin-input { width: 76px; }
+
+/* 登入時間軸：左側漸層縱線＋圓點，清單可捲動 */
+.admin-login-timeline {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0 0 0 1.1rem;
+  position: relative;
+  display: grid;
+  gap: 0.65rem;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.admin-login-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.32rem;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #22d3ee, #cbd5e1);
+}
+.admin-login-item { position: relative; }
+.admin-login-item::before {
+  content: "";
+  position: absolute;
+  left: -1.02rem;
+  top: 0.45rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #06b6d4;
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+}
+.admin-login-line1 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.admin-login-method {
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.admin-login-method.method-password { background: #e0f2fe; color: #0369a1; }
+.admin-login-method.method-google { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); }
+.admin-login-method.method-register { background: #e0e7ff; color: #4338ca; }
+.admin-login-ip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--admin-text-secondary);
+}
+.admin-login-time { font-size: 0.75rem; color: #94a3b8; }
+.admin-login-ua {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 網域管理頁：狀態徽章與審核操作 */
+.admin-domain-status {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.admin-domain-status.is-pending { background: #fef3c7; color: var(--admin-tone-warn-text); }
+.admin-domain-status.is-verified { background: #d1fae5; color: var(--admin-tone-good-text); }
+.admin-domain-status.is-rejected { background: #fee2e2; color: var(--admin-tone-bad-text); }
+.admin-domain-status.is-expired { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-domain-status.is-effective { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35); }
+.admin-domain-effective {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--admin-tone-good-text);
+  white-space: nowrap;
+}
+.admin-domain-review {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 250px;
+}
+.admin-domain-note {
+  max-width: 180px;
+  min-width: 130px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+}
+.admin-domain-error {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

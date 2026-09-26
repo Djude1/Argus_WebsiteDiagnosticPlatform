@@ -196,7 +196,8 @@ Argus/
         ├── components/     ← 可獨立理解的品牌與 domain 元件
         ├── api.js          ← axios（含 401 攔截）
         ├── store.js        ← Zustand：accessToken / wallet / me + fetcher
-        └── styles.css      ← Tailwind + 大量 component class
+        ├── styles.css      ← 樣式入口，只依序 @import styles/*.css
+        └── styles/         ← 35 個樣式區塊；檔名編號＝匯入順序＝覆寫優先序
 ```
 
 > 前端已採 domain 分層；先在 `features/<domain>/` 定位頁面，只有新增根路由時才修改 `App.jsx`。
@@ -531,7 +532,7 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 依複雜度排列，挑一個跟另一個 Claude Code 同步是哪個再開工：
 
 ### 簡單（< 半天）
-1. **PublicNav 加 hamburger menu**（mobile 響應式）— `frontend/src/features/public/PublicPages.jsx::PublicNav` + `styles.css`
+1. **PublicNav 加 hamburger menu**（mobile 響應式）— `frontend/src/features/public/PublicPages.jsx::PublicNav` + `styles/21-public.css`
 2. **/download 加版本檢查**（SW 更新時提示 reload）— `frontend/public/service-worker.js` + `main.jsx`
 3. **（已完成）DEV LOGIN 後門清理** — dev-login 後門已移除，並有測試斷言其回 404；此項保留為歷史紀錄
 4. **TeamPage 加成員照片支援**（TeamMember 加 ImageField avatar）— `apps/content/models.py` + migration + admin + 前端 fallback

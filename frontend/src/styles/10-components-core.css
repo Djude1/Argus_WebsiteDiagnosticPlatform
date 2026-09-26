@@ -1,0 +1,461 @@
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+  }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.2em] text-blue-600;
+  }
+
+  .section-title {
+    @apply text-xl font-bold text-slate-950;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none ring-blue-200 focus:ring-4;
+  }
+
+  .primary-button {
+    @apply inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400;
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50;
+  }
+
+  .checkbox-row {
+    @apply flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700;
+  }
+
+  .checkbox-row.warning {
+    @apply border-amber-200 bg-amber-50 text-amber-900;
+  }
+
+  .error-text {
+    @apply rounded-xl bg-red-50 p-3 text-sm text-red-700;
+  }
+
+  /* 次要說明文字（重複的 utility 組合抽成全域語意 class）*/
+  .hint-text {
+    @apply text-sm text-slate-500;
+  }
+
+  .hint-text-sm {
+    @apply text-xs text-slate-400;
+  }
+
+  /* 掃描頁 layout：
+     list-mode（/scans）→ sidebar inline 固定 360px
+     detail-mode（/scans/:id）→ sidebar 變 drawer overlay，內容區拿全寬 */
+  .scan-sidebar {
+    @apply space-y-4;
+  }
+
+  .scan-content {
+    min-height: 640px;
+  }
+
+  /* list-mode：兩欄 grid */
+  .scan-layout.list-mode {
+    @apply grid gap-4 lg:grid-cols-[360px_1fr];
+    align-items: start;
+  }
+
+  .scan-layout.list-mode .scan-sidebar {
+    align-self: start;
+    position: sticky;
+    top: 1rem;
+  }
+
+  /* detail-mode：單欄，sidebar 抽離為 drawer */
+  .scan-layout.detail-mode {
+    @apply block;
+  }
+
+  .scan-layout.detail-mode .scan-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: 360px;
+    max-width: 88vw;
+    overflow-y: auto;
+    padding: 1rem;
+    background: #f1f5f9;
+    box-shadow: 0 20px 50px -12px rgba(8, 47, 73, 0.5);
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .scan-layout.detail-mode.drawer-open .scan-sidebar {
+    transform: translateX(0);
+  }
+
+  .scan-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    border: 0;
+    background: rgba(8, 15, 35, 0.55);
+    backdrop-filter: blur(2px);
+    animation: fade-in 0.2s ease-out;
+  }
+
+  /* 詳情頁頂部工具列：展開列表 / 回列表 */
+  .scan-content-toolbar {
+    @apply mb-3 flex flex-wrap items-center gap-2;
+  }
+
+  .drawer-toggle {
+    @apply inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50;
+  }
+
+  .back-to-list-button {
+    @apply inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700;
+  }
+
+  /* 整頁紅色高光：站台層級 / 無座標 finding 被選中時的視覺反饋 */
+  .whole-page-highlight {
+    position: absolute;
+    inset: 0;
+    border: 3px solid var(--tone-bad);
+    border-radius: 0.75rem;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+      inset 0 0 32px rgba(239, 68, 68, 0.3),
+      0 0 16px rgba(239, 68, 68, 0.4);
+    animation: pulse-soft 1.4s ease-in-out infinite;
+  }
+
+  .scan-card {
+    @apply flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-blue-300;
+  }
+
+  .scan-card.active {
+    @apply border-blue-500 bg-blue-50;
+  }
+
+  .score-badge {
+    @apply rounded-full px-3 py-1 text-xs font-bold;
+  }
+
+  .score-badge.good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .score-badge.medium {
+    @apply bg-amber-100 text-amber-700;
+  }
+
+  .score-badge.bad {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .score-badge.muted {
+    @apply bg-slate-100 text-slate-500;
+  }
+
+  .screenshot-shell {
+    @apply min-h-[460px] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4;
+  }
+
+  .screenshot-pending {
+    @apply flex min-h-[380px] flex-col items-center justify-center gap-3;
+  }
+
+  .screenshot-image {
+    @apply max-w-full rounded-xl border border-slate-200;
+  }
+
+  .highlight-box {
+    @apply pointer-events-auto absolute cursor-pointer border-2 border-amber-400 bg-amber-300/20 opacity-60 transition-all hover:border-amber-500 hover:bg-amber-300/40 hover:opacity-100;
+  }
+
+  .highlight-box.active {
+    @apply animate-pulse border-red-500 bg-red-400/30 opacity-100;
+  }
+
+  .finding-card {
+    @apply flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300;
+  }
+
+  .finding-card.active {
+    @apply border-blue-500 bg-blue-50;
+  }
+
+  /* 分組顯示：同分類同標題的 finding 折成一個群組卡 */
+  .finding-group {
+    @apply rounded-xl border border-slate-200 bg-white;
+  }
+
+  .finding-group.active {
+    @apply border-blue-400 ring-1 ring-blue-200;
+  }
+
+  .finding-group-header {
+    @apply flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50;
+  }
+
+  .finding-group-title {
+    @apply flex-1 truncate font-medium text-slate-900;
+  }
+
+  .finding-group-count {
+    @apply min-w-[28px] rounded-full bg-slate-100 px-2 py-0.5 text-center text-xs font-semibold text-slate-600;
+  }
+
+  .finding-group-chevron {
+    @apply text-xs text-slate-400;
+  }
+
+  .finding-group-items {
+    @apply space-y-1 border-t border-slate-100 px-2 py-2;
+  }
+
+  .finding-item {
+    @apply flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50;
+  }
+
+  .finding-item.active {
+    @apply bg-blue-50 text-blue-900;
+  }
+
+  .finding-item-url {
+    @apply w-full truncate text-xs font-mono text-slate-700;
+  }
+
+  .finding-item-evidence {
+    @apply w-full truncate text-[11px] text-slate-400;
+  }
+
+  .category-pill {
+    @apply rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide;
+  }
+
+  .category-pill.cat-security {
+    @apply bg-red-50 text-red-700;
+  }
+
+  .category-pill.cat-seo {
+    @apply bg-indigo-50 text-indigo-700;
+  }
+
+  .category-pill.cat-aeo {
+    @apply bg-violet-50 text-violet-700;
+  }
+
+  .category-pill.cat-geo {
+    @apply bg-cyan-50 text-cyan-700;
+  }
+
+  .category-pill.cat-ux {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+
+  .screenshot-caption {
+    @apply mb-2 truncate text-xs font-mono text-slate-500;
+  }
+
+  .screenshot-caption-row {
+    @apply mb-2 flex items-center justify-between gap-3;
+  }
+
+  .screenshot-caption-row .screenshot-caption {
+    @apply mb-0 flex-1;
+  }
+
+  .screenshot-open-link {
+    @apply whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-400 hover:bg-blue-50;
+  }
+
+  /* 站台層級 finding 在截圖頂部畫紅色 banner */
+  .site-banner-overlay {
+    @apply absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 rounded-t-xl border-b-2 px-3 py-2 text-sm font-medium;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.92), rgba(190, 18, 60, 0.92));
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+  }
+
+  .site-banner-overlay .severity,
+  .site-banner-overlay .category-pill {
+    @apply !bg-white/20 !text-white;
+  }
+
+  .site-banner-title {
+    @apply flex-1 truncate;
+  }
+
+  .site-banner-note {
+    @apply text-[11px] opacity-80;
+  }
+
+  /* 頁面 tabs（報告區頂部）— 看起來像可點按鈕 */
+  .page-tabs {
+    @apply mb-4 flex flex-wrap gap-2 overflow-x-auto pb-1;
+  }
+
+  .page-tab {
+    @apply inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition;
+  }
+
+  .page-tab:hover {
+    @apply -translate-y-0.5 border-cyan-300 bg-white text-slate-900;
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.2),
+      0 6px 14px -8px rgba(56, 189, 248, 0.45);
+  }
+
+  .page-tab:focus-visible {
+    outline: 2px solid var(--argus-cyan);
+    outline-offset: 2px;
+  }
+
+  .page-tab:active {
+    transform: translateY(0);
+  }
+
+  .page-tab.active {
+    @apply border-cyan-400 text-blue-700;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(99, 102, 241, 0.1));
+    box-shadow:
+      0 0 0 2px rgba(56, 189, 248, 0.3),
+      0 8px 18px -8px rgba(56, 189, 248, 0.5);
+  }
+
+  .page-tab.active::before {
+    content: "▸";
+    @apply text-cyan-500;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .page-tab-label {
+    @apply max-w-[140px] truncate;
+  }
+
+  .page-tab-count {
+    @apply min-w-[24px] rounded-full bg-slate-100 px-2 py-0.5 text-center text-[10px] font-bold text-slate-600;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .page-tab:hover .page-tab-count {
+    @apply bg-cyan-100 text-cyan-700;
+  }
+
+  .page-tab.active .page-tab-count {
+    @apply bg-cyan-500 text-white;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.55);
+  }
+
+  .severity {
+    @apply rounded-full px-2 py-0.5 text-xs font-bold;
+  }
+
+  .severity.critical,
+  .severity.high {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .severity.medium {
+    @apply bg-amber-100 text-amber-700;
+  }
+
+  .severity.low,
+  .severity.info {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  .finding-detail {
+    @apply space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700;
+  }
+
+  .evidence-panel {
+    @apply overflow-hidden rounded-xl border border-cyan-200 bg-white text-xs text-slate-700;
+  }
+
+  .evidence-panel.is-empty {
+    @apply p-3 text-slate-500;
+  }
+
+  .evidence-panel-header {
+    @apply flex cursor-pointer flex-col gap-0.5 border-b border-cyan-100 bg-cyan-50 px-3 py-2;
+  }
+
+  .evidence-panel-title {
+    @apply text-sm font-bold text-cyan-900;
+  }
+
+  .evidence-panel-subtitle {
+    @apply text-[11px] font-medium text-cyan-700;
+  }
+
+  .evidence-meta-grid {
+    @apply grid gap-2 p-3;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .evidence-meta-grid div {
+    @apply min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5;
+  }
+
+  .evidence-meta-grid span {
+    @apply block text-[10px] font-semibold uppercase tracking-wide text-slate-400;
+  }
+
+  .evidence-meta-grid strong {
+    @apply block truncate font-mono text-[11px] text-slate-800;
+  }
+
+  .evidence-block,
+  .ai-explanation-block {
+    @apply mx-3 mb-3 rounded-lg border border-slate-100 bg-slate-950 p-3 text-slate-100;
+  }
+
+  .ai-explanation-block {
+    @apply bg-slate-50 text-slate-700;
+  }
+
+  .evidence-block-label {
+    @apply mb-1 block text-[10px] font-bold uppercase tracking-wide text-cyan-600;
+  }
+
+  .evidence-block pre {
+    @apply max-h-44 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed;
+  }
+
+  .ai-model {
+    @apply font-mono text-[11px] text-slate-500;
+  }
+
+  .evidence-copy-button {
+    @apply mx-3 mb-3 w-[calc(100%-1.5rem)] justify-center text-xs;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-semibold;
+  }
+
+  .status-badge.status-slate {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  .status-badge.status-blue {
+    @apply bg-blue-100 text-blue-700;
+  }
+
+  .status-badge.status-emerald {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .status-badge.status-red {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .status-badge-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+}

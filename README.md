@@ -362,7 +362,8 @@ Argus/
 │       ├── components/      品牌與可獨立理解的元件
 │       ├── api.js           Axios 統一封裝
 │       ├── store.js         Zustand 全域狀態
-│       └── styles.css       Tailwind + 元件樣式
+│       ├── styles.css       樣式入口（依序 @import styles/）
+│       └── styles/          依原始順序切出的樣式區塊（順序即覆寫優先序）
 ├── docs/                    設計文件與規格
 ├── log/                     開發日誌（每次任務後記錄）
 ├── docker-compose.yml

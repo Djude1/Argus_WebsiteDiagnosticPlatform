@@ -1,0 +1,96 @@
+/* ===== LoginPage ===== */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base, #0f172a);
+  padding: 1rem;
+}
+.login-card {
+  background: var(--bg-card, #1e293b);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; }
+.login-brand-glyph { font-size: 1.8rem; }
+.login-brand-name { font-size: 1.5rem; font-weight: 700; letter-spacing: .08em; color: #e2e8f0; }
+.login-sub { text-align: center; color: #94a3b8; font-size: .875rem; margin: 0; }
+.login-tabs { display: flex; gap: .5rem; }
+.login-tab {
+  flex: 1; padding: .5rem .25rem; border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; background: transparent; color: #94a3b8;
+  cursor: pointer; font-size: .875rem; transition: all .15s;
+}
+.login-tab.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
+.login-form { display: flex; flex-direction: column; gap: .75rem; }
+.login-submit {
+  padding: .75rem; background: #6366f1; border: none; border-radius: 8px;
+  color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity .15s;
+}
+.login-submit:disabled { opacity: .6; cursor: default; }
+.login-forgot-hint { text-align: center; color: #64748b; font-size: .8rem; margin: 0; }
+.login-forgot-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: #818cf8; font-size: .8rem;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(129, 140, 248, .4);
+  transition: color .15s, text-decoration-color .15s;
+}
+.login-forgot-link:hover {
+  color: #a5b4fc;
+  text-decoration-color: #a5b4fc;
+}
+.login-google-wrap { display: flex; justify-content: center; padding: .5rem 0; }
+.login-error { color: #f87171; font-size: .875rem; text-align: center; margin: 0; }
+.login-notice { font-size: .75rem; color: #475569; text-align: center; margin: 0; }
+.login-back {
+  align-self: flex-start;
+  background: none; border: none; padding: 0;
+  color: #94a3b8; font-size: .85rem; cursor: pointer;
+  transition: color .15s;
+}
+.login-back:hover { color: #cbd5e1; }
+.login-info-box {
+  display: flex; flex-direction: column; gap: .9rem;
+  background: rgba(99, 102, 241, .08);
+  border: 1px solid rgba(99, 102, 241, .25);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  color: #cbd5e1;
+  font-size: .92rem;
+  line-height: 1.6;
+}
+.login-info-box p { margin: 0; }
+.login-info-box .login-info-foot {
+  font-size: .8rem;
+  color: #64748b;
+}
+
+/* 掃描預估費用 */
+.scan-estimate-row { display: flex; align-items: flex-start; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
+.scan-estimate-btn {
+  padding: .4rem .9rem; border: 1px solid #6366f1; border-radius: 8px;
+  background: #fff; color: #4f46e5; cursor: pointer; font-size: .85rem; font-weight: 600;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.scan-estimate-btn:hover { background: rgba(99,102,241,.1); }
+.scan-estimate-btn:disabled { opacity: .5; cursor: default; }
+.scan-estimate-btn:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, .45);
+  outline-offset: 2px;
+}
+.scan-estimate-result {
+  display: flex; width: 100%; gap: .5rem .75rem; align-items: center; flex-wrap: wrap;
+  font-size: .875rem; line-height: 1.5; color: #0f172a;
+  padding: .65rem .8rem; border: 1px solid #cbd5e1; border-radius: 8px;
+  background: #f8fafc;
+}
+.scan-estimate-result strong { color: #4338ca; }
+.scan-estimate-conf { color: #475569; font-size: .8rem; }

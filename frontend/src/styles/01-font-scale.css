@@ -1,0 +1,70 @@
+/* ========================================
+   字體放大（W2 — 評審老花要看清，公開頁與評論區整體放大）
+   不動 root font-size 避免破壞 admin / dashboard layout，
+   只針對 .public-shell 與評論卡片局部加大。
+   ======================================== */
+
+.public-shell {
+  font-size: 17px;
+}
+
+/* 公開頁 hero title 從 text-4xl/5xl 放大到約 6xl */
+.public-shell .public-hero-title {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.15;
+}
+.public-shell .public-hero-sub {
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+.public-shell .public-hero-eyebrow {
+  font-size: 0.875rem;
+  letter-spacing: 0.18em;
+}
+
+/* section 標題 */
+.public-shell .public-section-head h2 {
+  font-size: 2.25rem;
+}
+.public-shell .public-section-head p {
+  font-size: 1rem;
+}
+
+/* feature / team / plan card 標題與描述加大 */
+.public-feature-icon { font-size: 2.5rem !important; }
+.public-feature-title { font-size: 1.375rem !important; }
+.public-feature-desc { font-size: 1rem !important; line-height: 1.75; }
+.public-team-avatar { font-size: 2.5rem !important; }
+.public-team-name { font-size: 1.375rem !important; }
+.public-team-role { font-size: 1rem !important; }
+.public-team-bio { font-size: 0.95rem !important; line-height: 1.75; }
+.public-plan-name { font-size: 1.375rem !important; }
+.public-plan-coin { font-size: 2.25rem !important; }
+.public-plan-coin span { font-size: 1rem !important; }
+.public-plan-price { font-size: 1.75rem !important; }
+.public-plan-desc { font-size: 1rem !important; }
+.public-cta-primary,
+.public-cta-ghost,
+.public-plan-cta { font-size: 1.05rem !important; padding: 0.8rem 1.7rem !important; }
+
+/* tech stack tile 與 install 卡片 */
+.tech-tile-label { font-size: 0.8125rem !important; }
+/* 並排但欄位很窄的區段，字級要跟著降，否則長標籤會撐爆欄寬 */
+@media (max-width: 639px), (min-width: 768px) and (max-width: 1023px) {
+  .tech-tile-label { font-size: 0.6875rem !important; }
+}
+.public-install-icon { font-size: 2.75rem !important; }
+.public-install-title { font-size: 1.25rem !important; }
+.public-install-card ol { font-size: 1rem !important; }
+
+/* PublicNav 與 footer */
+.public-brand-title { font-size: 1.25rem !important; }
+.public-nav-link {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  padding: 0.58rem 0.95rem;
+}
+
+/* FAQ */
+.public-faq-item summary { font-size: 1.125rem; }
+.public-faq-item p { font-size: 1rem; }
