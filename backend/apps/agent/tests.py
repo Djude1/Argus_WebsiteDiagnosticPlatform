@@ -255,6 +255,7 @@ class ToolSchemaTests(TestCase):
             "get_response_headers",
             "decode_jwt",
             "run_nuclei",
+            "navigate_and_observe",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -386,6 +387,92 @@ class RedactToolDataTests(TestCase):
         original = {"clicked": ".btn", "url_after": "https://example.com/page"}
         clean = redact_tool_result("click", dict(original))
         self.assertEqual(clean, original)
+
+
+class NavigateAndObserveTests(TestCase):
+    """navigate_and_observe：同源＋deep_mode 雙閘，dialog／渲染 DOM 觀察閉環。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="navuser", password="x")
+        self.scan_job = _make_scan_job(self.user)
+
+    def _deep_scan_job(self) -> ScanJob:
+        self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
+        self.scan_job.active_testing_authorized = True
+        self.scan_job.save()
+        return self.scan_job
+
+    def _executor(self, scan_job):
+        page = MagicMock()
+        page.url = "https://example.com/search"
+        page.goto = AsyncMock()
+        page.content = AsyncMock(return_value="<html>rendered</html>")
+        page.evaluate = AsyncMock(return_value="visible text")
+        return ToolExecutor(page=page, screenshot_dir="/tmp/agent", scan_job=scan_job), page
+
+    def test_passive_mode_is_forbidden(self):
+        executor, page = self._executor(self.scan_job)
+        outcome = asyncio.run(
+            executor.run("navigate_and_observe", {"url": "https://example.com/?q=1"})
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "not_authorized_mode")
+        page.goto.assert_not_called()
+
+    def test_cross_origin_is_forbidden(self):
+        executor, page = self._executor(self._deep_scan_job())
+        outcome = asyncio.run(
+            executor.run("navigate_and_observe", {"url": "https://evil.com/?q=1"})
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "cross_origin_forbidden")
+        page.goto.assert_not_called()
+
+    def test_navigate_returns_execution_observations(self):
+        executor, page = self._executor(self._deep_scan_job())
+        captured = {}
+
+        def fake_on(event, handler):
+            captured.setdefault(event, []).append(handler)
+            if event == "dialog":
+                # 模擬頁面觸發 dialog：handler 收到 fake dialog 物件
+                class FakeDialog:
+                    type = "alert"
+                    message = "xss"
+
+                    def dismiss(self):
+                        import asyncio as _a
+
+                        return _a.sleep(0)
+
+                for h in captured[event]:
+                    h(FakeDialog())
+
+        page.on = MagicMock(side_effect=fake_on)
+        outcome = asyncio.run(
+            executor.run("navigate_and_observe", {"url": "https://example.com/?q=%3Cimg%3E"})
+        )
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.result["status"], "loaded")
+        self.assertEqual(outcome.result["dialogs"][0]["type"], "alert")
+        self.assertIn("rendered_html", outcome.result)
+        page.goto.assert_awaited_once()
+
+    def test_redact_result_masks_urls_and_truncates(self):
+        clean = redact_tool_result(
+            "navigate_and_observe",
+            {
+                "status": "loaded",
+                "url_after": "https://example.com/search?q=secretvalue",
+                "dialogs": [{"type": "alert", "message": "xss"}],
+                "console": [],
+                "rendered_html": "<html>" + "x" * 5000 + "</html>",
+                "visible_text": "text",
+            },
+        )
+        self.assertNotIn("secretvalue", json.dumps(clean))
+        self.assertLessEqual(len(clean["rendered_html"]), 2000)
+
 
 
 class ProbeSqlInjectionTests(TestCase):

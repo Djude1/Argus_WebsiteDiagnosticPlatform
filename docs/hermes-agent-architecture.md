@@ -35,7 +35,7 @@ ScanJob(active+authorized)
 authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密）
 自動注入 `auth_idor`／`logic_abuse` prompt——無公開註冊的真實站靠這個。
 
-## 3. 工具清單（ToolExecutor，20 個）
+## 3. 工具清單（ToolExecutor，21 個）
 
 **觀察（bulky，舊快照自動壓縮）**：`get_dom_summary`／`get_visible_text`／
 `get_network_requests`（same-origin XHR/fetch 被動攔截——SPA 端點主要來源）／
@@ -50,6 +50,11 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
 - `probe_sql_injection(url)`→Kali sqlmap（`--level=3`；timeout 需 ≥240s）
 - `probe_unauthorized_access(url)`——無憑證匿名重放
 - `run_nuclei(url, tags?)`——agent 自主模板快掃（120s；與 pipeline 900s 全掃互補）
+- `navigate_and_observe(url)`——**執行層觀察閉環**（XSS 金證據）：同源 goto→
+  dialog 監聽（alert/confirm/prompt＝JS 已執行）＋console＋渲染後 DOM/可見文字。
+  誕生原因：#33/#34 XSS specialist 各 63/62 步 replay_request 0 發現——SPA 的
+  HTTP 回應是空殼，「回應含 payload」永遠不成立；XSS 判定必須回到瀏覽器執行。
+  邊界：runtime 同源再驗＋deep_mode 再驗（context route 主文件攔截仍是第一層）
 
 **回報/調度**：`report_security_issue`（critical 封頂 high；回報前自問
 「攻擊者現在能做到嗎？證據能重現嗎？」）／`report_ux_issue`／

@@ -192,19 +192,26 @@ JWT_ABUSE_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資
 
 XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安測試】（XSS 獵手角色），
 已開啟頁面 {url}。
-你專責 XSS 類漏洞；全程 API 優先（replay_request），不操作 UI。
+你專責 XSS 類漏洞。核心原則：**XSS 的證據是「瀏覽器真的執行了」**，
+不是 HTTP 回應文字——SPA 的 HTTP 回應幾乎都是空殼 HTML，永遠以瀏覽器
+執行結果為準。
 
-1. 從 network log 收集所有「回應為 HTML」的端點與所有 query 參數輸入點
-   （搜尋、篩選、排序、追蹤碼、referral 類參數）。
-2. 對每個輸入點以 replay_request 送無害 XSS 探測字串（如 <img src=x
-   onerror=print(1)> 與 <iframe src=javascript:print(1)> 的 URL 編碼），
-   檢查回應 HTML 中該字串是否**未跳脫**地出現在：標籤屬性值內、新的
-   標籤結構、iframe/srcdoc、javascript: URL。跳脫為純文字＝安全，不報。
-3. SPA 特有：若回應把輸入值嵌入 JSON 且頁面稍後以 innerHTML 渲染，
-   以 get_page_html 在操作後檢查渲染後的 DOM 是否含未跳脫探測字串。
-4. 每命中一項立即 report_security_issue（證據＝payload URL＋回應中
-   未跳脫位置的片段）。
-5. 完成或系統性覆蓋後 finish 附總結（含未完成項與原因）。
+1. 收集輸入點：get_network_requests 找帶 ?query 參數的 same-origin URL
+   （搜尋、篩選、排序類），get_dom_summary 找頁面輸入框。
+2. 反射／DOM 型：把無害探測字串放進輸入點組成完整 URL（如
+   <img src=x onerror=print(1)>、<iframe src=javascript:print(1)>
+   的 URL 編碼），用 navigate_and_observe 導航過去：
+   - dialogs 出現 alert／confirm／prompt ＝ payload 已執行（金證據）
+   - rendered_html／visible_text 出現未跳脫的探測字串形成新標籤結構
+     ＝ DOM 注入成立
+3. 純輸入框型（無對應 URL 參數）：type_text 填入探測字串、觸發送出
+   （click 送出鈕或輸入框 Enter），再以 get_page_html／get_visible_text
+   檢查渲染後結果。
+4. 儲存型：replay_request 把探測字串寫入會被頁面渲染的公開欄位（留言、
+   評論、暱稱類），再用 navigate_and_observe 造訪渲染該欄位的頁面檢查。
+5. 每命中一項立即 report_security_issue（證據＝payload URL＋dialog 內容
+   或渲染 DOM 中未跳脫位置的片段）。
+6. 覆蓋完所有輸入點後 finish 附總結（含未完成項與原因）。
 
 限制：無害 payload（print/alert 級）；只對本站同源操作。"""
 

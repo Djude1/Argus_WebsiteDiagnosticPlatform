@@ -183,6 +183,30 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "navigate_and_observe",
+            "description": (
+                "導航到一個同源 URL（可含你組好的探測 payload），並回傳**執行層**"
+                "觀察：觸發的 dialog（alert/confirm/prompt＝JS 已執行的金證據）、"
+                "console 訊息、渲染後的 DOM HTML 與可見文字。這是驗證 XSS／"
+                "client 端渲染問題的唯一正確方式——SPA 的 HTTP 回應幾乎都是"
+                "空殼，payload 是否真的被瀏覽器執行只有這裡看得到。跨源 URL"
+                "會被拒絕；dialog 會自動關閉不阻塞。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "完整同源 URL（query 參數可含 URL 編碼後的探測字串）",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "decode_jwt",
             "description": (
                 "解碼一個 JWT 字串的 header 與 payload（base64，不驗簽）。"
@@ -414,6 +438,7 @@ def build_tool_schemas(
         "probe_unauthorized_access",
         "replay_request",
         "run_nuclei",
+        "navigate_and_observe",
     }
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
@@ -453,7 +478,12 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
     clean = dict(arguments or {})
     if (
         tool_name
-        in {"probe_sql_injection", "probe_unauthorized_access", "replay_request"}
+        in {
+            "probe_sql_injection",
+            "probe_unauthorized_access",
+            "replay_request",
+            "navigate_and_observe",
+        }
         and "url" in clean
     ):
         clean["url"] = redact_url_query_values(str(clean["url"]))
@@ -497,6 +527,28 @@ def redact_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, Any]
         if raw.get("token_stored") is not None:
             safe["token_stored"] = raw.get("token_stored")
         return safe
+    if tool_name == "navigate_and_observe":
+        raw = result or {}
+        safe_nav: dict[str, Any] = {"status": raw.get("status")}
+        if raw.get("url_after"):
+            safe_nav["url_after"] = redact_url_query_values(str(raw["url_after"]))
+        safe_nav["dialogs"] = [
+            d for d in raw.get("dialogs", []) if isinstance(d, dict)
+        ][:10]
+        safe_nav["console"] = [
+            c for c in raw.get("console", []) if isinstance(c, dict)
+        ][:10]
+        if raw.get("rendered_html"):
+            safe_nav["rendered_html"] = redact_url_query_values(
+                str(raw["rendered_html"])
+            )[:2000]
+        if raw.get("visible_text"):
+            safe_nav["visible_text"] = redact_url_query_values(
+                str(raw["visible_text"])
+            )[:1500]
+        if raw.get("error"):
+            safe_nav["error"] = raw["error"]
+        return safe_nav
     if tool_name != "probe_sql_injection":
         return dict(result or {})
     raw = result or {}
@@ -610,6 +662,8 @@ class ToolExecutor:
                 )
             if name == "take_screenshot":
                 return await self._take_screenshot()
+            if name == "navigate_and_observe":
+                return await self._navigate_and_observe(args.get("url", ""))
             if name == "report_ux_issue":
                 return self._report_ux_issue(args)
             if name == "probe_sql_injection":
@@ -875,6 +929,90 @@ class ToolExecutor:
         )
         nodes = await self.page.evaluate(script)
         return ToolOutcome(ok=True, result={"nodes": nodes[:MAX_DOM_NODES]})
+
+    async def _navigate_and_observe(self, url: str) -> ToolOutcome:
+        """同源導航＋執行層觀察閉環（XSS／client 端渲染驗證金標準）。
+
+        安全約束：
+        - runtime 同源再驗（比對 scan_job.origin）＋deep_mode 再驗；context
+          route 的主文件同源攔截仍在（雙保險），不繞過既有邊界。
+        - 只導航（GET），不執行任意 JS；dialog 自動 dismiss，不阻塞迴圈。
+        - 觀察（dialogs／console／渲染 DOM）回給 LLM 判定，維持
+          「工具觀察、agent 判定、report 附證據」契約。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import urlparse
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+
+        parsed = urlparse(url or "")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return ToolOutcome(ok=False, result={"error": "invalid_url"})
+        target_origin = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            target_origin = f"{target_origin}:{parsed.port}"
+        if target_origin != self.scan_job.origin:
+            return ToolOutcome(
+                ok=False,
+                result={"error": "cross_origin_forbidden", "allowed_origin": self.scan_job.origin},
+            )
+
+        dialogs: list[dict[str, Any]] = []
+        console_msgs: list[dict[str, Any]] = []
+
+        def _on_dialog(dialog) -> None:
+            # 收集後立即 dismiss；非同步關閉避免阻塞 page 事件迴圈
+            if len(dialogs) < 10:
+                dialogs.append(
+                    {"type": dialog.type, "message": str(dialog.message or "")[:200]}
+                )
+            asyncio.ensure_future(dialog.dismiss())
+
+        def _on_console(msg) -> None:
+            if len(console_msgs) < 20:
+                console_msgs.append(
+                    {"type": msg.type, "text": str(msg.text or "")[:200]}
+                )
+
+        self.page.on("dialog", _on_dialog)
+        self.page.on("console", _on_console)
+        try:
+            await self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            # SPA 渲染與延遲觸發的 payload（iframe onload 等）留緩衝
+            await asyncio.sleep(1.0)
+            html = await self.page.content()
+            visible = await self.page.evaluate(
+                "() => document.body && document.body.innerText"
+                " ? document.body.innerText.slice(0, 1500) : ''"
+            )
+        except PlaywrightTimeoutError:
+            return ToolOutcome(
+                ok=False, result={"error": "timeout", "dialogs": dialogs}
+            )
+        finally:
+            try:
+                self.page.remove_listener("dialog", _on_dialog)
+                self.page.remove_listener("console", _on_console)
+            except Exception:  # noqa: BLE001 — mock/已關閉頁面下清理失敗可容忍
+                pass
+        return ToolOutcome(
+            ok=True,
+            result={
+                "status": "loaded",
+                "url_after": self.page.url,
+                "dialogs": dialogs,
+                "console": console_msgs,
+                "rendered_html": str(html)[:4000],
+                "visible_text": _truncate(str(visible), 1500),
+            },
+        )
 
     async def _take_screenshot(self) -> ToolOutcome:
         self._screenshot_counter += 1
