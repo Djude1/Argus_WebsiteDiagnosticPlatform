@@ -67,6 +67,7 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
 |---|---|---|
 | 快照壓縮 | 每輪 | bulky 工具只留最新一份全量（32步260k→36步169k） |
 | 空轉導正 | 連續 ≥4 次同型 click/type_text | 注入策略提醒（換方向或 finish） |
+| 假設與換道 | system prompt＋dispatcher 尾巴（所有 specialist） | 行動前寫假設/驗證/放棄條件；同手法 3 次無新資訊＝列未試假設換道；先交叉比對既有觀察再發新請求（Excalibur 2602.17622 TDA；#33/#34 實證 77 次觸碰未成鏈） |
 | 終局收斂 | 剩 10 步 | 注入「停止探索、立即 report 未報發現」（#30~#32 教訓：未回報＝遺失） |
 | 首步強制 | orchestrator | `tool_choice` 鎖定 dispatch_specialist（根除讀完情報直接文字收尾） |
 | 步數盒 | specialist | `_SPECIALIST_MAX_STEPS=60`（token 上限加多大都會爆，收斂才是解） |

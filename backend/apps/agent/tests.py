@@ -626,7 +626,29 @@ class ProbeSqlInjectionTests(TestCase):
         self.assertNotIn("https://example.com/s", dumped)
 
 
+class SystemPromptDisciplineTests(TestCase):
+    """P0-2：假設與換道紀律存在於 system prompt 與 dispatcher 組裝（防回歸）。"""
+
+    def test_system_prompt_contains_hypothesis_pivot_rules(self):
+        from apps.agent.loop import DEFAULT_SYSTEM_PROMPT
+
+        self.assertIn("假設與換道紀律", DEFAULT_SYSTEM_PROMPT)
+        self.assertIn("交叉比對", DEFAULT_SYSTEM_PROMPT)
+
+    def test_dispatcher_prompt_template_contains_hypothesis_discipline(self):
+        """runner.py 的 specialist prompt 尾巴必須含假設模板（讀 source 鎖事實）。"""
+        from pathlib import Path
+
+        from apps.agent import runner as runner_module
+
+        source = Path(runner_module.__file__).read_text(encoding="utf-8")
+        self.assertIn("攻擊假設紀律", source)
+        self.assertIn("放棄條件", source)
+
+
 class PersistAgentSecurityFindingsTests(TestCase):
+    """agent security findings 落地。"""
+
     def setUp(self):
         self.user = User.objects.create_user(username="secuser", password="x")
         self.scan_job = _make_scan_job(self.user)

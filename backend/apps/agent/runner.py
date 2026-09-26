@@ -473,6 +473,16 @@ async def run_agent_for_scan(
                 "測試結束才一次回報——你的 token 預算可能在途中用盡，未回報的"
                 "發現會全部遺失。"
             )
+            # 攻擊假設紀律（Excalibur arXiv:2602.17622 TDA 概念；#33/#34
+            # 實證：SecurityQuestion 觸碰 77 次未組出「洩漏→推答案→重置」鏈、
+            # XSS 63 步重試同方法 0 發現——瓶頸在假設生成與換道，非工具量）
+            prompt += (
+                "\n\n【攻擊假設紀律】每條行動前先寫下：(1) 假設（一句話）"
+                "(2) 驗證步驟 (3) 放棄條件。同一假設用同一手法連續 3 次無新"
+                "資訊＝換假設（換端點／參數／手法），不要用同一方法重試。"
+                "發新請求前先交叉比對你已收集的觀察（回應內容、欄位值、洩漏"
+                "文字、公開資料）——組合既有線索常比新探測更快形成攻擊鏈。"
+            )
             specialist_result = await _run_session(prompt)
             specialist_results.append(specialist_result)
             titles = [
