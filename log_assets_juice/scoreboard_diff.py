@@ -42,7 +42,13 @@ def diff() -> None:
     solved_new, solved_all = [], set()
     for idx, line in enumerate(lines):
         if line.startswith("info: Solved "):
-            name = line.split(" (")[0].removeprefix("info: Solved ").strip()
+            # 行格式：info: Solved 2-star loginAdminChallenge (Login Admin)
+            name = (
+                line.split(" (")[0]
+                .removeprefix("info: Solved ")
+                .split("-star ", 1)[-1]
+                .strip()
+            )
             star = line.split("-star")[0].split()[-1]
             solved_all.add(name)
             if idx >= start:
@@ -60,10 +66,12 @@ def diff() -> None:
         )["data"]
     except Exception:
         challenges = []
+    # log 事件用 challenge key（loginAdminChallenge），API 用 name——以 API
+    # 的 key 欄對映後比對，兩邊名稱空間才一致
     remaining = [
         (c["name"], c["difficulty"])
         for c in challenges
-        if c["name"] not in solved_all and c["name"] not in PLACEHOLDER
+        if c.get("key") not in solved_all and c["name"] not in PLACEHOLDER
     ]
     remaining.sort(key=lambda x: x[1])
     print(f"=== NOT unlocked (excl. placeholders): {len(remaining)} ===")
