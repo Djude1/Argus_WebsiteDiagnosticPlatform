@@ -258,6 +258,7 @@ class ToolSchemaTests(TestCase):
             "navigate_and_observe",
             "probe_payload_injection",
             "forge_jwt",
+            "search_knowledge",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -887,6 +888,43 @@ class MultipartRedactTests(TestCase):
         self.assertNotIn("xxxxx", dumped)
         self.assertEqual(clean["files"][0]["content_length"], 5000)
         self.assertEqual(clean["files"][0]["filename"], "../evil.txt")
+
+
+class SearchKnowledgeTests(TestCase):
+    """search_knowledge：離線知識庫檢索（全域工具，無目標互動）。"""
+
+    def test_retrieval_returns_relevant_topic(self):
+        from apps.agent.tools import _search_knowledge
+
+        outcome = _search_knowledge("password reset security question")
+        self.assertTrue(outcome.ok)
+        self.assertTrue(outcome.result["hits"])
+        self.assertIn("密碼重置", outcome.result["hits"][0]["topic"])
+
+    def test_chinese_query_matches(self):
+        from apps.agent.tools import _search_knowledge
+
+        outcome = _search_knowledge("優惠碼 預測")
+        self.assertTrue(outcome.ok)
+        self.assertTrue(outcome.result["hits"])
+        self.assertIn("商業邏輯", outcome.result["hits"][0]["topic"])
+
+    def test_no_match_returns_hint(self):
+        from apps.agent.tools import _search_knowledge
+
+        outcome = _search_knowledge("zzzqqqxxx")
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.result["hits"], [])
+
+    def test_executor_dispatches_to_module_function(self):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        executor = ToolExecutor(page=page, screenshot_dir="/tmp/agent")
+        outcome = asyncio.run(
+            executor.run("search_knowledge", {"query": "upload extension bypass"})
+        )
+        self.assertTrue(outcome.ok)
+        self.assertTrue(outcome.result["hits"])
 
 
 class SystemPromptDisciplineTests(TestCase):

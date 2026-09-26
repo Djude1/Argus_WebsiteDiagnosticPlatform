@@ -37,7 +37,7 @@ ScanJob(active+authorized)
 authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密）
 自動注入 `auth_idor`／`logic_abuse` prompt——無公開註冊的真實站靠這個。
 
-## 3. 工具清單（ToolExecutor，23 個）
+## 3. 工具清單（ToolExecutor，24 個；另含離線知識庫）
 
 **觀察（bulky，舊快照自動壓縮）**：`get_dom_summary`／`get_visible_text`／
 `get_network_requests`（same-origin XHR/fetch 被動攔截——SPA 端點主要來源）／
@@ -63,6 +63,13 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
   baseline——marker 需「payload 回應出現且 baseline 不出現」才算命中（消回應本含
   49/root: 雜訊）；帶登入態（與 replay 同憑證源）。誕生原因：#33/#34 ssti/xxe 0
   觸碰、nosql 1-2 次觸碰——SQL probe 之外的注入面完全沒有探測原語。
+
+**知識（全域，passive 也可用）**：`search_knowledge(query)`——離線方法論知識庫
+（`backend/apps/agent/knowledge/*.md`，11 檔 45 段：WSTG/PayloadsAllTheThings/
+jwt_tool 通用方法論摘錄——密碼重置答案推理、CSP 繞過、JWT kid/jku、$regex 盲注、
+優惠碼規律、上傳 polyglot、SSRF 無 OOB 判定、備份殘留、站內 OSINT、CAPTCHA 缺陷、
+注入家族判定）；關鍵詞評分（tags×3＋標題×2＋內文）回 top 3 段落。設計依據：
+Excalibur 檢索增強知識；網路搜尋裁定不做（黑箱抄答案＋目標外洩）。
 
 **回報/調度**：`report_security_issue`（critical 封頂 high；回報前自問
 「攻擊者現在能做到嗎？證據能重現嗎？」）／`report_ux_issue`／

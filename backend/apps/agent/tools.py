@@ -15,6 +15,7 @@ import copy
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -444,6 +445,32 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "search_knowledge",
+            "description": (
+                "查詢內建攻擊方法論知識庫（WSTG／PayloadsAllTheThings／"
+                "jwt_tool 等通用方法論的離線摘錄，純本地不外連）。用途："
+                "遇到不熟悉的漏洞類型、測試卡住需要手法點子、或想確認某類"
+                "漏洞的通用測法與變體時——先查再行動。回傳最相關的數段"
+                "方法論（主題＋內容）。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "想查的主題，如「password reset token reuse」"
+                            "或「上傳副檔名繞過」"
+                        ),
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_security_issue",
             "description": (
                 "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
@@ -514,6 +541,105 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# 離線知識庫（knowledge/*.md）——通用攻擊方法論，檔案隨 app 打包
+# ---------------------------------------------------------------------------
+_KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
+_KNOWLEDGE_SECTIONS: list[dict[str, Any]] | None = None
+
+
+def _tokenize(text: str) -> set[str]:
+    """極輕量分詞：英文小寫單詞＋中文 2-gram。"""
+    tokens = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z0-9_-]{1,}", text)}
+    cjk = re.findall(r"[\u4e00-\u9fff]", text)
+    tokens.update("".join(cjk[i : i + 2]) for i in range(len(cjk) - 1))
+    return tokens
+
+
+def _load_knowledge() -> list[dict[str, Any]]:
+    """載入並快取知識檔；每個 ## 段落＝一個可檢索單元（topic/tags/section/body）。"""
+    global _KNOWLEDGE_SECTIONS
+    if _KNOWLEDGE_SECTIONS is not None:
+        return _KNOWLEDGE_SECTIONS
+    sections: list[dict[str, Any]] = []
+    if _KNOWLEDGE_DIR.is_dir():
+        for md in sorted(_KNOWLEDGE_DIR.glob("*.md")):
+            try:
+                content = md.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            lines = content.splitlines()
+            topic = lines[0].lstrip("# ").strip() if lines else md.stem
+            tags = ""
+            body_parts: list[str] = []
+            heading = ""
+            for line in lines[1:]:
+                if line.startswith("tags:"):
+                    tags = line
+                elif line.startswith("## "):
+                    if body_parts:
+                        sections.append(
+                            {
+                                "topic": topic,
+                                "section": heading,
+                                "tags": tags,
+                                "body": "\n".join(body_parts).strip(),
+                            }
+                        )
+                    heading = line.lstrip("# ").strip()
+                    body_parts = []
+                elif heading:
+                    body_parts.append(line)
+            if body_parts:
+                sections.append(
+                    {
+                        "topic": topic,
+                        "section": heading,
+                        "tags": tags,
+                        "body": "\n".join(body_parts).strip(),
+                    }
+                )
+    _KNOWLEDGE_SECTIONS = sections
+    return sections
+
+
+def _search_knowledge(query: str) -> ToolOutcome:
+    """關鍵詞評分檢索（tags×3＋標題×2＋內文），回 top 3 段落。"""
+    sections = _load_knowledge()
+    if not sections:
+        return ToolOutcome(ok=False, result={"error": "knowledge_unavailable"})
+    q_tokens = _tokenize(query)
+    if not q_tokens:
+        return ToolOutcome(ok=False, result={"error": "empty_query"})
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for sec in sections:
+        tag_tokens = _tokenize(str(sec.get("tags", "")))
+        title_tokens = _tokenize(f"{sec['topic']} {sec['section']}")
+        body_tokens = _tokenize(str(sec.get("body", "")))
+        score = (
+            3.0 * len(q_tokens & tag_tokens)
+            + 2.0 * len(q_tokens & title_tokens)
+            + 1.0 * len(q_tokens & body_tokens)
+        )
+        if score > 0:
+            scored.append((score, sec))
+    scored.sort(key=lambda pair: -pair[0])
+    hits = [
+        {
+            "topic": sec["topic"],
+            "section": sec["section"],
+            "content": str(sec["body"])[:1500],
+        }
+        for _, sec in scored[:3]
+    ]
+    if not hits:
+        return ToolOutcome(
+            ok=True,
+            result={"hits": [], "hint": "換個主題詞再試（如漏洞類別英文名）"},
+        )
+    return ToolOutcome(ok=True, result={"hits": hits})
 
 
 # ---------------------------------------------------------------------------
@@ -847,6 +973,8 @@ class ToolExecutor:
                 return await self._get_response_headers(args.get("url", ""))
             if name == "decode_jwt":
                 return self._decode_jwt(args.get("token", ""))
+            if name == "search_knowledge":
+                return _search_knowledge(str(args.get("query", "")))
             if name == "forge_jwt":
                 if not (
                     self.scan_job is not None

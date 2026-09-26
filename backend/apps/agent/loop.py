@@ -61,6 +61,8 @@ DEFAULT_SYSTEM_PROMPT = """你是 Argus 平台的 Hermes 動態 UX 測試 Agent�
   下一步線索常已經在其中。
 - 速率紀律：收到 429／連續 403（rate limit／WAF）時立即停打該端點，
   改測其他面相或收斂 finish——硬打只會被封鎖且浪費預算。
+- 知識庫：遇到不熟悉的漏洞類型、手法沒點子、或想確認某類缺陷的通用
+  測法時，先用 search_knowledge 查方法論再行動（離線，不外連）。
 """
 
 
