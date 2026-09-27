@@ -1,8 +1,7 @@
 
 // 後台 sidebar nav icon 系統：每個功能一個滿版、可一眼辨識的獨立圖形，
-// 右上角疊一顆小「反光點」（class="accent"）——呼應 ArgusMark 瞳孔上的守望琥珀反光，
-// 只在選取中的項目亮起（見 18-admin.css 的 .admin-nav-icon .accent）。
-// 取代先前的 ⟡ 四角星角標：那是與品牌無關的通用裝飾。
+// 右上角統一疊一個小 ⟡ 品牌角標做識別（取代先前每顆圖示都以整顆 ⟡ 菱形當底、
+// 功能記號被壓縮成右下角極小線稿而看起來千篇一律的版本）。
 
 function IconShell({ className, ariaHidden = true, title, children }) {
   return (
@@ -22,8 +21,10 @@ function IconShell({ className, ariaHidden = true, title, children }) {
     >
       {title && <title>{title}</title>}
       {children}
-      {/* 反光點角標：呼應標誌瞳孔上的琥珀反光 */}
-      <circle className="accent" cx="20.6" cy="3.4" r="1.7" fill="currentColor" stroke="none" />
+      {/* ⟡ 品牌角標：固定右上角小記號，統一識別但不搶主圖形風采 */}
+      <g className="accent" fill="currentColor" stroke="none">
+        <path d="M19.4 2.6c.32 1.12.72 1.52 1.84 1.84-1.12.32-1.52.72-1.84 1.84-.32-1.12-.72-1.52-1.84-1.84 1.12-.32 1.52-.72 1.84-1.84Z" />
+      </g>
     </svg>
   );
 }
@@ -211,7 +212,7 @@ export function AdminTrendIcon(props) {
   );
 }
 
-// ---- 功能性 glyph（無角標；沿用同一套 stroke 線稿語言，取代頁面內文 Unicode 符號） ----
+// ---- 功能性 glyph（無 ⟡ 底；沿用同一套 stroke 線稿語言，取代頁面內文 Unicode 符號） ----
 
 function GlyphShell({ className, ariaHidden = true, title, children }) {
   return (
@@ -256,42 +257,6 @@ export function AdminStarIcon({ filled = true, ...props }) {
         fill={filled ? "currentColor" : "none"}
         strokeWidth={filled ? "1" : "1.75"}
       />
-    </GlyphShell>
-  );
-}
-
-export function AdminSunIcon(props) {
-  return (
-    <GlyphShell {...props}>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
-    </GlyphShell>
-  );
-}
-
-export function AdminMoonIcon(props) {
-  return (
-    <GlyphShell {...props}>
-      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
-    </GlyphShell>
-  );
-}
-
-export function AdminBackIcon(props) {
-  return (
-    <GlyphShell {...props}>
-      <path d="M10 6 4 12l6 6" />
-      <path d="M4 12h11a5 5 0 0 1 5 5v1" />
-    </GlyphShell>
-  );
-}
-
-export function AdminLogoutIcon(props) {
-  return (
-    <GlyphShell {...props}>
-      <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
-      <path d="M9 16l-4-4 4-4" />
-      <path d="M5 12h10" />
     </GlyphShell>
   );
 }

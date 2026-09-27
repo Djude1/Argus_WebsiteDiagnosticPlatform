@@ -60,7 +60,7 @@ export function AdminOverviewPage() {
   if (loading || !data || !dash) {
     return (
       <div className="admin-page">
-        <AdminSkeleton variant="card" rows={4} label="載入概覽中" />
+        <AdminSkeleton variant="card" rows={4} label="載入待辦中" />
         <AdminSkeleton variant="detail" rows={2} />
       </div>
     );
@@ -114,16 +114,20 @@ export function AdminOverviewPage() {
       <section className="admin-panel">
         <div className="admin-panel-head-row">
           <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>最近 14 天活動</h3>
-          <span className="admin-panel-hint">滑過圖表可看單日數值；各列縱軸獨立</span>
+          <div className="admin-chart-legend">
+            <span><i className="tone-cyan" />AI tokens</span>
+            <span><i className="tone-good" />訂單金額</span>
+            <span><i className="tone-amber" />掃描數</span>
+          </div>
         </div>
         <AdminMiniChart
           series={dash.series}
           keys={[
-            { key: "ai_tokens", label: "AI tokens" },
-            { key: "revenue_ntd", label: "訂單金額", format: (v) => formatNtd(v) },
-            { key: "scans", label: "掃描數" },
+            { key: "ai_tokens", color: "#0ea5e9" },
+            { key: "revenue_ntd", color: "#10b981" },
+            { key: "scans", color: "#f59e0b" },
           ]}
-          height={200}
+          height={140}
         />
       </section>
 
@@ -133,9 +137,9 @@ export function AdminOverviewPage() {
           label="累計營收"
           value={formatNtd(t.revenue_ntd)}
           hint={`流通 coin ${formatNumber(t.coin_balance_total)}`}
-          tone="amber"
+          tone="cyan"
           icon={AdminTransactionsIcon}
-          spark={<AdminSparkline series={dash.series} dataKey="revenue_ntd" seriesIndex={2} />}
+          spark={<AdminSparkline series={dash.series} dataKey="revenue_ntd" color="#0ea5e9" />}
         />
         <AdminStatCard
           label="使用者總數"

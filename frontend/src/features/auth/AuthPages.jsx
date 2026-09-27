@@ -1,14 +1,9 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
-import { ArgusLogo, ArgusMark } from "../../components/brand/ArgusMark";
-import { ThemeToggle } from "../../components/navigation/NavActions";
 import { useArgusStore } from "../../store";
-import { ArrowLeftIcon, CheckIcon } from "../../shared/ActionIcons";
-import { LockIcon, ScoreIcon, ShieldIcon } from "../../shared/LineIcons";
-import PasswordInput from "../../shared/PasswordInput";
 
 function RequireAuth({ children }) {
   const accessToken = useArgusStore((state) => state.accessToken);
@@ -26,117 +21,17 @@ function RequireAuth({ children }) {
   return <Navigate to={`/login?next=${next}`} replace />;
 }
 
-// ============================================================
-// 共用版型：左側品牌敘事（寬螢幕）＋右側表單卡；手機單欄
-// ============================================================
-
-const TRUST_POINTS = [
-  {
-    Icon: ShieldIcon,
-    title: "授權式掃描",
-    body: "主動式資安測試只對你驗證過所有權的網域執行。",
-  },
-  {
-    Icon: ScoreIcon,
-    title: "五維一次看見",
-    body: "SEO、AEO、GEO、資安、UX 同一份報告，附證據截圖。",
-  },
-  {
-    Icon: LockIcon,
-    title: "直接給修法",
-    body: "不只列問題，還產出可套用的 JSON-LD、meta 與 llms.txt。",
-  },
-];
-
-function AuthShell({ children, backTo, backLabel }) {
-  return (
-    <div className="auth-shell">
-      <aside className="auth-story ag-surface-grid" aria-label="關於 Argus">
-        <ArgusLogo size={40} subtitle="AI 網站健檢平台" />
-        <div className="auth-story-copy">
-          <p className="ag-eyebrow">Night Watch</p>
-          <p className="auth-story-title">
-            讓百眼替你守望網站，<br />
-            <span>看見問題，也拿到修法。</span>
-          </p>
-          <p className="auth-story-sub">
-            Argus 以瀏覽器逐頁巡視你的網站，找出搜尋、AI 答案引擎、資安與體驗上的缺口，並直接給出可用的修正。
-          </p>
-        </div>
-        <ul className="auth-trust">
-          {TRUST_POINTS.map((point) => (
-            <li key={point.title}>
-              <span className="auth-trust-icon" aria-hidden="true"><point.Icon /></span>
-              <span>
-                <strong>{point.title}</strong>
-                <small>{point.body}</small>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="auth-story-eye" aria-hidden="true">
-          <ArgusMark size={220} />
-        </div>
-      </aside>
-
-      <div className="auth-main">
-        <div className="auth-topbar">
-          <Link to={backTo} className="auth-back">
-            <ArrowLeftIcon /> {backLabel}
-          </Link>
-          <ThemeToggle />
-        </div>
-        <div className="auth-card ag-viewfinder">
-          <div className="auth-card-mark">
-            <ArgusLogo size={32} subtitle={null} />
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AuthField({ id, label, hint, children }) {
-  return (
-    <div className="auth-field">
-      <label className="auth-label" htmlFor={id}>{label}</label>
-      {children}
-      {hint && <p className="auth-hint" id={`${id}-hint`}>{hint}</p>}
-    </div>
-  );
-}
-
-function AuthError({ children }) {
-  if (!children) return null;
-  return <p className="auth-error" role="alert">{children}</p>;
-}
-
-function SubmitButton({ loading, loadingText, children, disabled }) {
-  return (
-    <button className="primary-button auth-submit" type="submit" disabled={loading || disabled} aria-busy={loading || undefined}>
-      {loading && <span className="auth-spinner" aria-hidden="true" />}
-      {loading ? loadingText : children}
-    </button>
-  );
-}
-
-// ============================================================
-// 登入／註冊
-// ============================================================
-
 function LoginPage({ googleOAuthEnabled }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const accessToken = useArgusStore((s) => s.accessToken);
   const setToken = useArgusStore((s) => s.setToken);
-  const [tab, setTab] = useState("login");
+  const [tab, setTab] = useState(googleOAuthEnabled ? "google" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const uid = useId();
 
   const next = searchParams.get("next");
   const redirect = (!next || next === "/login" || !next.startsWith("/")) ? "/dashboard" : next;
@@ -184,148 +79,134 @@ function LoginPage({ googleOAuthEnabled }) {
     }
   }
 
-  const tabs = [
-    { key: "login", label: "Email 登入" },
-    { key: "register", label: "新帳號" },
-  ];
-  const isRegister = tab === "register";
-
   return (
-    <AuthShell backTo="/project" backLabel="返回首頁">
-      <header className="auth-head">
-        <h1 className="auth-title">{isRegister ? "建立 Argus 帳號" : "登入 Argus"}</h1>
-        <p className="auth-sub">授權式 AI 網站健檢平台</p>
-      </header>
+    <div className="login-page">
+      <div className="login-card">
+        <button
+          type="button"
+          className="login-back"
+          onClick={() => navigate("/project")}
+        >
+          ← 返回首頁
+        </button>
+        <div className="login-brand">
+          <span className="login-brand-glyph">⟡</span>
+          <span className="login-brand-name">ARGUS</span>
+        </div>
+        <p className="login-sub">授權式 AI 網站健檢平台</p>
 
-      <div className="auth-tabs" role="tablist" aria-label="登入方式">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            id={`${uid}-tab-${t.key}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            aria-controls={`${uid}-panel`}
-            className={`auth-tab ${tab === t.key ? "is-active" : ""}`}
-            onClick={() => { setTab(t.key); setError(""); }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        <div className="login-tabs">
+          {[
+            ...(googleOAuthEnabled ? [{ key: "google", label: "Google 登入" }] : []),
+            { key: "login", label: "Email 登入" },
+            { key: "register", label: "新帳號" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`login-tab ${tab === t.key ? "active" : ""}`}
+              onClick={() => { setTab(t.key); setError(""); }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-      <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${tab}`} className="auth-panel">
-        {googleOAuthEnabled && (
-          <>
-            <div className="auth-google">
-              <GoogleLogin
-                onSuccess={(credentialResponse) => {
-                  api.post("/auth/google/", { credential: credentialResponse.credential })
-                    .then((res) => handleToken(res.data.access))
-                    .catch(() => setError("Google 登入失敗，請稍後再試。"));
-                }}
-                onError={() => setError("Google 登入元件錯誤，請重新整理。")}
-                useOneTap={false}
-                theme="filled_black"
-                shape="pill"
-                text={isRegister ? "signup_with" : "signin_with"}
-              />
-            </div>
-            <p className="auth-divider"><span>或使用 Email</span></p>
-          </>
+        {error && <p className="login-error">{error}</p>}
+
+        {googleOAuthEnabled && tab === "google" && (
+          <div className="login-google-wrap">
+            <GoogleLogin
+              onSuccess={(credentialResponse) => {
+                api.post("/auth/google/", { credential: credentialResponse.credential })
+                  .then((res) => handleToken(res.data.access))
+                  .catch(() => setError("Google 登入失敗，請稍後再試。"));
+              }}
+              onError={() => setError("Google 登入元件錯誤，請重新整理。")}
+              useOneTap={false}
+              theme="filled_black"
+              shape="pill"
+            />
+          </div>
         )}
 
-        <AuthError>{error}</AuthError>
-
-        {!isRegister && (
-          <form className="auth-form" onSubmit={handleEmailLogin}>
-            <AuthField id={`${uid}-email`} label="Email">
-              <input
-                id={`${uid}-email`}
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </AuthField>
-            <div className="auth-field">
-              <div className="auth-label-row">
-                <label className="auth-label" htmlFor={`${uid}-password`}>密碼</label>
-                <button
-                  type="button"
-                  className="auth-link"
-                  onClick={() => navigate("/password-reset")}
-                >
-                  忘記密碼？
-                </button>
-              </div>
-              <PasswordInput
-                id={`${uid}-password`}
-                placeholder="輸入密碼"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <SubmitButton loading={loading} loadingText="登入中…">登入</SubmitButton>
+        {tab === "login" && (
+          <form className="login-form" onSubmit={handleEmailLogin}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="密碼"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+            <button className="login-submit" type="submit" disabled={loading}>
+              {loading ? "登入中…" : "登入"}
+            </button>
+            <p className="login-forgot-hint">
+              <button
+                type="button"
+                className="login-forgot-link"
+                onClick={() => navigate("/password-reset")}
+              >
+                忘記密碼？
+              </button>
+            </p>
           </form>
         )}
 
-        {isRegister && (
-          <form className="auth-form" onSubmit={handleRegister}>
-            <AuthField id={`${uid}-reg-email`} label="Email">
-              <input
-                id={`${uid}-reg-email`}
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </AuthField>
-            <AuthField id={`${uid}-reg-password`} label="密碼" hint="至少 8 字元">
-              <PasswordInput
-                id={`${uid}-reg-password`}
-                placeholder="密碼（至少 8 字元）"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                aria-describedby={`${uid}-reg-password-hint`}
-              />
-            </AuthField>
-            <AuthField id={`${uid}-reg-confirm`} label="確認密碼">
-              <PasswordInput
-                id={`${uid}-reg-confirm`}
-                placeholder="再輸入一次"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                invalid={Boolean(confirmPassword) && confirmPassword !== password}
-              />
-            </AuthField>
-            <SubmitButton loading={loading} loadingText="建立中…">建立帳號</SubmitButton>
+        {tab === "register" && (
+          <form className="login-form" onSubmit={handleRegister}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="密碼（至少 8 字元）"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="確認密碼"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
+            <button className="login-submit" type="submit" disabled={loading}>
+              {loading ? "建立中…" : "建立帳號"}
+            </button>
           </form>
         )}
-      </div>
 
-      <p className="auth-notice">
-        管理員請用上方 Email 登入，登入後於右上角帳號選單進入 <code>/admin</code> 後台。
-      </p>
-    </AuthShell>
+        <p className="login-notice">
+          管理員請用上方 Email 登入，登入後於右上角進入 <code>/admin</code> 後台。
+        </p>
+      </div>
+    </div>
   );
 }
-
-// ============================================================
-// 忘記密碼：寄送重設連結
-// ============================================================
 
 function PasswordResetRequestPage() {
   const navigate = useNavigate();
@@ -333,7 +214,6 @@ function PasswordResetRequestPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [serverMessage, setServerMessage] = useState("");
-  const uid = useId();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -355,57 +235,59 @@ function PasswordResetRequestPage() {
   }
 
   return (
-    <AuthShell backTo="/login" backLabel="返回登入">
-      <header className="auth-head">
-        <h1 className="auth-title">重設密碼</h1>
-        <p className="auth-sub">輸入註冊時的 Email，我們會寄出重設連結（60 分鐘內有效）。</p>
-      </header>
-
-      {submitted ? (
-        <div className="auth-result" role="status">
-          <span className="auth-result-icon" aria-hidden="true"><CheckIcon /></span>
-          <p className="auth-result-title">{serverMessage}</p>
-          <p className="auth-result-foot">
-            收不到信？請檢查垃圾郵件夾，或確認 Email 是否拼寫正確。
-          </p>
-          <button
-            type="button"
-            className="primary-button auth-submit"
-            onClick={() => navigate("/login")}
-          >
-            回到登入頁
-          </button>
+    <div className="login-page">
+      <div className="login-card">
+        <button
+          type="button"
+          className="login-back"
+          onClick={() => navigate("/login")}
+        >
+          ← 返回登入
+        </button>
+        <div className="login-brand">
+          <span className="login-brand-glyph">⟡</span>
+          <span className="login-brand-name">重設密碼</span>
         </div>
-      ) : (
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <AuthField id={`${uid}-email`} label="Email">
+        <p className="login-sub">輸入註冊時的 Email，我們會寄出重設連結（60 分鐘內有效）。</p>
+
+        {submitted ? (
+          <div className="login-info-box">
+            <p>{serverMessage}</p>
+            <p className="login-info-foot">
+              收不到信？請檢查垃圾郵件夾，或確認 Email 是否拼寫正確。
+            </p>
+            <button
+              type="button"
+              className="login-submit"
+              onClick={() => navigate("/login")}
+            >
+              回到登入頁
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
             <input
-              id={`${uid}-email`}
               className="input"
               type="email"
-              placeholder="you@example.com"
+              placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
               autoFocus
             />
-          </AuthField>
-          <SubmitButton loading={loading} loadingText="送出中…" disabled={!email.trim()}>
-            寄出重設連結
-          </SubmitButton>
-          <p className="auth-notice">
-            Google 帳號的密碼請至 Google 帳號設定管理，本平台無法重設。
-          </p>
-        </form>
-      )}
-    </AuthShell>
+            <button className="login-submit" type="submit" disabled={loading || !email.trim()}>
+              {loading ? "送出中…" : "寄出重設連結"}
+            </button>
+            <p className="login-forgot-hint">
+              Google 帳號的密碼請至 Google 帳號設定管理，本平台無法重設。
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
-
-// ============================================================
-// 重設密碼：從信件連結（token 在 hash）設定新密碼
-// ============================================================
 
 function PasswordResetConfirmPage() {
   const navigate = useNavigate();
@@ -417,7 +299,6 @@ function PasswordResetConfirmPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
-  const uid = useId();
 
   useEffect(() => {
     if (window.location.hash) {
@@ -453,51 +334,61 @@ function PasswordResetConfirmPage() {
 
   if (!token) {
     return (
-      <AuthShell backTo="/login" backLabel="返回登入">
-        <header className="auth-head">
-          <h1 className="auth-title">重設密碼</h1>
-        </header>
-        <AuthError>
-          連結缺少 token；請從信件中重新點擊重設連結，或回到「忘記密碼」重新申請。
-        </AuthError>
-        <button
-          type="button"
-          className="primary-button auth-submit"
-          onClick={() => navigate("/password-reset")}
-        >
-          重新申請
-        </button>
-      </AuthShell>
+      <div className="login-page">
+        <div className="login-card">
+          <button type="button" className="login-back" onClick={() => navigate("/login")}>
+            ← 返回登入
+          </button>
+          <div className="login-brand">
+            <span className="login-brand-glyph">⟡</span>
+            <span className="login-brand-name">重設密碼</span>
+          </div>
+          <p className="login-error">
+            連結缺少 token；請從信件中重新點擊重設連結，或回到「忘記密碼」重新申請。
+          </p>
+          <button
+            type="button"
+            className="login-submit"
+            onClick={() => navigate("/password-reset")}
+          >
+            重新申請
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <AuthShell backTo="/login" backLabel="返回登入">
-      <header className="auth-head">
-        <h1 className="auth-title">設定新密碼</h1>
-        {!done && <p className="auth-sub">請設定新密碼（至少 8 個字元）。設定完成後請用新密碼登入。</p>}
-      </header>
-
-      {done ? (
-        <div className="auth-result" role="status">
-          <span className="auth-result-icon" aria-hidden="true"><CheckIcon /></span>
-          <p className="auth-result-title">密碼已重設成功。</p>
-          <p className="auth-result-foot">請用新密碼登入。</p>
-          <button
-            type="button"
-            className="primary-button auth-submit"
-            onClick={() => navigate("/login")}
-          >
-            前往登入
-          </button>
+    <div className="login-page">
+      <div className="login-card">
+        <button type="button" className="login-back" onClick={() => navigate("/login")}>
+          ← 返回登入
+        </button>
+        <div className="login-brand">
+          <span className="login-brand-glyph">⟡</span>
+          <span className="login-brand-name">設定新密碼</span>
         </div>
-      ) : (
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <AuthError>{error}</AuthError>
-          <AuthField id={`${uid}-new`} label="新密碼">
-            <PasswordInput
-              id={`${uid}-new`}
-              placeholder="至少 8 個字元"
+
+        {done ? (
+          <div className="login-info-box">
+            <p>密碼已重設成功。</p>
+            <p className="login-info-foot">請用新密碼登入。</p>
+            <button
+              type="button"
+              className="login-submit"
+              onClick={() => navigate("/login")}
+            >
+              前往登入
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
+            <p className="login-sub">請設定新密碼（至少 8 個字元）。設定完成後請用新密碼登入。</p>
+            {error && <p className="login-error">{error}</p>}
+            <input
+              className="input"
+              type="password"
+              placeholder="新密碼"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -505,25 +396,27 @@ function PasswordResetConfirmPage() {
               autoFocus
               minLength={8}
             />
-          </AuthField>
-          <AuthField id={`${uid}-confirm`} label="再次輸入新密碼">
-            <PasswordInput
-              id={`${uid}-confirm`}
-              placeholder="再輸入一次"
+            <input
+              className="input"
+              type="password"
+              placeholder="再次輸入新密碼"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
               autoComplete="new-password"
               minLength={8}
-              invalid={Boolean(confirm) && confirm !== password}
             />
-          </AuthField>
-          <SubmitButton loading={loading} loadingText="送出中…" disabled={!password || !confirm}>
-            確認重設
-          </SubmitButton>
-        </form>
-      )}
-    </AuthShell>
+            <button
+              className="login-submit"
+              type="submit"
+              disabled={loading || !password || !confirm}
+            >
+              {loading ? "送出中…" : "確認重設"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 

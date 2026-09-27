@@ -1,292 +1,81 @@
 /* ========================================
-   Argus 品牌設計系統 — 「百眼守望 Night Watch」
-   ----------------------------------------
-   品牌概念：希臘神話的百眼巨人 Argus Panoptes——永不同時闔眼的守望者。
-   視覺語言：深夜墨藍底（守夜）＋ 虹膜青（看見）＋ 守望琥珀（警示／洞察的火光）。
-   標誌性元素：杏眼＋由一圈小眼構成的虹膜（ArgusMark）、觀景窗四角框、
-   虹膜環形分數（IrisScore）、細網格「掃描面」底紋。
-
-   全站一律用 --ag-* 語意 token；深色值寫在 :root（預設主題），
-   日間值寫在 :root[data-theme="light"]。規則不要逐條寫兩套顏色。
-   完整規範見 docs/brand-guidelines.md。
-   ======================================== */
-
-:root {
-  color-scheme: dark;
-
-  /* ── 字體 ── */
-  --ag-font-display: "Sora", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --ag-font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --ag-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-
-  /* ── 品牌原色（不隨主題變） ── */
-  --ag-iris-200: #b4f3fa;
-  --ag-iris-300: #7fe9f5;
-  --ag-iris-400: #3fdcee;
-  --ag-iris-500: #14c3dd;
-  --ag-iris-600: #0a9db8;
-  --ag-iris-700: #0a7b91;
-  --ag-iris-800: #0c5a6b;
-  --ag-iris-900: #0a3a46;
-  --ag-signal-300: #ffd98a;
-  --ag-signal-400: #ffc04d;
-  --ag-signal-500: #f5a623;
-  --ag-signal-600: #c97f06;
-  --ag-signal-700: #8f5a04;
-  --ag-ink-950: #04070f;
-  --ag-ink-900: #060a14;
-  --ag-ink-850: #0a1120;
-  --ag-ink-800: #0e1628;
-  --ag-ink-700: #131d33;
-  --ag-ink-600: #1a263f;
-  --ag-ink-500: #26344f;
-
-  /* ── 表面與文字（深色） ── */
-  --ag-bg: var(--ag-ink-900);
-  --ag-bg-raised: var(--ag-ink-850);
-  --ag-surface: var(--ag-ink-800);
-  --ag-surface-2: var(--ag-ink-700);
-  --ag-surface-3: var(--ag-ink-600);
-  --ag-surface-glass: rgba(14, 22, 40, 0.72);
-  --ag-overlay: rgba(2, 5, 12, 0.66);
-  --ag-border: rgba(148, 197, 255, 0.1);
-  --ag-border-strong: rgba(148, 197, 255, 0.2);
-  --ag-border-accent: rgba(63, 220, 238, 0.42);
-  --ag-text: #e8eef8;
-  --ag-text-2: #a9b6cb;
-  --ag-text-3: #7d8ea9;
-  --ag-text-inverse: #060a14;
-
-  /* ── 互動色 ── */
-  --ag-primary: var(--ag-iris-400);
-  --ag-primary-hover: var(--ag-iris-300);
-  --ag-primary-press: var(--ag-iris-500);
-  --ag-on-primary: #03161c;
-  --ag-primary-soft: rgba(63, 220, 238, 0.12);
-  --ag-primary-soft-2: rgba(63, 220, 238, 0.2);
-  --ag-link: var(--ag-iris-300);
-  --ag-accent: var(--ag-signal-400);
-  --ag-accent-soft: rgba(255, 192, 77, 0.14);
-  --ag-on-accent: #1f1300;
-  --ag-focus: 0 0 0 3px rgba(63, 220, 238, 0.45);
-
-  /* ── 狀態色（good / warn / bad / info） ── */
-  --ag-good: #2ee59d;
-  --ag-good-soft: rgba(46, 229, 157, 0.14);
-  --ag-warn: #ffc04d;
-  --ag-warn-soft: rgba(255, 192, 77, 0.14);
-  --ag-bad: #ff5c7a;
-  --ag-bad-soft: rgba(255, 92, 122, 0.14);
-  --ag-info: #6cb6ff;
-  --ag-info-soft: rgba(108, 182, 255, 0.14);
-
-  /* ── 嚴重度（critical → info，報告／徽章／圖表共用） ── */
-  --ag-sev-critical: #ff4d6d;
-  --ag-sev-high: #ff8a3d;
-  --ag-sev-medium: #ffc04d;
-  --ag-sev-low: #6cb6ff;
-  --ag-sev-info: #94a3b8;
-
-  /* ── 維度色（SEO / AEO / GEO / 資安 / UX） ── */
-  --ag-cat-seo: #6c8cff;
-  --ag-cat-aeo: #b48cff;
-  --ag-cat-geo: #3fdcee;
-  --ag-cat-security: #ff5c7a;
-  --ag-cat-ux: #2ee59d;
-
-  /* ── 形狀 ── */
-  --ag-r-xs: 6px;
-  --ag-r-sm: 8px;
-  --ag-r-md: 12px;
-  --ag-r-lg: 16px;
-  --ag-r-xl: 22px;
-  --ag-r-pill: 999px;
-
-  /* ── 陰影與光暈 ── */
-  --ag-shadow-1: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.4);
-  --ag-shadow-2: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
-  --ag-shadow-3: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 28px 64px -24px rgba(0, 0, 0, 0.8);
-  --ag-glow: 0 0 0 1px rgba(63, 220, 238, 0.35), 0 0 28px -6px rgba(63, 220, 238, 0.45);
-  --ag-glow-signal: 0 0 0 1px rgba(255, 192, 77, 0.4), 0 0 28px -6px rgba(255, 192, 77, 0.4);
-
-  /* ── 品牌底紋 ── */
-  --ag-grid-line: rgba(63, 220, 238, 0.045);
-  --ag-hero-wash:
-    radial-gradient(60rem 30rem at 50% -10%, rgba(63, 220, 238, 0.14), transparent 70%),
-    radial-gradient(40rem 24rem at 100% 0%, rgba(255, 192, 77, 0.06), transparent 70%);
-
-  /* ── 動態 ── */
-  --ag-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ag-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ag-dur-1: 120ms;
-  --ag-dur-2: 200ms;
-  --ag-dur-3: 360ms;
-
-  /* ── 版面 ── */
-  --ag-container: 1240px;
-  --ag-nav-h: 64px;
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --ag-bg: #f3f6fb;
-  --ag-bg-raised: #f8fafd;
-  --ag-surface: #ffffff;
-  --ag-surface-2: #f2f5fa;
-  --ag-surface-3: #e7edf5;
-  --ag-surface-glass: rgba(255, 255, 255, 0.8);
-  --ag-overlay: rgba(10, 20, 38, 0.42);
-  --ag-border: rgba(12, 32, 64, 0.1);
-  --ag-border-strong: rgba(12, 32, 64, 0.18);
-  --ag-border-accent: rgba(10, 123, 145, 0.45);
-  --ag-text: #0a1426;
-  --ag-text-2: #3b4a63;
-  --ag-text-3: #5b6a82;
-  --ag-text-inverse: #ffffff;
-
-  --ag-primary: var(--ag-iris-700);
-  --ag-primary-hover: #086a7e;
-  --ag-primary-press: var(--ag-iris-800);
-  --ag-on-primary: #ffffff;
-  --ag-primary-soft: rgba(10, 157, 184, 0.1);
-  --ag-primary-soft-2: rgba(10, 157, 184, 0.18);
-  --ag-link: var(--ag-iris-700);
-  --ag-accent: var(--ag-signal-600);
-  --ag-accent-soft: rgba(245, 166, 35, 0.14);
-  --ag-on-accent: #1f1300;
-  --ag-focus: 0 0 0 3px rgba(10, 157, 184, 0.35);
-
-  --ag-good: #0e9f6e;
-  --ag-good-soft: rgba(14, 159, 110, 0.12);
-  --ag-warn: #b7730a;
-  --ag-warn-soft: rgba(245, 166, 35, 0.16);
-  --ag-bad: #d92d4f;
-  --ag-bad-soft: rgba(217, 45, 79, 0.1);
-  --ag-info: #2672d9;
-  --ag-info-soft: rgba(38, 114, 217, 0.1);
-
-  --ag-sev-critical: #d6204a;
-  --ag-sev-high: #e2661b;
-  --ag-sev-medium: #c98a06;
-  --ag-sev-low: #2672d9;
-  --ag-sev-info: #64748b;
-
-  --ag-cat-seo: #4a67e8;
-  --ag-cat-aeo: #8b5cf6;
-  --ag-cat-geo: #0a9db8;
-  --ag-cat-security: #d92d4f;
-  --ag-cat-ux: #0e9f6e;
-
-  --ag-shadow-1: 0 1px 2px rgba(12, 32, 64, 0.06);
-  --ag-shadow-2: 0 1px 2px rgba(12, 32, 64, 0.05), 0 12px 28px -14px rgba(12, 32, 64, 0.18);
-  --ag-shadow-3: 0 2px 4px rgba(12, 32, 64, 0.05), 0 30px 60px -24px rgba(12, 32, 64, 0.28);
-  --ag-glow: 0 0 0 1px rgba(10, 123, 145, 0.3), 0 8px 24px -10px rgba(10, 157, 184, 0.35);
-  --ag-glow-signal: 0 0 0 1px rgba(201, 127, 6, 0.35), 0 8px 24px -10px rgba(245, 166, 35, 0.35);
-
-  --ag-grid-line: rgba(10, 60, 110, 0.05);
-  --ag-hero-wash:
-    radial-gradient(60rem 30rem at 50% -10%, rgba(10, 157, 184, 0.12), transparent 70%),
-    radial-gradient(40rem 24rem at 100% 0%, rgba(245, 166, 35, 0.08), transparent 70%);
-}
-
-/* ── 全站基礎排版 ── */
-html {
-  -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  margin: 0;
-  background: var(--ag-bg);
-  color: var(--ag-text);
-  font-family: var(--ag-font-sans);
-  font-feature-settings: "palt" 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-h1, h2, h3, h4 {
-  font-family: var(--ag-font-display);
-  letter-spacing: -0.01em;
-}
-
-code, kbd, samp, pre, .ag-mono {
-  font-family: var(--ag-font-mono);
-}
-
-.ag-num {
-  font-family: var(--ag-font-display);
-  font-variant-numeric: tabular-nums;
-}
-
-::selection {
-  background: rgba(63, 220, 238, 0.32);
-  color: inherit;
-}
-
-:focus-visible {
-  outline: 2px solid var(--ag-primary);
-  outline-offset: 2px;
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--ag-surface-3) transparent;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ========================================
-   舊版 token（相容層）——值改由品牌 token 衍生，
-   既有規則不必逐條改就能跟上新品牌色。新規則請直接用 --ag-*。
+   全域設計 token（:root）
+   色彩 / 圓角 / 陰影集中於此，要換主題色改這裡即可。
+   半透明 glow / border 效果沿用原 rgba，視覺隨主色走。
    ======================================== */
 
 :root {
   /* 深藍背景階（高科技主題）*/
-  --argus-navy-950: var(--ag-ink-950);
-  --argus-navy-900: var(--ag-ink-900);
-  --argus-navy-800: var(--ag-ink-800);
-  --argus-navy-700: var(--ag-ink-700);
-  --argus-navy-600: var(--ag-ink-600);
+  --argus-navy-950: #050a1c;
+  --argus-navy-900: #060b1f;
+  --argus-navy-800: #0a1535;
+  --argus-navy-700: #111c4a;
+  --argus-navy-600: #142455;
   --argus-indigo-900: #1e1b4b;
 
   /* 強調色與深色介面文字 */
-  --argus-cyan: var(--ag-iris-400);
-  --argus-cyan-glow: var(--ag-iris-300);
-  --argus-cyan-dot: var(--ag-iris-500);
-  --argus-cyan-deep: var(--ag-iris-800);
+  --argus-cyan: #38bdf8;
+  --argus-cyan-glow: #67e8f9;
+  --argus-cyan-dot: #0ea5e9;
+  --argus-cyan-deep: #0c4a6e;
 
   /* Admin sidebar icon tokens */
-  --argus-icon-base: var(--ag-iris-400);
-  --argus-icon-accent: var(--ag-iris-300);
+  --argus-icon-base: #22d3ee;
+  --argus-icon-accent: #67e8f9;
   --argus-icon-base-active: #ffffff;
   --argus-icon-accent-active: rgba(255, 255, 255, 0.7);
   --argus-text-bright: #e0f2fe;
   --argus-text-white: #f0f9ff;
 
   /* tone：good / medium / bad（分數、配額、色帶共用）*/
-  --tone-good: var(--ag-good);
+  --tone-good: #10b981;
   --tone-good-bright: #34d399;
-  --tone-medium: var(--ag-warn);
+  --tone-medium: #f59e0b;
   --tone-medium-bright: #fbbf24;
-  --tone-bad: var(--ag-bad);
+  --tone-bad: #ef4444;
   --tone-bad-bright: #fb7185;
   --tone-bad-soft: #f87171;
 
-  /* 後台 --admin-* 語意 token 已移到 18-admin.css 開頭，由 --ag-* 衍生，深／淺主題自動切換。 */
+  /* 後台淺色底：navy/cyan 品牌延伸的淺灰藍，取代泛用純白 */
+  --argus-admin-bg-1: #e7eef8;
+  --argus-admin-bg-2: #d9e6f3;
+  --argus-admin-bg-3: #cce0f0;
+
+  /* 後台語意 token（S0）。全部由上方品牌色衍生，不另立色系。
+     canvas 改為單一平色：大面積資料頁用漸層只會讓白卡片的對比忽強忽弱。 */
+  --admin-canvas: #eef3f9;
+  --admin-surface: #ffffff;
+  --admin-surface-sunken: #f4f7fb;
+  --admin-border: rgba(15, 23, 42, 0.08);
+  --admin-border-strong: rgba(15, 23, 42, 0.14);
+  --admin-text: #0f172a;
+  --admin-text-muted: #64748b;
+  /* sunken 底上的次要文字：#64748b 在 #f4f7fb 上只有 4.43:1，未達 AA 4.5，故加深 */
+  --admin-text-muted-sunken: #5a6b80;
+  --admin-accent: var(--argus-cyan-dot);
+  /* sidebar 改用品牌 navy；原本的 #0f172a→#1e293b 是 Tailwind slate 預設值，
+     與 Argus 的識別無關，也是後台看起來像通用模板的主因。 */
+  --admin-sidebar-from: var(--argus-navy-950);
+  --admin-sidebar-to: var(--argus-navy-800);
+  /* S7：深色主題需要的其餘語意 token（此處為亮色值，深色值見檔案下方的
+     :root[data-theme="dark"] 區塊）。側欄本身恆為深色，不使用這組。 */
+  --admin-border-solid: #e2e8f0;
+  --admin-text-secondary: #475569;
+  --admin-accent-strong: #0e7490;
+  --admin-accent-soft-bg: #ecfeff;
+  --admin-tone-good-text: #047857;
+  --admin-tone-warn-text: #b45309;
+  --admin-tone-bad-text: #b91c1c;
+  --admin-tone-good-bg: rgba(16, 185, 129, 0.12);
+  --admin-tone-warn-bg: rgba(245, 158, 11, 0.14);
+  --admin-tone-bad-bg: rgba(239, 68, 68, 0.12);
+  --admin-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.12);
+  --argus-brand-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M12 4c1.25 4.85 3.15 6.75 8 8-4.85 1.25-6.75 3.15-8 8-1.25-4.85-3.15-6.75-8-8 4.85-1.25 6.75-3.15 8-8Z'/%3E%3C/svg%3E");
 
   /* 圓角 */
-  --radius-md: var(--ag-r-md);
-  --radius-lg: var(--ag-r-lg);
-  --radius-xl: var(--ag-r-xl);
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
 
   /* 陰影 */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);

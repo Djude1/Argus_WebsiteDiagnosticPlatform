@@ -1,0 +1,94 @@
+/* ========================================
+   S7：後台深色主題
+   只覆寫 --admin-* 語意 token，不逐條改規則——這也是先前把 101 個 admin
+   規則塊的硬編碼色值換成 token 的目的。
+   側欄不在此列：它恆為深色（--admin-sidebar-*），兩種主題下外觀一致。
+
+   預設主題為 dark（store.js），因此後台預設也是深色；使用者可在側欄底部
+   或前台導覽列切換，兩處共用同一個 data-theme 開關。
+   ======================================== */
+:root[data-theme="dark"] {
+  --admin-canvas: #070d1c;
+  --admin-surface: #0f1729;
+  --admin-surface-sunken: #0b1220;
+  --admin-border: rgba(148, 163, 184, 0.14);
+  --admin-border-strong: rgba(148, 163, 184, 0.26);
+  --admin-border-solid: #1e293b;
+  --admin-text: #e2e8f0;
+  --admin-text-secondary: #cbd5e1;
+  --admin-text-muted: #94a3b8;
+  --admin-text-muted-sunken: #a3b2c7;
+  --admin-accent: #38bdf8;
+  --admin-accent-strong: #67e8f9;
+  --admin-accent-soft-bg: rgba(56, 189, 248, 0.12);
+  /* 狀態文字在深底上要提亮，否則 #047857 這類深色在 #0f1729 上幾乎看不見 */
+  --admin-tone-good-text: #34d399;
+  --admin-tone-warn-text: #fbbf24;
+  --admin-tone-bad-text: #fb7185;
+  --admin-tone-good-bg: rgba(16, 185, 129, 0.16);
+  --admin-tone-warn-bg: rgba(245, 158, 11, 0.16);
+  --admin-tone-bad-bg: rgba(239, 68, 68, 0.16);
+  --admin-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -18px rgba(0, 0, 0, 0.7);
+}
+
+/* 深色下仍寫死的少數個案：表頭、錯誤區塊與 hover 底色原本綁亮色 */
+:root[data-theme="dark"] .admin-table thead th {
+  background: var(--admin-surface-sunken);
+  border-bottom-color: var(--admin-border-solid);
+}
+:root[data-theme="dark"] .admin-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.06);
+}
+:root[data-theme="dark"] .admin-error-state {
+  background: rgba(239, 68, 68, 0.10);
+  border-color: rgba(239, 68, 68, 0.32);
+}
+:root[data-theme="dark"] .admin-error-state-title { color: #fda4af; }
+:root[data-theme="dark"] .admin-error-state-detail { color: #fca5a5; }
+:root[data-theme="dark"] .admin-error-pre {
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text-secondary);
+}
+:root[data-theme="dark"] .admin-scope-note {
+  background: rgba(56, 189, 248, 0.10);
+  border-color: rgba(56, 189, 248, 0.30);
+  color: #bae6fd;
+}
+:root[data-theme="dark"] .admin-tech-chip { color: #7dd3fc; }
+:root[data-theme="dark"] .admin-order-status.tone-good {
+  background: var(--admin-tone-good-bg);
+  color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-order-status.tone-warn {
+  background: var(--admin-tone-warn-bg);
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-warn-count.tone-warn {
+  background: var(--admin-tone-warn-bg);
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-warn-count.tone-bad {
+  background: var(--admin-tone-bad-bg);
+  color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-ok .admin-health-badge {
+  background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-warn .admin-health-badge {
+  background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-health-row.tone-bad .admin-health-badge {
+  background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text);
+}
+:root[data-theme="dark"] .admin-health-summary.tone-warn .admin-health-summary-icon {
+  color: var(--admin-tone-warn-text);
+}
+:root[data-theme="dark"] .admin-health-summary.tone-bad .admin-health-summary-icon {
+  color: var(--admin-tone-bad-text);
+}
+/* 統計卡與面板的固有陰影在深底上會變成黑塊，改用 token */
+:root[data-theme="dark"] .admin-stat-card,
+:root[data-theme="dark"] .admin-panel {
+  box-shadow: var(--admin-shadow-card);
+  border-color: var(--admin-border);
+}

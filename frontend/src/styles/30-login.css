@@ -1,312 +1,96 @@
-/* ========================================
-   登入／註冊／密碼重設（features/auth/AuthPages.jsx）
-   左側品牌敘事 + 右側表單卡；≤ 960px 收成單欄。只用 --ag-* token。
-   ======================================== */
-
-/* 登入頁自己鋪滿視窗，不吃 .argus-main 的外距（避免外圍露出一圈底色） */
-.argus-main:has(> .auth-shell){ padding: 0; }
-
-.auth-shell{
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+/* ===== LoginPage ===== */
+.login-page {
   min-height: 100vh;
-  min-height: 100dvh;
-  background: var(--ag-bg);
-}
-
-/* ── 品牌敘事 ── */
-.auth-story{
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 2.5rem;
-  overflow: hidden;
-  padding: 2.5rem clamp(2rem, 5vw, 4.5rem);
-  border-right: 1px solid var(--ag-border);
-  background-color: var(--ag-bg-raised);
-}
-.auth-story::before{
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--ag-hero-wash);
-  pointer-events: none;
-}
-.auth-story .ag-logo-word{ font-size: 1.3rem; }
-.auth-story-copy{ display: grid; gap: 1rem; max-width: 34rem; margin-top: auto; }
-.auth-story-title{
-  margin: 0;
-  color: var(--ag-text);
-  font-family: var(--ag-font-display);
-  font-size: clamp(1.9rem, 3.1vw, 2.75rem);
-  font-weight: 700;
-  line-height: 1.22;
-  letter-spacing: -0.01em;
-}
-.auth-story-title span{ color: var(--ag-primary); }
-.auth-story-sub{ margin: 0; color: var(--ag-text-2); font-size: 1rem; line-height: 1.75; }
-
-.auth-trust{ display: grid; gap: 0.85rem; max-width: 34rem; margin: 0 0 auto; padding: 0; list-style: none; }
-.auth-trust li{
-  display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--ag-border);
-  border-radius: var(--ag-r-lg);
-  background: var(--ag-surface-glass);
-  backdrop-filter: blur(6px);
-}
-.auth-trust li > span:last-child{ display: grid; gap: 0.15rem; }
-.auth-trust strong{ color: var(--ag-text); font-size: 0.95rem; }
-.auth-trust small{ color: var(--ag-text-2); font-size: 0.84rem; line-height: 1.6; }
-.auth-trust-icon{
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--ag-r-md);
-  background: var(--ag-primary-soft);
-  color: var(--ag-primary);
-}
-.auth-trust-icon svg{ width: 20px; height: 20px; }
-.auth-trust-icon .ln-fill{ fill: currentColor; fill-opacity: 0.2; }
-
-/* 右下角大型標誌：低透明度浮水印，讓敘事區有主視覺但不搶文字 */
-.auth-story-eye{
-  position: absolute;
-  right: -48px;
-  bottom: -40px;
-  z-index: -1;
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-/* ── 表單區 ── */
-.auth-main{
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  padding: 1.5rem clamp(1rem, 4vw, 3rem) 2.5rem;
-}
-.auth-topbar{
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
+  background: var(--bg-base, #0f172a);
+  padding: 1rem;
 }
-.auth-back{
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 40px;
-  padding: 0 0.6rem;
-  margin-left: -0.6rem;
-  border-radius: var(--ag-r-md);
-  color: var(--ag-text-2);
-  font-size: 0.875rem;
-  text-decoration: none;
-  transition: color var(--ag-dur-2), background var(--ag-dur-2);
-}
-.auth-back svg{ width: 17px; height: 17px; }
-.auth-back:hover{ color: var(--ag-text); background: var(--ag-surface-2); }
-
-.auth-card{
-  display: flex;
+.login-card {
+  background: var(--bg-card, #1e293b);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
+  display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  margin: auto;
-  padding: 2rem;
-  border: 1px solid var(--ag-border);
-  border-radius: var(--ag-r-xl);
-  background: var(--ag-surface);
-  box-shadow: var(--ag-shadow-3);
-  animation: fade-up 0.4s var(--ag-ease);
 }
-.auth-card-mark{ display: none; }
-
-.auth-head{ display: grid; gap: 0.4rem; }
-.auth-title{
-  margin: 0;
-  color: var(--ag-text);
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.25;
+.login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; }
+.login-brand-glyph { font-size: 1.8rem; }
+.login-brand-name { font-size: 1.5rem; font-weight: 700; letter-spacing: .08em; color: #e2e8f0; }
+.login-sub { text-align: center; color: #94a3b8; font-size: .875rem; margin: 0; }
+.login-tabs { display: flex; gap: .5rem; }
+.login-tab {
+  flex: 1; padding: .5rem .25rem; border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; background: transparent; color: #94a3b8;
+  cursor: pointer; font-size: .875rem; transition: all .15s;
 }
-.auth-sub{ margin: 0; color: var(--ag-text-2); font-size: 0.9rem; line-height: 1.6; }
-
-.auth-tabs{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  border: 1px solid var(--ag-border);
-  border-radius: var(--ag-r-md);
-  background: var(--ag-bg-raised);
+.login-tab.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
+.login-form { display: flex; flex-direction: column; gap: .75rem; }
+.login-submit {
+  padding: .75rem; background: #6366f1; border: none; border-radius: 8px;
+  color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity .15s;
 }
-.auth-tab{
-  min-height: 40px;
-  border: 0;
-  border-radius: var(--ag-r-sm);
-  background: transparent;
-  color: var(--ag-text-2);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--ag-dur-2) var(--ag-ease), color var(--ag-dur-2);
+.login-submit:disabled { opacity: .6; cursor: default; }
+.login-forgot-hint { text-align: center; color: #64748b; font-size: .8rem; margin: 0; }
+.login-forgot-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: #818cf8; font-size: .8rem;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(129, 140, 248, .4);
+  transition: color .15s, text-decoration-color .15s;
 }
-.auth-tab:hover{ color: var(--ag-text); }
-.auth-tab.is-active{
-  background: var(--ag-surface-2);
-  color: var(--ag-text);
-  font-weight: 600;
-  box-shadow: var(--ag-shadow-1), inset 0 -2px 0 var(--ag-primary);
+.login-forgot-link:hover {
+  color: #a5b4fc;
+  text-decoration-color: #a5b4fc;
 }
-
-.auth-panel{ display: grid; gap: 1rem; }
-.auth-google{ display: flex; justify-content: center; min-height: 44px; }
-.auth-divider{
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0;
-  color: var(--ag-text-3);
-  font-size: 0.78rem;
+.login-google-wrap { display: flex; justify-content: center; padding: .5rem 0; }
+.login-error { color: #f87171; font-size: .875rem; text-align: center; margin: 0; }
+.login-notice { font-size: .75rem; color: #475569; text-align: center; margin: 0; }
+.login-back {
+  align-self: flex-start;
+  background: none; border: none; padding: 0;
+  color: #94a3b8; font-size: .85rem; cursor: pointer;
+  transition: color .15s;
 }
-.auth-divider::before,
-.auth-divider::after{ content: ""; flex: 1; height: 1px; background: var(--ag-border); }
-
-.auth-form{ display: grid; gap: 1rem; }
-.auth-field{ display: grid; gap: 0.4rem; }
-.auth-label-row{ display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.auth-label{ color: var(--ag-text); font-size: 0.84rem; font-weight: 600; }
-.auth-hint{ margin: 0; color: var(--ag-text-3); font-size: 0.76rem; }
-.auth-link{
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ag-link);
-  font-size: 0.8rem;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 3px;
-  transition: text-decoration-color var(--ag-dur-2);
-}
-.auth-link:hover{ text-decoration-color: currentColor; }
-
-.auth-error{
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--ag-bad) 35%, transparent);
-  border-radius: var(--ag-r-md);
-  background: var(--ag-bad-soft);
-  color: var(--ag-bad);
-  font-size: 0.86rem;
-  line-height: 1.55;
-  animation: fade-in var(--ag-dur-2) ease-out;
-}
-
-.auth-submit{ width: 100%; min-height: 46px; font-size: 0.95rem; }
-.auth-spinner{
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: auth-spin 0.7s linear infinite;
-}
-@keyframes auth-spin { to { transform: rotate(360deg); } }
-
-.auth-notice{
-  margin: 0;
-  color: var(--ag-text-3);
-  font-size: 0.76rem;
+.login-back:hover { color: #cbd5e1; }
+.login-info-box {
+  display: flex; flex-direction: column; gap: .9rem;
+  background: rgba(99, 102, 241, .08);
+  border: 1px solid rgba(99, 102, 241, .25);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  color: #cbd5e1;
+  font-size: .92rem;
   line-height: 1.6;
-  text-align: center;
 }
-.auth-notice code{
-  padding: 0.05rem 0.3rem;
-  border-radius: var(--ag-r-xs);
-  background: var(--ag-surface-2);
-  color: var(--ag-text-2);
-  font-size: 0.72rem;
+.login-info-box p { margin: 0; }
+.login-info-box .login-info-foot {
+  font-size: .8rem;
+  color: #64748b;
 }
 
-.auth-result{
-  display: grid;
-  justify-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  border: 1px solid color-mix(in srgb, var(--ag-good) 30%, transparent);
-  border-radius: var(--ag-r-lg);
-  background: var(--ag-good-soft);
-  text-align: center;
+/* 掃描預估費用 */
+.scan-estimate-row { display: flex; align-items: flex-start; gap: .75rem; flex-wrap: wrap; margin-top: .5rem; }
+.scan-estimate-btn {
+  padding: .4rem .9rem; border: 1px solid #6366f1; border-radius: 8px;
+  background: #fff; color: #4f46e5; cursor: pointer; font-size: .85rem; font-weight: 600;
+  transition: background .15s, border-color .15s, box-shadow .15s;
 }
-.auth-result-icon{
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--ag-good);
-  color: var(--ag-text-inverse);
+.scan-estimate-btn:hover { background: rgba(99,102,241,.1); }
+.scan-estimate-btn:disabled { opacity: .5; cursor: default; }
+.scan-estimate-btn:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, .45);
+  outline-offset: 2px;
 }
-.auth-result-icon svg{ width: 22px; height: 22px; stroke-width: 2.2; }
-.auth-result-title{ margin: 0; color: var(--ag-text); font-size: 0.95rem; font-weight: 600; line-height: 1.6; }
-.auth-result-foot{ margin: 0; color: var(--ag-text-2); font-size: 0.82rem; }
-
-/* ── 密碼輸入 + 顯示切換（shared/PasswordInput，登入與設定頁共用） ── */
-.pw-input{ position: relative; display: block; }
-.pw-input .pw-input-field{ padding-right: 3rem; }
-.pw-input.is-error .pw-input-field{ border-color: var(--ag-bad); }
-.pw-input-toggle{
-  position: absolute;
-  top: 50%;
-  right: 0.35rem;
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: var(--ag-r-sm);
-  background: transparent;
-  color: var(--ag-text-3);
-  cursor: pointer;
-  transform: translateY(-50%);
-  transition: color var(--ag-dur-2), background var(--ag-dur-2);
+.scan-estimate-result {
+  display: flex; width: 100%; gap: .5rem .75rem; align-items: center; flex-wrap: wrap;
+  font-size: .875rem; line-height: 1.5; color: #0f172a;
+  padding: .65rem .8rem; border: 1px solid #cbd5e1; border-radius: 8px;
+  background: #f8fafc;
 }
-.pw-input-toggle svg{ width: 18px; height: 18px; }
-.pw-input-toggle:hover{ color: var(--ag-text); background: var(--ag-surface-2); }
-.pw-input-toggle[aria-pressed="true"]{ color: var(--ag-primary); }
-
-/* ── 響應式 ── */
-@media (max-width: 960px) {
-  .auth-shell { grid-template-columns: 1fr; }
-  .auth-story { display: none; }
-  .auth-card-mark { display: flex; }
-  .auth-main { background: var(--ag-hero-wash), var(--ag-bg); }
-}
-
-@media (max-width: 480px) {
-  .auth-main{ padding: 0.75rem 1rem 2rem; }
-  .auth-card{
-    margin: 1rem 0 0;
-    padding: 1.35rem 1.1rem;
-    border-radius: var(--ag-r-lg);
-  }
-  .auth-title{ font-size: 1.35rem; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-spinner{ animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }
-}
-
+.scan-estimate-result strong { color: #4338ca; }
+.scan-estimate-conf { color: #475569; font-size: .8rem; }

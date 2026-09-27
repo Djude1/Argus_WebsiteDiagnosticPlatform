@@ -1,4 +1,4 @@
-import { BRAND_MARKS } from "./brandMarks";
+import { BRAND_MARKS } from "./brandMarks.jsx";
 
 /**
  * 技術棧 logo 牆：4 欄垂直 marquee，欄與欄反向且速度不同，

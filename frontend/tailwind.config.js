@@ -4,14 +4,7 @@ export default {
   // apiTypes.ts 是產生的型別檔、內容不受我們控制（上萬個字串），不讓它影響 CSS 輸出
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}", "!./src/shared/apiTypes.ts"],
   theme: {
-    extend: {
-      // 品牌字體（定義見 src/styles/03-tokens.css 的 --ag-font-*）
-      fontFamily: {
-        sans: ["var(--ag-font-sans)"],
-        display: ["var(--ag-font-display)"],
-        mono: ["var(--ag-font-mono)"],
-      },
-    },
+    extend: {},
   },
   plugins: [],
 };

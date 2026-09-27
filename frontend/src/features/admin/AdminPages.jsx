@@ -9,10 +9,9 @@ import {
 
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
-import { ArgusLogo } from "../../components/brand/ArgusMark";
+import brandLogo from "../../assets/brand-logo.webp";
 import { StatusDoneGlyph, useConfirmDialogs } from "../../shared/AppShared.jsx";
-import { AdminField, AdminModal } from "../../components/admin/AdminModal";
-import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates";
+import { AdminModal } from "../../components/admin/AdminModal";
 import {
   AdminOverviewIcon,
   AdminUsersIcon,
@@ -28,10 +27,6 @@ import {
   AdminMenuIcon,
   AdminOrdersIcon,
   AdminAlertIcon,
-  AdminBackIcon,
-  AdminLogoutIcon,
-  AdminMoonIcon,
-  AdminSunIcon,
 } from "../../components/admin/AdminIcons.jsx";
 
 // 側欄導覽依「使用者來後台做什麼」分組，而非依資料表分。
@@ -186,7 +181,7 @@ function AdminLayout() {
         >
           <AdminMenuIcon />
         </button>
-        <ArgusLogo size={26} subtitle="管理後台" className="admin-mobile-logo" />
+        <strong>ARGUS 管理後台</strong>
       </header>
       {drawerOpen && (
         <button
@@ -204,7 +199,8 @@ function AdminLayout() {
         inert={isMobileDrawer && !drawerOpen ? "" : undefined}
       >
         <button type="button" className="admin-brand" onClick={() => { replayIntro(); navigate("/project"); }} title="回到前台首頁" aria-label="回到前台首頁">
-          <ArgusLogo size={36} subtitle="管理後台" />
+          <img src={brandLogo} className="admin-brand-logo" alt="ARGUS" />
+          <span className="admin-brand-sub">管理後台</span>
         </button>
         <nav className="admin-nav">
           {navGroups.map((group) => (
@@ -237,19 +233,17 @@ function AdminLayout() {
             onClick={toggleTheme}
             aria-label={theme === "dark" ? "切換為淺色主題" : "切換為深色主題"}
           >
-            {theme === "dark" ? <AdminSunIcon /> : <AdminMoonIcon />}
+            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
             <span>{theme === "dark" ? "淺色主題" : "深色主題"}</span>
           </button>
           <NavLink to="/dashboard" className="admin-side-link" onClick={closeDrawer}>
-            <AdminBackIcon className="admin-side-icon" />
-            回前台
+            ← 回前台
           </NavLink>
           <button
             type="button"
-            className="admin-side-link is-danger"
+            className="admin-side-link"
             onClick={handleLogout}
           >
-            <AdminLogoutIcon className="admin-side-icon" />
             登出
           </button>
         </div>
@@ -393,7 +387,7 @@ function AdminCmsManager({ schema }) {
           ))}
           {items.length === 0 && (
             <tr><td colSpan={schema.displayFields.length + 1} className="admin-empty">
-              尚無資料，點右上「+ 新增」開始
+              尚無資料，點上方「+ 新增」開始
             </td></tr>
           )}
         </tbody>
@@ -416,55 +410,59 @@ function AdminCmsManager({ schema }) {
         }
       >
         <>
-          {schema.fields.map((f) => f.type === "boolean" ? (
-            <label key={f.key} className="admin-checkbox">
-              <input
-                type="checkbox"
-                checked={!!draft[f.key]}
-                onChange={(e) => setDraft({ ...draft, [f.key]: e.target.checked })}
-              /> {f.label}
-            </label>
-          ) : (
-            <AdminField key={f.key} id={`cms-${f.key}`} label={f.label} hint={f.hint} required={f.required}>
-              {(fieldProps) => f.type === "textarea" ? (
-                <textarea
-                  {...fieldProps}
-                  className="admin-input"
-                  rows={f.rows || 3}
-                  value={draft[f.key] ?? ""}
-                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
-                />
-              ) : f.type === "select" ? (
-                <select
-                  {...fieldProps}
-                  className="admin-input"
-                  value={draft[f.key] ?? ""}
-                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
-                >
-                  {f.options.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              ) : f.type === "json" ? (
-                <input
-                  {...fieldProps}
-                  className="admin-input"
-                  placeholder="用逗號分隔，例：React,Django,Figma"
-                  value={Array.isArray(draft[f.key]) ? draft[f.key].join(", ") : (draft[f.key] || "")}
-                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
-                />
-              ) : (
-                <input
-                  {...fieldProps}
-                  className="admin-input"
-                  type={f.type === "number" ? "number" : (f.type === "datetime" ? "datetime-local" : "text")}
-                  value={draft[f.key] ?? ""}
-                  onChange={(e) => setDraft({ ...draft, [f.key]:
-                    f.type === "number" ? Number(e.target.value) : e.target.value })}
-                />
-              )}
-            </AdminField>
-          ))}
+              {schema.fields.map((f) => (
+                <div key={f.key} className="wizard-field">
+                  <label htmlFor={`cms-${f.key}`}>
+                    {f.label}{f.required && " *"}
+                    {f.hint && <span className="wizard-field-hint">{f.hint}</span>}
+                  </label>
+                  {f.type === "textarea" ? (
+                    <textarea
+                      id={`cms-${f.key}`}
+                      className="admin-input"
+                      rows={f.rows || 3}
+                      value={draft[f.key] ?? ""}
+                      onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                    />
+                  ) : f.type === "boolean" ? (
+                    <label className="admin-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={!!draft[f.key]}
+                        onChange={(e) => setDraft({ ...draft, [f.key]: e.target.checked })}
+                      /> 啟用
+                    </label>
+                  ) : f.type === "select" ? (
+                    <select
+                      id={`cms-${f.key}`}
+                      className="admin-input"
+                      value={draft[f.key] ?? ""}
+                      onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                    >
+                      {f.options.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  ) : f.type === "json" ? (
+                    <input
+                      id={`cms-${f.key}`}
+                      className="admin-input"
+                      placeholder="用逗號分隔，例：React,Django,Figma"
+                      value={Array.isArray(draft[f.key]) ? draft[f.key].join(", ") : (draft[f.key] || "")}
+                      onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                    />
+                  ) : (
+                    <input
+                      id={`cms-${f.key}`}
+                      className="admin-input"
+                      type={f.type === "number" ? "number" : (f.type === "datetime" ? "datetime-local" : "text")}
+                      value={draft[f.key] ?? ""}
+                      onChange={(e) => setDraft({ ...draft, [f.key]:
+                        f.type === "number" ? Number(e.target.value) : e.target.value })}
+                    />
+                  )}
+                </div>
+              ))}
         {feedback && (
           <div className={`admin-feedback tone-${feedback.tone}`}>{feedback.message}</div>
         )}
@@ -589,19 +587,15 @@ function AdminContentPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <div>
-          <h1>內容管理</h1>
-          <p>編輯前台公開頁的卡片內容；存檔後前台即時生效</p>
-        </div>
+        <h1>內容管理</h1>
+        <p>編輯前台公開頁的卡片內容；存檔後前台即時生效</p>
       </header>
 
-      <div className="admin-tab-row" role="tablist" aria-label="內容類型">
+      <div className="admin-tab-row">
         {CONTENT_TABS.map((t) => (
           <button
             key={t.key}
             type="button"
-            role="tab"
-            aria-selected={tab === t.key}
             className={`admin-tab ${tab === t.key ? "active" : ""}`}
             onClick={() => setTab(t.key)}
           >
@@ -625,20 +619,8 @@ function AdminSettingsPage() {
       .catch((err) => setError(err.response?.data?.detail || "讀取設定失敗"));
   }, []);
 
-  if (error) {
-    return (
-      <div className="admin-page">
-        <AdminErrorState message="無法載入系統資訊" detail={error} onRetry={() => window.location.reload()} />
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div className="admin-page">
-        <AdminSkeleton variant="detail" rows={3} label="載入系統資訊中" />
-      </div>
-    );
-  }
+  if (error) return <div className="admin-error">{error}</div>;
+  if (!data) return <div className="admin-loading">載入中…</div>;
 
   const Section = ({ title, rows }) => (
     <section className="admin-panel">
@@ -668,10 +650,8 @@ function AdminSettingsPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <div>
-          <h1>系統資訊</h1>
-          <p>{data.note}</p>
-        </div>
+        <h1>系統資訊</h1>
+        <p>{data.note}</p>
       </header>
       <Section title="計費" rows={Object.entries(data.billing)} />
       <Section title="Hermes-Agent" rows={Object.entries(data.agent)} />

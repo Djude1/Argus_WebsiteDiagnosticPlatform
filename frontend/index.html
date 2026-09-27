@@ -18,27 +18,14 @@
     <meta name="twitter:title" content="Argus 網站健檢平台" />
     <meta name="twitter:description" content="授權式 AI 網站健檢平台 — SEO/AEO/GEO/資安四維掃描 + 互動式報告" />
     <meta name="twitter:image" content="https://xn--gst.tw/favicon.svg" />
-    <!-- 品牌字體：Sora（標題／數字）＋ Noto Sans TC（內文）＋ JetBrains Mono（URL／程式碼）
-         Google Fonts 以 unicode-range 分片，中文只下載實際用到的字 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700;900&family=Sora:wght@500;600;700;800&display=swap"
-    />
     <!-- PWA -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#060a14" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f3f6fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#06b6d4" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/pwa-icon.svg" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <script>
-      // 在 CSS 載入前先套主題，避免日間使用者看到一閃而過的深色畫面（FOUC）
-      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("argus_theme") === "light" ? "light" : "dark"); } catch (e) { /* 無痕模式 */ }
-    </script>
     <meta name="apple-mobile-web-app-title" content="Argus" />
   </head>
   <body>

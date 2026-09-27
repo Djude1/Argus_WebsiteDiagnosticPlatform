@@ -146,14 +146,12 @@ function isInProgress(status) {
 // ============================================================
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"];
-// 顏色一律指向品牌 token（03-tokens.css），深／淺主題自動切換；
-// 值是 CSS 變數字串，可直接放進 inline style 的 background／color。
 const SEVERITY_COLOR = {
-  critical: "var(--ag-sev-critical)",
-  high: "var(--ag-sev-high)",
-  medium: "var(--ag-sev-medium)",
-  low: "var(--ag-sev-low)",
-  info: "var(--ag-sev-info)",
+  critical: "#dc2626",
+  high: "#f97316",
+  medium: "#facc15",
+  low: "#38bdf8",
+  info: "#94a3b8",
 };
 const SEVERITY_LABEL = {
   critical: "嚴重",
@@ -163,11 +161,11 @@ const SEVERITY_LABEL = {
   info: "資訊",
 };
 const CATEGORY_COLOR = {
-  security: "var(--ag-cat-security)",
-  seo: "var(--ag-cat-seo)",
-  aeo: "var(--ag-cat-aeo)",
-  geo: "var(--ag-cat-geo)",
-  ux: "var(--ag-cat-ux)",
+  security: "#ef4444",
+  seo: "#6366f1",
+  aeo: "#a855f7",
+  geo: "#06b6d4",
+  ux: "#10b981",
 };
 
 function apiErrorMessage(err, fallback = "操作失敗，請稍後再試。") {
@@ -322,8 +320,8 @@ function CountUp({ value, duration = 600, suffix = "" }) {
   }, [value, duration]);
   const rounded = Number.isInteger(value) ? Math.round(display) : Math.round(display * 10) / 10;
   return (
-    <span className="ag-num">
-      {rounded.toLocaleString("zh-TW")}
+    <span>
+      {rounded}
       {suffix}
     </span>
   );
@@ -335,13 +333,9 @@ function StackedBar({ data, height = 14 }) {
   if (total === 0) {
     return <div className="stacked-bar empty" style={{ height }} />;
   }
-  const summary = data
-    .filter((item) => item.value)
-    .map((item) => `${item.label} ${Math.round((item.value / total) * 100)}%`)
-    .join("、");
   return (
     <div className="stacked-bar-wrap">
-      <div className="stacked-bar" style={{ height }} role="img" aria-label={summary}>
+      <div className="stacked-bar" style={{ height }}>
         {data.map((item) => {
           const pct = (item.value / total) * 100;
           if (pct === 0) return null;
@@ -402,8 +396,14 @@ function SeverityBarChart({ severityTotals, title = "Findings 嚴重度分佈" }
                 {SEVERITY_LABEL[sev]}
               </span>
               <div className="bar-chart-track">
-                {/* 顏色由 .bar-chart-fill.sev-* 決定；只有寬度是動態值 */}
-                <div className={`bar-chart-fill sev-${sev}`} style={{ width: `${pct}%` }} />
+                <div
+                  className="bar-chart-fill"
+                  style={{
+                    width: `${pct}%`,
+                    background: SEVERITY_COLOR[sev],
+                    boxShadow: `0 0 8px ${SEVERITY_COLOR[sev]}66`,
+                  }}
+                />
               </div>
               <span className="bar-chart-count">{count}</span>
             </div>

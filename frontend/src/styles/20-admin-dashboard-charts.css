@@ -1,128 +1,69 @@
 @layer components {
-  /* --- 面板標頭列與圖表 --- */
-  .admin-panel-head-row{
-    @apply mb-4 flex flex-wrap items-center justify-between gap-2;
+  /* --- Dashboard charts --- */
+  .admin-panel-head-row {
+    @apply flex flex-wrap items-center justify-between gap-2 mb-3;
   }
-  .admin-panel-head-actions{
+  .admin-panel-head-actions {
     @apply flex flex-wrap items-center gap-2;
   }
-  .admin-panel-head-actions a.admin-btn{ text-decoration: none; }
-
-  
-  
-  
-  
-  
-  
-  
-
-  /* AdminMiniChart：所有顏色走 class，不在 JSX 寫死 */
-  .admin-mini-chart{ display: block; overflow: visible; }
-  .admin-chart-grid-line{ stroke: var(--admin-chart-grid); stroke-dasharray: 2 4; }
-  
-  .admin-chart-series{ --admin-series: var(--admin-chart-1); }
-  .admin-chart-series.series-2{ --admin-series: var(--admin-chart-2); }
-  .admin-chart-series.series-3{ --admin-series: var(--admin-chart-3); }
-  .admin-chart-series.series-4{ --admin-series: var(--admin-chart-4); }
-  .admin-chart-series.series-5{ --admin-series: var(--admin-chart-5); }
-  .admin-chart-series .admin-chart-stop{ stop-color: var(--admin-series); }
-  .admin-chart-line{
-    fill: none;
-    stroke: var(--admin-series);
-    stroke-width: 2;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-  }
-  
-  .admin-chart-hover-line{ stroke: var(--admin-border-strong); stroke-width: 1; }
-  .admin-chart-hit{ fill: transparent; cursor: crosshair; }
-  
-  
-  .admin-chart-wrap{ position: relative; }
-
-  /* 小倍數：每序列一列，各自縱軸 */
-  .admin-multiples{ @apply flex flex-col gap-3; }
-  .admin-multiple-head{
-    @apply mb-1 flex items-baseline justify-between gap-3 text-xs;
-  }
-  .admin-multiple-label{
-    @apply inline-flex items-center gap-2 font-semibold;
+  .admin-panel-head-actions a.admin-btn { text-decoration: none; }
+  .admin-chart-legend {
+    @apply flex flex-wrap gap-3 text-xs;
     color: var(--admin-text-secondary);
   }
-  .admin-multiple-label i{
+  .admin-chart-legend span {
+    @apply inline-flex items-center gap-1;
+  }
+  .admin-chart-legend i {
     display: inline-block;
-    width: 12px;
-    height: 3px;
+    width: 10px;
+    height: 10px;
     border-radius: 999px;
-    background: var(--admin-series);
   }
-  .admin-multiple-value{
-    @apply inline-flex items-baseline gap-2 font-semibold;
-    font-family: var(--ag-font-display);
-    font-size: 0.95rem;
-    color: var(--admin-text);
-    font-variant-numeric: tabular-nums;
-  }
-  .admin-multiple-date{
-    font-family: var(--ag-font-mono);
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: var(--admin-text-muted);
-  }
-  .admin-multiple-plot{ position: relative; }
-  .admin-multiple-dot{
-    position: absolute;
-    width: 9px;
-    height: 9px;
-    margin: -4.5px 0 0 -4.5px;
-    border-radius: 50%;
-    background: var(--admin-series);
-    box-shadow: 0 0 0 2px var(--admin-surface), 0 0 10px var(--admin-series);
-    pointer-events: none;
-    transition: left var(--ag-dur-1) var(--ag-ease), top var(--ag-dur-1) var(--ag-ease);
-  }
-  .admin-multiples-axis{
-    @apply flex justify-between;
-    font-family: var(--ag-font-mono);
-    font-size: 10px;
-    color: var(--admin-chart-axis);
-  }
-  
+  .admin-chart-legend i.tone-cyan { background: var(--argus-cyan-dot); }
+  .admin-chart-legend i.tone-good { background: var(--tone-good); }
+  .admin-chart-legend i.tone-amber { background: var(--tone-medium); }
+  .admin-mini-chart { display: block; }
+  .admin-mini-chart-dot { stroke: var(--admin-surface); stroke-width: 1.5; }
 
-  /* --- AI Provider 用量 --- */
-  .admin-provider-bars{ @apply flex flex-col gap-3; }
-  .admin-provider-row{ @apply flex items-center gap-3 text-sm; }
-  .admin-provider-meta{ @apply flex w-32 shrink-0 flex-col text-xs; }
-  .admin-provider-name{ @apply font-semibold; color: var(--admin-text); }
-  .admin-provider-model{ color: var(--admin-text-muted); font-family: var(--ag-font-mono); }
-  .admin-provider-track{
-    @apply h-2 flex-1 overflow-hidden rounded-full;
-    background: var(--admin-surface-sunken);
+  .admin-provider-bars {
+    @apply flex flex-col gap-2;
   }
-  .admin-provider-fill{
-    @apply h-full rounded-full;
-    background: var(--admin-chart-1);
-    transition: width var(--ag-dur-3) var(--ag-ease);
+  .admin-provider-row {
+    @apply flex items-center gap-3 text-sm;
   }
-  .admin-provider-row:nth-child(2) .admin-provider-fill{ background: var(--admin-chart-2); }
-  .admin-provider-row:nth-child(3) .admin-provider-fill{ background: var(--admin-chart-3); }
-  .admin-provider-row:nth-child(4) .admin-provider-fill{ background: var(--admin-chart-4); }
-  .admin-provider-row:nth-child(5) .admin-provider-fill{ background: var(--admin-chart-5); }
-  .admin-provider-stats{ @apply flex w-28 shrink-0 flex-col text-right text-xs; }
-  .admin-provider-tokens{
+  .admin-provider-meta {
+    @apply flex w-32 flex-col text-xs;
+  }
+  .admin-provider-name {
     @apply font-semibold;
     color: var(--admin-text);
-    font-variant-numeric: tabular-nums;
   }
-  .admin-provider-sessions{ color: var(--admin-text-muted); }
+  .admin-provider-model {
+    color: #94a3b8;
+  }
+  .admin-provider-track {
+    @apply h-3 flex-1 overflow-hidden rounded-full;
+    background: var(--admin-border-solid);
+  }
+  .admin-provider-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, var(--argus-cyan-dot), var(--argus-cyan-glow));
+    transition: width 0.4s;
+  }
+  .admin-provider-stats {
+    @apply flex w-28 flex-col text-right text-xs;
+  }
+  .admin-provider-tokens {
+    @apply font-semibold;
+    color: var(--admin-accent-strong);
+  }
+  .admin-provider-sessions {
+    color: #94a3b8;
+  }
 
   /* AI 使用量 - 使用者詳情頁 */
-  .admin-ai-summary{ @apply mb-2 flex flex-wrap gap-8; }
-
-  @media (max-width: 520px) {
-    .admin-provider-row{ flex-wrap: wrap; row-gap: 6px; }
-    .admin-provider-meta{ width: auto; flex: 1; }
-    .admin-provider-track{ order: 3; flex-basis: 100%; }
-    .admin-provider-stats{ width: auto; }
+  .admin-ai-summary {
+    @apply flex flex-wrap gap-8 mb-2;
   }
 }
