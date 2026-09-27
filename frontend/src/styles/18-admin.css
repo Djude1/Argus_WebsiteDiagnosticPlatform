@@ -86,14 +86,10 @@
   --ag-primary: var(--ag-iris-400);
   --ag-focus: 0 0 0 3px rgba(63, 220, 238, 0.45);
 }
-:root[data-theme="light"] .admin-sidebar .ag-mark-stop-a,
-:root[data-theme="light"] .admin-mobile-header .ag-mark-stop-a{ stop-color: var(--ag-iris-300); }
-:root[data-theme="light"] .admin-sidebar .ag-mark-stop-b,
-:root[data-theme="light"] .admin-mobile-header .ag-mark-stop-b{ stop-color: var(--ag-iris-600); }
-:root[data-theme="light"] .admin-sidebar .ag-mark-eye,
-:root[data-theme="light"] .admin-mobile-header .ag-mark-eye{ fill: var(--ag-iris-400); }
-:root[data-theme="light"] .admin-sidebar .ag-mark-glint,
-:root[data-theme="light"] .admin-mobile-header .ag-mark-glint{ fill: var(--ag-signal-400); }
+:root[data-theme="light"] .admin-sidebar .ag-logo-img,
+:root[data-theme="light"] .admin-mobile-header .ag-logo-img{
+  filter: saturate(1.15) contrast(1.08) drop-shadow(0 4px 10px rgba(14, 165, 233, 0.22));
+}
 
 @layer components {
   /* ============================================================
@@ -189,7 +185,6 @@
   .admin-brand:hover{ background: var(--admin-sidebar-hover); }
   .admin-brand:focus-visible{ outline: 2px solid var(--admin-sidebar-accent); outline-offset: -2px; }
   .admin-brand .ag-logo-sub{ color: var(--admin-sidebar-accent); letter-spacing: 0.2em; }
-  .admin-brand:hover .ag-mark-eye{ animation: ag-iris-blink 1.08s var(--ag-ease) 1; }
 
   .admin-nav{
     @apply flex flex-1 flex-col;
@@ -941,7 +936,6 @@
   .admin-stat-icon-chip .accent,
   .admin-empty-state-icon .accent{ color: var(--admin-highlight); }
 
-  .admin-mobile-logo .ag-logo-word{ font-size: 0.95rem; }
   .admin-mobile-logo .ag-logo-sub{ color: var(--admin-sidebar-accent); margin-top: 0.2rem; }
 }
 

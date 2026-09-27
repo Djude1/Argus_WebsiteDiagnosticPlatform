@@ -10,7 +10,7 @@ Argus 替使用者「看見」網站在 SEO／AEO／GEO／資安／UX 上的所�
 | 關鍵字 | 在介面上的表現 |
 |---|---|
 | 守望（Watch） | 深夜墨藍底、細網格「掃描面」底紋、觀景窗四角框 |
-| 看見（Seeing） | 虹膜青主色、杏眼標誌、虹膜環形分數 |
+| 看見（Seeing） | 虹膜青主色、Argus 之眼標誌、虹膜環形分數 |
 | 洞察（Insight） | 守望琥珀——只用在「值得注意」的地方：反光點、重點提示、次要 CTA |
 | 可信（Trust） | 克制的動態、清楚的層級、等寬字呈現可驗證的技術資訊 |
 
@@ -18,12 +18,13 @@ Argus 替使用者「看見」網站在 SEO／AEO／GEO／資安／UX 上的所�
 
 ## 2. 標誌
 
-- 元件：`components/brand/ArgusMark.tsx`（`ArgusMark`、`ArgusLogo`）。
-- 構成：杏眼輪廓＋12 顆小眼圍成的虹膜＋瞳孔＋琥珀反光點。
-- 最小尺寸 16px；四周留白 ≥ 標誌高度的 25%。
-- `scanning` 屬性：虹膜小眼依序亮起，用於掃描進行中的狀態。
-- 不要：拉伸、改色（顏色由 token 決定）、加外發光、放在雜亂的照片上。
-- 大型插畫（`assets/argus-eye*.webp`）只用於首頁 hero 與開場動畫；導覽列、頁尾、登入頁一律用向量標誌。
+一律使用專案原有的品牌圖，不使用向量重繪版（元件 `components/brand/ArgusMark.tsx`）：
+
+- **Logo `ArgusLogo`**：`assets/brand-logo.webp`（之眼＋ARGUS 字標）——導覽列、頁尾、後台側欄、登入頁。
+- **之眼圖示 `ArgusMark`**：`assets/argus-eye-still.webp`——登入頁、狀態圖示、空狀態等；`scanning` 屬性加呼吸光暈。
+- **動態之眼**：`assets/argus-eye.webp`——專案介紹頁 hero（原版掃描動畫，樣式在 `34-classic-hero.css`）。
+- 日間主題下 logo 以 filter 壓暗以便在淺底上辨識；後台側欄恆為深色，維持原色。
+- 不要：拉伸、改色、加額外外框。
 
 ## 3. 色彩
 

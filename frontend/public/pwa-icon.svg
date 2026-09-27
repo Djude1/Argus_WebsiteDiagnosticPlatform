@@ -1,16 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="lid" x1="8" y1="14" x2="56" y2="50" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7fe9f5"/>
-      <stop offset="1" stop-color="#0a9db8"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#6366f1"/>
     </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#67e8f9" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#67e8f9" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="15" fill="#060a14"/>
-  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#3fdcee" stroke-opacity="0.28" stroke-width="1.5"/>
-  <path d="M6 32c7.6-12.5 16.9-18.7 26-18.7S50.4 19.5 58 32c-7.6 12.5-16.9 18.7-26 18.7S13.6 44.5 6 32Z" fill="none" stroke="url(#lid)" stroke-width="3.6" stroke-linejoin="round"/>
-  <g fill="#3fdcee">
-    <circle cx="32" cy="20.5" r="2"/><circle cx="37.75" cy="22.04" r="2"/><circle cx="41.96" cy="26.25" r="2"/><circle cx="43.5" cy="32" r="2"/><circle cx="41.96" cy="37.75" r="2"/><circle cx="37.75" cy="41.96" r="2"/><circle cx="32" cy="43.5" r="2"/><circle cx="26.25" cy="41.96" r="2"/><circle cx="22.04" cy="37.75" r="2"/><circle cx="20.5" cy="32" r="2"/><circle cx="22.04" cy="26.25" r="2"/><circle cx="26.25" cy="22.04" r="2"/>
-  </g>
-  <circle cx="32" cy="32" r="6.2" fill="#e8eef8"/>
-  <circle cx="35" cy="29" r="1.9" fill="#ffc04d"/>
+  <!-- 圓角方塊背景（PWA 圖示要做成正方形 + 圓角，maskable safe area） -->
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- glow -->
+  <circle cx="256" cy="256" r="180" fill="url(#glow)"/>
+  <!-- ⟡ glyph -->
+  <text x="256" y="356" text-anchor="middle"
+        font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="320" font-weight="700" fill="#ffffff" opacity="0.95">⟡</text>
+  <!-- 底部文字 ARGUS -->
+  <text x="256" y="450" text-anchor="middle"
+        font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="56" font-weight="700" fill="#ffffff" letter-spacing="6">ARGUS</text>
 </svg>

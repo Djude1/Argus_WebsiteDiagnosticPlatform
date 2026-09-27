@@ -172,8 +172,8 @@
   cursor: pointer;
 }
 .public-brand:focus-visible{ outline: none; box-shadow: var(--ag-focus); }
-.public-brand .ag-mark{ transition: transform var(--ag-dur-3) var(--ag-ease); }
-.public-brand:hover .ag-mark{ transform: scale(1.06); }
+.public-brand .ag-logo-img{ transition: transform var(--ag-dur-3) var(--ag-ease); }
+.public-brand:hover .ag-logo-img{ transform: scale(1.04); }
 
 .public-nav-links{
   display: flex;
@@ -283,7 +283,7 @@
 }
 
 @media (max-width: 480px) {
-  .public-brand .ag-logo-word{ font-size: 1rem; }
+  .public-brand .ag-logo-img{ height: 44px; }
   .theme-toggle{ width: 40px; padding: 0; justify-content: center; }
   .theme-toggle-text{ display: none; }
   .public-nav-login{ padding: 0.5rem 0.8rem; }

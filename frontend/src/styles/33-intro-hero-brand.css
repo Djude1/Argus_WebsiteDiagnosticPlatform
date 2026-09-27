@@ -1,89 +1,105 @@
+/* ========================================
+   首次進站開場動畫（IntroSequence）——還原為改版前的版本。
+   聚合目標是 brand-logo.webp。只保留 .argus-intro* 規則；
+   原檔其餘的 hero／導覽規則已由 21-public.css 與 34-classic-hero.css 取代。
+   ======================================== */
 /* ============================================================
-   首次進站品牌開場（components/brand/IntroSequence.jsx）
-   開場固定為深色畫面（不隨日／夜主題），色值取品牌原色 --ag-iris-* / --ag-signal-*。
+   首次進站粒子過場動畫（IntroSequence）
+   移植自「過場動畫和網站設計範本/index.html」的青藍科技風 overlay；
+   播完淡出露出首頁。樣式自包含，不依賴其他 token。
    ============================================================ */
-.argus-intro{
+.argus-intro {
   position: fixed;
   inset: 0;
   z-index: 99999;
-  background:
-    radial-gradient(60% 50% at 50% 45%, rgba(63, 220, 238, 0.1), transparent 70%),
-    radial-gradient(ellipse at center, var(--ag-ink-850) 0%, var(--ag-ink-950) 75%);
-  font-family: var(--ag-font-mono);
-  color: var(--ag-iris-300);
+  background: radial-gradient(ellipse at center, #001428 0%, #000308 70%, #000 100%);
+  font-family: "Consolas", "Courier New", monospace;
+  color: #00d4ff;
   overflow: hidden;
   opacity: 1;
-  transition: opacity 0.6s var(--ag-ease);
+  transition: opacity 0.6s ease;
   cursor: pointer;
 }
-.argus-intro--out{
+.argus-intro--out {
   opacity: 0;
   pointer-events: none;
 }
-.argus-intro-grid{
+.argus-intro-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(63, 220, 238, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(63, 220, 238, 0.05) 1px, transparent 1px);
-  background-size: 44px 44px;
+    linear-gradient(rgba(0, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
   pointer-events: none;
 }
-.argus-intro-canvas{
+.argus-intro-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
 }
-/* 觀景窗四角框（品牌 .ag-viewfinder 的全螢幕版） */
-.argus-intro-corner{
+.argus-intro-corner {
   position: absolute;
-  width: 40px;
-  height: 40px;
-  border: 2px solid rgba(63, 220, 238, 0.6);
+  width: 44px;
+  height: 44px;
+  border: 2px solid #00f7ff;
   pointer-events: none;
 }
-.argus-intro-corner.tl{ top: 16px; left: 16px; border-right: none; border-bottom: none; border-top-left-radius: 8px; }
-.argus-intro-corner.tr{ top: 16px; right: 16px; border-left: none; border-bottom: none; border-top-right-radius: 8px; }
-.argus-intro-corner.bl{ bottom: 16px; left: 16px; border-right: none; border-top: none; border-bottom-left-radius: 8px; }
-.argus-intro-corner.br{ bottom: 16px; right: 16px; border-left: none; border-top: none; border-bottom-right-radius: 8px; }
-.argus-intro-hud{
+.argus-intro-corner.tl { top: 16px; left: 16px; border-right: none; border-bottom: none; }
+.argus-intro-corner.tr { top: 16px; right: 16px; border-left: none; border-bottom: none; }
+.argus-intro-corner.bl { bottom: 16px; left: 16px; border-right: none; border-top: none; }
+.argus-intro-corner.br { bottom: 16px; right: 16px; border-left: none; border-top: none; }
+.argus-intro-hud {
   position: absolute;
   font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--ag-iris-300);
+  letter-spacing: 1.5px;
+  color: #00f7ff;
   line-height: 1.7;
-  font-weight: 600;
+  font-weight: bold;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(0, 247, 255, 0.6);
+}
+.argus-intro-hud.tl { top: 32px; left: 32px; }
+.argus-intro-hud.tr { top: 32px; right: 32px; text-align: right; }
+.argus-intro-hud.br { bottom: 32px; right: 32px; text-align: right; }
+.argus-intro-hud .v { color: #fff; }
+.argus-intro-hud .dim { opacity: 0.55; }
+.argus-intro-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
   pointer-events: none;
 }
-.argus-intro-hud.tl{ top: 32px; left: 32px; }
-.argus-intro-hud.tr{ top: 32px; right: 32px; text-align: right; }
-.argus-intro-hud.br{ bottom: 32px; right: 32px; text-align: right; }
-.argus-intro-hud .v{ color: #e8eef8; }
-.argus-intro-hud .dim{ opacity: 0.55; }
-.argus-intro-hint{
+.argus-intro-hint {
   position: absolute;
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  color: var(--ag-signal-400);
+  color: rgba(0, 247, 255, 0.75);
   font-size: 12px;
-  letter-spacing: 0.3em;
-  font-weight: 600;
-  white-space: nowrap;
+  letter-spacing: 4px;
+  font-weight: bold;
   pointer-events: none;
   animation: introHintPulse 1.8s ease-in-out infinite;
 }
-@keyframes introHintPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.95; } }
-@media (max-width: 640px) {
-  .argus-intro-hud.tr,
-  .argus-intro-hud.br{ display: none; }
-  .argus-intro-hint{ letter-spacing: 0.16em; }
-}
+@keyframes introHintPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.95; } }
 
 @media (prefers-reduced-motion: reduce) {
   /* 偏好減少動態者：元件層已直接略過並 onComplete，這裡確保不殘留任何 overlay 畫面 */
-  .argus-intro{ display: none; }
+  .argus-intro { display: none; }
 }
-
+@keyframes heroGridDrift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(48px, 48px); }
+}
+@keyframes heroScan {
+  0% { top: -4px; }
+  100% { top: 100%; }
+}
+@keyframes heroTitleGlow {
+  0%, 100% { text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35); }
+  50% { text-shadow: 0 0 22px rgba(0, 247, 255, 0.85), 0 0 60px rgba(0, 247, 255, 0.55); }
+}

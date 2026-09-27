@@ -34,7 +34,6 @@
   background: var(--ag-hero-wash);
   pointer-events: none;
 }
-.auth-story .ag-logo-word{ font-size: 1.3rem; }
 .auth-story-copy{ display: grid; gap: 1rem; max-width: 34rem; margin-top: auto; }
 .auth-story-title{
   margin: 0;

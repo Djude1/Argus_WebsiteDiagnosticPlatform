@@ -49,7 +49,6 @@
   transition: background var(--ag-dur-2) var(--ag-ease);
 }
 .app-nav-brand:hover { background: var(--ag-surface-2); }
-.app-nav-brand .ag-logo-word { font-size: 1rem; }
 
 .app-nav-links {
   display: flex;
@@ -382,8 +381,7 @@
 
 @media (max-width: 640px) {
   .app-nav-inner { gap: 0.5rem; padding: 0 0.75rem; height: 58px; }
-  .app-nav-brand .ag-logo-word { font-size: 0.9rem; letter-spacing: 0.24em; }
-  .app-nav-brand .ag-mark { width: 26px; height: 26px; }
+  .app-nav-brand .ag-logo-img { height: 42px; width: auto; }
   .app-nav-actions { gap: 0.35rem; }
   .app-coin-chip { height: 36px; padding: 0 0.6rem; }
   .app-coin-chip-unit,
@@ -394,7 +392,7 @@
 }
 
 @media (max-width: 370px) {
-  .app-nav-brand .ag-logo-text { display: none; }
+  .app-nav-brand .ag-logo-img { height: 38px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
