@@ -4,7 +4,7 @@
      命名沿用既有 class，呼叫端不需改。
      ──────────────────────────────────────────────── */
 
-  .panel {
+  .panel{
     @apply rounded-2xl p-5;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border);
@@ -12,36 +12,36 @@
     color: var(--ag-text);
   }
 
-  .eyebrow {
+  .eyebrow{
     @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase;
     font-family: var(--ag-font-mono);
     letter-spacing: 0.16em;
     color: var(--ag-primary);
   }
 
-  .section-title {
+  .section-title{
     @apply text-xl font-bold;
     font-family: var(--ag-font-display);
     color: var(--ag-text);
   }
 
-  .input {
+  .input{
     @apply w-full rounded-xl px-4 py-3 text-sm outline-none;
     background: var(--ag-bg-raised);
     border: 1px solid var(--ag-border-strong);
     color: var(--ag-text);
     transition: border-color var(--ag-dur-2) var(--ag-ease), box-shadow var(--ag-dur-2) var(--ag-ease), background var(--ag-dur-2);
   }
-  .input::placeholder { color: var(--ag-text-3); }
-  .input:hover { border-color: var(--ag-border-accent); }
-  .input:focus {
+  .input::placeholder{ color: var(--ag-text-3); }
+  .input:hover{ border-color: var(--ag-border-accent); }
+  .input:focus{
     border-color: var(--ag-primary);
     box-shadow: var(--ag-focus);
   }
-  .input:disabled { opacity: 0.6; cursor: not-allowed; }
-  select.input { appearance: auto; }
+  .input:disabled{ opacity: 0.6; cursor: not-allowed; }
+  select.input{ appearance: auto; }
 
-  .primary-button {
+  .primary-button{
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold;
     background: var(--ag-primary);
     color: var(--ag-on-primary);
@@ -49,54 +49,54 @@
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 8px 20px -10px var(--ag-primary);
     transition: background var(--ag-dur-2) var(--ag-ease), transform var(--ag-dur-1) var(--ag-ease), box-shadow var(--ag-dur-2);
   }
-  .primary-button:hover:not(:disabled) {
+  .primary-button:hover:not(:disabled){
     background: var(--ag-primary-hover);
     transform: translateY(-1px);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 12px 24px -10px var(--ag-primary);
   }
-  .primary-button:active:not(:disabled) { transform: translateY(0); background: var(--ag-primary-press); }
-  .primary-button:disabled {
+  .primary-button:active:not(:disabled){ transform: translateY(0); background: var(--ag-primary-press); }
+  .primary-button:disabled{
     cursor: not-allowed;
     background: var(--ag-surface-3);
     color: var(--ag-text-3);
     box-shadow: none;
   }
 
-  .secondary-button {
+  .secondary-button{
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold;
     background: var(--ag-surface-2);
     color: var(--ag-text);
     border: 1px solid var(--ag-border-strong);
     transition: background var(--ag-dur-2) var(--ag-ease), border-color var(--ag-dur-2), color var(--ag-dur-2);
   }
-  .secondary-button:hover:not(:disabled) {
+  .secondary-button:hover:not(:disabled){
     background: var(--ag-primary-soft);
     border-color: var(--ag-border-accent);
     color: var(--ag-text);
   }
-  .secondary-button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .secondary-button:disabled{ opacity: 0.55; cursor: not-allowed; }
 
-  .ghost-button {
+  .ghost-button{
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium;
     color: var(--ag-text-2);
     transition: background var(--ag-dur-2), color var(--ag-dur-2);
   }
-  .ghost-button:hover { background: var(--ag-surface-2); color: var(--ag-text); }
+  .ghost-button:hover{ background: var(--ag-surface-2); color: var(--ag-text); }
 
-  .checkbox-row {
+  .checkbox-row{
     @apply flex items-start gap-3 rounded-xl p-3 text-sm;
     background: var(--ag-surface-2);
     border: 1px solid var(--ag-border);
     color: var(--ag-text-2);
   }
-  .checkbox-row input[type="checkbox"] { accent-color: var(--ag-primary); margin-top: 0.2rem; }
-  .checkbox-row.warning {
+  .checkbox-row input[type="checkbox"]{ accent-color: var(--ag-primary); margin-top: 0.2rem; }
+  .checkbox-row.warning{
     background: var(--ag-warn-soft);
     border-color: color-mix(in srgb, var(--ag-warn) 40%, transparent);
     color: var(--ag-text);
   }
 
-  .error-text {
+  .error-text{
     @apply rounded-xl p-3 text-sm;
     background: var(--ag-bad-soft);
     border: 1px solid color-mix(in srgb, var(--ag-bad) 35%, transparent);
@@ -104,12 +104,12 @@
   }
 
   /* 次要說明文字（重複的 utility 組合抽成全域語意 class）*/
-  .hint-text {
+  .hint-text{
     @apply text-sm;
     color: var(--ag-text-2);
   }
 
-  .hint-text-sm {
+  .hint-text-sm{
     @apply text-xs;
     color: var(--ag-text-3);
   }
@@ -117,30 +117,30 @@
   /* 掃描頁 layout：
      list-mode（/scans）→ sidebar inline 固定 380px
      detail-mode（/scans/:id）→ sidebar 變 drawer overlay，內容區拿全寬 */
-  .scan-sidebar {
+  .scan-sidebar{
     @apply space-y-4;
   }
 
-  .scan-content {
+  .scan-content{
     min-height: 640px;
   }
 
-  .scan-layout.list-mode {
+  .scan-layout.list-mode{
     @apply grid gap-5 lg:grid-cols-[400px_1fr];
     align-items: start;
   }
 
-  .scan-layout.list-mode .scan-sidebar {
+  .scan-layout.list-mode .scan-sidebar{
     align-self: start;
     position: sticky;
     top: calc(var(--ag-nav-h) + 1rem);
   }
 
-  .scan-layout.detail-mode {
+  .scan-layout.detail-mode{
     @apply block;
   }
 
-  .scan-layout.detail-mode .scan-sidebar {
+  .scan-layout.detail-mode .scan-sidebar{
     position: fixed;
     top: 0;
     bottom: 0;
@@ -157,11 +157,11 @@
     transition: transform 0.3s var(--ag-ease);
   }
 
-  .scan-layout.detail-mode.drawer-open .scan-sidebar {
+  .scan-layout.detail-mode.drawer-open .scan-sidebar{
     transform: translateX(0);
   }
 
-  .scan-sidebar-backdrop {
+  .scan-sidebar-backdrop{
     position: fixed;
     inset: 0;
     z-index: 55;
@@ -171,11 +171,11 @@
     animation: fade-in 0.2s ease-out;
   }
 
-  .scan-content-toolbar {
+  .scan-content-toolbar{
     @apply mb-4 flex flex-wrap items-center gap-2;
   }
 
-  .drawer-toggle {
+  .drawer-toggle{
     @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border-strong);
@@ -183,17 +183,17 @@
     box-shadow: var(--ag-shadow-1);
     transition: border-color var(--ag-dur-2), background var(--ag-dur-2);
   }
-  .drawer-toggle:hover { border-color: var(--ag-border-accent); background: var(--ag-primary-soft); }
+  .drawer-toggle:hover{ border-color: var(--ag-border-accent); background: var(--ag-primary-soft); }
 
-  .back-to-list-button {
+  .back-to-list-button{
     @apply inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium;
     color: var(--ag-text-2);
     transition: background var(--ag-dur-2), color var(--ag-dur-2);
   }
-  .back-to-list-button:hover { background: var(--ag-surface-2); color: var(--ag-text); }
+  .back-to-list-button:hover{ background: var(--ag-surface-2); color: var(--ag-text); }
 
   /* 整頁紅色高光：站台層級 / 無座標 finding 被選中時的視覺反饋 */
-  .whole-page-highlight {
+  .whole-page-highlight{
     position: absolute;
     inset: 0;
     border: 3px solid var(--ag-sev-critical);
@@ -205,53 +205,43 @@
     animation: pulse-soft 1.4s ease-in-out infinite;
   }
 
-  .scan-card {
+  .scan-card{
     @apply flex w-full items-center justify-between rounded-xl p-3 text-left;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border);
     color: var(--ag-text);
     transition: border-color var(--ag-dur-2), background var(--ag-dur-2), transform var(--ag-dur-1);
   }
-  .scan-card:hover { border-color: var(--ag-border-accent); }
-  .scan-card.active {
+  .scan-card:hover{ border-color: var(--ag-border-accent); }
+  .scan-card.active{
     border-color: var(--ag-primary);
     background: var(--ag-primary-soft);
   }
 
-  .score-badge {
+  .score-badge{
     @apply rounded-full px-3 py-1 text-xs font-bold;
     font-family: var(--ag-font-display);
     font-variant-numeric: tabular-nums;
   }
-  .score-badge.good { background: var(--ag-good-soft); color: var(--ag-good); }
-  .score-badge.medium { background: var(--ag-warn-soft); color: var(--ag-warn); }
-  .score-badge.bad { background: var(--ag-bad-soft); color: var(--ag-bad); }
-  .score-badge.muted { background: var(--ag-surface-2); color: var(--ag-text-3); }
+  .score-badge.good{ background: var(--ag-good-soft); color: var(--ag-good); }
+  .score-badge.medium{ background: var(--ag-warn-soft); color: var(--ag-warn); }
+  .score-badge.bad{ background: var(--ag-bad-soft); color: var(--ag-bad); }
+  .score-badge.muted{ background: var(--ag-surface-2); color: var(--ag-text-3); }
 
-  .screenshot-shell {
-    @apply min-h-[460px] overflow-auto rounded-2xl p-4;
-    background: var(--ag-bg-raised);
-    border: 1px solid var(--ag-border);
-  }
+  
 
-  .screenshot-pending {
-    @apply flex min-h-[380px] flex-col items-center justify-center gap-3;
-    color: var(--ag-text-2);
-  }
+  
 
-  .screenshot-image {
-    @apply max-w-full rounded-xl;
-    border: 1px solid var(--ag-border);
-  }
+  
 
-  .highlight-box {
+  .highlight-box{
     @apply pointer-events-auto absolute cursor-pointer border-2 opacity-70 transition-all;
     border-color: var(--ag-signal-400);
     background: rgba(255, 192, 77, 0.16);
     border-radius: 4px;
   }
-  .highlight-box:hover { opacity: 1; background: rgba(255, 192, 77, 0.3); border-color: var(--ag-signal-500); }
-  .highlight-box.active {
+  .highlight-box:hover{ opacity: 1; background: rgba(255, 192, 77, 0.3); border-color: var(--ag-signal-500); }
+  .highlight-box.active{
     @apply opacity-100;
     border-color: var(--ag-sev-critical);
     background: rgba(255, 77, 109, 0.22);
@@ -259,109 +249,91 @@
     animation: pulse-soft 1.4s ease-in-out infinite;
   }
 
-  .finding-card {
-    @apply flex w-full items-center gap-2 rounded-xl p-3 text-left text-sm;
-    background: var(--ag-surface);
-    border: 1px solid var(--ag-border);
-    color: var(--ag-text);
-  }
-  .finding-card:hover { border-color: var(--ag-border-accent); }
-  .finding-card.active { border-color: var(--ag-primary); background: var(--ag-primary-soft); }
+  
+  
+  
 
   /* 分組顯示：同分類同標題的 finding 折成一個群組卡 */
-  .finding-group {
+  .finding-group{
     @apply rounded-xl;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border);
     transition: border-color var(--ag-dur-2);
   }
-  .finding-group:hover { border-color: var(--ag-border-strong); }
-  .finding-group.active {
+  .finding-group:hover{ border-color: var(--ag-border-strong); }
+  .finding-group.active{
     border-color: var(--ag-primary);
     box-shadow: 0 0 0 1px var(--ag-primary-soft-2);
   }
 
-  .finding-group-header {
+  .finding-group-header{
     @apply flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm;
     color: var(--ag-text);
   }
-  .finding-group-header:hover { background: var(--ag-surface-2); }
+  .finding-group-header:hover{ background: var(--ag-surface-2); }
 
-  .finding-group-title {
+  .finding-group-title{
     @apply flex-1 truncate font-medium;
     color: var(--ag-text);
   }
 
-  .finding-group-count {
+  .finding-group-count{
     @apply min-w-[28px] rounded-full px-2 py-0.5 text-center text-xs font-semibold;
     background: var(--ag-surface-2);
     color: var(--ag-text-2);
   }
 
-  .finding-group-chevron {
+  .finding-group-chevron{
     @apply text-xs;
     color: var(--ag-text-3);
   }
 
-  .finding-group-items {
+  .finding-group-items{
     @apply space-y-1 px-2 py-2;
     border-top: 1px solid var(--ag-border);
   }
 
-  .finding-item {
+  .finding-item{
     @apply flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left;
   }
-  .finding-item:hover { background: var(--ag-surface-2); }
-  .finding-item.active { background: var(--ag-primary-soft); color: var(--ag-text); }
+  .finding-item:hover{ background: var(--ag-surface-2); }
+  .finding-item.active{ background: var(--ag-primary-soft); color: var(--ag-text); }
 
-  .finding-item-url {
+  .finding-item-url{
     @apply w-full truncate text-xs;
     font-family: var(--ag-font-mono);
     color: var(--ag-text-2);
   }
 
-  .finding-item-evidence {
+  .finding-item-evidence{
     @apply w-full truncate text-[11px];
     color: var(--ag-text-3);
   }
 
-  .category-pill {
+  .category-pill{
     @apply rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide;
     font-family: var(--ag-font-mono);
     --pill: var(--ag-text-3);
     color: var(--pill);
     background: color-mix(in srgb, var(--pill) 14%, transparent);
   }
-  .category-pill.cat-security { --pill: var(--ag-cat-security); }
-  .category-pill.cat-seo { --pill: var(--ag-cat-seo); }
-  .category-pill.cat-aeo { --pill: var(--ag-cat-aeo); }
-  .category-pill.cat-geo { --pill: var(--ag-cat-geo); }
-  .category-pill.cat-ux { --pill: var(--ag-cat-ux); }
+  .category-pill.cat-security{ --pill: var(--ag-cat-security); }
+  .category-pill.cat-seo{ --pill: var(--ag-cat-seo); }
+  .category-pill.cat-aeo{ --pill: var(--ag-cat-aeo); }
+  .category-pill.cat-geo{ --pill: var(--ag-cat-geo); }
+  .category-pill.cat-ux{ --pill: var(--ag-cat-ux); }
 
-  .screenshot-caption {
-    @apply mb-2 truncate text-xs;
-    font-family: var(--ag-font-mono);
-    color: var(--ag-text-3);
-  }
+  
 
-  .screenshot-caption-row {
-    @apply mb-2 flex items-center justify-between gap-3;
-  }
+  
 
-  .screenshot-caption-row .screenshot-caption {
-    @apply mb-0 flex-1;
-  }
+  
 
-  .screenshot-open-link {
-    @apply whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors;
-    background: var(--ag-surface-2);
-    border: 1px solid var(--ag-border);
-    color: var(--ag-link);
-  }
-  .screenshot-open-link:hover { border-color: var(--ag-border-accent); background: var(--ag-primary-soft); }
+  
+  
 
   /* 站台層級 finding 在截圖頂部畫紅色 banner */
-  .site-banner-overlay {
+  .site-banner-overlay{
     @apply absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 rounded-t-xl border-b-2 px-3 py-2 text-sm font-medium;
     background: linear-gradient(135deg, rgba(214, 32, 74, 0.94), rgba(160, 18, 60, 0.94));
     border-color: rgba(255, 255, 255, 0.4);
@@ -370,43 +342,43 @@
   }
 
   .site-banner-overlay .severity,
-  .site-banner-overlay .category-pill {
+  .site-banner-overlay .category-pill{
     @apply !bg-white/20 !text-white;
   }
 
-  .site-banner-title {
+  .site-banner-title{
     @apply flex-1 truncate;
   }
 
-  .site-banner-note {
+  .site-banner-note{
     @apply text-[11px] opacity-80;
   }
 
   /* 頁面 tabs（報告區頂部） */
-  .page-tabs {
+  .page-tabs{
     @apply mb-4 flex flex-wrap gap-2 overflow-x-auto pb-1;
   }
 
-  .page-tab {
+  .page-tab{
     @apply inline-flex cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border);
     color: var(--ag-text-2);
     transition: border-color var(--ag-dur-2), color var(--ag-dur-2), transform var(--ag-dur-1), background var(--ag-dur-2);
   }
-  .page-tab:hover {
+  .page-tab:hover{
     transform: translateY(-1px);
     border-color: var(--ag-border-accent);
     color: var(--ag-text);
   }
-  .page-tab:active { transform: translateY(0); }
-  .page-tab.active {
+  .page-tab:active{ transform: translateY(0); }
+  .page-tab.active{
     border-color: var(--ag-primary);
     color: var(--ag-text);
     background: var(--ag-primary-soft);
     box-shadow: 0 0 0 1px var(--ag-primary-soft-2);
   }
-  .page-tab.active::before {
+  .page-tab.active::before{
     content: "";
     width: 6px;
     height: 6px;
@@ -415,139 +387,139 @@
     box-shadow: 0 0 8px var(--ag-primary);
   }
 
-  .page-tab-label {
+  .page-tab-label{
     @apply max-w-[160px] truncate;
   }
 
-  .page-tab-count {
+  .page-tab-count{
     @apply min-w-[24px] rounded-full px-2 py-0.5 text-center text-[10px] font-bold;
     background: var(--ag-surface-2);
     color: var(--ag-text-2);
     transition: background-color 0.2s, color 0.2s;
   }
-  .page-tab.active .page-tab-count {
+  .page-tab.active .page-tab-count{
     background: var(--ag-primary);
     color: var(--ag-on-primary);
   }
 
-  .severity {
+  .severity{
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold;
     --sev: var(--ag-sev-info);
     color: var(--sev);
     background: color-mix(in srgb, var(--sev) 15%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sev) 30%, transparent);
   }
-  .severity.critical { --sev: var(--ag-sev-critical); }
-  .severity.high { --sev: var(--ag-sev-high); }
-  .severity.medium { --sev: var(--ag-sev-medium); }
-  .severity.low { --sev: var(--ag-sev-low); }
-  .severity.info { --sev: var(--ag-sev-info); }
+  .severity.critical{ --sev: var(--ag-sev-critical); }
+  .severity.high{ --sev: var(--ag-sev-high); }
+  .severity.medium{ --sev: var(--ag-sev-medium); }
+  .severity.low{ --sev: var(--ag-sev-low); }
+  .severity.info{ --sev: var(--ag-sev-info); }
 
-  .finding-detail {
+  .finding-detail{
     @apply space-y-3 rounded-xl p-4 text-sm;
     background: var(--ag-surface-2);
     border: 1px solid var(--ag-border);
     color: var(--ag-text-2);
   }
 
-  .evidence-panel {
+  .evidence-panel{
     @apply overflow-hidden rounded-xl text-xs;
     background: var(--ag-surface);
     border: 1px solid var(--ag-border-accent);
     color: var(--ag-text-2);
   }
 
-  .evidence-panel.is-empty {
+  .evidence-panel.is-empty{
     @apply p-3;
     color: var(--ag-text-3);
   }
 
-  .evidence-panel-header {
+  .evidence-panel-header{
     @apply flex cursor-pointer flex-col gap-0.5 px-3 py-2;
     background: var(--ag-primary-soft);
     border-bottom: 1px solid var(--ag-border);
   }
 
-  .evidence-panel-title {
+  .evidence-panel-title{
     @apply text-sm font-bold;
     color: var(--ag-text);
   }
 
-  .evidence-panel-subtitle {
+  .evidence-panel-subtitle{
     @apply text-[11px] font-medium;
     color: var(--ag-primary);
   }
 
-  .evidence-meta-grid {
+  .evidence-meta-grid{
     @apply grid gap-2 p-3;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
 
-  .evidence-meta-grid div {
+  .evidence-meta-grid div{
     @apply min-w-0 rounded-lg px-2 py-1.5;
     background: var(--ag-surface-2);
     border: 1px solid var(--ag-border);
   }
 
-  .evidence-meta-grid span {
+  .evidence-meta-grid span{
     @apply block text-[10px] font-semibold uppercase tracking-wide;
     color: var(--ag-text-3);
   }
 
-  .evidence-meta-grid strong {
+  .evidence-meta-grid strong{
     @apply block truncate text-[11px];
     font-family: var(--ag-font-mono);
     color: var(--ag-text);
   }
 
   .evidence-block,
-  .ai-explanation-block {
+  .ai-explanation-block{
     @apply mx-3 mb-3 rounded-lg p-3;
     background: var(--ag-ink-950);
     border: 1px solid var(--ag-border);
     color: #d6e2f3;
   }
 
-  .ai-explanation-block {
+  .ai-explanation-block{
     background: var(--ag-surface-2);
     color: var(--ag-text-2);
   }
 
-  .evidence-block-label {
+  .evidence-block-label{
     @apply mb-1 block text-[10px] font-bold uppercase tracking-wide;
     font-family: var(--ag-font-mono);
     color: var(--ag-iris-400);
   }
-  .ai-explanation-block .evidence-block-label { color: var(--ag-primary); }
+  .ai-explanation-block .evidence-block-label{ color: var(--ag-primary); }
 
-  .evidence-block pre {
+  .evidence-block pre{
     @apply max-h-44 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed;
     font-family: var(--ag-font-mono);
   }
 
-  .ai-model {
+  .ai-model{
     @apply text-[11px];
     font-family: var(--ag-font-mono);
     color: var(--ag-text-3);
   }
 
-  .evidence-copy-button {
+  .evidence-copy-button{
     @apply mx-3 mb-3 w-[calc(100%-1.5rem)] justify-center text-xs;
   }
 
-  .status-badge {
+  .status-badge{
     @apply inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-semibold;
     --st: var(--ag-text-3);
     color: var(--st);
     background: color-mix(in srgb, var(--st) 14%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 28%, transparent);
   }
-  .status-badge.status-slate { --st: var(--ag-text-2); }
-  .status-badge.status-blue { --st: var(--ag-info); }
-  .status-badge.status-emerald { --st: var(--ag-good); }
-  .status-badge.status-red { --st: var(--ag-bad); }
+  .status-badge.status-slate{ --st: var(--ag-text-2); }
+  .status-badge.status-blue{ --st: var(--ag-info); }
+  .status-badge.status-emerald{ --st: var(--ag-good); }
+  .status-badge.status-red{ --st: var(--ag-bad); }
 
-  .status-badge-icon {
+  .status-badge-icon{
     width: 13px;
     height: 13px;
     flex-shrink: 0;

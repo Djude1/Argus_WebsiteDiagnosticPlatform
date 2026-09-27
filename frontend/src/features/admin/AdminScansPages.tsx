@@ -395,7 +395,7 @@ export function AdminScanDetailPage() {
           <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>各類別分數</h3>
           <div className="admin-cat-scores">
             {Object.entries(categoryScores).map(([cat, score]) => (
-              <div key={cat} className="admin-cat-score-item">
+              <div key={cat} className={`admin-cat-score-item cat-${cat}`}>
                 <div className="admin-cat-score-label">{cat.toUpperCase()}</div>
                 <div className="admin-cat-score-value">{Math.round(score)}</div>
               </div>

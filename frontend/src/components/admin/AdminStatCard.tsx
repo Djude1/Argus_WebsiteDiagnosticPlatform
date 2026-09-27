@@ -44,11 +44,12 @@ export function AdminStatCard({
 type AdminSparklineProps = {
   series: Array<Record<string, number | string | null | undefined>> | null | undefined;
   dataKey: string;
-  color?: string;
+  /** 品牌圖表序列（1＝虹膜青、2＝守望琥珀、3 之後為維度色）；顏色由 CSS token 決定 */
+  seriesIndex?: 1 | 2 | 3 | 4 | 5;
   height?: number;
 };
 
-export function AdminSparkline({ series, dataKey, color = "#0ea5e9", height = 40 }: AdminSparklineProps) {
+export function AdminSparkline({ series, dataKey, seriesIndex = 1, height = 40 }: AdminSparklineProps) {
   if (!series || series.length < 2) return null;
   const w = 240;
   const values = series.map((row) => Number(row[dataKey]) || 0);
@@ -56,20 +57,25 @@ export function AdminSparkline({ series, dataKey, color = "#0ea5e9", height = 40
   const minV = Math.min(...values, 0);
   const range = maxV - minV || 1;
   const step = w / (series.length - 1);
-  const yFor = (v: number) => height - ((v - minV) / range) * height;
+  const yFor = (v: number) => 2 + (height - 4) * (1 - (v - minV) / range);
   const linePoints = values.map((v, i) => `${i * step},${yFor(v)}`).join(" ");
   const areaPoints = `0,${height} ${linePoints} ${w},${height}`;
   const gradId = `admin-spark-${dataKey}`;
   return (
-    <svg className="admin-stat-spark-svg" viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none">
+    <svg
+      className={`admin-stat-spark-svg admin-chart-series series-${seriesIndex}`}
+      viewBox={`0 0 ${w} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+          <stop offset="0%" className="admin-chart-stop" stopOpacity="0.25" />
+          <stop offset="100%" className="admin-chart-stop" stopOpacity="0" />
         </linearGradient>
       </defs>
       <polygon points={areaPoints} fill={`url(#${gradId})`} stroke="none" />
-      <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline className="admin-chart-line" points={linePoints} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
