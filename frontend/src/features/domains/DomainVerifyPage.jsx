@@ -8,6 +8,7 @@ import {
   verifyVerifiedDomain,
 } from "../../api";
 import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
+import { CodeIcon, DocIcon, GlobeIcon } from "../../shared/LineIcons.jsx";
 
 // ============================================================
 // 網域所有權驗證頁（/domains）
@@ -25,9 +26,9 @@ const STATUS_LABELS = {
 
 // 三種驗證方法（與後端 VerifiedDomain.Method 對齊）
 const METHOD_OPTIONS = [
-  { value: "dns_txt", label: "DNS TXT" },
-  { value: "meta_tag", label: "meta 標籤" },
-  { value: "html_file", label: "驗證檔" },
+  { value: "dns_txt", label: "DNS TXT", desc: "能管理 DNS 設定時最穩定", Icon: GlobeIcon },
+  { value: "meta_tag", label: "meta 標籤", desc: "可以修改首頁 HTML 時", Icon: CodeIcon },
+  { value: "html_file", label: "驗證檔", desc: "可以上傳檔案到網站根目錄時", Icon: DocIcon },
 ];
 
 const METHOD_LABELS = {
@@ -124,22 +125,38 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
       </div>
 
       <div className="domain-ins-tabs" role="tablist" aria-label="驗證方法">
-        {METHOD_OPTIONS.map((option) => (
+        {METHOD_OPTIONS.map((option, index) => (
           <button
             key={option.value}
             type="button"
             role="tab"
+            id={`domain-tab-${option.value}`}
             aria-selected={methodTab === option.value}
+            aria-controls="domain-ins-panel"
+            tabIndex={methodTab === option.value ? 0 : -1}
             className={`domain-ins-tab ${methodTab === option.value ? "active" : ""}`}
             onClick={() => onTabChange(option.value)}
+            onKeyDown={(event) => {
+              // 方向鍵在三個方法間切換（WAI-ARIA tabs 慣例）
+              if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+              event.preventDefault();
+              const step = event.key === "ArrowRight" ? 1 : -1;
+              const next = METHOD_OPTIONS[(index + step + METHOD_OPTIONS.length) % METHOD_OPTIONS.length];
+              onTabChange(next.value);
+              document.getElementById(`domain-tab-${next.value}`)?.focus();
+            }}
           >
-            {option.label}
+            <option.Icon className="domain-ins-tab-icon" />
+            <span className="domain-ins-tab-text">
+              <span className="domain-ins-tab-label">{option.label}</span>
+              <span className="domain-ins-tab-desc">{option.desc}</span>
+            </span>
           </button>
         ))}
       </div>
 
       {methodTab === "dns_txt" && instructions.dns_txt && (
-        <div className="domain-ins-panel" role="tabpanel">
+        <div className="domain-ins-panel" role="tabpanel" id="domain-ins-panel" aria-labelledby={`domain-tab-${methodTab}`}>
           <p className="domain-ins-hint">到你的 DNS 管理介面新增一筆 TXT 記錄：</p>
           <dl className="domain-ins-fields">
             <CopyField label="記錄名稱（Host）" value={instructions.dns_txt.record_name} copiedKey={copiedKey} onCopy={onCopy} />
@@ -151,7 +168,7 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
       )}
 
       {methodTab === "meta_tag" && instructions.meta_tag && (
-        <div className="domain-ins-panel" role="tabpanel">
+        <div className="domain-ins-panel" role="tabpanel" id="domain-ins-panel" aria-labelledby={`domain-tab-${methodTab}`}>
           <p className="domain-ins-hint">
             將以下標籤放入{instructions.meta_tag.location}：
           </p>
@@ -169,7 +186,7 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
       )}
 
       {methodTab === "html_file" && instructions.html_file && (
-        <div className="domain-ins-panel" role="tabpanel">
+        <div className="domain-ins-panel" role="tabpanel" id="domain-ins-panel" aria-labelledby={`domain-tab-${methodTab}`}>
           <p className="domain-ins-hint">在網站根目錄建立指定路徑的驗證檔，內容即為 Token：</p>
           <dl className="domain-ins-fields">
             <CopyField label="檔案路徑" value={instructions.html_file.path} copiedKey={copiedKey} onCopy={onCopy} />
@@ -302,6 +319,10 @@ export function DomainVerifyPage() {
     }
   }
 
+  // 流程指示：剛新增 → 在第 2 步；清單裡有待驗證 → 第 3 步；其餘從第 1 步開始
+  const hasPending = (domains || []).some((item) => !item.is_effectively_verified && item.status !== "rejected");
+  const currentStep = justAdded && !justAdded.is_effectively_verified ? 2 : hasPending ? 3 : 1;
+
   const pendingCount = useMemo(
     () => (domains || []).filter((item) => !item.is_effectively_verified && item.status !== "rejected").length,
     [domains],
@@ -325,11 +346,21 @@ export function DomainVerifyPage() {
           證明你擁有網域後，該網域與其子網域即可啟用主動測試模式。
         </p>
         <ol className="domain-steps" aria-label="驗證流程">
-          <li className="domain-step"><span aria-hidden="true">1</span>新增網域</li>
-          <li className="domain-step" aria-hidden="true">→</li>
-          <li className="domain-step"><span aria-hidden="true">2</span>設定驗證資料</li>
-          <li className="domain-step" aria-hidden="true">→</li>
-          <li className="domain-step"><span aria-hidden="true">3</span>執行驗證</li>
+          {["新增網域", "設定驗證資料", "執行驗證"].map((label, index) => {
+            const state = index + 1 < currentStep ? "done" : index + 1 === currentStep ? "active" : "todo";
+            return (
+              <li
+                key={label}
+                className={`domain-step is-${state}`}
+                aria-current={state === "active" ? "step" : undefined}
+              >
+                <span className="domain-step-num" aria-hidden="true">
+                  {state === "done" ? "✓" : index + 1}
+                </span>
+                {label}
+              </li>
+            );
+          })}
         </ol>
       </header>
 
@@ -387,8 +418,19 @@ export function DomainVerifyPage() {
 
         {listError && <p className="error-text">{listError}</p>}
 
+        {domains === null && (
+          <div className="domain-list" aria-busy="true">
+            <span className="domain-skel" />
+            <span className="domain-skel" />
+          </div>
+        )}
+
         {domains !== null && domains.length === 0 && !listError && (
-          <p className="domain-empty">還沒有任何網域。從上方「新增網域」開始！</p>
+          <div className="domain-empty">
+            <GlobeIcon className="domain-empty-icon" />
+            <p className="domain-empty-title">還沒有任何網域</p>
+            <p>從上方「新增網域」開始，驗證一次即涵蓋所有子網域。</p>
+          </div>
         )}
 
         <div className="domain-list">
@@ -442,7 +484,8 @@ export function DomainVerifyPage() {
 
                 {flash && (
                   <p className={`domain-flash ${flash.ok ? "is-ok" : "is-fail"}`} role="status">
-                    {flash.ok ? "✓ " : "✕ "}{flash.message}
+                    <span className="domain-flash-icon" aria-hidden="true">{flash.ok ? "✓" : "✕"}</span>
+                    {flash.message}
                   </p>
                 )}
 

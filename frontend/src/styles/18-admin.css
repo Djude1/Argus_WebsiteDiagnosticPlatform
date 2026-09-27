@@ -1,685 +1,965 @@
+/* ============================================================
+   /admin 後台 — Night Watch 品牌版
+   ------------------------------------------------------------
+   1. --admin-* 語意 token：全部由 --ag-* 品牌 token 衍生。
+      --ag-* 本身已經隨 data-theme 切換（:root＝深色、[data-theme="light"]＝日間），
+      所以 --admin-* 只需要定義一次，兩種主題自動正確——不再需要
+      63-admin-dark.css 那組反向（:root＝亮）的覆寫。
+      這段刻意寫在 @layer 之外：Tailwind 會把 @layer components 提到檔案最前面，
+      放在裡面會被 03-tokens.css 的舊值蓋掉。
+   2. 側欄恆為深色：使用 --admin-sidebar-*（不隨主題），並在側欄內把 --ag-* 文字
+      token 固定回深色值，讓 ArgusLogo 在日間主題下也正確。
+   ============================================================ */
+
+:root{
+  /* 表面 */
+  --admin-canvas: var(--ag-bg);
+  --admin-surface: var(--ag-surface);
+  --admin-surface-sunken: var(--ag-surface-2);
+  --admin-surface-hover: var(--ag-primary-soft);
+  --admin-border: var(--ag-border);
+  --admin-border-strong: var(--ag-border-strong);
+  --admin-border-solid: var(--ag-border-strong);
+  /* 文字 */
+  --admin-text: var(--ag-text);
+  --admin-text-secondary: var(--ag-text-2);
+  --admin-text-muted: var(--ag-text-3);
+  --admin-text-muted-sunken: var(--ag-text-2);
+  /* 互動：虹膜青為主、守望琥珀為重點 */
+  --admin-accent: var(--ag-primary);
+  --admin-accent-strong: var(--ag-link);
+  --admin-accent-soft-bg: var(--ag-primary-soft);
+  --admin-accent-soft-bg-2: var(--ag-primary-soft-2);
+  --admin-on-accent: var(--ag-on-primary);
+  --admin-highlight: var(--ag-accent);
+  --admin-highlight-soft: var(--ag-accent-soft);
+  /* 狀態：填色用品牌狀態色；文字與主文字色混合，日間主題下也能過 AA */
+  --admin-tone-good: var(--ag-good);
+  --admin-tone-warn: var(--ag-warn);
+  --admin-tone-bad: var(--ag-bad);
+  --admin-tone-info: var(--ag-info);
+  --admin-tone-good-text: color-mix(in srgb, var(--ag-good) 76%, var(--ag-text));
+  --admin-tone-warn-text: color-mix(in srgb, var(--ag-warn) 76%, var(--ag-text));
+  --admin-tone-bad-text: color-mix(in srgb, var(--ag-bad) 78%, var(--ag-text));
+  --admin-tone-info-text: color-mix(in srgb, var(--ag-info) 78%, var(--ag-text));
+  --admin-tone-good-bg: var(--ag-good-soft);
+  --admin-tone-warn-bg: var(--ag-warn-soft);
+  --admin-tone-bad-bg: var(--ag-bad-soft);
+  --admin-tone-info-bg: var(--ag-info-soft);
+  --admin-tone-good-border: color-mix(in srgb, var(--ag-good) 38%, transparent);
+  --admin-tone-warn-border: color-mix(in srgb, var(--ag-warn) 42%, transparent);
+  --admin-tone-bad-border: color-mix(in srgb, var(--ag-bad) 42%, transparent);
+  /* 形狀與陰影 */
+  --admin-radius: var(--ag-r-lg);
+  --admin-shadow-card: var(--ag-shadow-1);
+  --admin-shadow-hover: var(--ag-shadow-2);
+  --admin-shadow-pop: var(--ag-shadow-3);
+  /* 圖表：主序列虹膜青、次序列琥珀，再來依序取維度色 */
+  --admin-chart-1: var(--ag-primary);
+  --admin-chart-2: var(--ag-accent);
+  --admin-chart-3: var(--ag-cat-seo);
+  --admin-chart-4: var(--ag-cat-aeo);
+  --admin-chart-5: var(--ag-cat-ux);
+  --admin-chart-grid: var(--ag-border-strong);
+  --admin-chart-axis: var(--ag-text-3);
+  /* 側欄（恆為深色，不隨主題） */
+  --admin-sidebar-w: 256px;
+  --admin-sidebar-bg: var(--ag-ink-950);
+  --admin-sidebar-from: var(--ag-ink-950);
+  --admin-sidebar-to: var(--ag-ink-900);
+  --admin-sidebar-border: rgba(148, 197, 255, 0.1);
+  --admin-sidebar-text: #a9b6cb;
+  --admin-sidebar-text-strong: #e8eef8;
+  --admin-sidebar-muted: #7d8ea9;
+  --admin-sidebar-hover: rgba(63, 220, 238, 0.08);
+  --admin-sidebar-active: rgba(63, 220, 238, 0.14);
+  --admin-sidebar-accent: var(--ag-iris-400);
+}
+
+/* 側欄內把 --ag-* 文字／標誌固定為深色主題值（日間主題下側欄仍是深色） */
+.admin-sidebar,
+.admin-mobile-header{
+  color-scheme: dark;
+  --ag-text: #e8eef8;
+  --ag-text-2: #a9b6cb;
+  --ag-text-3: #7d8ea9;
+  --ag-primary: var(--ag-iris-400);
+  --ag-focus: 0 0 0 3px rgba(63, 220, 238, 0.45);
+}
+:root[data-theme="light"] .admin-sidebar .ag-mark-stop-a,
+:root[data-theme="light"] .admin-mobile-header .ag-mark-stop-a{ stop-color: var(--ag-iris-300); }
+:root[data-theme="light"] .admin-sidebar .ag-mark-stop-b,
+:root[data-theme="light"] .admin-mobile-header .ag-mark-stop-b{ stop-color: var(--ag-iris-600); }
+:root[data-theme="light"] .admin-sidebar .ag-mark-eye,
+:root[data-theme="light"] .admin-mobile-header .ag-mark-eye{ fill: var(--ag-iris-400); }
+:root[data-theme="light"] .admin-sidebar .ag-mark-glint,
+:root[data-theme="light"] .admin-mobile-header .ag-mark-glint{ fill: var(--ag-signal-400); }
+
 @layer components {
   /* ============================================================
-     /admin React 後台主題（淺色調、白卡片 + cyan accent）
+     Shell：側欄欄位本身就是深色（背景畫在 shell 上），
+     所以不論頁面多高，左欄都不會露出淺底。
      ============================================================ */
-
-  .argus-app.is-admin-mode {
-    background: var(--argus-admin-bg-2);
+  .argus-app.is-admin-mode{
+    background: var(--admin-canvas);
     min-height: 100vh;
   }
-
-  .argus-main.is-admin {
+  .argus-main.is-admin{
     padding: 0;
     max-width: none;
     background: transparent;
   }
 
-  .admin-shell {
+  .admin-shell{
     display: grid;
-    grid-template-columns: 256px 1fr;
+    grid-template-columns: var(--admin-sidebar-w) minmax(0, 1fr);
     min-height: 100vh;
     color: var(--admin-text);
+    background:
+      linear-gradient(90deg, var(--admin-sidebar-to) 0 var(--admin-sidebar-w), transparent var(--admin-sidebar-w)),
+      var(--admin-canvas);
   }
   .admin-mobile-header,
-  .admin-drawer-backdrop {
+  .admin-drawer-backdrop{
     display: none;
   }
 
   .admin-loading,
   .admin-error,
-  .admin-forbidden {
-    @apply mx-auto mt-20 max-w-md rounded-2xl p-8 text-center;
+  .admin-forbidden{
+    @apply mx-auto mt-20 max-w-md p-8 text-center;
+    border-radius: var(--ag-r-xl);
     background: var(--admin-surface);
-    border: 1px solid var(--admin-border-solid);
-    color: var(--admin-text);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text-secondary);
+    box-shadow: var(--admin-shadow-card);
   }
-  .admin-forbidden h2 { @apply text-xl font-bold mb-2; color: var(--admin-text); }
-  .admin-forbidden p { @apply text-sm; color: var(--admin-text-secondary); }
-  .admin-error { color: #be123c; }
+  .admin-loading{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.875rem;
+  }
+  .admin-loading::before{
+    content: "";
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--admin-accent-soft-bg-2);
+    border-top-color: var(--admin-accent);
+    animation: admin-spin 0.9s linear infinite;
+  }
+  @keyframes admin-spin { to { transform: rotate(360deg); } }
+  .admin-forbidden h2{ @apply mb-2 text-xl font-bold; color: var(--admin-text); }
+  .admin-forbidden p{ @apply text-sm; color: var(--admin-text-secondary); }
+  .admin-error{
+    color: var(--admin-tone-bad-text);
+    background: var(--admin-tone-bad-bg);
+    border-color: var(--admin-tone-bad-border);
+  }
 
-  /* --- Sidebar (dark gradient) --- */
-  .admin-sidebar {
+  /* ============================================================
+     側欄
+     ============================================================ */
+  .admin-sidebar{
     @apply flex flex-col;
-    background: linear-gradient(180deg, var(--admin-sidebar-from) 0%, var(--admin-sidebar-to) 100%);
-    border-right: 1px solid rgba(56, 189, 248, 0.16);
-    padding: 0;
     position: sticky;
     top: 0;
     height: 100vh;
-    box-shadow: 2px 0 24px -8px rgba(15, 23, 42, 0.25);
-  }
-  /* 科技主控台微光：sidebar 頂部一道靜態 cyan accent（克制、無動畫，符合後台冷靜原則） */
-  .admin-sidebar::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.75), transparent);
-    pointer-events: none;
+    height: 100dvh;
+    padding: 0;
+    color: var(--admin-sidebar-text);
+    background:
+      radial-gradient(18rem 14rem at 0% 0%, rgba(63, 220, 238, 0.09), transparent 70%),
+      linear-gradient(180deg, var(--admin-sidebar-from) 0%, var(--admin-sidebar-to) 100%);
+    border-right: 1px solid var(--admin-sidebar-border);
   }
 
-  .admin-brand {
-    @apply flex flex-col items-start gap-2;
-    padding: 20px 14px;
+  .admin-brand{
+    @apply flex w-full items-center;
+    padding: 20px 18px 18px;
     border: none;
-    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    border-bottom: 1px solid var(--admin-sidebar-border);
     background: transparent;
-    width: 100%;
     cursor: pointer;
     text-align: left;
-    transition: background 0.15s ease;
+    transition: background var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-brand:hover {
-    background: rgba(34, 211, 238, 0.06);
-  }
-  .admin-brand-logo {
-    height: 40px;
-    width: auto;
-    display: block;
-    flex-shrink: 0;
-  }
-  .admin-brand-sub {
-    @apply text-xs font-medium;
-    color: #22d3ee;
-    letter-spacing: 0.04em;
-  }
+  .admin-brand:hover{ background: var(--admin-sidebar-hover); }
+  .admin-brand:focus-visible{ outline: 2px solid var(--admin-sidebar-accent); outline-offset: -2px; }
+  .admin-brand .ag-logo-sub{ color: var(--admin-sidebar-accent); letter-spacing: 0.2em; }
+  .admin-brand:hover .ag-mark-eye{ animation: ag-iris-blink 1.08s var(--ag-ease) 1; }
 
-  .admin-nav {
+  .admin-nav{
     @apply flex flex-1 flex-col;
-    gap: 14px;
-    padding: 12px 10px;
+    gap: 16px;
+    padding: 14px 12px;
     overflow-y: auto;
+    scrollbar-color: rgba(148, 197, 255, 0.18) transparent;
   }
-  .admin-nav-group > div {
-    @apply flex flex-col gap-0.5;
+  .admin-nav-group > div{
+    @apply flex flex-col;
+    gap: 2px;
   }
-  /* 分組標題：刻意低對比且小字——它是掃視時的錨點，不是可點的項目，
-     權重高過連結反而會誤導 */
-  .admin-nav-group-label {
-    @apply px-3 pb-1.5 text-[0.65rem] font-bold uppercase;
-    letter-spacing: 0.14em;
-    color: rgba(148, 163, 184, 0.7);
+  /* 分組標題：mono 眉標，低對比——它是掃視錨點，不是可點的項目 */
+  .admin-nav-group-label{
     margin: 0;
+    padding: 0 12px 6px;
+    font-family: var(--ag-font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--admin-sidebar-muted);
   }
-  .admin-nav-link {
-    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium;
-    color: #94a3b8;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  .admin-nav-link{
+    @apply flex items-center gap-3 text-sm font-medium;
     position: relative;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: var(--ag-r-md);
+    color: var(--admin-sidebar-text);
+    text-decoration: none;
+    transition:
+      background var(--ag-dur-2) var(--ag-ease),
+      color var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-nav-link:hover {
-    background: rgba(51, 65, 85, 0.5);
-    color: #f1f5f9;
-    transform: translateX(2px);
+  .admin-nav-link:hover{
+    background: var(--admin-sidebar-hover);
+    color: var(--admin-sidebar-text-strong);
   }
-  .admin-nav-link.active {
-    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-    color: #ffffff;
-    box-shadow: 0 6px 16px -4px rgba(8, 145, 178, 0.5),
-                0 0 0 1px rgba(34, 211, 238, 0.2);
+  .admin-nav-link:focus-visible{
+    outline: 2px solid var(--admin-sidebar-accent);
+    outline-offset: -2px;
   }
-  .admin-nav-link.active::after {
+  /* 選取：柔青底 + 左側虹膜指示條（不再用青→青漸層大色塊） */
+  .admin-nav-link.active{
+    background: var(--admin-sidebar-active);
+    color: var(--admin-sidebar-text-strong);
+    box-shadow: inset 0 0 0 1px rgba(63, 220, 238, 0.22);
+  }
+  .admin-nav-link.active::before{
     content: "";
     position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: #cffafe;
-    box-shadow: 0 0 6px rgba(207, 250, 254, 0.7);
+    left: -12px;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--admin-sidebar-accent);
+    box-shadow: 0 0 12px rgba(63, 220, 238, 0.6);
   }
-  .admin-nav-emoji {
-    /* legacy class kept for backward compat; new SVG icon uses .admin-nav-icon */
-  }
-  .admin-nav-icon {
+  .admin-nav-icon{
     flex-shrink: 0;
-    color: var(--argus-icon-base);
-    transition: filter 0.15s ease;
+    color: var(--admin-sidebar-muted);
+    transition: color var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-nav-icon .accent {
-    color: var(--argus-icon-accent);
-  }
-  .admin-nav-link:hover .admin-nav-icon {
-    filter: brightness(1.18);
-  }
-  .admin-nav-link.active .admin-nav-icon {
-    color: var(--argus-icon-base-active);
-  }
-  .admin-nav-link.active .admin-nav-icon .accent {
-    color: var(--argus-icon-accent-active);
-  }
+  /* 圖示角標：守望琥珀反光點（呼應標誌的 glint） */
+  .admin-nav-icon .accent{ color: var(--ag-signal-400); opacity: 0; transition: opacity var(--ag-dur-2) var(--ag-ease); }
+  .admin-nav-link:hover .admin-nav-icon{ color: var(--admin-sidebar-text-strong); }
+  .admin-nav-link.active .admin-nav-icon{ color: var(--admin-sidebar-accent); }
+  .admin-nav-link.active .admin-nav-icon .accent{ opacity: 1; }
 
-  .admin-sidebar-footer {
+  .admin-sidebar-footer{
     @apply flex flex-col gap-1;
-    padding: 12px 10px 18px;
-    border-top: 1px solid rgba(51, 65, 85, 0.5);
+    padding: 12px 12px 18px;
+    border-top: 1px solid var(--admin-sidebar-border);
   }
-  .admin-side-link {
-    @apply flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition;
-    color: #94a3b8;
+  .admin-side-link{
+    @apply flex items-center gap-2 text-left text-xs font-medium;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: var(--ag-r-md);
+    color: var(--admin-sidebar-text);
     background: transparent;
     border: none;
     cursor: pointer;
+    text-decoration: none;
+    transition: background var(--ag-dur-2) var(--ag-ease), color var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-side-link:hover {
-    background: rgba(51, 65, 85, 0.5);
-    color: #f1f5f9;
+  .admin-side-link:hover{
+    background: var(--admin-sidebar-hover);
+    color: var(--admin-sidebar-text-strong);
   }
-  .admin-side-link:last-child:hover {
-    background: rgba(127, 29, 29, 0.3);
-    color: #fca5a5;
+  .admin-side-link.is-danger:hover{
+    background: rgba(255, 92, 122, 0.12);
+    color: #ff8fa3;
   }
+  .admin-side-link:focus-visible{ outline: 2px solid var(--admin-sidebar-accent); outline-offset: -2px; }
+  .admin-side-icon{ width: 16px; height: 16px; flex-shrink: 0; }
 
-  /* --- Main content --- */
-  .admin-main {
-    padding: 32px 36px;
-    overflow-x: auto;
-    background: var(--admin-canvas);
+  /* ============================================================
+     主內容區
+     ============================================================ */
+  .admin-main{
+    position: relative;
+    min-width: 0;
     min-height: 100vh;
+    padding: 32px 40px 56px;
+    overflow-x: clip;
+    background-color: var(--admin-canvas);
+    background-image: var(--ag-hero-wash);
+    background-repeat: no-repeat;
+    background-size: 100% 520px;
   }
-  .admin-page {
+  .admin-page{
     @apply space-y-5;
     max-width: 1280px;
+    margin: 0 auto;
+    animation: admin-page-in var(--ag-dur-3) var(--ag-ease) both;
   }
-  .admin-page-head {
-    @apply flex flex-wrap items-start justify-between gap-3;
+  @keyframes admin-page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
   }
-  .admin-page-head h1 {
-    @apply text-2xl font-bold;
+
+  .admin-page-head{
+    @apply flex flex-wrap items-end justify-between;
+    gap: 12px 16px;
+    padding-bottom: 4px;
+  }
+  /* 有些頁面 h1 與說明直接放在 header 裡：讓說明換到下一行，不要被推到右邊 */
+  .admin-page-head > p{ flex-basis: 100%; margin-top: -8px; }
+  .admin-page-head h1{
+    margin: 0;
+    font-family: var(--ag-font-display);
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
     color: var(--admin-text);
-    letter-spacing: 0.02em;
   }
-  .admin-page-head p {
+  .admin-page-head p{
     @apply mt-1 text-sm;
     color: var(--admin-text-muted);
   }
-  /* 即時監控狀態徽章：呼應 Argus（全視之眼）品牌敘事，唯一允許在後台常駐的動效——傳達真實系統狀態，非裝飾 */
-  .admin-status-badge {
-    @apply inline-flex items-center gap-2 text-xs font-semibold;
-    padding: 7px 14px;
-    border-radius: 999px;
-    background: rgba(14, 165, 233, 0.08);
-    border: 1px solid rgba(14, 165, 233, 0.25);
-    color: var(--admin-accent-strong);
-    white-space: nowrap;
-  }
-  .admin-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: var(--tone-good);
-    animation: admin-status-pulse 2.4s ease-out infinite;
-  }
+
+  
+  
   @keyframes admin-status-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
-    70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    0% { box-shadow: 0 0 0 0 var(--admin-tone-good-border); }
+    70% { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .admin-status-dot { animation: none; }
-  }
-  .admin-back-link {
-    @apply mb-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition;
+  .admin-back-link{
+    @apply mb-1 inline-flex items-center gap-1 text-sm font-medium;
+    min-height: 32px;
+    padding: 0 10px 0 6px;
+    border-radius: var(--ag-r-sm);
     background: transparent;
     color: var(--admin-accent-strong);
     border: none;
     cursor: pointer;
+    text-decoration: none;
+    transition: background var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-back-link:hover {
-    background: var(--admin-accent-soft-bg);
-  }
+  .admin-back-link:hover{ background: var(--admin-accent-soft-bg); }
 
-  /* --- Stat grid --- */
   /* ============================================================
-     Card 視覺語言（第三輪重設）：不靠頂部色條區分卡片，改靠材質
-     （柔和陰影／細邊框/圓角）、圖示自帶背景色塊、數字為視覺焦點、
-     版面（bento 式大小差異）建立層次與品牌識別。
+     統計卡
      ============================================================ */
-  .admin-stat-grid {
+  .admin-stat-grid{
     @apply grid gap-4;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
-  .admin-stat-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-  /* Overview 專用 bento 版面：首張卡（hero）跨兩欄，建立主次層次而非靠顏色 */
-  .admin-stat-grid--bento {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .admin-stat-card.hero {
-    grid-column: span 2;
-    padding: 24px;
-  }
-  @media (max-width: 900px) {
-    .admin-stat-grid--bento { grid-template-columns: repeat(2, 1fr); }
-  }
+  
+  
+  .admin-stat-card.hero{ grid-column: span 2; padding: 24px; }
+  
   @media (max-width: 560px) {
-    .admin-stat-grid--bento { grid-template-columns: 1fr; }
-    .admin-stat-card.hero { grid-column: span 1; }
+    
+    .admin-stat-card.hero{ grid-column: span 1; }
   }
 
-  .admin-stat-card {
-    border-radius: 18px;
-    padding: 20px;
-    background: var(--admin-surface);
-    border: 1px solid rgba(15, 23, 42, 0.07);
+  .admin-stat-card{
     position: relative;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -16px rgba(15, 23, 42, 0.12);
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    overflow: hidden;
+    padding: 20px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    box-shadow: var(--admin-shadow-card);
+    transition:
+      border-color var(--ag-dur-2) var(--ag-ease),
+      box-shadow var(--ag-dur-2) var(--ag-ease),
+      transform var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-stat-card:hover {
+  /* 頂部一道依 tone 著色的細光，比整張卡上色更克制 */
+  .admin-stat-card::before{
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--admin-stat-tone, var(--admin-accent)), transparent);
+    opacity: 0.7;
+  }
+  .admin-stat-card:hover{
     transform: translateY(-2px);
-    border-color: rgba(15, 23, 42, 0.11);
-    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 18px 36px -18px rgba(15, 23, 42, 0.18);
+    border-color: var(--ag-border-accent);
+    box-shadow: var(--admin-shadow-hover);
   }
-  .admin-stat-head {
+  .admin-stat-card.tone-good{ --admin-stat-tone: var(--admin-tone-good); }
+  .admin-stat-card.tone-warn{ --admin-stat-tone: var(--admin-tone-warn); }
+  .admin-stat-card.tone-bad{ --admin-stat-tone: var(--admin-tone-bad); }
+  .admin-stat-card.tone-amber{ --admin-stat-tone: var(--admin-highlight); }
+  .admin-stat-head{
     @apply flex items-start justify-between gap-3;
   }
-  .admin-stat-icon-chip {
+  .admin-stat-icon-chip{
     @apply inline-flex shrink-0 items-center justify-center;
     width: 34px;
     height: 34px;
-    border-radius: 10px;
-    background: rgba(14, 165, 233, 0.1);
-    color: var(--argus-cyan-dot);
+    border-radius: var(--ag-r-sm);
+    background: var(--admin-accent-soft-bg);
+    color: var(--admin-accent);
   }
-  .admin-stat-card.tone-good .admin-stat-icon-chip { background: rgba(16, 185, 129, 0.1); color: var(--tone-good); }
-  .admin-stat-card.tone-warn .admin-stat-icon-chip { background: rgba(245, 158, 11, 0.1); color: var(--tone-medium); }
-  .admin-stat-card.tone-bad .admin-stat-icon-chip { background: rgba(239, 68, 68, 0.1); color: var(--tone-bad); }
-  .admin-stat-label {
-    @apply text-xs font-medium uppercase tracking-wider;
-    color: #94a3b8;
+  .admin-stat-card.tone-good .admin-stat-icon-chip{ background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+  .admin-stat-card.tone-warn .admin-stat-icon-chip{ background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+  .admin-stat-card.tone-bad .admin-stat-icon-chip{ background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
+  .admin-stat-card.tone-amber .admin-stat-icon-chip{ background: var(--admin-highlight-soft); color: var(--admin-highlight); }
+  .admin-stat-label{
+    font-family: var(--ag-font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--admin-text-muted);
   }
-  .admin-stat-value {
+  .admin-stat-value{
     @apply mt-2 text-3xl font-bold;
+    font-family: var(--ag-font-display);
     color: var(--admin-text);
     letter-spacing: -0.015em;
     font-variant-numeric: tabular-nums;
   }
-  .admin-stat-card.hero .admin-stat-value {
-    @apply text-4xl;
-  }
-  .admin-stat-hint {
+  .admin-stat-card.hero .admin-stat-value{ @apply text-4xl; }
+  .admin-stat-hint{
     @apply mt-1.5 text-xs;
-    color: #94a3b8;
+    color: var(--admin-text-muted);
   }
-  .admin-stat-spark {
+  .admin-stat-spark{
     height: 40px;
-    margin-top: 14px;
+    margin: 14px -4px 0;
   }
-  .admin-stat-spark-svg {
+  .admin-stat-spark-svg{
     display: block;
     width: 100%;
     height: 100%;
+    overflow: visible;
   }
 
-  /* --- Panels --- */
-  .admin-panel {
-    border-radius: 18px;
-    padding: 20px;
-    background: var(--admin-surface);
-    border: 1px solid rgba(15, 23, 42, 0.07);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.1);
+  /* ============================================================
+     面板
+     ============================================================ */
+  .admin-panel{
     position: relative;
-    transition: box-shadow 0.2s ease;
+    padding: 20px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    box-shadow: var(--admin-shadow-card);
   }
-  .admin-panel:hover {
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 16px 32px -18px rgba(15, 23, 42, 0.16);
-  }
-  .admin-panel h3 {
-    @apply mb-4 flex items-center gap-2.5 text-base font-bold;
+  .admin-panel h3{
+    @apply mb-4 flex items-center gap-2.5 text-base font-semibold;
+    font-family: var(--ag-font-display);
     color: var(--admin-text);
   }
-  .admin-panel-icon-chip {
+  .admin-panel-head-row h3{ margin-bottom: 0; }
+  .admin-panel-icon-chip{
     @apply inline-flex shrink-0 items-center justify-center;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: rgba(14, 165, 233, 0.1);
-    color: var(--argus-cyan-dot);
+    border-radius: var(--ag-r-sm);
+    background: var(--admin-accent-soft-bg);
+    color: var(--admin-accent);
   }
-  .admin-panel-danger {
-    border-color: #fecdd3;
-    background: #fff1f2;
+  .admin-panel-danger{
+    border-color: var(--admin-tone-bad-border);
+    background: color-mix(in srgb, var(--ag-bad) 6%, var(--admin-surface));
   }
-  .admin-grid-2col {
+  .admin-grid-2col{
     @apply grid gap-4;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
   }
-  .admin-empty {
-    @apply py-6 text-center text-sm;
-    color: #94a3b8;
+  /* 行內空狀態：小眼標 + 文字，比單行灰字更容易被注意到 */
+  .admin-empty{
+    @apply py-8 text-center text-sm;
+    color: var(--admin-text-muted);
   }
+  .admin-empty::before{
+    content: "";
+    display: block;
+    width: 28px;
+    height: 28px;
+    margin: 0 auto 8px;
+    background: var(--admin-text-muted);
+    opacity: 0.55;
+    -webkit-mask: var(--admin-eye-mask) center / contain no-repeat;
+    mask: var(--admin-eye-mask) center / contain no-repeat;
+  }
+  td.admin-empty{ padding: 36px 12px; }
+  .admin-empty.admin-panel{ padding: 36px 20px; }
 
-  /* --- Tables --- */
-  .admin-table-scroll {
+  /* ============================================================
+     表格：列表頁的表格直接放在頁面上時，外框就是一張卡片；
+     窄螢幕時只在卡片內水平捲動，整頁不會被撐寬。
+     ============================================================ */
+  .admin-table-scroll{
+    position: relative;
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
   }
-  .admin-table-spaced { margin-top: 12px; }
-  .admin-table {
+  .admin-page > .admin-table-scroll{
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    box-shadow: var(--admin-shadow-card);
+  }
+  .admin-table-spaced{ margin-top: 12px; }
+  .admin-table{
     @apply w-full text-sm;
     border-collapse: separate;
     border-spacing: 0;
   }
-  .admin-table thead th {
-    @apply px-3 py-2 text-left text-xs uppercase tracking-wider font-semibold;
+  .admin-table thead th{
+    @apply px-3 py-2.5 text-left font-semibold;
+    font-family: var(--ag-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
     color: var(--admin-text-muted);
     background: var(--admin-surface-sunken);
-    border-bottom: 1px solid var(--admin-border-solid);
+    border-bottom: 1px solid var(--admin-border);
   }
+  .admin-page > .admin-table-scroll .admin-table thead th:first-child{ border-top-left-radius: var(--admin-radius); }
+  .admin-page > .admin-table-scroll .admin-table thead th:last-child{ border-top-right-radius: var(--admin-radius); }
   .admin-table thead th.num,
-  .admin-table tbody td.num {
+  .admin-table tbody td.num{
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
-  .admin-table thead th.col-actions { width: 120px; }
-  .admin-cell-mono { width: 280px; font-family: monospace; color: #94a3b8; }
-  .admin-table tbody td {
+  .admin-table thead th.col-actions{ width: 120px; }
+  .admin-cell-mono{
+    width: 280px;
+    font-family: var(--ag-font-mono);
+    font-size: 0.78rem;
+    color: var(--admin-text-muted);
+  }
+  .admin-table tbody td{
     @apply px-3 py-2.5;
     color: var(--admin-text-secondary);
-    border-bottom: 1px solid var(--admin-surface-sunken);
+    border-bottom: 1px solid var(--admin-border);
+    transition: background var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-table tbody tr.clickable { cursor: pointer; transition: background 0.15s; }
-  .admin-table tbody tr.clickable:hover {
-    background: #f0f9ff;
+  .admin-table tbody tr:last-child td{ border-bottom: none; }
+  .admin-table tbody tr:hover td{ background: color-mix(in srgb, var(--admin-surface-sunken) 60%, transparent); }
+  .admin-table tbody tr.clickable{ cursor: pointer; }
+  .admin-table tbody tr.clickable:hover td{ background: var(--admin-surface-hover); }
+  /* 可點列：hover 時左緣出現虹膜指示條 */
+  .admin-table tbody tr.clickable td:first-child{ box-shadow: inset 0 0 0 transparent; }
+  .admin-table tbody tr.clickable:hover td:first-child,
+  .admin-table tbody tr.clickable:focus-visible td:first-child{
+    box-shadow: inset 3px 0 0 var(--admin-accent);
   }
-  .admin-table tbody tr.clickable:focus-visible {
-    outline: 3px solid #06b6d4;
-    outline-offset: -3px;
+  .admin-table tbody tr.clickable:focus-visible{
+    outline: 2px solid var(--admin-accent);
+    outline-offset: -2px;
   }
+  .admin-table tbody tr.clickable:focus-visible td{ background: var(--admin-surface-hover); }
+  .admin-table tbody tr.is-selected td{ background: var(--admin-accent-soft-bg-2); }
   .admin-table.compact thead th,
-  .admin-table.compact tbody td {
+  .admin-table.compact tbody td{
     @apply px-2 py-1.5 text-xs;
   }
-  .admin-cell-primary {
+  .admin-table.compact thead th{ font-size: 0.64rem; }
+  .admin-cell-primary{
     @apply font-semibold;
     color: var(--admin-text);
   }
-  .admin-cell-secondary {
+  .admin-cell-secondary{
     @apply text-xs;
-    color: #94a3b8;
+    color: var(--admin-text-muted);
   }
-  .admin-log-payload { margin-top: 4px; }
-  .admin-log-payload summary { cursor: pointer; color: var(--admin-accent-strong); font-size: 11px; }
-  .admin-log-payload pre { font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
-  .admin-coin {
+  .admin-log-payload{ margin-top: 4px; }
+  .admin-log-payload summary{ cursor: pointer; color: var(--admin-accent-strong); font-size: 11px; }
+  .admin-log-payload pre{
+    margin: 4px 0 0;
+    padding: 8px;
+    border-radius: var(--ag-r-sm);
+    background: var(--admin-surface-sunken);
+    font-family: var(--ag-font-mono);
+    font-size: 11px;
+    white-space: pre-wrap;
+    color: var(--admin-text-secondary);
+  }
+  .admin-coin{
     @apply font-bold;
     color: var(--admin-accent-strong);
+    font-variant-numeric: tabular-nums;
   }
-  .truncate {
+  .truncate{
     max-width: 280px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .tx-pos { color: var(--tone-good); font-weight: 600; }
-  .tx-neg { color: var(--tone-bad); font-weight: 600; }
+  .tx-pos{ color: var(--admin-tone-good-text); font-weight: 600; }
+  .tx-neg{ color: var(--admin-tone-bad-text); font-weight: 600; }
 
-  .admin-staff-chip {
-    @apply ml-1 inline-block rounded-full px-1.5 py-0 text-[10px] font-bold;
-    background: rgba(14, 165, 233, 0.14);
-    color: var(--argus-cyan-deep);
+  .admin-staff-chip,
+  .admin-super-chip{
+    @apply ml-1 inline-block px-1.5 py-0 text-[10px] font-bold;
+    border-radius: var(--ag-r-pill);
+    font-family: var(--ag-font-mono);
+    letter-spacing: 0.04em;
   }
-  .admin-super-chip {
-    @apply ml-1 inline-block rounded-full px-1.5 py-0 text-[10px] font-bold;
-    background: rgba(245, 158, 11, 0.16);
-    color: #92400e;
-  }
-  .admin-status {
-    @apply inline-block rounded-full px-2 py-0.5 text-xs font-semibold;
+  .admin-staff-chip{ background: var(--admin-accent-soft-bg-2); color: var(--admin-accent-strong); }
+  .admin-super-chip{ background: var(--admin-highlight-soft); color: var(--admin-tone-warn-text); }
+
+  .admin-status{
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold;
+    border-radius: var(--ag-r-pill);
+    white-space: nowrap;
     background: var(--admin-surface-sunken);
     color: var(--admin-text-secondary);
   }
-  .admin-status.completed { background: rgba(16, 185, 129, 0.12); color: var(--tone-good); }
-  .admin-status.failed { background: rgba(239, 68, 68, 0.12); color: var(--tone-bad); }
+  .admin-status::before{
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .admin-status.completed{ background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+  .admin-status.failed{ background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
   .admin-status.crawling,
   .admin-status.scanning,
   .admin-status.agent_testing,
-  .admin-status.queued { background: rgba(14, 165, 233, 0.12); color: var(--argus-cyan-dot); }
-  .admin-status.cancelled { background: var(--admin-surface-sunken); color: var(--admin-text-secondary); }
+  .admin-status.queued{ background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); }
+  .admin-status.crawling::before,
+  .admin-status.scanning::before,
+  .admin-status.agent_testing::before{ animation: admin-status-blink 1.2s ease-in-out infinite; }
+  @keyframes admin-status-blink { 50% { opacity: 0.3; } }
+  .admin-status.cancelled{ background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
 
-  /* --- Inputs & forms --- */
-  .admin-input {
-    @apply rounded-lg px-3 py-2 text-sm transition;
-    background: var(--admin-surface);
-    border: 1px solid #cbd5e1;
+  /* ============================================================
+     輸入與按鈕
+     ============================================================ */
+  .admin-input{
+    @apply text-sm;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: var(--ag-r-md);
+    background: var(--ag-bg-raised);
+    border: 1px solid var(--admin-border-strong);
     color: var(--admin-text);
     outline: none;
+    transition:
+      border-color var(--ag-dur-1) var(--ag-ease),
+      box-shadow var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-input::placeholder { color: #94a3b8; }
-  .admin-input:focus {
-    border-color: #06b6d4;
-    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+  .admin-input::placeholder{ color: var(--admin-text-muted); }
+  .admin-input:hover{ border-color: var(--ag-border-accent); }
+  .admin-input:focus,
+  .admin-input:focus-visible{
+    border-color: var(--admin-accent);
+    box-shadow: var(--ag-focus);
   }
-  .admin-input.wide { flex: 1; }
-  .admin-btn {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+  select.admin-input{
+    appearance: none;
+    padding-right: 34px;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--admin-text-muted) 50%),
+      linear-gradient(135deg, var(--admin-text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  select.admin-input option{ background: var(--admin-surface); color: var(--admin-text); }
+  textarea.admin-input{ line-height: 1.6; }
+  .admin-input.wide{ flex: 1; }
+
+  .admin-btn{
+    @apply inline-flex items-center justify-center gap-1.5 text-sm font-semibold;
+    min-height: 38px;
+    padding: 0 16px;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface);
     color: var(--admin-accent-strong);
-    border: 1px solid #67e8f9;
+    border: 1px solid var(--ag-border-accent);
     cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    transition:
+      background var(--ag-dur-1) var(--ag-ease),
+      border-color var(--ag-dur-1) var(--ag-ease),
+      box-shadow var(--ag-dur-2) var(--ag-ease),
+      transform var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-btn:hover {
+  .admin-btn:hover:not(:disabled){
     background: var(--admin-accent-soft-bg);
-    border-color: #06b6d4;
-    box-shadow: 0 2px 6px rgba(6, 182, 212, 0.15);
+    border-color: var(--admin-accent);
   }
-  .admin-btn.primary {
-    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-    color: var(--admin-surface);
-    border: none;
+  .admin-btn:active:not(:disabled){ transform: translateY(1px); }
+  .admin-btn:focus-visible{ outline: none; box-shadow: var(--ag-focus); }
+  .admin-btn.primary{
+    background: var(--admin-accent);
+    color: var(--admin-on-accent);
+    border-color: transparent;
   }
-  .admin-btn.primary:hover {
-    box-shadow: 0 4px 12px rgba(8, 145, 178, 0.32);
+  .admin-btn.primary:hover:not(:disabled){
+    background: var(--ag-primary-hover);
+    box-shadow: var(--ag-glow);
   }
-  .admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .admin-btn.small { padding: 4px 10px; font-size: 12px; }
-  .admin-btn.small + .admin-btn.small { margin-left: 4px; }
-  .admin-btn.danger { color: #dc2626; border-color: #fecaca; }
-  .admin-icon-lg { font-size: 22px; }
+  .admin-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+  .admin-btn.small{ min-height: 30px; padding: 0 10px; font-size: 12px; border-radius: var(--ag-r-sm); }
+  .admin-btn.small + .admin-btn.small{ margin-left: 4px; }
+  .admin-btn.danger{
+    background: transparent;
+    color: var(--admin-tone-bad-text);
+    border-color: var(--admin-tone-bad-border);
+  }
+  .admin-btn.danger:hover:not(:disabled){
+    background: var(--admin-tone-bad-bg);
+    border-color: var(--admin-tone-bad);
+  }
+  .admin-icon-lg{ font-size: 22px; }
 
-  .admin-search-bar {
-    @apply flex flex-wrap gap-2;
+  /* 篩選工具列：搜尋、下拉與按鈕排成一條，放在一張淺卡上 */
+  .admin-search-bar{
+    @apply flex flex-wrap items-center gap-2;
   }
-  .admin-search-bar .admin-input { flex: 1; min-width: 220px; }
-  .admin-filter-bar {
+  .admin-search-bar .admin-input:not(select){ flex: 1; min-width: min(100%, 220px); }
+  .admin-page > .admin-search-bar,
+  .admin-page > .admin-filter-bar{
+    padding: 10px;
+    border-radius: var(--admin-radius);
+    background: color-mix(in srgb, var(--admin-surface) 70%, transparent);
+    border: 1px solid var(--admin-border);
+  }
+  .admin-filter-bar > .admin-search-bar{ flex: 1; min-width: min(100%, 320px); }
+  .admin-filter-bar{
     @apply flex flex-wrap items-center gap-3;
   }
-  .admin-checkbox {
+  .admin-checkbox{
     @apply inline-flex items-center gap-2 text-sm;
+    min-height: 32px;
     color: var(--admin-text-secondary);
     cursor: pointer;
   }
-  .admin-checkbox input {
+  .admin-checkbox input{
     @apply h-4 w-4;
-    accent-color: #06b6d4;
+    accent-color: var(--admin-accent);
   }
 
-  /* --- Definition list (key-value) --- */
-  .admin-dl {
+  /* --- Definition list --- */
+  .admin-dl{
     @apply grid gap-y-2 text-sm;
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: 120px minmax(0, 1fr);
   }
-  .admin-dl dt { color: var(--admin-text-muted); }
-  .admin-dl dd { color: var(--admin-text); }
+  .admin-dl dt{ color: var(--admin-text-muted); }
+  .admin-dl dd{ color: var(--admin-text); margin: 0; overflow-wrap: anywhere; }
 
-  .admin-balance-big {
+  .admin-balance-big{
     @apply mb-3 text-4xl font-bold;
+    font-family: var(--ag-font-display);
     color: var(--admin-accent-strong);
+    font-variant-numeric: tabular-nums;
   }
-  .admin-balance-big span { @apply ml-1 text-base; color: var(--admin-text-muted); }
-  .admin-balance-big.tight { margin-bottom: 0; }
+  .admin-balance-big span{ @apply ml-1 text-base font-medium; color: var(--admin-text-muted); }
+  .admin-balance-big.tight{ margin-bottom: 0; }
 
-  /* --- Adjust form --- */
-  .admin-adjust-form .admin-adjust-row {
-    @apply flex flex-wrap gap-2;
-  }
-  .admin-quick-row {
-    @apply mt-2 flex flex-wrap gap-2;
-  }
-  .admin-quick-btn {
-    @apply rounded-full px-3 py-1 text-xs transition;
+  /* --- 調整點數 --- */
+  .admin-adjust-form .admin-adjust-row{ @apply flex flex-wrap gap-2; }
+  .admin-quick-row{ @apply mt-2 flex flex-wrap gap-2; }
+  .admin-quick-btn{
+    @apply px-3 text-xs font-semibold;
+    min-height: 30px;
+    border-radius: var(--ag-r-pill);
+    font-family: var(--ag-font-mono);
     background: var(--admin-surface-sunken);
     color: var(--admin-text-secondary);
-    border: 1px solid var(--admin-border-solid);
+    border: 1px solid var(--admin-border);
     cursor: pointer;
+    transition: all var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-quick-btn:hover {
+  .admin-quick-btn:hover{
     background: var(--admin-accent-soft-bg);
     color: var(--admin-accent-strong);
-    border-color: #67e8f9;
+    border-color: var(--ag-border-accent);
   }
-  .admin-feedback {
-    @apply mt-3 rounded-lg px-3 py-2 text-sm;
+  .admin-feedback{
+    @apply mt-3 px-3 py-2 text-sm;
+    border-radius: var(--ag-r-sm);
+    border: 1px solid transparent;
   }
-  .admin-feedback.tone-good { background: #d1fae5; color: var(--admin-tone-good-text); }
-  .admin-feedback.tone-bad { background: #fee2e2; color: var(--admin-tone-bad-text); }
+  .admin-feedback.tone-good{ background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); border-color: var(--admin-tone-good-border); }
+  .admin-feedback.tone-bad{ background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); border-color: var(--admin-tone-bad-border); }
 
-  /* --- Pagination --- */
-  .admin-pagination {
+  /* --- 分頁 --- */
+  .admin-pagination{
     @apply mt-4 flex items-center justify-center gap-4 text-sm;
-    color: var(--admin-text-muted);
+    color: var(--admin-text-secondary);
+    font-variant-numeric: tabular-nums;
   }
-  .admin-pagination button {
-    @apply rounded-md px-3 py-1.5 transition;
+  .admin-pagination button{
+    @apply inline-flex items-center px-3 text-sm font-semibold;
+    min-height: 36px;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface);
     color: var(--admin-accent-strong);
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--admin-border-strong);
     cursor: pointer;
+    transition: all var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-pagination button:hover:not(:disabled) {
+  .admin-pagination button:hover:not(:disabled){
     background: var(--admin-accent-soft-bg);
-    border-color: #67e8f9;
+    border-color: var(--ag-border-accent);
   }
-  .admin-pagination button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
+  .admin-pagination button:focus-visible{ outline: none; box-shadow: var(--ag-focus); }
+  .admin-pagination button:disabled{ opacity: 0.4; cursor: not-allowed; }
 
-  /* --- Reviews 治理區 --- */
-  .admin-review {
-    @apply rounded-2xl p-5 mb-3;
+  /* ============================================================
+     評論治理
+     ============================================================ */
+  .admin-review{
+    @apply mb-3 p-5;
+    position: relative;
+    border-radius: var(--admin-radius);
     background: var(--admin-surface);
-    border: 1px solid var(--admin-border-solid);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    border: 1px solid var(--admin-border);
+    box-shadow: var(--admin-shadow-card);
+    transition: border-color var(--ag-dur-2) var(--ag-ease);
   }
-  .admin-review.is-pending {
-    border-color: #fcd34d;
-  }
-  .admin-review.is-reported {
-    box-shadow: inset 3px 0 0 #ef4444, 0 1px 3px rgba(15, 23, 42, 0.04);
-  }
-  .admin-review.is-hidden {
-    background: var(--admin-surface-sunken);
-    opacity: 0.88;
-  }
-  .admin-review-head {
-    @apply flex flex-wrap items-start justify-between gap-2 mb-2;
-  }
-  .admin-review-user {
-    @apply font-semibold;
-    color: var(--admin-text);
-  }
-  .admin-review-time {
-    @apply text-xs;
-    color: #94a3b8;
-  }
-  .admin-review-rating {
-    @apply text-lg;
-    color: #f59e0b;
-    letter-spacing: 2px;
-  }
-
-  .admin-star-icon {
+  .admin-review:hover{ border-color: var(--admin-border-strong); }
+  .admin-review.is-pending{ border-color: var(--admin-tone-warn-border); }
+  .admin-review.is-reported{ box-shadow: inset 3px 0 0 var(--admin-tone-bad), var(--admin-shadow-card); }
+  .admin-review.is-hidden{ background: var(--admin-surface-sunken); opacity: 0.88; }
+  .admin-review-head{ @apply mb-2 flex flex-wrap items-start justify-between gap-2; }
+  .admin-review-user{ @apply font-semibold; color: var(--admin-text); }
+  .admin-review-time{ @apply text-xs; color: var(--admin-text-muted); }
+  .admin-review-rating{ @apply text-lg; color: var(--admin-highlight); letter-spacing: 2px; }
+  .admin-star-icon{
     display: inline-block;
     width: 15px;
     height: 15px;
     vertical-align: -2px;
-    color: #f59e0b;
+    color: var(--admin-highlight);
   }
-
-  .admin-review-rating .admin-star-icon {
-    width: 18px;
-    height: 18px;
-    vertical-align: -3px;
-  }
-
+  .admin-review-rating .admin-star-icon{ width: 18px; height: 18px; vertical-align: -3px; }
   .admin-bool-glyph,
-  .admin-inline-glyph {
+  .admin-inline-glyph{
     display: inline-block;
     width: 14px;
     height: 14px;
     vertical-align: -2px;
-    color: #059669;
+    color: var(--admin-tone-good-text);
   }
-  .admin-review-status-row {
-    @apply mb-3 flex flex-wrap items-center gap-2;
-  }
-  .admin-review-title {
-    @apply mb-1 text-base font-bold;
-    color: var(--admin-text);
-  }
-  .admin-review-body {
-    @apply mb-2 text-sm whitespace-pre-line;
+  .admin-review-status-row{ @apply mb-3 flex flex-wrap items-center gap-2; }
+  .admin-review-title{ @apply mb-1 text-base font-bold; color: var(--admin-text); }
+  .admin-review-body{
+    @apply mb-2 whitespace-pre-line text-sm;
     color: var(--admin-text-secondary);
     line-height: 1.7;
   }
-  .admin-review-public-name {
-    @apply mb-4 text-xs;
-    color: var(--admin-text-muted);
-  }
-  .admin-review-reply-section {
-    @apply flex flex-col gap-2 rounded-xl p-3;
+  .admin-review-public-name{ @apply mb-4 text-xs; color: var(--admin-text-muted); }
+  .admin-review-reply-section{
+    @apply flex flex-col gap-2 p-3;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface-sunken);
-    border: 1px solid var(--admin-border-solid);
+    border: 1px solid var(--admin-border);
   }
-  .admin-review-reply-field {
+  .admin-review-reply-field{
     @apply flex flex-col gap-1 text-xs font-semibold;
     color: var(--admin-text-secondary);
   }
-  .admin-reply-input {
-    min-height: 76px;
-    resize: vertical;
-  }
-  .admin-review-actions {
-    @apply flex flex-wrap justify-end gap-2;
-  }
-  .admin-review-existing-reply {
-    @apply mt-2 text-xs;
-    color: var(--admin-tone-good-text);
-  }
-  /* --- Scan detail category scores --- */
-  .admin-cat-scores {
+  .admin-reply-input{ min-height: 76px; resize: vertical; }
+  .admin-review-actions{ @apply flex flex-wrap justify-end gap-2; }
+  .admin-review-existing-reply{ @apply mt-2 text-xs; color: var(--admin-tone-good-text); }
+
+  /* ============================================================
+     掃描詳情：維度分數（左側色條＝維度色）
+     ============================================================ */
+  .admin-cat-scores{
     @apply grid gap-3;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
-  .admin-cat-score-item {
-    @apply rounded-xl p-3 text-center;
-    background: var(--admin-accent-soft-bg);
-    border: 1px solid #67e8f9;
+  .admin-cat-score-item{
+    @apply p-3;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--ag-r-md);
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
   }
-  .admin-cat-score-label {
-    @apply text-xs uppercase tracking-wider;
-    color: var(--admin-accent-strong);
+  .admin-cat-score-item::before{
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--admin-cat, var(--admin-accent));
   }
-  .admin-cat-score-value {
+  .admin-cat-score-item.cat-seo{ --admin-cat: var(--ag-cat-seo); }
+  .admin-cat-score-item.cat-aeo{ --admin-cat: var(--ag-cat-aeo); }
+  .admin-cat-score-item.cat-geo{ --admin-cat: var(--ag-cat-geo); }
+  .admin-cat-score-item.cat-security{ --admin-cat: var(--ag-cat-security); }
+  .admin-cat-score-item.cat-ux{ --admin-cat: var(--ag-cat-ux); }
+  .admin-cat-score-label{
+    font-family: var(--ag-font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--admin-text-muted);
+  }
+  .admin-cat-score-value{
     @apply mt-1 text-2xl font-bold;
-    color: #155e75;
+    font-family: var(--ag-font-display);
+    font-variant-numeric: tabular-nums;
+    color: var(--admin-text);
   }
-  .admin-error-pre {
-    @apply rounded-lg p-3 text-xs overflow-auto;
-    background: #fef2f2;
+  .admin-error-pre{
+    @apply overflow-auto p-3 text-xs;
+    border-radius: var(--ag-r-sm);
+    background: var(--admin-tone-bad-bg);
     color: var(--admin-tone-bad-text);
-    border: 1px solid #fecaca;
-    font-family: ui-monospace, monospace;
+    border: 1px solid var(--admin-tone-bad-border);
+    font-family: var(--ag-font-mono);
     max-height: 200px;
+    white-space: pre-wrap;
   }
-  .admin-link-row {
-    @apply flex justify-end;
-  }
+  .admin-link-row{ @apply flex justify-end; }
+
+  /* 圖示角標反光點：面板／統計卡／空狀態的圖示一律用守望琥珀 */
+  .admin-panel-icon-chip .accent,
+  .admin-stat-icon-chip .accent,
+  .admin-empty-state-icon .accent{ color: var(--admin-highlight); }
+
+  .admin-mobile-logo .ag-logo-word{ font-size: 0.95rem; }
+  .admin-mobile-logo .ag-logo-sub{ color: var(--admin-sidebar-accent); margin-top: 0.2rem; }
+}
+
+/* 行內空狀態用的品牌眼形遮罩（杏眼 + 瞳孔），不隨主題 */
+:root{
+  --admin-eye-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M3.5 24C9.2 14.6 16.2 10 24 10s14.8 4.6 20.5 14C38.8 33.4 31.8 38 24 38S9.2 33.4 3.5 24Z' fill='none' stroke='black' stroke-width='2.6' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='24' r='8.6' fill='none' stroke='black' stroke-width='2.4' stroke-dasharray='1.6 2.9'/%3E%3Ccircle cx='24' cy='24' r='4.4'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  
+  .admin-status::before,
+  .admin-loading::before{ animation: none; }
+  .admin-page{ animation: none; }
+}
+
+/* 窄螢幕：表格不擠壓換行，改在自身容器內水平捲動（右緣淡出提示還有內容） */
+@media (max-width: 900px) {
+  .admin-table-scroll .admin-table th,
+  .admin-table-scroll .admin-table td { white-space: nowrap; }
+  .admin-table-scroll .admin-table td.truncate { max-width: 220px; }
 }

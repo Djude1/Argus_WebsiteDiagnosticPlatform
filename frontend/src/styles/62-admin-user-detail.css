@@ -8,7 +8,7 @@
   align-items: center;
   margin-top: 0.9rem;
 }
-.admin-sub-form .admin-input:not(.admin-sub-periods .admin-input) { max-width: 340px; }
+.admin-sub-form > select.admin-input { max-width: 340px; flex: 1 1 240px; }
 .admin-sub-periods {
   display: inline-flex;
   align-items: center;
@@ -19,7 +19,7 @@
 }
 .admin-sub-periods .admin-input { width: 76px; }
 
-/* 登入時間軸：左側漸層縱線＋圓點，清單可捲動 */
+/* 登入時間軸：左側虹膜青縱線＋圓點，清單可捲動 */
 .admin-login-timeline {
   list-style: none;
   margin: 0.75rem 0 0;
@@ -38,7 +38,7 @@
   bottom: 0.4rem;
   width: 2px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #22d3ee, #cbd5e1);
+  background: linear-gradient(180deg, var(--admin-accent), var(--admin-border));
 }
 .admin-login-item { position: relative; }
 .admin-login-item::before {
@@ -49,8 +49,8 @@
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: #06b6d4;
-  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+  background: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft-bg-2);
 }
 .admin-login-line1 {
   display: flex;
@@ -64,19 +64,19 @@
   font-size: 0.72rem;
   font-weight: 700;
 }
-.admin-login-method.method-password { background: #e0f2fe; color: #0369a1; }
+.admin-login-method.method-password { background: var(--admin-tone-info-bg); color: var(--admin-tone-info-text); }
 .admin-login-method.method-google { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); }
-.admin-login-method.method-register { background: #e0e7ff; color: #4338ca; }
+.admin-login-method.method-register { background: var(--admin-highlight-soft); color: var(--admin-tone-warn-text); }
 .admin-login-ip {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--ag-font-mono);
   font-size: 0.78rem;
   color: var(--admin-text-secondary);
 }
-.admin-login-time { font-size: 0.75rem; color: #94a3b8; }
+.admin-login-time { font-size: 0.75rem; color: var(--admin-text-muted); }
 .admin-login-ua {
   margin: 0.2rem 0 0;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--admin-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -90,11 +90,11 @@
   font-size: 0.72rem;
   font-weight: 700;
 }
-.admin-domain-status.is-pending { background: #fef3c7; color: var(--admin-tone-warn-text); }
-.admin-domain-status.is-verified { background: #d1fae5; color: var(--admin-tone-good-text); }
-.admin-domain-status.is-rejected { background: #fee2e2; color: var(--admin-tone-bad-text); }
+.admin-domain-status.is-pending { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+.admin-domain-status.is-verified { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+.admin-domain-status.is-rejected { background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
 .admin-domain-status.is-expired { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
-.admin-domain-status.is-effective { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35); }
+.admin-domain-status.is-effective { box-shadow: 0 0 0 1px var(--admin-tone-good-border); }
 .admin-domain-effective {
   margin-left: 0.4rem;
   font-size: 0.7rem;

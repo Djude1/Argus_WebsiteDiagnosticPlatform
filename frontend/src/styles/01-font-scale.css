@@ -1,70 +1,35 @@
 /* ========================================
-   字體放大（W2 — 評審老花要看清，公開頁與評論區整體放大）
-   不動 root font-size 避免破壞 admin / dashboard layout，
-   只針對 .public-shell 與評論卡片局部加大。
+   公開頁字級系統（.public-shell 範圍）
+   ----------------------------------------
+   品牌字級節奏 12 / 14 / 16 / 20 / 24 / 32 / 48 / 64（見 docs/brand-guidelines.md §4）。
+   只在公開頁外框內生效，不動 root font-size，不影響後台與登入後頁面。
+   舊版用一長串 !important 把個別元件放大；改成以下幾個語意尺寸，
+   元件一律引用變數，不再逐一覆寫。
    ======================================== */
 
 .public-shell {
-  font-size: 17px;
+  --pub-fs-caption: 0.75rem;   /* 12：眉標、徽章、技術識別碼 */
+  --pub-fs-small: 0.875rem;    /* 14：輔助說明、表格 */
+  --pub-fs-body: 1rem;         /* 16：內文 */
+  --pub-fs-lead: 1.125rem;     /* 18：hero 副標（介於 16 與 20 的導言級） */
+  --pub-fs-h4: 1.25rem;        /* 20：卡片標題 */
+  --pub-fs-h3: 1.5rem;         /* 24：區塊內標題 */
+  --pub-fs-h2: clamp(1.625rem, 1.1rem + 1.6vw, 2rem);      /* 26 → 32：區段標題 */
+  --pub-fs-h1: clamp(2.25rem, 1.2rem + 3.6vw, 3.5rem);     /* 36 → 56：子頁 hero */
+  --pub-fs-display: clamp(2.5rem, 1.1rem + 4.6vw, 4rem);   /* 40 → 64：首頁 hero */
+  --pub-lh-body: 1.7;
+  --pub-lh-heading: 1.2;
+
+  font-size: var(--pub-fs-body);
+  line-height: var(--pub-lh-body);
 }
 
-/* 公開頁 hero title 從 text-4xl/5xl 放大到約 6xl */
-.public-shell .public-hero-title {
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  line-height: 1.15;
-}
-.public-shell .public-hero-sub {
-  font-size: 1.125rem;
-  line-height: 1.75;
-}
-.public-shell .public-hero-eyebrow {
-  font-size: 0.875rem;
-  letter-spacing: 0.18em;
+/* :where() 把權重壓到 0,0,1：只當預設值，/reviews 等子頁自己的標題樣式一定蓋得過 */
+:where(.public-shell) :is(h1, h2, h3) {
+  line-height: var(--pub-lh-heading);
+  text-wrap: balance;
 }
 
-/* section 標題 */
-.public-shell .public-section-head h2 {
-  font-size: 2.25rem;
+:where(.public-shell) p {
+  text-wrap: pretty;
 }
-.public-shell .public-section-head p {
-  font-size: 1rem;
-}
-
-/* feature / team / plan card 標題與描述加大 */
-.public-feature-icon { font-size: 2.5rem !important; }
-.public-feature-title { font-size: 1.375rem !important; }
-.public-feature-desc { font-size: 1rem !important; line-height: 1.75; }
-.public-team-avatar { font-size: 2.5rem !important; }
-.public-team-name { font-size: 1.375rem !important; }
-.public-team-role { font-size: 1rem !important; }
-.public-team-bio { font-size: 0.95rem !important; line-height: 1.75; }
-.public-plan-name { font-size: 1.375rem !important; }
-.public-plan-coin { font-size: 2.25rem !important; }
-.public-plan-coin span { font-size: 1rem !important; }
-.public-plan-price { font-size: 1.75rem !important; }
-.public-plan-desc { font-size: 1rem !important; }
-.public-cta-primary,
-.public-cta-ghost,
-.public-plan-cta { font-size: 1.05rem !important; padding: 0.8rem 1.7rem !important; }
-
-/* tech stack tile 與 install 卡片 */
-.tech-tile-label { font-size: 0.8125rem !important; }
-/* 並排但欄位很窄的區段，字級要跟著降，否則長標籤會撐爆欄寬 */
-@media (max-width: 639px), (min-width: 768px) and (max-width: 1023px) {
-  .tech-tile-label { font-size: 0.6875rem !important; }
-}
-.public-install-icon { font-size: 2.75rem !important; }
-.public-install-title { font-size: 1.25rem !important; }
-.public-install-card ol { font-size: 1rem !important; }
-
-/* PublicNav 與 footer */
-.public-brand-title { font-size: 1.25rem !important; }
-.public-nav-link {
-  font-size: 1.05rem !important;
-  font-weight: 700 !important;
-  padding: 0.58rem 0.95rem;
-}
-
-/* FAQ */
-.public-faq-item summary { font-size: 1.125rem; }
-.public-faq-item p { font-size: 1rem; }

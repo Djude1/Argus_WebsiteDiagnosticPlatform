@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../../api";
+import { CodeIcon } from "../../shared/LineIcons.jsx";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -164,10 +165,14 @@ function FixOutputSection({ scan }) {
     artifacts && (artifacts[activeTab] || artifacts[availableTabs[0]?.key]);
 
   return (
-    <section className="fixoutput-box">
+    <section className="panel fixoutput-box" aria-label="修正產出">
       <div className="fixoutput-header">
         <div>
-          <p className="fixoutput-title">🛠️ 修正產出</p>
+          <p className="ag-eyebrow">修正產出</p>
+          <h2 className="fixoutput-title">
+            <CodeIcon className="fixoutput-title-icon" />
+            可直接貼上的修正內容
+          </h2>
           <p className="fixoutput-desc">
             以本次掃描爬到的內容為事實基礎，產生可直接貼上的修正內容。
             爬不到的欄位以【請填寫：…】標示，請人工確認後再替換。
@@ -209,6 +214,8 @@ function FixOutputSection({ scan }) {
                 key={tab.key}
                 type="button"
                 role="tab"
+                id={`fixoutput-tab-${tab.key}`}
+                aria-controls="fixoutput-panel"
                 aria-selected={activeTab === tab.key}
                 className={`fixoutput-tab ${activeTab === tab.key ? "active" : ""}`}
                 onClick={() => setActiveTab(tab.key)}
@@ -219,16 +226,17 @@ function FixOutputSection({ scan }) {
           </div>
 
           {activeArtifact && (
-            <div className="fixoutput-panel">
+            <div className="fixoutput-panel" role="tabpanel" id="fixoutput-panel" aria-labelledby={`fixoutput-tab-${activeTab}`}>
               <p className="fixoutput-hint">
                 {ARTIFACT_TABS.find((t) => t.key === activeTab)?.hint}
               </p>
 
               <div className="fixoutput-actions">
                 <button
-                  className="secondary-button"
+                  className={`secondary-button copy-feedback ${copiedKey === activeTab ? "is-copied" : ""}`}
                   type="button"
                   onClick={() => handleCopy(activeTab)}
+                  aria-live="polite"
                 >
                   {copiedKey === activeTab ? "已複製 ✓" : "一鍵複製"}
                 </button>
