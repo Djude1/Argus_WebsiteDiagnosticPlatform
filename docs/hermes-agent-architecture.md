@@ -64,11 +64,22 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
   49/root: 雜訊）；帶登入態（與 replay 同憑證源）。誕生原因：#33/#34 ssti/xxe 0
   觸碰、nosql 1-2 次觸碰——SQL probe 之外的注入面完全沒有探測原語。
 
+- `send_message(text, selector?)`——UI 互動原子化：自動偵測可見輸入框→
+  fill→Enter（無新請求則 fallback 送出鈕）→回傳 network log 增量＋回應
+  文字尾段。誕生原因：#46/47 type_text 填了沒按送出→真 API 進不了流量
+  →猜端點 14 次全錯。chat/對話/搜尋送出場景第一步。
+- `collect_target_intel(target, urls≤8)`——帳號接管情報彙整（WSTG-ATHN-09
+  檢索化）：帶憑證 GET×N、全文搜目標（email＋前綴）、命中抽前後 250 字
+  上下文（≤15 片段）。誕生原因：#48 agent 讀了備份檔但答案線索被 context
+  淹沒。**注意：M3 三路引導×三輪 0 採用（見已知限制）——工具正確但模型
+  不叫；換更強模型時採用率為第一測點**
+
 **知識（全域，passive 也可用）**：`search_knowledge(query)`——離線方法論知識庫
-（`backend/apps/agent/knowledge/*.md`，11 檔 45 段：WSTG/PayloadsAllTheThings/
-jwt_tool 通用方法論摘錄——密碼重置答案推理、CSP 繞過、JWT kid/jku、$regex 盲注、
-優惠碼規律、上傳 polyglot、SSRF 無 OOB 判定、備份殘留、站內 OSINT、CAPTCHA 缺陷、
-注入家族判定）；關鍵詞評分（tags×3＋標題×2＋內文）回 top 3 段落。設計依據：
+（`backend/apps/agent/knowledge/*.md`，15 檔 61 段：WSTG/PayloadsAllTheThings/
+jwt_tool 通用方法論摘錄＋reverse-skill 蒸餾四檔——密碼重置答案推理、CSP 繞過、
+JWT kid/jku、$regex 盲注、優惠碼規律、上傳 polyglot、SSRF 無 OOB、備份殘留、
+站內 OSINT、CAPTCHA 缺陷、注入家族判定、GraphQL、WebSocket、限速繞過、
+LLM/chatbot 注入）；關鍵詞評分（tags×3＋標題×2＋內文）回 top 3 段落。設計依據：
 Excalibur 檢索增強知識；網路搜尋裁定不做（黑箱抄答案＋目標外洩）。
 
 **回報/調度**：`report_security_issue`（critical 封頂 high；回報前自問
@@ -101,7 +112,7 @@ M3 特性：思考型、探索深（步數上限會切斷）、行為非決定�
 |---|---|---|---|
 | `ARGUS_AGENT_ENABLED` | false | true | 總開關 |
 | `ARGUS_AGENT_MAX_STEPS` | 20 | 100 | orchestrator/recon 用；specialist 另受 60 盒 |
-| `ARGUS_AGENT_MAX_TOKENS` | 60000 | 500000 | 每角色各自上限 |
+| `ARGUS_AGENT_MAX_TOKENS` | 60000 | 500000 | 每角色各自上限；**chat 場景 500k 不足**（回應全文進 context，#53-55 實測 900k 三 specialist 仍爆至 908-938k）——chat 導向輪建議 exec 進程同步 apply 覆寫（Celery 常駐進程不吃 exec env） |
 | `ARGUS_NUCLEI_DEEP_TIMEOUT` | 300 | 900 | pipeline 全模板掃 |
 | `ARGUS_KALI_TIMEOUT` | 120 | 240 | sqlmap level3 需 ≥240（120 會邊緣超時） |
 | `ARGUS_ALLOW_PRIVATE_TARGETS` | false | true | 私網靶機旁路（DEBUG 雙條件＋scans.E002） |
@@ -119,10 +130,45 @@ M3 特性：思考型、探索深（步數上限會切斷）、行為非決定�
 8. **SPA 驗證打前端路由不打 API URL**——API 回 JSON 不渲染；`/#/` hash 路由
    才是執行現場（XSS 35 輪全滅的另一半根因）
 7. Express serve-index 目錄列表標題是 `listing directory`（非 Apache `Index of /`）——兩種都要認
+9. **新工具採用有梯度**——navigate（首輪）、forge_jwt（兩輪）、prober（三輪＋
+   when+prompt 雙補）；但 collect_target_intel 三路引導（定向明列/5b 深位/
+   第一步高位）×三輪全 0——**觸發條件在情報中不顯眼的工具，M3 不會採用**，
+   工程不可解（模型行為層）
+10. **XSS 偵測掛載體差異**——事件屬性類（img onerror）與 URL 載入類
+    （iframe javascript:）觸發路徑不同，站方偵測常只覆蓋一類——雙載體
+    都測（手動 Playwright 對照實證後寫通用紀律）
+11. **Celery 常駐進程不吃 exec env**——settings 覆寫必須 `run_scan_job.apply`
+    同步執行才生效；靶機 restart 後必輪詢就緒（version 200）才建掃描
+    （#45 爬蟲零頁教訓）
 
 ## 8. 戰果基準（Juice Shop，黑箱）
 
-四輪聯集（#30/31/33/34）：43/40/51/40 findings；核心類別（SQLi×2、IDOR
-讀寫、負數、ftp、metrics、Challenges、email 洩漏）**聯集 100%**；峰值 #33
-（51/24H，含 mass-assignment 提權、CAPTCHA 自答）。同口徑 vs 對手 9 項：
-領先 11~15。樣本與軌跡：`log_assets_juice/`（未追蹤）。
+**競賽期**（#30/31/33/34 四輪聯集）：43/40/51/40 findings；核心類別聯集
+100%；峰值 #33（51/24H）。同口徑 vs 對手 9 項：領先 11~15。
+
+**內部提升期**（#35-55，21 輪＋8 定向）：解鎖 22→**26/112**（記分板
+`docker logs Solved` 事件為 ground truth——`/api/challenges` solvedAt 勿信）。
+四個類別首穿：`resetPasswordJimChallenge`（帳號接管全鏈）、
+`localXssChallenge`（DOM XSS 雙載體）、`freeDeluxeChallenge`（商業邏輯深水）、
+`uploadTypeChallenge`（上傳面）。900k 全掃單輪峰值 12 種重解＋38 findings
+（穩定性大幅提升）。26 種＝M3 當前架構穩定重現集。
+
+## 9. 已知限制（2026-09-28 定案：M3 行為層，工程不可解）
+
+22 全掃＋8 定向（M3 500k/900k＋GLM 各試）全組合窮盡，26/112 為「便宜模型
+最低成本」策略的真實高原：
+
+1. **工具採用極限**：`collect_target_intel` 三路引導×三輪 0 呼叫——auth
+   角色注意力在註冊/IDOR 本業，reset 條件子項（5.x）被跳過；與 prober
+   （when 補描述即上）差異＝觸發條件顯眼度。換更強模型時此工具採用率
+   為第一測點
+2. **Chatbot 簇（3 挑戰）**：chat 鏈前三環已穿（真端點 /rest/chat、對話
+   18 發 200、900k 盒下 v3 走通全鏈＋chat 領域首件 report），第四環＝
+   Juice Shop 特定判定條件，超出 OWASP LLM 通用方法論——深入即目標
+   特定＝黑箱紅線禁區
+3. **reset 語義推理**：Bender/Bjoern 答案需「備份檔內容→題型」跳躍——
+   M3 推理深度邊際（Jim 已穿＝能力在，邊際不在方法論）
+4. **指令遵循**：步數預算指示被無視（chat 定向「12 步」兩輪實證）；
+   orchestrator 派工波動（覆蓋紀律提示詞入檔後仍偶發跳角色）
+5. **自進化記憶**：裁定分階段——現階段黑箱測底不做；最後階段加案例庫
+   （掃後離線寫入知識庫、掃前檢索注入；記方法論結晶禁 writeup）

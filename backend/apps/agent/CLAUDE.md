@@ -33,6 +33,13 @@ orchestrator agent（subagent 派工）→ specialist subagent（8 角色：auth
 - specialist 不掛 `dispatch_specialist`（防遞迴）；orchestrator 只掛 dispatch/finish/report。
 - Kali 攻擊鏈正式環境 disabled；啟用 runbook 見 `docs/runbooks/kali-sqlmap-rollout.md`。
 
+## 已知限制（2026-09-28 定案，詳見架構文件第 9 節）
+
+- **M3 工具採用極限**：`collect_target_intel` 三路引導×三輪 0 呼叫（auth 角色注意力在本業，條件子項被跳過）——工具正確但模型不叫；換更強模型時採用率＝第一測點
+- **Chatbot 挑戰判定**：超出 OWASP LLM 通用方法論＝黑箱禁區（chat 鏈本身已通：/rest/chat 全鏈＋900k 盒下首件 report）
+- **chat 場景 token**：500k 不足（回應全文進 context）——定向輪用 exec 進程同步 apply 覆寫（Celery 常駐進程不吃 exec env）
+- 26/112 為 M3 架構高原（22 全掃＋8 定向窮盡）；四類別首穿（帳號接管/DOM XSS/商業邏輯/上傳）
+
 ## 禁止事項
 
 | 禁止 | 原因 | 正確做法 |
