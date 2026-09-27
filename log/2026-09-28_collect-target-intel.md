@@ -23,3 +23,19 @@
 ## 驗證方式
 - apps.agent 70 tests OK（新 3：跨源拒/上下文抽取/redact）；ruff 通過
 - 定向驗證輪（reset Bender/Bjoern）執行中，結果另 log
+
+## 首測（reset 定向輪，sess235）
+- 工具**未被呼叫**（16 步 session：navigate 探端點×10→註冊登入→reset 500→
+  淺嘗即 finish）——與 send_message 首輪同型（M3 指令遵循弱，新工具採用
+  需 1-3 輪醞釀，歷史規律：prober 三輪、forge_jwt 兩輪）
+- reset API 參數（securityContext 格式）agent 未摸對＝500 早退
+
+## reverse-skill 查證（使用者指示補查）
+- **repo 實質性**：181 commits、15 contributors、v1.0.1+ releases（8/8）、
+  CI/tests 結構、field-journal 帶真實案例細節、昨仍活躍——非殼專案
+- **star 高速**（4.5 月 38k）＝資安 skill 熱潮＋推廣成分無法排除；第三方
+  評價待 WebSearch 限額重置（09-28 10:22）後補查
+- **我方風險**：零（僅取方法論文字自寫蒸餾，無代碼/供應鏈依賴）
+- **效用實證現況**：檢索品質已驗（6 查詢全中）；實戰直接貢獻（新種）
+  未證——graphql/ws 本站無對應面、llm-chatbot 鏈未穿。誠實標定：
+  參考價值中性偏正，非決定性
