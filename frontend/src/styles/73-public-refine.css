@@ -1,0 +1,516 @@
+/* ========================================
+   公開頁：在「改版前樣式」之上做的克制整理
+   ----------------------------------------
+   基準是 462848b 的公開頁樣式（21-public / 35-public-legacy / 70-home / 71-scan-pipeline）。
+   這一層只做三件事，全部限縮在 .public-shell 內，不影響會員區與後台：
+     1. 字體回到改版前的系統字（不套 Sora），並統一區塊節奏與分隔，讓整頁連續。
+     2. 降低螢光、光暈、漸層：強調色只留給主要操作、關鍵數據與狀態。
+     3. 新增內容（檢測面向、交付物、證據、頁尾分組）的樣式，沿用原本的深藍＋科技青。
+   ======================================== */
+
+.public-shell {
+  --pub-line: rgba(148, 163, 184, 0.12);
+  --pub-line-strong: rgba(148, 163, 184, 0.2);
+  --pub-text: #e2e8f0;
+  --pub-heading: #f1f5f9;
+  --pub-muted: #94a3b8;
+  --pub-accent: #67e8f9;
+  --pub-accent-strong: #22d3ee;
+  --pub-surface: rgba(15, 23, 42, 0.45);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+}
+:root[data-theme="light"] .public-shell {
+  --pub-line: rgba(15, 23, 42, 0.1);
+  --pub-line-strong: rgba(15, 23, 42, 0.16);
+  --pub-text: #1e293b;
+  --pub-heading: #0b1930;
+  --pub-muted: #475569;
+  --pub-accent: #0369a1;
+  --pub-accent-strong: #0284c7;
+  --pub-surface: rgba(255, 255, 255, 0.7);
+}
+/* 03-tokens 對 h1–h4 設了 Sora；公開頁回到改版前的系統字 */
+.public-shell :where(h1, h2, h3, h4) {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+/* ── 1. 整頁節奏：區塊之間用一致的留白與細分隔線銜接，而不是各自一個框 ── */
+.public-shell .public-page {
+  row-gap: 0;
+}
+.public-shell .public-page > * + * {
+  margin-top: 0;
+}
+.public-shell .public-page > .public-section,
+.public-shell .public-page > .project-stack {
+  margin-top: 0;
+  padding-block: clamp(3rem, 6vw, 4.5rem);
+}
+.public-shell .public-page > .public-section + .public-section,
+.public-shell .public-page > .public-section + .project-stack,
+.public-shell .public-page > .project-stack + .public-section {
+  border-top: 1px solid var(--pub-line);
+}
+/* 產品預覽緊接 hero，不需要分隔線與大留白 */
+.public-shell .public-page > .public-section-demo {
+  padding-top: clamp(2rem, 4vw, 3rem);
+}
+.public-shell .public-page > .public-final-cta-wrap {
+  border-top: 0;
+  padding-top: 0;
+  padding-bottom: 1rem;
+}
+.public-shell .public-footer { margin-top: 2.5rem; }
+.public-shell .public-section-head {
+  margin-bottom: 1.75rem;
+}
+.public-shell .public-section-head h2 {
+  color: var(--pub-heading);
+}
+.public-shell .public-section-head p {
+  color: var(--pub-muted) !important;
+}
+
+/* ── 2. 降低發光與漸層 ── */
+
+/* 主要按鈕：保留青色系，拿掉紫色漸層與大片光暈 */
+.public-shell .public-cta-primary {
+  background: linear-gradient(135deg, #0ea5c6 0%, #0284c7 100%);
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.22);
+}
+.public-shell .public-cta-primary:hover {
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+}
+
+/* 面板：改成開放式排版——頂端一條細線＋內容，不再是發光卡片 */
+.public-shell .public-panel-grid {
+  gap: 0 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.public-shell .public-panel {
+  padding: 1.25rem 0 1.5rem;
+  border: 0;
+  border-top: 1px solid var(--pub-line-strong);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.public-shell .public-panel:hover {
+  transform: none;
+  border-top-color: rgba(var(--pl), 0.55);
+  box-shadow: none;
+}
+.public-shell .public-panel-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  filter: none;
+  background: rgba(var(--pl), 0.08);
+  border-color: rgba(var(--pl), 0.22);
+}
+.public-shell .public-panel-icon::after { display: none; }
+.public-shell .public-panel-icon svg { width: 20px; height: 20px; }
+.public-shell .public-panel-title { color: var(--pub-heading); }
+.public-shell .public-panel-desc { color: var(--pub-muted); font-size: 0.86rem; }
+:root[data-theme="light"] .public-shell .public-panel {
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--pub-line-strong);
+  box-shadow: none;
+}
+/* 核心功能數量來自 CMS：依 data-cols 固定欄數，避免最後一列只剩一張 */
+@media (min-width: 1024px) {
+  .public-shell .home-feature-grid[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .public-shell .home-feature-grid[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* 產品預覽視窗：保留外框（它本身是產品畫面），收掉外發光 */
+.public-shell .demo-win {
+  box-shadow: inset 0 1px 0 rgba(103, 232, 249, 0.12), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+}
+
+/* 收尾 CTA：拿掉青→紫→粉漸層與大陰影，改成安定的淡底 */
+.public-shell .public-final-cta {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(15, 23, 42, 0.4));
+  border: 1px solid rgba(103, 232, 249, 0.22);
+  box-shadow: none;
+}
+:root[data-theme="light"] .public-shell .public-final-cta {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(255, 255, 255, 0.8));
+  border-color: rgba(3, 105, 161, 0.2);
+  box-shadow: none;
+}
+
+/* 掃描流程圖：標題不發光；節點光暈減弱 */
+.public-shell .pl-title {
+  text-shadow: none;
+}
+.public-shell .pl-note {
+  box-shadow: none;
+}
+.public-shell .pl-stage:hover,
+.public-shell .pl-out:hover {
+  box-shadow: none;
+}
+/* 1540px 以下原本改成橫向捲動，看起來像被裁掉：
+   改成兩列——上面六個階段自動換行，下面四項交付物一排，不需要捲動。 */
+@media (min-width: 901px) and (max-width: 1540px) {
+  .public-shell .pl-flow {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 1.25rem;
+    padding-bottom: 0;
+  }
+  .public-shell .pl-flow > * { flex: 0 1 auto; }
+  .public-shell .pl-stages {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 1rem;
+    justify-content: center;
+  }
+  .public-shell .pl-fan { display: none; }
+  .public-shell .pl-outputs {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .public-shell .pl-out { width: auto; flex: 1 1 220px; max-width: 300px; }
+}
+/* 1180–1540px：六個階段仍放得下一排，讓節點寬度彈性縮放而不是換行 */
+@media (min-width: 1180px) and (max-width: 1540px) {
+  .public-shell .pl-stages { flex-wrap: nowrap; }
+  .public-shell .pl-stage-slot { flex: 1 1 0; min-width: 0; }
+  .public-shell .pl-stage-slot:has(.pl-stage-group) { flex: 1.6 1 0; }
+  .public-shell .pl-stage { width: auto; flex: 1 1 auto; min-width: 0; }
+  .public-shell .pl-arrow { width: 22px; }
+}
+
+/* 全棧現代化選型：維持改版前的左文右商標牆，只把面板背景壓淡 */
+.public-shell .project-stack {
+  background: var(--pub-surface);
+  border-color: var(--pub-line);
+}
+
+/* ── 3. 新增內容的樣式 ── */
+
+/* 檢測涵蓋的面向：一張以分隔線組成的對照表，不用卡片 */
+.home-coverage-list {
+  margin: 0;
+  border-top: 1px solid var(--pub-line-strong);
+}
+.home-coverage-row {
+  --cat: #67e8f9;
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--pub-line);
+}
+.home-coverage-row[data-cat="seo"] { --cat: #818cf8; }
+.home-coverage-row[data-cat="aeo"] { --cat: #a78bfa; }
+.home-coverage-row[data-cat="geo"] { --cat: #22d3ee; }
+.home-coverage-row[data-cat="security"] { --cat: #f87171; }
+.home-coverage-row[data-cat="ux"] { --cat: #34d399; }
+.home-coverage-row dt {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.home-coverage-code {
+  min-width: 3.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cat);
+}
+.home-coverage-name {
+  font-weight: 700;
+  color: var(--pub-heading);
+}
+.home-coverage-row dd {
+  margin: 0;
+  color: var(--pub-muted);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+.home-methods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.home-methods h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--pub-heading);
+}
+.home-methods h3::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin: 0 0.6rem 0.3rem 0;
+  background: var(--pub-accent-strong);
+  vertical-align: middle;
+}
+.home-methods p {
+  margin: 0;
+  color: var(--pub-muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+/* 你會拿到什麼：編號＋標題＋說明，四欄並排 */
+.home-deliver-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.home-deliver-list li {
+  padding-top: 1rem;
+  border-top: 1px solid var(--pub-line-strong);
+}
+.home-deliver-no {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--pub-accent);
+  font-variant-numeric: tabular-nums;
+}
+.home-deliver-list h3 {
+  margin: 0.4rem 0 0.4rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--pub-heading);
+}
+.home-deliver-list p {
+  margin: 0;
+  color: var(--pub-muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+/* 證據：左文右示意，示意區是全頁少數保留外框的地方 */
+.home-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  align-items: start;
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+}
+.home-evidence-copy h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--pub-heading);
+}
+.home-evidence-copy > p {
+  margin: 0 0 1.25rem;
+  color: var(--pub-muted);
+  line-height: 1.75;
+}
+.home-evidence-fields {
+  margin: 0;
+}
+.home-evidence-fields > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--pub-line);
+}
+.home-evidence-fields dt {
+  font-weight: 700;
+  color: var(--pub-text);
+  font-size: 0.9rem;
+}
+.home-evidence-fields dd {
+  margin: 0;
+  color: var(--pub-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+.home-evidence-sample {
+  margin: 0;
+  padding: 1.25rem 1.35rem;
+  border-radius: 14px;
+  background: rgba(8, 14, 28, 0.75);
+  border: 1px solid var(--pub-line-strong);
+}
+:root[data-theme="light"] .home-evidence-sample {
+  background: #ffffff;
+}
+.home-evidence-sample figcaption {
+  margin-bottom: 0.9rem;
+  font-size: 0.75rem;
+  color: var(--pub-muted);
+}
+.home-evidence-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--pub-line);
+}
+.home-evidence-head strong {
+  flex: 1 1 100%;
+  color: var(--pub-heading);
+  font-size: 1rem;
+}
+.home-evidence-sev,
+.home-evidence-cat {
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.home-evidence-sev { color: #fb923c; background: rgba(251, 146, 60, 0.12); }
+.home-evidence-cat { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+.home-evidence-kv { margin: 0; }
+.home-evidence-kv > div {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px dashed var(--pub-line);
+  font-size: 0.85rem;
+}
+.home-evidence-kv > div:last-child { border-bottom: 0; }
+.home-evidence-kv dt { color: var(--pub-muted); }
+.home-evidence-kv dd {
+  margin: 0;
+  color: var(--pub-text);
+  overflow-wrap: anywhere;
+}
+.home-evidence-kv > div:nth-child(1) dd,
+.home-evidence-kv > div:nth-child(2) dd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+/* 頁尾：沿用改版後的分組結構，視覺回到改版前的低調深底 */
+.public-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+.public-footer-about { max-width: 30rem; }
+.public-footer-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  margin-bottom: 0.35rem;
+}
+:root[data-theme="light"] .public-footer-logo {
+  filter: brightness(0.72) saturate(1.1) contrast(1.12);
+}
+.public-footer-tagline {
+  margin: 0.75rem 0 0;
+  line-height: 1.7;
+  color: var(--pub-muted);
+}
+.public-footer-groups {
+  display: flex;
+  justify-content: flex-end;
+  gap: clamp(2rem, 6vw, 5rem);
+}
+.public-footer-group-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--pub-text);
+}
+.public-footer-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+.public-footer-group a {
+  color: var(--pub-muted);
+  text-decoration: none;
+}
+.public-footer-group a:hover { color: var(--pub-accent); }
+.public-footer-copy { grid-column: 1 / -1; }
+
+/* ── 響應式 ── */
+@media (max-width: 1023px) {
+  .home-deliver-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-evidence { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .home-coverage-row { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+  .home-methods { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .home-deliver-list { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .home-evidence-fields > div { grid-template-columns: minmax(0, 1fr); gap: 0.2rem; }
+  .public-footer-inner { grid-template-columns: minmax(0, 1fr); }
+  .public-footer-groups { justify-content: flex-start; }
+}
+
+/* ── 評論頁：日間主題的按讚／檢舉列 ──
+   改版前只有夜間主題（51-reviews-dark）定義了這一列的版面，日間主題下
+   圖示與數字會上下錯位。這裡補上同一套版面，配色改成日間色；其餘評論頁樣式維持改版前原樣。 */
+.review-next-day .review-next-entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+}
+.review-next-day .review-next-entry-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #52657a;
+  background: transparent;
+  cursor: pointer;
+  transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
+}
+.review-next-day .review-next-entry-action svg { width: 20px; height: 20px; }
+.review-next-day .review-next-entry-action strong {
+  min-width: 1ch;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.review-next-day .review-next-entry-action:hover,
+.review-next-day .review-next-entry-action:focus-visible {
+  color: #0b4f6c;
+  border-color: rgba(3, 105, 161, 0.2);
+  background: rgba(14, 165, 233, 0.07);
+  outline: none;
+}
+.review-next-day .review-next-entry-action.is-helpful.is-active {
+  color: #0369a1;
+  border-color: rgba(3, 105, 161, 0.28);
+  background: rgba(14, 165, 233, 0.1);
+}
+.review-next-day .review-next-entry-action.is-report { padding: 0; }
+.review-next-day .review-next-entry-action.is-report:hover,
+.review-next-day .review-next-entry-action.is-report:focus-visible {
+  color: #be123c;
+  border-color: rgba(190, 18, 60, 0.22);
+  background: rgba(244, 63, 94, 0.06);
+}
+.review-next-day .review-next-response-content > .review-next-entry-actions {
+  width: calc(100% + 20px);
+}

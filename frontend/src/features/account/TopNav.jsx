@@ -110,7 +110,7 @@ function TopNav() {
   if (!accessToken) return null;
   // /admin/* 與公開頁走獨立 layout，不顯示前台 TopNav
   if (location.pathname.startsWith("/admin")) return null;
-  if (["/project", "/team", "/purchase", "/download"].some((p) =>
+  if (["/project", "/purchase", "/download"].some((p) =>
     location.pathname.startsWith(p),
   )) return null;
   // 掃描頁的 top bar 不顯示「評論」入口（首頁等其他頁保留）

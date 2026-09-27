@@ -500,8 +500,7 @@ const FEATURE_SCHEMA = {
 const TEAM_SCHEMA = {
   endpoint: "/admin/cms/team/",
   title: "團隊成員",
-  previewPath: "/team",
-  previewLabel: "預覽 /team",
+  // 公開團隊頁已移除，不提供前台預覽連結（資料仍保留在 CMS）。
   titleField: "name",
   fields: [
     { key: "name", label: "姓名", type: "text", required: true },
@@ -556,8 +555,7 @@ const RELEASE_SCHEMA = {
 const MILESTONE_SCHEMA = {
   endpoint: "/admin/cms/milestones/",
   title: "開發里程碑",
-  previewPath: "/project",
-  previewLabel: "預覽 /project（timeline）",
+  // 首頁已不顯示開發里程碑，不提供前台預覽連結。
   titleField: "title",
   fields: [
     { key: "title", label: "標題", type: "text", required: true },

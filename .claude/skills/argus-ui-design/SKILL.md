@@ -58,7 +58,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 ## 2. 動畫與特效：前台重、後台輕
 
-**前台公開頁（`.public-shell`：`/project` `/team` `/purchase` `/reviews` 等行銷頁）— 放手做複雜動效：**
+**前台公開頁（`.public-shell`：`/project` `/free-tools` `/purchase` `/reviews` 等行銷頁）— 放手做複雜動效：**
 
 - 進場用一次精心編排的 **staggered reveal**（`animation-delay` 階梯式淡入上移，沿用既有 `fade-up`），一次高衝擊的 page-load 勝過一堆散亂微互動。
 - hover glow、scroll-triggered 顯現、ambient 漸層光暈緩慢飄移、scanline / glitch 點綴。
@@ -104,7 +104,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 |---|---|---|
 | 掃描 | `/scans`、`/scans/:id`、`/scans/:id/topology` | `/admin/scans`、`/admin/scans/:id` |
 | 評論 | `/reviews` | `/admin/reviews` |
-| 內容 / CMS | `/project`、`/team`（公開呈現） | `/admin/content` |
+| 內容 / CMS | `/project`、`/download`（公開呈現） | `/admin/content` |
 | 方案 / 購買 | `/purchase` | `/admin/plans` |
 | 交易 / 錢包 | 使用者錢包 | `/admin/transactions` |
 | 使用者 | （個人資料） | `/admin/users`、`/admin/users/:id` |

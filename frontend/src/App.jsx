@@ -45,7 +45,6 @@ const ReviewsPage = lazyNamed(loadReviewsPage, "ReviewsPage");
 const SettingsPage = lazyNamed(loadAuthenticatedPages, "SettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
 const ProjectPage = lazyNamed(loadPublicPages, "ProjectPage");
-const TeamPage = lazyNamed(loadPublicPages, "TeamPage");
 const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
 const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
 const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
@@ -77,7 +76,7 @@ function AppShell({ googleOAuthEnabled }) {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
   const isPublic = [
-    "/project", "/free-tools", "/team", "/purchase", "/download", "/reviews", "/verify",
+    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify",
   ].some((p) =>
     location.pathname.startsWith(p),
   );
@@ -111,7 +110,6 @@ function AppShell({ googleOAuthEnabled }) {
           <Route element={<PublicLayout />}>
             <Route path="/project" element={<ProjectPage />} />
             <Route path="/free-tools" element={<FreeToolsPage />} />
-            <Route path="/team" element={<TeamPage />} />
             <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/download" element={<DownloadPage />} />
             <Route path="/verify" element={<VerifyReportPage />} />

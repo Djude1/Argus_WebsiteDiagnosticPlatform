@@ -1,30 +1,45 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
   Check,
+  ChevronDown,
   CircleAlert,
+  Flag,
   MessageSquareText,
   Pencil,
-  RotateCw,
-  ScanSearch,
+  Send,
+  ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Star,
+  ThumbsUp,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { api } from "../../api";
-import { ArgusMark } from "../../components/brand/ArgusMark";
-import { ReviewCard, ReadonlyStars } from "../../components/reviews/ReviewCard";
-import { ReviewComposer } from "../../components/reviews/ReviewComposer";
-import { ReviewReportDialog } from "../../components/reviews/ReviewReportDialog";
-import { useConfirmDialogs } from "../../shared/AppShared";
-import { formatNumber } from "../../shared/formatters";
+import brandLogo from "../../assets/brand-logo.webp";
+import { useConfirmDialogs, useDialogFocus } from "../../shared/AppShared.jsx";
 import { useArgusStore } from "../../store";
 
-const STAR_FILTERS = [5, 4, 3, 2, 1];
+const RATING_LABELS = {
+  1: "很不滿意",
+  2: "不滿意",
+  3: "普通",
+  4: "滿意",
+  5: "很滿意",
+};
+
+const REPORT_REASONS = [
+  { value: "spam", label: "垃圾內容或廣告", hint: "重複張貼、導流或與使用體驗無關" },
+  { value: "privacy", label: "揭露個人資料", hint: "包含電話、Email、真實姓名或其他隱私" },
+  { value: "abuse", label: "騷擾或不當內容", hint: "仇恨、威脅、人身攻擊或令人不適的內容" },
+  { value: "other", label: "其他問題", hint: "不屬於以上類型，請在下方補充說明" },
+];
 
 function apiMessage(error, fallback) {
   const data = error?.response?.data;
@@ -33,103 +48,307 @@ function apiMessage(error, fallback) {
   return first || fallback;
 }
 
-/** 撰寫入口：依登入／資格顯示不同的說明與行動 */
-function ComposeEntry({ loggedIn, eligibility, onOpen }) {
-  let title = "分享你的使用經驗";
-  let body = "你的評分能幫助其他團隊判斷 Argus 是否適合他們的網站。";
-  let action = (
-    <button type="button" className="primary-button" onClick={onOpen}>
-      <Pencil aria-hidden="true" />寫下你的評論
-    </button>
+function BrandEye({ size = "default" }) {
+  return (
+    <span className={`review-next-brand-eye size-${size}`} aria-hidden="true">
+      <img src={brandLogo} alt="" />
+    </span>
   );
-  if (!loggedIn) {
-    title = "用過 Argus 嗎？";
-    body = "登入並完成一次網站掃描後，就能留下你的評分與心得。";
-    action = (
-      <Link className="primary-button" to="/login?next=%2Freviews">
-        <Pencil aria-hidden="true" />寫下你的評論
-      </Link>
-    );
-  } else if (eligibility && !eligibility.eligible) {
-    title = "想分享你的使用經驗？";
-    body = eligibility.reason || "評論只開放給實際用過掃描的帳號，確保每則評價都有真實依據。";
-    action = (
-      <Link className="secondary-button" to="/scans">
-        <ScanSearch aria-hidden="true" />評論前先完成一次掃描
-      </Link>
-    );
+}
+
+function ReadonlyStars({ value, compact = false }) {
+  const rounded = Math.round(Number(value) || 0);
+  return (
+    <span
+      className={`review-next-stars ${compact ? "is-compact" : ""}`}
+      role="img"
+      aria-label={`${value || 0} 顆星`}
+    >
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star key={star} aria-hidden="true" className={star <= rounded ? "is-filled" : ""} />
+      ))}
+    </span>
+  );
+}
+
+function RatingInput({
+  value,
+  onChange,
+  idPrefix,
+  showPartialEmail,
+  onShowPartialEmailChange,
+}) {
+  return (
+    <fieldset className="review-next-rating-input">
+      <legend>整體評分</legend>
+      <div className="review-next-rating-row">
+        <div className="review-next-rating-options">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <span key={star}>
+              <input
+                id={`${idPrefix}-${star}`}
+                name={`${idPrefix}-rating`}
+                type="radio"
+                value={star}
+                checked={value === star}
+                onChange={() => onChange(star)}
+                required
+              />
+              <label
+                className="review-next-rating-star"
+                htmlFor={`${idPrefix}-${star}`}
+                title={`${star} 星：${RATING_LABELS[star]}`}
+              >
+                <Star aria-hidden="true" className={star <= value ? "is-filled" : ""} />
+                <span className="sr-only">{star} 星：{RATING_LABELS[star]}</span>
+              </label>
+            </span>
+          ))}
+          <output aria-live="polite">
+            {value ? `${value} 星 · ${RATING_LABELS[value]}` : "尚未評分"}
+          </output>
+        </div>
+
+        <label className="review-next-author-privacy">
+          <input
+            type="checkbox"
+            checked={showPartialEmail}
+            onChange={(event) => onShowPartialEmailChange(event.target.checked)}
+          />
+          <span className="review-next-checkbox-mark" aria-hidden="true"><Check /></span>
+          <span>顯示部分 Email</span>
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+function ReviewComposer({ review, busy, onCancel, onSave }) {
+  const [rating, setRating] = useState(review?.rating || 0);
+  const [comment, setComment] = useState(review?.comment || "");
+  const [showPartialEmail, setShowPartialEmail] = useState(
+    Boolean(review?.show_partial_email),
+  );
+  const [error, setError] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    setError("");
+    if (!rating) {
+      setError("請先選擇 1 到 5 星");
+      return;
+    }
+    if (comment.trim().length < 20) {
+      setError("請至少用 20 個字元描述你的使用經驗");
+      return;
+    }
+    onSave({
+      rating,
+      comment: comment.trim(),
+      show_partial_email: showPartialEmail,
+    });
   }
 
   return (
-    <section className="rv-cta" aria-label="撰寫評論">
-      <span className="rv-cta-icon" aria-hidden="true"><MessageSquareText /></span>
-      <div className="rv-cta-copy">
-        <strong>{title}</strong>
-        <span>{body}</span>
+    <section className="review-next-composer-shell" aria-labelledby="review-next-composer-title">
+      <div className="review-next-section-heading">
+        <div className="review-next-heading-icon"><MessageSquareText aria-hidden="true" /></div>
+        <div>
+          <h2 id="review-next-composer-title">{review ? "編輯你的評論" : "寫下你的評論"}</h2>
+        </div>
+        <button type="button" className="review-next-icon-button" onClick={onCancel} aria-label="關閉評論表單">
+          <X aria-hidden="true" />
+        </button>
       </div>
-      {action}
+
+      <form className="review-next-composer" onSubmit={submit}>
+        <RatingInput
+          value={rating}
+          onChange={setRating}
+          idPrefix={review ? "next-edit" : "next-new"}
+          showPartialEmail={showPartialEmail}
+          onShowPartialEmailChange={setShowPartialEmail}
+        />
+
+        <label className="review-next-field" htmlFor="review-next-comment">
+          <span>你的使用經驗 <small>至少 20 個字元</small></span>
+          <textarea
+            id="review-next-comment"
+            maxLength={3000}
+            rows={7}
+            placeholder="說說哪些地方最好用，或還能改善"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            required
+          />
+          <small>{comment.length} / 3000</small>
+        </label>
+
+        <div className="review-next-privacy-note">
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <strong>公開前請再看一次</strong>
+            <span>請不要填入 Email、電話、真實全名或其他個人資料</span>
+          </div>
+        </div>
+
+        {error && <p className="review-next-form-error" role="alert"><CircleAlert aria-hidden="true" />{error}</p>}
+        <div className="review-next-form-actions">
+          <button type="button" className="review-next-button is-secondary" onClick={onCancel}>取消</button>
+          <button type="submit" className="review-next-button is-primary" disabled={busy}>
+            <Send aria-hidden="true" />
+            {busy ? "儲存中…" : review ? "儲存更新" : "發表評論"}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
 
-/** 評分總覽：大數字＋星等＋可點擊篩選的分布長條 */
-function ScoreCard({ summary, status, distribution, ratingFilter, onSelect, onRetry }) {
-  const ready = status === "ready";
+function ContentActions({ count, active, loggedIn, label, onHelpful, onReport }) {
   return (
-    <section className="rv-score ag-viewfinder" aria-label="評論總覽">
-      <div className="rv-score-top">
-        <div className="rv-score-value">
-          <span className="ag-eyebrow">整體評分</span>
-          <strong className="ag-num">{ready && summary.average != null ? Number(summary.average).toFixed(2) : "—"}</strong>
-          <ReadonlyStars value={ready ? summary.average || 0 : 0} size="lg" />
-          <span className="rv-score-total">
-            {ready ? <>共 <b className="ag-num">{formatNumber(summary.total, "0")}</b> 則評論</> : status === "error" ? "統計暫時無法取得" : "載入統計中…"}
-          </span>
+    <div className="review-next-entry-actions" aria-label={`${label}互動`}>
+      <button
+        type="button"
+        className={`review-next-entry-action is-helpful ${active ? "is-active" : ""}`}
+        aria-label={`按讚${label}，目前 ${count || 0} 個讚`}
+        aria-pressed={active}
+        title={!loggedIn ? "登入後可按讚" : `按讚${label}`}
+        onClick={onHelpful}
+      >
+        <ThumbsUp aria-hidden="true" />
+        <strong>{count || 0}</strong>
+      </button>
+      <button
+        type="button"
+        className="review-next-entry-action is-report"
+        aria-label={`檢舉${label}`}
+        title={`檢舉${label}`}
+        onClick={onReport}
+      >
+        <Flag aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function ExpandableReviewText({ text, label }) {
+  const contentId = useId();
+  const textRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+
+  useEffect(() => {
+    const node = textRef.current;
+    if (!node) return undefined;
+
+    const measure = () => {
+      if (expanded) return;
+      setCanExpand(node.scrollHeight > node.clientHeight + 1);
+    };
+
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [expanded, text]);
+
+  return (
+    <div className="review-next-copy">
+      <p ref={textRef} id={contentId} className={expanded ? "" : "is-collapsed"}>{text}</p>
+      {canExpand && (
+        <button
+          type="button"
+          className={`review-next-copy-toggle ${expanded ? "is-expanded" : ""}`}
+          aria-controls={contentId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "收合" : "顯示更多"}<ChevronDown aria-hidden="true" />
+          <span className="sr-only">{label}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions = true }) {
+  const response = review.response;
+  const date = new Date(review.created_at).toLocaleDateString("zh-Hant", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const initial = Array.from(review.user_display || "訪")[0];
+
+  return (
+    <article className={`review-next-card ${review.is_mine ? "is-mine" : ""}`} style={{ "--review-card-index": index }}>
+      <header className="review-next-card-head">
+        <div className="review-next-avatar" aria-hidden="true">
+          <span>{initial}</span>
+          {review.verified_experience && <BadgeCheck />}
         </div>
+        <div className="review-next-author">
+          <div>
+            <strong>{review.user_display}</strong>
+            {review.is_mine && <span className="review-next-owner-chip">我的評論</span>}
+          </div>
+          {/* 只有後端標記為已驗證體驗時才顯示（改版前一律顯示，屬錯誤標示） */}
+          {review.verified_experience && <span><BadgeCheck aria-hidden="true" />已驗證</span>}
+        </div>
+        <div className="review-next-card-rating">
+          <ReadonlyStars value={review.rating} compact />
+          <time dateTime={review.created_at}>{date}{review.updated_at !== review.created_at ? " · 已編輯" : ""}</time>
+        </div>
+      </header>
+
+      <div className="review-next-card-content">
+        <ExpandableReviewText text={review.comment} label="使用者評論" />
+        {showActions && (
+          <ContentActions
+            count={review.helpful_count}
+            active={review.my_helpful}
+            loggedIn={loggedIn}
+            label="使用者評論"
+            onHelpful={() => onHelpful(review, "review")}
+            onReport={() => onReport(review, "review")}
+          />
+        )}
       </div>
 
-      {status === "error" ? (
-        <div className="rv-score-error" role="alert">
-          <CircleAlert aria-hidden="true" />
-          <span>暫時無法載入評論統計</span>
-          <button type="button" className="rv-link-button" onClick={onRetry}>重試</button>
-        </div>
-      ) : (
-        <div className={`rv-bars ${status === "loading" ? "is-loading" : ""}`}>
-          {distribution.map((item) => {
-            const active = ratingFilter === item.star;
-            return (
-              <button
-                key={item.star}
-                type="button"
-                className={`rv-bar ${active ? "is-active" : ""}`}
-                aria-pressed={active}
-                aria-label={`${item.star} 星，共 ${item.count} 則評論${active ? "，目前已篩選" : ""}`}
-                onClick={() => onSelect(item.star)}
-                disabled={!ready}
-              >
-                <span className="rv-bar-star ag-num">{item.star}<Star aria-hidden="true" /></span>
-                <span className="rv-bar-track" aria-hidden="true">
-                  {/* 長條寬度是動態值，依規範可用 inline style */}
-                  <span className="rv-bar-fill" style={{ "--rv-pct": `${item.percent}%` }} />
-                </span>
-                <span className="rv-bar-count ag-num">{item.count}</span>
-                <span className="rv-bar-pct ag-num" aria-hidden="true">{item.percent}%</span>
-              </button>
-            );
-          })}
-        </div>
+      {response && (
+        <aside className="review-next-response" aria-label="Argus 官方回覆">
+          <div className="review-next-response-line" aria-hidden="true" />
+          <BrandEye size="small" />
+          <div className="review-next-response-content">
+            <header>
+              <span><strong>Argus 官方回覆</strong></span>
+              <time dateTime={response.updated_at}>
+                {new Date(response.updated_at).toLocaleDateString("zh-Hant")}
+              </time>
+            </header>
+            <ExpandableReviewText text={response.body} label="官方回覆" />
+            <ContentActions
+              count={response.helpful_count}
+              active={response.my_helpful}
+              loggedIn={loggedIn}
+              label="官方回覆"
+              onHelpful={() => onHelpful(review, "response")}
+              onReport={() => onReport(review, "response")}
+            />
+          </div>
+        </aside>
       )}
-    </section>
+    </article>
   );
 }
 
 function ReviewsPage() {
   const accessToken = useArgusStore((state) => state.accessToken);
+  const theme = useArgusStore((state) => state.theme);
   const [summary, setSummary] = useState({ total: 0, average: null, distribution: {} });
-  const [summaryStatus, setSummaryStatus] = useState("loading");
   const [listData, setListData] = useState({ reviews: [], total: 0, total_pages: 1, page: 1 });
-  const [listError, setListError] = useState(false);
   const [mineInfo, setMineInfo] = useState(null);
   const [sort, setSort] = useState("helpful");
   const [ratingFilter, setRatingFilter] = useState(null);
@@ -142,13 +361,13 @@ function ReviewsPage() {
   const [reportDraft, setReportDraft] = useState(null);
   const [reporting, setReporting] = useState(false);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
+  const reportDialogRef = useDialogFocus(Boolean(reportDraft), () => setReportDraft(null));
 
   useEffect(() => {
     let active = true;
-    setSummaryStatus("loading");
     api.get("/reviews/summary/")
-      .then((response) => { if (active) { setSummary(response.data); setSummaryStatus("ready"); } })
-      .catch(() => { if (active) setSummaryStatus("error"); });
+      .then((response) => { if (active) setSummary(response.data); })
+      .catch(() => { if (active) setFeedback({ tone: "bad", message: "暫時無法載入評論統計" }); });
     if (accessToken) {
       api.get("/reviews/mine/")
         .then((response) => { if (active) setMineInfo(response.data); })
@@ -163,15 +382,14 @@ function ReviewsPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setListError(false);
     api.get("/reviews/", { params: { sort, rating: ratingFilter || undefined, page } })
       .then((response) => { if (active) setListData(response.data); })
-      .catch(() => { if (active) setListError(true); })
+      .catch(() => { if (active) setFeedback({ tone: "bad", message: "暫時無法載入評論，請稍後重試" }); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [sort, ratingFilter, page, accessToken, refreshKey]);
 
-  const distribution = useMemo(() => STAR_FILTERS.map((star) => ({
+  const distribution = useMemo(() => [5, 4, 3, 2, 1].map((star) => ({
     star,
     count: summary.distribution?.[String(star)] || 0,
     percent: summary.total
@@ -187,10 +405,6 @@ function ReviewsPage() {
   );
   const mineMatchesFilter = Boolean(mine && (!ratingFilter || mine.rating === ratingFilter));
   const visibleTotal = Math.max(0, listData.total - (mineMatchesFilter ? 1 : 0));
-
-  function retry() {
-    setRefreshKey((value) => value + 1);
-  }
 
   function openComposer() {
     if (mine || eligibility?.eligible) {
@@ -308,42 +522,48 @@ function ReviewsPage() {
     setPage(1);
   }
 
-  function clearRating() {
-    setRatingFilter(null);
-    setPage(1);
-  }
-
   return (
-    <div className="rv-page">
-      <div className="rv-wrap">
-        <section className="rv-hero" aria-labelledby="rv-title">
-          <div className="rv-hero-copy">
-            <span className="ag-eyebrow">User Reviews</span>
-            <h1 id="rv-title">使用者怎麼評價 <span>Argus</span></h1>
-            <p className="rv-lead">
-              每則評論都來自完成過網站掃描的帳號，顯示名稱經過遮罩；官方回覆會以 Argus 標誌標示。
-            </p>
-            {!composerOpen && !mine && (
-              <ComposeEntry loggedIn={Boolean(accessToken)} eligibility={eligibility} onOpen={openComposer} />
-            )}
+    <div className={`review-next-page ${theme === "dark" ? "review-next-night" : "review-next-day"}`}>
+      <div className="review-next-main">
+        <section className="review-next-hero" aria-labelledby="review-next-title">
+          <div className="review-next-hero-copy">
+            <h1 id="review-next-title">使用者怎麼評價 <span>Argus</span></h1>
           </div>
-          <ScoreCard
-            summary={summary}
-            status={summaryStatus}
-            distribution={distribution}
-            ratingFilter={ratingFilter}
-            onSelect={selectRating}
-            onRetry={retry}
-          />
+
+          <div className="review-next-score-card" aria-label="評論總覽">
+            <div className="review-next-score-head">
+              <span>整體評分</span>
+              <strong>{summary.total.toLocaleString()} 則評論</strong>
+            </div>
+            <div className="review-next-score-main">
+              <strong>{summary.average ?? "—"}</strong>
+              <div>
+                <ReadonlyStars value={summary.average || 0} />
+              </div>
+            </div>
+            <div className="review-next-rating-bars">
+              {distribution.map((item) => (
+                <button
+                  key={item.star}
+                  type="button"
+                  className={ratingFilter === item.star ? "is-active" : ""}
+                  aria-pressed={ratingFilter === item.star}
+                  aria-label={`${item.star} 星，共 ${item.count} 則評論${ratingFilter === item.star ? "，目前已篩選" : ""}`}
+                  onClick={() => selectRating(item.star)}
+                >
+                  <span>{item.star}<Star aria-hidden="true" /></span>
+                  <i aria-hidden="true"><b style={{ "--review-next-percent": `${item.percent}%` }} /></i>
+                  <strong>{item.count}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         {feedback && (
-          <div className={`rv-feedback is-${feedback.tone}`} role="status" aria-live="polite">
+          <div className={`review-next-feedback tone-${feedback.tone}`} role="status" aria-live="polite">
             {feedback.tone === "good" ? <Check aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
-            <span>{feedback.message}</span>
-            <button type="button" className="rv-icon-button is-sm" onClick={() => setFeedback(null)} aria-label="關閉提示">
-              <X aria-hidden="true" />
-            </button>
+            {feedback.message}
           </div>
         )}
 
@@ -357,15 +577,32 @@ function ReviewsPage() {
           />
         )}
 
+        {!composerOpen && !mine && (
+          <section className="review-next-compose-entry" aria-label="撰寫評論">
+            <span aria-hidden="true"><UserRound /></span>
+            {!accessToken ? (
+              <Link to="/login?next=%2Freviews">寫下你的評論</Link>
+            ) : eligibility && !eligibility.eligible ? (
+              <Link to="/scans">評論前先完成一次掃描</Link>
+            ) : (
+              <button type="button" onClick={openComposer}>寫下你的評論</button>
+            )}
+            <MessageSquareText aria-hidden="true" />
+          </section>
+        )}
+
         {mine && !composerOpen && (
-          <section className="rv-mine" aria-labelledby="rv-mine-title">
-            <header className="rv-section-head">
-              <h2 id="rv-mine-title">我的評論</h2>
-              <div className="rv-mine-actions">
-                <button type="button" className="secondary-button" onClick={() => setComposerOpen(true)}>
+          <section className="review-next-my-review" aria-labelledby="review-next-my-title">
+            <header>
+              <div>
+                <UserRound aria-hidden="true" />
+                <h2 id="review-next-my-title">我的評論</h2>
+              </div>
+              <div>
+                <button type="button" className="review-next-button is-secondary" onClick={() => setComposerOpen(true)}>
                   <Pencil aria-hidden="true" />編輯
                 </button>
-                <button type="button" className="rv-danger-button is-ghost" onClick={deleteMine}>
+                <button type="button" className="review-next-button is-danger" onClick={deleteMine}>
                   <Trash2 aria-hidden="true" />刪除
                 </button>
               </div>
@@ -381,72 +618,37 @@ function ReviewsPage() {
           </section>
         )}
 
-        <section className="rv-list-section" id="rv-list" aria-labelledby="rv-list-title">
-          <div className="rv-toolbar">
-            <div className="rv-section-head">
-              <h2 id="rv-list-title">使用者評論</h2>
-              {!listError && (
-                <p className="rv-count" aria-live="polite">
-                  共 <strong className="ag-num">{loading ? "…" : visibleTotal}</strong> 則{ratingFilter ? ` ${ratingFilter} 星` : ""}評論
-                </p>
-              )}
+        <section className="review-next-content" id="review-next-list" aria-labelledby="review-next-list-title">
+          <div className="review-next-toolbar">
+            <div>
+              <h2 id="review-next-list-title">使用者評論</h2>
+              {ratingFilter && <p>{ratingFilter} 星評論</p>}
             </div>
-            <div className="rv-toolbar-controls">
-              <div className="rv-segment" role="group" aria-label="依星等篩選">
-                <button type="button" aria-pressed={!ratingFilter} onClick={clearRating}>全部</button>
-                {STAR_FILTERS.map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    aria-pressed={ratingFilter === star}
-                    aria-label={`只看 ${star} 星`}
-                    onClick={() => selectRating(star)}
-                  >
-                    <span className="ag-num">{star}</span><Star aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-              <label className="rv-sort">
+            <div className="review-next-toolbar-controls">
+              {ratingFilter && (
+                <button type="button" className="review-next-filter-chip" onClick={() => selectRating(ratingFilter)}>
+                  {ratingFilter} 星 · 清除篩選<X aria-hidden="true" />
+                </button>
+              )}
+              <label className="review-next-sort">
                 <SlidersHorizontal aria-hidden="true" />
                 <span>排序</span>
                 <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
                   <option value="helpful">熱門</option>
                   <option value="newest">最新</option>
                 </select>
+                <ChevronDown aria-hidden="true" />
               </label>
             </div>
           </div>
 
-          {ratingFilter && (
-            <div className="rv-active-filter">
-              <span>目前只顯示 {ratingFilter} 星評論</span>
-              <button type="button" className="rv-chip is-filter" onClick={() => selectRating(ratingFilter)}>
-                {ratingFilter} 星 · 清除篩選<X aria-hidden="true" />
-              </button>
-            </div>
-          )}
+          <div className="review-next-result-count" aria-live="polite">
+            共 <strong>{visibleTotal}</strong> 則{ratingFilter ? ` ${ratingFilter} 星` : ""}評論
+          </div>
 
-          <div className="rv-list" aria-busy={loading}>
-            {loading && [1, 2, 3].map((item) => (
-              <div className="rv-card rv-skeleton" key={item} aria-hidden="true">
-                <span className="rv-sk-row"><i className="rv-sk-avatar" /><i className="rv-sk-line is-short" /></span>
-                <i className="rv-sk-line" />
-                <i className="rv-sk-line is-mid" />
-              </div>
-            ))}
-
-            {!loading && listError && (
-              <div className="rv-state is-error" role="alert">
-                <span className="rv-state-mark"><ArgusMark size={44} /></span>
-                <h3>評論暫時無法載入</h3>
-                <p>暫時無法載入評論，請稍後重試。若問題持續，可能是網路或伺服器正在維護。</p>
-                <button type="button" className="primary-button" onClick={retry}>
-                  <RotateCw aria-hidden="true" />重新載入
-                </button>
-              </div>
-            )}
-
-            {!loading && !listError && visibleReviews.map((review, index) => (
+          <div className="review-next-list" aria-busy={loading}>
+            {loading && [1, 2, 3].map((item) => <div className="review-next-skeleton" key={item} />)}
+            {!loading && visibleReviews.map((review, index) => (
               <ReviewCard
                 key={review.id}
                 review={review}
@@ -456,14 +658,13 @@ function ReviewsPage() {
                 onReport={openReport}
               />
             ))}
-
-            {!loading && !listError && visibleReviews.length === 0 && (
-              <div className="rv-state">
-                <span className="rv-state-mark"><ArgusMark size={44} /></span>
+            {!loading && visibleReviews.length === 0 && (
+              <div className="review-next-empty">
+                <div><MessageSquareText aria-hidden="true" /></div>
                 <h3>{ratingFilter ? `目前沒有 ${ratingFilter} 星評論` : "目前還沒有評論"}</h3>
-                <p>{ratingFilter ? "清除篩選或選擇其他星等" : "目前還沒有公開評論，歡迎成為第一個分享使用經驗的人。"}</p>
+                <p>{ratingFilter ? "清除篩選或選擇其他星等" : "目前還沒有公開評論"}</p>
                 {ratingFilter && (
-                  <button type="button" className="secondary-button" onClick={() => selectRating(ratingFilter)}>
+                  <button type="button" className="review-next-button is-secondary" onClick={() => selectRating(ratingFilter)}>
                     清除星等篩選
                   </button>
                 )}
@@ -471,13 +672,13 @@ function ReviewsPage() {
             )}
           </div>
 
-          {!listError && listData.total_pages > 1 && (
-            <nav className="rv-pagination" aria-label="評論分頁">
-              <button type="button" className="secondary-button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+          {listData.total_pages > 1 && (
+            <nav className="review-next-pagination" aria-label="評論分頁">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
                 <ArrowLeft aria-hidden="true" />上一頁
               </button>
-              <span>第 <strong className="ag-num">{listData.page}</strong> 頁，共 <span className="ag-num">{listData.total_pages}</span> 頁</span>
-              <button type="button" className="secondary-button" disabled={page >= listData.total_pages} onClick={() => setPage((value) => value + 1)}>
+              <span>第 <strong>{listData.page}</strong> 頁，共 {listData.total_pages} 頁</span>
+              <button type="button" disabled={page >= listData.total_pages} onClick={() => setPage((value) => value + 1)}>
                 下一頁<ArrowRight aria-hidden="true" />
               </button>
             </nav>
@@ -486,13 +687,69 @@ function ReviewsPage() {
       </div>
 
       {reportDraft && (
-        <ReviewReportDialog
-          draft={reportDraft}
-          busy={reporting}
-          onChange={setReportDraft}
-          onClose={() => setReportDraft(null)}
-          onSubmit={submitReport}
-        />
+        <div className="review-next-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportDraft(null); }}>
+          <form
+            ref={reportDialogRef}
+            className="review-next-report-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-next-report-title"
+            tabIndex={-1}
+            onSubmit={submitReport}
+          >
+            <header>
+              <div className="review-next-report-icon"><ShieldAlert aria-hidden="true" /></div>
+              <div>
+                <h2 id="review-next-report-title">
+                  {reportDraft.target === "response" ? "檢舉官方回覆" : "檢舉使用者評論"}
+                </h2>
+              </div>
+              <button type="button" className="review-next-icon-button" onClick={() => setReportDraft(null)} aria-label="關閉檢舉視窗">
+                <X aria-hidden="true" />
+              </button>
+            </header>
+
+            <fieldset className="review-next-report-reasons">
+              <legend>發生了什麼問題？</legend>
+              {REPORT_REASONS.map((reason) => (
+                <label key={reason.value}>
+                  <input
+                    type="radio"
+                    name="review-next-report-reason"
+                    value={reason.value}
+                    checked={reportDraft.reason === reason.value}
+                    onChange={(event) => setReportDraft({ ...reportDraft, reason: event.target.value })}
+                  />
+                  <span className="review-next-radio-mark" aria-hidden="true" />
+                  <span><strong>{reason.label}</strong><small>{reason.hint}</small></span>
+                </label>
+              ))}
+            </fieldset>
+
+            <label className="review-next-field" htmlFor="review-next-report-detail">
+              <span>補充說明 <small>選填</small></span>
+              <textarea
+                id="review-next-report-detail"
+                rows={4}
+                maxLength={500}
+                placeholder="請勿填入個人資料"
+                value={reportDraft.detail}
+                onChange={(event) => setReportDraft({ ...reportDraft, detail: event.target.value })}
+              />
+              <small>{reportDraft.detail.length} / 500</small>
+            </label>
+
+            <div className="review-next-report-notice">
+              <CircleAlert aria-hidden="true" />惡意或重複檢舉不會加速處理
+            </div>
+            <div className="review-next-form-actions">
+              <button type="button" className="review-next-button is-secondary" onClick={() => setReportDraft(null)}>取消</button>
+              <button type="submit" className="review-next-button is-report" disabled={reporting}>
+                <Flag aria-hidden="true" />{reporting ? "送出中…" : "送出檢舉"}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
       {dialogHost}
     </div>
