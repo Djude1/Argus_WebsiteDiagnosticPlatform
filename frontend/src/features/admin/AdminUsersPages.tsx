@@ -299,8 +299,20 @@ export function AdminUserDetailPage() {
     }
   }
 
-  if (error) return <div className="admin-error">{error}</div>;
-  if (!user) return <div className="admin-loading">載入中…</div>;
+  if (error) {
+    return (
+      <div className="admin-page">
+        <AdminErrorState message={error} onRetry={userId ? load : undefined} />
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <div className="admin-page">
+        <AdminSkeleton variant="detail" rows={3} label="載入使用者中" />
+      </div>
+    );
+  }
   const w = user.wallet;
 
   return (
@@ -439,7 +451,7 @@ export function AdminUserDetailPage() {
       <section className="admin-panel">
         <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>登入記錄（最近 50 筆）</h3>
         {loginEvents === null ? (
-          <div className="admin-loading">載入中…</div>
+          <AdminSkeleton variant="table" rows={4} label="載入登入記錄中" />
         ) : loginEvents.length === 0 ? (
           <p className="admin-empty">尚無登入紀錄</p>
         ) : (

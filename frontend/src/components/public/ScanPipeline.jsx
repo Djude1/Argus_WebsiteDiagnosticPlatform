@@ -1,4 +1,4 @@
-import { PipelineDiagram } from "./PipelineDiagram.jsx";
+import { PipelineDiagram } from "./PipelineDiagram";
 import {
   BrainIcon,
   BrowserIcon,
@@ -12,7 +12,7 @@ import {
   ScoreIcon,
   ShieldIcon,
   TargetIcon,
-} from "../../shared/LineIcons.jsx";
+} from "../../shared/LineIcons";
 
 // 首頁掃描鏈路圖的內容，依設計稿「掃描鏈路圖.png」逐項對應。
 //
@@ -52,14 +52,14 @@ const STAGES = [
         badge: "PASSIVE + ACTIVE",
       },
       {
-        tone: "teal",
+        tone: "rose",
         icon: TargetIcon,
         title: "主動安全工具",
         desc: "Nuclei · Katana · 路徑探測",
         badge: "ACTIVE",
       },
       {
-        tone: "violet",
+        tone: "teal",
         icon: RobotIcon,
         title: "Agent 行為測試",
         desc: "Hermes-Agent 模擬操作網站",
