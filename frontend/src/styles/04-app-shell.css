@@ -3,7 +3,9 @@
    ======================================== */
 
 .argus-app {
-  @apply min-h-screen bg-slate-100;
+  @apply min-h-screen;
+  background: var(--ag-bg);
+  color: var(--ag-text);
 }
 
 .argus-main {
