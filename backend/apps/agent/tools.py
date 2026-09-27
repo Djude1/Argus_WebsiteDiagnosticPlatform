@@ -471,6 +471,34 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "send_message",
+            "description": (
+                "在頁面的輸入框（聊天／客服／AI 助理對話框、搜尋框、留言欄）"
+                "填入文字並**真的送出**，一步完成：自動偵測輸入框（或給 "
+                "selector）→填入→Enter 送出（若無新請求則嘗試送出鈕）→"
+                "回撈送出後的**新 API 請求**（真實端點＋你還沒見過的流量）"
+                "與**頁面新回應文字**。對話機器人／互動功能的正確第一步——"
+                "只 type_text 不送出＝訊息沒發、API 不會出現在流量。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要送出的訊息文字"},
+                    "selector": {
+                        "type": "string",
+                        "description": (
+                            "（選填）輸入框 CSS selector；留空自動偵測"
+                            "可見的 textarea／文字輸入框"
+                        ),
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_security_issue",
             "description": (
                 "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
@@ -993,6 +1021,10 @@ class ToolExecutor:
                 )
             if name == "take_screenshot":
                 return await self._take_screenshot()
+            if name == "send_message":
+                return await self._send_message(
+                    str(args.get("text", "")), str(args.get("selector", ""))
+                )
             if name == "navigate_and_observe":
                 return await self._navigate_and_observe(args.get("url", ""))
             if name == "probe_payload_injection":
@@ -1515,6 +1547,91 @@ class ToolExecutor:
                 ok=False, result={"error": f"probe_failed:{exc.__class__.__name__}"}
             )
         return ToolOutcome(ok=True, result=observation)
+
+    async def _send_message(self, text: str, selector: str) -> ToolOutcome:
+        """填入＋送出＋回撈（UI 互動一步化）。
+
+        消除「type_text 填了沒按送出→真實 API 進不了 network log」的
+        實證波動（#46/47：agent 猜端點 14 次全錯）。流程：偵測輸入框→
+        fill→Enter→比對 network log 增量；無新請求則嘗試送出鈕；最後
+        回傳新請求清單＋頁面新回應文字尾段。UI 操作層（同 click/
+        type_text 邊界，context route 把關），不額外發任何 HTTP。
+        """
+        if not text.strip():
+            return ToolOutcome(ok=False, result={"error": "empty_text"})
+
+        _DETECT_SCRIPT = (
+            "() => {"
+            " const cands = ['textarea', 'input[type=text]', 'input[type=search]',"
+            " '[contenteditable=true]'];"
+            " for (const s of cands) {"
+            "   for (const el of document.querySelectorAll(s)) {"
+            "     const r = el.getBoundingClientRect();"
+            "     if (r.width > 0 && r.height > 0 && !el.disabled) {"
+            "       el.setAttribute('data-argus-target', '1');"
+            "       return s;"
+            "     }"
+            "   }"
+            " }"
+            " return '';"
+            "}"
+        )
+
+        try:
+            if selector:
+                loc = self.page.locator(selector).first
+                await loc.fill(text, timeout=self.action_timeout_ms)
+            else:
+                detected = await self.page.evaluate(_DETECT_SCRIPT)
+                if not detected:
+                    return ToolOutcome(ok=False, result={"error": "no_input_found"})
+                loc = self.page.locator(
+                    f"{detected}[data-argus-target='1']"
+                ).first
+
+            before = len(self._network_log)
+            await loc.press("Enter")
+            await asyncio.sleep(1.5)
+
+            # Enter 沒觸發新請求 → 嘗試送出鈕（常見按鈕式對話 UI）
+            if len(self._network_log) == before:
+                for btn_sel in (
+                    "button[type=submit]",
+                    "button[aria-label*='end' i]",
+                    "button:has-text('Send')",
+                    "button:has-text('送出')",
+                ):
+                    try:
+                        btn = self.page.locator(btn_sel).first
+                        await btn.click(timeout=1500)
+                        await asyncio.sleep(1.5)
+                        break
+                    except Exception:  # noqa: BLE001 — 逐 selector 嘗試
+                        continue
+
+            new_requests = [
+                {
+                    "method": r.get("method"),
+                    "url": r.get("url"),
+                    "status": r.get("status"),
+                }
+                for r in self._network_log[before:]
+            ]
+            visible = await self.page.evaluate(
+                "() => document.body && document.body.innerText"
+                " ? document.body.innerText.slice(-1200) : ''"
+            )
+        except PlaywrightTimeoutError:
+            return ToolOutcome(ok=False, result={"error": "timeout"})
+
+        return ToolOutcome(
+            ok=True,
+            result={
+                "sent": True,
+                "new_requests": new_requests[:10],
+                "page_tail": _truncate(str(visible), 1200),
+            },
+        )
 
     async def _take_screenshot(self) -> ToolOutcome:
         self._screenshot_counter += 1

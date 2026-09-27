@@ -259,6 +259,7 @@ class ToolSchemaTests(TestCase):
             "probe_payload_injection",
             "forge_jwt",
             "search_knowledge",
+            "send_message",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -925,6 +926,61 @@ class SearchKnowledgeTests(TestCase):
         )
         self.assertTrue(outcome.ok)
         self.assertTrue(outcome.result["hits"])
+
+
+class SendMessageTests(TestCase):
+    """send_message：填入＋送出＋回撈一步化（消 UI 送出波動）。"""
+
+    def _executor(self):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        page.evaluate = AsyncMock(return_value="textarea")
+        locator = MagicMock()
+        locator.fill = AsyncMock()
+        locator.press = AsyncMock()
+        page.locator = MagicMock(return_value=locator)
+        page.on = MagicMock()
+        page.remove_listener = MagicMock()
+        return (
+            ToolExecutor(page=page, screenshot_dir="/tmp/agent"),
+            page,
+            locator,
+        )
+
+    def test_empty_text_rejected(self):
+        executor, _, _ = self._executor()
+        outcome = asyncio.run(executor.run("send_message", {"text": "  "}))
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "empty_text")
+
+    def test_no_input_found_when_detection_fails(self):
+        executor, page, _ = self._executor()
+        page.evaluate = AsyncMock(return_value="")
+        outcome = asyncio.run(executor.run("send_message", {"text": "hi"}))
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "no_input_found")
+
+    def test_fill_press_enter_and_report_new_requests(self):
+        executor, page, locator = self._executor()
+        # 模擬 Enter 後 network log 新增一筆
+        executor._network_log = []
+        original_sleep = asyncio.sleep
+
+        async def fake_sleep(sec):
+            if sec == 1.5:
+                executor._network_log.append(
+                    {"method": "POST", "url": "https://example.com/chat", "status": 200}
+                )
+            return await original_sleep(0)
+
+        import apps.agent.tools as tools_module
+
+        with patch.object(tools_module.asyncio, "sleep", side_effect=fake_sleep):
+            outcome = asyncio.run(executor.run("send_message", {"text": "hello"}))
+        self.assertTrue(outcome.ok)
+        locator.fill.assert_awaited_once()
+        locator.press.assert_awaited_once_with("Enter")
+        self.assertEqual(outcome.result["new_requests"][0]["url"], "https://example.com/chat")
 
 
 class SystemPromptDisciplineTests(TestCase):
