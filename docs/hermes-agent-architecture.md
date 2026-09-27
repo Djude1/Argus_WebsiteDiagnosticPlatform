@@ -37,7 +37,7 @@ ScanJob(active+authorized)
 authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密）
 自動注入 `auth_idor`／`logic_abuse` prompt——無公開註冊的真實站靠這個。
 
-## 3. 工具清單（ToolExecutor，24 個；另含離線知識庫）
+## 3. 工具清單（ToolExecutor，26 個；另含離線知識庫）
 
 **觀察（bulky，舊快照自動壓縮）**：`get_dom_summary`／`get_visible_text`／
 `get_network_requests`（same-origin XHR/fetch 被動攔截——SPA 端點主要來源）／

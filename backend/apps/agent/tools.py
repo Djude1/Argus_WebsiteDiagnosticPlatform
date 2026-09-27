@@ -499,6 +499,36 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "collect_target_intel",
+            "description": (
+                "帳號接管情報彙整（WSTG-ATHN-09 的「答案來源推理」工具化）：對"
+                "你給的數個同源公開端點（留言/評論/使用者列表/備份檔等，從"
+                " network log 挑）以目前登入態 GET，全文搜索目標帳號"
+                "（email／username／其前綴），命中處抽前後上下文片段彙整成"
+                "單一視圖——免去逐端點人工讀回應找線索（寵物名/城市/經歷"
+                " 等可推安全問題答案的個人細節）。GET only；上限 8 個 URL。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "目標帳號識別（email 或 username）",
+                    },
+                    "urls": {
+                        "type": "array",
+                        "maxItems": 8,
+                        "items": {"type": "string"},
+                        "description": "已觀察過的同源公開資料端點（完整 URL）",
+                    },
+                },
+                "required": ["target", "urls"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_security_issue",
             "description": (
                 "回報一個你在實際操作或 probe 觀察中發現的資安問題（例如未授權存取、"
@@ -698,6 +728,7 @@ def build_tool_schemas(
         "navigate_and_observe",
         "probe_payload_injection",
         "forge_jwt",
+        "collect_target_intel",
     }
     if orchestrator:
         keep = {"dispatch_specialist", "finish", "report_security_issue"}
@@ -743,10 +774,15 @@ def redact_tool_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str
             "replay_request",
             "navigate_and_observe",
             "probe_payload_injection",
+            "collect_target_intel",
         }
         and "url" in clean
     ):
         clean["url"] = redact_url_query_values(str(clean["url"]))
+    if tool_name == "collect_target_intel" and isinstance(clean.get("urls"), list):
+        clean["urls"] = [
+            redact_url_query_values(str(u)) for u in clean["urls"] if u
+        ][:8]
     # multipart 檔案內容屬探測 payload，持久化只留描述性欄位＋內容長度
     if tool_name == "replay_request" and isinstance(clean.get("files"), list):
         clean["files"] = [
@@ -1024,6 +1060,11 @@ class ToolExecutor:
             if name == "send_message":
                 return await self._send_message(
                     str(args.get("text", "")), str(args.get("selector", ""))
+                )
+            if name == "collect_target_intel":
+                return await self._collect_target_intel(
+                    str(args.get("target", "")),
+                    [str(u) for u in (args.get("urls") or [])][:8],
                 )
             if name == "navigate_and_observe":
                 return await self._navigate_and_observe(args.get("url", ""))
@@ -1632,6 +1673,99 @@ class ToolExecutor:
                 "page_tail": _truncate(str(visible), 1200),
             },
         )
+
+    async def _collect_target_intel(
+        self, target: str, urls: list[str]
+    ) -> ToolOutcome:
+        """帳號接管情報彙整：對多個同源端點帶憑證 GET，全文搜目標＋上下文抽取。
+
+        把 WSTG-ATHN-09「答案來源推理」的資料蒐集從 LLM 多步推理降為單次
+        檢索（#48 實證：agent 已讀備份檔但未連到答案——線索在 context 裡
+        被淹沒）。GET only、同源閘＋deep_mode 再驗、每 URL 獨立容錯。
+        """
+        if self.scan_job is None:
+            return ToolOutcome(ok=False, result={"error": "no_scan_context"})
+        from urllib.parse import urlparse
+
+        from apps.scans.models import ScanJob
+
+        if not (
+            self.scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+            and self.scan_job.active_testing_authorized
+        ):
+            return ToolOutcome(ok=False, result={"error": "not_authorized_mode"})
+        if not target.strip() or not urls:
+            return ToolOutcome(ok=False, result={"error": "missing_target_or_urls"})
+
+        # 同源檢查（全部 URL）
+        for u in urls:
+            parsed = urlparse(u or "")
+            origin = f"{parsed.scheme}://{parsed.hostname}"
+            if parsed.port:
+                origin = f"{origin}:{parsed.port}"
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                return ToolOutcome(ok=False, result={"error": "invalid_url"})
+            if origin != self.scan_job.origin:
+                return ToolOutcome(
+                    ok=False, result={"error": "cross_origin_forbidden"}
+                )
+
+        token, cookies = await self._session_credentials()
+        headers, jar = self._http_headers_for(token, cookies)
+        # 搜尋鍵：完整 target＋email 前綴（user@x → user）＋local 常見變體
+        keys = {target.strip().lower()}
+        if "@" in target:
+            keys.add(target.split("@", 1)[0].lower())
+
+        import httpx
+
+        def _collect() -> dict[str, Any]:
+            snippets: list[dict[str, Any]] = []
+            errors: list[str] = []
+            with httpx.Client(
+                headers=headers, cookies=jar, timeout=10.0, follow_redirects=False
+            ) as client:
+                for u in urls:
+                    try:
+                        r = client.get(u)
+                    except Exception as exc:  # noqa: BLE001 — 單 URL 失敗不中斷
+                        errors.append(f"{exc.__class__.__name__}")
+                        continue
+                    text = r.text or ""
+                    low = text.lower()
+                    hits: list[tuple[int, str]] = []
+                    for k in sorted(keys, key=len, reverse=True):
+                        start = 0
+                        while len(hits) < 6:
+                            idx = low.find(k, start)
+                            if idx < 0:
+                                break
+                            hits.append((idx, k))
+                            start = idx + len(k)
+                        if hits:
+                            break
+                    for idx, k in hits[:4]:
+                        ctx = text[max(0, idx - 250) : idx + len(k) + 250]
+                        snippets.append(
+                            {
+                                "url": u,
+                                "matched": k,
+                                "context": re.sub(r"\s+", " ", ctx).strip()[:500],
+                            }
+                        )
+                        if len(snippets) >= 15:
+                            break
+                    if len(snippets) >= 15:
+                        break
+            return {"snippets": snippets, "errors": errors, "urls_scanned": len(urls)}
+
+        try:
+            observation = await asyncio.to_thread(_collect)
+        except Exception as exc:  # noqa: BLE001
+            return ToolOutcome(
+                ok=False, result={"error": f"collect_failed:{exc.__class__.__name__}"}
+            )
+        return ToolOutcome(ok=True, result=observation)
 
     async def _take_screenshot(self) -> ToolOutcome:
         self._screenshot_counter += 1

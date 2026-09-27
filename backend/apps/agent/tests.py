@@ -260,6 +260,7 @@ class ToolSchemaTests(TestCase):
             "forge_jwt",
             "search_knowledge",
             "send_message",
+            "collect_target_intel",
             "take_screenshot",
             "report_ux_issue",
             "probe_sql_injection",
@@ -981,6 +982,70 @@ class SendMessageTests(TestCase):
         locator.fill.assert_awaited_once()
         locator.press.assert_awaited_once_with("Enter")
         self.assertEqual(outcome.result["new_requests"][0]["url"], "https://example.com/chat")
+
+
+class CollectTargetIntelTests(TestCase):
+    """collect_target_intel：同源閘＋命中上下文抽取＋redact。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="inteluser", password="x")
+        self.scan_job = _make_scan_job(self.user)
+
+    def _deep(self) -> ScanJob:
+        self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
+        self.scan_job.active_testing_authorized = True
+        self.scan_job.save()
+        return self.scan_job
+
+    def _executor(self, scan_job):
+        page = MagicMock()
+        page.url = "https://example.com/"
+        page.evaluate = AsyncMock(return_value="")
+        page.context = MagicMock()
+        page.context.cookies = AsyncMock(return_value=[])
+        return ToolExecutor(page=page, screenshot_dir="/tmp/agent", scan_job=scan_job)
+
+    def test_cross_origin_rejected(self):
+        executor = self._executor(self._deep())
+        outcome = asyncio.run(
+            executor.run(
+                "collect_target_intel",
+                {"target": "bob@x.com", "urls": ["https://evil.com/api"]},
+            )
+        )
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.result["error"], "cross_origin_forbidden")
+
+    def test_snippets_extracted_with_context(self):
+        executor = self._executor(self._deep())
+
+        class FakeResp:
+            status_code = 200
+            text = '{"comments": ["bob@x.com owns a cat named Mikey", "other"]}'
+
+        client = MagicMock()
+        client.get = MagicMock(return_value=FakeResp())
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=client)
+        cm.__exit__ = MagicMock(return_value=False)
+        with patch("httpx.Client", return_value=cm):
+            outcome = asyncio.run(
+                executor.run(
+                    "collect_target_intel",
+                    {"target": "bob@x.com", "urls": ["https://example.com/api/Comments"]},
+                )
+            )
+        self.assertTrue(outcome.ok)
+        snippets = outcome.result["snippets"]
+        self.assertTrue(snippets)
+        self.assertIn("cat named Mikey", snippets[0]["context"])
+
+    def test_redact_urls(self):
+        clean = redact_tool_arguments(
+            "collect_target_intel",
+            {"target": "bob@x.com", "urls": ["https://example.com/a?x=secret"]},
+        )
+        self.assertNotIn("secret", json.dumps(clean))
 
 
 class SystemPromptDisciplineTests(TestCase):
