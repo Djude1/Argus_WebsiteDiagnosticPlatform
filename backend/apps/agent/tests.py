@@ -837,6 +837,8 @@ class ForgeJwtTests(TestCase):
         self.assertEqual(outcome.result["error"], "not_authorized_mode")
 
     def test_alg_none_produces_unsigned_token(self):
+        import base64
+
         self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
         self.scan_job.active_testing_authorized = True
         self.scan_job.save()
@@ -847,9 +849,13 @@ class ForgeJwtTests(TestCase):
         self.assertTrue(outcome.ok)
         tokens = outcome.result["tokens"]
         self.assertEqual(len(tokens), 1)
-        self.assertEqual(tokens[0]["token"].count("."), 2)
-        self.assertTrue(tokens[0]["token"].endswith("."))  # 無簽章段
-        self.assertIn("admin", tokens[0]["token"])
+        token = tokens[0]["token"]
+        self.assertEqual(token.count("."), 2)
+        self.assertTrue(token.endswith("."))  # 無簽章段
+        # payload 是 base64——decode 後驗內容（明文不出現在 token 中）
+        payload_b64 = token.split(".")[1]
+        decoded = base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4))
+        self.assertIn(b"admin", decoded)
 
     def test_hs256_runs_weak_secret_list(self):
         self.scan_job.scan_mode = ScanJob.ScanMode.ACTIVE
@@ -939,6 +945,8 @@ class SendMessageTests(TestCase):
         locator = MagicMock()
         locator.fill = AsyncMock()
         locator.press = AsyncMock()
+        locator.click = AsyncMock()
+        locator.first = locator  # handler 取 .first——回自身（fill/press 已 mock）
         page.locator = MagicMock(return_value=locator)
         page.on = MagicMock()
         page.remove_listener = MagicMock()

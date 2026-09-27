@@ -1629,6 +1629,7 @@ class ToolExecutor:
                 loc = self.page.locator(
                     f"{detected}[data-argus-target='1']"
                 ).first
+                await loc.fill(text, timeout=self.action_timeout_ms)
 
             before = len(self._network_log)
             await loc.press("Enter")
