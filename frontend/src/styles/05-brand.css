@@ -3,23 +3,18 @@
    （components/brand/*）。只用 --ag-* token。
    ======================================== */
 
-.ag-mark { display: inline-block; flex: none; overflow: visible; }
-.ag-mark-stop-a { stop-color: var(--ag-iris-300); }
-.ag-mark-stop-b { stop-color: var(--ag-iris-600); }
-.ag-mark-eye { fill: var(--ag-iris-400); }
-.ag-mark-pupil { fill: var(--ag-text); }
-.ag-mark-glint { fill: var(--ag-signal-400); }
-:root[data-theme="light"] .ag-mark-stop-a { stop-color: var(--ag-iris-500); }
-:root[data-theme="light"] .ag-mark-stop-b { stop-color: var(--ag-iris-800); }
-:root[data-theme="light"] .ag-mark-eye { fill: var(--ag-iris-600); }
-:root[data-theme="light"] .ag-mark-glint { fill: var(--ag-signal-500); }
-
-.ag-mark.is-scanning .ag-mark-eye {
-  animation: ag-iris-blink 1.08s var(--ag-ease) infinite;
+.ag-mark {
+  display: inline-block;
+  flex: none;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
 }
-@keyframes ag-iris-blink {
-  0%, 100% { opacity: 0.25; }
-  30% { opacity: 1; }
+:root[data-theme="light"] .ag-mark { filter: drop-shadow(0 2px 6px rgba(2, 132, 199, 0.25)); }
+.ag-mark.is-scanning { animation: ag-eye-breathe 1.6s ease-in-out infinite; }
+@keyframes ag-eye-breathe {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.3)); opacity: 0.85; }
+  50% { filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.75)); opacity: 1; }
 }
 
 .ag-logo {
@@ -29,20 +24,22 @@
   color: var(--ag-text);
   text-decoration: none;
 }
-.ag-logo-text { display: flex; flex-direction: column; line-height: 1; }
-.ag-logo-word {
-  font-family: var(--ag-font-display);
-  font-weight: 700;
-  font-size: 1.12rem;
-  letter-spacing: 0.32em;
-  margin-right: -0.32em;
+.ag-logo-img {
+  display: block;
+  flex: none;
+  width: auto;
+  object-fit: contain;
+  filter: saturate(1.15) contrast(1.08) drop-shadow(0 4px 10px rgba(14, 165, 233, 0.22));
+}
+:root[data-theme="light"] .ag-logo-img {
+  filter: brightness(0.72) saturate(1.1) contrast(1.12) drop-shadow(0 7px 12px rgba(29, 78, 216, 0.14));
 }
 .ag-logo-sub {
-  margin-top: 0.3rem;
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  color: var(--ag-text-3);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--ag-text-2);
 }
 
 /* 觀景窗四角框：包住重點區塊，暗示「被看見」 */

@@ -1,49 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 
-// 首次進站的品牌開場：字元粒子風暴 → 聚合成 Argus 標誌（杏眼＋12 顆虹膜小眼＋琥珀反光）
-// 與 ARGUS 字標 → 放射穿越後淡出。
-//
-// 聚合目標直接用向量幾何畫在離屏 canvas 上取樣（與 ArgusMark.tsx 同一組路徑），
-// 不再載入 164 KB 的點陣 logo：任何解析度都清晰，也少一次網路請求。
-// 顏色取品牌原色（虹膜青為主、守望琥珀只在反光點與少量粒子）。
-// 開場固定是深色畫面，不隨日／夜主題切換。
+import brandLogo from "../../assets/brand-logo.webp";
 
 const INTRO_PHASE = { storm: 2000, assemble: 2400, display: 400, warp: 2200 };
 const INTRO_TOTAL =
   INTRO_PHASE.storm + INTRO_PHASE.assemble + INTRO_PHASE.display + INTRO_PHASE.warp;
 const INTRO_STORM_CHARS = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$&*+={}/<>";
 const INTRO_ARGUS_CHARS = "ARGUS";
-// 品牌原色（對應 03-tokens.css 的 --ag-iris-* / --ag-signal-*）
-const BRAND = {
-  iris200: "#b4f3fa",
-  iris300: "#7fe9f5",
-  iris400: "#3fdcee",
-  iris600: "#0a9db8",
-  signal400: "#ffc04d",
-  text: "#e8eef8",
-};
-// 風暴粒子：8 色輪替，其中 1 色是守望琥珀——點綴，不搶主色
 const INTRO_STORM_COLORS = [
-  "rgba(63, 220, 238, 0.6)", "rgba(127, 233, 245, 0.7)", "rgba(20, 195, 221, 0.62)",
-  "rgba(180, 243, 250, 0.55)", "rgba(63, 220, 238, 0.75)", "rgba(255, 192, 77, 0.55)",
-  "rgba(10, 157, 184, 0.7)", "rgba(127, 233, 245, 0.62)",
+  "rgba(80, 220, 255, 0.55)", "rgba(100, 235, 255, 0.7)", "rgba(60, 200, 240, 0.65)",
+  "rgba(140, 240, 255, 0.6)", "rgba(70, 210, 250, 0.75)", "rgba(170, 245, 255, 0.55)",
+  "rgba(40, 180, 220, 0.65)", "rgba(110, 230, 255, 0.7)",
 ];
-// 放射穿越光束色盤：虹膜青階＋白（琥珀只留在標誌反光點與少量風暴粒子）
+// 時空穿越光束色盤（沿用開頭動畫的青藍系，不另加雜色）
 const INTRO_WARP_COLORS = [
-  [63, 220, 238],
-  [127, 233, 245],
-  [180, 243, 250],
-  [20, 195, 221],
-  [10, 157, 184],
-  [232, 238, 248],
-  [255, 255, 255],
+  [56, 189, 248],   // argus-cyan
+  [103, 232, 249],  // cyan-glow
+  [125, 211, 252],  // sky
+  [14, 165, 233],   // cyan-dot
+  [150, 220, 255],  // 淺藍
+  [224, 242, 254],  // 近白 cyan tint
+  [255, 255, 255],  // 白
 ];
-// ArgusMark 的幾何（viewBox 0 0 48 48），與 components/brand/ArgusMark.tsx 相同
-const MARK_LID_PATH = "M3.5 24C9.2 14.6 16.2 10 24 10s14.8 4.6 20.5 14C38.8 33.4 31.8 38 24 38S9.2 33.4 3.5 24Z";
-const MARK_IRIS_DOTS = Array.from({ length: 12 }, (_, i) => {
-  const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
-  return { x: 24 + Math.cos(angle) * 8.6, y: 24 + Math.sin(angle) * 8.6 };
-});
 
 function IntroSequence({ onComplete }) {
   const canvasRef = useRef(null);
@@ -69,8 +47,9 @@ function IntroSequence({ onComplete }) {
     const ctx = canvas.getContext("2d", { alpha: true });
     let W = 0, H = 0;
     let particles = [];
-    let logoCanvas = null;
-    let textTop = Infinity;
+    let imgRef = null;
+    let logoBox = null;
+    let fallbackCanvas = null;
     let warpInited = false;
     let startTime = 0, fpsCount = 0, fpsTimer = 0;
     let mainRAF = null;
@@ -82,6 +61,17 @@ function IntroSequence({ onComplete }) {
       canvas.width = W; canvas.height = H;
     }
     resize();
+
+    function buildLogoBox() {
+      if (!imgRef) return;
+      const maxW = Math.min(W * 0.6, 720);
+      const maxH = Math.min(H * 0.6, 540);
+      const ratio = imgRef.width / imgRef.height;
+      let tw, th;
+      if (maxW / ratio < maxH) { tw = maxW; th = maxW / ratio; }
+      else { th = maxH; tw = maxH * ratio; }
+      logoBox = { ox: (W - tw) / 2, oy: (H - th) / 2, tw, th };
+    }
 
     function makeParticles(pts) {
       for (let i = pts.length - 1; i > 0; i--) {
@@ -120,59 +110,62 @@ function IntroSequence({ onComplete }) {
       if (countRef.current) countRef.current.textContent = String(N);
     }
 
-    // 把標誌與字標畫到離屏 canvas，再以固定間距取樣成粒子的聚合目標
-    function buildTargets() {
+    function buildFallback() {
       const cx = W / 2, cy = H / 2;
-      const markSize = Math.min(W * 0.46, H * 0.42, 380);
-      const k = markSize / 48;
-      const markTop = cy - markSize * 0.62;
-      const markLeft = cx - markSize / 2;
+      const s = Math.min(W, H) / 900;
       const off = document.createElement("canvas");
       off.width = W; off.height = H;
       const octx = off.getContext("2d");
-
-      octx.save();
-      octx.translate(markLeft, markTop);
-      octx.scale(k, k);
-      const grad = octx.createLinearGradient(6, 10, 42, 38);
-      grad.addColorStop(0, BRAND.iris300);
-      grad.addColorStop(1, BRAND.iris600);
-      octx.strokeStyle = grad;
-      octx.lineWidth = 2.6;
-      octx.lineJoin = "round";
-      octx.stroke(new Path2D(MARK_LID_PATH));
-      octx.fillStyle = BRAND.iris400;
-      for (const dot of MARK_IRIS_DOTS) {
-        octx.beginPath(); octx.arc(dot.x, dot.y, 1.55, 0, Math.PI * 2); octx.fill();
-      }
-      octx.fillStyle = BRAND.text;
-      octx.beginPath(); octx.arc(24, 24, 4.6, 0, Math.PI * 2); octx.fill();
-      octx.fillStyle = BRAND.signal400;
-      octx.beginPath(); octx.arc(26.3, 21.7, 1.35, 0, Math.PI * 2); octx.fill();
-      octx.restore();
-
-      // 字標：Sora 寬字距（字型未載入時退回系統無襯線，不影響取樣）
-      const fontSize = Math.max(28, markSize * 0.26);
-      octx.font = `700 ${fontSize}px Sora, "Noto Sans TC", system-ui, sans-serif`;
-      octx.textBaseline = "middle";
-      octx.fillStyle = BRAND.iris200;
-      const tracking = fontSize * 0.34;
-      const letters = INTRO_ARGUS_CHARS.split("");
-      const widths = letters.map((ch) => octx.measureText(ch).width);
-      const total = widths.reduce((sum, w) => sum + w, 0) + tracking * (letters.length - 1);
-      let x = cx - total / 2;
-      const textY = markTop + markSize * 0.92 + fontSize * 0.5;
-      textTop = textY - fontSize * 0.6;
-      letters.forEach((ch, i) => { octx.fillText(ch, x, textY); x += widths[i] + tracking; });
-      logoCanvas = off;
-
+      octx.strokeStyle = "#0096ff"; octx.lineWidth = 12 * s;
+      octx.beginPath(); octx.ellipse(cx, cy - 30 * s, 260 * s, 110 * s, 0, 0, Math.PI * 2); octx.stroke();
+      octx.fillStyle = "#0066cc"; octx.beginPath(); octx.arc(cx, cy - 30 * s, 90 * s, 0, Math.PI * 2); octx.fill();
+      octx.fillStyle = "#001a33"; octx.beginPath(); octx.arc(cx, cy - 30 * s, 40 * s, 0, Math.PI * 2); octx.fill();
+      octx.fillStyle = "#00aaff";
+      octx.font = `bold ${150 * s}px 'Arial Black', 'Impact', sans-serif`;
+      octx.textAlign = "center"; octx.textBaseline = "middle";
+      octx.fillText("ARGUS", cx, cy + 180 * s);
+      fallbackCanvas = off;
       const data = octx.getImageData(0, 0, W, H).data;
       const pts = [];
-      const step = W < 600 ? 4 : 5;
-      for (let y = 0; y < H; y += step) {
-        for (let x2 = 0; x2 < W; x2 += step) {
-          const idx = (y * W + x2) * 4;
-          if (data[idx + 3] > 80) pts.push({ x: x2, y, r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+      for (let y = 0; y < H; y += 5) {
+        for (let x = 0; x < W; x += 5) {
+          const idx = (y * W + x) * 4;
+          if (data[idx + 3] > 80) pts.push({ x, y, r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+        }
+      }
+      makeParticles(pts);
+    }
+
+    function buildTargets() {
+      if (!imgRef || !logoBox) { buildFallback(); return; }
+      const { ox, oy, tw, th } = logoBox;
+      const off = document.createElement("canvas");
+      off.width = Math.floor(tw); off.height = Math.floor(th);
+      const octx = off.getContext("2d");
+      octx.drawImage(imgRef, 0, 0, off.width, off.height);
+      let data;
+      try { data = octx.getImageData(0, 0, off.width, off.height).data; }
+      catch { buildFallback(); return; }
+      const w = off.width, h = off.height;
+      const cornerIdx = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + w - 1) * 4];
+      let tCount = 0;
+      for (const idx of cornerIdx) if (data[idx + 3] < 30) tCount++;
+      const isTransparentBg = tCount >= 3;
+      const pts = [];
+      const step = 5;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const idx = (y * w + x) * 4;
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+          let keep;
+          if (isTransparentBg) keep = a > 40;
+          else {
+            const lum = (r + g + b) / 3 / 255;
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sat = mx === 0 ? 0 : (mx - mn) / mx;
+            keep = a > 60 && !(lum > 0.93 && sat < 0.06);
+          }
+          if (keep) pts.push({ x: ox + x, y: oy + y, r, g, b });
         }
       }
       makeParticles(pts);
@@ -235,7 +228,7 @@ function IntroSequence({ onComplete }) {
             p.y = p.y * (1 - blend) + (p.ty + breath * 0.5) * blend;
           }
           if (pt > 0.6 && !p.locked) {
-            const inText = p.ty > textTop;
+            const inText = (p.ty - cy) > 60;
             if (inText && Math.random() < 0.55) p.char = INTRO_ARGUS_CHARS[(Math.random() * 5) | 0];
             p.locked = true;
           } else if (!p.locked) {
@@ -253,7 +246,7 @@ function IntroSequence({ onComplete }) {
         if (phase === "STORM") fill = INTRO_STORM_COLORS[i & 7];
         else if (phase === "ASSEMBLE") fill = pt > 0.5 ? p.displayColor : INTRO_STORM_COLORS[i & 7];
         else fill = p.displayColor;
-        if (p.size !== lastSize) { ctx.font = `700 ${p.size}px "JetBrains Mono", Consolas, monospace`; lastSize = p.size; }
+        if (p.size !== lastSize) { ctx.font = `bold ${p.size}px 'Consolas', monospace`; lastSize = p.size; }
         ctx.fillStyle = fill;
         ctx.fillText(p.char, p.x, p.y);
       }
@@ -284,7 +277,7 @@ function IntroSequence({ onComplete }) {
         canvas.style.transform = `scale(${zoom})`;
         // 觀測者越來越快 → 每幀清除越少、上一幀殘留越久 → 粒子拉出長殘影拖曳
         const trailFade = Math.max(0.05, 0.2 - pt * 0.15);
-        ctx.fillStyle = `rgba(6, 10, 20, ${trailFade})`;
+        ctx.fillStyle = `rgba(12, 16, 38, ${trailFade})`;
         ctx.fillRect(0, 0, W, H);
         const cxw = W / 2, cyw = H / 2;
         const baseSpeed = 5 + pt * pt * 80;
@@ -326,7 +319,8 @@ function IntroSequence({ onComplete }) {
       else if (phaseName === "DISPLAY") logoAlpha = 0.9 + Math.sin(elapsed * 0.003) * 0.08;
       if (logoAlpha > 0) {
         ctx.save(); ctx.globalAlpha = logoAlpha;
-        if (logoCanvas) ctx.drawImage(logoCanvas, 0, 0);
+        if (imgRef && logoBox) ctx.drawImage(imgRef, logoBox.ox, logoBox.oy, logoBox.tw, logoBox.th);
+        else if (fallbackCanvas) ctx.drawImage(fallbackCanvas, 0, 0);
         ctx.restore();
       }
       updateAndDraw(phaseName, pt, elapsed);
@@ -342,7 +336,7 @@ function IntroSequence({ onComplete }) {
     }
     finishRef.current = finish;
 
-    const onResize = () => { resize(); };
+    const onResize = () => { resize(); if (imgRef) buildLogoBox(); };
     window.addEventListener("resize", onResize);
     // 點畫面任一處 / Esc / Enter / 空白鍵 皆可跳過動畫
     const onKey = (e) => {
@@ -350,10 +344,10 @@ function IntroSequence({ onComplete }) {
     };
     window.addEventListener("keydown", onKey);
 
-    buildTargets();
-    startTime = performance.now();
-    fpsTimer = startTime;
-    mainRAF = requestAnimationFrame(mainLoop);
+    const img = new Image();
+    img.onload = () => { imgRef = img; buildLogoBox(); buildTargets(); startTime = performance.now(); fpsTimer = startTime; mainRAF = requestAnimationFrame(mainLoop); };
+    img.onerror = () => { buildFallback(); startTime = performance.now(); fpsTimer = startTime; mainRAF = requestAnimationFrame(mainLoop); };
+    img.src = brandLogo;
 
     return () => {
       window.removeEventListener("resize", onResize);
@@ -389,9 +383,13 @@ function IntroSequence({ onComplete }) {
         <span className="dim">PARTICLES</span> <span className="v" ref={countRef}>0</span><br />
         <span className="dim">FPS</span> <span className="v" ref={fpsRef}>--</span>
       </div>
-      <div className="argus-intro-hint">點擊任意處或按 Esc 跳過</div>
+      <div className="argus-intro-hint">點擊任意處跳過</div>
     </div>
   );
 }
+
+// ============================================================
+// 根 App + Routes
+// ============================================================
 
 export default IntroSequence;

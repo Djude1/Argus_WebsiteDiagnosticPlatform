@@ -4,9 +4,7 @@ import { NavLink } from "react-router-dom";
 import { api } from "../../api";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
-import { IrisScore } from "../../components/brand/IrisScore";
 import { DimensionGrid } from "../../components/public/DimensionGrid";
-import { HeroQuickCheck } from "../../components/public/HeroQuickCheck";
 import { PublicSection } from "../../components/public/PublicHero";
 import { PublicFaq } from "../../components/public/PublicFaq";
 import { ScanDemoWindow } from "../../components/public/ScanDemoWindow";
@@ -112,50 +110,45 @@ const HOME_FAQ = [
 
 function HomeHero() {
   return (
-    <section className="home-hero">
-      <div className="home-hero-backdrop ag-surface-grid" aria-hidden="true" />
-      <div className="home-hero-inner">
-        <div className="home-hero-copy">
-          <span className="ag-eyebrow">AI Website Audit · 百眼守望</span>
-          <h1 className="home-hero-title">
-            一鍵看見<br />
-            <em>網站的所有問題</em>
-          </h1>
-          <p className="home-hero-sub">
-            輸入網址，找出網站在 <strong>SEO、AEO、GEO、資安與 UX</strong> 上的問題，並排好該先處理哪一個——
-            修正要用的檔案，直接生給你。
-          </p>
-          <HeroQuickCheck />
-          <NavLink to="/login" className="home-hero-login">
-            需要整站多頁掃描？登入建立完整掃描 <span aria-hidden="true">→</span>
-          </NavLink>
+    <section className="classic-hero classic-hero--console">
+      <div className="classic-hero-bg" aria-hidden="true">
+        <span className="classic-hero-orb classic-hero-orb-1" />
+        <span className="classic-hero-orb classic-hero-orb-2" />
+        <span className="classic-hero-orb classic-hero-orb-3" />
+        <span className="classic-hero-grid" />
+        <span className="classic-hero-scan" />
+        <span className="classic-hero-corner tl" />
+        <span className="classic-hero-corner tr" />
+        <span className="classic-hero-corner bl" />
+        <span className="classic-hero-corner br" />
+      </div>
+      <div className="classic-hero-content">
+        {/* 品牌識別：會動的 Argus 之眼 ＋ 藝術字。
+            之眼用 <picture>，偏好減少動態者自動換靜態首幀且不下載動態版。 */}
+        <div className="classic-hero-brand">
+          <picture className="classic-hero-eye">
+            <source media="(prefers-reduced-motion: reduce)" srcSet={argusEyeStill} />
+            <img src={argusEye} alt="" width="256" height="202" />
+          </picture>
+          <span className="classic-hero-wordmark" aria-label="ARGUS">
+            {"ARGUS".split("").map((ch, i) => (
+              <span key={`${ch}-${i}`} style={{ animationDelay: `${i * 0.08}s` }}>{ch}</span>
+            ))}
+          </span>
         </div>
-
-        <div className="home-hero-art" aria-hidden="true">
-          <div className="home-hero-scope ag-viewfinder">
-            <span className="home-hero-halo" />
-            <span className="home-hero-ring" />
-            <picture className="home-hero-eye">
-              {/* 偏好減少動態者自動換靜態首幀，且不下載動態版 */}
-              <source media="(prefers-reduced-motion: reduce)" srcSet={argusEyeStill} />
-              <img src={argusEye} alt="" width="256" height="202" />
-            </picture>
-            <span className="home-hero-sweep" />
-            <span className="home-hero-coord tl">LAT 25.04 · WATCH</span>
-            <span className="home-hero-coord br">IRIS 12 / 12</span>
-          </div>
-          <div className="home-hero-card home-hero-card--score">
-            <IrisScore score={72} size={64} />
-            <span className="home-hero-card-text">
-              <strong>範例報告</strong>
-              <span>找到 3 個高風險問題，這是修法</span>
-            </span>
-          </div>
-          <div className="home-hero-card home-hero-card--live">
-            <span className="home-hero-live-dot" />
-            <span className="ag-num">12 / 50 頁</span>
-            <span className="home-hero-card-muted">爬取中</span>
-          </div>
+        <span className="classic-hero-eyebrow">掃描 · 洞察 · 證據</span>
+        <h1 className="classic-hero-title">
+          一鍵看見<span className="classic-hero-grad">網站的所有問題</span>
+        </h1>
+        <p className="classic-hero-sub">
+          輸入網址，找出網站在<strong>搜尋、體驗與資安</strong>上的問題，並排好該先處理哪一個。
+        </p>
+        <p className="classic-hero-sub is-highlight">
+          不只列出問題——修正要用的檔案，直接生給你。
+        </p>
+        <div className="classic-hero-actions">
+          <NavLink to="/login" className="classic-cta-primary">登入進行詳細檢查 →</NavLink>
+          <NavLink to="/free-tools" className="classic-cta-ghost">免登入先試單頁檢查</NavLink>
         </div>
       </div>
     </section>

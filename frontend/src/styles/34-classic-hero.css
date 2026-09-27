@@ -1,0 +1,408 @@
+/* ========================================
+   專案介紹頁 hero（原版還原）
+   使用者要求把首頁上方的主題掃描動畫改回改版前的樣子：
+   會動的 argus-eye.webp、ARGUS 逐字浮現、光球、網格漂移、掃描線、四角框。
+   規則取自改版前的 01/21/31/33/40/41/70 號檔，class 改名為 classic-hero-*，
+   避免和其他公開頁共用的 .public-hero 互相影響。
+   ======================================== */
+:root[data-theme="light"] .classic-hero{
+  --public-day-ink: #0b1930;
+  --public-day-muted: #42526a;
+}
+
+/* ── 取自原 01-font-scale.css ── */
+.public-shell .classic-hero-title{
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.15;
+}
+.public-shell .classic-hero-sub{
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+.public-shell .classic-hero-eyebrow{
+  font-size: 0.875rem;
+  letter-spacing: 0.18em;
+}
+.classic-cta-primary,
+.classic-cta-ghost{ font-size: 1.05rem !important; padding: 0.8rem 1.7rem !important; }
+
+/* ── 取自原 21-public.css ── */
+  .classic-cta-primary{
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
+    color: #fff;
+    border: none;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32);
+    cursor: pointer;
+  }
+  .classic-cta-primary:hover{
+    box-shadow: 0 6px 22px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+  }
+  .classic-cta-ghost{
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+    background: transparent;
+    color: #67e8f9;
+    border: 1px solid rgba(103, 232, 249, 0.45);
+    text-decoration: none;
+  }
+  .classic-cta-ghost:hover{
+    background: rgba(103, 232, 249, 0.1);
+    border-color: #67e8f9;
+  }
+  .classic-hero{
+    position: relative;
+    padding: 100px 0 80px;
+    overflow: hidden;
+    margin: 0 -24px;
+  }
+  .classic-hero.compact{ padding: 70px 0 50px; }
+  .classic-hero-bg{
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .classic-hero-orb{
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.55;
+    animation: orb-drift 18s ease-in-out infinite;
+  }
+  .classic-hero-orb-1{
+    top: -120px; left: 10%;
+    width: 380px; height: 380px;
+    background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+  }
+  .classic-hero-orb-2{
+    top: 50px; right: -80px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+    animation-delay: -6s;
+  }
+  .classic-hero-orb-3{
+    bottom: -100px; left: 40%;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, #ec4899 0%, transparent 70%);
+    opacity: 0.32;
+    animation-delay: -12s;
+  }
+  .classic-hero-content{
+    position: relative;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px;
+    text-align: center;
+  }
+  .classic-hero-eyebrow{
+    @apply inline-block rounded-full px-3 py-1 text-xs font-bold;
+    letter-spacing: 0.15em;
+    background: rgba(56, 189, 248, 0.1);
+    color: #67e8f9;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+  .classic-hero-title{
+    @apply mt-4 text-4xl font-bold sm:text-5xl;
+    color: #f1f5f9;
+    line-height: 1.2;
+  }
+  .classic-hero-grad{
+    background: linear-gradient(135deg, #67e8f9 0%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .classic-hero-sub{
+    @apply mx-auto mt-4 max-w-2xl text-base sm:text-lg;
+    color: #cbd5e1;
+    line-height: 1.7;
+  }
+  .classic-hero-actions{
+    @apply mt-8 flex flex-wrap items-center justify-center gap-3;
+  }
+
+/* ── 取自原 31-responsive.css ── */
+@media (max-width: 640px) {
+  .public-shell .classic-hero-title {
+    font-size: clamp(2rem, 12vw, 3rem);
+    line-height: 1.12;
+  }
+  .public-shell .classic-hero-sub {
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+  .public-nav-cta .classic-cta-primary {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.82rem !important;
+    white-space: nowrap;
+  }
+  .classic-hero {
+    margin: 0 -0.75rem;
+    padding: 3.5rem 0 2.75rem;
+  }
+  .classic-hero.compact {
+    padding: 3rem 0 2.25rem;
+  }
+  .classic-hero-content {
+    padding: 0 1rem;
+  }
+}
+
+/* ── 取自原 33-intro-hero-brand.css ── */
+.classic-hero--console{
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 60, 110, 0.45) 0%, rgba(6, 11, 31, 0) 60%),
+    radial-gradient(ellipse at center, #001a2e 0%, #050a1c 60%, #03060f 100%);
+  border-bottom: 1px solid rgba(0, 247, 255, 0.18);
+  overflow: hidden;
+}
+.classic-hero--console .classic-hero-grid{
+  position: absolute;
+  inset: -2px;
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: heroGridDrift 14s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.classic-hero--console .classic-hero-scan{
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 247, 255, 0.55) 50%, transparent);
+  box-shadow: 0 0 18px rgba(0, 247, 255, 0.6);
+  animation: heroScan 6s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.classic-hero--console .classic-hero-corner{
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 2px solid rgba(0, 247, 255, 0.75);
+  box-shadow: 0 0 16px rgba(0, 247, 255, 0.4);
+  pointer-events: none;
+  z-index: 1;
+}
+.classic-hero--console .classic-hero-corner.tl{ top: 18px; left: 18px; border-right: none; border-bottom: none; }
+.classic-hero--console .classic-hero-corner.tr{ top: 18px; right: 18px; border-left: none; border-bottom: none; }
+.classic-hero--console .classic-hero-corner.bl{ bottom: 18px; left: 18px; border-right: none; border-top: none; }
+.classic-hero--console .classic-hero-corner.br{ bottom: 18px; right: 18px; border-left: none; border-top: none; }
+.classic-hero--console .classic-hero-content{ position: relative; z-index: 2; }
+.classic-hero--console .classic-hero-title{
+  color: #f2feff;
+  text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35);
+  animation: heroTitleGlow 3.2s ease-in-out infinite;
+}
+.classic-hero--console .classic-hero-eyebrow{
+  color: #67e8f9;
+  text-shadow: 0 0 10px rgba(0, 247, 255, 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .classic-hero--console .classic-hero-grid,
+.classic-hero--console .classic-hero-scan,
+.classic-hero--console .classic-hero-title{ animation: none; }
+}
+
+/* ── 取自原 40-theme-light.css ── */
+:root[data-theme="light"] .classic-cta-primary{
+  background: linear-gradient(135deg, #0e7490 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+}
+:root[data-theme="light"] .classic-hero-grid,
+:root[data-theme="light"] .classic-hero-scan,
+:root[data-theme="light"] .classic-hero-corner,
+:root[data-theme="light"] .classic-hero-orb{ display: none; }
+:root[data-theme="light"] .classic-hero--console{
+  background:
+    linear-gradient(180deg, rgba(224, 242, 254, 0.72), rgba(248, 251, 253, 0.2)),
+    transparent;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+:root[data-theme="light"] .classic-hero-title,
+:root[data-theme="light"] .classic-hero--console .classic-hero-title{
+  color: #132033;
+  text-shadow: none;
+  animation: none;
+}
+:root[data-theme="light"] .classic-hero-grad{
+  background: none;
+  -webkit-text-fill-color: #0e7490;
+  background-clip: unset;
+  -webkit-background-clip: unset;
+  color: #0e7490;
+}
+:root[data-theme="light"] .classic-hero-eyebrow{
+  color: #075985;
+  background: #e0f2fe;
+  border-color: rgba(8, 145, 178, 0.18);
+}
+:root[data-theme="light"] .classic-hero-sub{ color: #334155; }
+
+:root[data-theme="light"] .classic-cta-ghost{
+  color: #075985;
+  border-color: rgba(8, 145, 178, 0.34);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ── 取自原 41-theme-light-v2.css ── */
+:root[data-theme="light"] .classic-cta-primary{
+  min-height: 2.75rem;
+  background: linear-gradient(135deg, #087ea4 0%, #1d4ed8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 14px 26px -17px rgba(29, 78, 216, 0.9);
+}
+:root[data-theme="light"] .classic-cta-primary:hover{
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 17px 30px -15px rgba(29, 78, 216, 0.82);
+}
+:root[data-theme="light"] .classic-hero{
+  border-bottom: 1px solid rgba(37, 99, 235, 0.1);
+  background:
+    linear-gradient(180deg, rgba(224, 242, 254, 0.34), rgba(255, 255, 255, 0.08)),
+    transparent;
+}
+:root[data-theme="light"] .classic-hero-orb{
+  display: block;
+  opacity: 0.16;
+  filter: blur(92px);
+  mix-blend-mode: multiply;
+}
+:root[data-theme="light"] .classic-hero-orb-3{
+  opacity: 0.1;
+}
+:root[data-theme="light"] .classic-hero--console{
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(125, 211, 252, 0.26), transparent 58%),
+    linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(248, 251, 255, 0.58));
+  border-bottom-color: rgba(37, 99, 235, 0.12);
+}
+:root[data-theme="light"] .classic-hero--console .classic-hero-grid{
+  display: block;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.055) 1px, transparent 1px);
+}
+:root[data-theme="light"] .classic-hero--console .classic-hero-scan{
+  display: block;
+  opacity: 0.34;
+  background: linear-gradient(90deg, transparent, rgba(8, 126, 164, 0.52) 50%, transparent);
+  box-shadow: 0 0 16px rgba(14, 165, 233, 0.28);
+}
+:root[data-theme="light"] .classic-hero--console .classic-hero-corner{
+  display: block;
+  border-color: rgba(29, 78, 216, 0.34);
+  box-shadow: none;
+}
+:root[data-theme="light"] .classic-hero-eyebrow{
+  color: #0b5c83;
+  border-color: rgba(8, 126, 164, 0.22);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 9px 22px -20px rgba(29, 78, 216, 0.6);
+}
+:root[data-theme="light"] .classic-hero-title,
+:root[data-theme="light"] .classic-hero--console .classic-hero-title{
+  color: var(--public-day-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+:root[data-theme="light"] .classic-hero-grad{
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: #0b5c83;
+  color: #0b5c83;
+}
+:root[data-theme="light"] .classic-hero-sub{
+  color: var(--public-day-muted);
+}
+
+/* ── 取自原 70-home.css ── */
+.classic-hero-sub strong{
+  color: #e0f2fe;
+  font-weight: 700;
+}
+.classic-hero-sub.is-highlight{
+  margin-top: .45rem;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+:root[data-theme="light"] .classic-hero-sub strong{ color: #0f172a; }
+:root[data-theme="light"] .classic-hero-sub.is-highlight{ color: #0369a1; }
+.classic-hero-brand{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 1.1rem;
+}
+.classic-hero-eye{
+  display: block;
+  width: clamp(190px, 26vw, 330px);
+  line-height: 0;
+  filter: drop-shadow(0 0 34px rgba(56, 189, 248, .5));
+}
+.classic-hero-eye img{ width: 100%; height: auto; display: block; }
+.classic-hero-wordmark{
+  display: flex;
+  gap: clamp(.18em, .5vw, .34em);
+  font-size: clamp(2.1rem, 5.4vw, 4.2rem);
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-top: -.18em;          /* 讓字稍微托住眼睛下緣 */
+}
+.classic-hero-wordmark > span{
+  display: inline-block;
+  background: linear-gradient(170deg, #eaf9ff 0%, #7dd3fc 42%, #38bdf8 78%, #0ea5e9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 30px rgba(56, 189, 248, .45);
+  opacity: 0;
+  animation: hero-word-in .6s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+:root[data-theme="light"] .classic-hero-wordmark > span{
+  background: linear-gradient(170deg, #0369a1 0%, #0ea5e9 60%, #0284c7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+}
+:root[data-theme="light"] .classic-hero-eye{ filter: drop-shadow(0 2px 10px rgba(2, 132, 199, .25)); }
+@media (prefers-reduced-motion: reduce) {
+  .classic-hero-wordmark > span{ opacity: 1; animation: none; }
+}
+
+/* ── 原 hero 使用的 keyframes ── */
+@keyframes hero-word-in {
+  from { opacity: 0; transform: translateY(14px); filter: blur(5px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes heroGridDrift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(48px, 48px); }
+}
+
+@keyframes heroScan {
+  0% { top: -4px; }
+  100% { top: 100%; }
+}
+
+@keyframes heroTitleGlow {
+  0%, 100% { text-shadow: 0 0 14px rgba(0, 247, 255, 0.55), 0 0 38px rgba(0, 247, 255, 0.35); }
+  50% { text-shadow: 0 0 22px rgba(0, 247, 255, 0.85), 0 0 60px rgba(0, 247, 255, 0.55); }
+}
+
+@keyframes orb-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -20px) scale(1.05); }
+    66% { transform: translate(-20px, 30px) scale(0.95); }
+  }
+
