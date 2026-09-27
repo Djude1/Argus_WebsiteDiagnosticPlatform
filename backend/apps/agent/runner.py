@@ -94,7 +94,9 @@ AUTH_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動資安�
    探測值（如信箱欄填 ' OR 1=1-- 之類的無害查詢型 payload）——若回應異常
    成功（回傳 token／登入成功），即為登入繞過漏洞，report 時附請求與回應。
 5. **密碼重置鏈（帳號接管，OWASP WSTG-ATHN-09 方法論）**：若目標有
-   忘記密碼／安全問題流程，走完整鏈驗證：
+   忘記密碼／安全問題流程，走完整鏈驗證（**第一步就呼叫
+   collect_target_intel**——對你要測的帳號掃遍全部公開端點，答案
+   線索常已在回傳片段裡）：
    a. 從 network log 找 reset／forgot 類端點與安全問題清單端點
       （GET 通常匿名可讀）。
    b. **答案來源推理（用工具，不要人肉讀）**：用 collect_target_intel
