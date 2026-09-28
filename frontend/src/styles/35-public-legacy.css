@@ -676,39 +676,45 @@
   border-bottom-color: var(--public-day-line);
   box-shadow: 0 14px 38px -28px rgba(15, 46, 96, 0.46);
 }
-:root[data-theme="light"] .public-nav-inner {
+/* 頂部導覽列的尺寸與排版日／夜共用（原本只寫在日間規則裡，切換主題時整條導覽列
+   高度、logo 與字級都會跳動）；日間規則只留顏色。放在媒體查詢之前，響應式規則兩個主題都吃得到。 */
+.public-nav-inner {
   width: 100%;
   max-width: 1440px;
   margin-inline: auto;
   padding-block: 0.7rem;
 }
-:root[data-theme="light"] .public-brand {
+.public-brand {
   flex: 0 0 auto;
   gap: 0.65rem;
 }
-:root[data-theme="light"] .public-brand-logo {
+.public-brand-logo {
   height: 52px;
 }
-:root[data-theme="light"] .public-brand-sub {
-  color: var(--public-day-muted);
+.public-brand-sub {
   font-size: 0.82rem !important;
   font-weight: 760;
   letter-spacing: 0.08em;
   white-space: nowrap;
   word-break: keep-all;
 }
-:root[data-theme="light"] .public-nav-links {
+.public-nav-links {
   flex-wrap: nowrap;
   gap: 0.2rem;
 }
-:root[data-theme="light"] .public-nav-link {
+.public-nav-link {
   position: relative;
   min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
+}
+:root[data-theme="light"] .public-brand-sub {
+  color: var(--public-day-muted);
+}
+:root[data-theme="light"] .public-nav-link {
   color: #24344d;
   text-shadow: none;
-  white-space: nowrap;
 }
 :root[data-theme="light"] .public-nav-link:hover {
   color: #0b3165;
@@ -722,8 +728,10 @@
     inset 0 -2px 0 rgba(37, 99, 235, 0.78),
     0 8px 18px -15px rgba(29, 78, 216, 0.7);
 }
-:root[data-theme="light"] .theme-toggle {
+.theme-toggle {
   min-height: 2.75rem;
+}
+:root[data-theme="light"] .theme-toggle {
   border-color: rgba(29, 78, 216, 0.2);
   color: #173e79;
   background: rgba(255, 255, 255, 0.82);
@@ -739,8 +747,10 @@
   background: linear-gradient(145deg, #173e79, #0b1930);
   box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.18), 0 4px 10px rgba(15, 46, 96, 0.2);
 }
-:root[data-theme="light"] .public-cta-primary {
+.public-cta-primary {
   min-height: 2.75rem;
+}
+:root[data-theme="light"] .public-cta-primary {
   background: linear-gradient(135deg, #087ea4 0%, #1d4ed8 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 14px 26px -17px rgba(29, 78, 216, 0.9);
 }
