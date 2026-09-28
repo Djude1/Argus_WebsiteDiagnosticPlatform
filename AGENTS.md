@@ -58,6 +58,7 @@ This file provides guidance to AGENTS-compatible agents (ZCode, Codex) when work
 - [`backend/apps/admin_api/CLAUDE.md`](backend/apps/admin_api/CLAUDE.md) — 後台 API + AdminAuditLog 稽核
 - [`backend/apps/content/CLAUDE.md`](backend/apps/content/CLAUDE.md) — 公開 CMS 讀取（寫入走 admin_api/cms）
 - [`backend/apps/insights/CLAUDE.md`](backend/apps/insights/CLAUDE.md) — 免費工具 `/free-tools`（SSRF 防護）
+- [`backend/apps/mcp_access/CLAUDE.md`](backend/apps/mcp_access/CLAUDE.md) — MCP 接入（會員以本地 AI 工具使用 Argus；每次呼叫檢查憑證／訂閱／額度，工具沿用既有授權與計費路徑）
 
 ### 跨 Agent 與模組規則同步（強制）
 

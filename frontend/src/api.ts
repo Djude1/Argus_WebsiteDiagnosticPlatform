@@ -54,6 +54,33 @@ export function setAccessToken(token: string | null) {
 
 let refreshRequest: Promise<{ data: { access: string } }> | null = null;
 
+// ---- MCP 接入中心（/api/mcp-access/）----
+
+// 訂閱權益、用量、端點網址、憑證清單、最近呼叫與工具清單
+export async function fetchMcpOverview() {
+  const response = await api.get("/mcp-access/overview/");
+  return response.data;
+}
+
+// 建立憑證；回應的 secret 是明文，只會出現這一次
+export async function createMcpKey(name: string) {
+  const response = await api.post("/mcp-access/keys/", { name });
+  return response.data;
+}
+
+export async function revokeMcpKey(keyId: number) {
+  const response = await api.post(`/mcp-access/keys/${keyId}/revoke/`);
+  return response.data;
+}
+
+// 「驗證連線」：since 之後是否收到 initialize／工具呼叫
+export async function checkMcpConnection(since: string, keyId?: number) {
+  const response = await api.get("/mcp-access/connection/", {
+    params: { since, ...(keyId ? { key_id: keyId } : {}) },
+  });
+  return response.data;
+}
+
 // ---- 訂閱（billing subscription）：回傳 data，錯誤丟給呼叫端以 axios error 處理 ----
 
 // 公開的訂閱方案清單；回傳 { plans, payment_mode, subscribe_enabled }

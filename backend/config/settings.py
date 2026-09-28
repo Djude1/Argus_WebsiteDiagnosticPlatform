@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "apps.admin_api",
     "apps.content",
     "apps.insights",
+    "apps.mcp_access",
     # OpenAPI schema 產生器：前端的 API 型別由它產出的 schema 生成，
     # 欄位對不上會變成前端的編譯錯誤而不是執行期的靜默失效
     "drf_spectacular",
@@ -418,6 +419,29 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 #   完成後依實際頁數退差（五維全選＝每頁 10 coin，與舊每頁定價相同）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
 ARGUS_COIN_PER_CATEGORY = int(os.getenv("ARGUS_COIN_PER_CATEGORY", "2"))
+
+# MCP 接入（會員以 Claude Code／Codex 等本地 AI 工具透過 MCP 使用 Argus）
+# - 限有效訂閱會員；每次呼叫都重新檢查憑證、帳號與訂閱
+# - 額度只計 tools/call 次數（台北時間每月重置），掃描費用照舊走點數
+# - ARGUS_MCP_PLAN_QUOTAS 格式「方案代碼:次數」以逗號分隔；查無方案時用預設值
+ARGUS_MCP_ENABLED = os.getenv("ARGUS_MCP_ENABLED", "true").lower() in {"1", "true", "yes"}
+ARGUS_MCP_DEFAULT_MONTHLY_CALLS = int(os.getenv("ARGUS_MCP_DEFAULT_MONTHLY_CALLS", "300"))
+ARGUS_MCP_PLAN_QUOTAS = {
+    code.strip(): int(calls)
+    for code, _, calls in (
+        item.partition(":")
+        for item in os.getenv(
+            "ARGUS_MCP_PLAN_QUOTAS", "sub-lite:300,sub-pro:1500,sub-team:6000"
+        ).split(",")
+    )
+    if code.strip() and calls.strip().isdigit()
+}
+ARGUS_MCP_MAX_KEYS = int(os.getenv("ARGUS_MCP_MAX_KEYS", "5"))
+ARGUS_MCP_RATE_PER_MINUTE = int(os.getenv("ARGUS_MCP_RATE_PER_MINUTE", "60"))
+ARGUS_MCP_REPORT_LINK_TTL = int(os.getenv("ARGUS_MCP_REPORT_LINK_TTL", "900"))
+# 對外網址（例如 https://argus.example.com）：反向代理鏈沒有正確轉送 https 時，
+# 會員頁顯示的 MCP 端點與報告連結改用此網址組成；空字串＝依請求自動判斷
+ARGUS_MCP_PUBLIC_BASE_URL = os.getenv("ARGUS_MCP_PUBLIC_BASE_URL", "").strip().rstrip("/")
 # 網頁複刻的計費：預扣上限 → 依 agent 回報的實際用量結算退差額，
 # 與掃描的 hold_for_scan / settle_scan_actual 同一套模式。
 #

@@ -21,7 +21,6 @@ from apps.billing.services import (
     InsufficientCoinError,
     estimate_scan_cost,
     get_or_create_wallet,
-    refund_full_for_scan,
 )
 from apps.scans.domain_verification import generate_token, run_verification
 from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
@@ -54,6 +53,7 @@ from apps.scans.services import get_client_ip
 from apps.scans.tasks import (
     fail_scan_job_before_start,
     reconcile_local_scan_process_exit,
+    request_scan_cancel,
     run_scan_job,
 )
 
@@ -128,6 +128,58 @@ def _submit_eager_scan(scan_job_id: int) -> bool:
         _EAGER_SCAN_SLOT.release()
         raise
     return True
+
+
+def enqueue_created_scan(scan_job: ScanJob) -> bool:
+    """把剛建立（已預扣 coin）的掃描交給 worker。
+
+    網頁 API 與 MCP 共用。派工失敗時以同一筆交易把 queued 改為 failed 並全額退款，
+    回傳 False；成功（或已被其他流程收斂）回傳 True。
+    """
+    if not settings.ARGUS_AUTO_QUEUE_SCANS:
+        return True
+    try:
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            if not _submit_eager_scan(scan_job.id):
+                raise RuntimeError("本機 eager 背景執行器忙碌或未允許。")
+        else:
+            run_scan_job.delay(scan_job.id)
+    except Exception:  # noqa: BLE001
+        if fail_scan_job_before_start(scan_job.id):
+            return False
+        scan_job.refresh_from_db()
+    return True
+
+
+def ensure_report_file(scan_job: ScanJob) -> Path:
+    """取得掃描的 Word 報告檔；快取失效時重新產生（網頁下載與 MCP 報告連結共用）。
+
+    三個條件都成立才算快取有效：
+      1. 有防偽紀錄——舊版留在磁碟上、沒有編號的報告要重新產生
+      2. 檔案還在——cleanup_reports 會刪掉逾期檔案
+      3. 排版版本是最新的——否則排版改了以後，掃描一旦產過報告就永遠鎖在舊版面
+    重產會換掉內容雜湊，但舊雜湊由 build_scan_report 收進 previous_sha256，
+    已經交付出去的副本在查驗頁仍然驗得過。
+    """
+    report_path = report_output_path(scan_job)
+    verification = ReportVerification.objects.filter(scan_job=scan_job).first()
+    cache_valid = (
+        verification is not None
+        and verification.renderer_version == RENDERER_VERSION
+        and report_path.exists()
+    )
+    if not cache_valid:
+        report_path = Path(build_scan_report(scan_job))
+    return report_path
+
+
+def report_file_response(report_path: Path) -> FileResponse:
+    return FileResponse(
+        report_path.open("rb"),
+        as_attachment=True,
+        filename=report_path.name,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
 
 
 class ScanCreateThrottle(UserRateThrottle):
@@ -220,20 +272,11 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         scan_job = serializer.save()
-        if settings.ARGUS_AUTO_QUEUE_SCANS:
-            try:
-                if settings.CELERY_TASK_ALWAYS_EAGER:
-                    if not _submit_eager_scan(scan_job.id):
-                        raise RuntimeError("本機 eager 背景執行器忙碌或未允許。")
-                else:
-                    run_scan_job.delay(scan_job.id)
-            except Exception:  # noqa: BLE001
-                if fail_scan_job_before_start(scan_job.id):
-                    return Response(
-                        {"detail": "掃描任務暫時無法啟動，預扣 coin 已退回。"},
-                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    )
-                scan_job.refresh_from_db()
+        if not enqueue_created_scan(scan_job):
+            return Response(
+                {"detail": "掃描任務暫時無法啟動，預扣 coin 已退回。"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         output_serializer = ScanJobSerializer(scan_job, context=self.get_serializer_context())
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -286,31 +329,9 @@ class ScanJobViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def report(self, request, pk=None):
+        # 已產生過就直接送既有檔案，不重跑產生器（快取規則見 ensure_report_file）
         scan_job = self.get_object()
-        # 已產生過就直接送既有檔案，不重跑產生器，省下每次下載的 IO 與 CPU。
-        # 三個條件都成立才算快取有效：
-        #   1. 有防偽紀錄——舊版留在磁碟上、沒有編號的報告要重新產生
-        #   2. 檔案還在——cleanup_reports 會刪掉逾期檔案
-        #   3. 排版版本是最新的——否則排版改了以後，掃描一旦產過報告就永遠鎖在
-        #      舊版面。使用者實際踩過：修好圖表後重新下載舊掃描的報告，拿到的是
-        #      沒有圖表的快取檔，看起來像修復失敗。
-        # 重產會換掉內容雜湊，但舊雜湊由 build_scan_report 收進 previous_sha256，
-        # 已經交付出去的副本在查驗頁仍然驗得過。
-        report_path = report_output_path(scan_job)
-        verification = ReportVerification.objects.filter(scan_job=scan_job).first()
-        cache_valid = (
-            verification is not None
-            and verification.renderer_version == RENDERER_VERSION
-            and report_path.exists()
-        )
-        if not cache_valid:
-            report_path = Path(build_scan_report(scan_job))
-        return FileResponse(
-            report_path.open("rb"),
-            as_attachment=True,
-            filename=report_path.name,
-            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
+        return report_file_response(ensure_report_file(scan_job))
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
@@ -320,21 +341,11 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         非進行中狀態（已完成 / 失敗 / 已終止）回 400。
         """
         scan_job = self.get_object()
-        in_progress_statuses = {
-            ScanJob.Status.QUEUED,
-            ScanJob.Status.CRAWLING,
-            ScanJob.Status.SCANNING,
-            ScanJob.Status.AGENT_TESTING,
-        }
-        if scan_job.status not in in_progress_statuses:
+        if not request_scan_cancel(scan_job):
             return Response(
                 {"detail": f"掃描已結束（{scan_job.get_status_display()}），無法終止。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        scan_job.status = ScanJob.Status.CANCELLED
-        scan_job.save(update_fields=["status", "updated_at"])
-        # 立即退回該 scan 預扣的 coin（worker 那邊也會再做一次，refund 函式本身冪等）
-        refund_full_for_scan(scan_job.user, scan_job, reason="取消")
         return Response(ScanJobSerializer(scan_job).data)
 
     # ---------- 修正產出（Fix Output）----------

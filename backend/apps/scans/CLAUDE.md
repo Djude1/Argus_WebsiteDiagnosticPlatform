@@ -24,7 +24,7 @@ queued → crawling → scanning → [agent_testing] → completed
 
 | 檔案 | 職責 | 禁止做的事 |
 |---|---|---|
-| `tasks.py` | Celery task 入口、狀態機推進、呼叫 billing | 直接執行爬蟲邏輯 |
+| `tasks.py` | Celery task 入口、狀態機推進、呼叫 billing；掃描流程拆成 `SCAN_PIPELINE` 階段函式（見下「掃描流程階段」）；`request_scan_cancel()` 為網頁與 MCP 共用的取消＋退款入口 | 直接執行爬蟲邏輯 |
 | `scan_plan.py` | 將單頁／全網站範圍與主動授權集中轉成各工具的執行閘門 | 寫 DB、執行任何掃描工具 |
 | `process_runner.py` | 以 `Popen` 執行 Nuclei/Katana，輪詢 DB 取消並終止 process tree | 吞掉 `ScanCancelled`、記錄 raw stdout/stderr |
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面 | 修改 ScanJob.status、呼叫 billing |
@@ -293,11 +293,36 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 
 ---
 
+## 掃描流程階段（`tasks.py`，2026-09-28 工程化）
+
+`run_scan_job` 只做三件事：`start_scan_run()` CAS 取件並建立 `ScanRunContext` → 依序執行 `SCAN_PIPELINE` → 取消／超時／失敗三種收尾（`finish_cancelled`／`finish_timeout`／`finish_failed`，退款失敗會讓 task 失敗）。完成時由 `stage_settlement()` 結算與贈與修正產出額度。
+
+| 階段名（失敗 log 會寫 `[階段名:例外類別]`） | 函式 | 做什麼 |
+|---|---|---|
+| `target_validation` | `stage_validate_target` | 再次確認目標是公開 HTTP(S) |
+| `crawl` | `stage_crawl` | Playwright BFS；每頁回報進度並當取消檢查點 |
+| `enter_scanning` | `stage_enter_scanning` | 記錄警告、狀態推進到 scanning、落地 `Page` |
+| `page_analysis` | `stage_analyze_pages`（單頁單維度：`_analyze_one_page`） | 逐維度、逐頁規則分析＋inline 秘鑰偵測 |
+| `site_security` | `stage_site_security` | 站台層級 HTTPS/HSTS/CSP 等（只評估一次） |
+| `active_probe` | `stage_active_probe`（`_collect_probe_targets`、`_run_site_active_tools`、`_run_single_page_nuclei`、`_waf_blocked_nuclei_note`） | Nuclei／Katana，遵守範圍與授權矩陣 |
+| `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
+| `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
+| `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
+| `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
+| `kali` | `stage_kali` | Kali 主動驗證 fallback |
+| `scoring` | `stage_scoring`（`tested_categories_for`） | 計分並 CAS 推進到 completed |
+
+階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。
+
+網頁 API 與 MCP 共用的掃描入口：`views.enqueue_created_scan()`（派工，失敗全額退款）、`views.ensure_report_file()`（報告快取）、`tasks.request_scan_cancel()`（取消＋退款）。
+
+---
+
 ## 合作式取消機制（Cancellation）
 
 實作在 `cancellation.py`，**完全 DB-status-based**（沒有 Redis 旗標）：
 
-1. 使用者呼叫 Cancel API → `views.py` 把 `ScanJob.status` 直接 update 成 `CANCELLED` 後立即回應。
+1. 使用者呼叫 Cancel API（或 MCP 的 `cancel_scan`）→ `tasks.request_scan_cancel()` 把 `ScanJob.status` 設為 `CANCELLED` 並立即退款後回應。
 2. `is_cancelled(scan_job_id)` 用 `ScanJob.objects.filter(id=..., status=CANCELLED).exists()` 即時查 DB（**不**用 ORM 物件快取、**不**經 Redis）；`raise_if_cancelled(scan_job_id)` 在檢查點呼叫它，命中就 raise `ScanCancelled`。
 3. Worker 各階段（爬蟲每頁、scanners、agent、Kali fallback、Kubernetes executor 的 watch / Pod list / log I/O 前後）透過 `raise_if_cancelled` 主動輪詢；偵測到取消 → 停止當前工作 → `tasks.py` 主迴圈的 try/except 收到 `ScanCancelled` 後走 cancelled/refund 分支。
 

@@ -122,6 +122,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/verify` | `VerifyReportPage` | 報告查驗（公開導覽列有入口） |
 | `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
 | `/settings` | `SettingsPage` | 帳號設定：個人資料、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀 |
+| `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在導覽列右側帳號選單）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
@@ -223,7 +224,8 @@ npm run typecheck
 | `src/shared/useListQuery.ts` | 列表頁的搜尋／篩選／排序／分頁狀態與網址同步（泛型綁定 `defaults`，未宣告的鍵無法存取）|
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
-| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、帳號選單、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、帳號選單（帳號設定／購點與訂閱／MCP 接入中心／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |
 | `src/shared/apiTypes.ts` | **自動產生，禁止手改**：OpenAPI → TS 型別 |

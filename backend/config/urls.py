@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from apps.mcp_access.urls import manage_urlpatterns as mcp_manage_urlpatterns
+from apps.mcp_access.urls import mcp_urlpatterns
 from apps.scans.verify_views import verify_report
 from django.conf import settings
 from django.db import connection
@@ -189,6 +191,17 @@ urlpatterns = [
     path(
         "api/",
         include("apps.scans.urls"),
+    ),
+
+    # MCP 接入：給 MCP 用戶端的端點＋會員區管理 API
+    path(
+        "api/mcp/",
+        include(mcp_urlpatterns),
+    ),
+
+    path(
+        "api/mcp-access/",
+        include(mcp_manage_urlpatterns),
     ),
 
 

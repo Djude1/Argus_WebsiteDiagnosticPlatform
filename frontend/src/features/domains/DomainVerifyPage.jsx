@@ -8,6 +8,7 @@ import {
   verifyVerifiedDomain,
 } from "../../api";
 import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
+import { copyToClipboard } from "../../shared/clipboard";
 
 // ============================================================
 // 網域所有權驗證頁（/domains）
@@ -49,30 +50,6 @@ function formatDate(value) {
     month: "numeric",
     day: "numeric",
   });
-}
-
-// 一鍵複製：優先 clipboard API，不支援（如非 HTTPS 環境）時退回 execCommand
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.setAttribute("readonly", "");
-      // 動態計算值：移出視野避免頁面跳動，屬必要 inline style
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(textarea);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
 }
 
 // 單一欄位（標籤 + 值 + 一鍵複製）
