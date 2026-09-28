@@ -86,8 +86,10 @@ function AppShell({ googleOAuthEnabled }) {
   const restoreSession = useArgusStore((state) => state.restoreSession);
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
+  // 評論頁：登入後留在會員區（會員導覽列）；未登入才走公開頁版型
   const isPublic = [
-    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify", "/partners",
+    "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners",
+    ...(accessToken ? [] : ["/reviews"]),
   ].some((p) =>
     location.pathname.startsWith(p),
   );
@@ -126,8 +128,9 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/verify" element={<VerifyReportPage />} />
             <Route path="/verify/:reportNumber" element={<VerifyReportPage />} />
             <Route path="/partners" element={<PartnersPage />} />
-            <Route path="/reviews" element={<ReviewsPage />} />
+            {!accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           </Route>
+          {accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           <Route
             path="/dashboard"
             element={

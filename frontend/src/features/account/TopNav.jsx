@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { to: "/history", label: "歷史" },
   { to: "/billing", label: "購點" },
   { to: "/reviews", label: "評論" },
-  { to: "/settings", label: "設定" },
+  { to: "/mcp", label: "MCP 接入中心" },
 ];
 
 function TopNav() {
