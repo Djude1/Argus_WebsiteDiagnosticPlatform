@@ -131,6 +131,8 @@ class PartnerInquiry(models.Model):
         NEW = "new", "待處理"
         CONTACTED = "contacted", "已聯繫"
         CLOSED = "closed", "已結案"
+        # 誘餌欄位有值的送出：照樣存檔（避免瀏覽器自動填入讓真人的洽談默默消失），由管理員判斷
+        SPAM = "spam", "疑似垃圾訊息"
 
     name = models.CharField(max_length=80)
     company = models.CharField(max_length=120)

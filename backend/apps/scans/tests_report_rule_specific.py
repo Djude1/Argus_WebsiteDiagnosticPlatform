@@ -111,8 +111,8 @@ class RuleVerifyTests(TestCase):
             category="geo", severity="medium",
             title="X", description="d", remediation="r", ai_handoff_prompt="p",
         )
-        # CATEGORY_VERIFY geo: 「修補後重新執行一次 Argus 掃描確認此項目消失。」
-        self.assertIn("Argus", _verify_for(finding))
+        # 沒有 per-rule 指令時退回分類的手動確認方式（不再只叫人「重掃一次」）
+        self.assertIn("逐頁證據", _verify_for(finding))
 
 
 def _full_doc_text(path: str) -> str:

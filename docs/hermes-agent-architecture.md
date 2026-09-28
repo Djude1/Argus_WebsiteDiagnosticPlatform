@@ -102,7 +102,7 @@ JWT kid/jku、$regex 盲注、優惠碼規律、上傳 polyglot、SSRF 無 OOB�
 LLM/chatbot 注入）；關鍵詞評分（tags×3＋標題×2＋內文）回 top 3 段落。設計依據：
 Excalibur 檢索增強知識；網路搜尋裁定不做（黑箱抄答案＋目標外洩）。
 
-**回報/調度**：`report_security_issue`（critical 封頂 high；回報前自問
+**回報/調度**：`report_security_issue`（2026-09-28 起封頂 medium、附判定依據與 IP 核對；回報前自問
 「攻擊者現在能做到嗎？證據能重現嗎？」）／`report_ux_issue`／
 `dispatch_specialist`（僅 orchestrator）／`decode_jwt`（不驗簽）／
 `finish`（summary 必含「未能完成的測試與原因」→ `warning_summary.agent.feedback`）

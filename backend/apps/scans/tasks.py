@@ -120,8 +120,15 @@ def _write_progress(
     phase_started_at: str,
     step: str = "",
     steps: list[str] | None = None,
+    step_done: int | None = None,
+    step_total: int | None = None,
 ) -> None:
-    """寫 ScanJob.progress；用 filter().update() 避免覆蓋其他欄位且 race-safe。"""
+    """寫 ScanJob.progress；用 filter().update() 避免覆蓋其他欄位且 race-safe。
+
+    step_done／step_total 是「目前這一步」自己的進度（例如 GEO 分析到第幾頁），前端用它和
+    steps 一起算整體進度，讓進度條與階段一致；無法計數的步驟給 0／0（前端顯示進行中）。
+    未指定時，爬取與 Agent 這類一步就是一整個 phase 的步驟沿用 done／total。
+    """
     progress = {
         "pages_done": done,
         "pages_total": max(total, 1),  # 避免除以 0
@@ -129,7 +136,20 @@ def _write_progress(
         "phase_started_at": phase_started_at,
     }
     if step:
+        if step_done is None:
+            step_done, step_total = (done, total) if step in ("crawl", "agent") else (0, 0)
         progress["step"] = step
+        progress["step_done"] = max(step_done, 0)
+        progress["step_total"] = max(step_total or 0, 0)
+        # 同一步驟沿用第一次寫入的開始時間（前端據此估算本步驟剩餘時間）
+        previous = (
+            ScanJob.objects.filter(id=scan_job_id).values_list("progress", flat=True).first()
+        )
+        same_step = isinstance(previous, dict) and previous.get("step") == step
+        if same_step and previous.get("step_started_at"):
+            progress["step_started_at"] = previous["step_started_at"]
+        else:
+            progress["step_started_at"] = timezone.now().isoformat()
     if steps:
         progress["steps"] = steps
     ScanJob.objects.filter(id=scan_job_id).update(progress=progress)
@@ -350,6 +370,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             "phase": "scanning",
             "phase_started_at": scan_phase_started,
             "step": f"analyze_{analyze_cats[0]}" if analyze_cats else "deep_security",
+            "step_done": 0,
+            "step_total": page_count if analyze_cats else 0,
+            "step_started_at": scan_phase_started,
             "steps": scan_steps,
         }
         scan_job.save(update_fields=["status", "warning_summary", "progress", "updated_at"])
@@ -425,6 +448,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                     phase_started_at=scan_phase_started,
                     step=f"analyze_{category}",
                     steps=scan_steps,
+                    step_done=page_idx + 1,
+                    step_total=page_count,
                 )
                 raise_if_cancelled(scan_job_id)
             append_log(
@@ -846,6 +871,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 "phase": "agent_testing",
                 "phase_started_at": agent_phase_started,
                 "step": "agent",
+                "step_done": 0,
+                "step_total": settings.ARGUS_AGENT_MAX_STEPS,
+                "step_started_at": agent_phase_started,
                 "steps": scan_steps,
             }
             scan_job.save(update_fields=["status", "progress", "updated_at"])

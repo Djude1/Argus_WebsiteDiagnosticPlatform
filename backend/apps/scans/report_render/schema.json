@@ -41,7 +41,8 @@
           }
         },
         "new_findings":  {"type": "array", "items": {"type": "string"}},
-        "priority_note": {"type": "string"}
+        "priority_note": {"type": "string"},
+        "score_note":    {"type": "string", "description": "分數算法說明"}
       }
     },
     "priorities": {
@@ -85,7 +86,17 @@
           "urls":     {"type": "string", "description": "受影響網址（選填）"},
           "problem":  {"type": "string"},
           "fix":      {"type": "string"},
-          "evidence": {"type": "string", "description": "檢測依據原始數據，等寬字呈現"}
+          "evidence": {"type": "string", "description": "檢測依據原始數據，等寬字呈現"},
+          "group":    {"type": "string", "enum": ["security", "content"], "description": "資安或網站內容改善；報告分段顯示"},
+          "trace":    {"type": "string", "description": "規則、觀測時間與來源（規則／工具／AI），供重新核對"},
+          "locations": {"type": "array", "description": "合併多頁時逐頁的網址與該頁證據",
+                        "items": {"type": "object", "required": ["url"],
+                                  "properties": {"url": {"type": "string"}, "evidence": {"type": "string"}}}},
+          "locations_more": {"type": "string", "description": "未列出的其餘位置說明"},
+          "assessment": {"type": "object", "description": "判定依據：成立條件／實際觀察／尚缺證據／驗證方法",
+                         "properties": {"condition": {"type": "string"}, "observed": {"type": "string"},
+                                        "missing": {"type": "string"}, "verify": {"type": "string"}}},
+          "basis":    {"type": "string", "description": "內容類建議的規則依據與適用限制"}
         }
       }
     },
@@ -113,6 +124,11 @@
                                    "owasp_cwe": {"type": "string"}}}
         },
         "verify_note":   {"type": "string"},
+        "verify_items":  {"type": "array",
+                          "items": {"type": "object", "required": ["ref", "title", "how"],
+                                    "properties": {"ref": {"type": "string"}, "title": {"type": "string"},
+                                                   "how": {"type": "string"}}}},
+        "method_note":   {"type": "string", "description": "報告產生方式與來源說明（規則／工具／AI）"},
         "authorization": {"type": "object", "description": "項目->內容 的鍵值對"}
       }
     }

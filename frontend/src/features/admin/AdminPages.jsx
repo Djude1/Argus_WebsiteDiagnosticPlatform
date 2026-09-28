@@ -61,6 +61,7 @@ const ADMIN_NAV_GROUPS = [
       { to: "/admin/users", label: "使用者", Icon: AdminUsersIcon },
       { to: "/admin/orders", label: "訂單", Icon: AdminOrdersIcon },
       { to: "/admin/transactions", label: "點數交易", Icon: AdminTransactionsIcon },
+      { to: "/admin/partner-inquiries", label: "合作洽談", Icon: AdminAnnouncementsIcon },
     ],
   },
   {
@@ -594,6 +595,7 @@ const PARTNER_INQUIRY_SCHEMA = {
         { value: "new", label: "待處理" },
         { value: "contacted", label: "已聯繫" },
         { value: "closed", label: "已結案" },
+        { value: "spam", label: "疑似垃圾訊息" },
       ] },
     { key: "admin_note", label: "內部備註", type: "textarea", rows: 3, hint: "只有後台看得到" },
     { key: "company", label: "公司", type: "text", readOnly: true },
@@ -618,8 +620,22 @@ const CONTENT_TABS = [
   { key: "team", label: "團隊成員", schema: TEAM_SCHEMA },
   { key: "releases", label: "APP / PWA 版本", schema: RELEASE_SCHEMA },
   { key: "milestones", label: "開發里程碑", schema: MILESTONE_SCHEMA },
-  { key: "partner-inquiries", label: "合作洽談", schema: PARTNER_INQUIRY_SCHEMA },
 ];
+
+// 商業合作洽談：獨立放在「客戶」分組（原本藏在網站內容的分頁裡，不容易找到）
+function AdminPartnerInquiriesPage() {
+  return (
+    <div className="admin-page">
+      <header className="admin-page-head">
+        <div>
+          <h1>合作洽談</h1>
+          <p>公開頁 /partners 送來的洽談需求；可更新處理狀態與內部備註。誘餌欄位被填寫的送出會標成「疑似垃圾訊息」，仍保留供判斷。</p>
+        </div>
+      </header>
+      <AdminCmsManager schema={PARTNER_INQUIRY_SCHEMA} />
+    </div>
+  );
+}
 
 function AdminContentPage() {
   const [tab, setTab] = useState("features");
@@ -733,5 +749,6 @@ export {
   RequireAdmin,
   AdminLayout,
   AdminContentPage,
+  AdminPartnerInquiriesPage,
   AdminSettingsPage,
 };
