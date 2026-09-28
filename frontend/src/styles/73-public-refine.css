@@ -514,3 +514,198 @@
 .review-next-day .review-next-response-content > .review-next-entry-actions {
   width: calc(100% + 20px);
 }
+
+/* ── 商業合作（/partners）：大段落、細分隔線，只有首屏報告示意用一次卡片 ── */
+.public-shell .partners-hero-grid {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+  max-width: 1120px;
+  margin: 0 auto;
+  text-align: left;
+}
+@media (min-width: 960px) {
+  .public-shell .partners-hero-grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  }
+}
+.public-shell .partners-hero .public-hero-title,
+.public-shell .partners-hero .public-hero-sub {
+  margin-left: 0;
+  text-align: left;
+}
+.public-shell .partners-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  margin-top: 1.75rem;
+}
+.public-shell .partners-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pub-accent);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.public-shell .partners-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+.public-shell .partners-report {
+  box-shadow: 0 0 60px -30px rgba(34, 211, 238, 0.55);
+}
+
+.public-shell .partners-types,
+.public-shell .partners-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 900px) {
+  .public-shell .partners-types { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .public-shell .partners-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.public-shell .partners-types > li,
+.public-shell .partners-steps > li {
+  padding: 1.25rem 1.5rem 1.25rem 0;
+  border-top: 1px solid var(--pub-line-strong);
+}
+@media (min-width: 900px) {
+  .public-shell .partners-types > li + li,
+  .public-shell .partners-steps > li + li {
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--pub-line);
+  }
+}
+.public-shell .partners-types h3,
+.public-shell .partners-steps h3 {
+  margin: 0 0 0.5rem;
+  color: var(--pub-heading);
+  font-size: 1.1rem;
+}
+.public-shell .partners-types p,
+.public-shell .partners-steps p {
+  margin: 0;
+  color: var(--pub-muted);
+  line-height: 1.75;
+}
+.public-shell .partners-step-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--pub-accent);
+  border-radius: 50%;
+  color: var(--pub-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* 「客戶會拿到什麼」：整頁唯一一個淺色段落，放報告內容的三個面向 */
+.public-shell .partners-outcomes {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 1.75rem;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #1e293b;
+}
+@media (min-width: 900px) {
+  .public-shell .partners-outcomes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.public-shell .partners-outcomes dt {
+  margin-bottom: 0.4rem;
+  color: #0369a1;
+  font-weight: 700;
+}
+.public-shell .partners-outcomes dd {
+  margin: 0;
+  line-height: 1.75;
+  color: #334155;
+}
+:root[data-theme="light"] .public-shell .partners-outcomes {
+  background: #e0f2fe;
+}
+
+.public-shell .partners-form {
+  max-width: 880px;
+  display: grid;
+  gap: 1rem;
+}
+.public-shell .partners-form-grid {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 720px) {
+  .public-shell .partners-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.public-shell .partners-form textarea,
+.public-shell .partners-form select {
+  width: 100%;
+}
+.public-shell .partners-field-error,
+.public-shell .partners-form-error {
+  color: #f87171;
+  font-size: 0.82rem;
+}
+:root[data-theme="light"] .public-shell .partners-field-error,
+:root[data-theme="light"] .public-shell .partners-form-error {
+  color: #b91c1c;
+}
+.public-shell .partners-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.public-shell .partners-form-note {
+  margin: 0;
+  color: var(--pub-muted);
+  font-size: 0.82rem;
+}
+/* 誘餌欄位：移出畫面但保留在表單中（display:none 會被部分機器人略過） */
+.public-shell .partners-hp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.public-shell .partners-form-done {
+  max-width: 880px;
+  padding: 1.5rem;
+  border: 1px solid var(--pub-accent);
+  border-radius: 14px;
+}
+.public-shell .partners-form-done h3 {
+  margin: 0 0 0.5rem;
+  color: var(--pub-heading);
+}
+.public-shell .partners-form-done p {
+  margin: 0 0 1rem;
+  color: var(--pub-text);
+}
+/* 下拉選單沿用 .insight-field 輸入框的樣式（原本只定義了 input／textarea） */
+.public-shell .partners-form select {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.68);
+  color: #f8fafc;
+  padding: 0.8rem 0.9rem;
+}
+.public-shell .partners-form textarea {
+  min-height: 8rem;
+}
+:root[data-theme="light"] .public-shell .partners-form select {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #ffffff;
+  color: #0f172a;
+}
+.public-shell .partners-hero .public-hero-title {
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  line-height: 1.25;
+}

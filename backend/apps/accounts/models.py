@@ -10,7 +10,8 @@ from django.utils import timezone
 
 
 class User(AbstractUser):
-    pass
+    # 大頭貼：一律是 apps.accounts.avatars 重新編碼過的 256×256 PNG，檔名為隨機 32 位 hex
+    avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
 
 
 class LoginEvent(models.Model):

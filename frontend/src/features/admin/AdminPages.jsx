@@ -13,6 +13,7 @@ import { ArgusLogo } from "../../components/brand/ArgusMark";
 import { StatusDoneGlyph, useConfirmDialogs } from "../../shared/AppShared.jsx";
 import { AdminField, AdminModal } from "../../components/admin/AdminModal";
 import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates";
+import { formatDateTime } from "../../shared/formatters";
 import {
   AdminOverviewIcon,
   AdminUsersIcon,
@@ -360,9 +361,11 @@ function AdminCmsManager({ schema }) {
               {schema.previewLabel || "預覽前台 ↗"}
             </a>
           )}
-          <button type="button" className="admin-btn primary" onClick={startNew}>
-            + 新增
-          </button>
+          {schema.canCreate !== false && (
+            <button type="button" className="admin-btn primary" onClick={startNew}>
+              + 新增
+            </button>
+          )}
         </div>
       </div>
 
@@ -393,7 +396,7 @@ function AdminCmsManager({ schema }) {
           ))}
           {items.length === 0 && (
             <tr><td colSpan={schema.displayFields.length + 1} className="admin-empty">
-              尚無資料，點右上「+ 新增」開始
+              {schema.emptyText || "尚無資料，點右上「+ 新增」開始"}
             </td></tr>
           )}
         </tbody>
@@ -430,6 +433,7 @@ function AdminCmsManager({ schema }) {
                 <textarea
                   {...fieldProps}
                   className="admin-input"
+                  readOnly={f.readOnly}
                   rows={f.rows || 3}
                   value={draft[f.key] ?? ""}
                   onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
@@ -457,6 +461,7 @@ function AdminCmsManager({ schema }) {
                 <input
                   {...fieldProps}
                   className="admin-input"
+                  readOnly={f.readOnly}
                   type={f.type === "number" ? "number" : (f.type === "datetime" ? "datetime-local" : "text")}
                   value={draft[f.key] ?? ""}
                   onChange={(e) => setDraft({ ...draft, [f.key]:
@@ -574,11 +579,46 @@ const MILESTONE_SCHEMA = {
   ],
 };
 
+// 商業合作洽談（/partners 表單送來的資料）：不能新增，只更新處理狀態與備註；其餘欄位唯讀
+const PARTNER_INQUIRY_SCHEMA = {
+  endpoint: "/admin/cms/partner-inquiries/",
+  title: "合作洽談",
+  previewPath: "/partners",
+  previewLabel: "預覽 /partners",
+  canCreate: false,
+  emptyText: "尚無洽談需求",
+  titleField: "company",
+  fields: [
+    { key: "status", label: "處理狀態", type: "select",
+      options: [
+        { value: "new", label: "待處理" },
+        { value: "contacted", label: "已聯繫" },
+        { value: "closed", label: "已結案" },
+      ] },
+    { key: "admin_note", label: "內部備註", type: "textarea", rows: 3, hint: "只有後台看得到" },
+    { key: "company", label: "公司", type: "text", readOnly: true },
+    { key: "name", label: "聯絡人", type: "text", readOnly: true },
+    { key: "email", label: "工作信箱", type: "text", readOnly: true },
+    { key: "phone", label: "電話", type: "text", readOnly: true },
+    { key: "partner_type_label", label: "合作類型", type: "text", readOnly: true },
+    { key: "site_count", label: "網站數量", type: "text", readOnly: true },
+    { key: "message", label: "需求說明", type: "textarea", rows: 5, readOnly: true },
+  ],
+  displayFields: [
+    { key: "created_at", label: "送出時間", render: (i) => formatDateTime(i.created_at) },
+    { key: "company", label: "公司" },
+    { key: "name", label: "聯絡人" },
+    { key: "partner_type_label", label: "合作類型" },
+    { key: "status_label", label: "狀態" },
+  ],
+};
+
 const CONTENT_TABS = [
   { key: "features", label: "專案特色", schema: FEATURE_SCHEMA },
   { key: "team", label: "團隊成員", schema: TEAM_SCHEMA },
   { key: "releases", label: "APP / PWA 版本", schema: RELEASE_SCHEMA },
   { key: "milestones", label: "開發里程碑", schema: MILESTONE_SCHEMA },
+  { key: "partner-inquiries", label: "合作洽談", schema: PARTNER_INQUIRY_SCHEMA },
 ];
 
 function AdminContentPage() {

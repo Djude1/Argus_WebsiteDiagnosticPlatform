@@ -12,7 +12,8 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 | `register/` | `EmailRegisterView` | email + 密碼（依 Django policy，至少 10 碼） |
 | `email-login/` | `EmailLoginView` | `django_authenticate` → JWT |
 | `refresh/` / `logout/` | `CookieTokenRefreshView` / `LogoutView` | HttpOnly refresh cookie 輪替與撤銷（CSRF 保護） |
-| `me/` | `MeView` | GET 回傳 whitelist 個資；PATCH **僅可改 `first_name` / `last_name`**（`IsAuthenticated`） |
+| `me/` | `MeView` | GET 回傳 whitelist 個資（含 `avatar_url`）；PATCH **僅可改 `first_name` / `last_name`**（`IsAuthenticated`） |
+| `me/avatar/` | `MeAvatarView` | POST（multipart 欄位 `avatar`）上傳大頭貼、DELETE 移除；`avatar_upload` throttle（預設 20/hour） |
 | `change-password/` | `ChangePasswordView` | 僅 email 帳號（Google 帳號無可用密碼） |
 | `password-reset/request/` / `confirm/` | Password reset views | 資料庫只保存 HMAC digest；raw token 只寄信且單次使用 |
 
@@ -22,6 +23,7 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 - 每次登入都呼叫 `billing.services.grant_monthly_bonus_if_needed`（本月未領則補 200 coin）。
 - 三個實際登入入口（`EmailLoginView` / `GoogleLoginView` / `EmailRegisterView`）成功後都寫一筆 `LoginEvent`（method/password|google|register、IP 用 `config.client_ip.resolve_client_ip`、UA），並觸發 `billing.services.settle_subscription_safe`（訂閱 lazy 結算）；兩者都包 try/except，失敗不影響登入回應。後台查詢走 `GET /api/admin/users/<id>/login-events/`。
 - `auth_provider` 由 `has_usable_password()` 推斷（`google` / `email`）。
+- 大頭貼（`User.avatar`）：`avatars.process_avatar` 限 JPG／PNG／WebP、≤ 2 MB、≤ 25M 像素，Pillow 解碼後重新編碼成 256×256 PNG（丟棄 EXIF／ICC／polyglot），檔名 `uuid4().hex`；換圖或移除會刪舊檔。檔案由 `config/urls.py` 的 `serve_avatar`（`/media/avatars/<32 hex>.png`，`nosniff`＋sandbox CSP）提供。`/api/admin/me/` 也回 `avatar_url`（前端導覽列頭像）。
 - dev-login 後門已移除，勿復活。
 - `email-login/` 的狀態碼必須分開：**帳密錯誤回 401**，**欄位缺漏回 400**。
   兩者都回 400 會與 `DisallowedHost`、CSRF 等設定層錯誤同碼，線上排查時無法從

@@ -81,18 +81,58 @@ def _run_async(coroutine_factory):
         return runner.run(coroutine_factory())
 
 
+# 細分階段（progress.step）：讓前端顯示「現在在分析什麼」。phase 仍只有
+# crawling/scanning/agent_testing 三值（既有契約），step 是其下更細的子步驟，
+# steps 是本次掃描實際會跑的子步驟清單（依維度與範圍／授權決定）。
+ANALYZE_STEP_ORDER = ["seo", "aeo", "geo", "ux", "security"]
+CATEGORY_LOG_LABELS = {"seo": "SEO", "aeo": "AEO", "geo": "GEO", "ux": "UX", "security": "資安"}
+
+
+def planned_scan_steps(scan_job, execution_plan) -> list[str]:
+    """本次掃描會經過的子步驟（順序即執行順序）。"""
+    cats = scan_job.effective_categories
+    steps = ["crawl"]
+    steps += [f"analyze_{c}" for c in ANALYZE_STEP_ORDER if c in cats]
+    if execution_plan.run_nuclei:
+        steps.append("active_probe")
+    steps.append("deep_security")
+    if execution_plan.run_exposure:
+        steps.append("exposure_probe")
+    if "geo" in cats:
+        steps.append("geo_site")
+    if settings.ARGUS_AGENT_ENABLED and (execution_plan.run_agent or execution_plan.run_agent_ux):
+        steps.append("agent")
+    steps.append("scoring")
+    return steps
+
+
+def _first_step(steps: list[str], *candidates: str) -> str:
+    """回傳 candidates 中第一個會在本次掃描執行的子步驟。"""
+    return next((c for c in candidates if c in steps), candidates[-1])
+
+
 def _write_progress(
-    scan_job_id: int, *, phase: str, done: int, total: int, phase_started_at: str
+    scan_job_id: int,
+    *,
+    phase: str,
+    done: int,
+    total: int,
+    phase_started_at: str,
+    step: str = "",
+    steps: list[str] | None = None,
 ) -> None:
     """寫 ScanJob.progress；用 filter().update() 避免覆蓋其他欄位且 race-safe。"""
-    ScanJob.objects.filter(id=scan_job_id).update(
-        progress={
-            "pages_done": done,
-            "pages_total": max(total, 1),  # 避免除以 0
-            "phase": phase,
-            "phase_started_at": phase_started_at,
-        }
-    )
+    progress = {
+        "pages_done": done,
+        "pages_total": max(total, 1),  # 避免除以 0
+        "phase": phase,
+        "phase_started_at": phase_started_at,
+    }
+    if step:
+        progress["step"] = step
+    if steps:
+        progress["steps"] = steps
+    ScanJob.objects.filter(id=scan_job_id).update(progress=progress)
 
 
 @transaction.atomic
@@ -240,6 +280,11 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         return {"status": current_status}
     scan_job = ScanJob.objects.select_related("user").get(id=scan_job_id)
     execution_plan = build_scan_execution_plan(scan_job)
+    scan_steps = planned_scan_steps(scan_job, execution_plan)
+    _write_progress(
+        scan_job_id, phase="crawling", done=0, total=1,
+        phase_started_at=crawl_phase_started, step="crawl", steps=scan_steps,
+    )
     scope_label = "單頁" if execution_plan.scope == "single" else "全網站"
     append_log(
         scan_job_id,
@@ -256,7 +301,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         async def _crawl_progress(done: int, total: int) -> None:
             await sync_to_async(_write_progress, thread_sensitive=True)(
                 scan_job_id, phase="crawling", done=done, total=total,
-                phase_started_at=crawl_phase_started,
+                phase_started_at=crawl_phase_started, step="crawl", steps=scan_steps,
             )
             cancelled = await sync_to_async(is_cancelled, thread_sensitive=True)(scan_job_id)
             if cancelled:
@@ -296,18 +341,23 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         scan_phase_started = timezone.now().isoformat()
         scan_job.status = ScanJob.Status.SCANNING
         scan_job.warning_summary = warnings
+        analyze_cats = [c for c in ANALYZE_STEP_ORDER if c in scan_job.effective_categories]
+        page_count = max(len(crawled_pages), 1)
+        scanning_total = page_count * max(len(analyze_cats), 1)
         scan_job.progress = {
             "pages_done": 0,
-            "pages_total": max(len(crawled_pages), 1),
+            "pages_total": scanning_total,
             "phase": "scanning",
             "phase_started_at": scan_phase_started,
+            "step": f"analyze_{analyze_cats[0]}" if analyze_cats else "deep_security",
+            "steps": scan_steps,
         }
         scan_job.save(update_fields=["status", "warning_summary", "progress", "updated_at"])
         append_log(scan_job_id, f"開始分析，共 {len(crawled_pages)} 頁待掃描")
 
         all_findings: list[dict] = []
-        scanning_total = max(len(crawled_pages), 1)
-        for scanned_idx, page_data in enumerate(crawled_pages, start=1):
+        pages: list[tuple[Page, dict]] = []
+        for page_data in crawled_pages:
             page = Page.objects.create(
                 scan_job=scan_job,
                 url=page_data["url"],
@@ -327,57 +377,74 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 element_boxes=page_data["element_boxes"],
                 layout_metrics=page_data.get("layout_metrics") or {},
             )
-            # 被阻擋的頁面內容是錯誤頁，不進行四維掃描，僅保留紀錄與警告
-            if not page_data["blocked_reason"]:
-                page_findings = analyze_page(
-                    PageAnalysisInput(
-                        url=page.url,
-                        final_url=page.final_url,
-                        title=page.title,
-                        html=page.html,
-                        headers=page_data["headers"],
-                        element_boxes=page_data["element_boxes"],
-                        html_only=page_data["html_only"],
-                        layout_metrics=page_data.get("layout_metrics") or {},
-                        ux_signals=page_data.get("ux_signals") or {},
-                        js_errors=page_data.get("js_errors") or [],
-                    ),
-                    categories=scan_job.effective_categories,
-                )
-                all_findings.extend(page_findings)
-                for finding in page_findings:
-                    Finding.objects.create(scan_job=scan_job, page=page, **finding)
-                # Inline/HTML 硬編碼秘鑰偵測（被動：只分析已抓到的 HTML，不發額外請求）
-                if "security" in scan_job.effective_categories:
-                    page_secrets = detect_secrets_in_text(page.html)
-                    secret_finding = build_secret_finding(
-                        page_secrets, page.final_url or page.url, source="inline_html"
+            pages.append((page, page_data))
+
+        # 逐維度、逐頁分析：一次只跑一個維度，進度才能告訴使用者「現在在分析 GEO／UX／資安」。
+        # 結果與一次跑全部維度相同（analyze_page 各維度互不相依）。
+        page_finding_counts = [0] * len(pages)
+        for cat_idx, category in enumerate(analyze_cats):
+            category_found = 0
+            for page_idx, (page, page_data) in enumerate(pages):
+                # 被阻擋的頁面內容是錯誤頁，不進行分析，僅保留紀錄與警告
+                if not page_data["blocked_reason"]:
+                    page_findings = analyze_page(
+                        PageAnalysisInput(
+                            url=page.url,
+                            final_url=page.final_url,
+                            title=page.title,
+                            html=page.html,
+                            headers=page_data["headers"],
+                            element_boxes=page_data["element_boxes"],
+                            html_only=page_data["html_only"],
+                            layout_metrics=page_data.get("layout_metrics") or {},
+                            ux_signals=page_data.get("ux_signals") or {},
+                            js_errors=page_data.get("js_errors") or [],
+                        ),
+                        categories={category},
                     )
-                    if secret_finding:
-                        secret_finding = owasp_mapper.tag(secret_finding)
-                        Finding.objects.create(scan_job=scan_job, page=page, **secret_finding)
-                        all_findings.append(secret_finding)
-            # 不論是否被阻擋，已處理一頁就更新 progress；同時當作 cancel 檢查點
-            _write_progress(
-                scan_job.id,
-                phase="scanning",
-                done=scanned_idx,
-                total=scanning_total,
-                phase_started_at=scan_phase_started,
+                    # Inline/HTML 硬編碼秘鑰偵測（被動：只分析已抓到的 HTML，不發額外請求）
+                    if category == "security":
+                        secret_finding = build_secret_finding(
+                            detect_secrets_in_text(page.html),
+                            page.final_url or page.url,
+                            source="inline_html",
+                        )
+                        if secret_finding:
+                            page_findings.append(owasp_mapper.tag(secret_finding))
+                    all_findings.extend(page_findings)
+                    for finding in page_findings:
+                        Finding.objects.create(scan_job=scan_job, page=page, **finding)
+                    page_finding_counts[page_idx] += len(page_findings)
+                    category_found += len(page_findings)
+                # 每處理一頁就更新 progress；同時當作 cancel 檢查點
+                _write_progress(
+                    scan_job.id,
+                    phase="scanning",
+                    done=cat_idx * page_count + page_idx + 1,
+                    total=scanning_total,
+                    phase_started_at=scan_phase_started,
+                    step=f"analyze_{category}",
+                    steps=scan_steps,
+                )
+                raise_if_cancelled(scan_job_id)
+            append_log(
+                scan_job_id,
+                f"{CATEGORY_LOG_LABELS[category]} 分析完成：{category_found} 項問題",
             )
+
+        for page_idx, (_page, page_data) in enumerate(pages, start=1):
+            found = page_finding_counts[page_idx - 1]
             blocked = (
                 f"（阻擋：{page_data['blocked_reason']}）"
                 if page_data["blocked_reason"]
                 else ""
             )
-            findings_count = len(page_findings) if not page_data["blocked_reason"] else 0
             append_log(
                 scan_job_id,
-                f"[{scanned_idx}/{scanning_total}] "
+                f"[{page_idx}/{len(pages)}] "
                 f"{redact_pii_in_text(redact_url_query_values(page_data['url']))} "
-                f"HTTP {page_data['status_code']} {blocked}→ {findings_count} 項問題",
+                f"HTTP {page_data['status_code']} {blocked}→ {found} 項問題",
             )
-            raise_if_cancelled(scan_job_id)
 
         # HTTPS/HSTS/CSP/X-Frame-Options/X-Content-Type-Options 是伺服器設定，整站幾乎一致；
         # 對每頁各自呼叫 analyze_security() 只會得到同一組問題的多份複本，且會把 SECURITY
@@ -435,6 +502,16 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         katana_tech: list[str] = []
         nuclei_findings: list[dict] = []
 
+        if execution_plan.run_nuclei:
+            _write_progress(
+                scan_job.id,
+                phase="scanning",
+                done=scanning_total,
+                total=deep_scan_total,
+                phase_started_at=scan_phase_started,
+                step="active_probe",
+                steps=scan_steps,
+            )
         if execution_plan.run_katana:
             append_log(
                 scan_job_id,
@@ -555,6 +632,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             done=scanning_total + 1,
             total=deep_scan_total,
             phase_started_at=scan_phase_started,
+            step="deep_security",
+            steps=scan_steps,
         )
 
         # 若 Nuclei 無發現，且 Katana 偵測到已知 WAF / CDN，
@@ -612,6 +691,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             done=scanning_total + 2,
             total=deep_scan_total,
             phase_started_at=scan_phase_started,
+            step="deep_security",
+            steps=scan_steps,
         )
         # === 深度被動安全掃描（security/ sub-package，純加法、silent-fail）===
         host = urlparse(scan_job.normalized_url).hostname or ""
@@ -651,6 +732,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             done=scanning_total + 3,
             total=deep_scan_total,
             phase_started_at=scan_phase_started,
+            step=_first_step(scan_steps, "exposure_probe", "geo_site", "agent", "scoring"),
+            steps=scan_steps,
         )
 
         # === robots.txt 敏感路徑洩露（被動，任何模式都產出）===
@@ -713,6 +796,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
             done=deep_scan_total,
             total=deep_scan_total,
             phase_started_at=scan_phase_started,
+            step=_first_step(scan_steps, "geo_site", "agent", "scoring"),
+            steps=scan_steps,
         )
 
         append_log(
@@ -760,6 +845,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                 "pages_total": settings.ARGUS_AGENT_MAX_STEPS,
                 "phase": "agent_testing",
                 "phase_started_at": agent_phase_started,
+                "step": "agent",
+                "steps": scan_steps,
             }
             scan_job.save(update_fields=["status", "progress", "updated_at"])
             try:
@@ -789,6 +876,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         done=agent_result.steps,
                         total=settings.ARGUS_AGENT_MAX_STEPS,
                         phase_started_at=agent_phase_started,
+                        step="agent",
+                        steps=scan_steps,
                     )
                     for issue in agent_result.issues:
                         all_findings.append(
@@ -872,6 +961,19 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # 該維度的量測（如 UX 的 layout_metrics 在爬蟲階段一律收集），
         # 不在勾選內就不得進 category_scores——「沒買」不能被算成「測過」。
         tested_categories &= scan_job.effective_categories
+        _write_progress(
+            scan_job.id,
+            phase=(
+                "agent_testing"
+                if scan_job.status == ScanJob.Status.AGENT_TESTING
+                else "scanning"
+            ),
+            done=1,
+            total=1,
+            phase_started_at=timezone.now().isoformat(),
+            step="scoring",
+            steps=scan_steps,
+        )
         # 0 頁是「掃描實質失效」的強信號：在 warning_summary 標記 + scan_log 警告，
         # 避免 overall_score（此時只反映站台層級）被誤讀為「網站安全」。
         if not crawled_pages:

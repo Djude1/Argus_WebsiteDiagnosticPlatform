@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from apps.content.models import AppRelease, ProjectFeature, ProjectMilestone, TeamMember
+from apps.content.models import (
+    AppRelease,
+    PartnerInquiry,
+    ProjectFeature,
+    ProjectMilestone,
+    TeamMember,
+)
 
 
 class ProjectFeatureSerializer(serializers.ModelSerializer):
@@ -37,3 +43,28 @@ class AppReleaseSerializer(serializers.ModelSerializer):
             "release_notes", "download_url", "icon_url",
             "is_latest", "released_at",
         ]
+
+
+class PartnerInquiryCreateSerializer(serializers.ModelSerializer):
+    """公開洽談表單：只接受洽談欄位；`website` 是給機器人填的誘餌欄位，有值就視為垃圾訊息。"""
+
+    website = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
+    class Meta:
+        model = PartnerInquiry
+        fields = [
+            "name", "company", "email", "partner_type", "message",
+            "phone", "site_count", "website",
+        ]
+        extra_kwargs = {"message": {"max_length": 2000}}
+
+    def validate(self, attrs):
+        for key in ("name", "company", "message"):
+            attrs[key] = attrs[key].strip()
+            if not attrs[key]:
+                raise serializers.ValidationError({key: "此欄位不可空白。"})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("website", None)
+        return super().create(validated_data)

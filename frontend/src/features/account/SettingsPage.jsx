@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { api, fetchMySubscription } from "../../api";
-import { accountInitial } from "../../components/navigation/NavActions";
+import { api, deleteAvatar, fetchMySubscription, uploadAvatar } from "../../api";
+import { AccountAvatar } from "../../components/navigation/NavActions";
 import { useArgusStore } from "../../store";
 import { useConfirmDialogs } from "../../shared/AppShared";
 import { MoonIcon, SunIcon } from "../../shared/ActionIcons";
@@ -19,7 +19,12 @@ function SettingsPage() {
   const setToken = useArgusStore((s) => s.setToken);
   const theme = useArgusStore((s) => s.theme);
   const toggleTheme = useArgusStore((s) => s.toggleTheme);
+  const fetchMe = useArgusStore((s) => s.fetchMe);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
+
+  const avatarInputRef = useRef(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState("");
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -66,6 +71,48 @@ function SettingsPage() {
     }
   }
 
+  // 大頭貼：前端先擋格式與大小，實際驗證與重新編碼由後端（apps.accounts.avatars）負責
+  async function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setAvatarMsg("只接受 JPG、PNG 或 WebP 圖片");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarMsg("圖片不可超過 2 MB");
+      return;
+    }
+    setAvatarBusy(true);
+    setAvatarMsg("");
+    try {
+      const { avatar_url: url } = await uploadAvatar(file);
+      setMeData((prev) => ({ ...prev, avatar_url: url }));
+      fetchMe();
+      setAvatarMsg("頭像已更新");
+    } catch (err) {
+      setAvatarMsg(err.response?.data?.detail || "上傳失敗，請稍後再試");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarBusy(true);
+    setAvatarMsg("");
+    try {
+      await deleteAvatar();
+      setMeData((prev) => ({ ...prev, avatar_url: null }));
+      fetchMe();
+      setAvatarMsg("已移除頭像");
+    } catch {
+      setAvatarMsg("移除失敗，請稍後再試");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
   async function handleChangePassword(e) {
     e.preventDefault();
     setPwdError("");
@@ -96,7 +143,7 @@ function SettingsPage() {
       <div className="set-layout">
         <aside className="set-summary" aria-label="帳號摘要">
           <div className="set-card set-profile-card">
-            <span className="app-avatar is-xl" aria-hidden="true">{accountInitial(meData)}</span>
+            <AccountAvatar me={meData} className="is-xl" />
             <div className="set-profile-id">
               <strong>{displayName}</strong>
               {meData?.email && meData.email !== displayName && <small>{meData.email}</small>}
@@ -105,6 +152,30 @@ function SettingsPage() {
                   {isEmailAccount ? "Email 帳號" : "Google 帳號"}
                 </span>
               )}
+            </div>
+            <div className="set-avatar-actions">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={handleAvatarChange}
+                aria-label="選擇大頭貼圖片"
+              />
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={avatarBusy || !meData}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {avatarBusy ? "處理中…" : meData?.avatar_url ? "更換頭像" : "上傳頭像"}
+              </button>
+              {meData?.avatar_url && (
+                <button type="button" className="set-link-btn" disabled={avatarBusy} onClick={handleAvatarRemove}>
+                  移除
+                </button>
+              )}
+              <p className="set-hint" role="status">{avatarMsg || "JPG、PNG 或 WebP，2 MB 以內；會裁成正方形。"}</p>
             </div>
           </div>
 

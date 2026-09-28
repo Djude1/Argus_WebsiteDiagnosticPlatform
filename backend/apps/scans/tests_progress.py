@@ -151,3 +151,53 @@ class CrawlerProgressCallbackTests(TestCase):
 
         result = asyncio.run(driver())
         self.assertEqual(result, "swallowed")
+
+
+class PlannedScanStepsTests(TestCase):
+    """progress.steps：依勾選維度與範圍列出本次實際會跑的子步驟（前端據此顯示細分階段）。"""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="steps_user", password="safe-test-password"
+        )
+
+    def _steps(self, **fields):
+        from django.test import override_settings
+
+        from apps.scans.scan_plan import build_scan_execution_plan
+        from apps.scans.tasks import planned_scan_steps
+
+        scan = _make_scan(self.user)
+        for key, value in fields.items():
+            setattr(scan, key, value)
+        with override_settings(ARGUS_AGENT_ENABLED=False):
+            return planned_scan_steps(scan, build_scan_execution_plan(scan))
+
+    def test_passive_single_page_lists_only_selected_categories(self):
+        steps = self._steps(categories=["ux", "seo"], max_pages=1)
+        self.assertEqual(
+            steps, ["crawl", "analyze_seo", "analyze_ux", "deep_security", "scoring"],
+        )
+
+    def test_all_categories_include_geo_site_and_keep_fixed_order(self):
+        steps = self._steps(categories=["security", "geo", "aeo", "seo", "ux"])
+        self.assertEqual(
+            steps[:6],
+            [
+                "crawl", "analyze_seo", "analyze_aeo", "analyze_geo",
+                "analyze_ux", "analyze_security",
+            ],
+        )
+        self.assertIn("geo_site", steps)
+        self.assertNotIn("active_probe", steps)  # 被動模式不跑主動探測
+        self.assertEqual(steps[-1], "scoring")
+
+    def test_write_progress_keeps_step_fields(self):
+        scan = _make_scan(self.user)
+        _write_progress(
+            scan.id, phase="scanning", done=3, total=10, phase_started_at="t",
+            step="analyze_geo", steps=["crawl", "analyze_geo"],
+        )
+        scan.refresh_from_db()
+        self.assertEqual(scan.progress["step"], "analyze_geo")
+        self.assertEqual(scan.progress["steps"], ["crawl", "analyze_geo"])

@@ -7,6 +7,7 @@ from apps.accounts.views import (
     EmailRegisterView,
     GoogleLoginView,
     LogoutView,
+    MeAvatarView,
     MeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
@@ -19,6 +20,7 @@ urlpatterns = [
     path("refresh/", CookieTokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),
+    path("me/avatar/", MeAvatarView.as_view(), name="me-avatar"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     path(
         "password-reset/request/",
