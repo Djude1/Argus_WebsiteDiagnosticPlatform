@@ -383,6 +383,92 @@ def analyze_robots_disclosure(disallow: list[str]) -> list[dict]:
     )]
 
 
+class _PacedRequester:
+    """所有 exposure HTTP 請求共用同一個取消檢查與 RPS 時鐘。"""
+
+    def __init__(self, context, scan_job_id: int, min_interval: float) -> None:
+        self._context = context
+        self._scan_job_id = scan_job_id
+        self._min_interval = min_interval
+        self._last_at = 0.0
+
+    async def get(self, raw_url: str, *, timeout: int):
+        cancelled = await sync_to_async(
+            is_cancelled,
+            thread_sensitive=True,
+        )(self._scan_job_id)
+        if cancelled:
+            raise ScanCancelled()
+        wait = self._min_interval - (time.perf_counter() - self._last_at)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        self._last_at = time.perf_counter()
+        # max_redirects=0：不跟隨重定向，避免目標站的 open redirect
+        # 把探針導向雲端 metadata / 外站（任何重定向會丟例外 → 跳過該路徑）
+        return await self._context.request.get(
+            assert_public_http_url(raw_url),
+            timeout=timeout,
+            max_redirects=0,
+        )
+
+
+async def _fetch_robots_disallow(requester: _PacedRequester, origin: str) -> list[str]:
+    """主爬蟲沒提供 robots.txt 時自行抓取；失敗回 []。"""
+    try:
+        robots_url = assert_public_http_url(f"{origin}/robots.txt")
+        resp = await requester.get(robots_url, timeout=10000)
+        if resp.ok:
+            return parse_robots_disallow(await resp.text())
+    except ScanCancelled:
+        raise
+    except Exception:
+        pass
+    return []
+
+
+async def _soft_404_baselines(requester: _PacedRequester, origin: str) -> list[str]:
+    """soft-404 基準：SPA / catch-all 會對任意路徑回 200 + 同一頁。
+
+    先抓兩個保證不存在的隨機路徑當基準，後續用來濾掉假命中。
+    """
+    baselines: list[str] = []
+    for _ in range(2):
+        rnd = f"{origin}/zz-nonexist-{uuid.uuid4().hex}"
+        try:
+            bresp = await requester.get(rnd, timeout=12000)
+            if 200 <= bresp.status < 300:
+                baselines.append(_norm_body((await bresp.text())[:20000]))
+        except ScanCancelled:
+            raise
+        except Exception:
+            pass
+    return baselines
+
+
+async def _probe_one(requester: _PacedRequester, url: str, baselines: list[str]) -> dict | None:
+    """探測單一路徑；連線失敗或被重定向回 None（跳過該路徑）。"""
+    try:
+        resp = await requester.get(url, timeout=12000)
+        status = resp.status
+        ctype = (resp.headers or {}).get("content-type", "")
+        body = ""
+        if 200 <= status < 300:
+            try:
+                body = (await resp.text())[:20000]
+            except Exception:
+                body = ""
+        return {
+            "url": url, "status": status, "content_type": ctype, "body": body,
+            "soft_404": (
+                _is_soft_404(body, baselines) if 200 <= status < 300 else False
+            ),
+        }
+    except ScanCancelled:
+        raise
+    except Exception:
+        return None
+
+
 async def probe_paths(
     normalized_url: str,
     origin: str,
@@ -393,14 +479,13 @@ async def probe_paths(
     """重用 Playwright（繞 CF）探測敏感路徑，回傳 raw 結果。任何例外回 []（不影響主掃描）。
 
     優先重用主爬蟲取得的 robots.txt Disallow；沒有傳入時才自行抓取。
-    套用 active 模式速率限制與取消檢查點。
+    套用 active 模式速率限制與取消檢查點。流程：robots → soft-404 基準 → 逐路徑探測，
+    三段共用 _PacedRequester 的速率時鐘。
     """
     from playwright.async_api import async_playwright  # 延遲匯入，避免無 worker 環境 import 失敗
 
     results: list[dict] = []
     rps = max(getattr(settings, "ARGUS_ACTIVE_MAX_RPS", 2), 1)
-    min_interval = 1.0 / rps
-    last_at = 0.0
 
     try:
         async with async_playwright() as pw:
@@ -412,91 +497,19 @@ async def probe_paths(
                 user_agent=settings.ARGUS_SCANNER_USER_AGENT,
             )
             try:
-                async def _paced_get(raw_url: str, *, timeout: int):
-                    """所有 exposure HTTP 請求共用同一個取消檢查與 RPS 時鐘。"""
-                    nonlocal last_at
-                    cancelled = await sync_to_async(
-                        is_cancelled,
-                        thread_sensitive=True,
-                    )(scan_job_id)
-                    if cancelled:
-                        raise ScanCancelled()
-                    wait = min_interval - (time.perf_counter() - last_at)
-                    if wait > 0:
-                        await asyncio.sleep(wait)
-                    last_at = time.perf_counter()
-                    return await context.request.get(
-                        assert_public_http_url(raw_url),
-                        timeout=timeout,
-                        max_redirects=0,
-                    )
-
+                requester = _PacedRequester(context, scan_job_id, 1.0 / rps)
                 effective_robots_disallow = robots_disallow
                 if effective_robots_disallow is None:
-                    effective_robots_disallow = []
-                    try:
-                        robots_url = assert_public_http_url(f"{origin}/robots.txt")
-                        resp = await _paced_get(
-                            robots_url,
-                            timeout=10000,
-                        )
-                        if resp.ok:
-                            effective_robots_disallow = parse_robots_disallow(
-                                await resp.text()
-                            )
-                    except ScanCancelled:
-                        raise
-                    except Exception:
-                        pass
-
+                    effective_robots_disallow = await _fetch_robots_disallow(requester, origin)
                 targets = build_probe_targets(
                     origin,
                     robots_disallow=effective_robots_disallow,
                 )
-
-                # soft-404 baseline：SPA / catch-all 會對任意路徑回 200 + 同一頁；
-                # 先抓兩個保證不存在的隨機路徑當基準，後續用來濾掉假命中
-                baselines: list[str] = []
-                for _ in range(2):
-                    rnd = f"{origin}/zz-nonexist-{uuid.uuid4().hex}"
-                    try:
-                        bresp = await _paced_get(
-                            rnd,
-                            timeout=12000,
-                        )
-                        if 200 <= bresp.status < 300:
-                            baselines.append(_norm_body((await bresp.text())[:20000]))
-                    except ScanCancelled:
-                        raise
-                    except Exception:
-                        pass
-
+                baselines = await _soft_404_baselines(requester, origin)
                 for url in targets:
-                    try:
-                        # max_redirects=0：不跟隨重定向，避免目標站的 open redirect
-                        # 把探針導向雲端 metadata / 外站（任何重定向會丟例外 → 跳過該路徑）
-                        resp = await _paced_get(
-                            url,
-                            timeout=12000,
-                        )
-                        status = resp.status
-                        ctype = (resp.headers or {}).get("content-type", "")
-                        body = ""
-                        if 200 <= status < 300:
-                            try:
-                                body = (await resp.text())[:20000]
-                            except Exception:
-                                body = ""
-                        results.append({
-                            "url": url, "status": status, "content_type": ctype, "body": body,
-                            "soft_404": (
-                                _is_soft_404(body, baselines) if 200 <= status < 300 else False
-                            ),
-                        })
-                    except ScanCancelled:
-                        raise
-                    except Exception:
-                        continue
+                    result = await _probe_one(requester, url, baselines)
+                    if result is not None:
+                        results.append(result)
             finally:
                 await context.close()
                 await browser.close()
@@ -504,4 +517,5 @@ async def probe_paths(
         raise
     except Exception:
         return results
+    return results
     return results

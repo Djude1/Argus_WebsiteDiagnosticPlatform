@@ -300,9 +300,46 @@ def get_scan(ctx: ToolContext, args: dict) -> dict:
         "error_message": scan.error_message or None,
         "recent_log": [e.get("msg") for e in (scan.scan_log or [])[-5:]],
     }
+    aeo = _aeo_summary(scan)
+    if aeo:
+        result["aeo"] = aeo
     if scan.status == ScanJob.Status.COMPLETED:
         result["note"] = "category_scores 缺少的維度代表未評估，不是滿分。"
     return result
+
+
+def _aeo_summary(scan: ScanJob) -> dict | None:
+    """AEO 可回答性檢測：逐題判定與第一筆原文證據（個資已遮蔽）。"""
+    report = scan.aeo_report or {}
+    if not report:
+        return None
+    if report.get("status") != "evaluated":
+        return {"status": report.get("status"), "reason": report.get("reason")}
+    questions = []
+    for question in report.get("questions") or []:
+        evidence = (question.get("evidence") or [])[:1]
+        questions.append({
+            "question": question.get("text"),
+            "verdict": question.get("verdict"),
+            "reason": question.get("reason"),
+            "evidence": [
+                {
+                    "url": e.get("url"),
+                    "location": e.get("location"),
+                    "quote": mask_pii_evidence(e.get("quote") or "")[:200],
+                }
+                for e in evidence
+            ],
+        })
+    return {
+        "status": "evaluated",
+        "score": report.get("score"),
+        "questions_total": report.get("questions_total"),
+        "counts": report.get("counts"),
+        "answered_ratio": report.get("answered_ratio"),
+        "evidence_ratio": report.get("evidence_ratio"),
+        "questions": questions,
+    }
 
 
 _SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]

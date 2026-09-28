@@ -17,7 +17,7 @@
 | **Security（rule-based）** | HTTPS 檢查、HSTS/CSP 存在性/X-Frame-Options/X-Content-Type-Options、CSRF token、PII 偵測 |
 | **Security（深度，`security/`）** | SSL/TLS 深度、Cookie 旗標、資訊洩露標頭、CORS、CSP 品質、SRI 缺失、DNS/郵件（SPF/DMARC/DNSSEC）、敏感檔探測、硬編碼秘鑰、OWASP/CWE 對映、Nuclei→Kali sqlmap 攻擊鏈 |
 | **SEO** | meta title/description、H1、圖片 alt、canonical URL |
-| **AEO** | FAQPage/HowTo Schema 偵測 |
+| **AEO** | 問答檢測：依網站內容出題、逐題找答案並附原文（可回答／資訊不足／內容衝突／無可用答案）、noindex／nosnippet、結構化資料與可見文字一致性（2026-09-28 起不再以缺 FAQPage/HowTo 扣分） |
 | **GEO** | JSON-LD 結構化資料、JS 渲染差距、llms.txt、robots.txt AI 爬蟲封鎖 |
 | **免費工具** | 測速、釣魚 URL 分析、釣魚郵件分析 |
 

@@ -140,7 +140,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
 
         captured: list[dict] = []
 
-        def _capture(findings, tested_categories=None):
+        def _capture(findings, tested_categories=None, base_scores=None):
             captured.extend(findings)
             return (50, {"security": 0}, [])
 
@@ -167,7 +167,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
         """
         captured: dict = {}
 
-        def _capture(findings, tested_categories=None):
+        def _capture(findings, tested_categories=None, base_scores=None):
             captured["tested"] = set(tested_categories or [])
             return (100, {}, [])
 
@@ -197,7 +197,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
         """正常掃描（有頁）時 seo/aeo 恢復計入 overall_score，行為與修復前一致。"""
         captured: dict = {}
 
-        def _capture(findings, tested_categories=None):
+        def _capture(findings, tested_categories=None, base_scores=None):
             captured["tested"] = set(tested_categories or [])
             return (100, {}, [])
 
@@ -207,7 +207,13 @@ class KaliPipelineOrderingTests(TransactionTestCase):
             "origin": "https://example.com",
             "status_code": 200,
             "title": "Example",
-            "html": "<html><body></body></html>",
+            # 要有足夠正文，AEO 可回答性檢測才會評分（內容不足會是「未充分評估」）
+            "html": (
+                "<html><body><main><h1>關於我們</h1><p>我們提供網站健檢服務，協助企業"
+                "檢查網站的搜尋可見度、資安設定與使用體驗，並提供可執行的修正建議。</p>"
+                "<p>聯絡電話：02-2345-6789，客服信箱 service@example.com，"
+                "服務時間週一至週五 09:00-18:00。</p></main></body></html>"
+            ),
             "rendered_dom": "",
             "html_only": "",
             "screenshot_path": "",

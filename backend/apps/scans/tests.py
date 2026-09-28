@@ -1322,8 +1322,9 @@ class AeoFaqHeuristicTests(APITestCase):
 
         self.assertNotIn("問答內容缺少 FAQPage 或 HowTo 結構化資料", titles)
 
-    def test_analyze_aeo_flags_real_faq_section_without_schema(self):
-        # 真正有 FAQ 結構（dl）但沒 Schema 時才該建議補 FAQPage/HowTo
+    def test_analyze_aeo_no_longer_demands_faqpage_schema(self):
+        # 2026-09-28 起不再因為沒有 FAQPage／HowTo 就要求補標記：Google 已停止顯示 FAQ
+        # 複合搜尋結果，補標記不等於答案更容易被引用；AEO 改看內容能否回答問題。
         html = (
             "<html><body>"
             "<dl>"
@@ -1335,9 +1336,8 @@ class AeoFaqHeuristicTests(APITestCase):
             "</body></html>"
         )
         findings = analyze_aeo(self._page_input(html), parse_html_signals(html))
-        titles = {finding["title"] for finding in findings}
 
-        self.assertIn("問答內容缺少 FAQPage 或 HowTo 結構化資料", titles)
+        self.assertFalse([f for f in findings if "FAQPage" in f["title"]])
 
     def test_analyze_aeo_ignores_low_question_density_text(self):
         # 內文只出現 1-2 個常用字（什麼/如何），不應觸發任何 AEO finding

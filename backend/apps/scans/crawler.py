@@ -1,6 +1,7 @@
 import asyncio
 import time
 from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
@@ -530,6 +531,367 @@ async def _capture_screenshot(page, target: Path, url: str, warnings: dict) -> P
         return None
 
 
+_CROSS_ORIGIN_REASON = "跨網域導向，超出授權範圍"
+
+
+@dataclass
+class _CrawlState:
+    """一次爬取的佇列、結果與速率限制狀態。"""
+
+    start_url: str
+    origin: str
+    max_depth: int
+    max_pages: int
+    warnings: dict = field(default_factory=lambda: {"blocked_urls": [], "failed_urls": []})
+    visited: set[str] = field(default_factory=set)
+    queue: deque = field(default_factory=deque)
+    pages: list[dict] = field(default_factory=list)
+    api_endpoints: set[str] = field(default_factory=set)
+    page_retry_counts: dict[str, int] = field(default_factory=dict)
+    last_request_at: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.queue.append((self.start_url, 0))
+
+    def next_target(self, robot_parser: RobotFileParser, respect_robots: bool):
+        """取下一個要爬的 (url, depth)；已造訪、超過深度或被 robots.txt 禁止的直接略過。"""
+        while self.queue and len(self.pages) < self.max_pages:
+            url, depth = self.queue.popleft()
+            if url in self.visited or depth > self.max_depth:
+                continue
+            self.visited.add(url)
+            if respect_robots and not robot_parser.can_fetch(
+                settings.ARGUS_SCANNER_USER_AGENT,
+                url,
+            ):
+                self.warnings["blocked_urls"].append({"url": url, "reason": "robots.txt"})
+                continue
+            return url, depth
+        return None
+
+    def enqueue_links(self, links: list[str], depth: int) -> None:
+        for link in links:
+            if link not in self.visited and len(self.pages) + len(self.queue) < self.max_pages:
+                self.queue.append((link, depth + 1))
+
+    def progress(self) -> tuple[int, int]:
+        done = len(self.visited)
+        return done, min(len(self.visited) + len(self.queue), self.max_pages)
+
+
+class _PageStage:
+    """目前做到哪一步（失敗時寫進 failed_urls 的 reason，例如 "navigation:TimeoutError"）。"""
+
+    def __init__(self) -> None:
+        self.name = "new_page"
+
+
+def _empty_capture(js_errors: list[str]) -> dict:
+    """被阻擋／跨網域／過大的頁面：不保留任何內容，只留紀錄。"""
+    js_errors.clear()
+    return {
+        "title": "",
+        "html": "",
+        "html_only": "",
+        "links": [],
+        "element_boxes": {},
+        "layout_metrics": {},
+        "ux_signals": {},
+        "screenshot_path": None,
+    }
+
+
+async def _throttle(state: _CrawlState, min_interval: float) -> None:
+    """per-origin 速率限制：主動模式 RPS <= 2。"""
+    wait_seconds = min_interval - (time.perf_counter() - state.last_request_at)
+    if wait_seconds > 0:
+        await asyncio.sleep(wait_seconds)
+    state.last_request_at = time.perf_counter()
+
+
+def _attach_page_listeners(page, origin: str, api_endpoints: set[str]) -> list[str]:
+    """掛上被動監聽：same-origin XHR/fetch 端點、本頁 JavaScript 執行期錯誤。回傳錯誤清單。
+
+    SPA 的 API 呼叫只存在於真實瀏覽器流量：被動攔截 same-origin 端點，供 Nuclei／sqlmap／
+    Agent 作為攻擊面輸入；這裡不發任何新請求，只是觀察頁面自己發出的流量。
+    未捕捉的 JS 例外會中斷該頁腳本，常導致按鈕沒反應、內容載不出來：只收錯誤訊息首行
+    （去重、設上限），作為 UX 可用性訊號。
+    """
+
+    def _on_response(resp, _origin=origin, _sink=api_endpoints):
+        try:
+            if resp.request.resource_type not in {"xhr", "fetch"}:
+                return
+            if url_origin(resp.url) != _origin:
+                return
+            if len(_sink) < _MAX_API_ENDPOINTS:
+                _sink.add(resp.url)
+        except Exception:
+            pass
+
+    page_js_errors: list[str] = []
+
+    def _on_page_error(exc, _sink=page_js_errors):
+        try:
+            msg = str(exc).strip().splitlines()[0][:200]
+            if msg and msg not in _sink and len(_sink) < _MAX_UX_OFFENDERS:
+                _sink.append(msg)
+        except Exception:
+            pass
+
+    page.on("response", _on_response)
+    page.on("pageerror", _on_page_error)
+    return page_js_errors
+
+
+async def _capture_content(
+    page,
+    response,
+    *,
+    url: str,
+    final_url: str,
+    origin: str,
+    headers: dict,
+    status_code,
+    screenshot_target: Path | None,
+    warnings: dict,
+    stage: _PageStage,
+    js_errors: list[str],
+) -> tuple[dict, str]:
+    """擷取同源頁面的內容、截圖、連結與量測；回傳 (capture, blocked_reason)。
+
+    超大回應（PDF／影片／gzip bomb）在 Content-Length 就攔下，跳過 scroll／content／
+    screenshot 等耗記憶體操作，避免 worker 被單頁撐爆。
+    """
+    oversized_reason = classify_oversized(headers)
+    if oversized_reason:
+        return _empty_capture(js_errors), oversized_reason
+
+    stage.name = "content"
+    await scroll_to_bottom(page)
+    capture = {"title": await page.title(), "html": await page.content()}
+    try:
+        capture["html_only"] = await response.text() if response else ""
+    except Exception:
+        capture["html_only"] = ""
+    # 二次檢查：無 Content-Length 時用實際 body 大小 fallback；再看 body 是否為 CF
+    # challenge——CF 常回 200 但 body 是攔截頁，必須在 status code 判斷之前先攔下，
+    # 否則 scanners 會誤判為真實內容。
+    blocked_reason = (
+        classify_oversized(None, capture["html"])
+        or classify_cf_challenge(capture["html"])
+        or classify_blocked(status_code)
+    )
+    # 被阻擋的頁面仍拍截圖供人工核對；截圖失敗只讓這一頁沒有圖，不影響其餘分析。
+    stage.name = "screenshot"
+    capture["screenshot_path"] = (
+        await _capture_screenshot(page, screenshot_target, url, warnings)
+        if screenshot_target is not None
+        else None
+    )
+    # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
+    stage.name = "links"
+    capture["links"] = [] if blocked_reason else await extract_links(page, final_url, origin)
+    stage.name = "element_boxes"
+    capture["element_boxes"] = await collect_element_boxes(page)
+    # 一定要放最後：會改 viewport，跑在截圖或內容擷取之前會讓那些結果變成行動版的
+    stage.name = "mobile_layout"
+    capture["layout_metrics"] = await collect_mobile_layout(page)
+    # 仍在行動版視窗時量互動可用性訊號（觸控目標、表單標籤）
+    stage.name = "ux_signals"
+    capture["ux_signals"] = await collect_ux_signals(page)
+    return capture, blocked_reason
+
+
+async def _capture_same_origin_page(page, response, **kwargs) -> tuple[dict, str]:
+    """在「擷取期間沒有被 JS 導去其他網域」的保護下擷取內容。
+
+    只在 goto 完成時檢查一次 page.url 不夠：setTimeout、meta refresh 可能在之後的
+    scroll／content／screenshot 期間才導轉（TOCTOU）。framenavigated 事件會即時標記，
+    擷取結束後若曾離開授權網域，就丟棄內容與截圖。
+    """
+    origin = kwargs["origin"]
+    navigated_off_origin = {"flag": False}
+
+    def _on_frame_navigated(frame, _page=page, _origin=origin, _flag=navigated_off_origin):
+        if frame != _page.main_frame:
+            return
+        try:
+            if frame.url and url_origin(frame.url) != _origin:
+                _flag["flag"] = True
+        except Exception:
+            pass
+
+    page.on("framenavigated", _on_frame_navigated)
+    try:
+        capture, blocked_reason = await _capture_content(page, response, **kwargs)
+    finally:
+        page.remove_listener("framenavigated", _on_frame_navigated)
+
+    if navigated_off_origin["flag"] and not blocked_reason:
+        screenshot_path = capture.get("screenshot_path")
+        if screenshot_path is not None:
+            screenshot_path.unlink(missing_ok=True)
+        return _empty_capture(kwargs["js_errors"]), _CROSS_ORIGIN_REASON
+    return capture, blocked_reason
+
+
+def _page_record(
+    *,
+    url: str,
+    depth: int,
+    final_url: str,
+    final_url_origin: str,
+    status_code,
+    headers: dict,
+    capture: dict,
+    blocked_reason: str,
+    js_errors: list[str],
+    load_time_ms: int,
+) -> dict:
+    """crawl_site 回傳的單頁資料（tasks.py 落地成 Page，並交給各 scanner 分析）。"""
+    screenshot_path = capture["screenshot_path"]
+    return {
+        "url": url,
+        "final_url": final_url,
+        "origin": final_url_origin,
+        "status_code": status_code,
+        "title": capture["title"],
+        "html": capture["html"],
+        "rendered_dom": capture["html"],
+        "html_only": capture["html_only"],
+        "screenshot_path": (
+            str(screenshot_path.relative_to(settings.BASE_DIR))
+            if screenshot_path is not None
+            else ""
+        ),
+        "load_time_ms": load_time_ms,
+        "depth": depth,
+        "blocked_reason": blocked_reason,
+        "outgoing_links": capture["links"],
+        "headers": headers,
+        "element_boxes": capture["element_boxes"],
+        "layout_metrics": capture["layout_metrics"],
+        "ux_signals": capture["ux_signals"],
+        "js_errors": list(js_errors),
+    }
+
+
+async def _visit_page(
+    context,
+    state: _CrawlState,
+    url: str,
+    depth: int,
+    *,
+    screenshot_dir: Path | None,
+    stage: _PageStage,
+) -> dict:
+    """開一個分頁造訪單一網址並回傳單頁資料；Playwright 例外交給呼叫端處理。"""
+    started_at = time.perf_counter()
+    origin = state.origin
+    page = None
+    try:
+        # new_page() 在 try 裡：context/browser 偶發損壞時只讓這一頁失敗
+        page = await context.new_page()
+        js_errors = _attach_page_listeners(page, origin, state.api_endpoints)
+        stage.name = "navigation"
+        # 不等 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠無法完全安靜；
+        # 後續 scroll_to_bottom 本身會讓動態內容有時間渲染。
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        stage.name = "response_headers"
+        headers = await response.all_headers() if response else {}
+        status_code = response.status if response else None
+        stage.name = "final_url"
+        final_url = normalize_crawl_url(assert_public_http_url(page.url))
+        final_url_origin = url_origin(final_url) if final_url else origin
+
+        if final_url_origin != origin:
+            # 伺服器端 redirect 導去公開但非授權的網域：不分析其內容
+            capture, blocked_reason = _empty_capture(js_errors), _CROSS_ORIGIN_REASON
+        else:
+            capture, blocked_reason = await _capture_same_origin_page(
+                page,
+                response,
+                url=url,
+                final_url=final_url,
+                origin=origin,
+                headers=headers,
+                status_code=status_code,
+                screenshot_target=(
+                    screenshot_dir / f"page-{len(state.pages) + 1}.png"
+                    if screenshot_dir is not None
+                    else None
+                ),
+                warnings=state.warnings,
+                stage=stage,
+                js_errors=js_errors,
+            )
+        return _page_record(
+            url=url,
+            depth=depth,
+            final_url=final_url,
+            final_url_origin=final_url_origin,
+            status_code=status_code,
+            headers=headers,
+            capture=capture,
+            blocked_reason=blocked_reason,
+            js_errors=js_errors,
+            load_time_ms=round((time.perf_counter() - started_at) * 1000),
+        )
+    finally:
+        await _close_playwright_resources(page)
+
+
+def _record_page_failure(
+    state: _CrawlState, url: str, depth: int, exc: Exception, stage: _PageStage
+) -> None:
+    """Playwright 錯誤先重試（排回佇列最前面），超過上限才記為失敗；其他例外直接記失敗。"""
+    if isinstance(exc, PlaywrightError):
+        retry_count = state.page_retry_counts.get(url, 0)
+        if retry_count < _PAGE_RETRY_LIMIT:
+            state.page_retry_counts[url] = retry_count + 1
+            state.visited.discard(url)
+            state.queue.appendleft((url, depth))
+            return
+        reason = (
+            "timeout"
+            if isinstance(exc, PlaywrightTimeoutError)
+            else f"{stage.name}:{exc.__class__.__name__}"
+        )
+    else:
+        reason = f"{stage.name}:{exc.__class__.__name__}"
+    state.warnings["failed_urls"].append({"url": url, "reason": reason})
+
+
+async def _recycle_context(browser, context, origin: str, state: _CrawlState, url: str):
+    """每爬 _CONTEXT_RECYCLE_EVERY 頁換一個 browser context（釋放記憶體）。
+
+    回傳新的 context；browser process 已死、開不出新 context 時回 None，
+    呼叫端以目前已收集的頁面正常結束，不讓例外害已爬到的頁面全部遺失。
+    """
+    try:
+        await context.close()
+        return await _make_context(browser, origin)
+    except Exception as exc:
+        state.warnings["failed_urls"].append(
+            {"url": url, "reason": f"context_recycle_failed:{exc.__class__.__name__}"}
+        )
+        return None
+
+
+async def _report_progress(state: _CrawlState, progress_callback) -> None:
+    """回報進度（同時是取消檢查點）：ScanCancelled 往上拋，其他 callback 錯誤不影響爬蟲。"""
+    if progress_callback is None:
+        return
+    done, total = state.progress()
+    try:
+        await progress_callback(done, total)
+    except ScanCancelled:
+        raise
+    except Exception:
+        pass
+
+
 async def crawl_site(
     *,
     start_url: str,
@@ -541,7 +903,7 @@ async def crawl_site(
     respect_robots: bool,
     progress_callback=None,
 ) -> tuple[list[dict], dict, dict, list[str]]:
-    """爬整站。
+    """爬整站（同網域 BFS）。
 
     progress_callback：可選的 async callable，每爬完一頁（含失敗/被擋）就會呼叫
     `await progress_callback(pages_done, pages_total_estimated)`，
@@ -551,22 +913,20 @@ async def crawl_site(
     回傳第四個值 discovered_endpoints：爬取過程中瀏覽器**被動發出**的
     same-origin XHR/fetch 端點（SPA 的 API 呼叫不在 <a href> 裡，只有
     攔截真實流量才看得到）。僅觀察既有請求，不新增任何連線。
+
+    每頁的流程：_throttle（速率限制）→ _visit_page（導覽、擷取、組單頁資料）→
+    enqueue_links；失敗走 _record_page_failure（重試或記錄），每頁結束後視需要
+    _recycle_context 並 _report_progress。
     """
-    warnings: dict = {"blocked_urls": [], "failed_urls": []}
-    visited: set[str] = set()
-    queue: deque[tuple[str, int]] = deque([(start_url, 0)])
-    pages: list[dict] = []
-    api_endpoints: set[str] = set()
+    state = _CrawlState(start_url, origin, max_depth, max_pages)
     robot_parser = load_robot_parser(origin)
     min_interval = compute_min_interval(
         scan_mode,
         active_rps=settings.ARGUS_ACTIVE_MAX_RPS,
         passive_rps=settings.ARGUS_PASSIVE_MAX_RPS,
     )
-    last_request_at = 0.0
-    page_retry_counts: dict[str, int] = {}
     screenshot_dir = _prepare_screenshot_dir(
-        Path(settings.MEDIA_ROOT) / "scans" / str(scan_job_id), warnings
+        Path(settings.MEDIA_ROOT) / "scans" / str(scan_job_id), state.warnings
     )
 
     async with async_playwright() as playwright:
@@ -578,273 +938,38 @@ async def crawl_site(
         pages_in_context = 0
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
-            while queue and len(pages) < max_pages:
-                url, depth = queue.popleft()
-                if url in visited or depth > max_depth:
-                    continue
-                visited.add(url)
-                if respect_robots and not robot_parser.can_fetch(
-                    settings.ARGUS_SCANNER_USER_AGENT,
-                    url,
-                ):
-                    warnings["blocked_urls"].append({"url": url, "reason": "robots.txt"})
-                    continue
-
-                # 套用 per-origin 速率限制：主動模式 RPS <= 2
-                wait_seconds = min_interval - (time.perf_counter() - last_request_at)
-                if wait_seconds > 0:
-                    await asyncio.sleep(wait_seconds)
-                last_request_at = time.perf_counter()
-
-                page = None
-                started_at = time.perf_counter()
+            while (target := state.next_target(robot_parser, respect_robots)) is not None:
+                url, depth = target
+                await _throttle(state, min_interval)
+                stage = _PageStage()
                 context_broken = False
-                page_stage = "new_page"
                 try:
-                    # new_page() 納入 try：context/browser 偶發損壞時只讓這一頁失敗，
-                    # 不會讓例外冒出迴圈外、害已爬到的所有頁面全部遺失。
-                    page = await context.new_page()
-                    # SPA 的 API 呼叫只存在於真實瀏覽器流量：被動攔截 same-origin
-                    # XHR/fetch 端點，供 Nuclei/sqlmap/Agent 作為攻擊面輸入。
-                    # 這裡不發任何新請求，只是觀察頁面自己發出的流量。
-                    def _on_response(resp, _origin=origin, _sink=api_endpoints):
-                        try:
-                            if resp.request.resource_type not in {"xhr", "fetch"}:
-                                return
-                            if url_origin(resp.url) != _origin:
-                                return
-                            if len(_sink) < _MAX_API_ENDPOINTS:
-                                _sink.add(resp.url)
-                        except Exception:
-                            pass
-
-                    page.on("response", _on_response)
-                    # JavaScript 執行期錯誤：未捕捉的例外會中斷該頁腳本，常導致
-                    # 按鈕沒反應、內容載不出來。只收本頁同源腳本拋出的錯誤訊息
-                    # 首行（去重、設上限），作為 UX 可用性訊號。
-                    page_js_errors: list[str] = []
-
-                    def _on_page_error(exc, _sink=page_js_errors):
-                        try:
-                            msg = str(exc).strip().splitlines()[0][:200]
-                            if msg and msg not in _sink and len(_sink) < _MAX_UX_OFFENDERS:
-                                _sink.append(msg)
-                        except Exception:
-                            pass
-
-                    page.on("pageerror", _on_page_error)
-                    page_stage = "navigation"
-                    response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                    # 不再等待 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠
-                    # 無法完全安靜。後續 scroll_to_bottom 本身會讓動態內容有時間渲染，
-                    # 因此直接使用 DOMContentLoaded 結果可避免每頁最多額外等待 5 秒。
-                    page_stage = "response_headers"
-                    headers = await response.all_headers() if response else {}
-                    status_code = response.status if response else None
-                    page_stage = "final_url"
-                    final_url = normalize_crawl_url(assert_public_http_url(page.url))
-                    final_url_origin = url_origin(final_url) if final_url else origin
-
-                    if final_url_origin != origin:
-                        # 伺服器端 redirect 導去公開但非授權的網域：不分析其內容，
-                        # 也不能把它標記成屬於使用者授權的網站（origin 欄位另見下方）。
-                        blocked_reason = "跨網域導向，超出授權範圍"
-                        title = ""
-                        html = ""
-                        html_only = ""
-                        links = []
-                        element_boxes = {}
-                        layout_metrics = {}
-                        ux_signals = {}
-                        page_js_errors.clear()
-                        screenshot_path = None
-                    else:
-                        # 從這裡到內容擷取完成為止，若頁面被延遲觸發的 JS 導轉
-                        # （setTimeout、meta refresh）帶去其他網域，framenavigated 事件
-                        # 會即時標記；只在剛剛 goto 完成時檢查一次 page.url 沒辦法涵蓋
-                        # 之後 scroll/title/content/screenshot 這段期間才發生的導轉
-                        # （TOCTOU：檢查當下同源，擷取當下已經不同源）。
-                        navigated_off_origin = {"flag": False}
-
-                        def _on_frame_navigated(
-                            frame, _page=page, _origin=origin, _flag=navigated_off_origin
-                        ):
-                            if frame != _page.main_frame:
-                                return
-                            try:
-                                if frame.url and url_origin(frame.url) != _origin:
-                                    _flag["flag"] = True
-                            except Exception:
-                                pass
-
-                        page.on("framenavigated", _on_frame_navigated)
-                        try:
-                            # 早期 Content-Length 檢查：超大回應（PDF/影片/gzip bomb）
-                            # 跳過 scroll/content/screenshot 等耗記憶體操作，防止 worker
-                            # 被單頁撐爆
-                            oversized_reason = classify_oversized(headers)
-                            if oversized_reason:
-                                blocked_reason = oversized_reason
-                                title = ""
-                                html = ""
-                                html_only = ""
-                                links = []
-                                element_boxes = {}
-                                layout_metrics = {}
-                                ux_signals = {}
-                                page_js_errors.clear()
-                                screenshot_path = None
-                            else:
-                                page_stage = "content"
-                                await scroll_to_bottom(page)
-                                title = await page.title()
-                                html = await page.content()
-                                try:
-                                    html_only = await response.text() if response else ""
-                                except Exception:
-                                    html_only = ""
-                                # 二次檢查：無 Content-Length 時用實際 body 大小 fallback
-                                # 再看 body 是否為 CF challenge——CF 常回 200 但 body 是
-                                # 攔截頁，必須在 status code 判斷之前先攔下，否則 scanners
-                                # 會誤判為真實內容。
-                                blocked_reason = (
-                                    classify_oversized(None, html)
-                                    or classify_cf_challenge(html)
-                                    or classify_blocked(status_code)
-                                )
-                                # 被阻擋的頁面仍拍截圖供人工核對；oversized 已在前分支返回。
-                                # 截圖失敗只讓這一頁沒有圖，不影響這一頁其餘的分析。
-                                page_stage = "screenshot"
-                                screenshot_path = (
-                                    await _capture_screenshot(
-                                        page,
-                                        screenshot_dir / f"page-{len(pages) + 1}.png",
-                                        url,
-                                        warnings,
-                                    )
-                                    if screenshot_dir is not None
-                                    else None
-                                )
-                                # 被阻擋的頁面不再往下擷取連結，避免在錯誤頁上繼續爬取
-                                page_stage = "links"
-                                links = (
-                                    []
-                                    if blocked_reason
-                                    else await extract_links(page, final_url, origin)
-                                )
-                                page_stage = "element_boxes"
-                                element_boxes = await collect_element_boxes(page)
-                                # 一定要放最後：會改 viewport，跑在截圖或內容
-                                # 擷取之前會讓那些結果變成行動版的
-                                page_stage = "mobile_layout"
-                                layout_metrics = await collect_mobile_layout(page)
-                                # 仍在行動版視窗時量互動可用性訊號（觸控目標、
-                                # 表單標籤）；放在 mobile_layout 之後、還原視窗之前。
-                                page_stage = "ux_signals"
-                                ux_signals = await collect_ux_signals(page)
-                        finally:
-                            page.remove_listener("framenavigated", _on_frame_navigated)
-
-                        if navigated_off_origin["flag"] and not blocked_reason:
-                            blocked_reason = "跨網域導向，超出授權範圍"
-                            title = ""
-                            html = ""
-                            html_only = ""
-                            links = []
-                            element_boxes = {}
-                            layout_metrics = {}
-                            ux_signals = {}
-                            page_js_errors.clear()
-                            if screenshot_path is not None:
-                                screenshot_path.unlink(missing_ok=True)
-                                screenshot_path = None
-                    load_time_ms = round((time.perf_counter() - started_at) * 1000)
-                    pages.append(
-                        {
-                            "url": url,
-                            "final_url": final_url,
-                            "origin": final_url_origin,
-                            "status_code": status_code,
-                            "title": title,
-                            "html": html,
-                            "rendered_dom": html,
-                            "html_only": html_only,
-                            "screenshot_path": (
-                                str(screenshot_path.relative_to(settings.BASE_DIR))
-                                if screenshot_path is not None
-                                else ""
-                            ),
-                            "load_time_ms": load_time_ms,
-                            "depth": depth,
-                            "blocked_reason": blocked_reason,
-                            "outgoing_links": links,
-                            "headers": headers,
-                            "element_boxes": element_boxes,
-                            "layout_metrics": layout_metrics,
-                            "ux_signals": ux_signals,
-                            "js_errors": list(page_js_errors),
-                        }
+                    record = await _visit_page(
+                        context, state, url, depth, screenshot_dir=screenshot_dir, stage=stage
                     )
-                    if blocked_reason:
-                        warnings["blocked_urls"].append({"url": url, "reason": blocked_reason})
-                    for link in links:
-                        if link not in visited and len(pages) + len(queue) < max_pages:
-                            queue.append((link, depth + 1))
-                except PlaywrightError as exc:
-                    retry_count = page_retry_counts.get(url, 0)
-                    if retry_count < _PAGE_RETRY_LIMIT:
-                        page_retry_counts[url] = retry_count + 1
-                        visited.discard(url)
-                        queue.appendleft((url, depth))
-                    else:
-                        reason = (
-                            "timeout"
-                            if isinstance(exc, PlaywrightTimeoutError)
-                            else f"{page_stage}:{exc.__class__.__name__}"
+                    state.pages.append(record)
+                    if record["blocked_reason"]:
+                        state.warnings["blocked_urls"].append(
+                            {"url": url, "reason": record["blocked_reason"]}
                         )
-                        warnings["failed_urls"].append({"url": url, "reason": reason})
+                    state.enqueue_links(record["outgoing_links"], depth)
                 except Exception as exc:
-                    warnings["failed_urls"].append(
-                        {"url": url, "reason": f"{page_stage}:{exc.__class__.__name__}"}
-                    )
+                    _record_page_failure(state, url, depth, exc, stage)
                 finally:
-                    await _close_playwright_resources(page)
                     pages_in_context += 1
                     if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
-                        try:
-                            await context.close()
-                            context = await _make_context(browser, origin)
-                            pages_in_context = 0
-                        except Exception as exc:
-                            # browser process 本身可能已經死亡，開不出新 context 就沒辦法
-                            # 再爬下一頁；記警告、用目前已收集的 pages 正常結束，不要讓
-                            # 例外冒出 while 迴圈外害已爬到的頁面全部遺失（同一類問題，
-                            # 見上面 context.new_page() 移進 try 區塊的修正）。
-                            warnings["failed_urls"].append(
-                                {
-                                    "url": url,
-                                    "reason": f"context_recycle_failed:{exc.__class__.__name__}",
-                                }
-                            )
+                        new_context = await _recycle_context(browser, context, origin, state, url)
+                        if new_context is None:
                             context_broken = True
-                    if not context_broken and progress_callback is not None:
-                        done = len(visited)
-                        total = min(len(visited) + len(queue), max_pages)
-                        try:
-                            await progress_callback(done, total)
-                        except ScanCancelled:
-                            # 使用者按終止：立刻往上 propagate，不要被吞
-                            raise
-                        except Exception:
-                            # 其他 callback 錯誤不影響爬蟲本身
-                            pass
-                # break 特意放在 finally 區塊外：ruff B012 禁止在 finally 裡 break，
-                # 因為若當時有例外正在傳遞，finally 裡的 break 會把它悄悄吞掉；
-                # 這裡的 context_broken 只在 finally 內部自己的 try/except 已經
-                # 完整處理過例外後才會是 True，不存在還有未處理例外要傳遞的情況，
-                # 但仍照 lint 規則把 break 移到 try/finally 區塊外以避免歧義。
+                        else:
+                            context = new_context
+                            pages_in_context = 0
+                    if not context_broken:
+                        await _report_progress(state, progress_callback)
+                # break 特意放在 finally 外：ruff B012 禁止在 finally 裡 break
+                # （若當時有例外正在傳遞，finally 裡的 break 會把它悄悄吞掉）。
                 if context_broken:
                     break
         finally:
             await _close_playwright_resources(context, browser)
-    return pages, warnings, site_signals, sorted(api_endpoints)
+    return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)

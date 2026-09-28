@@ -638,3 +638,11 @@ def _appendix(doc, data):
                     "size": 10, "color": T.SLATE}], after=6, line=1.44)
     add_para(doc, [{"text": ap.get("method_note") or "本報告採 Evidence-first 原則：每一項發現都附上掃描當下實際觀測到的內容。",
                     "size": 10, "color": T.SLATE}], after=0, line=1.44)
+    # AEO 逐題結果（Argus 在地修改：可回答性檢測的每一題與原文證據）
+    if ap.get("aeo_items"):
+        h2(doc, "6.6　AEO 問答檢測逐題結果")
+        add_para(doc, [{"text": "Argus 依網站內容建立的問題，以及在已掃描頁面中找到的答案原文與位置；"
+                                "判定不是「可回答」的題目也列在發現清單中，附修正建議。",
+                        "size": 9, "color": T.GREY}], after=5)
+        rows = [[i["question"], i["verdict"], i["basis"]] for i in ap["aeo_items"]]
+        data_table(doc, ["題目", "判定", "答案原文或理由"], rows, [2300, 1100, 4700])

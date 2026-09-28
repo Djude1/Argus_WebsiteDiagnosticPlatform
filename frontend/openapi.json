@@ -3741,6 +3741,89 @@
                 }
             }
         },
+        "/api/mcp-access/connection/": {
+            "get": {
+                "operationId": "mcp_access_connection_retrieve",
+                "description": "「驗證連線」：回傳指定時間之後，這位使用者的 MCP 用戶端是否已連上並呼叫過。",
+                "tags": [
+                    "mcp-access"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/mcp-access/keys/": {
+            "post": {
+                "operationId": "mcp_access_keys_create",
+                "tags": [
+                    "mcp-access"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/mcp-access/keys/{key_id}/revoke/": {
+            "post": {
+                "operationId": "mcp_access_keys_revoke_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "key_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "mcp-access"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/mcp-access/overview/": {
+            "get": {
+                "operationId": "mcp_access_overview_retrieve",
+                "tags": [
+                    "mcp-access"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/pages/": {
             "get": {
                 "operationId": "pages_list",
@@ -6894,10 +6977,11 @@
                 "enum": [
                     "new",
                     "contacted",
-                    "closed"
+                    "closed",
+                    "spam"
                 ],
                 "type": "string",
-                "description": "* `new` - 待處理\n* `contacted` - 已聯繫\n* `closed` - 已結案"
+                "description": "* `new` - 待處理\n* `contacted` - 已聯繫\n* `closed` - 已結案\n* `spam` - 疑似垃圾訊息"
             },
             "PartnerInquiryListResponse": {
                 "type": "object",
@@ -7630,6 +7714,9 @@
                     "warning_summary": {
                         "readOnly": true
                     },
+                    "aeo_report": {
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -7672,6 +7759,7 @@
                     }
                 },
                 "required": [
+                    "aeo_report",
                     "categories",
                     "category_scores",
                     "completed_at",

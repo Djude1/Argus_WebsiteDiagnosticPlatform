@@ -678,174 +678,161 @@ def _ux_js_errors(page_input: PageAnalysisInput) -> list[dict]:
 _MAX_JS_ERROR_EVIDENCE_CHARS = 800
 
 
+def _seo_title_length(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """Meta title 過短或過長（10–65 字元以外）。"""
+    title_length = len((page_input.title or "").strip())
+    if not (title_length < 10 or title_length > 65):
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        title="Meta title 長度不理想",
+        description="頁面標題過短或過長，可能降低搜尋結果可讀性與點擊率。",
+        remediation="將 title 調整為清楚描述頁面主題且約 10 到 65 字元。",
+        evidence=f"title={page_input.title!r}, length={title_length}",
+        selector="title",
+        impact_area="metadata",
+        priority_score=40,
+    )
+
+
+def _seo_meta_description(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """Meta description 缺失、過短或過長（50–160 字元以外）。"""
+    description_length = len(parser.meta_description.strip())
+    if not (description_length < 50 or description_length > 160):
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        title="Meta description 缺失或長度不理想",
+        description="Meta description 缺失、過短或過長，會影響搜尋摘要品質。",
+        remediation="補上清楚摘要頁面價值的 description，建議約 50 到 160 字元。",
+        # 附上實際內容開頭，讀者才能自行核對（例如 CMS 把整篇文章塞進 description）
+        evidence=(
+            f"description_length={description_length}"
+            + (
+                f", 開頭：「{parser.meta_description.strip()[:60]}」"
+                if description_length
+                else "（頁面沒有 meta description）"
+            )
+        ),
+        selector='meta[name="description"]',
+        impact_area="metadata",
+        priority_score=38,
+    )
+
+
+def _seo_h1_count(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """H1 不是恰好一個。"""
+    if parser.h1_count == 1:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.MEDIUM if parser.h1_count == 0 else Finding.Severity.LOW,
+        title="H1 標題數量不正確",
+        description="每頁應有唯一且明確的 H1，協助搜尋引擎與使用者理解頁面主題。",
+        remediation="保留一個代表頁面主題的 H1，其他段落標題改用 H2-H6。",
+        evidence=f"h1_count={parser.h1_count}",
+        selector="h1",
+        bounding_box=page_input.element_boxes.get("h1"),
+        impact_area="heading",
+        priority_score=55 if parser.h1_count == 0 else 42,
+    )
+
+
+def _seo_image_alt(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """有圖片缺少 alt 屬性。"""
+    if not parser.image_without_alt:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        title="圖片缺少 alt 屬性",
+        description="圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。",
+        remediation="為有語意的圖片補上精準 alt，裝飾性圖片可使用空 alt。",
+        evidence=(
+            f"image_count={parser.image_count}, "
+            f"image_without_alt={parser.image_without_alt}"
+        ),
+        selector="img:not([alt])",
+        bounding_box=page_input.element_boxes.get("img:not([alt])"),
+        impact_area="accessibility",
+        priority_score=25,
+    )
+
+
+def _seo_canonical(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """缺少 canonical URL（info）。"""
+    if parser.canonical:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.INFO,
+        title="缺少 canonical URL",
+        description="缺少 canonical 可能讓重複內容頁面分散搜尋權重。",
+        remediation="為主要內容頁加入 canonical，指向該內容的標準 URL。",
+        evidence="canonical_missing=true",
+        selector='link[rel="canonical"]',
+        impact_area="metadata",
+        priority_score=15,
+    )
+
+
+def _seo_open_graph(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """缺少 Open Graph 分享標籤。"""
+    missing_og = sorted(OG_META_KEYS - parser.og_tags)
+    if not missing_og:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        title="缺少 Open Graph 社交分享標籤",
+        description=(
+            "頁面缺少部分 Open Graph 標籤，連結被分享到社群媒體或通訊軟體時，"
+            "預覽卡片可能沒有標題、描述或圖片，降低點擊意願。"
+        ),
+        remediation=(
+            "為頁面補齊 og:title、og:description、og:image 與 og:url 標籤，"
+            "內容與頁面主題一致，圖片建議 1200×630 以上。"
+        ),
+        evidence=f"missing_og_tags={', '.join(missing_og)}",
+        selector='meta[property^="og:"]',
+        impact_area="metadata",
+        priority_score=30,
+    )
+
+
+# 逐頁 SEO 檢查：每項獨立、順序即 finding 輸出順序；新增檢查寫成同樣簽名的函式加進來。
+SEO_PAGE_CHECKS = (
+    _seo_title_length,
+    _seo_meta_description,
+    _seo_h1_count,
+    _seo_image_alt,
+    _seo_canonical,
+    _seo_open_graph,
+)
+
+
 def analyze_seo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:
     findings: list[dict] = []
-    title_length = len((page_input.title or "").strip())
-    if title_length < 10 or title_length > 65:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.LOW,
-                title="Meta title 長度不理想",
-                description="頁面標題過短或過長，可能降低搜尋結果可讀性與點擊率。",
-                remediation="將 title 調整為清楚描述頁面主題且約 10 到 65 字元。",
-                evidence=f"title={page_input.title!r}, length={title_length}",
-                selector="title",
-                impact_area="metadata",
-                priority_score=40,
-            )
-        )
-    description_length = len(parser.meta_description.strip())
-    if description_length < 50 or description_length > 160:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.LOW,
-                title="Meta description 缺失或長度不理想",
-                description="Meta description 缺失、過短或過長，會影響搜尋摘要品質。",
-                remediation="補上清楚摘要頁面價值的 description，建議約 50 到 160 字元。",
-                # 附上實際內容開頭，讀者才能自行核對（例如 CMS 把整篇文章塞進 description）
-                evidence=(
-                    f"description_length={description_length}"
-                    + (
-                        f", 開頭：「{parser.meta_description.strip()[:60]}」"
-                        if description_length
-                        else "（頁面沒有 meta description）"
-                    )
-                ),
-                selector='meta[name="description"]',
-                impact_area="metadata",
-                priority_score=38,
-            )
-        )
-    if parser.h1_count != 1:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.MEDIUM if parser.h1_count == 0 else Finding.Severity.LOW,
-                title="H1 標題數量不正確",
-                description="每頁應有唯一且明確的 H1，協助搜尋引擎與使用者理解頁面主題。",
-                remediation="保留一個代表頁面主題的 H1，其他段落標題改用 H2-H6。",
-                evidence=f"h1_count={parser.h1_count}",
-                selector="h1",
-                bounding_box=page_input.element_boxes.get("h1"),
-                impact_area="heading",
-                priority_score=55 if parser.h1_count == 0 else 42,
-            )
-        )
-    if parser.image_without_alt:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.LOW,
-                title="圖片缺少 alt 屬性",
-                description="圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。",
-                remediation="為有語意的圖片補上精準 alt，裝飾性圖片可使用空 alt。",
-                evidence=(
-                    f"image_count={parser.image_count}, "
-                    f"image_without_alt={parser.image_without_alt}"
-                ),
-                selector="img:not([alt])",
-                bounding_box=page_input.element_boxes.get("img:not([alt])"),
-                impact_area="accessibility",
-                priority_score=25,
-            )
-        )
-    if not parser.canonical:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.INFO,
-                title="缺少 canonical URL",
-                description="缺少 canonical 可能讓重複內容頁面分散搜尋權重。",
-                remediation="為主要內容頁加入 canonical，指向該內容的標準 URL。",
-                evidence="canonical_missing=true",
-                selector='link[rel="canonical"]',
-                impact_area="metadata",
-                priority_score=15,
-            )
-        )
-    missing_og = sorted(OG_META_KEYS - parser.og_tags)
-    if missing_og:
-        findings.append(
-            make_finding(
-                category=Finding.Category.SEO,
-                severity=Finding.Severity.LOW,
-                title="缺少 Open Graph 社交分享標籤",
-                description=(
-                    "頁面缺少部分 Open Graph 標籤，連結被分享到社群媒體或通訊軟體時，"
-                    "預覽卡片可能沒有標題、描述或圖片，降低點擊意願。"
-                ),
-                remediation=(
-                    "為頁面補齊 og:title、og:description、og:image 與 og:url 標籤，"
-                    "內容與頁面主題一致，圖片建議 1200×630 以上。"
-                ),
-                evidence=f"missing_og_tags={', '.join(missing_og)}",
-                selector='meta[property^="og:"]',
-                impact_area="metadata",
-                priority_score=30,
-            )
-        )
+    for check in SEO_PAGE_CHECKS:
+        finding = check(page_input, parser)
+        if finding is not None:
+            findings.append(finding)
     return findings
 
 
 def analyze_aeo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:
-    findings: list[dict] = []
-    json_ld_text = "\n".join(parser.json_ld_blocks).lower()
-    has_faq_or_howto = "faqpage" in json_ld_text or "howto" in json_ld_text
+    """AEO 逐頁檢查：索引／摘要限制與結構化資料一致性（apps/scans/aeo/page_checks.py）。
 
-    # 問句訊號改從可見文字計算，避免 HTML 屬性、註解、tag 名稱中的字元
-    # 被誤算（例如 class="how-to-img" 被當成「如何」）。
-    visible_text = re.sub(r"<[^>]+>", " ", page_input.html or "")
-    question_like = len(re.findall(r"[？?]|什麼|如何|為何|怎麼", visible_text))
+    2026-09-28 起 AEO 改為「問題能否從網站內容中被找到、回答並追溯證據」：
+    舊版只數問句、辨識 FAQ 區塊並建議補 FAQPage，無法證明答案存在，還會在只有資訊提示時
+    讓 AEO 拿 100 分。能否回答問題的檢測是站台層級（aeo/evaluate.py），在所有頁面分析完
+    之後由 tasks.stage_aeo_answerability 執行一次。
+    """
+    from apps.scans.aeo.page_checks import analyze_page_aeo
 
-    # 問句門檻必須夠高才視為真正的問答內容；單純內文出現「什麼」「如何」
-    # 等常用詞不應觸發 FAQPage 建議。
-    if question_like < 4:
-        return findings
-
-    has_faq_structure = detect_faq_structure(page_input.html, parser.dl_count)
-
-    if has_faq_structure and not has_faq_or_howto:
-        # 已有明確的 FAQ 結構卻沒有對應 Schema：補 Schema 才有意義。
-        findings.append(
-            make_finding(
-                category=Finding.Category.AEO,
-                severity=Finding.Severity.LOW,
-                title="問答內容缺少 FAQPage 或 HowTo 結構化資料",
-                description=(
-                    "頁面已有 FAQ 結構（dl/details/accordion）但缺少對應 Schema，"
-                    "AI answer engine 較難穩定抽取答案。"
-                ),
-                remediation="為現有 FAQ 內容加入符合主題的 FAQPage 或 HowTo Schema。",
-                evidence=(
-                    f"question_like_count={question_like}, "
-                    f"json_ld_blocks={len(parser.json_ld_blocks)}, "
-                    f"dl_count={parser.dl_count}"
-                ),
-                selector='script[type="application/ld+json"]',
-                impact_area="answer_engine",
-                priority_score=38,
-            )
-        )
-    elif not has_faq_structure:
-        # 出現大量問答語氣卻沒有任何 FAQ 結構：先整理內容比補 Schema 重要。
-        findings.append(
-            make_finding(
-                category=Finding.Category.AEO,
-                severity=Finding.Severity.INFO,
-                title="問答資訊缺少明確結構",
-                description="頁面出現大量問句但沒有明確的問答區塊，AI 與使用者都較難快速擷取答案。",
-                remediation=(
-                    "使用 dl/details、明確的小標題或 FAQ 區塊整理問答內容，"
-                    "再考慮加上 Schema。"
-                ),
-                evidence=f"question_like_count={question_like}, dl_count={parser.dl_count}",
-                impact_area="content_structure",
-                priority_score=25,
-            )
-        )
-    return findings
+    return analyze_page_aeo(page_input, parser)
 
 
 _BLOCK_SPLIT = re.compile(
@@ -1042,24 +1029,11 @@ def analyze_security_site_level(pages: list[dict]) -> list[dict]:
     return findings
 
 
-def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
-    """偵測頁面外洩的個人資料（email、台灣手機、身分證、信用卡）。
+def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
+    """從頁面 HTML 萃取 PII。
 
-    顯示原始 PII 在 finding evidence 中（依使用者明確要求，不做遮罩）；
-    description 前置警示文字，讓報告閱讀者意識到本報告含未遮罩個資的法律責任。
-    身分證與信用卡含檢查碼驗證以降低 false positive。
-
-    防誤報（B1）：移除 SVG 元素與所有 points/d 屬性，避免雷達圖等動態
-    SVG 內的浮點座標數字（如 133.4346474264069）剛好 13-19 位且巧合通過
-    Luhn 被誤判為信用卡號（實機在 cekb.local 測試靶機已觀察到此 FP）。
-
-    強化覆蓋率（B2）：額外掃 HTML <!-- --> 註解內容，因為開發者最常把
-    測試資料（PCI 測試卡 4111-1111-1111-1111、員工聯絡簿、TODO 含路徑、
-    API key sample）以註解形式留在 production HTML。同類 evidence 會
-    在文案上標示「含 HTML 註解 X 筆」讓使用者注意成因。
+    回傳 (合併後 pii, 註解中的 pii, 各類「只在註解」筆數, 開發者預留字串)。
     """
-    raw_html = page_input.html or ""
-
     # B1: 移除 SVG 整段 → 殘留的 SVG 子元素 → 殘留的 SVG 座標屬性；三層防護避免浮點誤判為卡號
     safe_html = _HTML_SVG_STRIP.sub(" ", raw_html)
     safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
@@ -1085,15 +1059,22 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     # 為了避免一般網站誤觸發、僅當「同頁 PII 已有 1 筆以上 OR 字串看起來像 CTF flag」才報。
     dev_artifacts = list(dict.fromkeys(_DEV_ARTIFACT_PATTERN.findall(raw_html)))
 
-    total = sum(len(v) for v in pii.values())
-    if total == 0 and not dev_artifacts:
-        return []
+    return pii, pii_comments, comment_only_counts, dev_artifacts
 
+
+def _classify_pii(
+    page_url: str,
+    raw_html: str,
+    pii: dict,
+    pii_comments: dict,
+    comment_only_counts: dict,
+    dev_artifacts: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """依資料種類與出現脈絡分成（高風險, 個人聯絡資料, 刻意公開的聯絡方式）三組證據行。"""
     # 依「資料種類 × 出現脈絡」分級，而不是看到個資就一律高風險（2026-09-28 報告審查）：
     # 身分證、信用卡幾乎不會刻意公開 → 高風險；手機、非本網域 Email、藏在 HTML 註解的
     # 資料 → 中風險；網站自己網域的 Email 或 mailto/tel 連結 → 多半是刻意公開的聯絡資訊，
     # 只列為資訊提示請網站主確認，不當成外洩。
-    page_url = page_input.final_url or page_input.url or ""
     site_domain = _registrable_domain(urlparse(page_url).hostname or "")
     mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
     tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
@@ -1131,6 +1112,38 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
         public_contact.append(_pii_line("email（本網域或 mailto 連結）", public_emails, 0))
     if public_mobiles:
         public_contact.append(_pii_line("手機（tel 連結）", public_mobiles, 0))
+    return sensitive, personal, public_contact
+
+
+def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
+    """偵測頁面外洩的個人資料（email、台灣手機、身分證、信用卡）。
+
+    顯示原始 PII 在 finding evidence 中（依使用者明確要求，不做遮罩）；
+    description 前置警示文字，讓報告閱讀者意識到本報告含未遮罩個資的法律責任。
+    身分證與信用卡含檢查碼驗證以降低 false positive。
+
+    防誤報（B1）：移除 SVG 元素與所有 points/d 屬性，避免雷達圖等動態
+    SVG 內的浮點座標數字（如 133.4346474264069）剛好 13-19 位且巧合通過
+    Luhn 被誤判為信用卡號（實機在 cekb.local 測試靶機已觀察到此 FP）。
+
+    強化覆蓋率（B2）：額外掃 HTML <!-- --> 註解內容，因為開發者最常把
+    測試資料（PCI 測試卡 4111-1111-1111-1111、員工聯絡簿、TODO 含路徑、
+    API key sample）以註解形式留在 production HTML。同類 evidence 會
+    在文案上標示「含 HTML 註解 X 筆」讓使用者注意成因。
+    """
+    raw_html = page_input.html or ""
+    pii, pii_comments, comment_only_counts, dev_artifacts = _collect_pii(raw_html)
+    total = sum(len(v) for v in pii.values())
+    if total == 0 and not dev_artifacts:
+        return []
+    sensitive, personal, public_contact = _classify_pii(
+        page_input.final_url or page_input.url or "",
+        raw_html,
+        pii,
+        pii_comments,
+        comment_only_counts,
+        dev_artifacts,
+    )
 
     findings: list[dict] = []
     if sensitive:
@@ -1414,8 +1427,15 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
     return deduped
 
 
+# 這些 rule 的結果已經反映在分類的「基準分」裡（base_scores），不再另外扣分
+BASE_SCORED_RULE_PREFIXES = ("aeo-answer-",)
+
+
 def calculate_scores(
-    findings: list[dict], *, tested_categories: set[str] | None = None
+    findings: list[dict],
+    *,
+    tested_categories: set[str] | None = None,
+    base_scores: dict[str, int] | None = None,
 ) -> tuple[int, dict[str, int], list[dict]]:
     """算各分類分數與 overall_score。
 
@@ -1434,6 +1454,10 @@ def calculate_scores(
       一致——舊版列 5 個卻只平均 4 個，使用者怎麼算都對不出總分。
 
     tested_categories 傳 None 時視為全部類別皆已測試（相容舊呼叫）。
+
+    base_scores：分類的基準分（預設 100）。AEO 的基準分是「可回答性」分數
+    （aeo/evaluate.py，逐題判定的加權平均）；逐題 finding（BASE_SCORED_RULE_PREFIXES）
+    已反映在基準分裡，不再重複扣分，其餘 AEO 問題（noindex、標記錯誤）照一般規則扣。
 
     呼叫端注意：category_scores 不再保證含全部 5 個分類，取值請用 .get()。
     """
@@ -1462,13 +1486,20 @@ def calculate_scores(
         if tested_categories is None or category in tested_categories
     ]
     category_scores: dict[str, int] = {}
+    base_scores = base_scores or {}
     for category in scored_categories:
+        has_base = category in base_scores
         penalty = sum(
             severity_penalty.get(finding["severity"], 0)
             for finding in deduped
             if finding["category"] == category
+            and not (
+                has_base
+                and str(finding.get("rule_id") or "").startswith(BASE_SCORED_RULE_PREFIXES)
+            )
         )
-        category_scores[category] = round(100 * math.exp(-penalty / SCORE_DECAY_CONSTANT))
+        base = base_scores.get(category, 100)
+        category_scores[category] = round(base * math.exp(-penalty / SCORE_DECAY_CONSTANT))
     overall_score = (
         round(sum(category_scores.values()) / len(category_scores))
         if category_scores

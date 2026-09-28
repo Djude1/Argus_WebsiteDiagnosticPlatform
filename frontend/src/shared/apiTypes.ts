@@ -1406,6 +1406,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp-access/connection/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 「驗證連線」：回傳指定時間之後，這位使用者的 MCP 用戶端是否已連上並呼叫過。 */
+        get: operations["mcp_access_connection_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp-access/keys/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mcp_access_keys_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp-access/keys/{key_id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mcp_access_keys_revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp-access/overview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mcp_access_overview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pages/": {
         parameters: {
             query?: never;
@@ -2555,9 +2620,10 @@ export interface components {
          * @description * `new` - 待處理
          *     * `contacted` - 已聯繫
          *     * `closed` - 已結案
+         *     * `spam` - 疑似垃圾訊息
          * @enum {string}
          */
-        PartnerInquiryAdminStatusEnum: "new" | "contacted" | "closed";
+        PartnerInquiryAdminStatusEnum: "new" | "contacted" | "closed" | "spam";
         PartnerInquiryListResponse: {
             items: components["schemas"]["PartnerInquiryAdmin"][];
         };
@@ -2773,6 +2839,7 @@ export interface components {
             readonly category_scores: unknown;
             readonly top_actions: unknown;
             readonly warning_summary: unknown;
+            readonly aeo_report: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;
@@ -5380,6 +5447,80 @@ export interface operations {
         };
     };
     insights_speed_test_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcp_access_connection_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcp_access_keys_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcp_access_keys_revoke_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcp_access_overview_retrieve: {
         parameters: {
             query?: never;
             header?: never;

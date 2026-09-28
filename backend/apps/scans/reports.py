@@ -65,6 +65,9 @@ SCORE_NOTE = (
     "低風險 4、資訊提示 0；同一條規則在同一分類只扣一次（出現在多頁不重複扣）。"
     "分類分數＝100 × e^(−扣分總和 ÷ 50)，扣越多下降越慢、不會直接歸零；"
     "總分是「已評估」各分類分數的平均，每個分類權重相同。"
+    "AEO 例外：以「可回答性」為起始分（每題可回答 1、資訊不足 0.5、內容衝突 0.25、無答案 0，"
+    "聯絡、價格、期限等核心題權重較高），再依索引限制、標記錯誤等其他 AEO 問題扣分；"
+    "網站內容不足以出題時 AEO 不評分，顯示為未充分評估。"
 )
 
 SCORE_BANDS = [
@@ -104,8 +107,8 @@ CATEGORY_IMPACT = {
                 "或你的網域被冒用來寄送釣魚信件，連帶損害品牌信任。",
     "seo": "這類問題會讓搜尋引擎較難正確理解與收錄你的頁面，"
            "潛在客戶用關鍵字搜尋時，你的網站可能排在競爭對手後面。",
-    "aeo": "這類問題會讓 AI 助理在回答使用者提問時，較難引用你的內容，"
-           "等於在新的搜尋入口上失去曝光機會。",
+    "aeo": "訪客或 AI 助理問到這些問題時，網站文字無法直接給出具體、可核對的答案，"
+           "對方只能轉向其他來源，或得到不正確的資訊。",
     "geo": "這類問題會讓生成式搜尋引擎難以擷取與理解你的頁面主題，"
            "影響你的內容被 AI 摘要與推薦的機會。",
     "ux": "這類問題會讓訪客在瀏覽或操作時遇到阻礙，"
@@ -134,7 +137,8 @@ CATEGORY_VERIFY = {
                 "確認原本觀察到的回應已不存在；再重新掃描作為輔助確認。",
     "seo": "開啟逐頁證據列出的網址，以「檢視原始碼」確認對應標記已修正；"
            "可再用 Google Search Console 觀察後續索引狀態。",
-    "aeo": "開啟逐頁證據列出的網址，確認問答內容已改用明確的問答結構（dl／details 或 FAQ 區塊）。",
+    "aeo": "修改後重新掃描，確認該題的判定變為「可回答」，且證據指向修改後的段落；"
+           "也可以直接在證據列出的頁面搜尋題目中的關鍵詞，確認答案以文字寫在頁面上。",
     "geo": "開啟逐頁證據列出的網址，以「檢視原始碼」確認對應的結構或內容已補上。",
     "ux": "用手機或開發者工具的行動版模式開啟逐頁證據列出的網址，實際操作一次確認問題已不存在。",
 }
@@ -329,6 +333,20 @@ RULE_BASIS = {
     "GEO_GENERAL_A8C8023032":
         "依據：40 字以上的文字區塊少於 2 塊，或全頁文字少於 300 字。"
         "限制：這是 Argus 自訂的門檻，不是搜尋服務公布的標準。",
+    "aeo-noindex":
+        "依據：頁面的 meta robots 或 X-Robots-Tag 含 noindex。"
+        "限制：若頁面本來就不打算公開（會員頁、測試頁），這是預期行為。",
+    "aeo-nosnippet":
+        "依據：meta robots 或 X-Robots-Tag 含 nosnippet／max-snippet:0。"
+        "限制：只影響摘要與引用，不影響頁面被收錄。",
+    "aeo-markup-syntax":
+        "依據：JSON-LD 無法以 JSON 解析。限制：只檢查語法，不檢查型別是否適合該頁。",
+    "aeo-markup-mismatch":
+        "依據：標記中的問題、答案、電話或 Email 在頁面可見文字中找不到。"
+        "限制：以前 16～20 字比對，改寫過的同義文字可能被判為不一致。",
+    "aeo-render-dependent":
+        "依據：原始 HTML 的正文不到執行 JavaScript 後的 30%。"
+        "限制：Google 會執行 JavaScript；這項只說明不執行 JavaScript 的工具會拿到較少內容。",
     "AEO_GENERAL_75C5FFBB7D":
         "依據：頁面出現多個問句，但沒有 dl／details 等問答結構。"
         "限制：問句以標點與字詞推測，可能把一般疑問句也算進去。",
@@ -336,8 +354,10 @@ RULE_BASIS = {
 CATEGORY_BASIS = {
     "seo": "依據：Argus 規則比對頁面標記。限制：這是可改善的項目，不代表網站不會被搜尋；"
            "排名仍取決於內容品質與外部因素。",
-    "aeo": "依據：Argus 規則比對頁面的問答結構。限制：結構只影響答案被擷取的難易度，"
-           "不保證也不排除被 AI 引用。",
+    "aeo": "依據：Argus 以固定規則從網站內容出題（聯絡方式、價格、申請期限等），在已掃描的頁面中"
+           "找答案段落，檢查答案是否具體、是否互相矛盾（此版不使用 AI 判讀）。"
+           "限制：只涵蓋已掃描的頁面"
+           "與題庫中的問題，無法代表特定 AI 服務是否會引用你的網站。",
     "geo": "依據：Argus 規則比對頁面的結構與可讀性訊號。限制：不代表網站不會被 AI 搜尋或引用。",
     "ux": "依據：以行動版視窗實際量測（版面寬度、觸控目標、表單標籤、JavaScript 錯誤）。"
           "限制：只涵蓋可自動量測的項目，不取代實際使用者測試。",
@@ -673,7 +693,53 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
     if not_selected:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
+    aeo = _aeo_scope_text(scan_job)
+    if aeo:
+        rows["AEO 問答檢測"] = aeo
     return rows
+
+
+def _aeo_scope_text(scan_job: ScanJob) -> str:
+    report = scan_job.aeo_report or {}
+    if not report:
+        return ""
+    if report.get("status") != "evaluated":
+        return report.get("reason") or "未充分評估"
+    counts = report.get("counts") or {}
+    text = (
+        f"測試 {report.get('questions_total', 0)} 題：可回答 {counts.get('answered', 0)}、"
+        f"資訊不足 {counts.get('insufficient', 0)}、內容衝突 {counts.get('conflict', 0)}、"
+        f"無可用答案 {counts.get('missing', 0)}；"
+        f"有答案的問題比例 {round((report.get('answered_ratio') or 0) * 100)}%"
+    )
+    if report.get("evidence_ratio") is not None:
+        text += f"，答案附有原文的比例 {round(report['evidence_ratio'] * 100)}%"
+    return text + "（逐題結果見附錄）"
+
+
+def _aeo_items(scan_job: ScanJob) -> list[dict]:
+    """附錄的 AEO 逐題表：題目、判定、證據（原文與位置）或理由。"""
+    report = scan_job.aeo_report or {}
+    if report.get("status") != "evaluated":
+        return []
+    items = []
+    for question in report.get("questions") or []:
+        evidence = question.get("evidence") or []
+        if question.get("verdict") == "answered" and evidence:
+            first = evidence[0]
+            quote = mask_pii_evidence(first["quote"])[:120]
+            basis = f"{first['url']}｜{first['location']}｜「{quote}」"
+        else:
+            basis = question.get("reason") or ""
+            if evidence:
+                first = evidence[0]
+                basis += f"（{first['url']}｜{first['location']}）"
+        items.append({
+            "question": question.get("text", ""),
+            "verdict": question.get("verdict_label", ""),
+            "basis": basis[:400],
+        })
+    return items
 
 
 def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
@@ -770,109 +836,95 @@ def _score_band_label(score: int) -> str:
     return "需優先處理"
 
 
-def build_report_payload(scan_job: ScanJob) -> dict:
-    """把一次掃描轉成 report_render 的輸入 JSON（契約見 report_render/schema.json）。
+def _sorted_report_groups(scan_job: ScanJob) -> list[dict]:
+    """去重分組後排序：先資安、再內容（SEO／AEO／GEO／UX），各自依嚴重度。
 
-    這裡是報告的「資料層」：去重分組、評分、與前次比較、術語過濾、per-rule 文案、
-    PII 遮罩全部發生在這一支，排版完全交給 report_render。分開的好處是排版可以整套
-    抽換（本次就是），而這些領域規則與它們的測試一行都不用動。
+    report_render 依此順序分段顯示，先排好編號才會連續。
     """
     grouped = _group_findings_for_report(scan_job.findings.select_related("page").all())
-    # 資安與網站內容改善分開呈現：先資安、再內容（SEO／AEO／GEO／UX），各自依嚴重度排序；
-    # report_render 依此順序分段顯示，先排好編號才會連續。
     grouped.sort(
         key=lambda item: (
             item["finding"].category != Finding.Category.SECURITY,
             _severity_rank(_report_severity(item["finding"])),
         )
     )
+    return grouped
 
+
+def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
+    """單一（已合併多頁的）發現項目卡片。"""
+    finding = item["finding"]
+    pages = item["pages"]
+    is_security = finding.category == Finding.Category.SECURITY
+    observed_at = timezone.localtime(
+        finding.created_at or scan_job.completed_at or timezone.now()
+    ).strftime("%Y-%m-%d %H:%M")
+    entry = {
+        "id": ref,
+        "title": finding.title,
+        "severity": _render_severity(_report_severity(finding)),
+        "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
+        "group": "security" if is_security else "content",
+        "scope": _pages_label(pages),
+        "problem": _description_for_report(finding),
+        "fix": finding.remediation or "（無）",
+        # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
+        # 殘缺數字命不中 regex，反而以明文殘留。
+        "evidence": _report_evidence(finding, finding.evidence)[:_MAX_EVIDENCE_CHARS],
+        # 讓每筆結果都能被重新核對：規則、觀測時間與來源（規則／工具／AI）
+        "trace": (
+            f"規則 {finding.rule_id or '—'}　·　觀測 {observed_at}"
+            f"　·　來源：{_source_label(finding)}"
+        ),
+    }
+    if len(pages) > 1:
+        locations = item.get("locations") or []
+        entry["locations"] = [
+            {"url": url, "evidence": _report_evidence(finding, evidence)[:160]}
+            for url, evidence in locations[:_MAX_LISTED_PAGES]
+        ]
+        if len(pages) > _MAX_LISTED_PAGES:
+            entry["locations_more"] = (
+                f"等，另 {len(pages) - _MAX_LISTED_PAGES} 處"
+                "（完整清單見 Argus 網頁版的掃描結果）"
+            )
+    assessment = _assessment_for(finding)
+    if assessment:
+        entry["assessment"] = dict(assessment)
+        if _report_severity(finding) != finding.severity:
+            entry["assessment"]["missing"] += "（AI 觀察項目在報告中以中風險為上限呈現。）"
+    if not is_security:
+        entry["basis"] = RULE_BASIS.get(finding.rule_id or "") or CATEGORY_BASIS.get(
+            finding.category, ""
+        )
+    return entry
+
+
+def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
+    """摘要：總分、各分類分數、與前次比較。"""
     category_scores = scan_job.category_scores or {}
-    previous = _previous_completed_scan(scan_job)
     scan_date = timezone.localtime(
         scan_job.completed_at or scan_job.created_at or timezone.now()
     ).strftime("%Y-%m-%d")
-
-    findings_payload = []
-    ref_by_rule: dict[str, str] = {}
-    for index, item in enumerate(grouped, start=1):
-        finding = item["finding"]
-        pages = item["pages"]
-        ref = f"4.{index}"
-        if finding.rule_id:
-            ref_by_rule[finding.rule_id] = ref
-        is_security = finding.category == Finding.Category.SECURITY
-        observed_at = timezone.localtime(
-            finding.created_at or scan_job.completed_at or timezone.now()
-        ).strftime("%Y-%m-%d %H:%M")
-        entry = {
-            "id": ref,
-            "title": finding.title,
-            "severity": _render_severity(_report_severity(finding)),
-            "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
-            "group": "security" if is_security else "content",
-            "scope": _pages_label(pages),
-            "problem": _description_for_report(finding),
-            "fix": finding.remediation or "（無）",
-            # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
-            # 殘缺數字命不中 regex，反而以明文殘留。
-            "evidence": _report_evidence(finding, finding.evidence)[:_MAX_EVIDENCE_CHARS],
-            # 讓每筆結果都能被重新核對：規則、觀測時間與來源（規則／工具／AI）
-            "trace": (
-                f"規則 {finding.rule_id or '—'}　·　觀測 {observed_at}"
-                f"　·　來源：{_source_label(finding)}"
-            ),
-        }
-        if len(pages) > 1:
-            locations = item.get("locations") or []
-            entry["locations"] = [
-                {"url": url, "evidence": _report_evidence(finding, evidence)[:160]}
-                for url, evidence in locations[:_MAX_LISTED_PAGES]
-            ]
-            if len(pages) > _MAX_LISTED_PAGES:
-                entry["locations_more"] = (
-                    f"等，另 {len(pages) - _MAX_LISTED_PAGES} 處"
-                    "（完整清單見 Argus 網頁版的掃描結果）"
-                )
-        assessment = _assessment_for(finding)
-        if assessment:
-            entry["assessment"] = dict(assessment)
-            if _report_severity(finding) != finding.severity:
-                entry["assessment"]["missing"] += "（AI 觀察項目在報告中以中風險為上限呈現。）"
-        if not is_security:
-            entry["basis"] = RULE_BASIS.get(finding.rule_id or "") or CATEGORY_BASIS.get(
-                finding.category, ""
-            )
-        findings_payload.append(entry)
-
-    payload: dict = {
-        "meta": {
-            "site_url": scan_job.normalized_url,
-            "report_id": build_report_number(scan_job),
-            "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M:%S"),
-        },
-        "summary": {
-            "overall_score": scan_job.overall_score or 0,
-            "scan_date": scan_date,
-            "headline": _headline(
-                scan_job, previous, category_scores, _resolved_since(previous, grouped)
-            ),
-            "score_note": SCORE_NOTE,
-            # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
-            # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。
-            "categories": [
-                {
-                    "name": CATEGORY_DISPLAY.get(category, category.upper()),
-                    "score": category_scores.get(category),
-                }
-                for category in Finding.Category.values
-            ],
-        },
-        "findings": findings_payload,
+    summary: dict = {
+        "overall_score": scan_job.overall_score or 0,
+        "scan_date": scan_date,
+        "headline": _headline(
+            scan_job, previous, category_scores, _resolved_since(previous, grouped)
+        ),
+        "score_note": SCORE_NOTE,
+        # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
+        # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。
+        "categories": [
+            {
+                "name": CATEGORY_DISPLAY.get(category, category.upper()),
+                "score": category_scores.get(category),
+            }
+            for category in Finding.Category.values
+        ],
     }
-
     if previous is not None:
-        payload["summary"]["previous"] = {
+        summary["previous"] = {
             "date": timezone.localtime(previous.completed_at).strftime("%m-%d"),
             "score": previous.overall_score,
         }
@@ -885,8 +937,12 @@ def build_report_payload(scan_job: ScanJob) -> dict:
             if item["finding"].rule_id and item["finding"].rule_id not in previous_rules
         ]
         if appeared:
-            payload["summary"]["new_findings"] = appeared
+            summary["new_findings"] = appeared
+    return summary
 
+
+def _report_priorities(scan_job: ScanJob, findings_payload: list[dict]) -> list[dict]:
+    """優先改善建議（top_actions），嚴重度與對應卡片一致。"""
     priorities = []
     severity_by_title = {f["title"]: f["severity"] for f in findings_payload}
     for action in scan_job.top_actions or []:
@@ -903,9 +959,10 @@ def build_report_payload(scan_job: ScanJob) -> dict:
                 (f["id"] for f in findings_payload if f["title"] == action.get("title")), ""
             ),
         })
-    if priorities:
-        payload["priorities"] = priorities
+    return priorities
 
+
+def _report_why_matters(grouped: list[dict]) -> list[dict]:
     # 分類的「沒處理會怎樣」講一次；只列有非 info 發現的分類——某分類若只有正向的
     # 資訊提示（例如只偵測到 WAF 保護），寫「會被攻擊者利用」就是把好消息說成威脅。
     why_matters = []
@@ -919,9 +976,11 @@ def build_report_payload(scan_job: ScanJob) -> dict:
             "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
             "consequence": _impact_for(finding),
         })
-    if why_matters:
-        payload["why_matters"] = why_matters
+    return why_matters
 
+
+def _report_scan_info(scan_job: ScanJob) -> dict:
+    """掃描範圍、警示與入口頁截圖。"""
     scan_info: dict = {"scope": _scan_scope_rows(scan_job)}
     warning_lines = _scan_warning_lines(scan_job)
     if warning_lines:
@@ -933,8 +992,13 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         scan_info["screenshot_caption"] = (
             f"{entry_page.final_url or entry_page.url}（掃描當下擷取）"
         )
-    payload["scan_info"] = scan_info
+    return scan_info
 
+
+def _report_appendix(
+    scan_job: ScanJob, grouped: list[dict], findings_payload: list[dict]
+) -> dict:
+    """附錄：名詞解釋、技術索引、AEO 逐題、修補驗證、檢測方法與授權聲明。"""
     appendix: dict = {}
     glossary = _collect_glossary_terms(grouped)
     if glossary:
@@ -964,6 +1028,9 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         "想更深入了解任何一項：把該項的「問題是什麼」「怎麼修」「檢測依據」三段文字複製起來，"
         "貼給 ChatGPT、Claude 等 AI 助手並補一句「請說明這個問題的影響與具體修復步驟」即可。"
     )
+    aeo_items = _aeo_items(scan_job)
+    if aeo_items:
+        appendix["aeo_items"] = aeo_items
     appendix["verify_items"] = [
         {"ref": f["id"], "title": f["title"], "how": _verify_for(item["finding"])}
         for f, item in zip(findings_payload, grouped, strict=True)
@@ -1001,7 +1068,42 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         appendix["authorization"] = {
             "授權紀錄": "查無授權紀錄。若這份報告要作為稽核依據，請先確認授權來源。"
         }
-    payload["appendix"] = appendix
+    return appendix
+
+
+def build_report_payload(scan_job: ScanJob) -> dict:
+    """把一次掃描轉成 report_render 的輸入 JSON（契約見 report_render/schema.json）。
+
+    這裡是報告的「資料層」：去重分組、評分、與前次比較、術語過濾、per-rule 文案、
+    PII 遮罩全部發生在這一支，排版完全交給 report_render。分開的好處是排版可以整套
+    抽換（本次就是），而這些領域規則與它們的測試一行都不用動。
+
+    每一節由各自的函式組成（_report_summary、_report_finding_entry、_report_priorities、
+    _report_why_matters、_report_scan_info、_report_appendix），鍵的順序即報告章節順序。
+    """
+    grouped = _sorted_report_groups(scan_job)
+    previous = _previous_completed_scan(scan_job)
+    findings_payload = [
+        _report_finding_entry(scan_job, f"4.{index}", item)
+        for index, item in enumerate(grouped, start=1)
+    ]
+    payload: dict = {
+        "meta": {
+            "site_url": scan_job.normalized_url,
+            "report_id": build_report_number(scan_job),
+            "generated_at": timezone.localtime().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        "summary": _report_summary(scan_job, previous, grouped),
+        "findings": findings_payload,
+    }
+    priorities = _report_priorities(scan_job, findings_payload)
+    if priorities:
+        payload["priorities"] = priorities
+    why_matters = _report_why_matters(grouped)
+    if why_matters:
+        payload["why_matters"] = why_matters
+    payload["scan_info"] = _report_scan_info(scan_job)
+    payload["appendix"] = _report_appendix(scan_job, grouped, findings_payload)
     return payload
 
 

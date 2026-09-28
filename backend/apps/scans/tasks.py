@@ -21,6 +21,7 @@ from apps.billing.services import (
     refund_full_for_scan,
     settle_scan_actual,
 )
+from apps.scans.aeo.evaluate import SitePage, evaluate_site
 from apps.scans.cancellation import ScanCancelled, is_cancelled, raise_if_cancelled
 from apps.scans.crawler import crawl_site
 from apps.scans.katana_scanner import run_katana
@@ -95,6 +96,8 @@ def planned_scan_steps(scan_job, execution_plan) -> list[str]:
     cats = scan_job.effective_categories
     steps = ["crawl"]
     steps += [f"analyze_{c}" for c in ANALYZE_STEP_ORDER if c in cats]
+    if "aeo" in cats:
+        steps.append("aeo_answers")
     if execution_plan.run_nuclei:
         steps.append("active_probe")
     steps.append("deep_security")
@@ -337,6 +340,8 @@ class ScanRunContext:
     katana_findings: list[dict] = field(default_factory=list)
     katana_tech: list[str] = field(default_factory=list)
     nuclei_findings: list[dict] = field(default_factory=list)
+    # AEO 可回答性檢測（aeo/evaluate.py 的 AeoEvaluation）
+    aeo_evaluation: object | None = None
     # Agent 階段
     agent_meta: dict = field(default_factory=dict)
     agent_result: object | None = None
@@ -607,6 +612,45 @@ def stage_analyze_pages(ctx: ScanRunContext) -> None:
             f"{redact_pii_in_text(redact_url_query_values(page_data['url']))} "
             f"HTTP {page_data['status_code']} {blocked}→ {found} 項問題",
         )
+
+
+def _aeo_site_pages(ctx: ScanRunContext) -> list[SitePage]:
+    return [
+        SitePage(
+            url=page.final_url or page.url,
+            html=page_data.get("html") or "",
+            raw_html=page_data.get("html_only") or "",
+            blocked=bool(page_data.get("blocked_reason")),
+        )
+        for page, page_data in ctx.pages
+    ]
+
+
+def stage_aeo_answerability(ctx: ScanRunContext) -> None:
+    """AEO 可回答性檢測（站台層級）：網站內容能否回答一組具體問題，逐題附原文證據。
+
+    內容不足以出題時標記為未充分評估（AEO 不評分），而不是給 100 分。
+    """
+    scan_job = ctx.scan_job
+    if "aeo" not in scan_job.effective_categories:
+        return
+    ctx.scanning_progress(ctx.scanning_total, "aeo_answers")
+    evaluation = evaluate_site(_aeo_site_pages(ctx))
+    ctx.aeo_evaluation = evaluation
+    ctx.record(evaluation.findings)
+    scan_job.aeo_report = evaluation.summary
+    scan_job.save(update_fields=["aeo_report", "updated_at"])
+    if evaluation.status == "evaluated":
+        summary = evaluation.summary
+        counts = summary["counts"]
+        append_log(
+            ctx.scan_job_id,
+            f"AEO 問答檢測：{summary['questions_total']} 題，可回答 {counts['answered']}、"
+            f"資訊不足 {counts['insufficient']}、衝突 {counts['conflict']}、"
+            f"無答案 {counts['missing']}（可回答性 {evaluation.score} 分）",
+        )
+    else:
+        append_log(ctx.scan_job_id, f"AEO 問答檢測未充分評估：{evaluation.reason}", level="warn")
 
 
 def stage_site_security(ctx: ScanRunContext) -> None:
@@ -1051,6 +1095,7 @@ def tested_categories_for(ctx: ScanRunContext) -> set[str]:
     - seo/aeo 只來自逐頁分析：0 頁時沒測，不可把「沒測」當成「零問題」灌高總分。
     - ux 有兩個來源，任一成立才算有測：行動版版面量測（空 dict＝沒量到）、
       Agent 實際跑完（拋例外時 agent_meta 也有值，但 status=error 不算）。
+    - aeo 的可回答性檢測若因內容不足而未充分評估，不列入。
     - 最後與勾選維度取交集：「沒買」不能被算成「測過」。
     """
     tested = {"security", "geo"}
@@ -1060,7 +1105,18 @@ def tested_categories_for(ctx: ScanRunContext) -> set[str]:
         tested.add("ux")
     if ctx.agent_meta and ctx.agent_meta.get("status") != "error":
         tested.add("ux")
+    # AEO 內容不足以出題：未充分評估，不評分（不能因為沒問題可問就給 100 分）
+    if ctx.aeo_evaluation is not None and ctx.aeo_evaluation.status != "evaluated":
+        tested.discard("aeo")
     return tested & ctx.scan_job.effective_categories
+
+
+def base_scores_for(ctx: ScanRunContext) -> dict[str, int]:
+    """分類基準分：AEO 以可回答性分數為基準（見 scanners.calculate_scores）。"""
+    evaluation = ctx.aeo_evaluation
+    if evaluation is not None and evaluation.status == "evaluated":
+        return {"aeo": evaluation.score}
+    return {}
 
 
 def stage_scoring(ctx: ScanRunContext) -> None:
@@ -1093,7 +1149,9 @@ def stage_scoring(ctx: ScanRunContext) -> None:
             level="warn",
         )
     overall_score, category_scores, top_actions = calculate_scores(
-        ctx.all_findings, tested_categories=tested_categories
+        ctx.all_findings,
+        tested_categories=tested_categories,
+        base_scores=base_scores_for(ctx),
     )
     append_log(
         scan_job_id,
@@ -1175,6 +1233,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("crawl", stage_crawl),
     ("enter_scanning", stage_enter_scanning),
     ("page_analysis", stage_analyze_pages),
+    ("aeo_answers", stage_aeo_answerability),
     ("site_security", stage_site_security),
     ("active_probe", stage_active_probe),
     ("deep_security", stage_deep_security),

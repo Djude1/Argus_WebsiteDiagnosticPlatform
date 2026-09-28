@@ -107,7 +107,15 @@ def _rescore(scan_job: ScanJob) -> None:
         for f in scan_job.findings.order_by("-priority_score", "id")
     ]
     tested = set((scan_job.category_scores or {}).keys()) or None
-    overall, category_scores, top_actions = calculate_scores(findings, tested_categories=tested)
+    aeo_report = scan_job.aeo_report or {}
+    base_scores = (
+        {"aeo": aeo_report["score"]}
+        if aeo_report.get("status") == "evaluated" and aeo_report.get("score") is not None
+        else {}
+    )
+    overall, category_scores, top_actions = calculate_scores(
+        findings, tested_categories=tested, base_scores=base_scores
+    )
     scan_job.overall_score = overall
     scan_job.category_scores = category_scores
     scan_job.top_actions = top_actions

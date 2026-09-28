@@ -23,6 +23,7 @@ import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
+import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
 import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
 import { useArgusStore } from "../../store";
 import {
@@ -77,9 +78,10 @@ const SCAN_STEP_META = {
   queued: { label: "等待", title: "等待排程", hint: "任務已建立，等待掃描器接手", Icon: StatusQueuedGlyph },
   crawl: { label: "爬取", title: "爬取頁面", hint: "以真實瀏覽器走訪同網域頁面，擷取內容、截圖與行動版版面量測", Icon: StatusCrawlGlyph },
   analyze_seo: { label: "SEO", title: "分析 SEO", hint: "檢查 title、meta description、H1、圖片 alt、canonical 與 Open Graph", Icon: StatusScanGlyph },
-  analyze_aeo: { label: "AEO", title: "分析 AEO", hint: "檢查問答內容與 FAQPage／HowTo 結構化資料", Icon: StatusScanGlyph },
+  analyze_aeo: { label: "AEO", title: "分析 AEO", hint: "檢查索引與摘要限制，以及結構化資料是否與頁面文字一致", Icon: StatusScanGlyph },
   analyze_geo: { label: "GEO", title: "分析 GEO", hint: "檢查 JSON-LD 實體、可引用段落與 JavaScript 渲染依賴", Icon: StatusScanGlyph },
   analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤與 JavaScript 錯誤", Icon: StatusScanGlyph },
+  aeo_answers: { label: "問答檢測", title: "AEO 問答檢測", hint: "依網站內容出題，在已掃描頁面中找答案並核對原文證據", Icon: StatusScanGlyph },
   analyze_security: { label: "資安", title: "分析資安", hint: "檢查表單 CSRF，以及頁面中外洩的金鑰與個資", Icon: StatusScanGlyph },
   active_probe: { label: "主動探測", title: "主動探測", hint: "以 Nuclei／Katana 對授權目標執行受控探測", Icon: StatusScanGlyph },
   deep_security: { label: "深度資安", title: "深度資安檢查", hint: "檢查 HTTPS 與安全標頭、TLS 憑證、Cookie、SRI、DNS 與前端套件版本", Icon: StatusScanGlyph },
@@ -1693,6 +1695,7 @@ function FindingsWorkspace({ scan }) {
 
       {/* 修正產出專區：全寬獨立區塊，只在掃描完成後出現——進行中的掃描
           沒有完整爬取內容可當事實基礎，也不該讓使用者誤觸計費。 */}
+      {scan.status === "completed" && <AeoAnswerPanel report={scan.aeo_report} />}
       {scan.status === "completed" && <FixOutputSection scan={scan} />}
     </section>
     {dialogHost}
