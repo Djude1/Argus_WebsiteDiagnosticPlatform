@@ -132,20 +132,33 @@ function CrawlingAnimation({
 
   const { detailed, steps, currentIdx: safeIdx, current } = buildScanSteps(status, progress);
 
-  // progress 結構：{pages_done, pages_total, phase, phase_started_at}
-  const total = progress?.pages_total || 0;
-  const done = progress?.pages_done || 0;
-  const hasProgress = total > 0;
+  // 細分階段模式：整體進度＝（已完成階段數＋目前階段完成比例）÷ 階段數，
+  // 與下方階段列用同一個公式，進度條不會跑在階段前面或後面。
+  // 舊任務（沒有 steps）沿用 phase 的 pages_done／pages_total。
+  const stepTotal = detailed ? progress?.step_total || 0 : 0;
+  const stepDone = detailed ? Math.min(progress?.step_done || 0, stepTotal) : 0;
+  const stepFrac = stepTotal > 0 ? stepDone / stepTotal : 0;
+  const total = detailed ? steps.length : progress?.pages_total || 0;
+  const done = detailed ? safeIdx + stepFrac : progress?.pages_done || 0;
+  const hasProgress = total > 0 && (detailed ? status !== "queued" : true);
   const pct = hasProgress ? Math.min(100, Math.round((done / total) * 100)) : null;
+  const stepUnit = current?.key === "agent" ? "步" : "頁";
 
   // 已執行時間（從整個 scan 的 started_at 起算）
   const scanStart = startedAt ? new Date(startedAt).getTime() : null;
   const elapsedSec = scanStart ? Math.floor((Date.now() - scanStart) / 1000) : null;
 
-  // ETA：基於當前 phase 的 elapsed × (total / done - 1)
+  // ETA：細分模式估「本階段」剩餘（各階段耗時差很多，不拿整體比例外推）；
+  // 舊任務沿用 phase 的 elapsed × (total / done - 1)
   let etaSec = null;
   let etaPending = false;
-  if (hasProgress && done > 0 && done < total && progress?.phase_started_at) {
+  if (detailed) {
+    if (stepTotal > 0 && stepDone > 0 && stepDone < stepTotal && progress?.step_started_at) {
+      const stepStart = new Date(progress.step_started_at).getTime();
+      const stepElapsed = Math.max(1, Math.floor((Date.now() - stepStart) / 1000));
+      etaSec = Math.max(0, Math.round(stepElapsed * (stepTotal / stepDone - 1)));
+    }
+  } else if (hasProgress && done > 0 && done < total && progress?.phase_started_at) {
     const phaseStart = new Date(progress.phase_started_at).getTime();
     const phaseElapsed = Math.max(1, Math.floor((Date.now() - phaseStart) / 1000));
     etaSec = Math.max(0, Math.round(phaseElapsed * (total / done - 1)));
@@ -177,14 +190,25 @@ function CrawlingAnimation({
               已執行 <strong>{formatMMSS(elapsedSec)}</strong>
             </span>
           ) : null}
-          {hasProgress ? (
+          {hasProgress && detailed ? (
+            <>
+              <span className="crawl-meta-chip">
+                階段 <strong>{safeIdx + 1}/{steps.length}</strong> · 整體 {pct}%
+              </span>
+              {stepTotal > 0 ? (
+                <span className="crawl-meta-chip">
+                  {current.label}：<strong>{stepDone}/{stepTotal}</strong> {stepUnit}
+                </span>
+              ) : null}
+            </>
+          ) : hasProgress ? (
             <span className="crawl-meta-chip">
               進度 <strong>{done}/{total}</strong> · {pct}%
             </span>
           ) : null}
           {etaSec !== null ? (
             <span className="crawl-meta-chip is-eta">
-              剩餘約 <strong>{formatMMSS(etaSec)}</strong>
+              {detailed ? "本階段剩餘約" : "剩餘約"} <strong>{formatMMSS(etaSec)}</strong>
             </span>
           ) : etaPending ? (
             <span className="crawl-meta-chip is-eta">
@@ -214,6 +238,9 @@ function CrawlingAnimation({
           let cls = "phase-pending";
           if (idx < safeIdx) cls = "phase-done";
           else if (idx === safeIdx) cls = "phase-active";
+          // 每個階段自己的小進度：完成＝滿、進行中＝本階段比例（無法計數時顯示流動條）、未開始＝空
+          const segFill = idx < safeIdx ? 1 : idx === safeIdx ? stepFrac : 0;
+          const segIndeterminate = idx === safeIdx && stepTotal === 0 && status !== "queued";
           return (
             <li
               key={phase.key}
@@ -226,6 +253,11 @@ function CrawlingAnimation({
                 {idx < safeIdx ? <StatusDoneGlyph /> : <phase.Icon />}
               </span>
               <span className="crawl-phase-label">{phase.label}</span>
+              {detailed ? (
+                <span className={`crawl-phase-bar ${segIndeterminate ? "is-indeterminate" : ""}`} aria-hidden="true">
+                  <span style={{ width: `${Math.round(segFill * 100)}%` }} />
+                </span>
+              ) : null}
             </li>
           );
         })}

@@ -147,14 +147,16 @@ class ReportLayoutTests(TestCase):
         self.assertNotIn("rule_engine", text)
         self.assertNotIn("證據型態", text)
 
-    def test_rule_id_moves_to_a_technical_index(self):
-        """rule_id 仍要可查（技術人員需要），但不該混在正文裡。"""
+    def test_rule_id_is_traceable_in_card_and_technical_index(self):
+        """每筆結果要能被重新核對（2026-09-28 報告審查）：卡片的追溯行列出規則、觀測時間與來源，
+        技術索引仍保留完整對照。"""
         doc = self._doc()
         body = "\n".join(p.text for p in doc.paragraphs)
         table_text = "\n".join(
             cell.text for t in doc.tables for row in t.rows for cell in row.cells
         )
-        self.assertNotIn("header-hsts-missing", body)
+        self.assertIn("規則 header-hsts-missing", body)
+        self.assertIn("來源：", body)
         self.assertIn("header-hsts-missing", table_text)
 
     def test_english_jargon_heading_is_translated(self):

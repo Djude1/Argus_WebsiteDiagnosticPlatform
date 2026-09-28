@@ -64,6 +64,7 @@ const AdminScansPage = lazyNamed(loadAdminScans, "AdminScansPage");
 const AdminScanDetailPage = lazyNamed(loadAdminScans, "AdminScanDetailPage");
 const AdminDomainsPage = lazyNamed(loadAdminDomains, "AdminDomainsPage");
 const AdminContentPage = lazyNamed(loadAdminPages, "AdminContentPage");
+const AdminPartnerInquiriesPage = lazyNamed(loadAdminPages, "AdminPartnerInquiriesPage");
 const AdminPlansPage = lazyNamed(loadAdminPlans, "AdminPlansPage");
 const AdminSettingsPage = lazyNamed(loadAdminPages, "AdminSettingsPage");
 const AdminAuditLogPage = lazyNamed(loadAdminAuditLog, "AdminAuditLogPage");
@@ -209,6 +210,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/admin/scans/:scanId" element={<AdminScanDetailPage />} />
             <Route path="/admin/domains" element={<AdminDomainsPage />} />
             <Route path="/admin/content" element={<AdminContentPage />} />
+            <Route path="/admin/partner-inquiries" element={<AdminPartnerInquiriesPage />} />
             <Route path="/admin/plans" element={<AdminPlansPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />

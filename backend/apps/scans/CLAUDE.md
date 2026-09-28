@@ -162,6 +162,17 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 | 怎麼用 AI 深入了解 | 附錄，一次（叫讀者複製該項的三段文字，不逐項重印提示詞）|
 | 問題是什麼／怎麼修／檢測依據 | 逐項 |
 
+### 證據品質（2026-09-28 報告審查）
+
+- **PII 分級**（`scanners.analyze_data_exposure`）：高風險 `SECURITY_PII_8B24BB8B28` 只給身分證號／信用卡號；手機、非本站網域 Email、藏在 HTML 註解的資料、開發殘留 → 中風險 `security-pii-personal-contact`；本站網域（同 registrable domain）或 `mailto:`／`tel:` 的聯絡方式 → info `security-pii-public-contact`（多半是刻意公開）。舊版一看到任何 Email 就判高風險。
+- **判定依據**：高風險、PII 與 AI 觀察項目在 `evidence_json.assessment`（或 `reports._assessment_for` 的預設）寫「成立條件／實際觀察／尚缺證據／驗證方法」，報告卡片逐項印出。
+- **AI 觀察封頂中風險**（`reports._report_severity`，對 `agent-` 規則；舊資料亦同）並標示來源；每張卡片一行追溯資訊：規則、觀測時間、來源（規則引擎／工具／AI Agent）。
+- **合併多頁保留逐頁證據**（`locations`），Cookie 值遮蔽（`cookie_scanner.mask_cookie_line`，頭 4 尾 2）。
+- **掃描範圍**：寫清楚已檢查幾頁、是否達頁數上限、完整分析頁數、被阻擋／錯誤頁數、本次沒跑的檢查；不把「全網站模式」說成檢查了整個網站。
+- **資安與內容分開**：發現清單分「資訊安全」與「網站內容與體驗」兩節；內容類建議附 `RULE_BASIS`／`CATEGORY_BASIS`（依據與限制），不得推論「缺 llms.txt／JSON-LD／字數少 ⇒ 不會被搜尋或引用」；摘要附分數算法（`SCORE_NOTE`）。
+- **修補驗證**：附錄逐項列「如何確認已修好」（`verify_items`），並提醒重掃沒出現不等於已修好；CSP 要檢查指令內容而非只看標頭存在；JS 渲染比對要用同一種文字擷取方式。
+- **既有掃描**：`manage.py renormalize_findings --scan-id N`（或 `--all`）以資料庫保存的頁面 HTML 重跑 PII 分級、AI 觀察降級＋IP 核對、Cookie 遮蔽，重算分數並刪除快取報告（`finding_normalization.py`，不對目標發請求，可重複執行）。
+
 其他硬性上限：每項發現的中繼資料壓成**一行**不用表格（19 項就是 19 張表，在 Word 裡非常吃垂直空間）；受影響頁面最多列 `_MAX_LISTED_PAGES` 個、其餘收成「…另 N 處」；證據顯示上限 `_MAX_EVIDENCE_CHARS`。
 
 成效：總字元 15848 → 6669（−58%），表格 30 → 10，發現項目數不變。由 `tests_report_compactness.py` 鎖定。
@@ -262,8 +273,11 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
   "pages_total": 50,
   "phase": "crawling",
   "phase_started_at": "2026-05-26T10:30:00Z",
-  "step": "crawl",
-  "steps": ["crawl", "analyze_seo", "analyze_geo", "deep_security", "geo_site", "scoring"]
+  "step": "analyze_seo",
+  "steps": ["crawl", "analyze_seo", "analyze_geo", "deep_security", "geo_site", "scoring"],
+  "step_done": 12,
+  "step_total": 50,
+  "step_started_at": "2026-05-26T10:31:00Z"
 }
 ```
 
@@ -274,6 +288,8 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度）、
 `active_probe`（`run_nuclei`）、`deep_security`、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`agent`（Agent 啟用且可執行）、`scoring`。
 頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
+
+`step_done`／`step_total` 是**本階段**內的進度（爬取＝頁、逐維度分析＝該維度已分析頁數、Agent＝步數；其他子步驟 0/0＝不定進度），`step_started_at` 在同一步內保留不變（供前端估算本階段剩餘時間）。前端整體百分比由階段序號加上本階段比例算出，進度條才會和階段一起走（2026-09-28 前整體進度只看頁數，爬完就 100%、後面十個階段進度條不動）。
 
 ---
 

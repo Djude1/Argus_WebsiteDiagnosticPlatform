@@ -138,14 +138,16 @@ class PartnerInquiryTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("email", response.data)
 
-    def test_honeypot_is_silently_dropped(self):
+    def test_honeypot_is_kept_and_flagged_as_spam(self):
+        """誘餌欄位可能被瀏覽器自動填入：不能丟棄，要存檔並標成疑似垃圾訊息讓管理員判斷。"""
         from apps.content.models import PartnerInquiry
 
         response = self.client.post(
             self.url, {**self.payload, "website": "http://spam.example"}, format="json",
         )
         self.assertEqual(response.status_code, 201)
-        self.assertFalse(PartnerInquiry.objects.exists())
+        inquiry = PartnerInquiry.objects.get()
+        self.assertEqual(inquiry.status, PartnerInquiry.Status.SPAM)
 
     def test_admin_can_only_update_status_and_note(self):
         from django.contrib.auth import get_user_model

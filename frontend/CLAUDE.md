@@ -102,7 +102,7 @@ D:\nodejs\npm.cmd install 套件名
 | 分組 | 項目 |
 |---|---|
 | 營運 | 概覽、掃描任務、網域驗證、系統健康 |
-| 客戶 | 使用者、訂單、點數交易 |
+| 客戶 | 使用者、訂單、點數交易、合作洽談 |
 | 內容與社群 | 評論治理、網站內容、公告（superuser）|
 | 系統 | 方案與定價、系統資訊、操作日誌（superuser）|
 
@@ -120,11 +120,11 @@ D:\nodejs\npm.cmd install 套件名
 | `/purchase` | `PurchasePage` | 購買點數（3 步驟結帳 wizard） |
 | `/download` | `DownloadPage` | 下載報告 |
 | `/verify` | `VerifyReportPage` | 報告查驗（公開導覽列有入口） |
-| `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台「內容管理 → 合作洽談」檢視） |
+| `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
 | `/settings` | `SettingsPage` | 帳號設定：個人資料、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀 |
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
-| `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`） |
+| `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
 | `/reviews` | `ReviewsPage`（`PublicLayout`） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
@@ -141,6 +141,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/health` | `AdminHealthPage` | 系統健康：動態掃描鏈路圖（資料庫→Redis→Worker→佇列→掃描執行，斷點之後停止流動）＋ 系統資源（CPU／記憶體／磁碟／網路／運行時間）＋ 逐項判定依據；預設每 15 秒自動更新 |
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決）（`AdminDomainsPage.tsx`；篩選在網址上）|
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |
+| `/admin/partner-inquiries` | `AdminPartnerInquiriesPage` | 商業合作洽談（`/partners` 表單送來的資料；只能改處理狀態與內部備註，含「疑似垃圾訊息」狀態）|
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理（`AdminPlansPage.tsx`；成本／毛利試算見 `features/admin/planEconomics.ts`，每頁 coin 數取自後端）|
 | `/admin/settings` | `AdminSettingsPage` | 系統資訊（唯讀；敏感值只顯示「已設定／未設定」布林，不輸出實際值）|
 | `/admin/announcements` | `AdminAnnouncementsPage` | 公告管理（superuser 限定）（`AdminAnnouncementsPage.tsx`）|

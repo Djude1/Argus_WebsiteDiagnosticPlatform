@@ -159,10 +159,17 @@ function PartnerInquiryForm() {
         />
         {fieldError("message")}
       </label>
-      {/* 給機器人填的誘餌欄位：一般使用者看不到也不會填 */}
+      {/* 給機器人填的誘餌欄位：一般使用者看不到。標籤與 name 刻意不用「網站／公司／網址」等字眼，
+          避免瀏覽器自動填入；即使被填，後端也只標成疑似垃圾訊息，不會丟棄。 */}
       <label className="partners-hp" aria-hidden="true">
-        公司網站
-        <input tabIndex={-1} autoComplete="off" value={form.website} onChange={update("website")} />
+        請勿填寫此欄
+        <input
+          tabIndex={-1}
+          name="argus_hp_field"
+          autoComplete="off"
+          value={form.website}
+          onChange={update("website")}
+        />
       </label>
       {state.error && <p className="partners-form-error" role="alert">{state.error}</p>}
       <div className="partners-form-actions">

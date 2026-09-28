@@ -54,9 +54,10 @@ def partner_inquiry_create(request):
     """公開的商業合作洽談表單（/partners）。"""
     serializer = PartnerInquiryCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    ok = {"detail": "已收到你的洽談需求，我們會以 Email 與你聯繫。"}
-    # 誘餌欄位有值＝機器人：回同樣的成功訊息但不寫入，不讓對方知道被擋
-    if serializer.validated_data.get("website"):
-        return Response(ok, status=status.HTTP_201_CREATED)
+    # 誘餌欄位有值時仍然寫入、只把狀態標成疑似垃圾訊息：曾因瀏覽器自動填入誘餌欄位，
+    # 真人送出的洽談被當成機器人靜默丟棄，後台完全看不到。回應一律相同，不透露判定結果。
     serializer.save()
-    return Response(ok, status=status.HTTP_201_CREATED)
+    return Response(
+        {"detail": "已收到你的洽談需求，我們會以 Email 與你聯繫。"},
+        status=status.HTTP_201_CREATED,
+    )

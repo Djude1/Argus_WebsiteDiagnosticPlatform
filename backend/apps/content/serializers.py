@@ -46,7 +46,7 @@ class AppReleaseSerializer(serializers.ModelSerializer):
 
 
 class PartnerInquiryCreateSerializer(serializers.ModelSerializer):
-    """公開洽談表單：只接受洽談欄位；`website` 是給機器人填的誘餌欄位，有值就視為垃圾訊息。"""
+    """公開洽談表單：只接受洽談欄位；`website` 是給機器人填的誘餌欄位，有值就標成疑似垃圾訊息。"""
 
     website = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
@@ -66,5 +66,6 @@ class PartnerInquiryCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop("website", None)
+        if validated_data.pop("website", ""):
+            validated_data["status"] = PartnerInquiry.Status.SPAM
         return super().create(validated_data)

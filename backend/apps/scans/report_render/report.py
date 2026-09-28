@@ -217,8 +217,14 @@ def finding_card(doc, f):
     mp.paragraph_format.keep_with_next = True
     chip_run(mp, f["severity"])
     add_run(mp, f'　·　{f["category"]}　·　{f["scope"]}', size=9, color=T.GREY)
-    # affected urls
-    if f.get("urls"):
+    # 可重新核對的中繼資料：規則、觀測時間、來源（規則／工具／AI）
+    if f.get("trace"):
+        tp = doc.add_paragraph()
+        tp.paragraph_format.space_after = Pt(3)
+        tp.paragraph_format.keep_with_next = True
+        add_run(tp, f["trace"], size=8, color=T.GREY)
+    # affected urls（舊版 payload；新版改在「逐頁證據」逐一列出網址與證據）
+    if f.get("urls") and not f.get("locations"):
         up = doc.add_paragraph()
         up.paragraph_format.space_after = Pt(4)
         add_run(up, f["urls"], size=8, color=T.LIGHTGREY)
@@ -233,13 +239,40 @@ def finding_card(doc, f):
     X.set_para_shading(fp, T.FIXBLUE)
     X.set_para_indent(fp, left=130, right=130)
     X.set_para_borders(fp, {"left": (18, "0369A1", "4")})
-    # evidence
-    _card_label(doc, "▍檢測依據", T.GREY)
-    ep = add_para(doc, [{"text": f["evidence"], "size": 9, "color": T.SLATE, "mono": True}],
-                  before=2, after=3, line=1.35)
-    X.set_para_shading(ep, T.BG)
-    X.set_para_indent(ep, left=130, right=130)
-    X.set_para_borders(ep, {"left": (18, T.LIGHTGREY, "4")})
+    # evidence：多頁合併時逐頁列出網址與該頁自己的證據
+    _card_label(doc, "▍檢測依據" + ("（逐頁證據）" if f.get("locations") else ""), T.GREY)
+    if f.get("locations"):
+        for loc in f["locations"]:
+            ep = add_para(doc, [
+                {"text": loc["url"], "size": 8, "color": T.GREY},
+                {"text": "\n" + (loc.get("evidence") or "（無）"), "size": 8.5, "color": T.SLATE, "mono": True},
+            ], before=1, after=1, line=1.3)
+            X.set_para_shading(ep, T.BG)
+            X.set_para_indent(ep, left=130, right=130)
+            X.set_para_borders(ep, {"left": (18, T.LIGHTGREY, "4")})
+        if f.get("locations_more"):
+            add_para(doc, [{"text": f["locations_more"], "size": 8, "color": T.LIGHTGREY}],
+                     before=1, after=3)
+    else:
+        ep = add_para(doc, [{"text": f["evidence"], "size": 9, "color": T.SLATE, "mono": True}],
+                      before=2, after=3, line=1.35)
+        X.set_para_shading(ep, T.BG)
+        X.set_para_indent(ep, left=130, right=130)
+        X.set_para_borders(ep, {"left": (18, T.LIGHTGREY, "4")})
+    # 判定依據：高風險與 AI 觀察項目交代成立條件、實際觀察、尚缺證據、驗證方法
+    if f.get("assessment"):
+        _card_label(doc, "▍判定依據", T.NAVY)
+        a = f["assessment"]
+        for label, key in (("成立條件", "condition"), ("實際觀察", "observed"),
+                           ("尚缺證據", "missing"), ("驗證方法", "verify")):
+            if a.get(key):
+                add_para(doc, [{"text": f"{label}：", "size": 9, "color": T.NAVY, "bold": True},
+                               {"text": a[key], "size": 9, "color": T.SLATE}],
+                         after=1, line=1.35)
+    # 內容類建議的規則依據與適用限制
+    if f.get("basis"):
+        add_para(doc, [{"text": f["basis"], "size": 8.5, "color": T.GREY}],
+                 before=3, after=3, line=1.35)
 
 
 def _card_label(doc, text, color):
@@ -433,6 +466,9 @@ def _summary(doc, data, ch):
         _trend_block(doc, s, ch)
     # scoring legend (fixed reference)
     h2(doc, "分數怎麼看")
+    if s.get("score_note"):
+        add_para(doc, [{"text": s["score_note"], "size": 9, "color": T.SLATE}],
+                 after=6, line=1.4)
     data_table(doc, ["分數", "評級", "建議"], [
         ["80–100", "良好", "持續維持即可，建議定期複檢。"],
         ["60–79", "需改善", "有幾項體質問題值得排入維護排程。"],
@@ -518,16 +554,30 @@ def _findings(doc, data):
     n = len(data["findings"])
     add_para(doc, [{"text": f"共 {n} 項，依嚴重度由高至低分組排列。每一張卡片獨立完整：問題是什麼、怎麼修、以及當下觀測到的檢測依據。各分類「為什麼重要」見第 3 章，修補後如何驗證見附錄 6.3。",
                     "size": 10, "color": T.SLATE}], after=6, line=1.44)
-    by_sev = {}
-    for f in data["findings"]:
-        by_sev.setdefault(f["severity"], []).append(f)
-    for sev in T.SEVERITY_ORDER:
-        group = by_sev.get(sev, [])
-        if not group:
+    # 資安與網站內容改善分開呈現（沒有 group 欄位的舊 payload 全部歸在同一段）
+    parts = [
+        ("security", "資訊安全", "可能被利用或造成資料外洩的項目。"),
+        ("content", "網站內容與體驗（SEO／AEO／GEO／UX）",
+         "影響搜尋、AI 理解與使用體驗的改善建議；每一項附有規則依據與適用限制。"),
+    ]
+    has_groups = any(f.get("group") for f in data["findings"])
+    for key, title, intro in parts if has_groups else [(None, None, None)]:
+        items = [f for f in data["findings"] if key is None or f.get("group") == key]
+        if not items:
             continue
-        severity_group_header(doc, sev, len(group))
-        for f in group:
-            finding_card(doc, f)
+        if title:
+            h2(doc, f"{title}（{len(items)} 項）")
+            add_para(doc, [{"text": intro, "size": 9, "color": T.GREY}], after=4)
+        by_sev = {}
+        for f in items:
+            by_sev.setdefault(f["severity"], []).append(f)
+        for sev in T.SEVERITY_ORDER:
+            group = by_sev.get(sev, [])
+            if not group:
+                continue
+            severity_group_header(doc, sev, len(group))
+            for f in group:
+                finding_card(doc, f)
 
 
 def _scan_info(doc, data, ch):
@@ -573,6 +623,9 @@ def _appendix(doc, data):
     add_para(doc, [{"text": ap.get("verify_note",
                     "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；下一份報告的摘要會列出這次解決了哪些項目。"),
                     "size": 10, "color": T.SLATE}], after=8, line=1.44)
+    if ap.get("verify_items"):
+        rows = [[v["ref"], v["title"], v["how"]] for v in ap["verify_items"]]
+        data_table(doc, ["項次", "項目", "如何確認已修好"], rows, [900, 2500, 4700])
     # authorization
     if ap.get("authorization"):
         h2(doc, "6.4　掃描授權聲明")
@@ -583,5 +636,5 @@ def _appendix(doc, data):
     h2(doc, "6.5　免責與報告產生方式")
     add_para(doc, [{"text": "本報告僅反映掃描當下、從網際網路可觀測到的外部特徵，不等同完整滲透測試或原始碼稽核，也不構成法律或合規意見。未列出的項目不代表不存在風險，實際修補請由具備權限的維運人員評估後執行。",
                     "size": 10, "color": T.SLATE}], after=6, line=1.44)
-    add_para(doc, [{"text": "本報告採 Evidence-first 原則：SEO、AEO、GEO 與資安判斷全部來自爬蟲與規則引擎產生的可驗證證據，每一項發現都附上當下實際觀測到的內容，過程不使用 AI 改寫或推論結論。",
+    add_para(doc, [{"text": ap.get("method_note") or "本報告採 Evidence-first 原則：每一項發現都附上掃描當下實際觀測到的內容。",
                     "size": 10, "color": T.SLATE}], after=0, line=1.44)

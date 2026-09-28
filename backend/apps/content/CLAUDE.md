@@ -12,11 +12,11 @@ Claude Code 進 `backend/apps/content/` 工作時，本檔在專案層 `CLAUDE.m
 | `team/` | `team_list` | 團隊成員（公開 `/team` 頁已於 2026-09-28 移除，目前前台無消費端） |
 | `releases/` | `releases_list` | `/download` 版本 |
 | `milestones/` | `milestones_list` | `/project` timeline |
-| `partner-inquiries/`（**POST**） | `partner_inquiry_create` | `/partners` 洽談表單；`AllowAny`＋`partner_inquiry` throttle（預設 5/hour）＋誘餌欄位 `website`（有值回同樣成功訊息但不寫入） |
+| `partner-inquiries/`（**POST**） | `partner_inquiry_create` | `/partners` 洽談表單；`AllowAny`＋`partner_inquiry` throttle（預設 5/hour）＋誘餌欄位 `website`（有值仍回同樣成功訊息，但存成 `status=spam`「疑似垃圾訊息」而不丟棄——2026-09-28 真人送出後台看不到，推定是瀏覽器自動填入誘餌欄位被默默丟掉；前端誘餌欄位 name 改為 `argus_hp_field`、標籤不含「網站／公司」字眼） |
 
 ## 重點
 - 本 app **只服務公開讀取**；**寫入 / 編輯走 `admin_api` 的 `cms_views`**（`/api/admin/cms/*`，需 `IsAdminUser`）。
-- **唯一例外是 `partner-inquiries/`**：只「新增」一筆洽談（對方主動提供的商業聯絡資訊），不能讀取或修改任何資料；後台在 `/api/admin/cms/partner-inquiries/`（React「內容管理 → 合作洽談」）檢視，只能改 `status`／`admin_note` 與刪除，不能新增。
+- **唯一例外是 `partner-inquiries/`**：只「新增」一筆洽談（對方主動提供的商業聯絡資訊），不能讀取或修改任何資料；後台在 `/api/admin/cms/partner-inquiries/`（React 後台側欄「客戶 → 合作洽談」，路由 `/admin/partner-inquiries`）檢視，只能改 `status`／`admin_note` 與刪除，不能新增。
 - `TeamMemberSerializer` 公開輸出**包含 `email` / `github_url`**（團隊頁聯絡資訊，屬刻意公開的團隊自介）→ 確認成員只填**願意公開**的內容；勿把終端使用者個資放進來。
 
 ## 禁止事項

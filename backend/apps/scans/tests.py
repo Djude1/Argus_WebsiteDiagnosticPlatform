@@ -1048,10 +1048,39 @@ class PiiDetectionTests(APITestCase):
         self.assertIn("a@b.com", findings[0]["evidence"])
         self.assertIn("0912345678", findings[0]["evidence"])
 
-    def test_analyze_data_exposure_finding_is_high_severity_security(self):
-        findings = analyze_data_exposure(self._page_input("<p>a@b.com</p>"))
+    # --- 分級（2026-09-28 報告審查：看到 Email 不等於外洩）---
+    def test_verified_national_id_is_high_severity(self):
+        findings = analyze_data_exposure(self._page_input("<p>身分證 A123456789</p>"))
         self.assertEqual(findings[0]["category"], "security")
         self.assertEqual(findings[0]["severity"], "high")
+        self.assertEqual(findings[0]["rule_id"], "SECURITY_PII_8B24BB8B28")
+        self.assertIn("assessment", findings[0]["evidence_json"])
+
+    def test_external_domain_email_is_medium_personal_contact(self):
+        findings = analyze_data_exposure(self._page_input("<p>a@gmail.com</p>"))
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["severity"], "medium")
+        self.assertEqual(findings[0]["rule_id"], "security-pii-personal-contact")
+
+    def test_site_domain_or_mailto_email_is_only_info(self):
+        page = self._page_input(
+            '<p>承辦人 staff@example.com</p><a href="mailto:help@other.org">help@other.org</a>'
+        )
+        findings = analyze_data_exposure(page)
+        self.assertEqual([f["severity"] for f in findings], ["info"])
+        self.assertEqual(findings[0]["rule_id"], "security-pii-public-contact")
+
+    def test_email_hidden_in_html_comment_is_not_treated_as_public(self):
+        findings = analyze_data_exposure(
+            self._page_input("<p>hi</p><!-- owner: staff@example.com -->")
+        )
+        self.assertEqual([f["severity"] for f in findings], ["medium"])
+
+    def test_registrable_domain_handles_second_level_tlds(self):
+        from apps.scans.scanners import _registrable_domain
+
+        self.assertEqual(_registrable_domain("imd.ntub.edu.tw"), "ntub.edu.tw")
+        self.assertEqual(_registrable_domain("www.example.com"), "example.com")
 
     def test_analyze_page_includes_data_exposure_when_pii_present(self):
         # PII 偵測必須被掛進 analyze_page pipeline
@@ -1060,7 +1089,7 @@ class PiiDetectionTests(APITestCase):
         )
         findings = analyze_page(page_input)
         titles = {f["title"] for f in findings}
-        self.assertIn("頁面外洩個人資料 (PII)", titles)
+        self.assertIn("頁面出現個人聯絡資料 (PII)", titles)
 
 
 class GeoFastScannerTests(APITestCase):
