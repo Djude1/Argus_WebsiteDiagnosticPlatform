@@ -56,7 +56,7 @@ function AuthShell({ children, backTo, backLabel }) {
         <div className="auth-story-copy">
           <p className="ag-eyebrow">Night Watch</p>
           <p className="auth-story-title">
-            讓百眼替你守望網站，<br />
+            讓Argus替你守望網站，<br />
             <span>看見問題，也拿到修法。</span>
           </p>
           <p className="auth-story-sub">
