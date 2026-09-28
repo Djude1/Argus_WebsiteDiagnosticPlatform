@@ -1,51 +1,95 @@
+// Dashboard 頁：依使用者要求恢復為 462848b（Night Watch 改版前）的版本。
+// 樣式由 styles/legacy-member/ 提供，只在 App.jsx 的 .member-legacy 範圍內生效。
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../../api";
-import { IrisScore } from "../../components/brand/IrisScore";
-import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges";
-import { useArgusStore } from "../../store";
+import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
   CATEGORY_COLOR,
   CATEGORY_LABELS,
   CountUp,
   SeverityBarChart,
   StackedBar,
-} from "../../shared/AppShared";
-import { ArrowRightIcon, CloseIcon, PlusIcon } from "../../shared/ActionIcons";
-import { formatRelative } from "../../shared/formatters";
-import { ChartIcon, CoinIcon, FlagIcon, GlobeIcon, MagnifierIcon, ScoreIcon } from "../../shared/LineIcons";
-import { AccountError, AccountSkeleton } from "./AccountStates";
+} from "../../shared/AppShared.jsx";
 
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return "早安";
-  if (hour >= 11 && hour < 18) return "午安";
-  return "晚安";
+// ============================================================
+// Dashboard 頁
+// ============================================================
+
+function formatRelativeTime(isoString) {
+  if (!isoString) return "";
+  const elapsedSeconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (elapsedSeconds < 60) return "剛剛";
+  if (elapsedSeconds < 3600) return `${Math.floor(elapsedSeconds / 60)} 分鐘前`;
+  if (elapsedSeconds < 86400) return `${Math.floor(elapsedSeconds / 3600)} 小時前`;
+  const elapsedDays = Math.floor(elapsedSeconds / 86400);
+  if (elapsedDays < 30) return `${elapsedDays} 天前`;
+  if (elapsedDays < 365) return `${Math.floor(elapsedDays / 30)} 個月前`;
+  return `${Math.floor(elapsedDays / 365)} 年前`;
 }
 
-function StatTile({ label, value, hint, tone = "neutral", Icon, onClick, actionLabel }) {
+function ScoreRing({ value, label, size = 96 }) {
+  const display = value === null || value === undefined ? "—" : Math.round(value);
+  const pct = typeof value === "number" ? Math.max(0, Math.min(100, value)) : 0;
+  const tone = pct >= 80 ? "good" : pct >= 60 ? "medium" : "bad";
+  const radius = (size - 12) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
+  return (
+    <div className={`score-ring tone-${tone}`} style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          strokeWidth="8"
+          className="ring-track"
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          fill="none"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          className="ring-progress"
+        />
+      </svg>
+      <div className="score-ring-text">
+        <span className="score-ring-value">{display}</span>
+        {label && <span className="score-ring-label">{label}</span>}
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value, hint, tone = "neutral", animateValue, onClick }) {
   const inner = (
     <>
-      <span className="dash-stat-head">
-        <span className="dash-stat-label">{label}</span>
-        {Icon && <span className="dash-stat-icon" aria-hidden="true"><Icon /></span>}
-      </span>
-      <span className="dash-stat-value ag-num"><CountUp value={value} /></span>
-      {hint && <span className="dash-stat-hint">{hint}</span>}
-      {onClick && actionLabel && (
-        <span className="dash-stat-action">{actionLabel} <ArrowRightIcon /></span>
-      )}
+      <p className="stat-tile-label">{label}</p>
+      <p className="stat-tile-value">
+        {typeof animateValue === "number" ? <CountUp value={animateValue} /> : value}
+      </p>
+      {hint && <p className="stat-tile-hint">{hint}</p>}
     </>
   );
   if (onClick) {
     return (
-      <button type="button" className={`dash-stat tone-${tone} is-clickable`} onClick={onClick}>
+      <button
+        type="button"
+        className={`stat-tile tone-${tone} is-clickable`}
+        onClick={onClick}
+      >
         {inner}
       </button>
     );
   }
-  return <div className={`dash-stat tone-${tone}`}>{inner}</div>;
+  return <div className={`stat-tile tone-${tone}`}>{inner}</div>;
 }
 
 // Dashboard 公告一律採非阻塞 toast；法律授權保留在建立掃描流程內。
@@ -65,26 +109,25 @@ function AnnouncementToast({ announcements, onDismiss }) {
 
   if (!announcements.length) return null;
   return (
-    <div className="dash-toast-stack" role="status" aria-live="polite">
+    <div className="argus-toast-stack" role="status" aria-live="polite">
       {announcements.map((ann) => (
         <div
           key={ann.id}
-          className="dash-toast"
+          className="argus-toast"
           onMouseEnter={() => setHovering((h) => ({ ...h, [ann.id]: true }))}
           onMouseLeave={() => setHovering((h) => ({ ...h, [ann.id]: false }))}
         >
-          <span className="dash-toast-dot" aria-hidden="true" />
-          <div className="dash-toast-body">
-            <div className="dash-toast-title">{ann.title}</div>
-            <div className="dash-toast-content">{ann.content.slice(0, 100)}{ann.content.length > 100 ? "…" : ""}</div>
+          <div className="argus-toast-body">
+            <div className="argus-toast-title">{ann.title}</div>
+            <div className="argus-toast-content">{ann.content.slice(0, 100)}{ann.content.length > 100 ? "…" : ""}</div>
           </div>
           <button
             type="button"
-            className="dash-toast-close"
+            className="argus-toast-close"
             onClick={() => onDismiss(ann.id)}
             aria-label="關閉公告"
           >
-            <CloseIcon />
+            ×
           </button>
         </div>
       ))}
@@ -92,61 +135,15 @@ function AnnouncementToast({ announcements, onDismiss }) {
   );
 }
 
-const ONBOARDING_STEPS = [
-  {
-    Icon: GlobeIcon,
-    title: "輸入要健檢的網址",
-    body: "貼上首頁網址即可；要跑主動式資安測試時，再到「網域驗證」證明所有權。",
-  },
-  {
-    Icon: FlagIcon,
-    title: "選擇維度與頁數",
-    body: "SEO、AEO、GEO、資安、UX 五個維度可自由組合，送出前會先估算所需點數。",
-  },
-  {
-    Icon: ScoreIcon,
-    title: "取得報告與修法",
-    body: "每個問題附證據截圖與可直接套用的修正內容，重掃即可追蹤分數變化。",
-  },
-];
-
-function FirstScanGuide({ onStart }) {
-  return (
-    <section className="dash-onboard ag-viewfinder" aria-labelledby="dash-onboard-title">
-      <div className="dash-onboard-head">
-        <p className="ag-eyebrow">第一次使用</p>
-        <h2 id="dash-onboard-title">三步驟完成第一次網站健檢</h2>
-        <p>Argus 會像百眼巨人一樣逐頁巡視你的網站，找出問題並直接給出修法。</p>
-      </div>
-      <ol className="dash-onboard-steps">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <li key={step.title} className="dash-onboard-step">
-            <span className="dash-onboard-index ag-num" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-            <span className="dash-onboard-icon" aria-hidden="true"><step.Icon /></span>
-            <h3>{step.title}</h3>
-            <p>{step.body}</p>
-          </li>
-        ))}
-      </ol>
-      <button type="button" className="primary-button dash-cta" onClick={onStart}>
-        <PlusIcon className="acct-btn-icon" /> 開始第一次掃描
-      </button>
-    </section>
-  );
-}
-
 function DashboardPage() {
   const navigate = useNavigate();
-  const me = useArgusStore((s) => s.me);
   const [data, setData] = useState(null);
   const [categoriesData, setCategoriesData] = useState(null);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState([]);
-  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setError("");
     Promise.all([api.get("/dashboard/"), api.get("/findings-by-category/")])
       .then(([dashRes, catRes]) => {
         if (cancelled) return;
@@ -159,7 +156,7 @@ function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, []);
 
   useEffect(() => {
     api.get("/admin/announcements/active/")
@@ -189,178 +186,169 @@ function DashboardPage() {
   }
 
   if (error) {
-    return <AccountError message={error} onRetry={() => setReloadKey((k) => k + 1)} />;
+    return (
+      <section className="panel">
+        <p className="error-text">{error}</p>
+      </section>
+    );
   }
   if (!data) {
-    return <AccountSkeleton label="載入 Dashboard 中…" />;
+    return (
+      <section className="panel">
+        <p className="hint-text">載入 Dashboard 中...</p>
+      </section>
+    );
   }
 
   const { wallet } = data;
-  const balance = wallet?.balance || 0;
   const totalFindings = Object.values(data.severity_totals || {}).reduce(
     (sum, n) => sum + n,
     0,
   );
-  const highRisk = (data.severity_totals?.critical || 0) + (data.severity_totals?.high || 0);
-  const pagesLeft = Math.floor(balance / ((wallet?.coin_per_category || 2) * 5));
-  const isNewUser = data.total_scans === 0;
-  const name = me?.first_name?.trim() || me?.display_name?.trim() || "";
 
   return (
-    <div className="dash">
-      <section className="dash-hero ag-surface-grid" aria-labelledby="dash-hero-title">
-        <div className="dash-hero-copy">
-          <p className="ag-eyebrow">總覽 · Overview</p>
-          <h1 id="dash-hero-title" className="dash-hero-title">
-            {greeting()}{name ? `，${name}` : ""}
-          </h1>
-          <p className="dash-hero-sub">
-            {isNewUser ? (
-              "帳號已就緒，從第一次掃描開始，讓 Argus 替你守望網站。"
-            ) : (
-              <>
-                你已執行 <strong className="ag-num">{data.total_scans}</strong> 次健檢・完成{" "}
-                <strong className="ag-num">{data.completed_scans}</strong>・失敗{" "}
-                <strong className="ag-num">{data.failed_scans}</strong>
-                {highRisk > 0 && (
-                  <>
-                    ・<span className="dash-hero-flag">{highRisk} 個高風險問題待處理</span>
-                  </>
-                )}
-              </>
-            )}
+    <div className="dashboard-grid">
+      <div className="dashboard-hero">
+        <div className="dashboard-hero-text">
+          <p className="eyebrow text-cyan-300">總覽</p>
+          <h2 className="dashboard-hero-title">
+            你已執行 <span>{data.total_scans}</span> 次健檢
+          </h2>
+          <p className="dashboard-hero-sub">
+            完成 {data.completed_scans}・失敗 {data.failed_scans}・點數餘額{" "}
+            <strong>{wallet?.balance ?? 0}</strong> coin
           </p>
-          <div className="dash-hero-actions">
-            <button type="button" className="primary-button dash-cta" onClick={() => navigate("/scans")}>
-              <PlusIcon className="acct-btn-icon" /> 開始新掃描
+          <div className="dashboard-hero-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => navigate("/scans")}
+            >
+              + 開始新掃描
             </button>
-            <button type="button" className="secondary-button" onClick={() => navigate("/history")}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => navigate("/history")}
+            >
               查看歷史
             </button>
           </div>
         </div>
-        <div className="dash-hero-score">
-          <IrisScore score={data.average_score} size={148} caption="平均分" />
-          <p className="dash-hero-score-label">整體平均 IrisScore</p>
-          <p className="dash-hero-score-hint">基於 {data.completed_scans} 次完成的掃描</p>
-        </div>
-      </section>
+        <ScoreRing value={data.average_score} label="平均分" size={120} />
+      </div>
 
-      <div className="dash-stats">
+      <div className="stat-grid">
         <StatTile
           label="掃描總數"
-          value={data.total_scans}
+          animateValue={data.total_scans}
           hint="所有狀態合計"
-          tone="primary"
-          Icon={MagnifierIcon}
+          tone="cyan"
         />
         <StatTile
           label="點數餘額"
-          value={balance}
-          hint={`≈ 還能掃 ${pagesLeft.toLocaleString()} 頁（五維全選）・累積花費 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
-          tone="accent"
-          Icon={CoinIcon}
-          onClick={() => navigate("/billing")}
-          actionLabel="前往購點"
+          animateValue={wallet?.balance || 0}
+          hint={`≈ 還能掃 ${Math.floor((wallet?.balance || 0) / ((wallet?.coin_per_category || 2) * 5)).toLocaleString()} 頁（五維全選） · 累積花費 NT$ ${(wallet?.total_purchased_ntd || 0).toLocaleString()}`}
+          tone="violet"
         />
         <StatTile
           label="累計 Findings"
-          value={totalFindings}
+          animateValue={totalFindings}
           hint="跨所有完成掃描"
-          tone="info"
-          Icon={ChartIcon}
+          tone="amber"
         />
         <StatTile
-          label="高／嚴重"
-          value={highRisk}
-          hint="critical + high"
-          tone="bad"
-          Icon={FlagIcon}
+          label="高/嚴重"
+          animateValue={
+            (data.severity_totals?.critical || 0) +
+            (data.severity_totals?.high || 0)
+          }
+          hint="critical + high · 點看清單"
+          tone="rose"
           onClick={() => navigate("/scans")}
-          actionLabel="點看清單"
         />
       </div>
 
-      {isNewUser ? (
-        <FirstScanGuide onStart={() => navigate("/scans")} />
-      ) : (
-        <div className="dash-main">
-          <section className="panel dash-panel dash-recent" aria-labelledby="dash-recent-title">
-            <header className="dash-panel-head">
-              <div>
-                <h2 id="dash-recent-title">最近掃描</h2>
-                <p>點任一列查看完整報告</p>
-              </div>
-              <button className="ghost-button" type="button" onClick={() => navigate("/scans")}>
-                前往掃描頁 <ArrowRightIcon className="acct-btn-icon" />
-              </button>
-            </header>
-            {data.recent_scans.length === 0 ? (
-              <p className="dash-empty-line">尚無掃描紀錄。</p>
-            ) : (
-              <ul className="dash-recent-list">
-                {data.recent_scans.map((scan) => (
-                  <li key={scan.id}>
-                    <button
-                      className="dash-recent-row"
-                      type="button"
-                      onClick={() => navigate(`/scans/${scan.id}`)}
-                    >
-                      <span className="dash-recent-main">
-                        <span className="dash-recent-origin">{scan.origin}</span>
-                        <span className="dash-recent-time">{formatRelative(scan.completed_at || scan.created_at)}</span>
-                      </span>
-                      <ScanStatusBadge status={scan.status} />
-                      <ScoreBadge score={scan.overall_score} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="panel dash-panel" aria-labelledby="dash-sev-title">
-            <header className="dash-panel-head">
-              <div>
-                <h2 id="dash-sev-title">Findings 嚴重度分佈</h2>
-                <p>跨所有掃描</p>
-              </div>
-            </header>
-            <SeverityBarChart severityTotals={data.severity_totals} title="" />
-          </section>
-
-          <section className="panel dash-panel dash-wide" aria-labelledby="dash-cat-title">
-            <header className="dash-panel-head">
-              <div>
-                <h2 id="dash-cat-title">五個維度</h2>
-                <p>各維度平均分數（基於完成的掃描）與問題佔比</p>
-              </div>
-            </header>
-            <div className="dash-cat-rings">
-              {Object.keys(CATEGORY_LABELS).map((cat) => (
-                <div className="dash-cat-item" key={cat}>
-                  <IrisScore score={data.category_averages?.[cat] ?? null} size={84} />
-                  <span className={`category-pill cat-${cat}`}>{CATEGORY_LABELS[cat]}</span>
-                </div>
-              ))}
-            </div>
-            <div className="dash-cat-share">
-              <p className="dash-cat-share-label">問題佔比：哪一類最多</p>
-              <StackedBar
-                data={Object.keys(CATEGORY_LABELS).map((cat) => ({
-                  label: CATEGORY_LABELS[cat],
-                  value: categoriesData?.categories?.[cat]?.total_findings || 0,
-                  color: CATEGORY_COLOR[cat],
-                }))}
-              />
-            </div>
-          </section>
+      <div className="panel dashboard-panel">
+        <div className="dashboard-panel-header">
+          <h3>Findings 嚴重度分佈</h3>
+          <span className="hint-text-sm">跨所有掃描</span>
         </div>
-      )}
+        <SeverityBarChart
+          severityTotals={data.severity_totals}
+          title=""
+        />
+      </div>
+
+      <div className="panel dashboard-panel">
+        <div className="dashboard-panel-header">
+          <h3>各類別 finding 佔比</h3>
+          <span className="hint-text-sm">哪一類問題最多</span>
+        </div>
+        <StackedBar
+          data={Object.keys(CATEGORY_LABELS).map((cat) => ({
+            label: CATEGORY_LABELS[cat],
+            value: categoriesData?.categories?.[cat]?.total_findings || 0,
+            color: CATEGORY_COLOR[cat],
+          }))}
+        />
+      </div>
+
+      <div className="panel dashboard-panel">
+        <div className="dashboard-panel-header">
+          <h3>各類別平均</h3>
+          <span className="hint-text-sm">基於完成的掃描</span>
+        </div>
+        <div className="category-rings">
+          {Object.keys(CATEGORY_LABELS).map((cat) => (
+            <div className="category-ring-item" key={cat}>
+              <ScoreRing
+                value={data.category_averages?.[cat] ?? null}
+                size={84}
+              />
+              <span className={`category-pill cat-${cat}`}>
+                {CATEGORY_LABELS[cat]}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel dashboard-panel">
+        <div className="dashboard-panel-header">
+          <h3>最近掃描</h3>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => navigate("/scans")}
+          >
+            前往掃描頁
+          </button>
+        </div>
+        <ul className="recent-list">
+          {data.recent_scans.length === 0 && (
+            <li className="text-sm text-slate-400">尚無掃描紀錄。</li>
+          )}
+          {data.recent_scans.map((scan) => (
+            <li key={scan.id}>
+              <button
+                className="recent-row"
+                type="button"
+                onClick={() => navigate(`/scans/${scan.id}`)}
+              >
+                <span className="recent-origin">{scan.origin}</span>
+                <span className="recent-time">{formatRelativeTime(scan.completed_at || scan.created_at)}</span>
+                <ScanStatusBadge status={scan.status} />
+                <ScoreBadge score={scan.overall_score} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
       <AnnouncementToast announcements={toasts} onDismiss={handleDismiss} />
     </div>
   );
 }
 
-export default DashboardPage;
+
 export { DashboardPage };

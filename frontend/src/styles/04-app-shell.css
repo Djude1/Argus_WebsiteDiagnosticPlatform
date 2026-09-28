@@ -28,6 +28,12 @@
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
+/* Dashboard／掃描／網域驗證／歷史／購點維持改版前外觀（見 styles/legacy-member/），頁面底色是當時的淺灰；
+   半透明導覽列會被透成灰色，這些頁面改用不透明底色 */
+.argus-app:has(.member-legacy) .app-nav {
+  background: var(--ag-surface);
+}
+
 .app-nav-inner {
   display: flex;
   align-items: center;

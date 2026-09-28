@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../../api";
-import { ArgusMark } from "../../components/brand/ArgusMark";
-import { LayersIcon } from "../../shared/LineIcons.jsx";
 
 // 專屬頁面比側欄面板更新得快：這裡是使用者盯著看的畫面，5 秒一跳會很鈍。
 const POLL_INTERVAL_MS = 1000;
@@ -257,9 +255,8 @@ function RebuildWorkspace() {
   }
   if (!rebuild) {
     return (
-      <section className="panel scan-state-card" aria-busy="true">
-        <ArgusMark size={48} scanning />
-        <p className="scan-state-title">載入複刻工作區…</p>
+      <section className="panel">
+        <p className="hint-text">載入中...</p>
       </section>
     );
   }
@@ -296,16 +293,12 @@ function RebuildWorkspace() {
   );
 
   return (
-    <section className="panel rebuild-workspace">
+    <section className="rebuild-workspace">
       <div className="rebuild-ws-head">
         <button className="rebuild-ws-back" type="button" onClick={() => navigate(`/scans/${scanId}`)}>
           ← 回到掃描結果
         </button>
-        <p className="ag-eyebrow">網頁複刻 · #{rebuild.id}</p>
-        <h1 className="rebuild-ws-title">
-          <LayersIcon className="rebuild-ws-title-icon" />
-          網頁複刻與優化
-        </h1>
+        <h2 className="rebuild-ws-title">🧬 網頁複刻與優化</h2>
         <p className="rebuild-ws-url">{rebuild.page_url}</p>
         <p className="rebuild-ws-status">
           <span className={`rebuild-dot status-${rebuild.status}`} />
@@ -446,7 +439,7 @@ function RebuildWorkspace() {
           {both && (
             <p className={`rebuild-ws-diff ${identical ? "same" : "changed"}`}>
               {identical
-                ? "兩份內容完全相同——agent 沒有改動任何東西"
+                ? "⚠ 兩份內容完全相同——agent 沒有改動任何東西"
                 : `已改動：原稿 ${docs.original.length.toLocaleString()} → 優化版 ${docs.optimized.length.toLocaleString()} 字元`}
             </p>
           )}

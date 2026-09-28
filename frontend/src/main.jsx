@@ -5,6 +5,8 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App.jsx";
 import "./styles.css";
+// 會員區五頁的改版前樣式（只作用在 .member-legacy 內，見 styles/legacy-member/index.css）
+import "./styles/legacy-member/index.css";
 
 // 盡早全域捕捉 PWA 安裝事件：beforeinstallprompt 常在 React 掛載前就觸發，
 // 若只在 DownloadPage 內監聽會錯過（race）→ 在進入點存到 window，hook 再讀回。

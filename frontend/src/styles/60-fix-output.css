@@ -28,11 +28,6 @@
   font-weight: 700;
   color: var(--ag-text);
 }
-.fixoutput-title-icon{
-  width: 20px;
-  height: 20px;
-  color: var(--ag-primary);
-}
 
 .fixoutput-desc{
   margin-top: 0.3rem;

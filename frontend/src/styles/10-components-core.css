@@ -76,13 +76,6 @@
   }
   .secondary-button:disabled{ opacity: 0.55; cursor: not-allowed; }
 
-  .ghost-button{
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium;
-    color: var(--ag-text-2);
-    transition: background var(--ag-dur-2), color var(--ag-dur-2);
-  }
-  .ghost-button:hover{ background: var(--ag-surface-2); color: var(--ag-text); }
-
   .checkbox-row{
     @apply flex items-start gap-3 rounded-xl p-3 text-sm;
     background: var(--ag-surface-2);
@@ -348,10 +341,6 @@
 
   .site-banner-title{
     @apply flex-1 truncate;
-  }
-
-  .site-banner-note{
-    @apply text-[11px] opacity-80;
   }
 
   /* 頁面 tabs（報告區頂部） */

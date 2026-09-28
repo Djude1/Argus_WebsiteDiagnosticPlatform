@@ -1,0 +1,62 @@
+@layer components {
+  .argus-toast-stack {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+    max-width: min(380px, calc(100vw - 2rem));
+  }
+  .argus-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(103, 232, 249, 0.4);
+    border-left: 3px solid rgba(34, 211, 238, 0.85);
+    border-radius: 10px;
+    padding: 0.7rem 0.85rem;
+    box-shadow: 0 14px 32px -10px rgba(2, 8, 23, 0.7), 0 0 16px -8px rgba(34, 211, 238, 0.35);
+    backdrop-filter: blur(8px);
+    animation: argus-toast-in 0.22s ease;
+  }
+  @keyframes argus-toast-in {
+    from { transform: translateX(20px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+  .argus-toast-body {
+    flex: 1;
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  .argus-toast-title {
+    font-weight: 600;
+    color: #67e8f9;
+    margin-bottom: 2px;
+  }
+  .argus-toast-content {
+    color: #cbd5e1;
+    font-size: 0.82rem;
+  }
+  .argus-toast-close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.15rem;
+    transition: color 0.12s;
+  }
+  .argus-toast-close:hover { color: #cbd5e1; }
+  @media (prefers-reduced-motion: reduce) {
+    .argus-toast { animation: none; }
+    .billing-choice-card { transition: none; }
+    .billing-choice-card:hover { transform: none; }
+  }
+}

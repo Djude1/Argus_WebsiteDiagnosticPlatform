@@ -69,6 +69,12 @@ const AdminAnnouncementsPage = lazyNamed(loadAdminAnnouncements, "AdminAnnouncem
 const IntroSequence = lazy(() => import("./components/brand/IntroSequence.jsx"));
 const NotFoundPage = lazy(() => import("./features/public/NotFoundPage.jsx"));
 
+// Dashboard／掃描／網域驗證／歷史／購點維持改版前（462848b）外觀：舊版樣式只在這個包裝內生效，
+// 見 styles/legacy-member/index.css。包裝本身是 display: contents，不影響版面。
+function MemberLegacy({ children }) {
+  return <div className="member-legacy">{children}</div>;
+}
+
 function AppShell({ googleOAuthEnabled }) {
   const accessToken = useArgusStore((state) => state.accessToken);
   const authReady = useArgusStore((state) => state.authReady);
@@ -120,14 +126,18 @@ function AppShell({ googleOAuthEnabled }) {
             path="/dashboard"
             element={
               <RequireAuth>
-                <DashboardPage />
+                <MemberLegacy>
+                  <DashboardPage />
+                </MemberLegacy>
               </RequireAuth>
             }
           />
           <Route
             element={
               <RequireAuth>
-                <ScanLayout />
+                <MemberLegacy>
+                  <ScanLayout />
+                </MemberLegacy>
               </RequireAuth>
             }
           >
@@ -143,7 +153,9 @@ function AppShell({ googleOAuthEnabled }) {
             path="/history"
             element={
               <RequireAuth>
-                <HistoryPage />
+                <MemberLegacy>
+                  <HistoryPage />
+                </MemberLegacy>
               </RequireAuth>
             }
           />
@@ -151,7 +163,9 @@ function AppShell({ googleOAuthEnabled }) {
             path="/domains"
             element={
               <RequireAuth>
-                <DomainVerifyPage />
+                <MemberLegacy>
+                  <DomainVerifyPage />
+                </MemberLegacy>
               </RequireAuth>
             }
           />
@@ -159,7 +173,9 @@ function AppShell({ googleOAuthEnabled }) {
             path="/billing"
             element={
               <RequireAuth>
-                <BillingPage />
+                <MemberLegacy>
+                  <BillingPage />
+                </MemberLegacy>
               </RequireAuth>
             }
           />

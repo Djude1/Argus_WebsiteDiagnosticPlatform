@@ -88,11 +88,6 @@
   .legend-chip.tone-good { --tone: var(--ag-good); }
   .legend-chip.tone-medium { --tone: var(--ag-warn); }
   .legend-chip.tone-bad { --tone: var(--ag-bad); }
-  .legend-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--ag-primary);
-  }
 
   .topology-canvas {
     height: 72vh;
@@ -224,9 +219,6 @@
     }
   }
 }
-
-/* React Flow 內建元件：reactflow/dist/style.css 由 JS 匯入且不在 layer 內，
-   layer 裡的規則一律輸給它，所以這段放在 @layer 之外，並以 .topology-canvas 提高權重。 */
 /* React Flow 背景點、控制列、小地圖 */
 .topology-canvas .react-flow__background circle {
   fill: var(--ag-border-strong);
@@ -260,6 +252,3 @@
   fill: var(--ag-overlay);
   fill-opacity: 0.5;
 }
-.topology-mini-node { fill: var(--ag-good); }
-.topology-mini-node.tone-medium { fill: var(--ag-warn); }
-.topology-mini-node.tone-bad { fill: var(--ag-bad); }
