@@ -219,6 +219,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "category_scores",
             "top_actions",
             "warning_summary",
+            "aeo_report",
             "progress",
             "scan_log",
             "error_message",

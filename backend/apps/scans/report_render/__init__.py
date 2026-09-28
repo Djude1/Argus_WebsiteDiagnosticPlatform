@@ -5,7 +5,7 @@ from .report import generate_report
 # 換圖表、改配色、改表格結構。views.py 用它判斷磁碟上的舊報告要不要重產——
 # 沒有這個版本號時，掃描一旦產過報告就永遠拿不到新排版（使用者實際踩過：
 # 修好圖表後重新下載舊掃描的報告，拿到的還是沒有圖表的快取檔，看起來像修復失敗）。
-RENDERER_VERSION = 2
+RENDERER_VERSION = 3
 
 __all__ = ["generate_report", "RENDERER_VERSION"]
 __version__ = "1.0.0"

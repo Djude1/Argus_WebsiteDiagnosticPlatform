@@ -129,6 +129,10 @@
                                     "properties": {"ref": {"type": "string"}, "title": {"type": "string"},
                                                    "how": {"type": "string"}}}},
         "method_note":   {"type": "string", "description": "報告產生方式與來源說明（規則／工具／AI）"},
+        "aeo_items":     {"type": "array", "description": "AEO 問答檢測逐題結果",
+                          "items": {"type": "object", "required": ["question", "verdict", "basis"],
+                                    "properties": {"question": {"type": "string"}, "verdict": {"type": "string"},
+                                                   "basis": {"type": "string"}}}},
         "authorization": {"type": "object", "description": "項目->內容 的鍵值對"}
       }
     }

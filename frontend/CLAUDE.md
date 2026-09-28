@@ -125,7 +125,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在會員頂部導覽列，取代原本的「設定」；帳號設定改由右側帳號選單進入）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
-| `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
+| `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」）；完成後顯示 `AeoAnswerPanel`；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
 | `/reviews` | `ReviewsPage`（未登入：`PublicLayout`；登入後：會員區，會員導覽列、無公開頁尾，網址相同；會員入口在頭像選單） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
@@ -197,6 +197,7 @@ npm run typecheck
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
+| `src/components/scans/AeoAnswerPanel.jsx` | 掃描詳情的「AEO 問答檢測」：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
 | `src/components/scans/FixOutputSection.jsx` | 掃描詳情的「修正產出」專區：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
 | `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`DashboardPage`／`HistoryPage`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；Dashboard／歷史／購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |

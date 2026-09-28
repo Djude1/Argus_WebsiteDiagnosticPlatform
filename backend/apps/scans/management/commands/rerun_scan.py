@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.scans.aeo.evaluate import SitePage, evaluate_site
 from apps.scans.models import Finding, ScanJob
 from apps.scans.scanners import (
     PageAnalysisInput,
@@ -81,11 +82,33 @@ class Command(BaseCommand):
                 Finding.objects.create(scan_job=scan_job, page=None, **finding)
             all_findings.extend(site_level_findings)
 
+        # AEO 可回答性檢測（站台層級）：用資料庫保存的渲染後 DOM 與原始 HTML 重跑
+        base_scores = {}
+        if "aeo" in scan_job.effective_categories:
+            evaluation = evaluate_site([
+                SitePage(
+                    url=page.final_url or page.url,
+                    html=page.rendered_dom or page.html,
+                    raw_html=page.html_only_text,
+                    blocked=bool(page.blocked_reason),
+                )
+                for page in scan_job.pages.all()
+            ])
+            for finding in evaluation.findings:
+                Finding.objects.create(scan_job=scan_job, page=None, **finding)
+            all_findings.extend(evaluation.findings)
+            scan_job.aeo_report = evaluation.summary
+            scan_job.save(update_fields=["aeo_report", "updated_at"])
+            if evaluation.status == "evaluated":
+                base_scores["aeo"] = evaluation.score
+
         tested = {c for c in ("seo", "aeo", "geo", "ux", "security") if any(
             f.get("category") == c for f in all_findings
-        )} or None
+        )} | set(base_scores)
+        if (scan_job.aeo_report or {}).get("status") == "insufficient":
+            tested.discard("aeo")
         overall_score, category_scores, top_actions = calculate_scores(
-            all_findings, tested_categories=tested
+            all_findings, tested_categories=tested or None, base_scores=base_scores
         )
         scan_job.overall_score = overall_score
         scan_job.category_scores = category_scores

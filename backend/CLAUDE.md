@@ -50,7 +50,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          維度數 × ARGUS_COIN_PER_CATEGORY，主動模式必須勾資安；
          effective_categories 過濾未知值、空集合退回全開）、
          max_depth、max_pages、progress（JSON 即時進度）、
-         overall_score、category_scores（JSON）、top_actions（JSON）
+         overall_score、category_scores（JSON）、top_actions（JSON）、
+         aeo_report（JSON，AEO 問答檢測逐題結果與「未充分評估」原因，
+         見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）
 ```
 
 **Finding**（`apps/scans/models.py`）

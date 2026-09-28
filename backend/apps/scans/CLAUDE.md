@@ -32,6 +32,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
+| `aeo/` | AEO 問答檢測（內容擷取、出題、找答案與判定、標記一致性、整站評估；見下「AEO 問答檢測」） | 修改 `ScanJob.status`、發出任何網路請求（只分析爬蟲已抓到的頁面） |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
 | `katana_scanner.py` | Katana 全站 JS/端點探索封裝；時間、大小、同主機與 RPS 預算 | 在單頁、passive 或未授權模式執行 |
 | `domain_verification.py` | 網域所有權驗證引擎：token 產生、網域正規化、DNS TXT／meta tag／HTML 檔三種驗證、`run_verification()` 更新 `VerifiedDomain` | 修改 `ScanJob.status`、繞過 `assert_public_http_url` SSRF 檢查 |
@@ -98,12 +99,30 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 2. **`info` 不扣分**。info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF 攔截，代表防護有效」）。**同理 `info` 不進 `top_actions`**——它對應的建議修補是「無需修復」，列進「優先改善建議」會被當成待辦。
 3. **指數衰減 `100 * exp(-penalty / SCORE_DECAY_CONSTANT)`**，不是 `max(0, 100 - penalty)`。舊公式累積 100 分懲罰後永遠是 0，無法分辨「4 個高風險」與「40 個高風險」。`SCORE_DECAY_CONSTANT` 是可調的產品參數，不是演算法細節。
 4. **未評估的分類不寫進 `category_scores`，缺鍵即代表未評估**。`category_scores` **不保證含全部 5 個分類，取值一律用 `.get()`**。這同時保證「報告列出的分數」與「`overall_score` 平均的分母」是同一組，使用者算得出總分。
+5. **有基準分的分類（`base_scores`，目前只有 AEO）**：`calculate_scores(findings, tested, base_scores={"aeo": N})` 以 N 取代 100 當起點，`BASE_SCORED_RULE_PREFIXES`（`aeo-answer-`）的逐題 finding 不再扣分（已反映在基準分裡），其餘 AEO finding（noindex、標記不一致…）照常衰減扣分。`rerun_scan` 與 `finding_normalization._rescore` 都從 `aeo_report["score"]` 取回基準分（第 5 條由 `tests_aeo_answerability.py` 鎖定）。
 
 `Finding.Meta.ordering` 一併鎖定兩件事：`priority_score` 必須明確 `nulls_last=True`（PostgreSQL 的 `DESC` 預設 NULLS FIRST、SQLite 是 NULLS LAST，不指定的話同一份報告在本機與正式站排序相反），`severity` 必須用 `Case/When` 的風險序（CharField 直接排是字母序 `critical < high < info < low < medium`，info 會插到 low 與 medium 前面）。
 
 `make_finding()` 在呼叫端沒傳 `priority_score` 時，依 severity 給預設值——`security/` 子套件的 scanner 全都不傳，留 `None` 會被 PostgreSQL 頂到報告最前面。
 
 ---
+
+## AEO 問答檢測（`aeo/`，2026-09-28 重做）
+
+AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內容中被找到、回答並追溯證據」。四層各一個模組：
+
+| 模組 | 職責 |
+|---|---|
+| `aeo/content.py` | 第 1 層：主要文字擷取（排除 nav／header／aside／表單／隱藏元素；footer 另標 region）、段落與所屬標題、`robots_directives`（meta robots／googlebot＋`X-Robots-Tag`）、`data-nosnippet` |
+| `aeo/questions.py` | 依網站內容出題：固定意圖（電話、Email、地址、營業時間、費用、報名方式／截止、資格、退款、運送…，需在正文命中觸發詞才出題）＋網站自己寫的問句標題 |
+| `aeo/answers.py` | 第 2、3 層：逐題找候選段落並判定 `answered`／`insufficient`（空泛、日期無年度）／`conflict`（不同頁日期矛盾）／`missing`，附原文與位置 |
+| `aeo/markup.py`、`aeo/page_checks.py` | 第 4 層與逐頁規則：結構化資料語法、標記與可見文字一致性、noindex／nosnippet（`scanners.analyze_aeo` 只委派到這裡） |
+| `aeo/evaluate.py` | 整站評估 `evaluate_site(pages)`：正文 < `MIN_MAIN_TEXT_CHARS` 或題目 < `MIN_QUESTIONS` → `status=insufficient`、**不給分**（`tested_categories_for` 移除 aeo，報告顯示「未評估」）；否則依逐題判定加權算分，產生 `aeo-answer-*` finding 與 `aeo-render-dependent`（主要文字需執行 JS 才出現） |
+
+- 結果存在 `ScanJob.aeo_report`（migration 0018）：`status`、`reason`、`questions_total`、`counts`、`answered_ratio`（有答案的問題比例）、`evidence_ratio`（答案附有原文的比例）、`score`、`questions[]`（逐題判定、理由、證據），`method` 目前是 `rules-v1`。
+- 呈現：掃描詳情頁 `AeoAnswerPanel`、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
+- 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
+- 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
 
 ## 報告內容契約（`reports.py`）
 
@@ -199,6 +218,18 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 ---
 
+## 大函式的內部結構（2026-09-28 拆解，行為不變）
+
+| 函式 | 拆成 |
+|---|---|
+| `crawler.crawl_site` | `_CrawlState`（佇列、造訪、重試、速率時鐘；`next_target`／`enqueue_links`／`progress`）→ 每頁 `_throttle` → `_visit_page`（`_attach_page_listeners`、`_capture_same_origin_page` 內含 framenavigated 跨網域保護 → `_capture_content`、`_page_record`）→ 失敗 `_record_page_failure`（Playwright 錯誤重試）→ `_recycle_context`、`_report_progress`。清空內容一律走 `_empty_capture`，錯誤原因的階段名由 `_PageStage` 追蹤 |
+| `scanners.analyze_seo` | `SEO_PAGE_CHECKS` 逐項檢查函式（`_seo_title_length` …），順序即 finding 順序 |
+| `scanners.analyze_data_exposure` | `_collect_pii`（正文＋HTML 註解＋開發者字串）→ `_classify_pii`（高風險／個人聯絡／刻意公開）→ 三種 finding |
+| `security.exposure_scanner.probe_paths` | `_PacedRequester`（取消檢查＋共用 RPS 時鐘）→ `_fetch_robots_disallow` → `_soft_404_baselines` → `_probe_one` |
+| `reports.build_report_payload` | `_sorted_report_groups`、`_report_finding_entry`、`_report_summary`、`_report_priorities`、`_report_why_matters`、`_report_scan_info`、`_report_appendix` |
+
+`crawl_site` 沒有單元測試能驅動真實 Playwright 迴圈；改動它時用本機測試站實際爬一次，前後比對回傳的頁面、警告與進度序列。
+
 ## 截圖失敗不得讓整頁分析作廢（2026-08-31 事故）
 
 `page.screenshot()` 在 `crawler.py` 裡是在 **`pages.append()` 之前**執行的。
@@ -285,7 +316,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 
 `step`／`steps` 是 phase 之下的細分階段（前端掃描進度條據此顯示「正在分析 GEO／UX／資安…」）：
 `steps` 由 `tasks.planned_scan_steps()` 依勾選維度與範圍／授權算出本次實際會跑的子步驟，`step` 是目前這一步。
-可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度）、
+可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度）、`aeo_answers`（勾 AEO，接在逐維度分析之後）、
 `active_probe`（`run_nuclei`）、`deep_security`、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`agent`（Agent 啟用且可執行）、`scoring`。
 頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
 
@@ -303,6 +334,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `crawl` | `stage_crawl` | Playwright BFS；每頁回報進度並當取消檢查點 |
 | `enter_scanning` | `stage_enter_scanning` | 記錄警告、狀態推進到 scanning、落地 `Page` |
 | `page_analysis` | `stage_analyze_pages`（單頁單維度：`_analyze_one_page`） | 逐維度、逐頁規則分析＋inline 秘鑰偵測 |
+| `aeo_answers` | `stage_aeo_answerability`（`_aeo_site_pages`） | AEO 問答檢測（見下「AEO 問答檢測」），結果寫 `ScanJob.aeo_report` |
 | `site_security` | `stage_site_security` | 站台層級 HTTPS/HSTS/CSP 等（只評估一次） |
 | `active_probe` | `stage_active_probe`（`_collect_probe_targets`、`_run_site_active_tools`、`_run_single_page_nuclei`、`_waf_blocked_nuclei_note`） | Nuclei／Katana，遵守範圍與授權矩陣 |
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
@@ -310,7 +342,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
-| `scoring` | `stage_scoring`（`tested_categories_for`） | 計分並 CAS 推進到 completed |
+| `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |
 
 階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。
 

@@ -88,6 +88,9 @@ class ScanJob(models.Model):
     top_actions = models.JSONField(default=list, blank=True)
     crawl_checkpoint = models.JSONField(default=dict, blank=True)
     warning_summary = models.JSONField(default=dict, blank=True)
+    # AEO 可回答性檢測結果（apps/scans/aeo/evaluate.py）：狀態、指標與逐題判定＋原文證據。
+    # 空 dict＝本次沒跑（未勾 AEO 或舊掃描）。
+    aeo_report = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

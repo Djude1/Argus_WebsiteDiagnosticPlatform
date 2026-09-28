@@ -41,7 +41,7 @@ class PipelineShapeTests(TestCase):
             names,
             [
                 "target_validation", "crawl", "enter_scanning", "page_analysis",
-                "site_security", "active_probe", "deep_security", "exposure",
+                "aeo_answers", "site_security", "active_probe", "deep_security", "exposure",
                 "geo_site", "agent", "kali", "scoring",
             ],
         )
