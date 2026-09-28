@@ -1,0 +1,225 @@
+@layer components {
+  /* ========================================
+     MCP 接入中心（/mcp，features/account/McpAccessPage.jsx）
+     沿用 Settings 頁的 acct-page／set-* 版型，只補這頁特有的元件。
+     只用 --ag-* token；深色（預設）與日間共用同一組規則。
+     ======================================== */
+
+  .mcp-badge{
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--ag-r-pill);
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .mcp-badge.is-on{ background: var(--ag-good-soft); color: var(--ag-good); }
+  .mcp-badge.is-off{ background: var(--ag-bad-soft); color: var(--ag-bad); }
+  .mcp-badge.is-warn{ background: var(--ag-warn-soft); color: var(--ag-warn); }
+
+  .mcp-meter{
+    height: 8px;
+    overflow: hidden;
+    border-radius: var(--ag-r-pill);
+    background: var(--ag-surface-2);
+  }
+  .mcp-meter-fill{ display: block; height: 100%; border-radius: inherit; transition: width 0.4s ease; }
+  .mcp-meter-fill.tone-good{ background: var(--ag-primary); }
+  .mcp-meter-fill.tone-warn{ background: var(--ag-warn); }
+  .mcp-meter-fill.tone-bad{ background: var(--ag-bad); }
+
+  .mcp-locked{ border-color: var(--ag-warn); }
+
+  /* ── 三步驟 ── */
+  .mcp-steps{ display: grid; gap: 1.5rem; margin: 0; padding: 0; list-style: none; }
+  .mcp-step{ display: grid; gap: 0.75rem; min-width: 0; }
+  .mcp-step + .mcp-step{ padding-top: 1.25rem; border-top: 1px solid var(--ag-border); }
+  .mcp-step-title{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    color: var(--ag-text);
+    font-size: 0.98rem;
+    font-weight: 700;
+  }
+  .mcp-step-no{
+    display: inline-grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--ag-primary-soft-2);
+    color: var(--ag-primary);
+    font-family: var(--ag-font-mono);
+    font-size: 0.8rem;
+  }
+
+  .mcp-client-bar{ display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .mcp-client-tab{
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--ag-border-strong);
+    border-radius: var(--ag-r-pill);
+    background: var(--ag-bg-raised);
+    color: var(--ag-text-2);
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .mcp-client-tab:hover{ border-color: var(--ag-primary); color: var(--ag-text); }
+  .mcp-client-tab:focus-visible{ outline: none; box-shadow: var(--ag-focus); }
+  .mcp-client-tab.active{
+    border-color: var(--ag-primary);
+    background: var(--ag-primary-soft);
+    color: var(--ag-primary);
+  }
+
+  .mcp-copy{ position: relative; min-width: 0; }
+  .mcp-code{
+    margin: 0;
+    padding: 0.9rem 1rem;
+    padding-right: 5.5rem;
+    overflow-x: auto;
+    border: 1px solid var(--ag-border);
+    border-radius: var(--ag-r-md);
+    background: var(--ag-bg-raised);
+    color: var(--ag-text);
+    font-family: var(--ag-font-mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+    white-space: pre;
+  }
+  .mcp-copy-btn{
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    min-height: 0;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .mcp-secret{
+    display: grid;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--ag-warn);
+    border-radius: var(--ag-r-md);
+    background: var(--ag-warn-soft);
+  }
+  .mcp-secret p{ margin: 0; color: var(--ag-text); font-size: 0.86rem; line-height: 1.6; }
+
+  .mcp-key-form{ display: grid; gap: 0.6rem; }
+  .mcp-key-form-row{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+  }
+
+  .mcp-verify{ display: grid; gap: 0.6rem; }
+  .mcp-verify-row{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+  .mcp-verify-status{
+    display: inline-flex;
+    flex: 1 1 16rem;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--ag-text-2);
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  .mcp-verify-status.is-connected{ color: var(--ag-primary); font-weight: 600; }
+  .mcp-verify-status.is-tool{ color: var(--ag-good); font-weight: 700; }
+  .mcp-verify-status.is-timeout{ color: var(--ag-bad); }
+  .mcp-spinner{
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 2px solid var(--ag-border-strong);
+    border-top-color: var(--ag-primary);
+    border-radius: 50%;
+    animation: mcp-spin 0.9s linear infinite;
+  }
+  @keyframes mcp-spin{ to{ transform: rotate(360deg); } }
+
+  /* ── 憑證表 ── */
+  .mcp-table-wrap{ overflow-x: auto; }
+  .mcp-table{ width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  .mcp-table th{
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--ag-border-strong);
+    color: var(--ag-text-3);
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .mcp-table td{
+    padding: 0.65rem 0.6rem;
+    border-bottom: 1px solid var(--ag-border);
+    color: var(--ag-text);
+    vertical-align: top;
+  }
+  .mcp-table tr.is-revoked td{ color: var(--ag-text-3); }
+  .mcp-mono{ font-family: var(--ag-font-mono); font-size: 0.8rem; }
+  .mcp-sub{ display: block; margin-top: 0.15rem; color: var(--ag-text-3); font-size: 0.74rem; }
+  .mcp-danger-link{
+    padding: 0.2rem 0.3rem;
+    border: 0;
+    background: none;
+    color: var(--ag-bad);
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .mcp-danger-link:focus-visible{ outline: none; box-shadow: var(--ag-focus); border-radius: var(--ag-r-sm); }
+
+  /* ── 最近呼叫 ── */
+  .mcp-calls{ display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+  .mcp-call{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--ag-border);
+    font-size: 0.84rem;
+  }
+  .mcp-call-time{ color: var(--ag-text-3); font-size: 0.78rem; }
+  .mcp-call-link{ color: var(--ag-primary); font-weight: 600; text-decoration: none; }
+  .mcp-call-link:hover{ text-decoration: underline; }
+  .mcp-call .mcp-sub{ flex-basis: 100%; margin: 0; }
+
+  /* ── 工具清單 ── */
+  .mcp-tools{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .mcp-tool{
+    display: grid;
+    align-content: start;
+    gap: 0.35rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--ag-border);
+    border-radius: var(--ag-r-md);
+    background: var(--ag-bg-raised);
+  }
+  .mcp-tool-head{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem; }
+  .mcp-tool-head strong{ color: var(--ag-text); font-size: 0.9rem; }
+  .mcp-tool code{ color: var(--ag-primary); }
+  .mcp-tool p{ margin: 0; color: var(--ag-text-2); font-size: 0.8rem; line-height: 1.55; }
+
+  @media (max-width: 900px){
+    .mcp-key-form-row{ grid-template-columns: minmax(0, 1fr); }
+  }
+}

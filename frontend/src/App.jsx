@@ -15,6 +15,7 @@ const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPag
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
+const loadMcpAccessPage = () => import("./features/account/McpAccessPage.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
@@ -44,6 +45,7 @@ const HistoryPage = lazyNamed(loadAuthenticatedPages, "HistoryPage");
 const BillingPage = lazyNamed(loadAuthenticatedPages, "BillingPage");
 const ReviewsPage = lazyNamed(loadReviewsPage, "ReviewsPage");
 const SettingsPage = lazyNamed(loadAuthenticatedPages, "SettingsPage");
+const McpAccessPage = lazyNamed(loadMcpAccessPage, "McpAccessPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
 const ProjectPage = lazyNamed(loadPublicPages, "ProjectPage");
 const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
@@ -188,6 +190,14 @@ function AppShell({ googleOAuthEnabled }) {
             element={
               <RequireAuth>
                 <SettingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/mcp"
+            element={
+              <RequireAuth>
+                <McpAccessPage />
               </RequireAuth>
             }
           />

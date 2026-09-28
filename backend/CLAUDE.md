@@ -14,6 +14,8 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
+| `/api/mcp/` | `mcp_access` | MCP Streamable HTTP 端點（只吃 `Bearer argus_mcp_…` 憑證）＋`reports/<token>/` 短效報告連結 |
+| `/api/mcp-access/` | `mcp_access` | 會員頁管理 API：`overview/`、`keys/`（建立）、`keys/<id>/revoke/`、`connection/`（驗證連線） |
 | `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`（+ `<id>/cancel/`、`<id>/requeue/`）、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`health/`、`audit-log/`、`announcements/*`、`cms/*` |
 | `/favicon.svg` | 靜態資產 | 直接服務被 Git 追蹤的 `frontend/public/favicon.svg`，不依賴 frontend build |
 | `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
@@ -21,7 +23,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 
 ---
 
-## 8 個 Django App 的職責邊界
+## 主要 Django App 的職責邊界
 
 | app | 職責 | 最重要的檔案 |
 |---|---|---|
@@ -33,6 +35,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `admin_api` | React `/admin/*` 用的 REST API + AdminAuditLog | `views.py` `permissions.py` |
 | `content` | CMS（ProjectFeature / TeamMember / AppRelease），公開 API | `models.py` `admin.py` |
 | `insights` | 公開免費分析工具（測速 / 釣魚 URL / 釣魚郵件），AllowAny、不扣 coin；供公開頁 `/free-tools` 使用 | `views.py` `analyzers.py` |
+| `mcp_access` | MCP 接入：會員 API 憑證（只存雜湊）、每次呼叫的訂閱／額度檢查、MCP 工具（沿用掃描 serializer、計費與退款） | `protocol.py` `tools.py` `entitlements.py` |
 
 ---
 
