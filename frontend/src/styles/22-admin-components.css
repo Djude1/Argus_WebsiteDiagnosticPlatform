@@ -1,101 +1,114 @@
 @layer components {
-  /* --- Admin CMS tab + modal --- */
+  /* --- 分頁籤（CMS）：與 .admin-segmented 同一語言——選取＝柔青底＋青字 --- */
   .admin-tab-row {
-    @apply flex flex-wrap gap-2 mb-3;
+    @apply mb-3 flex flex-wrap gap-1 p-1;
+    width: fit-content;
+    max-width: 100%;
+    border-radius: var(--ag-r-md);
+    background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
   }
   .admin-tab {
-    @apply rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer;
-    background: var(--admin-surface);
-    color: var(--admin-text-muted);
-    border: 1px solid var(--admin-border-solid);
+    @apply px-4 text-sm font-semibold;
+    min-height: 36px;
+    border-radius: var(--ag-r-sm);
+    background: transparent;
+    color: var(--admin-text-muted-sunken);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-tab:hover { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); border-color: #67e8f9; }
+  .admin-tab:hover { color: var(--admin-text); }
   .admin-tab.active {
-    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
-    color: var(--admin-surface);
-    border-color: transparent;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+    background: var(--admin-surface);
+    color: var(--admin-accent-strong);
+    border-color: var(--ag-border-accent);
+    box-shadow: var(--admin-shadow-card);
   }
+  .admin-tab:focus-visible { outline: none; box-shadow: var(--ag-focus); }
 
+  /* --- Modal --- */
   .admin-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(4px);
     z-index: 100;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 16px;
+    background: var(--ag-overlay);
+    backdrop-filter: blur(6px);
+    animation: admin-fade-in var(--ag-dur-2) var(--ag-ease) both;
   }
   .admin-modal {
-    background: var(--admin-surface);
-    border-radius: 16px;
-    box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35);
-    max-width: 560px;
-    width: 100%;
-    max-height: 90vh;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    max-height: 90dvh;
     overflow: hidden;
+    border-radius: var(--ag-r-xl);
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border-strong);
+    box-shadow: var(--admin-shadow-pop);
     color: var(--admin-text);
+    animation: admin-pop-in var(--ag-dur-3) var(--ag-ease) both;
+  }
+  .admin-modal:focus { outline: none; }
+  @keyframes admin-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes admin-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to { opacity: 1; transform: none; }
   }
   .admin-modal-head {
-    @apply flex items-center justify-between px-5 py-4;
-    border-bottom: 1px solid var(--admin-border-solid);
+    @apply flex items-center justify-between gap-3 px-5 py-4;
+    border-bottom: 1px solid var(--admin-border);
   }
-  .admin-modal-head h4 {
-    @apply text-lg font-bold;
-    color: var(--admin-text);
-  }
+  .admin-modal-head h4 { @apply text-lg font-bold; color: var(--admin-text); }
   .admin-modal-close {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-full text-xl transition;
+    @apply inline-flex items-center justify-center text-xl;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: var(--ag-r-md);
     background: transparent;
     color: var(--admin-text-muted);
     border: none;
     cursor: pointer;
+    transition: all var(--ag-dur-1) var(--ag-ease);
   }
   .admin-modal-close:hover { background: var(--admin-surface-sunken); color: var(--admin-text); }
+  .admin-modal-close:focus-visible { outline: none; box-shadow: var(--ag-focus); }
   .admin-modal-body {
     @apply space-y-3 overflow-y-auto px-5 py-4;
     flex: 1;
+    overscroll-behavior: contain;
   }
   .admin-modal-foot {
-    @apply flex items-center justify-end gap-2 px-5 py-4;
-    border-top: 1px solid var(--admin-border-solid);
+    @apply flex flex-wrap items-center justify-end gap-2 px-5 py-4;
+    border-top: 1px solid var(--admin-border);
     background: var(--admin-surface-sunken);
   }
-
-  /* modal 尺寸：收斂自原本 .ann-modal 的 sm / lg */
   .admin-modal.is-sm { max-width: 480px; }
   .admin-modal.is-md { max-width: 560px; }
   .admin-modal.is-lg { max-width: 720px; }
   .admin-modal-title {
-    @apply text-lg font-bold;
-    color: var(--admin-text);
     margin: 0;
+    font-family: var(--ag-font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--admin-text);
   }
 
   /* --- AdminField：label / hint / error 三段式表單欄位 --- */
-  .admin-field {
-    @apply flex flex-col gap-1;
-  }
-  .admin-field-label {
-    @apply text-sm font-semibold;
-    color: var(--admin-text);
-  }
-  .admin-field-required { color: var(--tone-bad); }
-  .admin-field-hint {
-    @apply text-xs;
-    color: var(--admin-text-muted);
-  }
-  .admin-field-error {
-    @apply text-xs font-medium;
-    color: var(--tone-bad);
-  }
-  .admin-field.has-error .admin-input {
-    border-color: var(--tone-bad);
-  }
+  .admin-field { @apply flex flex-col gap-1; }
+  .admin-field .admin-input { width: 100%; }
+  .admin-field-label { @apply text-sm font-semibold; color: var(--admin-text); }
+  .admin-field-required { color: var(--admin-tone-bad-text); }
+  .admin-field-hint { @apply text-xs; color: var(--admin-text-muted); }
+  .admin-field-error { @apply text-xs font-medium; color: var(--admin-tone-bad-text); }
+  .admin-field.has-error .admin-input { border-color: var(--admin-tone-bad); }
 
   /* --- 骨架：高度貼近真實內容，避免資料進來時版面位移 --- */
   .admin-skeleton { @apply w-full; }
@@ -106,13 +119,16 @@
   }
   .admin-skeleton-card,
   .admin-skeleton-block {
-    @apply flex flex-col gap-2 rounded-2xl p-5;
+    @apply flex flex-col gap-2 p-5;
+    border-radius: var(--admin-radius);
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
   }
+  .admin-skeleton-card { min-height: 120px; }
   .admin-skeleton-block { margin-bottom: 16px; }
   .admin-skeleton-table {
-    @apply overflow-hidden rounded-xl;
+    overflow: hidden;
+    border-radius: var(--admin-radius);
     border: 1px solid var(--admin-border);
     background: var(--admin-surface);
   }
@@ -122,21 +138,17 @@
     border-bottom: 1px solid var(--admin-border);
   }
   .admin-skeleton-row:last-child { border-bottom: none; }
-  .admin-skeleton-row.is-head {
-    height: 36px;
-    background: var(--admin-surface-sunken);
-  }
+  .admin-skeleton-row.is-head { height: 36px; background: var(--admin-surface-sunken); }
+  /* 掃描光帶：一道虹膜青的光掃過，呼應「正在看」 */
   .admin-skeleton-bar {
-    @apply block rounded;
+    @apply block;
     height: 10px;
-    background: linear-gradient(
-      90deg,
-      rgba(148, 163, 184, 0.18) 0%,
-      rgba(148, 163, 184, 0.32) 50%,
-      rgba(148, 163, 184, 0.18) 100%
-    );
-    background-size: 200% 100%;
-    animation: admin-skeleton-shimmer 1.4s ease-in-out infinite;
+    border-radius: 4px;
+    background:
+      linear-gradient(90deg, transparent 0%, var(--admin-accent-soft-bg-2) 50%, transparent 100%) no-repeat,
+      var(--admin-surface-sunken);
+    background-size: 40% 100%, auto;
+    animation: admin-skeleton-shimmer 1.6s var(--ag-ease) infinite;
   }
   .admin-skeleton-bar.tall { height: 22px; }
   .admin-skeleton-bar.w-25 { width: 25%; }
@@ -146,86 +158,91 @@
   .admin-skeleton-bar.w-70 { width: 70%; }
   .admin-skeleton-bar.w-90 { width: 90%; }
   @keyframes admin-skeleton-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% { background-position: -60% 0, 0 0; }
+    100% { background-position: 160% 0, 0 0; }
   }
 
-  /* --- 空狀態：圖示 + 說明 + 出口，取代單行「尚無資料」 --- */
+  /* --- 空狀態：品牌眼形圖示 + 說明 + 出口 --- */
   .admin-empty-state {
-    @apply flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-10 text-center;
-    background: var(--admin-surface);
+    @apply flex flex-col items-center justify-center gap-2 px-6 py-12 text-center;
+    border-radius: var(--admin-radius);
+    background:
+      radial-gradient(20rem 10rem at 50% 0%, var(--admin-accent-soft-bg), transparent 70%),
+      var(--admin-surface);
     border: 1px dashed var(--admin-border-strong);
   }
   .admin-empty-state-icon {
-    @apply inline-flex items-center justify-center;
-    width: 40px;
-    height: 40px;
+    @apply mb-1 inline-flex items-center justify-center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--admin-accent-soft-bg);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--admin-accent) 6%, transparent);
     color: var(--admin-accent);
   }
-  .admin-empty-state-title {
-    @apply text-sm font-semibold;
-    color: var(--admin-text);
-  }
-  .admin-empty-state-desc {
-    @apply text-xs;
-    color: var(--admin-text-muted);
-    max-width: 420px;
-  }
+  .admin-empty-state-icon svg { width: 22px; height: 22px; }
+  .admin-empty-state-title { @apply text-sm font-semibold; margin: 0; color: var(--admin-text); }
+  .admin-empty-state-desc { @apply text-xs; margin: 0; max-width: 420px; color: var(--admin-text-muted); }
+  .admin-empty-state .admin-btn { margin-top: 6px; }
   /* 無待辦是好消息，用成功色而非灰色呈現 */
-  .admin-empty-state.tone-good { border-color: rgba(16, 185, 129, 0.35); }
-  .admin-empty-state.tone-good .admin-empty-state-icon { color: var(--tone-good); }
+  .admin-empty-state.tone-good { border-color: var(--admin-tone-good-border); }
+  .admin-empty-state.tone-good .admin-empty-state-icon { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
 
   /* --- 錯誤狀態：區塊級，永遠留有下一步 --- */
   .admin-error-state {
-    @apply flex flex-col items-start gap-2 rounded-2xl p-5;
-    background: #fef2f2;
-    border: 1px solid rgba(239, 68, 68, 0.28);
+    @apply flex flex-col items-start gap-2 p-5;
+    border-radius: var(--admin-radius);
+    background: var(--admin-tone-bad-bg);
+    border: 1px solid var(--admin-tone-bad-border);
+    border-left-width: 3px;
   }
   .admin-error-state.is-compact { @apply p-3; }
-  .admin-error-state-title {
-    @apply text-sm font-semibold;
-    color: #991b1b;
-  }
+  .admin-error-state-title { @apply text-sm font-semibold; margin: 0; color: var(--admin-tone-bad-text); }
   .admin-error-state-detail {
     @apply text-xs;
-    color: var(--admin-tone-bad-text);
+    margin: 0;
+    font-family: var(--ag-font-mono);
+    color: var(--admin-text-secondary);
     word-break: break-word;
   }
 
-  /* 表格數字欄位等寬對齊：沒有它，金額與點數在列與列之間會左右跳動 */
+  /* 表格數字欄位等寬對齊 */
   .admin-table .num,
   .admin-stat-value,
-  .admin-balance-big {
-    font-variant-numeric: tabular-nums;
-  }
+  .admin-balance-big { font-variant-numeric: tabular-nums; }
 
-  /* --- 分段切換：取代下拉選單，讓狀態分佈一眼可見且一鍵可切 --- */
+  /* --- 分段切換 --- */
   .admin-segmented {
-    @apply inline-flex flex-wrap gap-1 rounded-xl p-1;
+    @apply inline-flex flex-wrap gap-1 p-1;
+    max-width: 100%;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface-sunken);
     border: 1px solid var(--admin-border);
   }
   .admin-segment {
-    @apply rounded-lg px-3.5 py-1.5 text-sm font-semibold transition;
+    @apply px-3.5 text-sm font-semibold;
+    min-height: 34px;
+    border-radius: var(--ag-r-sm);
     background: transparent;
     color: var(--admin-text-muted-sunken);
-    border: none;
+    border: 1px solid transparent;
     cursor: pointer;
+    transition: all var(--ag-dur-1) var(--ag-ease);
   }
   .admin-segment:hover { color: var(--admin-text); }
   .admin-segment.active {
     background: var(--admin-surface);
-    color: var(--admin-accent);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    color: var(--admin-accent-strong);
+    border-color: var(--ag-border-accent);
+    box-shadow: var(--admin-shadow-card);
   }
-  .admin-segment:focus-visible {
-    outline: 2px solid var(--admin-accent);
-    outline-offset: 1px;
-  }
+  .admin-segment:focus-visible { outline: none; box-shadow: var(--ag-focus); }
 
   /* --- 訂單狀態：色 + 圓點 + 文字三重編碼 --- */
   .admin-order-status {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold;
+    border-radius: var(--ag-r-pill);
+    white-space: nowrap;
     background: var(--admin-surface-sunken);
     color: var(--admin-text-muted-sunken);
   }
@@ -235,18 +252,13 @@
     height: 6px;
     background: currentColor;
   }
-  .admin-order-status.tone-good {
-    background: rgba(16, 185, 129, 0.12);
-    color: var(--admin-tone-good-text);
-  }
-  .admin-order-status.tone-warn {
-    background: rgba(245, 158, 11, 0.14);
-    color: var(--admin-tone-warn-text);
-  }
+  .admin-order-status.tone-good { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+  .admin-order-status.tone-warn { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+  .admin-order-status.tone-bad { background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
 
-  /* modal 內的次級標題 */
   .admin-modal-subhead {
     @apply mt-1 text-xs font-bold uppercase tracking-wider;
+    font-family: var(--ag-font-mono);
     color: var(--admin-text-muted);
   }
 
@@ -254,28 +266,29 @@
   .admin-btn.ghost {
     background: transparent;
     border-color: transparent;
-    color: var(--admin-text-muted-sunken);
+    color: var(--admin-text-secondary);
   }
-  .admin-btn.ghost:hover {
+  .admin-btn.ghost:hover:not(:disabled) {
     background: var(--admin-surface-sunken);
+    border-color: var(--admin-border);
     color: var(--admin-text);
   }
 
-  .admin-pagination-total {
-    color: var(--admin-text-muted);
-    font-size: 0.75rem;
-  }
-  .admin-pagination.is-single {
-    @apply flex justify-end;
-  }
+  .admin-pagination-total { color: var(--admin-text-muted); font-size: 0.75rem; }
+  .admin-pagination.is-single { @apply flex justify-end; }
 
   /* 面板右上的「看更多」連結 */
   .admin-panel-more {
-    @apply text-xs font-semibold;
-    color: var(--admin-accent);
+    @apply inline-flex items-center text-xs font-semibold;
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: var(--ag-r-sm);
+    color: var(--admin-accent-strong);
     text-decoration: none;
+    transition: background var(--ag-dur-1) var(--ag-ease);
   }
-  .admin-panel-more:hover { text-decoration: underline; }
+  .admin-panel-more:hover { background: var(--admin-accent-soft-bg); }
+  .admin-panel-hint { @apply text-xs; color: var(--admin-text-muted); }
 
   /* --- 掃描詳情：優先處置建議 --- */
   .admin-top-actions {
@@ -283,72 +296,80 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    counter-reset: none;
   }
   .admin-top-action {
-    @apply flex items-start gap-3 rounded-xl p-3;
+    @apply flex items-start gap-3 p-3;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface-sunken);
     border: 1px solid var(--admin-border);
+    transition: border-color var(--ag-dur-2) var(--ag-ease);
   }
+  .admin-top-action:hover { border-color: var(--ag-border-accent); }
   .admin-top-action-rank {
-    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-xs font-bold;
-    width: 24px;
-    height: 24px;
+    @apply inline-flex shrink-0 items-center justify-center text-xs font-bold;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--ag-r-sm);
+    font-family: var(--ag-font-mono);
     background: var(--admin-surface);
     border: 1px solid var(--admin-border-strong);
-    color: var(--admin-text-muted-sunken);
+    color: var(--admin-text-secondary);
     font-variant-numeric: tabular-nums;
   }
-  .admin-top-action-body { @apply flex min-w-0 flex-1 flex-col gap-1.5; }
-  .admin-top-action-title {
-    @apply text-sm font-semibold;
-    color: var(--admin-text);
-  }
-  .admin-top-action-meta { @apply flex flex-wrap items-center gap-2; }
-
-  /* --- 掃描詳情：爬取警告 --- */
-  .admin-tech-stack {
-    @apply mb-3 flex flex-wrap items-center gap-1.5;
-  }
-  .admin-tech-chip {
-    @apply rounded-md px-2 py-0.5 text-xs font-medium;
-    background: rgba(56, 189, 248, 0.12);
-    color: #0369a1;
-  }
-  .admin-warn-group {
-    @apply rounded-xl;
-    border: 1px solid var(--admin-border);
-    margin-bottom: 8px;
-  }
-  .admin-warn-group > summary {
-    @apply flex cursor-pointer items-center gap-2 px-3 py-2 text-sm;
-    list-style: none;
-  }
-  .admin-warn-group > summary::-webkit-details-marker { display: none; }
-  .admin-warn-group > summary::before {
-    content: "▸";
-    color: var(--admin-text-muted);
-    transition: transform 0.15s ease;
-  }
-  .admin-warn-group[open] > summary::before { transform: rotate(90deg); }
-  .admin-warn-count {
-    @apply inline-flex items-center justify-center rounded-md px-1.5 text-xs font-bold;
-    min-width: 22px;
-    height: 20px;
-    font-variant-numeric: tabular-nums;
-  }
-  .admin-warn-count.tone-warn {
-    background: rgba(245, 158, 11, 0.16);
+  .admin-top-action:first-child .admin-top-action-rank {
+    background: var(--admin-highlight-soft);
+    border-color: color-mix(in srgb, var(--admin-highlight) 45%, transparent);
     color: var(--admin-tone-warn-text);
   }
-  .admin-warn-count.tone-bad {
-    background: rgba(239, 68, 68, 0.14);
-    color: var(--admin-tone-bad-text);
+  .admin-top-action-body { @apply flex min-w-0 flex-1 flex-col gap-1.5; }
+  .admin-top-action-title { @apply text-sm font-semibold; color: var(--admin-text); }
+  .admin-top-action-meta { @apply flex flex-wrap items-center gap-2; }
+
+  /* --- 掃描詳情：技術棧與爬取警告 --- */
+  .admin-tech-stack { @apply mb-3 flex flex-wrap items-center gap-1.5; }
+  .admin-tech-chip {
+    @apply px-2 py-0.5 text-xs font-medium;
+    border-radius: var(--ag-r-xs);
+    font-family: var(--ag-font-mono);
+    background: var(--admin-tone-info-bg);
+    color: var(--admin-tone-info-text);
   }
-  .admin-warn-label {
-    @apply font-semibold;
-    color: var(--admin-text);
+  .admin-warn-group {
+    margin-bottom: 8px;
+    border-radius: var(--ag-r-md);
+    border: 1px solid var(--admin-border);
+    transition: border-color var(--ag-dur-2) var(--ag-ease);
   }
+  .admin-warn-group[open] { border-color: var(--admin-border-strong); }
+  .admin-warn-group > summary {
+    @apply flex cursor-pointer items-center gap-2 px-3 text-sm;
+    min-height: 40px;
+    list-style: none;
+    border-radius: var(--ag-r-md);
+  }
+  .admin-warn-group > summary:hover { background: var(--admin-surface-sunken); }
+  .admin-warn-group > summary:focus-visible { outline: none; box-shadow: var(--ag-focus); }
+  .admin-warn-group > summary::-webkit-details-marker { display: none; }
+  .admin-warn-group > summary::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--admin-text-muted);
+    border-bottom: 1.5px solid var(--admin-text-muted);
+    transform: rotate(-45deg);
+    transition: transform var(--ag-dur-2) var(--ag-ease);
+  }
+  .admin-warn-group[open] > summary::before { transform: rotate(45deg); }
+  .admin-warn-count {
+    @apply inline-flex items-center justify-center px-1.5 text-xs font-bold;
+    min-width: 22px;
+    height: 20px;
+    border-radius: var(--ag-r-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .admin-warn-count.tone-warn { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+  .admin-warn-count.tone-bad { background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
+  .admin-warn-label { @apply font-semibold; color: var(--admin-text); }
   .admin-warn-list {
     @apply flex flex-col gap-1 px-3 pb-3;
     list-style: none;
@@ -356,11 +377,11 @@
     max-height: 260px;
     overflow-y: auto;
   }
-  .admin-warn-list li {
-    @apply flex flex-wrap items-baseline gap-2 text-xs;
-  }
+  .admin-warn-list li { @apply flex flex-wrap items-baseline gap-2 text-xs; }
   .admin-warn-url {
-    @apply rounded px-1.5 py-0.5;
+    @apply px-1.5 py-0.5;
+    border-radius: 4px;
+    font-family: var(--ag-font-mono);
     background: var(--admin-surface-sunken);
     color: var(--admin-text);
     word-break: break-all;
@@ -380,32 +401,36 @@
   }
   .admin-radio-group label {
     @apply inline-flex items-center gap-1.5 text-sm;
+    min-height: 32px;
     color: var(--admin-text);
   }
+  .admin-radio-group input { accent-color: var(--admin-accent); }
   .admin-input-narrow { max-width: 120px; }
   .admin-page-head-links { @apply flex flex-wrap items-center gap-2; }
 
-  /* 列表被縮限在某個範圍時的提示條。沒有它，管理員會以為系統只有這幾筆資料 */
-  /* --- 系統健康 --- */
+  /* --- 系統健康：整體狀態 --- */
   .admin-health-summary {
-    @apply flex items-center gap-3 rounded-2xl p-4;
+    @apply flex items-center gap-3 p-4;
+    border-radius: var(--admin-radius);
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
-    border-left-width: 4px;
+    border-left-width: 3px;
+    box-shadow: var(--admin-shadow-card);
   }
-  .admin-health-summary.tone-ok { border-left-color: var(--tone-good); }
-  .admin-health-summary.tone-warn { border-left-color: var(--tone-medium); }
-  .admin-health-summary.tone-bad { border-left-color: var(--tone-bad); }
+  .admin-health-summary.tone-ok { border-left-color: var(--admin-tone-good); background: linear-gradient(90deg, var(--admin-tone-good-bg), var(--admin-surface) 40%); }
+  .admin-health-summary.tone-warn { border-left-color: var(--admin-tone-warn); background: linear-gradient(90deg, var(--admin-tone-warn-bg), var(--admin-surface) 40%); }
+  .admin-health-summary.tone-bad { border-left-color: var(--admin-tone-bad); background: linear-gradient(90deg, var(--admin-tone-bad-bg), var(--admin-surface) 40%); }
   .admin-health-summary-icon {
     @apply inline-flex items-center justify-center;
-    width: 28px; height: 28px;
+    width: 28px;
+    height: 28px;
     color: var(--admin-text-muted);
   }
-  .admin-health-summary.tone-ok .admin-health-summary-icon { color: var(--tone-good); }
+  .admin-health-summary.tone-ok .admin-health-summary-icon { color: var(--admin-tone-good-text); }
   .admin-health-summary.tone-warn .admin-health-summary-icon { color: var(--admin-tone-warn-text); }
   .admin-health-summary.tone-bad .admin-health-summary-icon { color: var(--admin-tone-bad-text); }
   .admin-health-summary-title { @apply text-sm font-bold; color: var(--admin-text); }
-  .admin-health-summary-time { @apply text-xs; color: var(--admin-text-muted); }
+  .admin-health-summary-time { @apply text-xs; font-family: var(--ag-font-mono); color: var(--admin-text-muted); }
 
   .admin-health-list { @apply flex flex-col; list-style: none; margin: 0; padding: 0; }
   .admin-health-row {
@@ -415,31 +440,35 @@
   .admin-health-row:last-child { border-bottom: none; }
   .admin-health-badge {
     @apply inline-flex shrink-0 items-center justify-center rounded-full text-xs font-bold;
-    width: 22px; height: 22px;
+    width: 22px;
+    height: 22px;
     background: var(--admin-surface-sunken);
     color: var(--admin-text-muted-sunken);
   }
-  .admin-health-row.tone-ok .admin-health-badge { background: rgba(16,185,129,.14); color: var(--admin-tone-good-text); }
-  .admin-health-row.tone-warn .admin-health-badge { background: rgba(245,158,11,.16); color: var(--admin-tone-warn-text); }
-  .admin-health-row.tone-bad .admin-health-badge { background: rgba(239,68,68,.14); color: var(--admin-tone-bad-text); }
+  .admin-health-row.tone-ok .admin-health-badge { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+  .admin-health-row.tone-warn .admin-health-badge { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+  .admin-health-row.tone-bad .admin-health-badge { background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
   .admin-health-body { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
   .admin-health-label {
     @apply flex flex-wrap items-center gap-2 text-sm font-semibold;
     color: var(--admin-text);
   }
   .admin-health-state {
-    @apply rounded px-1.5 py-0.5 text-xs font-medium;
+    @apply px-1.5 py-0.5 text-xs font-medium;
+    border-radius: var(--ag-r-xs);
     background: var(--admin-surface-sunken);
     color: var(--admin-text-muted-sunken);
   }
-  .admin-health-detail { @apply text-sm; color: var(--admin-text-muted); }
-  .admin-health-basis { @apply text-xs; color: var(--admin-text-muted); opacity: .85; }
+  .admin-health-detail { @apply text-sm; color: var(--admin-text-secondary); }
+  .admin-health-basis { @apply text-xs; color: var(--admin-text-muted); }
 
+  /* 列表被縮限在某個範圍時的提示條。沒有它，管理員會以為系統只有這幾筆資料 */
   .admin-scope-note {
-    @apply flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm;
-    background: rgba(56, 189, 248, 0.10);
-    border: 1px solid rgba(56, 189, 248, 0.28);
-    color: #0c4a6e;
+    @apply flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm;
+    border-radius: var(--ag-r-md);
+    background: var(--admin-accent-soft-bg);
+    border: 1px solid var(--ag-border-accent);
+    color: var(--admin-text);
   }
 
   /* --- 今日脈搏 --- */
@@ -448,43 +477,49 @@
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
   .admin-pulse {
-    @apply rounded-xl p-3;
+    @apply p-3;
+    position: relative;
+    border-radius: var(--ag-r-md);
     background: var(--admin-surface-sunken);
+    border: 1px solid var(--admin-border);
   }
   .admin-pulse-value {
     @apply text-2xl font-bold leading-tight;
+    font-family: var(--ag-font-display);
     color: var(--admin-text);
     font-variant-numeric: tabular-nums;
   }
-  .admin-pulse-label {
-    @apply text-xs;
-    color: var(--admin-text-muted-sunken);
-  }
-
+  .admin-pulse-label { @apply mt-0.5 text-xs; color: var(--admin-text-muted-sunken); }
 
   /* --- 可排序表頭 --- */
   .admin-table thead th.admin-th-sortable { padding: 0; }
   .admin-sort-btn {
-    @apply inline-flex w-full items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition;
+    @apply inline-flex w-full items-center gap-1 px-3 py-2.5 font-semibold uppercase;
+    position: relative;
+    font-family: var(--ag-font-mono);
+    font-size: inherit;
+    letter-spacing: inherit;
     background: transparent;
     border: none;
     color: inherit;
     cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--ag-dur-1) var(--ag-ease);
   }
+  .admin-table.compact .admin-sort-btn { @apply px-2 py-1.5; }
   .admin-table thead th.num .admin-sort-btn { justify-content: flex-end; }
   .admin-sort-btn:hover { color: var(--admin-text); }
-  .admin-sort-btn.is-active { color: var(--admin-accent); }
-  .admin-sort-arrow {
-    font-size: 0.85em;
-    opacity: 0.45;
-  }
+  .admin-sort-btn.is-active { color: var(--admin-accent-strong); }
+  .admin-sort-arrow { font-size: 0.95em; opacity: 0.4; }
   .admin-sort-btn.is-active .admin-sort-arrow { opacity: 1; }
-  .admin-sort-btn:focus-visible {
-    outline: 2px solid var(--admin-accent);
-    outline-offset: -2px;
-  }
+  .admin-sort-btn:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: -2px; }
 
   @media (max-width: 640px) {
     .admin-field-row { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .admin-skeleton-bar,
+    .admin-modal,
+    .admin-modal-backdrop { animation: none; }
   }
 }

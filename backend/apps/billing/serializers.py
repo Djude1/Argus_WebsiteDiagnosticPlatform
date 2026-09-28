@@ -73,6 +73,7 @@ class CoinTransactionSerializer(serializers.ModelSerializer):
 class CoinWalletSerializer(serializers.ModelSerializer):
     recent_transactions = serializers.SerializerMethodField()
     coin_per_category = serializers.SerializerMethodField()
+    agent_ux_fee = serializers.SerializerMethodField()
 
     class Meta:
         model = CoinWallet
@@ -81,6 +82,7 @@ class CoinWalletSerializer(serializers.ModelSerializer):
             "total_purchased_ntd",
             "total_scans_used",
             "coin_per_category",
+            "agent_ux_fee",
             "recent_transactions",
             "updated_at",
         ]
@@ -93,6 +95,17 @@ class CoinWalletSerializer(serializers.ModelSerializer):
         from django.conf import settings as dj_settings
 
         return dj_settings.ARGUS_COIN_PER_CATEGORY
+
+    def get_agent_ux_fee(self, obj):
+        # AI Agent 擬真使用者 UX 測試的固定附加費（全網站＋勾 UX 時另收）。
+        # agent 功能關閉時回 0，前端據此不顯示這一筆。
+        from django.conf import settings as dj_settings
+
+        return (
+            dj_settings.ARGUS_COIN_AGENT_UX
+            if dj_settings.ARGUS_AGENT_ENABLED
+            else 0
+        )
 
 
 class PurchaseRequestSerializer(serializers.Serializer):

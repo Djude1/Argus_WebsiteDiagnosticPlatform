@@ -1,178 +1,460 @@
 @layer components {
   /* ========================================
-     掃描列表 sidebar 強化
+     掃描體驗（/scans、/scans/:id）：版面、建立表單、列表、互動報告
+     只用 --ag-* token；深色值在 :root、日間值在 [data-theme="light"]，
+     規則寫一次兩主題都對。嚴重度一律「色＋文字」。
+     元件對應：features/scans/*、components/scans/*
+     ※ /scans、/domains 目前為改版前（462848b）版本，實際樣式在 legacy-member/（範圍內會覆寫本檔）；
+       本檔只剩與舊版同名 class 的規則，保留供日後改回改版後設計時參考。
      ======================================== */
 
-  .scan-card {
-    @apply relative overflow-hidden;
+  /* ── 版面（覆寫 10-components-core 的 scan-layout 預設） ── */
+  .scan-layout{
+    max-width: 1520px;
+    margin-inline: auto;
   }
 
-  .scan-card-stripe {
-    @apply absolute inset-y-0 left-0 w-1;
-    background: rgba(148, 163, 184, 0.4);
+  .scan-layout.list-mode{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
   }
 
-  .scan-card-stripe.tone-good {
-    background: linear-gradient(180deg, var(--tone-good-bright), var(--tone-good));
-    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
-  }
-  .scan-card-stripe.tone-medium {
-    background: linear-gradient(180deg, var(--tone-medium-bright), var(--tone-medium));
-    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
-  }
-  .scan-card-stripe.tone-bad {
-    background: linear-gradient(180deg, var(--tone-bad-bright), var(--tone-bad));
-    box-shadow: 0 0 8px rgba(251, 113, 133, 0.5);
+  /* 表單比視窗高，sticky 會把送出鈕卡在畫面外，改回一般流動 */
+  .scan-layout.list-mode .scan-sidebar{
+    position: static;
   }
 
-  .scan-card-body {
-    @apply flex-1 space-y-1 pl-2;
+  .scan-layout.list-mode .scan-content{
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-height: 0;
   }
 
-  .scan-card-origin {
-    @apply truncate font-mono text-sm font-semibold text-slate-900;
+  @media (min-width: 1024px) {
+    .scan-layout.list-mode{
+      grid-template-columns: minmax(400px, 460px) minmax(0, 1fr);
+    }
   }
 
-  .scan-card-meta {
-    @apply flex items-center gap-2;
+  .scan-layout.detail-mode .scan-sidebar{
+    width: 460px;
+    padding: 1rem;
+  }
+  .scan-layout.detail-mode .scan-sidebar > * + *{
+    margin-top: 1rem;
   }
 
-  .scan-card-delta {
-    @apply rounded-full px-1.5 py-0.5 text-[10px] font-bold;
-  }
-
-  .scan-card-delta.tone-good {
-    @apply bg-emerald-100 text-emerald-700;
-  }
-
-  .scan-card-delta.tone-bad {
-    @apply bg-red-100 text-red-700;
+  .scan-content-toolbar{
+    @apply mb-4 flex flex-wrap items-center gap-2;
   }
 
   /* ========================================
-     Settings 配額 panel
+     建立授權掃描表單（ScanJobForm）
      ======================================== */
 
-  .quota-panel {
-    @apply rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5;
+  /* 步驟 1：範圍卡 */
+  .scope-grid{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+  .scope-card{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.8rem 0.9rem;
+    border-radius: var(--ag-r-md);
+    text-align: left;
+    background: var(--ag-bg-raised);
+    border: 1px solid var(--ag-border-strong);
+    color: var(--ag-text);
+    transition: border-color var(--ag-dur-2), background var(--ag-dur-2), box-shadow var(--ag-dur-2), transform var(--ag-dur-1);
+  }
+  .scope-card:hover{
+    border-color: var(--ag-border-accent);
+    transform: translateY(-1px);
+  }
+  .scope-card.active{
+    border-color: var(--ag-primary);
+    background: var(--ag-primary-soft);
+    box-shadow: var(--ag-glow);
+  }
+  .scope-icon{
+    width: 22px;
+    height: 22px;
+    margin-bottom: 0.2rem;
+    color: var(--ag-text-3);
+    transition: color var(--ag-dur-2);
+  }
+  .scope-card.active .scope-icon{
+    color: var(--ag-primary);
+  }
+  .scope-title{
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  .scope-desc{
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--ag-text-2);
+  }
+  .scope-meta{
+    margin-top: 0.25rem;
+    font-family: var(--ag-font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--ag-text-3);
+  }
+  .scope-card.active .scope-meta{
+    color: var(--ag-primary);
   }
 
-  .quota-panel-head {
-    @apply flex items-end justify-between gap-3;
+  /* 步驟 2：維度 toggle（維度色勾選框＋名稱） */
+  .category-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 0.5rem;
+  }
+  .category-card{
+    --cat: var(--ag-text-3);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--ag-r-md);
+    text-align: left;
+    background: var(--ag-bg-raised);
+    border: 1px solid var(--ag-border-strong);
+    color: var(--ag-text-2);
+    transition: border-color var(--ag-dur-2), background var(--ag-dur-2), color var(--ag-dur-2);
+  }
+  .category-card.cat-seo{ --cat: var(--ag-cat-seo); }
+  .category-card.cat-aeo{ --cat: var(--ag-cat-aeo); }
+  .category-card.cat-geo{ --cat: var(--ag-cat-geo); }
+  .category-card.cat-security{ --cat: var(--ag-cat-security); }
+  .category-card.cat-ux{ --cat: var(--ag-cat-ux); }
+  .category-card:hover{
+    border-color: color-mix(in srgb, var(--cat) 55%, transparent);
+  }
+  .category-card.active{
+    color: var(--ag-text);
+    border-color: color-mix(in srgb, var(--cat) 60%, transparent);
+    background: color-mix(in srgb, var(--cat) 10%, var(--ag-bg-raised));
   }
 
-  .quota-label {
-    @apply text-xs uppercase tracking-[0.18em] text-slate-500;
+  /* 步驟 3：網址 */
+
+  .scan-verified-badge{
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: var(--ag-r-pill);
+    background: var(--ag-good-soft);
+    border: 1px solid color-mix(in srgb, var(--ag-good) 35%, transparent);
+    color: var(--ag-good);
+    font-size: 0.8rem;
+    font-weight: 700;
+    animation: fade-up 0.3s ease-out both;
+  }
+  .scan-verified-dot{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ag-good);
+  }
+  .scan-verified-note{
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: var(--ag-text-2);
   }
 
-  .quota-value {
-    @apply mt-1 flex items-baseline gap-1;
-  }
+  /* 步驟 5：授權 */
 
-  .quota-used {
-    @apply text-4xl font-bold tabular-nums text-slate-900;
+  .scan-domain-warning{
+    padding: 0.85rem 1rem;
+    border-radius: var(--ag-r-md);
+    background: var(--ag-warn-soft);
+    border: 1px solid color-mix(in srgb, var(--ag-warn) 40%, transparent);
+    animation: fade-up 0.3s ease-out both;
   }
-
-  .quota-divider {
-    @apply text-2xl text-slate-400;
+  .scan-domain-warning-title{
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ag-warn);
   }
-
-  .quota-limit {
-    @apply text-2xl font-bold tabular-nums text-slate-500;
+  .scan-domain-warning-text{
+    margin-top: 0.3rem;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--ag-text);
   }
-
-  .quota-unit {
-    @apply ml-1 text-sm text-slate-500;
-  }
-
-  .quota-tone-badge {
-    @apply rounded-full px-3 py-1 text-sm font-bold tabular-nums;
-  }
-
-  .quota-tone-badge.tone-good {
-    @apply bg-emerald-100 text-emerald-700;
-  }
-  .quota-tone-badge.tone-medium {
-    @apply bg-amber-100 text-amber-700;
-  }
-  .quota-tone-badge.tone-bad {
-    @apply bg-red-100 text-red-700;
-  }
-
-  .quota-progress {
-    @apply mt-3 h-3 overflow-hidden rounded-full bg-slate-200;
-  }
-
-  .quota-progress-fill {
-    @apply h-full rounded-full;
-    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: bar-grow 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .quota-progress-fill.tone-good {
-    background: linear-gradient(90deg, var(--tone-good-bright), var(--tone-good));
-    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
-  }
-  .quota-progress-fill.tone-medium {
-    background: linear-gradient(90deg, var(--tone-medium-bright), var(--tone-medium));
-    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
-  }
-  .quota-progress-fill.tone-bad {
-    background: linear-gradient(90deg, var(--tone-bad-bright), var(--tone-bad));
-    box-shadow: 0 0 8px rgba(251, 113, 133, 0.5);
-  }
-
-  .stat-card-glow {
-    @apply transition;
-  }
-
-  .stat-card-glow:hover {
-    @apply -translate-y-0.5 border-blue-300 shadow-md;
+  .scan-domain-warning-link{
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--ag-warn);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   /* ========================================
-     History 圖表容器
+     掃描列表（ScanList）
      ======================================== */
+  /* 概覽頁右欄夠寬：兩欄卡片，掃讀更快 */
 
-  .history-chart {
-    @apply mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2;
+  .scan-card{
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.8rem;
+    width: 100%;
+    min-height: 64px;
+    padding: 0.65rem 0.85rem;
+    overflow: hidden;
+    border-radius: var(--ag-r-md);
+    text-align: left;
+    background: var(--ag-surface-2);
+    border: 1px solid var(--ag-border);
+    transition: border-color var(--ag-dur-2), background var(--ag-dur-2), transform var(--ag-dur-1), box-shadow var(--ag-dur-2);
+  }
+  .scan-card:hover{
+    transform: translateY(-1px);
+    border-color: var(--ag-border-accent);
+    box-shadow: var(--ag-shadow-2);
+  }
+  .scan-card.active{
+    border-color: var(--ag-primary);
+    background: var(--ag-primary-soft);
+    box-shadow: var(--ag-glow);
+  }
+  .scan-card-body{
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+  .scan-card-origin{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--ag-font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ag-text);
+  }
+  .scan-card-meta{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+  }
+  .scan-card-delta{
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--ag-r-pill);
+    font-family: var(--ag-font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+  .scan-card-delta.tone-good{
+    color: var(--ag-good);
+    background: var(--ag-good-soft);
+  }
+  .scan-card-delta.tone-bad{
+    color: var(--ag-bad);
+    background: var(--ag-bad-soft);
+  }
+  .scan-card.is-skeleton{
+    pointer-events: none;
   }
 
   /* ========================================
-     全域 hover 微互動
+     互動報告（ScanDetailPage）
      ======================================== */
-
-  .stat-tile {
-    transition: transform 0.2s, box-shadow 0.2s;
-    animation: fade-up 0.4s ease-out;
+  .report{
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-width: 0;
+  }
+  /* 寬螢幕：左欄兩張圖表上下疊、右欄 Top Actions 跨兩列，避免三卡等高留白 */
+  .top-action-row{
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--ag-r-md);
+    text-align: left;
+    background: var(--ag-surface-2);
+    border: 1px solid var(--ag-border);
+    transition: border-color var(--ag-dur-2), background var(--ag-dur-2), transform var(--ag-dur-1);
+  }
+  .top-action-row:hover{
+    border-color: var(--ag-border-accent);
+    background: var(--ag-primary-soft);
+    transform: translateX(2px);
+  }
+  .top-action-title{
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--ag-text);
   }
 
-  .stat-tile:hover {
-    transform: translateY(-2px);
+  /* findings 清單 */
+  .finding-group{
+    --sev: var(--ag-sev-info);
+    position: relative;
+    flex-shrink: 0; /* 清單是可捲動的 flex 欄：不讓群組被壓扁 */
+    overflow: hidden;
+  }
+  .finding-group::before{
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--sev);
+  }
+  .finding-group.sev-critical{ --sev: var(--ag-sev-critical); }
+  .finding-group.sev-high{ --sev: var(--ag-sev-high); }
+  .finding-group.sev-medium{ --sev: var(--ag-sev-medium); }
+  .finding-group.sev-low{ --sev: var(--ag-sev-low); }
+  .finding-group-header{
+    min-height: 44px;
+    padding: 0.5rem 0.7rem 0.5rem 0.85rem;
+    gap: 0.5rem;
+  }
+  .finding-group-title{
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.4;
+    font-size: 0.85rem;
+  }
+  .finding-group-header .severity,
+  .finding-group-header .category-pill{
+    flex: none;
+  }
+  .finding-group-chevron{
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: var(--ag-text-3);
+    transition: transform var(--ag-dur-2) var(--ag-ease);
+  }
+  .finding-group.is-expanded .finding-group-chevron{
+    transform: rotate(90deg);
+  }
+  .finding-group-items{
+    padding: 0.35rem 0.5rem 0.5rem 0.85rem;
+  }
+  .finding-item{
+    min-height: 36px;
+    justify-content: center;
   }
 
-  .history-card,
-  .recent-row,
-  .timeline-body,
-  .finding-group {
+  /* 選取中的 finding */
+  .finding-detail{
+    --sev: var(--ag-sev-info);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    border-color: color-mix(in srgb, var(--sev) 45%, var(--ag-border));
+    box-shadow: inset 3px 0 0 var(--sev);
+    animation: fade-up 0.25s var(--ag-ease) both;
+  }
+  .finding-detail.sev-critical{ --sev: var(--ag-sev-critical); }
+  .finding-detail.sev-high{ --sev: var(--ag-sev-high); }
+  .finding-detail.sev-medium{ --sev: var(--ag-sev-medium); }
+  .finding-detail.sev-low{ --sev: var(--ag-sev-low); }
+  .finding-detail > * + *{
+    margin-top: 0;
+  }
+  .evidence-panel.is-empty .evidence-panel-title{
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+  .evidence-panel-header{
+    list-style: none;
+  }
+  .evidence-panel-header::-webkit-details-marker{
+    display: none;
+  }
+
+  /* 紅框：依嚴重度上色（色＋文字：可及名稱與 title 帶嚴重度文字） */
+  .highlight-box{
+    --sev: var(--ag-sev-medium);
+    border-color: var(--sev);
+    background: color-mix(in srgb, var(--sev) 14%, transparent);
+    opacity: 0.8;
+  }
+  .highlight-box.sev-critical{ --sev: var(--ag-sev-critical); }
+  .highlight-box.sev-high{ --sev: var(--ag-sev-high); }
+  .highlight-box.sev-medium{ --sev: var(--ag-sev-medium); }
+  .highlight-box.sev-low{ --sev: var(--ag-sev-low); }
+  .highlight-box.sev-info{ --sev: var(--ag-sev-info); }
+  .highlight-box:hover,
+  .highlight-box:focus-visible{
+    opacity: 1;
+    border-color: var(--sev);
+    background: color-mix(in srgb, var(--sev) 26%, transparent);
+  }
+  .highlight-box.active{
+    border-color: var(--ag-sev-critical);
+    background: color-mix(in srgb, var(--ag-sev-critical) 20%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ag-sev-critical) 28%, transparent);
+  }
+  .site-banner-overlay{
+    border-radius: var(--ag-r-sm) var(--ag-r-sm) 0 0;
+  }
+
+
+
+
+
+
+
+
+  .finding-group{
     transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
   }
 
-  .history-card:hover {
-    @apply -translate-y-0.5 shadow-md;
-  }
 
-  .scan-card {
-    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-  }
 
-  .scan-card:hover {
-    @apply -translate-y-0.5 shadow-md;
-  }
-
-  .panel,
-  .dashboard-hero,
-  .stat-tile {
+  .panel {
     animation: fade-up 0.4s ease-out;
+  }
+}
+
+@media (max-width: 640px) {
+  .scope-grid{
+    grid-template-columns: 1fr 1fr;
+  }
+  .scope-desc{
+    display: none;
+  }
+  .scan-layout.detail-mode .scan-sidebar{
+    width: 100%;
+    max-width: 100vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-card:hover,
+  .scope-card:hover,
+  .top-action-row:hover{
+    transform: none;
   }
 }

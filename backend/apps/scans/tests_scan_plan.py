@@ -13,12 +13,19 @@ from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.tasks import run_scan_job
 
 
-def _job(*, single_page: bool, active: bool) -> SimpleNamespace:
+def _job(*, single_page: bool, active: bool, categories=None) -> SimpleNamespace:
     return SimpleNamespace(
         max_pages=1 if single_page else 50,
         max_depth=1 if single_page else 3,
         scan_mode=ScanJob.ScanMode.ACTIVE if active else ScanJob.ScanMode.PASSIVE,
         active_testing_authorized=active,
+        # effective_categories 在 model 上是 property；此處以固定屬性替身，
+        # 預設五維全選（含 ux），run_agent_ux 判斷需要它。
+        effective_categories=(
+            categories
+            if categories is not None
+            else ["seo", "aeo", "geo", "ux", "security"]
+        ),
     )
 
 
@@ -53,6 +60,26 @@ class ScanExecutionPlanTests(SimpleTestCase):
         self.assertFalse(plan.run_exposure)
         self.assertFalse(plan.run_agent)
         self.assertFalse(plan.run_kali)
+
+    def test_agent_ux_runs_on_site_scan_with_ux_even_passive(self):
+        # 全網站＋勾 UX：不需主動授權就跑 Agent UX 測試（run_agent 仍為 False）。
+        plan = build_scan_execution_plan(
+            _job(single_page=False, active=False, categories=["seo", "ux"])
+        )
+        self.assertTrue(plan.run_agent_ux)
+        self.assertFalse(plan.run_agent)
+
+    def test_agent_ux_off_without_ux_category(self):
+        plan = build_scan_execution_plan(
+            _job(single_page=False, active=False, categories=["seo", "geo"])
+        )
+        self.assertFalse(plan.run_agent_ux)
+
+    def test_agent_ux_off_on_single_page(self):
+        plan = build_scan_execution_plan(
+            _job(single_page=True, active=False, categories=["ux"])
+        )
+        self.assertFalse(plan.run_agent_ux)
 
     def test_active_site_enables_authorized_site_tools(self):
         plan = build_scan_execution_plan(_job(single_page=False, active=True))
@@ -165,11 +192,27 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
 
         run_scan_job.run(scan.id)
 
+        # 主動資安工具在被動掃描一律不跑。
         self.mocks["nuclei"].assert_not_called()
         self.mocks["katana"].assert_not_called()
         self.mocks["exposure"].assert_not_called()
-        self.mocks["agent"].assert_not_called()
         self.mocks["kali"].assert_not_called()
+        # Agent 的「擬真使用者 UX 測試」是純體驗測試、非主動資安工具：全網站掃描
+        # 且勾了 UX（預設全維）時會執行，並以 may_submit_forms=False（未驗證網域
+        # 不送出表單）呼叫。
+        self.mocks["agent"].assert_called_once()
+        _, called_kwargs = self.mocks["agent"].call_args
+        self.assertFalse(called_kwargs.get("may_submit_forms"))
+
+    def test_passive_site_without_ux_category_skips_agent(self):
+        scan = self._create_scan(single_page=False, active=False)
+        # 取消 UX 維度：agent UX 測試不該執行。
+        scan.categories = ["seo", "geo"]
+        scan.save(update_fields=["categories"])
+
+        run_scan_job.run(scan.id)
+
+        self.mocks["agent"].assert_not_called()
 
     def test_active_single_page_only_calls_single_url_active_tools(self):
         scan = self._create_scan(single_page=True, active=True)

@@ -1,89 +1,104 @@
-// 後台多序列折線圖（14 天活動）。
-//
-// 與 shared/AppShared.jsx 的 LineChart 是兩套實作，暫時並存：後者服務使用者端的
-// 掃描圖表、座標與色階規則不同。統一為單一圖表系統列在後續工作，不在本次範圍。
+import { useState } from "react";
 
-export function AdminMiniChart({ series, keys, height = 110 }) {
-  // series: [{date, ...values}]；keys: [{key, label, color}]
+import { formatNumber } from "../../shared/formatters.js";
+
+// 後台多序列趨勢圖（14 天活動）。
+//
+// 改為「小倍數」（small multiples）：每個序列一列、各自的縱軸。原本三條線共用一個縱軸，
+// AI tokens 是幾十萬、掃描數是個位數，後兩條線永遠貼在 0，看不出任何趨勢。
+// 滑過任一列時，所有列同步標出同一天，並在列首顯示當天數值（未滑過時顯示最新一天）。
+//
+// 配色走品牌序列：series-1 虹膜青、series-2 守望琥珀、之後依序取維度色（見 20-admin-dashboard-charts.css）。
+//
+// 與 shared/AppShared.jsx 的 LineChart 是兩套實作，暫時並存：後者服務使用者端的掃描圖表。
+
+const W = 480;
+const PAD_X = 4;
+
+export function AdminMiniChart({ series, keys, height = 140 }) {
+  // series: [{date, ...values}]；keys: [{key, label, format?}]
+  const [hover, setHover] = useState(null);
   if (!series || series.length === 0) {
     return <div className="admin-empty">尚無資料</div>;
   }
-  const w = 480;
-  const padding = { top: 8, right: 8, bottom: 24, left: 36 };
-  const plotW = w - padding.left - padding.right;
-  const plotH = height - padding.top - padding.bottom;
-  const allValues = series.flatMap((row) => keys.map((k) => row[k.key] || 0));
-  const maxV = Math.max(...allValues, 1);
+  const rowH = Math.max(40, Math.round((height - 20) / Math.max(keys.length, 1)));
+  const plotW = W - PAD_X * 2;
   const step = series.length > 1 ? plotW / (series.length - 1) : 0;
-  const yFor = (v) => padding.top + plotH - (v / maxV) * plotH;
-  const xFor = (i) => padding.left + i * step;
-  const yTicks = [0, Math.round(maxV / 2), maxV];
+  const xFor = (i) => PAD_X + i * step;
+  const activeIndex = hover ?? series.length - 1;
+  const activeDate = series[activeIndex]?.date?.slice(5);
 
   return (
-    <svg className="admin-mini-chart" viewBox={`0 0 ${w} ${height}`} width="100%" height={height}>
-      <defs>
-        {keys.map((k) => (
-          <linearGradient key={k.key} id={`admin-chart-fill-${k.key}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={k.color} stopOpacity="0.28" />
-            <stop offset="100%" stopColor={k.color} stopOpacity="0" />
-          </linearGradient>
-        ))}
-      </defs>
-      {yTicks.map((t) => (
-        <g key={t}>
-          <line
-            x1={padding.left}
-            x2={w - padding.right}
-            y1={yFor(t)}
-            y2={yFor(t)}
-            stroke="#e2e8f0"
-            strokeDasharray="2 4"
-          />
-          <text x={padding.left - 6} y={yFor(t) + 3} fontSize="10" fill="#94a3b8" textAnchor="end">
-            {t.toLocaleString()}
-          </text>
-        </g>
-      ))}
-      {keys.map((k) => {
-        const points = series.map((row, i) => [xFor(i), yFor(row[k.key] || 0)]);
-        const linePoints = points.map(([x, y]) => `${x},${y}`).join(" ");
-        const areaPoints = [
-          `${points[0][0]},${padding.top + plotH}`,
-          ...points.map(([x, y]) => `${x},${y}`),
-          `${points[points.length - 1][0]},${padding.top + plotH}`,
-        ].join(" ");
-        const [lastX, lastY] = points[points.length - 1];
+    <div className="admin-chart-wrap admin-multiples" onMouseLeave={() => setHover(null)}>
+      {keys.map((k, keyIndex) => {
+        const values = series.map((row) => Number(row[k.key]) || 0);
+        const maxV = Math.max(...values, 1);
+        const total = values.reduce((sum, v) => sum + v, 0);
+        const yFor = (v) => 4 + (rowH - 8) * (1 - v / maxV);
+        const points = values.map((v, i) => [xFor(i), yFor(v)]);
+        const line = points.map(([x, y]) => `${x},${y}`).join(" ");
+        const area = `${xFor(0)},${rowH} ${line} ${xFor(values.length - 1)},${rowH}`;
+        const gradId = `admin-chart-fill-${k.key}`;
+        const fmt = k.format || formatNumber;
+        const [ax, ay] = points[activeIndex];
         return (
-          <g key={k.key}>
-            <polygon points={areaPoints} fill={`url(#admin-chart-fill-${k.key})`} stroke="none" />
-            <polyline
-              points={linePoints}
-              fill="none"
-              stroke={k.color}
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
+          <div className={`admin-multiple admin-chart-series series-${keyIndex + 1}`} key={k.key}>
+            <div className="admin-multiple-head">
+              <span className="admin-multiple-label">
+                <i aria-hidden="true" />{k.label || k.key}
+              </span>
+              <span className="admin-multiple-value">
+                <span className="admin-multiple-date">{hover === null ? "最新" : activeDate}</span>
+                {fmt(values[activeIndex])}
+              </span>
+            </div>
+            <div className="admin-multiple-plot">
+            <svg
+              className="admin-mini-chart"
+              viewBox={`0 0 ${W} ${rowH}`}
+              width="100%"
+              height={rowH}
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={`${k.label || k.key}：14 天合計 ${fmt(total)}，最高 ${fmt(maxV)}，最新 ${fmt(values[values.length - 1])}`}
+            >
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" className="admin-chart-stop" stopOpacity="0.28" />
+                  <stop offset="100%" className="admin-chart-stop" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line className="admin-chart-grid-line" x1={PAD_X} x2={W - PAD_X} y1={rowH - 0.5} y2={rowH - 0.5} />
+              <polygon points={area} fill={`url(#${gradId})`} stroke="none" />
+              <polyline className="admin-chart-line" points={line} vectorEffect="non-scaling-stroke" />
+              {hover !== null && (
+                <line className="admin-chart-hover-line" x1={ax} x2={ax} y1={0} y2={rowH} vectorEffect="non-scaling-stroke" />
+              )}
+              {series.map((row, i) => (
+                <rect
+                  key={row.date}
+                  className="admin-chart-hit"
+                  x={xFor(i) - step / 2}
+                  y={0}
+                  width={Math.max(step, 1)}
+                  height={rowH}
+                  onMouseEnter={() => setHover(i)}
+                />
+              ))}
+            </svg>
+            <span
+              className="admin-multiple-dot"
+              aria-hidden="true"
+              style={{ left: `${(ax / W) * 100}%`, top: `${ay}px` }}
             />
-            <circle
-              className="admin-mini-chart-dot"
-              cx={lastX}
-              cy={lastY}
-              r="3.5"
-              fill={k.color}
-            />
-          </g>
+            </div>
+          </div>
         );
       })}
-      {series.length > 0 && (
-        <>
-          <text x={xFor(0)} y={height - 4} fontSize="10" fill="#94a3b8" textAnchor="start">
-            {series[0].date.slice(5)}
-          </text>
-          <text x={xFor(series.length - 1)} y={height - 4} fontSize="10" fill="#94a3b8" textAnchor="end">
-            {series[series.length - 1].date.slice(5)}
-          </text>
-        </>
-      )}
-    </svg>
+      <div className="admin-multiples-axis" aria-hidden="true">
+        <span>{series[0].date.slice(5)}</span>
+        <span>{series[series.length - 1].date.slice(5)}</span>
+      </div>
+    </div>
   );
 }

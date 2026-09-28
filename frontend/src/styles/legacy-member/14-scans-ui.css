@@ -1,0 +1,85 @@
+@layer components {
+
+  .scan-card {
+    @apply relative overflow-hidden;
+  }
+
+  .scan-card-stripe {
+    @apply absolute inset-y-0 left-0 w-1;
+    background: rgba(148, 163, 184, 0.4);
+  }
+
+  .scan-card-stripe.tone-good {
+    background: linear-gradient(180deg, var(--tone-good-bright), var(--tone-good));
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
+  .scan-card-stripe.tone-medium {
+    background: linear-gradient(180deg, var(--tone-medium-bright), var(--tone-medium));
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  }
+  .scan-card-stripe.tone-bad {
+    background: linear-gradient(180deg, var(--tone-bad-bright), var(--tone-bad));
+    box-shadow: 0 0 8px rgba(251, 113, 133, 0.5);
+  }
+
+  .scan-card-body {
+    @apply flex-1 space-y-1 pl-2;
+  }
+
+  .scan-card-origin {
+    @apply truncate font-mono text-sm font-semibold text-slate-900;
+  }
+
+  .scan-card-meta {
+    @apply flex items-center gap-2;
+  }
+
+  .scan-card-delta {
+    @apply rounded-full px-1.5 py-0.5 text-[10px] font-bold;
+  }
+
+  .scan-card-delta.tone-good {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .scan-card-delta.tone-bad {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .history-chart {
+    @apply mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2;
+  }
+
+  .stat-tile {
+    transition: transform 0.2s, box-shadow 0.2s;
+    animation: fade-up 0.4s ease-out;
+  }
+
+  .stat-tile:hover {
+    transform: translateY(-2px);
+  }
+
+  .history-card,
+  .recent-row,
+  .finding-group {
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  }
+
+  .history-card:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  .scan-card {
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  }
+
+  .scan-card:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  .panel,
+  .dashboard-hero,
+  .stat-tile {
+    animation: fade-up 0.4s ease-out;
+  }
+}

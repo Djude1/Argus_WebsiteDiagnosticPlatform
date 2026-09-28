@@ -13,7 +13,7 @@
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
 - **後端數百項測試**（以 `manage.py test apps` 實跑為準）、ruff、frontend build 均由 CI quality gate 驗證
 - **兩個介面層**：
-  - 前台（使用者）：`/dashboard /scans /history /billing /settings`；公開頁 `/project /free-tools /team /purchase /download /reviews`（首次進站播粒子過場動畫）
+  - 前台（使用者）：`/dashboard /scans /history /billing /settings`；公開頁 `/project /free-tools /purchase /download /reviews /verify`（團隊頁已於 2026-09-28 移除）（首次進站播粒子過場動畫）
   - React 後台：`/admin/*`（**唯一後台**；dark cyan + 淺色內容；staff 可進、`📜 操作紀錄`/`📢 公告管理` 僅 superuser）
   - （django-admin 已於 2026-06 整併移除；管理員改走前台 email 登入）
 - **真實 PWA**：可一鍵安裝到桌面/手機主畫面
@@ -227,7 +227,6 @@ Argus/
 | `/` | redirect | 未登入跳 `/project`、已登入跳 `/dashboard` |
 | `/project` ★ | `ProjectPage` | 公開介紹頁 |
 | `/free-tools` ★ | `FreeToolsPage` | 免費分析（測速 / URL 風險 / 郵件原始碼風險），呼叫 `/api/insights/*` |
-| `/team` ★ | `TeamPage` | 團隊成員 |
 | `/purchase` ★ | `PurchasePage` | marketing + 4 方案 + FAQ，CTA 跳 `/billing` |
 | `/download` ★ | `DownloadPage` | PWA 一鍵安裝 + 三平台步驟 |
 | `/login` ★ | `LoginPage` | Email 登入 / 新帳號註冊；有 Google Client ID 時才顯示 Google OAuth |
@@ -361,7 +360,7 @@ Argus/
 | Method | 端點 | 權限 | 說明 |
 |---|---|---|---|
 | GET | `/api/content/features/` | open | /project 用 |
-| GET | `/api/content/team/` | open | /team 用（含 skill_levels + contributions） |
+| GET | `/api/content/team/` | open | 公開團隊頁已移除，端點與 CMS 資料保留（含 skill_levels + contributions） |
 | GET | `/api/content/releases/` | open | /download 用 |
 | GET | `/api/content/milestones/` | open | /project timeline 用 |
 

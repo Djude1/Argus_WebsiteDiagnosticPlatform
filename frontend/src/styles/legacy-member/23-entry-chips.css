@@ -1,0 +1,46 @@
+@layer components {
+  .scope-grid {
+    @apply grid grid-cols-1 gap-3 sm:grid-cols-2;
+  }
+  .scope-card {
+    @apply flex flex-col gap-1 rounded-xl border bg-white px-4 py-3 text-left transition cursor-pointer;
+    border-color: #cbd5e1;
+  }
+  .scope-card:hover {
+    border-color: #67e8f9;
+    box-shadow: 0 4px 14px -4px rgba(6, 182, 212, 0.25);
+    transform: translateY(-1px);
+  }
+  .scope-card.active {
+    border-color: #06b6d4;
+    background: linear-gradient(135deg, #ecfeff 0%, #ffffff 100%);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+  }
+  .scope-icon { @apply text-2xl; }
+  .scope-title { @apply text-base font-bold text-slate-900; }
+  .scope-desc { @apply text-xs text-slate-500 leading-relaxed; }
+  .scope-meta { @apply mt-1 text-xs font-semibold text-indigo-600; }
+  .category-grid {
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-3;
+  }
+  .category-card {
+    @apply px-3 py-2;
+  }
+  .category-card .scope-title { @apply text-sm; }
+  .page-preset-row {
+    @apply flex flex-wrap gap-2 mt-1;
+  }
+  .page-preset {
+    @apply rounded-full px-3 py-1 text-sm font-semibold transition cursor-pointer;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+  }
+  .page-preset:hover { background: #ecfeff; color: #0e7490; border-color: #67e8f9; }
+  .page-preset.active {
+    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
+    color: #fff;
+    border-color: transparent;
+  }
+  .page-preset-custom { @apply w-24 text-sm; }
+}

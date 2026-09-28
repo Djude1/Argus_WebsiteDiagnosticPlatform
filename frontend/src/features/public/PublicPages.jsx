@@ -26,7 +26,6 @@ import TechMarquee from "../../components/public/TechMarquee.jsx";
 const PUBLIC_NAV_ITEMS = [
   { to: "/project", label: "專案介紹" },
   { to: "/free-tools", label: "快速檢查" },
-  { to: "/team", label: "團隊" },
   { to: "/purchase", label: "購買" },
   { to: "/download", label: "下載" },
   { to: "/reviews", label: "評論" },
@@ -102,22 +101,51 @@ function PublicNav() {
   );
 }
 
+// 頁尾沿用改版後整理過的分組結構（產品／信任），視覺回到改版前的樣式。
+const FOOTER_GROUPS = [
+  {
+    title: "產品",
+    links: [
+      { to: "/project", label: "專案介紹" },
+      { to: "/free-tools", label: "免費快速檢查" },
+      { to: "/purchase", label: "方案與計費" },
+      { to: "/download", label: "下載 PWA" },
+    ],
+  },
+  {
+    title: "信任",
+    links: [
+      { to: "/verify", label: "報告查驗" },
+      { to: "/reviews", label: "使用者評論" },
+    ],
+  },
+];
+
 function PublicFooter() {
   return (
     <footer className="public-footer">
       <div className="public-footer-inner">
-        <div>
-          <div className="public-footer-brand">⟡ ARGUS</div>
+        <div className="public-footer-about">
+          <img src={brandLogo} className="public-footer-logo" alt="ARGUS" width="96" height="64" />
           <div className="public-footer-sub">授權式 AI 網站健檢平台</div>
+          <p className="public-footer-tagline">
+            找出網站在 SEO、AEO、GEO、資安與使用體驗上的問題，附上證據並給出可直接套用的修正。
+          </p>
         </div>
-        <div className="public-footer-links">
-          <NavLink to="/project">專案介紹</NavLink>
-          <NavLink to="/team">團隊</NavLink>
-          <NavLink to="/purchase">購買</NavLink>
-          <NavLink to="/download">下載 PWA</NavLink>
-          <NavLink to="/reviews">評論</NavLink>
-          <NavLink to="/verify">報告查驗</NavLink>
-        </div>
+        <nav className="public-footer-groups" aria-label="頁尾導覽">
+          {FOOTER_GROUPS.map((group) => (
+            <div className="public-footer-group" key={group.title}>
+              <h2 className="public-footer-group-title">{group.title}</h2>
+              <ul>
+                {group.links.map((link) => (
+                  <li key={link.to}>
+                    <NavLink to={link.to}>{link.label}</NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
         <div className="public-footer-copy">
           © Argus · 僅供授權測試的網站健檢工具
         </div>
@@ -138,20 +166,13 @@ function PublicLayout() {
   );
 }
 
+// 每一項都對應 repo 內實際使用的技術（frontend/package.json、pyproject.toml、k8s/）。
 const PROJECT_STACK_POINTS = [
-  "前端 React 18 + Vite，後端 Django 5 + DRF",
+  "前端 React 18 + Vite，逐步導入 TypeScript；後端 Django 5 + DRF",
   "Celery + Redis 排程，Playwright 驅動真實瀏覽器",
   "Docker 容器化，Argo CD 部署到 Kubernetes",
 ];
 
-// 數字以原始碼實測為準（2026-09-25）。寫小了等於自己把工程量砍掉，
-// 寫大了評委一查就破功——這幾個都能在 repo 裡數出來。
-const PROJECT_PLATFORM_STATS = [
-  { label: "Django Apps", value: "9", hint: "accounts / scans / agent / billing / reviews / admin_api / content / insights / rebuild" },
-  { label: "資料模型", value: "32", hint: "ScanJob、Finding、FixOutput、VerifiedDomain、CoinWallet、PurchaseOrder…" },
-  { label: "自動化測試", value: "1,053", hint: "API / 權限 / 計費流程 / 掃描鏈路 / 後台稽核" },
-  { label: "REST 端點", value: "65", hint: "scans / billing / reviews / content / insights / admin" },
-];
 
 // 首頁的產品預覽視窗：模擬一次掃描進行中的畫面。
 //
@@ -265,9 +286,109 @@ const PROJECT_SAFETY = [
   },
 ];
 
+// ── 首頁內容（皆以現有程式碼核對過，不宣稱尚未實作的能力）──
+
+// 檢測涵蓋的面向：檢查項目對應 backend/apps/scans/scanners.py 與 security/ 的實際規則。
+const PROJECT_COVERAGE = [
+  {
+    key: "seo",
+    code: "SEO",
+    name: "搜尋可見度",
+    checks: "Meta title／description 長度、H1 數量、圖片 alt、canonical、Open Graph 標籤",
+  },
+  {
+    key: "aeo",
+    code: "AEO",
+    name: "答案引擎",
+    checks: "問答內容是否有 FAQPage／HowTo 結構化資料、問答段落是否結構清楚",
+  },
+  {
+    key: "geo",
+    code: "GEO",
+    name: "生成式搜尋",
+    checks: "JSON-LD 實體類型、語意化主內容區塊、可引用段落、llms.txt、robots.txt 是否擋掉 AI 爬蟲",
+  },
+  {
+    key: "security",
+    code: "資安",
+    name: "被動資安",
+    checks: "HTTPS 與憑證、CSP／HSTS 等安全標頭、Cookie 旗標、SPF／DMARC、敏感檔案外洩、含已知漏洞的前端函式庫",
+  },
+  {
+    key: "ux",
+    code: "UX",
+    name: "使用體驗",
+    checks: "以行動版視窗實際渲染，檢查是否出現水平捲動破版",
+  },
+];
+
+const PROJECT_METHODS = [
+  { title: "真實瀏覽器渲染", desc: "以 Playwright 開啟每一頁，檢查的是使用者實際看到的 DOM，並逐頁截圖。" },
+  { title: "同網域爬取", desc: "從入口網址依 BFS 探索同網域頁面，範圍與頁數在建立掃描時決定。" },
+  { title: "被動為預設", desc: "預設只讀取公開回應；主動式資安工具必須先完成網域所有權驗證才會啟用。" },
+];
+
+// 使用者會拿到什麼：對應 ScanDetailPage、reports.py（Word）、fixgen、/verify。
+const PROJECT_DELIVERABLES = [
+  {
+    no: "01",
+    title: "互動式報告",
+    desc: "逐頁截圖上直接框出問題位置，可依嚴重度與維度篩選，並列出最該先處理的幾件事。",
+  },
+  {
+    no: "02",
+    title: "Word 報告",
+    desc: "一鍵匯出 .docx，附唯一報告編號；收件者可在「報告查驗」頁以 SHA-256 指紋核對內容未被竄改。",
+  },
+  {
+    no: "03",
+    title: "修正產出",
+    desc: "依掃描結果產生 JSON-LD、Open Graph／meta、llms.txt 與 FAQ Schema，可直接複製貼上；需人工確認的欄位會明確標示。",
+  },
+  {
+    no: "04",
+    title: "網站拓樸",
+    desc: "以圖呈現爬到的頁面與連結關係，孤立頁與被阻擋的頁面一眼看出。",
+  },
+];
+
+// 每一筆 finding 帶的證據欄位（Finding model：evidence / bounding_box / rule_id / remediation / ai_explanation）。
+const PROJECT_EVIDENCE = [
+  { label: "位置", desc: "問題所在的頁面網址，與截圖上的框選座標；站台層級的問題另外標示。" },
+  { label: "證據", desc: "觸發規則的原始片段，例如 HTML 標籤、回應標頭或 DNS 紀錄。" },
+  { label: "規則與嚴重度", desc: "規則代號、嚴重度與優先分數，排序有依據而不是主觀判斷。" },
+  { label: "修正方向", desc: "每一筆都附修正建議；AI 補充說明會標註使用的模型，方便判斷可信度。" },
+];
+
+const HOME_FAQ = [
+  {
+    q: "快速檢查和完整掃描差在哪？",
+    a: "快速檢查免登入、不扣點，只分析單一頁面的 HTML 與回應標頭；完整掃描會以真實瀏覽器爬取整站、逐頁截圖，並產出互動報告與可直接貼上的修正內容。",
+  },
+  {
+    q: "完整掃描怎麼計費？",
+    a: "按維度計費：每頁每維度 2 coin，只勾需要的維度就好。建立時依最大頁數預扣，完成後依實際頁數退回；掃描失敗或被取消會全額退回。登入後每月自動贈 200 coin。",
+  },
+  {
+    q: "可以掃描不是我的網站嗎？",
+    a: "只限你擁有或取得授權的網站。預設為被動模式，不做破壞性測試；要開啟主動式資安測試，必須先完成網域所有權驗證，所有操作都會記入稽核軌跡。",
+  },
+  {
+    q: "收到的報告怎麼確認是真的？",
+    a: "每份報告都有唯一編號與 SHA-256 指紋，任何人都能在「報告查驗」頁輸入編號核對，不需要登入。",
+  },
+];
+
+// 核心功能卡數量來自 CMS、不固定：挑讓最後一列最滿的欄數，避免「5 張＋孤零零 1 張」。
+function featureColumns(count) {
+  if (count <= 4) return Math.max(count, 1);
+  const exact = [4, 3].find((c) => count % c === 0);
+  if (exact) return exact;
+  return [4, 3].reduce((best, c) => (count % c > count % best ? c : best), 4);
+}
+
 function ProjectPage() {
   const [features, setFeatures] = useState(PROJECT_FEATURES_FALLBACK);
-  const [milestones, setMilestones] = useState([]);
   useEffect(() => {
     api.get("/content/features/")
       .then((r) => {
@@ -275,7 +396,6 @@ function ProjectPage() {
         if (list.length) setFeatures(list);
       })
       .catch(() => {});
-    api.get("/content/milestones/").then((r) => setMilestones(r.data.milestones || [])).catch(() => {});
   }, []);
   return (
     <div className="public-page">
@@ -322,45 +442,89 @@ function ProjectPage() {
         </div>
       </section>
 
-      {/* 產品預覽緊接 hero：先讓訪客看到東西長什麼樣，再談安全邊界與規模 */}
+      {/* 產品預覽緊接 hero：先讓訪客看到東西長什麼樣 */}
       <section className="public-section public-section-demo">
         <ProjectScanDemo />
       </section>
 
-      <section className="public-section">
+      {/* 檢測涵蓋的面向與方法：用列表與分隔線呈現，不再每項一張卡 */}
+      <section className="public-section home-coverage" aria-labelledby="home-coverage-title">
         <header className="public-section-head">
-          <h2>安全邊界</h2>
-          <p>每一項都對應實際程式碼，不是文宣</p>
+          <h2 id="home-coverage-title">檢測涵蓋的面向與方法</h2>
+          <p>一次掃描同時檢查五個面向，每個問題都標明屬於哪一個</p>
         </header>
-        <div className="public-panel-grid">
-          {PROJECT_SAFETY.map((item) => (
-            <article className="public-panel" data-tone={item.tone} key={item.key}>
-              <span className="public-panel-icon"><item.Icon /></span>
-              <h3 className="public-panel-title">{item.title}</h3>
-              <p className="public-panel-desc">{item.desc}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="public-section">
-        <header className="public-section-head">
-          <h2>平台規模</h2>
-          <p>這些數字都能在原始碼裡數出來</p>
-        </header>
-        <div className="project-stats-grid">
-          {PROJECT_PLATFORM_STATS.map((s) => (
-            <div key={s.label} className="project-stat-card">
-              <div className="project-stat-value">{s.value}</div>
-              <div className="project-stat-label">{s.label}</div>
-              <div className="project-stat-hint">{s.hint}</div>
+        <dl className="home-coverage-list">
+          {PROJECT_COVERAGE.map((item) => (
+            <div className="home-coverage-row" data-cat={item.key} key={item.key}>
+              <dt>
+                <span className="home-coverage-code">{item.code}</span>
+                <span className="home-coverage-name">{item.name}</span>
+              </dt>
+              <dd>{item.checks}</dd>
             </div>
           ))}
-        </div>
+        </dl>
+        <ul className="home-methods">
+          {PROJECT_METHODS.map((m) => (
+            <li key={m.title}>
+              <h3>{m.title}</h3>
+              <p>{m.desc}</p>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="public-section">
         <ScanPipeline />
+      </section>
+
+      {/* 使用者會拿到什麼 ＋ 報告如何提供證據 */}
+      <section className="public-section home-deliver" aria-labelledby="home-deliver-title">
+        <header className="public-section-head">
+          <h2 id="home-deliver-title">你會拿到什麼</h2>
+          <p>不只是一份問題清單，而是能直接交付、直接修正的結果</p>
+        </header>
+        <ol className="home-deliver-list">
+          {PROJECT_DELIVERABLES.map((d) => (
+            <li key={d.no}>
+              <span className="home-deliver-no">{d.no}</span>
+              <h3>{d.title}</h3>
+              <p>{d.desc}</p>
+            </li>
+          ))}
+        </ol>
+
+        <div className="home-evidence">
+          <div className="home-evidence-copy">
+            <h3>每個問題都附證據與修正方向</h3>
+            <p>
+              報告裡的每一筆問題都能追溯到頁面上的實際位置與觸發它的原始內容，
+              接手的工程師不需要重新排查，就能判斷要不要修、怎麼修。
+            </p>
+            <dl className="home-evidence-fields">
+              {PROJECT_EVIDENCE.map((e) => (
+                <div key={e.label}>
+                  <dt>{e.label}</dt>
+                  <dd>{e.desc}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <figure className="home-evidence-sample" aria-label="報告中一筆問題的示意">
+            <figcaption>報告中的一筆問題（示意）</figcaption>
+            <div className="home-evidence-head">
+              <span className="home-evidence-sev">HIGH</span>
+              <span className="home-evidence-cat">SECURITY</span>
+              <strong>缺少 Content-Security-Policy 標頭</strong>
+            </div>
+            <dl className="home-evidence-kv">
+              <div><dt>頁面</dt><dd>https://example.com/</dd></div>
+              <div><dt>規則</dt><dd>header-csp-missing</dd></div>
+              <div><dt>證據</dt><dd>回應標頭中找不到 Content-Security-Policy</dd></div>
+              <div><dt>修正</dt><dd>在伺服器回應加入 CSP，先以 Report-Only 觀察後再強制執行</dd></div>
+            </dl>
+          </figure>
+        </div>
       </section>
 
       <section className="public-section">
@@ -368,7 +532,7 @@ function ProjectPage() {
           <h2>核心功能</h2>
           <p>從爬取到修正產出，一條龍完成</p>
         </header>
-        <div className="public-panel-grid">
+        <div className="public-panel-grid home-feature-grid" data-cols={featureColumns(features.length)}>
           {features.map((f, i) => {
             // CMS 存的是 emoji；對不到就退回放大鏡，不讓畫面缺圖示
             const Icon = FEATURE_ICON_BY_EMOJI[f.icon] || MagnifierIcon;
@@ -387,32 +551,21 @@ function ProjectPage() {
         </div>
       </section>
 
-      {milestones.length > 0 && (
-        <section className="public-section">
-          <header className="public-section-head">
-            <h2>開發歷程</h2>
-            <p>從 MVP 到上線的關鍵里程碑</p>
-          </header>
-          <ol className="project-timeline">
-            {milestones.map((m, idx) => (
-              <li key={m.id} className={`project-timeline-item ${idx === 0 ? "is-first" : ""}`}>
-                <div className="project-timeline-marker">
-                  <span className="project-timeline-icon"><FlagIcon /></span>
-                </div>
-                <div className="project-timeline-body">
-                  <div className="project-timeline-date">
-                    {new Date(m.date).toLocaleDateString("zh-Hant", { year: "numeric", month: "long", day: "numeric" })}
-                  </div>
-                  <div className="project-timeline-title">{m.title}</div>
-                  {m.description && (
-                    <p className="project-timeline-desc">{m.description}</p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>安全邊界</h2>
+          <p>每一項都對應實際程式碼，不是文宣</p>
+        </header>
+        <div className="public-panel-grid">
+          {PROJECT_SAFETY.map((item) => (
+            <article className="public-panel" data-tone={item.tone} key={item.key}>
+              <span className="public-panel-icon"><item.Icon /></span>
+              <h3 className="public-panel-title">{item.title}</h3>
+              <p className="public-panel-desc">{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="project-stack">
         <div className="project-stack-intro">
@@ -430,6 +583,20 @@ function ProjectPage() {
         <TechMarquee />
       </section>
 
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>常見問題</h2>
+        </header>
+        <div className="public-faq">
+          {HOME_FAQ.map((item) => (
+            <details key={item.q} className="public-faq-item">
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
       <section className="public-section public-final-cta-wrap">
         <div className="public-final-cta">
           <div>
@@ -439,132 +606,6 @@ function ProjectPage() {
           <NavLink to="/purchase" className="public-cta-primary public-final-cta-btn">
             查看方案 →
           </NavLink>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function TeamMemberCard({ member }) {
-  const m = member;
-  return (
-    <article className="public-team-card-pro">
-      <header className="public-team-card-head">
-        <div className="public-team-avatar-wrap">
-          <span className="public-team-avatar-ring" aria-hidden="true" />
-          <span className="public-team-avatar-glyph">{m.avatar_emoji || "🧑"}</span>
-        </div>
-        <div className="public-team-card-meta">
-          <div className="public-team-name">{m.name}</div>
-          <div className="public-team-role">{m.role}</div>
-          {m.bio && <p className="public-team-bio">{m.bio}</p>}
-        </div>
-      </header>
-
-      {Array.isArray(m.skill_levels) && m.skill_levels.length > 0 && (
-        <div className="public-team-skill-bars">
-          <div className="public-team-block-label">⚡ 技能熟練度</div>
-          {m.skill_levels.map((s) => (
-            <div key={s.name} className="public-team-skill-row">
-              <div className="public-team-skill-row-head">
-                <span>{s.name}</span>
-                <span className="public-team-skill-pct">{s.level}%</span>
-              </div>
-              <div className="public-team-skill-track">
-                <div
-                  className="public-team-skill-fill"
-                  style={{ width: `${Math.max(0, Math.min(100, s.level))}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {Array.isArray(m.contributions) && m.contributions.length > 0 && (
-        <div className="public-team-contrib">
-          <div className="public-team-contrib-label">🎯 負責項目</div>
-          <ul className="public-team-contrib-list">
-            {m.contributions.map((c, i) => (
-              <li key={i}>
-                <span className="public-team-contrib-bullet" aria-hidden="true" />
-                <div>
-                  <div className="public-team-contrib-title">{c.title}</div>
-                  {c.desc && <div className="public-team-contrib-desc">{c.desc}</div>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {Array.isArray(m.skills) && m.skills.length > 0 && (
-        <div className="public-team-skills">
-          <div className="public-team-block-label public-team-skills-label">🧩 技術棧</div>
-          {m.skills.map((s) => (
-            <span key={s} className="public-team-skill-chip">{s}</span>
-          ))}
-        </div>
-      )}
-
-      {m.github_url && (
-        <div className="public-team-links">
-          <a href={m.github_url} target="_blank" rel="noopener noreferrer">
-            🐙 GitHub
-          </a>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function TeamPage() {
-  const [members, setMembers] = useState([]);
-  useEffect(() => {
-    api.get("/content/team/").then((r) => setMembers(r.data.members || [])).catch(() => {});
-  }, []);
-  return (
-    <div className="public-page">
-      <section className="public-hero compact">
-        <div className="public-hero-bg" aria-hidden="true">
-          <span className="hero-orb hero-orb-1" />
-          <span className="hero-orb hero-orb-2" />
-          <span className="hero-orb hero-orb-3" />
-        </div>
-        <div className="public-hero-content">
-          <span className="public-hero-eyebrow">TEAM · 團隊</span>
-          <h1 className="public-hero-title">
-            打造 Argus 的<span className="hero-grad">團隊</span>
-          </h1>
-          <p className="public-hero-sub">
-            {members.length} 位成員跨領域協作，從 Playwright 爬蟲、LLM Agent
-            到 Tailwind UI 與 Docker 部署，一手包辦。
-          </p>
-          <div className="public-team-stats">
-            <div className="public-team-stat">
-              <div className="public-team-stat-value">{members.length}</div>
-              <div className="public-team-stat-label">核心成員</div>
-            </div>
-            <div className="public-team-stat">
-              <div className="public-team-stat-value">8</div>
-              <div className="public-team-stat-label">Django apps</div>
-            </div>
-            <div className="public-team-stat">
-              <div className="public-team-stat-value">249+</div>
-              <div className="public-team-stat-label">自動化測試</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="public-section">
-        <div className="public-team-grid-pro">
-          {members.map((m) => (
-            <TeamMemberCard key={m.id} member={m} />
-          ))}
-          {members.length === 0 && (
-            <p className="public-empty">尚未設定團隊成員。</p>
-          )}
         </div>
       </section>
     </div>
@@ -582,7 +623,7 @@ const PURCHASE_FAQ = [
   },
   {
     q: "支援哪些付款方式？",
-    a: "目前為模擬付款（點選即入帳，供示範用）。正式上線後將串接綠界 / 藍新 / Stripe 等金流。",
+    a: "目前串接綠界測試環境（Stage）的信用卡付款：送出訂單後導向綠界付款頁，付款完成由綠界回傳通知後才會入點。尚未開放正式金流。",
   },
   {
     q: "可以退費嗎？",
@@ -1361,7 +1402,6 @@ function DownloadPage() {
 export {
   PublicLayout,
   ProjectPage,
-  TeamPage,
   PurchasePage,
   FreeToolsPage,
   DownloadPage,

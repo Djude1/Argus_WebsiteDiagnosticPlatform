@@ -1,22 +1,22 @@
 /*
- * 全站樣式入口。原本是單一 14,884 行的 styles.css，現依原始順序切成
- * src/styles/ 底下的連續區塊。
+ * 全站樣式入口：依序 @import src/styles/*.css。
  *
- * ⚠ 匯入順序＝覆寫優先序，不可重排。
- *   日間主題（40/41）、響應式（31）、後台深色主題（63）等覆寫層依賴
- *   「出現在後面」才能蓋過前面的同權重規則；調動順序會靜默改變畫面。
+ * ⚠ 匯入順序＝覆寫優先序，不可隨意重排。
+ * ⚠ 10–22 的元件規則多數包在 @layer components 裡（Tailwind 會提到 @tailwind components 的位置輸出）。
  *
- * ⚠ 10–23 的內容包在 @layer components 裡（Tailwind 會把它們提到
- *   @tailwind components 的位置輸出），新增元件樣式若要用 @apply 並參與
- *   Tailwind 的 purge，請放進這一段的檔案；否則放到對應的後段檔案。
- *
- * 新樣式：放進對應區塊檔；新增整個頁面或元件時可建立新檔並插在正確位置。
+ * 品牌改版（Night Watch）後：
+ *   - 顏色一律用 03-tokens.css 的 --ag-* 語意 token；深色值在 :root、日間在 :root[data-theme="light"]，
+ *     規則寫一次兩主題都對。原本的日間覆寫層（40/41）、評論深色／v2 覆寫（51/52）、
+ *     後台深色覆寫（63）都已併回各自的檔案並刪除。
+ *   - 後台 --admin-* token 定義在 18-admin.css 開頭，由 --ag-* 衍生。
+ *   - 品牌元件樣式在 05-brand.css；規範見 docs/brand-guidelines.md。
  */
 @import "./styles/00-tailwind.css";
 @import "./styles/01-font-scale.css";
 @import "./styles/02-keyframes.css";
 @import "./styles/03-tokens.css";
 @import "./styles/04-app-shell.css";
+@import "./styles/05-brand.css";
 @import "./styles/10-components-core.css";
 @import "./styles/11-account-pages.css";
 @import "./styles/12-viz.css";
@@ -30,20 +30,18 @@
 @import "./styles/20-admin-dashboard-charts.css";
 @import "./styles/21-public.css";
 @import "./styles/22-admin-components.css";
-@import "./styles/23-entry-chips.css";
 @import "./styles/30-login.css";
 @import "./styles/31-responsive.css";
 @import "./styles/32-admin-extras.css";
 @import "./styles/33-intro-hero-brand.css";
-@import "./styles/40-theme-light.css";
-@import "./styles/41-theme-light-v2.css";
+@import "./styles/35-public-legacy.css";
 @import "./styles/50-reviews.css";
 @import "./styles/51-reviews-dark.css";
 @import "./styles/52-reviews-layout-v2.css";
 @import "./styles/60-fix-output.css";
 @import "./styles/61-domain-verify.css";
 @import "./styles/62-admin-user-detail.css";
-@import "./styles/63-admin-dark.css";
 @import "./styles/70-home.css";
 @import "./styles/71-scan-pipeline.css";
 @import "./styles/72-admin-health.css";
+@import "./styles/73-public-refine.css";

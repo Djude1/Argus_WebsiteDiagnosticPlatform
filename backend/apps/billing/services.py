@@ -70,8 +70,28 @@ def grant_monthly_bonus_if_needed(user) -> CoinTransaction | None:
     )
 
 
+def agent_ux_fee(max_pages: int, categories=None) -> int:
+    """AI Agent 擬真使用者 UX 測試的固定附加費（0 表示這次不收）。
+
+    只有在「agent 功能開啟 + 全網站掃描（max_pages > 1）+ 勾選 UX 維度」時計收。
+    這三個條件與 scan_plan.run_agent_ux 一致，且都能從 estimate_scan_cost 現有的
+    兩個參數推得，因此 hold（用 max_pages）與 settle（用實際頁數）會自動對稱：
+    只爬到 1 頁的掃描 settle 時 max_pages 傳實際頁數＝1 → 不收費 → 這筆自動退回。
+    """
+    from apps.scans.models import ALL_CATEGORIES
+
+    if not settings.ARGUS_AGENT_ENABLED:
+        return 0
+    if int(max_pages) <= 1:
+        return 0
+    selected = {c for c in (categories or []) if c in ALL_CATEGORIES} or set(ALL_CATEGORIES)
+    if "ux" not in selected:
+        return 0
+    return settings.ARGUS_COIN_AGENT_UX
+
+
 def estimate_scan_cost(max_pages: int, categories=None) -> int:
-    """掃描預估點數：max_pages × 勾選維度數 × 每維單價。
+    """掃描預估點數：max_pages × 勾選維度數 × 每維單價，另加 Agent UX 附加費。
 
     categories 為 None（內部舊呼叫）或空集合時視同五維全選，
     與導入維度計費前的「max_pages × ARGUS_COIN_PER_PAGE」等價。
@@ -80,7 +100,8 @@ def estimate_scan_cost(max_pages: int, categories=None) -> int:
     from apps.scans.models import ALL_CATEGORIES
 
     selected = {c for c in (categories or []) if c in ALL_CATEGORIES} or set(ALL_CATEGORIES)
-    return int(max_pages) * len(selected) * settings.ARGUS_COIN_PER_CATEGORY
+    page_cost = int(max_pages) * len(selected) * settings.ARGUS_COIN_PER_CATEGORY
+    return page_cost + agent_ux_fee(max_pages, categories)
 
 
 @transaction.atomic

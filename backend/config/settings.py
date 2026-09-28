@@ -432,6 +432,10 @@ ARGUS_COIN_REBUILD_MIN = int(os.getenv("ARGUS_COIN_REBUILD_MIN", "1"))
 # 修正產出額度外的每次產生固定點數。暫定值——上線前以 rebuild 實際
 # token 成本校準（spec docs/specs/0002-fix-output.md）。
 ARGUS_COIN_FIXGEN_GENERATION = int(os.getenv("ARGUS_COIN_FIXGEN_GENERATION", "30"))
+# AI Agent 擬真使用者 UX 測試：全網站掃描且勾選 UX 維度時，於掃描費用外
+# 另收一筆固定點數（agent 會實際開瀏覽器操作、呼叫 LLM，成本與逐頁分析不同）。
+# 只在 ARGUS_AGENT_ENABLED 開啟時計收；hold 與 settle 對稱由 estimate_scan_cost 計算。
+ARGUS_COIN_AGENT_UX = int(os.getenv("ARGUS_COIN_AGENT_UX", "20"))
 
 # 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
 ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()

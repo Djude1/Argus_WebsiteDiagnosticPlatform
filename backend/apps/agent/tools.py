@@ -707,6 +707,7 @@ def build_tool_schemas(
     allow_sqlmap: bool,
     orchestrator: bool = False,
     specialist_roles: dict[str, dict[str, Any]] | None = None,
+    allow_form_submit: bool = True,
 ) -> list[dict[str, Any]]:
     """依模式組裝 tool schemas。
 
@@ -751,11 +752,15 @@ def build_tool_schemas(
                         "description": f"可用專家角色：\n{catalog}",
                     }
         return schemas
-    specialist_hidden = deep_only | {"dispatch_specialist"}
+    hidden = deep_only | {"dispatch_specialist"}
+    # 未通過網域驗證的被動 UX 測試：拿掉會實際送出表單／訊息的 send_message，
+    # agent 只能填入與觀察，不會在他人網站留下測試資料（提示詞也一併要求不送出）。
+    if not allow_form_submit:
+        hidden = hidden | {"send_message"}
     return [
         copy.deepcopy(schema)
         for schema in TOOL_SCHEMAS
-        if allow_sqlmap or schema["function"]["name"] not in specialist_hidden
+        if allow_sqlmap or schema["function"]["name"] not in hidden
     ]
 
 

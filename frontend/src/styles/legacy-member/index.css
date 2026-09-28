@@ -1,0 +1,35 @@
+/*
+ * 會員區舊版樣式入口（Dashboard／掃描／網域驗證／歷史／購點）。
+ *
+ * 這些頁面依使用者要求恢復為 462848b（Night Watch 改版前）的版本。本目錄的 NN-*.css 由當時的
+ * src/styles/NN-*.css 過濾而來：只保留這些頁面用得到的規則，檔名與匯入順序維持原樣（順序＝覆寫優先序）。
+ * 90-compat.css 補上共用元件（shared/AppShared.jsx）改版後的差異。
+ *
+ * 範圍限制由 postcss-member-legacy.js 在 build 時處理：每條規則都只作用在 App.jsx 的 .member-legacy
+ * 包裝內，不影響導覽列、設定頁、後台與公開頁。這裡的規則照舊版原樣書寫即可，不用自己加前綴。
+ */
+@import "./00-tailwind.css";
+@import "./02-keyframes.css";
+@import "./03-tokens.css";
+@import "./04-app-shell.css";
+@import "./10-components-core.css";
+@import "./11-account-pages.css";
+@import "./12-viz.css";
+@import "./13-page-rebuild.css";
+@import "./14-scans-ui.css";
+@import "./15-topology.css";
+@import "./16-crawling-animation.css";
+@import "./17-billing-reviews.css";
+@import "./18-admin.css";
+@import "./19-billing-wizard.css";
+@import "./21-public.css";
+@import "./23-entry-chips.css";
+@import "./30-login.css";
+@import "./31-responsive.css";
+@import "./32-admin-extras.css";
+@import "./60-fix-output.css";
+@import "./61-domain-verify.css";
+@import "./63-admin-dark.css";
+@import "./70-home.css";
+@import "./71-scan-pipeline.css";
+@import "./90-compat.css";

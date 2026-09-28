@@ -300,7 +300,12 @@ function ScanJobForm({ onCreated }) {
   const coinPerCategory = wallet?.coin_per_category ?? 2;
   const coinPerPage = coinPerCategory * categories.length;
   const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
-  const estimatedCost = effectivePages * coinPerPage;
+  // AI Agent 擬真使用者 UX 測試附加費：僅全網站掃描且勾 UX 時計收（後端 agent 關閉時回 0）。
+  const agentUxFee =
+    scope !== "single" && categories.includes("ux")
+      ? (wallet?.agent_ux_fee ?? 0)
+      : 0;
+  const estimatedCost = effectivePages * coinPerPage + agentUxFee;
   const balance = wallet?.balance ?? 0;
   const insufficient = balance < estimatedCost;
   const securitySelected = categories.includes("security");
@@ -450,6 +455,7 @@ function ScanJobForm({ onCreated }) {
         <p className="text-xs text-slate-500 mb-2">
           費用＝每頁每維度 {coinPerCategory} coin。已選 {categories.length} 維 →
           每頁 {coinPerPage} coin{categories.length === 5 ? "（全選價）" : "，少勾維度即省費用"}。
+          {agentUxFee > 0 && <> 全網站掃描含 UX 另加 AI Agent UX 測試 {agentUxFee} coin。</>}
         </p>
         <div className="category-grid">
           {SCAN_CATEGORY_OPTIONS.map(({ value, label, desc }) => {

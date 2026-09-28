@@ -294,7 +294,8 @@ function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions 
             <strong>{review.user_display}</strong>
             {review.is_mine && <span className="review-next-owner-chip">我的評論</span>}
           </div>
-          <span><BadgeCheck aria-hidden="true" />已驗證</span>
+          {/* 只有後端標記為已驗證體驗時才顯示（改版前一律顯示，屬錯誤標示） */}
+          {review.verified_experience && <span><BadgeCheck aria-hidden="true" />已驗證</span>}
         </div>
         <div className="review-next-card-rating">
           <ReadonlyStars value={review.rating} compact />

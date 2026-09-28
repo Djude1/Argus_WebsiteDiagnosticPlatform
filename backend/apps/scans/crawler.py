@@ -271,6 +271,103 @@ async def collect_mobile_layout(page) -> dict:
         return {}
 
 
+# 觸控目標的最小建議尺寸。WCAG 2.1 AA（2.5.5 Target Size）建議 44×44 CSS px；
+# 這裡取略寬的 40px 當門檻，避免把邊界值一律當缺陷洗版。
+_MIN_TAP_TARGET_PX = 40
+_MAX_UX_OFFENDERS = 8
+
+
+async def collect_ux_signals(page) -> dict:
+    """在行動版視窗量互動可用性訊號：觸控目標過小、表單欄位缺少可及標籤。
+
+    **必須在 collect_mobile_layout 之後、仍是行動版視窗時呼叫**：觸控目標尺寸
+    要用手機視窗判斷才有意義。與 collect_mobile_layout 同樣的容錯策略——
+    失敗一律回 {}，不讓整頁擷取失敗。
+    """
+    try:
+        return await asyncio.wait_for(
+            page.evaluate(
+                r"""
+                ({ minTap, maxOffenders }) => {
+                    const result = { small_tap_targets: [], unlabeled_fields: [] };
+                    if (!document.body) return result;
+
+                    const describe = (el) => {
+                        const id = el.id ? `#${el.id}` : "";
+                        const cls = (el.className && typeof el.className === "string")
+                            ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+                            : "";
+                        return (el.tagName.toLowerCase() + id + cls).slice(0, 120);
+                    };
+                    const isVisible = (el, rect) => {
+                        if (!rect.width || !rect.height) return false;
+                        const style = getComputedStyle(el);
+                        return style.visibility !== "hidden" && style.display !== "none";
+                    };
+
+                    // 1) 觸控目標過小：可點元素（連結／按鈕／表單控制項）在手機上
+                    //    寬或高小於門檻，手指不易點準。
+                    const tapSel = 'a[href], button, [role="button"], '
+                        + 'input:not([type="hidden"]), select, textarea';
+                    const tapSeen = new Set();
+                    for (const el of document.body.querySelectorAll(tapSel)) {
+                        const rect = el.getBoundingClientRect();
+                        if (!isVisible(el, rect)) continue;
+                        if (rect.width >= minTap && rect.height >= minTap) continue;
+                        const rawLabel =
+                            el.innerText || el.value || el.getAttribute("aria-label") || "";
+                        const label = rawLabel.trim().slice(0, 40);
+                        const selector = describe(el);
+                        if (tapSeen.has(selector)) continue;
+                        tapSeen.add(selector);
+                        result.small_tap_targets.push({
+                            selector,
+                            label,
+                            width_px: Math.round(rect.width),
+                            height_px: Math.round(rect.height),
+                        });
+                        if (result.small_tap_targets.length >= maxOffenders) break;
+                    }
+
+                    // 2) 表單欄位缺少可及名稱：<input>／<select>／<textarea> 沒有
+                    //    對應 <label>、aria-label、aria-labelledby，也沒有 title／
+                    //    placeholder，螢幕報讀者與部分使用者無從得知欄位用途。
+                    const fieldSel = 'input:not([type="hidden"]):not([type="submit"])'
+                        + ':not([type="button"]):not([type="reset"]), select, textarea';
+                    const fieldSeen = new Set();
+                    for (const el of document.body.querySelectorAll(fieldSel)) {
+                        const rect = el.getBoundingClientRect();
+                        if (!isVisible(el, rect)) continue;
+                        const id = el.getAttribute("id");
+                        const hasLabelFor = id && document.querySelector(
+                            'label[for="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'
+                        );
+                        const wrapped = el.closest("label");
+                        const aria =
+                            el.getAttribute("aria-label") || el.getAttribute("aria-labelledby");
+                        const fallback = el.getAttribute("title") || el.getAttribute("placeholder");
+                        if (hasLabelFor || wrapped || aria || fallback) continue;
+                        const selector = describe(el);
+                        if (fieldSeen.has(selector)) continue;
+                        fieldSeen.add(selector);
+                        result.unlabeled_fields.push({
+                            selector,
+                            type: (el.getAttribute("type") || el.tagName.toLowerCase()),
+                            name: (el.getAttribute("name") || "").slice(0, 60),
+                        });
+                        if (result.unlabeled_fields.length >= maxOffenders) break;
+                    }
+                    return result;
+                }
+                """,
+                {"minTap": _MIN_TAP_TARGET_PX, "maxOffenders": _MAX_UX_OFFENDERS},
+            ),
+            timeout=10,
+        )
+    except Exception:
+        return {}
+
+
 async def extract_links(page, base_url: str, origin: str) -> list[str]:
     hrefs = await page.eval_on_selector_all("a[href]", "els => els.map(el => el.href)")
     links: list[str] = []
@@ -522,6 +619,20 @@ async def crawl_site(
                             pass
 
                     page.on("response", _on_response)
+                    # JavaScript 執行期錯誤：未捕捉的例外會中斷該頁腳本，常導致
+                    # 按鈕沒反應、內容載不出來。只收本頁同源腳本拋出的錯誤訊息
+                    # 首行（去重、設上限），作為 UX 可用性訊號。
+                    page_js_errors: list[str] = []
+
+                    def _on_page_error(exc, _sink=page_js_errors):
+                        try:
+                            msg = str(exc).strip().splitlines()[0][:200]
+                            if msg and msg not in _sink and len(_sink) < _MAX_UX_OFFENDERS:
+                                _sink.append(msg)
+                        except Exception:
+                            pass
+
+                    page.on("pageerror", _on_page_error)
                     page_stage = "navigation"
                     response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                     # 不再等待 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠
@@ -544,6 +655,8 @@ async def crawl_site(
                         links = []
                         element_boxes = {}
                         layout_metrics = {}
+                        ux_signals = {}
+                        page_js_errors.clear()
                         screenshot_path = None
                     else:
                         # 從這裡到內容擷取完成為止，若頁面被延遲觸發的 JS 導轉
@@ -578,6 +691,8 @@ async def crawl_site(
                                 links = []
                                 element_boxes = {}
                                 layout_metrics = {}
+                                ux_signals = {}
+                                page_js_errors.clear()
                                 screenshot_path = None
                             else:
                                 page_stage = "content"
@@ -623,6 +738,10 @@ async def crawl_site(
                                 # 擷取之前會讓那些結果變成行動版的
                                 page_stage = "mobile_layout"
                                 layout_metrics = await collect_mobile_layout(page)
+                                # 仍在行動版視窗時量互動可用性訊號（觸控目標、
+                                # 表單標籤）；放在 mobile_layout 之後、還原視窗之前。
+                                page_stage = "ux_signals"
+                                ux_signals = await collect_ux_signals(page)
                         finally:
                             page.remove_listener("framenavigated", _on_frame_navigated)
 
@@ -634,6 +753,8 @@ async def crawl_site(
                             links = []
                             element_boxes = {}
                             layout_metrics = {}
+                            ux_signals = {}
+                            page_js_errors.clear()
                             if screenshot_path is not None:
                                 screenshot_path.unlink(missing_ok=True)
                                 screenshot_path = None
@@ -660,6 +781,8 @@ async def crawl_site(
                             "headers": headers,
                             "element_boxes": element_boxes,
                             "layout_metrics": layout_metrics,
+                            "ux_signals": ux_signals,
+                            "js_errors": list(page_js_errors),
                         }
                     )
                     if blocked_reason:

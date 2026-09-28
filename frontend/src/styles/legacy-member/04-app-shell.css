@@ -1,0 +1,15 @@
+/* ========================================
+   App shell：深色 nav + 白底主內容
+   ======================================== */
+
+.argus-app {
+  @apply min-h-screen bg-slate-100;
+}
+
+.argus-main {
+  @apply w-full p-4 md:p-8;
+}
+
+.argus-main.with-nav {
+  @apply pt-6;
+}

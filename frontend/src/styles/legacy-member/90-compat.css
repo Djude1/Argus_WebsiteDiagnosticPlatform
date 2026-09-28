@@ -1,0 +1,26 @@
+/* ========================================
+   與改版後共用元件的相容層（不是 462848b 原有內容）
+   shared/AppShared.jsx 改版後：嚴重度／類別色改為 --ag-* 變數、長條圖顏色改由 .bar-chart-fill.sev-* 決定。
+   這裡把變數與長條色設回改版前的色值，讓舊版頁面的圖表外觀不變。
+   改版後 :root 宣告 color-scheme: dark，會讓表單控制項的瀏覽器預設底色變深；改版前沒有宣告（淺色）。
+   ======================================== */
+
+:root {
+  color-scheme: light;
+  --ag-sev-critical: #dc2626;
+  --ag-sev-high: #f97316;
+  --ag-sev-medium: #facc15;
+  --ag-sev-low: #38bdf8;
+  --ag-sev-info: #94a3b8;
+  --ag-cat-security: #ef4444;
+  --ag-cat-seo: #6366f1;
+  --ag-cat-aeo: #a855f7;
+  --ag-cat-geo: #06b6d4;
+  --ag-cat-ux: #10b981;
+}
+
+.bar-chart-fill.sev-critical { background: #dc2626; box-shadow: 0 0 8px #dc262666; }
+.bar-chart-fill.sev-high { background: #f97316; box-shadow: 0 0 8px #f9731666; }
+.bar-chart-fill.sev-medium { background: #facc15; box-shadow: 0 0 8px #facc1566; }
+.bar-chart-fill.sev-low { background: #38bdf8; box-shadow: 0 0 8px #38bdf866; }
+.bar-chart-fill.sev-info { background: #94a3b8; box-shadow: 0 0 8px #94a3b866; }

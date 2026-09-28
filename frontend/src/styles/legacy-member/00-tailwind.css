@@ -1,0 +1,5 @@
+/* 舊版樣式使用 462848b 的 Tailwind 設定（系統字型），產生的 base／utilities 同樣只在 .member-legacy 內生效 */
+@config "../../../tailwind.member-legacy.config.js";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
