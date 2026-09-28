@@ -2,6 +2,8 @@
    DomainVerifyPage（/domains 網域驗證精靈頁）
    只用 --ag-* token；深／淺主題自動切換。
    （掃描表單內的「已驗證網域」徽章與主動模式警示已搬到 14-scans-ui.css）
+   ※ /scans、/domains 目前為改版前（462848b）版本，實際樣式在 legacy-member/（範圍內會覆寫本檔）；
+     本檔只剩與舊版同名 class 的規則，保留供日後改回改版後設計時參考。
    ======================================== */
 
 .domain-page {
@@ -66,33 +68,13 @@
   margin-right: 0.35rem;
   background: var(--ag-border-strong);
 }
-.domain-step-num {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  font-family: var(--ag-font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  background: var(--ag-surface-2);
-  color: var(--ag-text-3);
-}
 .domain-step.is-active {
   color: var(--ag-text);
   border-color: var(--ag-border-accent);
   background: var(--ag-primary-soft);
 }
-.domain-step.is-active .domain-step-num {
-  background: var(--ag-primary);
-  color: var(--ag-on-primary);
-}
 .domain-step.is-done {
   color: var(--ag-text-2);
-}
-.domain-step.is-done .domain-step-num {
-  background: var(--ag-good-soft);
-  color: var(--ag-good);
 }
 
 /* 新增網域表單 */
@@ -186,27 +168,6 @@
   background: var(--ag-primary-soft);
   border-color: var(--ag-primary);
   color: var(--ag-text);
-}
-.domain-ins-tab-icon {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  color: var(--ag-text-3);
-}
-.domain-ins-tab.active .domain-ins-tab-icon { color: var(--ag-primary); }
-.domain-ins-tab-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.domain-ins-tab-label {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-.domain-ins-tab-desc {
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--ag-text-3);
 }
 
 .domain-ins-panel {
@@ -330,23 +291,6 @@
   color: var(--ag-text-3);
   font-size: 0.85rem;
 }
-.domain-empty-icon {
-  width: 36px;
-  height: 36px;
-  color: var(--ag-primary);
-}
-.domain-empty-title {
-  font-weight: 700;
-  color: var(--ag-text);
-}
-.domain-skel {
-  display: block;
-  height: 88px;
-  border-radius: var(--ag-r-md);
-  background: linear-gradient(90deg, var(--ag-surface-2), var(--ag-surface-3), var(--ag-surface-2));
-  background-size: 200% 100%;
-  animation: shimmer 1.6s linear infinite;
-}
 .domain-list {
   display: grid;
   gap: 0.75rem;
@@ -466,7 +410,6 @@
   font-weight: 600;
   animation: fade-up 0.3s ease-out both;
 }
-.domain-flash-icon { font-weight: 800; }
 .domain-flash.is-ok {
   background: var(--ag-good-soft);
   color: var(--ag-good);

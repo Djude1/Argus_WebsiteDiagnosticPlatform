@@ -1,14 +1,13 @@
+// 購點頁：依使用者要求恢復為 462848b（Night Watch 改版前）的版本。
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
 import { useArgusStore } from "../../store";
-import { CheckIcon } from "../../shared/ActionIcons";
-import { StarIcon } from "../../shared/LineIcons";
-import SubscriptionPanel from "./SubscriptionPanel";
+import { SubscriptionPanel } from "./SubscriptionPanel";
 
 // ============================================================
-// Billing 頁：月訂閱 + 單次購點 3 步驟 wizard（綠界測試環境）
+// Billing 頁（4 個方案 + 綠界測試環境）
 // ============================================================
 
 // ----- BillingPage 3 步驟 wizard -----
@@ -31,7 +30,7 @@ function WizardStepper({ current }) {
             aria-current={state === "active" ? "step" : undefined}
           >
             <span className="wizard-step-circle" aria-hidden="true">
-              {state === "done" ? <CheckIcon /> : step.id}
+              {state === "done" ? "✓" : step.id}
             </span>
             <span className="wizard-step-copy">
               <span className="wizard-step-kicker">步驟 {step.id}</span>
@@ -240,7 +239,7 @@ function BillingPage() {
     return (
       <section className="panel space-y-4">
         <div className="wizard-success">
-          <div className="wizard-success-mark" aria-hidden="true"><CheckIcon /></div>
+          <div className="wizard-success-emoji" aria-hidden="true">🎉</div>
           <h2 className="wizard-success-title">訂購完成</h2>
           <p className="wizard-success-sub">已成功購買 {completedOrder.plan_name}</p>
           <dl className="wizard-success-dl">
@@ -316,7 +315,7 @@ function BillingPage() {
                 className={`billing-plan-card ${isRecommended ? "is-recommended" : ""}`}
               >
                 {plan.badge && <span className="billing-plan-badge">{plan.badge}</span>}
-                {isRecommended && <span className="billing-plan-recommend"><StarIcon /> 推薦</span>}
+                {isRecommended && <span className="billing-plan-recommend">★ 推薦</span>}
                 <h3 className="billing-plan-name">{plan.name}</h3>
                 <p className="billing-plan-coin">
                   {plan.coin_amount.toLocaleString()} <span>coin</span>
@@ -671,5 +670,4 @@ function BillingPage() {
   );
 }
 
-export default BillingPage;
 export { BillingPage };

@@ -1,3 +1,4 @@
+// 月訂閱區塊：依使用者要求恢復為 462848b（Night Watch 改版前）的版本。
 import { useEffect, useState } from "react";
 
 import {
@@ -7,11 +8,7 @@ import {
   subscribePlan,
 } from "../../api";
 import { useArgusStore } from "../../store";
-import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared";
-import { formatDate } from "../../shared/formatters";
-import { StarIcon } from "../../shared/LineIcons";
-
-// ----- BillingPage 訂閱區塊（與單次購點 wizard 並列，月訂閱 vs 單次購點一目了然） -----
+import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
 
 // 訂閱狀態 → 賣點語氣（active=綠、cancelled=amber、expired=灰）
 const SUB_STATUS_TONE = {
@@ -20,8 +17,16 @@ const SUB_STATUS_TONE = {
   expired: "neutral",
 };
 
+function formatChineseDate(isoString) {
+  if (!isoString) return "—";
+  return new Date(isoString).toLocaleDateString("zh-Hant", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+}
 
-export default function SubscriptionPanel({ purchasePlans }) {
+function SubscriptionPanel({ purchasePlans }) {
   // subState：undefined=載入中、null=無訂閱、物件=目前訂閱
   const [subPlans, setSubPlans] = useState([]);
   const [subscribeEnabled, setSubscribeEnabled] = useState(false);
@@ -191,16 +196,16 @@ export default function SubscriptionPanel({ purchasePlans }) {
               </div>
               <div>
                 <dt>{isActive ? "下次贈點日" : "權益到期日"}</dt>
-                <dd>{formatDate(subState.current_period_end)}</dd>
+                <dd>{formatChineseDate(subState.current_period_end)}</dd>
               </div>
               <div>
                 <dt>開始日</dt>
-                <dd>{formatDate(subState.started_at)}</dd>
+                <dd>{formatChineseDate(subState.started_at)}</dd>
               </div>
               {subState.cancelled_at && (
                 <div>
                   <dt>取消時間</dt>
-                  <dd>{formatDate(subState.cancelled_at)}</dd>
+                  <dd>{formatChineseDate(subState.cancelled_at)}</dd>
                 </div>
               )}
             </dl>
@@ -239,7 +244,7 @@ export default function SubscriptionPanel({ purchasePlans }) {
                   className={`billing-plan-card ${isRecommended ? "is-recommended" : ""}`}
                 >
                   {plan.badge && <span className="billing-plan-badge">{plan.badge}</span>}
-                  {isRecommended && <span className="billing-plan-recommend"><StarIcon /> 推薦</span>}
+                  {isRecommended && <span className="billing-plan-recommend">★ 推薦</span>}
                   <h3 className="billing-plan-name">{plan.name}</h3>
                   <p className="billing-plan-coin">
                     {plan.monthly_coins.toLocaleString()} <span>coin / 月</span>
@@ -274,3 +279,5 @@ export default function SubscriptionPanel({ purchasePlans }) {
     </section>
   );
 }
+
+export { SubscriptionPanel };

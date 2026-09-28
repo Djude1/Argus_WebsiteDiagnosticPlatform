@@ -54,6 +54,8 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 > 樣式一律寫進 `styles/` 底下對應的區塊檔（入口 `styles.css` 依序匯入，**順序即覆寫優先序、不可重排**）、用 CSS 變數、BEM-like 命名（`.頁面-元素`），**禁止 inline style**（動態計算值除外）。詳見 `frontend/CLAUDE.md`。
 
+> 會員區 Dashboard／掃描／網域驗證／歷史／購點目前是 `462848b`（改版前）的版本，樣式在 `styles/legacy-member/`，只作用在 `App.jsx` 的 `MemberLegacy`（`.member-legacy`）範圍內；改這五頁的外觀要改那裡，機制見 `frontend/CLAUDE.md`「會員區五頁例外」。
+
 ---
 
 ## 2. 動畫與特效：前台重、後台輕

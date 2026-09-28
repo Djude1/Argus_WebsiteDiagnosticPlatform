@@ -2,7 +2,7 @@
 
 > 程式碼的單一事實來源是 `frontend/src/styles/03-tokens.css`（token）與 `frontend/src/styles/05-brand.css`（品牌元件）。本文件說明「為什麼」與「怎麼用」。
 
-> **適用範圍（2026-09-28 起）**：本規範適用於登入後的會員區、掃描報告與後台。公開頁（`.public-shell`：首頁、快速檢查、購買、下載、報告查驗、評論）維持改版前的視覺——系統字、深藍＋科技青——並以 `73-public-refine.css` 做克制整理，見 `frontend/CLAUDE.md` 樣式規範。
+> **適用範圍（2026-09-28 起）**：本規範適用於登入後的導覽列、設定頁、登入頁與後台。公開頁（`.public-shell`：首頁、快速檢查、購買、下載、報告查驗、評論）維持改版前的視覺——系統字、深藍＋科技青——並以 `73-public-refine.css` 做克制整理；會員區 Dashboard／掃描（含互動報告、拓樸、複刻工作區）／網域驗證／歷史／購點恢復為改版前（`462848b`）版本，樣式在 `src/styles/legacy-member/`、只作用在 `.member-legacy` 範圍內。兩者都見 `frontend/CLAUDE.md` 樣式規範。
 
 ## 1. 品牌概念
 
@@ -68,11 +68,10 @@ Argus 替使用者「看見」網站在 SEO／AEO／GEO／資安／UX 上的所�
 | Class / 元件 | 說明 |
 |---|---|
 | `ArgusMark`, `ArgusLogo` | 品牌標誌 |
-| `IrisScore` | 0–100 分數環（≥80 good、≥60 medium、其餘 bad），12 道刻度呼應標誌 |
 | `.ag-eyebrow` | 等寬眉標，前導虹膜點 |
 | `.ag-viewfinder` | 觀景窗四角框，包住重點區塊 |
 | `.ag-surface-grid` | 掃描面細網格底紋 |
-| `.panel`, `.primary-button`, `.secondary-button`, `.ghost-button`, `.input`, `.severity`, `.status-badge`, `.category-pill` | 核心元件，已全面 token 化 |
+| `.panel`, `.primary-button`, `.secondary-button`, `.input`, `.severity`, `.status-badge`, `.category-pill` | 核心元件，已全面 token 化 |
 
 ## 7. 無障礙底線
 

@@ -338,18 +338,6 @@
       var(--ag-surface);
     text-align: center;
   }
-  .wizard-success-mark {
-    display: inline-grid;
-    place-items: center;
-    width: 56px;
-    height: 56px;
-    margin-bottom: 0.75rem;
-    border-radius: 50%;
-    background: var(--ag-good);
-    color: var(--ag-text-inverse);
-    box-shadow: 0 0 0 8px var(--ag-good-soft);
-  }
-  .wizard-success-mark svg { width: 28px; height: 28px; stroke-width: 2.4; }
   .wizard-success-title { margin: 0; color: var(--ag-text); font-size: 1.5rem; font-weight: 700; }
   .wizard-success-sub { margin: 0.35rem 0 0; color: var(--ag-text-2); font-size: 0.9rem; }
   .wizard-success-dl {

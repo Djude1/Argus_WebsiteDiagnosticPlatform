@@ -21,24 +21,6 @@
     font-weight: 700;
     color: var(--ag-text);
   }
-  .rebuild-title-icon {
-    width: 18px;
-    height: 18px;
-    color: var(--ag-primary);
-  }
-  .rebuild-title-page {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0.05rem 0.5rem;
-    border-radius: var(--ag-r-pill);
-    font-family: var(--ag-font-mono);
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: var(--ag-text-2);
-    background: var(--ag-surface-3);
-  }
 
   .rebuild-desc {
     margin-bottom: 0.5rem;
@@ -144,11 +126,6 @@
     font-size: 1.35rem;
     font-weight: 700;
     color: var(--ag-text);
-  }
-  .rebuild-ws-title-icon {
-    width: 24px;
-    height: 24px;
-    color: var(--ag-primary);
   }
 
   .rebuild-ws-url {

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../../api";
-import { LayersIcon } from "../../shared/LineIcons.jsx";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -118,11 +117,7 @@ function PageRebuildPanel({ scan, page }) {
 
   return (
     <div className="rebuild-box">
-      <p className="rebuild-title">
-        <LayersIcon className="rebuild-title-icon" />
-        網頁複刻與優化
-        <span className="rebuild-title-page" title={page.url}>{page.title || page.url}</span>
-      </p>
+      <p className="rebuild-title">🧬 網頁複刻與優化</p>
       <p className="rebuild-desc">
         複刻這一頁的原始樣貌，並依本頁的診斷結果產生優化版本。
         {pricing &&

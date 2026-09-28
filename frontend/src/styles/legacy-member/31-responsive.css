@@ -1,0 +1,154 @@
+/* ===== Responsive polish：收斂手機版密度與可點擊範圍 ===== */
+
+@media (max-width: 900px) {
+  .argus-main {
+    padding: 0.875rem;
+  }
+
+  .argus-main.with-nav {
+    padding-top: 0.875rem;
+  }
+
+  .scan-layout.list-mode {
+    display: block;
+  }
+
+  .scan-layout.list-mode .scan-sidebar {
+    position: static;
+  }
+
+  .scan-content {
+    min-height: 0;
+    margin-top: 1rem;
+  }
+
+  .scope-grid,
+  .billing-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-checkout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-order-summary {
+    position: static;
+    grid-row: 1;
+  }
+
+  .billing-carrier-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    border-radius: 14px;
+    padding: 1rem;
+  }
+
+  .wizard-nav,
+  .wizard-confirm-plan,
+  .wizard-success-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .billing-plan-button {
+    width: 100%;
+  }
+
+  .billing-plan-card,
+  .scope-card,
+  .wizard-confirm-card {
+    border-radius: 14px;
+  }
+
+  .billing-checkout-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1.25rem;
+  }
+
+  .billing-wallet-summary {
+    width: 100%;
+  }
+
+  .billing-environment-notice,
+  .wizard-stepper {
+    margin-right: 1rem;
+    margin-left: 1rem;
+  }
+
+  .billing-environment-notice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .billing-step-content,
+  .wizard-checkout-grid {
+    padding-right: 1rem;
+    padding-left: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .wizard-stepper {
+    gap: 0.4rem;
+  }
+
+  .wizard-step {
+    display: flex;
+    min-height: 4.6rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.6rem 0.35rem;
+    text-align: center;
+  }
+
+  .wizard-step-circle {
+    width: 1.95rem;
+    height: 1.95rem;
+    border-radius: 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .wizard-step-copy {
+    align-items: center;
+  }
+
+  .wizard-step-kicker {
+    display: none;
+  }
+
+  .wizard-step-label {
+    font-size: 0.68rem;
+  }
+
+  .billing-field-grid,
+  .billing-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-form-intro h3 {
+    font-size: 1.05rem;
+  }
+
+  .billing-form-section,
+  .wizard-order-summary {
+    padding: 1rem;
+  }
+
+  .scan-estimate-result,
+  .coin-estimate-row {
+    align-items: stretch;
+  }
+
+  .scan-estimate-result {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}

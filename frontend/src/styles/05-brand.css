@@ -1,5 +1,5 @@
 /* ========================================
-   品牌元件：ArgusMark / ArgusLogo / 觀景窗框 / 掃描面底紋 / IrisScore
+   品牌元件：ArgusMark / ArgusLogo / 觀景窗框 / 掃描面底紋
    （components/brand/*）。只用 --ag-* token。
    ======================================== */
 
@@ -84,41 +84,4 @@
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 0 3px var(--ag-primary-soft-2);
-}
-
-/* IrisScore：以虹膜環呈現 0–100 分數 */
-.ag-iris-score {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-}
-.ag-iris-score svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-.ag-iris-score-track { stroke: var(--ag-surface-3); }
-.ag-iris-score-ticks { stroke: var(--ag-border-strong); }
-.ag-iris-score-value {
-  transition: stroke-dashoffset 900ms var(--ag-ease);
-}
-.ag-iris-score[data-tone="good"] .ag-iris-score-value { stroke: var(--ag-good); }
-.ag-iris-score[data-tone="medium"] .ag-iris-score-value { stroke: var(--ag-warn); }
-.ag-iris-score[data-tone="bad"] .ag-iris-score-value { stroke: var(--ag-bad); }
-.ag-iris-score[data-tone="none"] .ag-iris-score-value { stroke: transparent; }
-.ag-iris-score-label {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-}
-.ag-iris-score-num {
-  font-family: var(--ag-font-display);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--ag-text);
-}
-.ag-iris-score-caption {
-  margin-top: 0.25rem;
-  font-size: 0.68rem;
-  color: var(--ag-text-3);
-  letter-spacing: 0.06em;
 }

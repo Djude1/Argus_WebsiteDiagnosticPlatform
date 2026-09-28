@@ -48,9 +48,13 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 
 - **品牌規範**：見 [`docs/brand-guidelines.md`](../docs/brand-guidelines.md)（Night Watch：虹膜青主色、守望琥珀點綴、Sora／Noto Sans TC／JetBrains Mono）。
 - **公開頁（`.public-shell`）例外**：視覺維持改版前版本（系統字、深藍＋科技青），樣式在 `21-public.css`、`35-public-legacy.css`（取回的改版前日間／響應式規則）、`70-home.css`、`71-scan-pipeline.css`，最後由 `73-public-refine.css` 做克制整理（區塊節奏、減少外框與光暈）。公開頁新增樣式寫在 `73`，並限縮在 `.public-shell` 內；不要把 Night Watch 的 `--ag-*` 風格套回公開頁。
+- **會員區五頁例外（2026-09-28 起）**：Dashboard、掃描（`/scans` 全部子路由：列表／建立表單、互動報告、拓樸、複刻工作區）、網域驗證、歷史、購點恢復為 `462848b`（Night Watch 改版前）的 JSX 與外觀；導覽列與設定頁維持改版後版本。
+  - 舊版樣式在 `src/styles/legacy-member/`（由 `main.jsx` 在 `styles.css` 之後匯入）：`NN-*.css` 是當時同名檔過濾出這些頁面用得到的規則，照舊版原樣書寫；`90-compat.css` 補共用元件（`shared/AppShared.jsx`）改版後的差異；`00-tailwind.css` 以 `@config` 指定 `tailwind.member-legacy.config.js`（當時的設定，系統字型）。
+  - 範圍限制由 `postcss-member-legacy.js`（掛在 `postcss.config.js` 的 tailwind 之後）在 build 時處理：規則一律加上 `:is(.member-legacy, #…)` 前綴（ID 等級特異度），範圍內元素先 `all: revert` 擋掉新版同名 class；`:root`／`html`／`body` 規則改掛在包裝上，`.argus-app`／`.argus-main` 規則改為 `:has(.member-legacy)`，keyframes 加 `ml-` 前綴。包裝是 `App.jsx` 的 `MemberLegacy`（`display: contents`）。
+  - 修改這五頁的樣式：改 `legacy-member/` 對應檔，**不要**改 `11`／`14`／`16`／`61` 等新版檔（範圍內會被覆寫）；新頁面不要放進 `MemberLegacy`。
 - 全域樣式入口是 `src/styles.css`，依序 `@import` `src/styles/*.css`；**匯入順序＝覆寫優先序，不可隨意重排**。
 - **顏色一律用 `--ag-*` 語意 token**（`03-tokens.css`）：深色值在 `:root`（預設主題），日間值在 `:root[data-theme="light"]`。規則只寫一次、兩個主題自動正確；**不要再寫 `:root[data-theme="light"] .xxx` 的逐條覆寫**，也不要寫死 Tailwind `slate-*`／`blue-*`／`indigo-*` 或青→紫漸層。
-- 品牌元件樣式在 `05-brand.css`（`ArgusMark`／`ArgusLogo`、`IrisScore`、`.ag-eyebrow`、`.ag-viewfinder`、`.ag-surface-grid`）；核心元件（`.panel`、`.primary-button`、`.secondary-button`、`.ghost-button`、`.input`、`.severity`、`.status-badge`、`.category-pill`…）在 `10-components-core.css`，已全面 token 化。
+- 品牌元件樣式在 `05-brand.css`（`ArgusMark`／`ArgusLogo`、`.ag-eyebrow`、`.ag-viewfinder`、`.ag-surface-grid`）；核心元件（`.panel`、`.primary-button`、`.secondary-button`、`.input`、`.severity`、`.status-badge`、`.category-pill`…）在 `10-components-core.css`，已全面 token 化。
 - 標誌一律用原品牌圖：`ArgusLogo`（`brand-logo.webp`）與 `ArgusMark`（`argus-eye-still.webp`），元件在 `components/brand/ArgusMark.tsx`；動態之眼 `argus-eye.webp` 只用於首頁 hero。圖示用 `shared/LineIcons.jsx`／`shared/ActionIcons.jsx`，不用 emoji。
 - 後台 `--admin-*` token 定義在 `18-admin.css` 開頭，由 `--ag-*` 衍生，深／淺主題自動切換；側欄恆為深色（`--admin-sidebar-*`）。後台樣式一律用 `--admin-*` 或 `--ag-*`。
 - 多數 `10`–`22` 號檔包在 `@layer components` 內（Tailwind 會提到 `@tailwind components` 的位置輸出）。
@@ -182,13 +186,12 @@ npm run typecheck
 |---|---|
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
 | `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
-| `src/features/scans/ScanExperience.jsx` | 掃描建立、列表、詳情與拓樸頁 |
+| `src/features/scans/ScanExperience.jsx` | 掃描建立表單、列表、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
-| `src/components/scans/ScanJobForm.jsx` | 建立掃描表單：範圍／模式／維度勾選與估價；估價＝`有效頁數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），公式列會顯示這筆 |
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
 | `src/components/scans/FixOutputSection.jsx` | 掃描詳情的「修正產出」專區：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
-| `src/features/account/AuthenticatedPages.jsx` | Dashboard、歷史、購點、設定與登入後導覽 |
+| `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`DashboardPage`／`HistoryPage`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；Dashboard／歷史／購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |
 | `src/features/public/PublicPages.jsx` | 公開頁 layout（導覽＋分組頁尾）與專案、免費工具、購買介紹、下載、報告查驗頁 |
 | `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
@@ -220,6 +223,7 @@ npm run typecheck
 | `src/store.js` | Zustand 全域狀態（user、wallet 等） |
 | `src/main.jsx` | React entry point，Provider 掛載 |
 | `src/styles.css` | 樣式入口：依序 `@import` `src/styles/*.css`（順序即覆寫優先序）|
+| `src/styles/legacy-member/index.css` | 會員區五頁的舊版樣式入口（只作用在 `.member-legacy` 內）|
+| `postcss-member-legacy.js` | 把 `legacy-member/` 的規則限縮到 `.member-legacy` 範圍的 PostCSS 外掛 |
 | `src/styles/03-tokens.css` | 品牌設計 token（`--ag-*`，深色 `:root`／日間 `[data-theme="light"]`）與全站基礎排版 |
 | `src/components/brand/ArgusMark.tsx` | 品牌標誌 `ArgusLogo`（brand-logo.webp）／`ArgusMark`（argus-eye-still.webp） |
-| `src/components/brand/IrisScore.tsx` | 品牌分數環（0–100，good／medium／bad）|
