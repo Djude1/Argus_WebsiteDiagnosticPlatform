@@ -15,6 +15,7 @@ from apps.billing.models import CoinTransaction, CoinWallet, PricingPlan, Purcha
 from apps.billing.services import (
     InsufficientCoinError,
     admin_adjust,
+    agent_ux_fee,
     estimate_scan_cost,
     grant_monthly_bonus_if_needed,
     hold_for_scan,
@@ -142,6 +143,31 @@ class CostEstimationTests(APITestCase):
         self.assertEqual(estimate_scan_cost(10, ["seo", "seo", "bogus"]), 20)
         self.assertEqual(estimate_scan_cost(10, []), 100)
         self.assertEqual(estimate_scan_cost(10, None), 100)
+
+    def test_agent_ux_fee_off_when_agent_disabled(self):
+        # 預設 ARGUS_AGENT_ENABLED=False：不論範圍與維度都不收 Agent UX 費
+        with override_settings(ARGUS_AGENT_ENABLED=False):
+            self.assertEqual(agent_ux_fee(50, ["ux"]), 0)
+            self.assertEqual(estimate_scan_cost(50, ["ux"]), 50 * 1 * 2)
+
+    @override_settings(ARGUS_AGENT_ENABLED=True, ARGUS_COIN_AGENT_UX=20)
+    def test_agent_ux_fee_only_on_site_scan_with_ux(self):
+        # 全網站（max_pages>1）且勾 UX 才收固定附加費
+        self.assertEqual(agent_ux_fee(50, ["ux"]), 20)
+        self.assertEqual(agent_ux_fee(50, ["seo", "ux", "geo"]), 20)
+        # 單頁（max_pages=1）不跑 agent → 不收
+        self.assertEqual(agent_ux_fee(1, ["ux"]), 0)
+        # 沒勾 UX → 不收
+        self.assertEqual(agent_ux_fee(50, ["seo", "geo"]), 0)
+
+    @override_settings(ARGUS_AGENT_ENABLED=True, ARGUS_COIN_AGENT_UX=20)
+    def test_estimate_includes_agent_ux_fee_and_settles_symmetrically(self):
+        # hold：50 頁 × 1 維(ux) × 2 + 20 附加費 = 120
+        self.assertEqual(estimate_scan_cost(50, ["ux"]), 50 * 2 + 20)
+        # settle 傳實際頁數：仍 >1 頁 → 附加費保留（agent 有跑）
+        self.assertEqual(estimate_scan_cost(30, ["ux"]), 30 * 2 + 20)
+        # 只爬到 1 頁：附加費自動不收 → 這筆在結算時退回
+        self.assertEqual(estimate_scan_cost(1, ["ux"]), 1 * 2)
 
 
 class ScanHoldRefundTests(APITestCase):

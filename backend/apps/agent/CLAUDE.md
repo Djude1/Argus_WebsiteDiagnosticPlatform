@@ -8,10 +8,18 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 
 ## 職責
 
-掃描後的動態測試（deep_mode＝active＋authorized 才全開）：recon agent →
-orchestrator agent（subagent 派工）→ specialist subagent（8 角色：auth_idor/injection/logic_abuse/info_leak/xss_hunter/jwt_token_abuse/file_upload/crypto）。
-`ARGUS_AGENT_ENABLED=false`（預設）時 `runner.run_agent_for_scan` 直接
-`return None`。
+掃描後的動態測試，兩種角色共用 `runner.run_agent_for_scan`（都受 `ARGUS_AGENT_ENABLED`
+總開關控制，預設 `false` 時直接 `return None`）：
+
+- **資安（deep_mode＝active＋authorized 才全開）**：recon agent → orchestrator agent
+  （subagent 派工）→ specialist subagent（8 角色：auth_idor/injection/logic_abuse/
+  info_leak/xss_hunter/jwt_token_abuse/file_upload/crypto）。
+- **擬真使用者 UX 測試（passive 也跑）**：全網站掃描且勾選 `ux` 維度時（`scan_plan.run_agent_ux`）
+  走 `DEFAULT_TASK_PROMPT_TEMPLATE` 單 session，像真實使用者操作找可用性問題，產生
+  `report_ux_issue`（UX 類 finding）。**不需要主動授權**，但 `may_submit_forms` 閘門決定能否
+  送出表單：deep_mode 或掃描目標已通過 `user_owns_domain` 才可送出；否則 runner 隱藏
+  `send_message` 工具、prompt 只填欄位不送出，避免在未驗證網域留下測試資料。
+  計費見 billing 的 `agent_ux_fee`（固定附加點數）。
 
 ## 關鍵檔案
 
@@ -20,7 +28,7 @@ orchestrator agent（subagent 派工）→ specialist subagent（8 角色：auth
 | `runner.py` | 流程編排：recon→orchestrator（首步 tool_choice 強制派工）→specialist；`SPECIALIST_ROLES` 角色目錄（desc＋when）；authenticated scan 帳密解密注入；`_merge` 結果合併 |
 | `providers.py` | `ChatProvider`／`ProviderChain`（**MiniMax-M3** 主力→GLM→Gemini 純文字 fallback）；`ProviderError` 只帶公開資訊 |
 | `loop.py` | `HermesAgent` tool-calling 迴圈；`_compact_stale_tool_results`（bulky 觀察快照壓縮）；`_inject_stall_hint`（連續 click 空轉導正）；`_inject_endgame_hint`（剩 10 步強制 report）；`forced_first_tool`（orchestrator 首步鎖定） |
-| `tools.py` | `ToolExecutor`：**26 個工具**＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；deep_only 閘；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
+| `tools.py` | `ToolExecutor`：**26 個工具**＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；`build_tool_schemas(..., allow_form_submit=True)`——deep_only 閘＋`allow_form_submit=False` 時另隱藏 `send_message`（未驗證網域 UX 測試不得送出表單）；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
 | `findings.py` | `persist_agent_issues`＋`persist_agent_security_findings`（description 去重；owasp tag） |
 
 ## 安全（硬規則）

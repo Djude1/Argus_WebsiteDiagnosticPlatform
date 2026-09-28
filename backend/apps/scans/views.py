@@ -809,10 +809,14 @@ def estimate_scan(request):
     serializer.is_valid(raise_exception=True)
     max_pages = serializer.validated_data["max_pages"]
     categories = serializer.validated_data["categories"]
+    from apps.billing.services import agent_ux_fee
+
     return Response({
         "estimated_pages": max_pages,
         "categories": categories,
         "estimated_cost": estimate_scan_cost(max_pages, categories),
+        # 拆出 Agent UX 附加費，讓前端能單獨列出這一筆（0 代表這次不收）。
+        "agent_ux_fee": agent_ux_fee(max_pages, categories),
         "confidence": "maximum",
         "method": "billing_cap",
     })
