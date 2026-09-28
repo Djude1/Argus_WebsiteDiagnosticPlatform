@@ -1,6 +1,6 @@
 /* ===== Responsive polish：收斂手機版密度與可點擊範圍 ===== */
 
-/* 登入後導覽列（.app-nav）的收合規則在 04-app-shell.css；會員區、購點、登入頁的
+/* 導覽列（SiteNav／.public-nav）的收合規則在 35-public-legacy.css；會員區、購點、登入頁的
    響應式規則各自寫在 11／17／19／30 號檔內。 */
 
 @media (max-width: 900px) {

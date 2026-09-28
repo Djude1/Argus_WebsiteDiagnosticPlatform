@@ -82,6 +82,21 @@ export async function cancelSubscription() {
   return response.data;
 }
 
+// ---- 大頭貼（accounts）：後端會重新編碼成 256×256 PNG ----
+
+// 上傳大頭貼（JPG／PNG／WebP，≤ 2 MB）；回傳 { avatar_url }
+export async function uploadAvatar(file: File) {
+  const form = new FormData();
+  form.append("avatar", file);
+  const response = await api.post("/auth/me/avatar/", form);
+  return response.data as { avatar_url: string | null };
+}
+
+// 移除大頭貼（204）
+export async function deleteAvatar() {
+  await api.delete("/auth/me/avatar/");
+}
+
 // ---- 網域驗證（scans/domains）：主動式資安測試的技術性閘門 ----
 
 // 自己的網域驗證清單；回傳 DRF 分頁 { count, next, previous, results }

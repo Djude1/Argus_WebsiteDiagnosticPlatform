@@ -15,11 +15,13 @@ from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from rest_framework import permissions, status, views
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.avatars import AvatarError, avatar_url, process_avatar
 from apps.accounts.emails import send_password_reset_email
 from apps.accounts.models import LoginEvent, PasswordResetToken
 from apps.billing.services import grant_monthly_bonus_if_needed, settle_subscription_safe
@@ -282,6 +284,7 @@ class MeView(views.APIView):
             "last_login": user.last_login,
             # 若管理員在 Django Admin 手動為 Google 使用者設密碼，這裡會判成 email。
             "auth_provider": "google" if not user.has_usable_password() else "email",
+            "avatar_url": avatar_url(user),
         })
 
     def patch(self, request):
@@ -294,6 +297,44 @@ class MeView(views.APIView):
             user.last_name = last_name[:150]
         user.save(update_fields=["first_name", "last_name"])
         return Response({"detail": "已更新。"})
+
+
+class MeAvatarView(views.APIView):
+    """上傳（POST，multipart 欄位 `avatar`）或移除（DELETE）自己的大頭貼。
+
+    圖片由 `apps.accounts.avatars.process_avatar` 解碼後重新編碼成 256×256 PNG；
+    換圖或移除時一併刪掉舊檔。
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "avatar_upload"
+
+    def post(self, request):
+        upload = request.FILES.get("avatar")
+        if upload is None:
+            return Response({"detail": "請選擇一張圖片。"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            content = process_avatar(upload)
+        except AvatarError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        old = user.avatar.name if user.avatar else None
+        user.avatar.save(content.name, content, save=False)
+        user.save(update_fields=["avatar"])
+        if old:
+            user.avatar.storage.delete(old)
+        return Response({"avatar_url": avatar_url(user)})
+
+    def delete(self, request):
+        user = request.user
+        if user.avatar:
+            name = user.avatar.name
+            user.avatar = None
+            user.save(update_fields=["avatar"])
+            user._meta.get_field("avatar").storage.delete(name)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PasswordResetRequestView(views.APIView):

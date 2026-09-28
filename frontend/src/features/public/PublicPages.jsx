@@ -22,82 +22,32 @@ import {
 } from "../../shared/LineIcons.jsx";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
 import TechMarquee from "../../components/public/TechMarquee.jsx";
+import SiteNav, { SiteThemeToggle } from "../../components/navigation/SiteNav.jsx";
 
 const PUBLIC_NAV_ITEMS = [
   { to: "/project", label: "專案介紹" },
   { to: "/free-tools", label: "快速檢查" },
   { to: "/purchase", label: "購買" },
   { to: "/download", label: "下載" },
+  { to: "/verify", label: "報告查驗" },
+  { to: "/partners", label: "商業合作" },
   { to: "/reviews", label: "評論" },
 ];
 
-function ThemeToggleIcon({ theme }) {
-  if (theme === "light") {
-    return (
-      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-        <path d="M20.4 15.1A8.2 8.2 0 0 1 8.9 3.6 8.3 8.3 0 1 0 20.4 15.1Z" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-      <circle cx="12" cy="12" r="3.5" />
-      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </svg>
-  );
-}
-
 function PublicNav() {
   const accessToken = useArgusStore((s) => s.accessToken);
-  const replayIntro = useArgusStore((s) => s.replayIntro);
-  const theme = useArgusStore((s) => s.theme);
-  const toggleTheme = useArgusStore((s) => s.toggleTheme);
-  const navigate = useNavigate();
   return (
-    <nav className="public-nav">
-      <div className="public-nav-inner">
-        <button type="button" className="public-brand active" onClick={() => { replayIntro(); navigate("/project"); }} title="重播開場動畫" aria-label="重播 ARGUS 開場動畫">
-          <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
-          <span className="public-brand-sub">AI 網站健檢平台</span>
-        </button>
-        <div className="public-nav-links">
-          {PUBLIC_NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `public-nav-link ${isActive ? "active" : ""}`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </div>
-        <div className="public-nav-cta">
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            title={theme === "light" ? "切換至夜間模式" : "切換至日間模式"}
-            aria-label={theme === "light" ? "切換至夜間模式" : "切換至日間模式"}
-          >
-            <span className="theme-toggle-icon" aria-hidden="true">
-              <ThemeToggleIcon theme={theme} />
-            </span>
-            <span>{theme === "light" ? "夜間" : "日間"}</span>
-          </button>
-          {accessToken ? (
-            <NavLink to="/dashboard" className="public-cta-primary">
-              進入 Dashboard
-            </NavLink>
-          ) : (
-            <NavLink to="/login" className="public-cta-primary">
-              登入 / 註冊
-            </NavLink>
-          )}
-        </div>
-      </div>
-    </nav>
+    <SiteNav
+      items={PUBLIC_NAV_ITEMS}
+      actions={(
+        <>
+          <SiteThemeToggle />
+          <NavLink to={accessToken ? "/dashboard" : "/login"} className="public-cta-primary">
+            {accessToken ? "進入 Dashboard" : "登入 / 註冊"}
+          </NavLink>
+        </>
+      )}
+    />
   );
 }
 
@@ -117,6 +67,7 @@ const FOOTER_GROUPS = [
     links: [
       { to: "/verify", label: "報告查驗" },
       { to: "/reviews", label: "使用者評論" },
+      { to: "/partners", label: "商業合作" },
     ],
   },
 ];

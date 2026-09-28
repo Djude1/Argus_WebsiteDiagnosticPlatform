@@ -269,81 +269,94 @@ function DashboardPage() {
         />
       </div>
 
-      <div className="panel dashboard-panel">
-        <div className="dashboard-panel-header">
-          <h3>Findings 嚴重度分佈</h3>
-          <span className="hint-text-sm">跨所有掃描</span>
+      {/* 版面重排：最常用的「最近掃描」放主欄，旁邊是各維度平均；圖表放到下方並排 */}
+      <div className="dashboard-main">
+        <div className="panel dashboard-panel">
+          <div className="dashboard-panel-header">
+            <h3>最近掃描</h3>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => navigate("/scans")}
+            >
+              前往掃描頁
+            </button>
+          </div>
+          <ul className="recent-list">
+            {data.recent_scans.length === 0 && (
+              <li className="dashboard-empty">
+                <p>還沒有掃描紀錄，從輸入網址開始第一次健檢。</p>
+                <button type="button" className="primary-button" onClick={() => navigate("/scans")}>
+                  建立第一個掃描
+                </button>
+              </li>
+            )}
+            {data.recent_scans.map((scan) => (
+              <li key={scan.id}>
+                <button
+                  className="recent-row"
+                  type="button"
+                  onClick={() => navigate(`/scans/${scan.id}`)}
+                >
+                  <span className="recent-origin">{scan.origin}</span>
+                  <span className="recent-time">{formatRelativeTime(scan.completed_at || scan.created_at)}</span>
+                  <ScanStatusBadge status={scan.status} />
+                  <ScoreBadge score={scan.overall_score} />
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
-        <SeverityBarChart
-          severityTotals={data.severity_totals}
-          title=""
-        />
+
+        <div className="panel dashboard-panel">
+          <div className="dashboard-panel-header">
+            <h3>各維度平均分</h3>
+            <span className="hint-text-sm">基於完成的掃描</span>
+          </div>
+          <ul className="category-avg-list">
+            {Object.keys(CATEGORY_LABELS).map((cat) => {
+              const value = data.category_averages?.[cat];
+              const has = value !== null && value !== undefined;
+              const tone = !has ? "muted" : value >= 80 ? "good" : value >= 60 ? "medium" : "bad";
+              return (
+                <li className="category-avg-row" key={cat}>
+                  <span className={`category-pill cat-${cat}`}>{CATEGORY_LABELS[cat]}</span>
+                  <span className="category-avg-track" aria-hidden="true">
+                    <span className={`category-avg-fill tone-${tone}`} style={{ width: `${has ? value : 0}%` }} />
+                  </span>
+                  <span className={`category-avg-value tone-${tone}`}>{has ? Math.round(value) : "—"}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
 
-      <div className="panel dashboard-panel">
-        <div className="dashboard-panel-header">
-          <h3>各類別 finding 佔比</h3>
-          <span className="hint-text-sm">哪一類問題最多</span>
+      <div className="dashboard-charts">
+        <div className="panel dashboard-panel">
+          <div className="dashboard-panel-header">
+            <h3>Findings 嚴重度分佈</h3>
+            <span className="hint-text-sm">跨所有掃描</span>
+          </div>
+          <SeverityBarChart
+            severityTotals={data.severity_totals}
+            title=""
+          />
         </div>
-        <StackedBar
-          data={Object.keys(CATEGORY_LABELS).map((cat) => ({
-            label: CATEGORY_LABELS[cat],
-            value: categoriesData?.categories?.[cat]?.total_findings || 0,
-            color: CATEGORY_COLOR[cat],
-          }))}
-        />
-      </div>
 
-      <div className="panel dashboard-panel">
-        <div className="dashboard-panel-header">
-          <h3>各類別平均</h3>
-          <span className="hint-text-sm">基於完成的掃描</span>
+        <div className="panel dashboard-panel">
+          <div className="dashboard-panel-header">
+            <h3>各類別 finding 佔比</h3>
+            <span className="hint-text-sm">哪一類問題最多</span>
+          </div>
+          <StackedBar
+            data={Object.keys(CATEGORY_LABELS).map((cat) => ({
+              label: CATEGORY_LABELS[cat],
+              value: categoriesData?.categories?.[cat]?.total_findings || 0,
+              color: CATEGORY_COLOR[cat],
+            }))}
+          />
         </div>
-        <div className="category-rings">
-          {Object.keys(CATEGORY_LABELS).map((cat) => (
-            <div className="category-ring-item" key={cat}>
-              <ScoreRing
-                value={data.category_averages?.[cat] ?? null}
-                size={84}
-              />
-              <span className={`category-pill cat-${cat}`}>
-                {CATEGORY_LABELS[cat]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="panel dashboard-panel">
-        <div className="dashboard-panel-header">
-          <h3>最近掃描</h3>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => navigate("/scans")}
-          >
-            前往掃描頁
-          </button>
-        </div>
-        <ul className="recent-list">
-          {data.recent_scans.length === 0 && (
-            <li className="text-sm text-slate-400">尚無掃描紀錄。</li>
-          )}
-          {data.recent_scans.map((scan) => (
-            <li key={scan.id}>
-              <button
-                className="recent-row"
-                type="button"
-                onClick={() => navigate(`/scans/${scan.id}`)}
-              >
-                <span className="recent-origin">{scan.origin}</span>
-                <span className="recent-time">{formatRelativeTime(scan.completed_at || scan.created_at)}</span>
-                <ScanStatusBadge status={scan.status} />
-                <ScoreBadge score={scan.overall_score} />
-              </button>
-            </li>
-          ))}
-        </ul>
       </div>
       <AnnouncementToast announcements={toasts} onDismiss={handleDismiss} />
     </div>

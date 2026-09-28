@@ -3,7 +3,8 @@
  *
  * 這些頁面依使用者要求恢復為 462848b（Night Watch 改版前）的版本。本目錄的 NN-*.css 由當時的
  * src/styles/NN-*.css 過濾而來：只保留這些頁面用得到的規則，檔名與匯入順序維持原樣（順序＝覆寫優先序）。
- * 90-compat.css 補上共用元件（shared/AppShared.jsx）改版後的差異。
+ * 90-compat.css 補上共用元件（shared/AppShared.jsx）改版後的差異；91-dark.css 是深色主題的手動調整
+ * （其餘深色規則由外掛依明度自動產生）；92-layout.css 是之後重新編排的版面。
  *
  * 範圍限制由 postcss-member-legacy.js 在 build 時處理：每條規則都只作用在 App.jsx 的 .member-legacy
  * 包裝內，不影響導覽列、設定頁、後台與公開頁。這裡的規則照舊版原樣書寫即可，不用自己加前綴。
@@ -33,3 +34,5 @@
 @import "./70-home.css";
 @import "./71-scan-pipeline.css";
 @import "./90-compat.css";
+@import "./91-dark.css";
+@import "./92-layout.css";

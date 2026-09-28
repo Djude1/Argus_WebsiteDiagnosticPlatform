@@ -14,6 +14,7 @@ const loadDomainPages = () => import("./features/domains/DomainVerifyPage.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
+const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
@@ -49,6 +50,7 @@ const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
 const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
 const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
 const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
+const PartnersPage = lazyNamed(loadPartnersPage, "PartnersPage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
 const AdminOverviewPage = lazyNamed(loadAdminOverview, "AdminOverviewPage");
@@ -82,7 +84,7 @@ function AppShell({ googleOAuthEnabled }) {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
   const isPublic = [
-    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify",
+    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify", "/partners",
   ].some((p) =>
     location.pathname.startsWith(p),
   );
@@ -120,6 +122,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/download" element={<DownloadPage />} />
             <Route path="/verify" element={<VerifyReportPage />} />
             <Route path="/verify/:reportNumber" element={<VerifyReportPage />} />
+            <Route path="/partners" element={<PartnersPage />} />
             <Route path="/reviews" element={<ReviewsPage />} />
           </Route>
           <Route

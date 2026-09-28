@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Outlet,
+  useOutletContext,
   useLocation,
   useNavigate,
   useParams,
@@ -17,6 +18,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { api, fetchVerifiedDomains } from "../../api";
+import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
@@ -61,13 +63,49 @@ const SCAN_DRAFT_KEY = "argus_scan_draft_v1";
 // 通用小元件
 // ============================================================
 
-// 四階段進度條：等待 → 爬取 → 掃描 → Agent 測試 → 完成
+// 舊任務（progress 沒有 steps）的四階段進度條：等待 → 爬取 → 掃描 → Agent 測試
 const CRAWL_PHASES = [
   { key: "queued", label: "等待", Icon: StatusQueuedGlyph },
   { key: "crawling", label: "爬取", Icon: StatusCrawlGlyph },
   { key: "scanning", label: "掃描", Icon: StatusScanGlyph },
   { key: "agent_testing", label: "Agent", Icon: StatusAgentGlyph },
 ];
+
+// 細分階段（後端 progress.steps／progress.step，見 backend/apps/scans/tasks.py 的 planned_scan_steps）。
+// hint 對應該階段實際執行的檢查，讓使用者知道現在在分析什麼。
+const SCAN_STEP_META = {
+  queued: { label: "等待", title: "等待排程", hint: "任務已建立，等待掃描器接手", Icon: StatusQueuedGlyph },
+  crawl: { label: "爬取", title: "爬取頁面", hint: "以真實瀏覽器走訪同網域頁面，擷取內容、截圖與行動版版面量測", Icon: StatusCrawlGlyph },
+  analyze_seo: { label: "SEO", title: "分析 SEO", hint: "檢查 title、meta description、H1、圖片 alt、canonical 與 Open Graph", Icon: StatusScanGlyph },
+  analyze_aeo: { label: "AEO", title: "分析 AEO", hint: "檢查問答內容與 FAQPage／HowTo 結構化資料", Icon: StatusScanGlyph },
+  analyze_geo: { label: "GEO", title: "分析 GEO", hint: "檢查 JSON-LD 實體、可引用段落與 JavaScript 渲染依賴", Icon: StatusScanGlyph },
+  analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤與 JavaScript 錯誤", Icon: StatusScanGlyph },
+  analyze_security: { label: "資安", title: "分析資安", hint: "檢查表單 CSRF，以及頁面中外洩的金鑰與個資", Icon: StatusScanGlyph },
+  active_probe: { label: "主動探測", title: "主動探測", hint: "以 Nuclei／Katana 對授權目標執行受控探測", Icon: StatusScanGlyph },
+  deep_security: { label: "深度資安", title: "深度資安檢查", hint: "檢查 HTTPS 與安全標頭、TLS 憑證、Cookie、SRI、DNS 與前端套件版本", Icon: StatusScanGlyph },
+  exposure_probe: { label: "敏感檔案", title: "敏感檔案探測", hint: "探測常見的敏感檔案路徑是否外洩", Icon: StatusScanGlyph },
+  geo_site: { label: "AI 爬蟲", title: "檢查 AI 爬蟲訊號", hint: "檢查 llms.txt 與 robots.txt 對 AI 爬蟲的設定", Icon: StatusScanGlyph },
+  agent: { label: "AI Agent", title: "AI Agent 測試", hint: "AI Agent 以擬真使用者操作網站，測試互動流程", Icon: StatusAgentGlyph },
+  scoring: { label: "評分", title: "彙整評分", hint: "計算各維度分數並排出優先處理項目", Icon: StatusScanGlyph },
+};
+
+const STATUS_FALLBACK_STEP = { crawling: "crawl", scanning: null, agent_testing: "agent" };
+
+/** 由 progress 算出要顯示的階段清單與目前位置；舊任務沒有 steps 時退回四階段。 */
+function buildScanSteps(status, progress) {
+  const planned = Array.isArray(progress?.steps) ? progress.steps.filter((key) => SCAN_STEP_META[key]) : [];
+  if (!planned.length) {
+    const idx = Math.max(0, CRAWL_PHASES.findIndex((p) => p.key === status));
+    return { detailed: false, steps: CRAWL_PHASES, currentIdx: idx, current: CRAWL_PHASES[idx] };
+  }
+  const steps = ["queued", ...planned].map((key) => ({ key, ...SCAN_STEP_META[key] }));
+  let currentKey = status === "queued" ? "queued" : progress?.step || STATUS_FALLBACK_STEP[status];
+  if (!currentKey || !planned.includes(currentKey)) {
+    currentKey = status === "scanning" ? planned.find((key) => key.startsWith("analyze_")) || planned[1] : planned[0];
+  }
+  const currentIdx = Math.max(0, steps.findIndex((step) => step.key === currentKey));
+  return { detailed: true, steps, currentIdx, current: steps[currentIdx] };
+}
 
 function formatMMSS(totalSec) {
   const sec = Math.max(0, Math.floor(totalSec));
@@ -92,9 +130,7 @@ function CrawlingAnimation({
     return () => clearInterval(t);
   }, []);
 
-  const currentIdx = CRAWL_PHASES.findIndex((p) => p.key === status);
-  const safeIdx = currentIdx >= 0 ? currentIdx : 0;
-  const current = CRAWL_PHASES[safeIdx] || CRAWL_PHASES[0];
+  const { detailed, steps, currentIdx: safeIdx, current } = buildScanSteps(status, progress);
 
   // progress 結構：{pages_done, pages_total, phase, phase_started_at}
   const total = progress?.pages_total || 0;
@@ -127,7 +163,8 @@ function CrawlingAnimation({
           <img className="crawl-anim-eye-img" src={argusEye} alt="" width="256" height="202" />
         </picture>
         <div className="crawl-anim-text">
-          <div className="crawl-anim-title">{current.label}中...</div>
+          <div className="crawl-anim-title">{detailed ? current.title : current.label}中...</div>
+          {detailed ? <div className="crawl-anim-step-hint">{current.hint}</div> : null}
           {hint ? <div className="crawl-anim-hint">{hint}</div> : null}
         </div>
         <span className="crawl-anim-spinner" aria-hidden="true" />
@@ -172,13 +209,18 @@ function CrawlingAnimation({
         )}
       </div>
 
-      <ol className="crawl-phases">
-        {CRAWL_PHASES.map((phase, idx) => {
+      <ol className={`crawl-phases ${detailed ? "is-detailed" : ""}`} aria-label="掃描階段">
+        {steps.map((phase, idx) => {
           let cls = "phase-pending";
           if (idx < safeIdx) cls = "phase-done";
           else if (idx === safeIdx) cls = "phase-active";
           return (
-            <li key={phase.key} className={`crawl-phase ${cls}`}>
+            <li
+              key={phase.key}
+              className={`crawl-phase ${cls}`}
+              title={phase.hint}
+              aria-current={idx === safeIdx ? "step" : undefined}
+            >
               <span className="crawl-phase-dot" />
               <span className="crawl-phase-emoji" aria-hidden="true">
                 {idx < safeIdx ? <StatusDoneGlyph /> : <phase.Icon />}
@@ -621,7 +663,8 @@ function ScanJobForm({ onCreated }) {
 // 掃描列表
 // ============================================================
 
-function ScanList({ scans, onRefresh }) {
+// wide：/scans 概覽頁的主內容（卡片多欄、顯示時間與頁數／發現數）；預設是側欄窄版。
+function ScanList({ scans, onRefresh, wide = false }) {
   const navigate = useNavigate();
   const { scanId } = useParams();
   const activeId = scanId ? Number(scanId) : null;
@@ -647,11 +690,11 @@ function ScanList({ scans, onRefresh }) {
   }, [scans]);
 
   return (
-    <section className="panel space-y-3">
+    <section className={`panel space-y-3 ${wide ? "scan-list-wide" : ""}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="eyebrow">任務</p>
-          <h2 className="section-title">掃描列表</h2>
+          <h2 className="section-title">{wide ? `掃描列表（${scans.length}）` : "掃描列表"}</h2>
           {inProgressCount > 0 && (
             <p className="mt-1 text-xs text-blue-600">
               🔄 {inProgressCount} 個進行中，畫面每 {LIST_POLL_INTERVAL_MS / 1000} 秒自動更新
@@ -672,7 +715,7 @@ function ScanList({ scans, onRefresh }) {
           重新整理
         </button>
       </div>
-      <div className="space-y-2">
+      <div className={wide ? "scan-list-grid" : "space-y-2"}>
         {scans.map((scan) => {
           const tone =
             scan.overall_score === null || scan.overall_score === undefined
@@ -717,6 +760,13 @@ function ScanList({ scans, onRefresh }) {
                     </span>
                   )}
                 </div>
+                {wide && (
+                  <p className="scan-card-extra">
+                    {formatDateTime(scan.created_at)}
+                    {scan.pages_count ? ` · ${scan.pages_count} 頁` : ""}
+                    {scan.findings_count ? ` · ${scan.findings_count} 項發現` : ""}
+                  </p>
+                )}
               </div>
               <ScoreBadge score={scan.overall_score} />
             </button>
@@ -1679,7 +1729,8 @@ function ScanLayout() {
     >
       <aside className="scan-sidebar">
         <ScanJobForm onCreated={handleScanCreated} />
-        <ScanList scans={scans} onRefresh={loadScans} />
+        {/* 概覽頁的列表在右側主內容；詳情頁才把列表收進抽屜 */}
+        {isDetailPage && <ScanList scans={scans} onRefresh={loadScans} />}
       </aside>
       {isDetailPage && drawerOpen && (
         <button
@@ -1727,7 +1778,7 @@ function ScanLayout() {
             )}
           </div>
         )}
-        <Outlet />
+        <Outlet context={{ scans, loadScans }} />
       </div>
     </div>
   );
@@ -2032,12 +2083,10 @@ function TopologyPage() {
   );
 }
 
+// /scans 概覽：右側主內容直接是完整的掃描列表（左側是建立掃描表單）
 function ScansPlaceholder() {
-  return (
-    <section className="panel">
-      <p className="hint-text">請從左側選擇一個掃描任務查看互動報告。</p>
-    </section>
-  );
+  const { scans, loadScans } = useOutletContext();
+  return <ScanList scans={scans} onRefresh={loadScans} wide />;
 }
 
 function ScanDetailPage() {

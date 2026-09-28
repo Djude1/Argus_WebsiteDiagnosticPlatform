@@ -68,6 +68,20 @@
     text-transform: uppercase;
   }
   .set-profile-card{ grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 1rem; }
+  .set-avatar-actions{ grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+  .set-avatar-actions .set-hint{ flex-basis: 100%; }
+  .set-link-btn{
+    padding: 0.25rem 0.25rem;
+    border: 0;
+    background: none;
+    color: var(--ag-text-2);
+    font-size: 0.85rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .set-link-btn:hover{ color: var(--ag-bad); }
+  .set-link-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
   .set-profile-id{ display: grid; min-width: 0; gap: 0.2rem; justify-items: start; }
   .set-profile-id strong{ max-width: 100%; overflow: hidden; color: var(--ag-text); font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
   .set-profile-id small{ max-width: 100%; overflow: hidden; color: var(--ag-text-3); font-family: var(--ag-font-mono); font-size: 0.74rem; text-overflow: ellipsis; white-space: nowrap; }

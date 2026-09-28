@@ -261,11 +261,19 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
   "pages_done": 12,
   "pages_total": 50,
   "phase": "crawling",
-  "phase_started_at": "2026-05-26T10:30:00Z"
+  "phase_started_at": "2026-05-26T10:30:00Z",
+  "step": "crawl",
+  "steps": ["crawl", "analyze_seo", "analyze_geo", "deep_security", "geo_site", "scoring"]
 }
 ```
 
 `phase` 值必須是 `"crawling"` / `"scanning"` / `"agent_testing"` 其中之一。
+
+`step`／`steps` 是 phase 之下的細分階段（前端掃描進度條據此顯示「正在分析 GEO／UX／資安…」）：
+`steps` 由 `tasks.planned_scan_steps()` 依勾選維度與範圍／授權算出本次實際會跑的子步驟，`step` 是目前這一步。
+可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度）、
+`active_probe`（`run_nuclei`）、`deep_security`、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`agent`（Agent 啟用且可執行）、`scoring`。
+頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
 
 ---
 

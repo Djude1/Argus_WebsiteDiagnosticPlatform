@@ -1,0 +1,153 @@
+/* ========================================
+   版面重排（不是 462848b 原有內容）：掃描頁概覽、掃描細分階段、Dashboard
+   ======================================== */
+
+/* ── /scans 概覽：左側建立掃描表單、右側完整掃描列表 ── */
+.scan-layout.list-mode {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .scan-layout.list-mode {
+    grid-template-columns: 420px minmax(0, 1fr);
+  }
+}
+
+/* 表單比視窗高，sticky 會讓表單下半段在捲動到頁尾前都看不到 */
+.scan-layout.list-mode .scan-sidebar {
+  position: static;
+}
+
+.scan-list-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.scan-card-extra {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* ── 掃描細分階段：階段多時自動換行，每格固定寬 ── */
+.crawl-phases.is-detailed {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 0.75rem 0.35rem;
+}
+
+.crawl-phases.is-detailed .crawl-phase-label {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.crawl-anim-step-hint {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #334155;
+}
+
+/* ── Dashboard：最近掃描（主欄）＋各維度平均；下方兩張圖表並排 ── */
+.dashboard-main,
+.dashboard-charts {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+/* 舊版 .dashboard-panel 是 col-span-full；放進兩欄格線後改回各佔一欄 */
+.dashboard-main > .dashboard-panel,
+.dashboard-charts > .dashboard-panel {
+  grid-column: auto;
+  height: 100%;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-main {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  }
+
+  .dashboard-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dashboard-empty {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.category-avg-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.category-avg-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.category-avg-row .category-pill {
+  justify-self: start;
+}
+
+.category-avg-track {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.category-avg-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #94a3b8;
+}
+
+.category-avg-fill.tone-good { background: #10b981; }
+.category-avg-fill.tone-medium { background: #f59e0b; }
+.category-avg-fill.tone-bad { background: #ef4444; }
+
+.category-avg-value {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+
+.category-avg-value.tone-good { color: #047857; }
+.category-avg-value.tone-medium { color: #b45309; }
+.category-avg-value.tone-bad { color: #b91c1c; }
+
+/* 最近掃描列：網址／時間／狀態／分數對齊成欄 */
+.dashboard-main .recent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 4rem;
+  gap: 0.75rem;
+}
+
+.dashboard-main .recent-row .recent-origin {
+  max-width: none;
+}
+
+.dashboard-main .recent-row > :last-child {
+  justify-self: end;
+}
+
+/* 舊版的進度填色同時有 absolute 與 relative，後者勝出後高度為 0、看不到填色 */
+.crawl-progress-fill {
+  height: 100%;
+}

@@ -9,6 +9,9 @@ cms_router.register("team", cms_views.TeamMemberViewSet, basename="admin-team-me
 cms_router.register("releases", cms_views.AppReleaseViewSet, basename="admin-release")
 cms_router.register("plans", cms_views.PricingPlanViewSet, basename="admin-plan")
 cms_router.register("milestones", cms_views.ProjectMilestoneViewSet, basename="admin-milestone")
+cms_router.register(
+    "partner-inquiries", cms_views.PartnerInquiryViewSet, basename="admin-partner-inquiry",
+)
 
 urlpatterns = [
     path("cms/", include(cms_router.urls)),
