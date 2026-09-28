@@ -9,7 +9,7 @@ Claude Code 進 `backend/apps/content/` 工作時，本檔在專案層 `CLAUDE.m
 | 端點 | View | 對應前台 |
 |---|---|---|
 | `features/` | `features_list` | `/project` 特色卡片 |
-| `team/` | `team_list` | `/team` 成員 |
+| `team/` | `team_list` | 團隊成員（公開 `/team` 頁已於 2026-09-28 移除，目前前台無消費端） |
 | `releases/` | `releases_list` | `/download` 版本 |
 | `milestones/` | `milestones_list` | `/project` timeline |
 

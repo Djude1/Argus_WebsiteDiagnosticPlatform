@@ -34,15 +34,19 @@ from .loop import AgentRunResult, HermesAgent
 from .providers import ProviderChain, build_default_chain
 from .tools import ToolExecutor, build_tool_schemas
 
-DEFAULT_TASK_PROMPT_TEMPLATE = """你正在測試 {origin} 這個網站，已開啟頁面 {url}。
+DEFAULT_TASK_PROMPT_TEMPLATE = """\
+你正在對 {origin} 進行擬真使用者的 UX（使用體驗）測試，已開啟頁面 {url}。
+你的目標是像真實使用者一樣操作，找出會讓人卡住、困惑或點不到的可用性問題。
 請執行以下測試：
 1. 先呼叫 get_dom_summary 取得頁面互動元素摘要。
-2. 找出最重要的呼叫行動按鈕（如「立即購買」、「免費試用」、「註冊」），嘗試點擊。
-3. 若進入表單或結帳流程，請嘗試填入示意資料（test@example.com），並送出觀察結果。
-4. 過程中任何 UX 問題（按鈕無反應、流程斷裂、文案歧義、看不到必要回饋），請呼叫 report_ux_issue。
+2. 找出最重要的呼叫行動按鈕（如「立即購買」、「免費試用」、「註冊」），
+   嘗試點擊，觀察是否有清楚回饋。
+{submit_clause}
+4. 過程中任何 UX 問題（按鈕無反應、流程斷裂、文案歧義、看不到必要回饋、
+   找不到返回路徑等），請呼叫 report_ux_issue，並提供修補方向（不要給程式碼）。
 5. 完成或無法繼續時呼叫 finish，並附短總結。
 
-請不要操作他站資源、不要繞過驗證、不要送出破壞性 payload。"""
+這是純使用體驗測試：不要嘗試繞過驗證、不要送出任何攻擊性或破壞性內容、不要操作他站資源。"""
 
 # 僅在 deep_mode（active + authorized）使用：雙 session 分工滲透（pentest-ai-agents
 # 的 role 化概念）。單 session 塞全部工作會互相搶步數（#17~#22 實測：recon 的
@@ -476,10 +480,15 @@ async def run_agent_for_scan(
     chain: ProviderChain | None = None,
     task_prompt: str | None = None,
     recon_intel: list[str] | None = None,
+    may_submit_forms: bool = False,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
 
     回傳 AgentRunResult，或 None 表示未啟動（功能關閉或無可用 Page）。
+
+    may_submit_forms：被動 UX 測試時是否允許實際送出表單。預設 False——
+    未通過網域所有權驗證的目標，agent 只填入示意資料觀察表單可用性，
+    不按送出，避免在他人網站留下測試資料。deep_mode（主動授權）一律 True。
     """
     if not settings.ARGUS_AGENT_ENABLED:
         return None
@@ -500,12 +509,15 @@ async def run_agent_for_scan(
         scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
         and scan_job.active_testing_authorized
     )
+    # deep_mode 目標已通過授權，送出表單本就允許；被動 UX 測試依 may_submit_forms。
+    allow_form_submit = deep_mode or may_submit_forms
 
     async def _run_session(
         role_prompt: str,
         *,
         orchestrator: bool = False,
         specialist_dispatcher=None,
+        allow_form_submit: bool = True,
     ) -> AgentRunResult:
         """單一 session：獨立 browser context（乾淨 localStorage／cookie）
         與獨立 LLM messages。orchestrator=True 時只掛調度工具（不親自測試）。"""
@@ -536,6 +548,7 @@ async def run_agent_for_scan(
                         specialist_roles=(
                             SPECIALIST_ROLES if orchestrator else None
                         ),
+                        allow_form_submit=allow_form_submit,
                     ),
                     # specialist 步數時間盒（#32 實測 token 上限非解，
                     # 步數收斂才是）；orchestrator 首步強制派工
@@ -683,10 +696,18 @@ async def run_agent_for_scan(
 
         result = _merge([recon_result, orchestrator_result, *specialist_results])
     else:
-        prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
-            origin=scan_job.origin, url=target_url
+        submit_clause = (
+            "3. 若進入表單或結帳流程，請嘗試填入示意資料（test@example.com），"
+            "並送出觀察結果。"
+            if allow_form_submit
+            else "3. 若進入表單或結帳流程，請填入示意資料（test@example.com）觀察"
+            "欄位與驗證提示是否清楚，但**不要按下送出／提交**——這個網站尚未通過"
+            "所有權驗證，不應留下測試資料。"
         )
-        result = await _run_session(prompt)
+        prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
+            origin=scan_job.origin, url=target_url, submit_clause=submit_clause
+        )
+        result = await _run_session(prompt, allow_form_submit=allow_form_submit)
 
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)

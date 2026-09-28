@@ -231,6 +231,10 @@ class PageAnalysisInput:
     html_only: str = ""
     # 行動版量測。空 dict 代表**未量測**（量測失敗或舊資料），不是「沒問題」。
     layout_metrics: dict | None = None
+    # 互動可用性訊號（觸控目標過小、表單欄位缺標籤）。空 dict＝未量測或無問題。
+    ux_signals: dict | None = None
+    # 本頁 JavaScript 執行期錯誤訊息（首行、去重）。空 list＝無錯誤或未量測。
+    js_errors: list | None = None
 
 
 class HtmlSignalParser(HTMLParser):
@@ -498,14 +502,25 @@ _MOBILE_OVERFLOW_TOLERANCE_PX = 4
 
 
 def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
-    """行動版版面問題。目前只有水平溢出。
+    """使用者體驗（UX）可用性檢查。
 
-    刻意只做這一項：判準客觀（`scrollWidth > clientWidth`）、不需要 computed
-    style、而且修好之後在手機上一眼看得出差別——先用最小的一項把「crawler
-    加量測」這條路走通，再考慮對比度、字級、觸控目標那批。
+    判準都是客觀量測、不需要人為評分：
+    - 行動版水平溢出（破版）：`layout_metrics`
+    - 觸控目標過小、表單欄位缺可及標籤：`ux_signals`（行動版視窗量測）
+    - JavaScript 執行期錯誤：`js_errors`（頁面實際拋出的未捕捉例外）
 
-    `layout_metrics` 為空代表**沒量到**（舊資料或量測失敗），不能當成通過。
+    各來源為空一律代表「未量測或無問題」，不會硬湊 finding。
     """
+    findings: list[dict] = []
+    findings.extend(_ux_mobile_overflow(page_input))
+    findings.extend(_ux_tap_targets(page_input))
+    findings.extend(_ux_unlabeled_fields(page_input))
+    findings.extend(_ux_js_errors(page_input))
+    return findings
+
+
+def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
+    """行動版水平溢出（破版）。`layout_metrics` 為空代表沒量到，不能當成通過。"""
     metrics = page_input.layout_metrics or {}
     if not metrics:
         return []
@@ -553,6 +568,114 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
             },
         )
     ]
+
+
+def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
+    """觸控目標過小：手機上手指不易點準的可點元素。"""
+    signals = page_input.ux_signals or {}
+    offenders = signals.get("small_tap_targets") or []
+    if not offenders:
+        return []
+
+    worst = offenders[0]
+    labels = "、".join(
+        f"{o.get('label') or o.get('selector')}"
+        f"（{o.get('width_px')}×{o.get('height_px')}px）"
+        for o in offenders[:3]
+    )
+    # 目標數量多代表整頁互動密度都偏小，比零星一兩個更值得處理。
+    severity = Finding.Severity.MEDIUM if len(offenders) >= 5 else Finding.Severity.LOW
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=severity,
+            title="觸控目標過小",
+            description=(
+                f"頁面有 {len(offenders)} 個可點元素（連結、按鈕或表單控制項）在 "
+                "行動版視窗下的寬或高小於 40px。手指觸控目標建議至少 44×44px"
+                "（WCAG 2.1 目標尺寸），過小會讓使用者誤點或點不到。"
+            ),
+            remediation=(
+                "把可點元素的可點區域放大到至少 44×44px，可用 padding、min-width／"
+                "min-height 或增加行高；相鄰的小連結之間保留足夠間距。"
+            ),
+            evidence=f"過小的觸控目標：{labels}",
+            selector=worst.get("selector", ""),
+            impact_area="mobile_usability",
+            priority_score=48 if severity == Finding.Severity.MEDIUM else 38,
+            evidence_type="ux_signals",
+            evidence_json={"small_tap_targets": offenders[:8]},
+        )
+    ]
+
+
+def _ux_unlabeled_fields(page_input: PageAnalysisInput) -> list[dict]:
+    """表單欄位缺少可及標籤：螢幕報讀者與部分使用者無從得知欄位用途。"""
+    signals = page_input.ux_signals or {}
+    offenders = signals.get("unlabeled_fields") or []
+    if not offenders:
+        return []
+
+    worst = offenders[0]
+    labels = "、".join(
+        f"{o.get('name') or o.get('type') or o.get('selector')}" for o in offenders[:4]
+    )
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.MEDIUM,
+            title="表單欄位缺少可及標籤",
+            description=(
+                f"頁面有 {len(offenders)} 個表單欄位沒有可及名稱（沒有對應的 "
+                "<label>、aria-label／aria-labelledby，也沒有 title 或 placeholder）。"
+                "螢幕報讀者會唸不出欄位用途，語音輸入與自動填入也難以對應。"
+            ),
+            remediation=(
+                "為每個輸入欄位加上 <label for>（或用 <label> 包住欄位），"
+                "或補上 aria-label；placeholder 不能取代 label，因為輸入後就消失。"
+            ),
+            evidence=f"缺標籤的欄位：{labels}",
+            selector=worst.get("selector", ""),
+            impact_area="accessibility",
+            priority_score=46,
+            evidence_type="ux_signals",
+            evidence_json={"unlabeled_fields": offenders[:8]},
+        )
+    ]
+
+
+def _ux_js_errors(page_input: PageAnalysisInput) -> list[dict]:
+    """JavaScript 執行期錯誤：未捕捉的例外常導致互動失效。"""
+    errors = [str(e).strip() for e in (page_input.js_errors or []) if str(e).strip()]
+    if not errors:
+        return []
+
+    joined = "\n".join(errors[:8])
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.MEDIUM,
+            title="頁面出現 JavaScript 執行期錯誤",
+            description=(
+                f"載入這個頁面時，瀏覽器主控台出現 {len(errors)} 則未捕捉的 "
+                "JavaScript 錯誤。這類錯誤會中斷腳本執行，常導致按鈕沒反應、"
+                "內容載不出來或表單無法送出。"
+            ),
+            remediation=(
+                "在瀏覽器開發者工具的 Console 重現這些錯誤，從第一則往下修："
+                "常見原因是存取了 null／undefined、缺少資源或第三方腳本失敗；"
+                "並為關鍵流程加上錯誤處理，避免單一例外讓整頁互動失效。"
+            ),
+            evidence=joined[:_MAX_JS_ERROR_EVIDENCE_CHARS],
+            impact_area="reliability",
+            priority_score=50,
+            evidence_type="js_errors",
+            evidence_json={"errors": errors[:8]},
+        )
+    ]
+
+
+_MAX_JS_ERROR_EVIDENCE_CHARS = 800
 
 
 def analyze_seo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:

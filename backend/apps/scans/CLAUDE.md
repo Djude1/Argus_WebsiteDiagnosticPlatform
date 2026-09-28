@@ -39,14 +39,20 @@ queued → crawling → scanning → [agent_testing] → completed
 
 ### 掃描範圍與工具矩陣
 
-產品範圍只有兩種：前端以 `max_pages=1` 表示**單頁**，其餘合法值表示**全網站**。`passive/active` 是探測授權層級，不是第三種掃描範圍。所有工具閘門集中由 `scan_plan.py` 決定：| 範圍與授權 | Nuclei | Katana | 敏感路徑探測 | Hermes-Agent | Kali |
-|---|---:|---:|---:|---:|---:|
-| 單頁 + passive | 否 | 否 | 否 | 否 | 否 |
-| 全網站 + passive | 否 | 否 | 否 | 否 | 否 |
-| 單頁 + active 且已授權 | 僅輸入頁 | 否 | 否 | 否 | 可執行既有同源候選驗證 |
-| 全網站 + active 且已授權 | 已爬 URL | 是 | 是 | 是（另受總開關控制） | 可執行既有同源候選驗證 |
+產品範圍只有兩種：前端以 `max_pages=1` 表示**單頁**，其餘合法值表示**全網站**。`passive/active` 是探測授權層級，不是第三種掃描範圍。所有工具閘門集中由 `scan_plan.py` 決定：| 範圍與授權 | Nuclei | Katana | 敏感路徑探測 | Agent（資安） | Agent（UX） | Kali |
+|---|---:|---:|---:|---:|---:|---:|
+| 單頁 + passive | 否 | 否 | 否 | 否 | 否 | 否 |
+| 全網站 + passive | 否 | 否 | 否 | 否 | 勾 UX 才跑 | 否 |
+| 單頁 + active 且已授權 | 僅輸入頁 | 否 | 否 | 否 | 否 | 可執行既有同源候選驗證 |
+| 全網站 + active 且已授權 | 已爬 URL | 是 | 是 | 是（另受總開關控制） | 勾 UX 才跑 | 可執行既有同源候選驗證 |
 
 Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只有 1 RPS，必須改為依序執行。單頁不得用 Katana、敏感路徑字典或 Agent 擴張成全站掃描。
+
+**Agent 有兩種角色，閘門分離**（都受 `ARGUS_AGENT_ENABLED` 總開關控制）：
+
+- **資安（deep_mode）**＝`run_agent`：只有「全網站 ＋ active 且已授權」才開，執行主動滲透（recon→orchestrator→specialist）。
+- **UX（擬真使用者體驗測試）**＝`run_agent_ux`：`scope == "site"` 且 `effective_categories` 含 `ux` 就開，**不需要主動授權**（passive 全網站勾 UX 也跑）。單頁不跑（無流程可走）。
+- `tasks.py` 只要 `run_agent or run_agent_ux` 任一成立即呼叫 `run_agent_for_scan`；是否允許 agent 送出表單由 `may_submit_forms` 決定＝`run_agent`（deep_mode）**或**掃描目標 hostname 已通過 `user_owns_domain`。未驗證網域的 passive UX 測試 `may_submit_forms=False`：runner 隱藏 `send_message` 工具、prompt 明示只填欄位不送出，避免在他人網站留下測試資料。
 
 ### 掃描維度選擇（ScanJob.categories，2026-09-26）
 
@@ -187,12 +193,25 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 `page.screenshot()` 在 `crawler.py` 裡是在 **`pages.append()` 之前**執行的。
 舊版讓它的例外直接冒出去，會被外層的 `except Exception` 接住，**整頁被丟進 `failed_urls`**——連帶該頁的 `Page` 紀錄與 SEO/AEO finding 一起消失。
 
-**UX 有兩個來源**：`analyze_ux()`（行動版版面量測，每頁都跑）與 Hermes-Agent
-（預設不啟用）。`Page.layout_metrics` 為空代表**沒量到**（量測失敗或舊資料），
+**UX 有三個來源**：規則式檢查（`analyze_ux()`，每頁都跑、不需 LLM）與擬真使用者
+Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關關）。規則式檢查含
+三類量測，全部由爬蟲逐頁收集、`analyze_ux()` 逐頁產生 finding：
+
+- **行動版版面**（`collect_mobile_layout()` → `Page.layout_metrics`）：水平溢出等。
+- **觸控目標過小 ＋ 表單欄位缺可及名稱**（`collect_ux_signals()` → `page["ux_signals"]`）：
+  可點元素在手機寬或高 < `_MIN_TAP_TARGET_PX`（40px）列為 tap-target 問題（≥5 個升
+  MEDIUM）；`<input>`/`<select>`/`<textarea>` 無 label/aria/title/placeholder 列為
+  accessibility 問題（MEDIUM）。每類上限 `_MAX_UX_OFFENDERS`（8）。
+- **未捕捉的 JS 例外**（`pageerror` 監聽 → `page["js_errors"]`）：頁面 console 未攔截的
+  例外列為 MEDIUM，證據上限 `_MAX_JS_ERROR_EVIDENCE_CHARS`（800）。
+
+`Page.layout_metrics` 為空代表**沒量到**（量測失敗或舊資料），
 不可當成「沒問題」——`tasks.py` 的 `tested_categories` 也依此判斷，否則報告會
 把「未評估」顯示成滿分。量測本身在 `crawler.collect_mobile_layout()`，**必須
 留在所有其他擷取之後**：它會改 viewport，跑在截圖或內容擷取之前會讓那些結果
-變成行動版的。失敗一律吞掉回傳 `{}`，比照截圖的失敗隔離。
+變成行動版的。`collect_ux_signals()` 緊接在 mobile layout 之後、同樣在其他擷取
+之後；失敗一律吞掉回傳 `{}`，比照截圖的失敗隔離。跨源／過大／離站等重置分支
+必須同步把 `ux_signals`／`js_errors` 清空，避免把上一頁的訊號帶到被重置的頁。
 
 **SEO 與 AEO finding 只由 `analyze_page()` 逐頁產生**，所以「爬到 0 頁」＝這兩類完全沒有結果。正式站的實際症狀是：掃描顯示完成，但畫面截圖空白、SEO 分析整個不見，只剩站台層級的 DNS/SSL/header 檢查。
 
@@ -313,14 +332,20 @@ Agent 端同能力＝`get_network_requests` 工具（見架構文件 §3）。
 ## Coin 扣點流程（與 billing 整合）
 
 ```
-建立掃描 → hold_for_scan(max_pages × 勾選維度數 × 每維單價)
+建立掃描 → hold_for_scan(max_pages × 勾選維度數 × 每維單價 ＋ agent_ux_fee)
   ↓ worker 完成
-settle_scan_actual(actual_pages × 同組維度數 × 每維單價)  ← 退差額
+settle_scan_actual(actual_pages × 同組維度數 × 每維單價 ＋ agent_ux_fee)  ← 退差額
   ↓ 若失敗/取消
 refund_full_for_scan(scan)  ← 全退（冪等）
 ```
 
 `tasks.py` 負責在適當時機呼叫這三個 `billing/services.py` 函式。
+
+**Agent UX 附加費**：`estimate_scan_cost` 已把 `agent_ux_fee(max_pages, categories)`
+折進頁面費，hold／settle 都自動含這筆固定點數（`ARGUS_COIN_AGENT_UX`，預設 20），
+不新增 `CoinTransaction.kind`、不需 migration。收費條件與 `run_agent_ux` 對齊：
+`ARGUS_AGENT_ENABLED` 開、`max_pages > 1`（全網站）、且勾了 `ux` 才收；否則回 0。
+若實際只爬到 1 頁，settle 以 `actual_pages=1` 重算 → 這筆費用自動退回（fee 也回 0）。
 
 `settle_scan_actual` 在 `ScanJob` 已寫成 `completed` 之後才執行，因此它的例外
 **不得往上拋**：拋出去會落到 `run_scan_job` 的通用 `except`，把已完成的掃描改成

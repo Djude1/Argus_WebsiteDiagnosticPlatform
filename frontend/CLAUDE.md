@@ -47,10 +47,11 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 ## 樣式規範
 
 - **品牌規範**：見 [`docs/brand-guidelines.md`](../docs/brand-guidelines.md)（Night Watch：虹膜青主色、守望琥珀點綴、Sora／Noto Sans TC／JetBrains Mono）。
+- **公開頁（`.public-shell`）例外**：視覺維持改版前版本（系統字、深藍＋科技青），樣式在 `21-public.css`、`35-public-legacy.css`（取回的改版前日間／響應式規則）、`70-home.css`、`71-scan-pipeline.css`，最後由 `73-public-refine.css` 做克制整理（區塊節奏、減少外框與光暈）。公開頁新增樣式寫在 `73`，並限縮在 `.public-shell` 內；不要把 Night Watch 的 `--ag-*` 風格套回公開頁。
 - 全域樣式入口是 `src/styles.css`，依序 `@import` `src/styles/*.css`；**匯入順序＝覆寫優先序，不可隨意重排**。
 - **顏色一律用 `--ag-*` 語意 token**（`03-tokens.css`）：深色值在 `:root`（預設主題），日間值在 `:root[data-theme="light"]`。規則只寫一次、兩個主題自動正確；**不要再寫 `:root[data-theme="light"] .xxx` 的逐條覆寫**，也不要寫死 Tailwind `slate-*`／`blue-*`／`indigo-*` 或青→紫漸層。
 - 品牌元件樣式在 `05-brand.css`（`ArgusMark`／`ArgusLogo`、`IrisScore`、`.ag-eyebrow`、`.ag-viewfinder`、`.ag-surface-grid`）；核心元件（`.panel`、`.primary-button`、`.secondary-button`、`.ghost-button`、`.input`、`.severity`、`.status-badge`、`.category-pill`…）在 `10-components-core.css`，已全面 token 化。
-- 標誌一律用 `components/brand/ArgusMark.tsx`（向量）；點陣插畫 `assets/argus-eye*.webp` 只用於首頁 hero。圖示用 `shared/LineIcons.jsx`／`shared/ActionIcons.jsx`，不用 emoji。
+- 標誌一律用原品牌圖：`ArgusLogo`（`brand-logo.webp`）與 `ArgusMark`（`argus-eye-still.webp`），元件在 `components/brand/ArgusMark.tsx`；動態之眼 `argus-eye.webp` 只用於首頁 hero。圖示用 `shared/LineIcons.jsx`／`shared/ActionIcons.jsx`，不用 emoji。
 - 後台 `--admin-*` token 定義在 `18-admin.css` 開頭，由 `--ag-*` 衍生，深／淺主題自動切換；側欄恆為深色（`--admin-sidebar-*`）。後台樣式一律用 `--admin-*` 或 `--ag-*`。
 - 多數 `10`–`22` 號檔包在 `@layer components` 內（Tailwind 會提到 `@tailwind components` 的位置輸出）。
 - 命名採 BEM-like：`.頁面名-元素名`（例如 `.admin-panel`、`.scan-card`）。
@@ -108,9 +109,8 @@ D:\nodejs\npm.cmd install 套件名
 | 路由 | 元件 / 頁面 | 說明 |
 |---|---|---|
 | `/login` | `LoginPage` | Email 登入/註冊；有 Google Client ID 時才顯示 Google OAuth |
-| `/project` | `ProjectPage` | 公開行銷頁：產品特色 |
+| `/project` | `ProjectPage` | 公開行銷頁：hero、產品預覽、檢測面向與方法、掃描流程、交付物與證據、核心功能、安全邊界、技術棧、FAQ（團隊頁、平台規模與開發歷程已於 2026-09-28 移除） |
 | `/free-tools` | `FreeToolsPage` | 公開免費分析（測速 / URL 風險 / 郵件風險），呼叫 `/api/insights/*` |
-| `/team` | `TeamPage` | 公開行銷頁：團隊介紹 |
 | `/purchase` | `PurchasePage` | 購買點數（3 步驟結帳 wizard） |
 | `/download` | `DownloadPage` | 下載報告 |
 | `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
@@ -118,7 +118,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
-| `/reviews` | `ReviewsPage`（`PublicLayout`） | 日／夜主題同步的科技評論頁；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
+| `/reviews` | `ReviewsPage`（`PublicLayout`） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
 | `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
@@ -185,11 +185,12 @@ npm run typecheck
 | `src/features/scans/ScanExperience.jsx` | 掃描建立、列表、詳情與拓樸頁 |
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
+| `src/components/scans/ScanJobForm.jsx` | 建立掃描表單：範圍／模式／維度勾選與估價；估價＝`有效頁數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），公式列會顯示這筆 |
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
 | `src/components/scans/FixOutputSection.jsx` | 掃描詳情的「修正產出」專區：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
 | `src/features/account/AuthenticatedPages.jsx` | Dashboard、歷史、購點、設定與登入後導覽 |
-| `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（元件拆在 `components/reviews/*`；樣式單檔 `50-reviews.css`，token 化雙主題） |
-| `src/features/public/PublicPages.jsx` | 專案、免費工具、團隊、購買介紹與下載等公開頁 |
+| `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |
+| `src/features/public/PublicPages.jsx` | 公開頁 layout（導覽＋分組頁尾）與專案、免費工具、購買介紹、下載、報告查驗頁 |
 | `src/features/public/NotFoundPage.jsx` | 未匹配路由的 404 頁面 |
 | `src/features/admin/AdminPages.jsx` | React 管理後台 layout 與各管理頁（掃描頁已拆出）|
 | `src/features/admin/AdminScansPages.tsx` | 掃描列表與掃描詳情（TypeScript，走型別化 API；頁面層測試鎖定 `?user=` 篩選與使用者連結）|
@@ -220,5 +221,5 @@ npm run typecheck
 | `src/main.jsx` | React entry point，Provider 掛載 |
 | `src/styles.css` | 樣式入口：依序 `@import` `src/styles/*.css`（順序即覆寫優先序）|
 | `src/styles/03-tokens.css` | 品牌設計 token（`--ag-*`，深色 `:root`／日間 `[data-theme="light"]`）與全站基礎排版 |
-| `src/components/brand/ArgusMark.tsx` | 向量品牌標誌 `ArgusMark`／`ArgusLogo` |
+| `src/components/brand/ArgusMark.tsx` | 品牌標誌 `ArgusLogo`（brand-logo.webp）／`ArgusMark`（argus-eye-still.webp） |
 | `src/components/brand/IrisScore.tsx` | 品牌分數環（0–100，good／medium／bad）|

@@ -21,6 +21,24 @@ ScanJob(active+authorized)
 序列執行（RPS 與 Kali 預算全域共享）；每角色獨立預算上限
 （`ARGUS_AGENT_MAX_TOKENS`；specialist 另受 `_SPECIALIST_MAX_STEPS=60` 步數盒）。
 
+## 1b. 擬真使用者 UX 測試模式（passive 也跑，2026-09-28）
+
+同一支 `run_agent_for_scan` 的第二種角色，與資安 deep_mode 並存但閘門分離：
+
+```
+ScanJob(scope=site 且 categories 含 ux)         # 不需 active/authorized
+ └─ run_agent_ux（scan_plan 判定）＋ ARGUS_AGENT_ENABLED
+     └─ 單 session（DEFAULT_TASK_PROMPT_TEMPLATE）：像真實使用者操作
+        get_dom_summary → 點主要 CTA → 走表單/結帳流程 → report_ux_issue
+        → finish
+合併 → persist_agent_issues（category=UX finding）→ 進 scoring
+```
+
+- **觸發**：`scan_plan.build_scan_execution_plan` 設 `run_agent_ux = scope=="site" and "ux" in effective_categories`；`tasks.py` 以 `run_agent or run_agent_ux` 觸發 agent。單頁不跑（無流程）。
+- **表單送出閘門（`may_submit_forms`）**：`tasks.py` 算 `may_submit_forms = run_agent(deep_mode) or user_owns_domain(user, hostname)`，傳入 `run_agent_for_scan`。`runner` 的 passive 分支據此組 `submit_clause`（送出 vs 只填不送）並傳 `_run_session(..., allow_form_submit=...)` → `build_tool_schemas` 在不允許時隱藏 `send_message`。未驗證他站只做「填入示意資料觀察欄位／驗證提示」，不留測試資料。
+- **計費**：固定附加費 `ARGUS_COIN_AGENT_UX`（見 billing `agent_ux_fee`），與 `run_agent_ux` 收費條件對齊。
+- **與規則式 UX 的分工**：規則式檢查（tap target/未標記欄位/JS 例外，見 `scans/CLAUDE.md`）每頁都跑、不需 LLM，是 UX 的地板；Agent UX 是需要 LLM 的擬真流程測試，兩者都產 `category=UX` finding。
+
 ## 2. Specialist 角色目錄（SPECIALIST_ROLES）
 
 | role | 職責 | when（派用時機） |
@@ -68,6 +86,8 @@ authenticated scan：使用者帳密（`test_auth_*_encrypted`，Signer 加密�
   fill→Enter（無新請求則 fallback 送出鈕）→回傳 network log 增量＋回應
   文字尾段。誕生原因：#46/47 type_text 填了沒按送出→真 API 進不了流量
   →猜端點 14 次全錯。chat/對話/搜尋送出場景第一步。
+  **`allow_form_submit=False`（未驗證網域的 passive UX 測試）時此工具被隱藏**，
+  agent 只能填欄位不能送出（見 §1b 表單送出閘門）。
 - `collect_target_intel(target, urls≤8)`——帳號接管情報彙整（WSTG-ATHN-09
   檢索化）：帶憑證 GET×N、全文搜目標（email＋前綴）、命中抽前後 250 字
   上下文（≤15 片段）。誕生原因：#48 agent 讀了備份檔但答案線索被 context

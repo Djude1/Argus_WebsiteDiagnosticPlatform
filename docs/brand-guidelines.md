@@ -2,6 +2,8 @@
 
 > 程式碼的單一事實來源是 `frontend/src/styles/03-tokens.css`（token）與 `frontend/src/styles/05-brand.css`（品牌元件）。本文件說明「為什麼」與「怎麼用」。
 
+> **適用範圍（2026-09-28 起）**：本規範適用於登入後的會員區、掃描報告與後台。公開頁（`.public-shell`：首頁、快速檢查、購買、下載、報告查驗、評論）維持改版前的視覺——系統字、深藍＋科技青——並以 `73-public-refine.css` 做克制整理，見 `frontend/CLAUDE.md` 樣式規範。
+
 ## 1. 品牌概念
 
 **Argus Panoptes——百眼巨人，永不同時闔眼的守望者。**

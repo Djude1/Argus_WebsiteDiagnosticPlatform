@@ -139,7 +139,12 @@ function ScanJobForm({ onCreated }) {
   const coinPerCategory = wallet?.coin_per_category ?? 2;
   const coinPerPage = coinPerCategory * categories.length;
   const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
-  const estimatedCost = effectivePages * coinPerPage;
+  // AI Agent 擬真使用者 UX 測試附加費：僅全網站掃描且勾 UX 時計收（後端 agent 關閉時回 0）。
+  const agentUxFee =
+    scope !== "single" && categories.includes("ux")
+      ? (wallet?.agent_ux_fee ?? 0)
+      : 0;
+  const estimatedCost = effectivePages * coinPerPage + agentUxFee;
   const balance = wallet?.balance ?? 0;
   const insufficient = balance < estimatedCost;
   const securitySelected = categories.includes("security");
@@ -353,6 +358,9 @@ function ScanJobForm({ onCreated }) {
           </div>
           <p className="scan-cost-formula">
             {effectivePages} 頁 × {categories.length} 維 × {coinPerCategory} coin
+            {agentUxFee > 0 && (
+              <> ＋ AI Agent UX 測試 {agentUxFee} coin</>
+            )}
           </p>
           <dl className="scan-cost-rows">
             <div>

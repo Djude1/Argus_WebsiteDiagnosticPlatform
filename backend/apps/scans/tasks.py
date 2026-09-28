@@ -339,6 +339,8 @@ def run_scan_job(self, scan_job_id: int) -> dict:
                         element_boxes=page_data["element_boxes"],
                         html_only=page_data["html_only"],
                         layout_metrics=page_data.get("layout_metrics") or {},
+                        ux_signals=page_data.get("ux_signals") or {},
+                        js_errors=page_data.get("js_errors") or [],
                     ),
                     categories=scan_job.effective_categories,
                 )
@@ -737,8 +739,20 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         # Task 6：Agent 在 Kali fallback 之前執行；agent 確認的 security finding 餵進 scoring。
         agent_meta = {}
         agent_result = None
-        if settings.ARGUS_AGENT_ENABLED and execution_plan.run_agent:
+        if settings.ARGUS_AGENT_ENABLED and (
+            execution_plan.run_agent or execution_plan.run_agent_ux
+        ):
             raise_if_cancelled(scan_job_id)
+            # 送出表單的授權：主動授權掃描（run_agent）本就已驗證；被動 UX 測試
+            # 只有在目標網域已通過所有權驗證（或 staff 測試旁路）時才允許實際送出。
+            from apps.scans.services import get_hostname, user_owns_domain
+
+            _scan_hostname = get_hostname(
+                scan_job.normalized_url or scan_job.original_url or ""
+            )
+            may_submit_forms = bool(execution_plan.run_agent) or user_owns_domain(
+                scan_job.user, _scan_hostname
+            )
             agent_phase_started = timezone.now().isoformat()
             scan_job.status = ScanJob.Status.AGENT_TESTING
             scan_job.progress = {
@@ -753,7 +767,9 @@ def run_scan_job(self, scan_job_id: int) -> dict:
 
                 agent_result = _run_async(
                     lambda: run_agent_for_scan(
-                        scan_job, recon_intel=discovered_endpoints
+                        scan_job,
+                        recon_intel=discovered_endpoints,
+                        may_submit_forms=may_submit_forms,
                     )
                 )
                 if agent_result:

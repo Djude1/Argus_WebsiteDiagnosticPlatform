@@ -14,6 +14,7 @@ class ScanExecutionPlan:
     run_katana: bool
     run_exposure: bool
     run_agent: bool
+    run_agent_ux: bool
     run_kali: bool
 
 
@@ -30,6 +31,12 @@ def build_scan_execution_plan(scan_job: ScanJob) -> ScanExecutionPlan:
     )
     site_active = active_authorized and scope == "site"
 
+    # AI Agent 擬真使用者 UX 測試：只要是全網站掃描且勾選 UX 維度就跑，不需要
+    # 主動授權（純 UX 測試不做破壞性操作）。是否可實際送出表單另由網域驗證決定，
+    # 見 runner.run_agent_for_scan 的 may_submit_forms。單頁掃描不跑（一頁不足以
+    # 測流程，且要省 LLM token）。
+    run_agent_ux = scope == "site" and "ux" in scan_job.effective_categories
+
     return ScanExecutionPlan(
         scope=scope,
         active_authorized=active_authorized,
@@ -37,5 +44,6 @@ def build_scan_execution_plan(scan_job: ScanJob) -> ScanExecutionPlan:
         run_katana=site_active,
         run_exposure=site_active,
         run_agent=site_active,
+        run_agent_ux=run_agent_ux,
         run_kali=active_authorized,
     )
