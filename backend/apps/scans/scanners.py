@@ -704,7 +704,15 @@ def analyze_seo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list
                 title="Meta description 缺失或長度不理想",
                 description="Meta description 缺失、過短或過長，會影響搜尋摘要品質。",
                 remediation="補上清楚摘要頁面價值的 description，建議約 50 到 160 字元。",
-                evidence=f"description_length={description_length}",
+                # 附上實際內容開頭，讀者才能自行核對（例如 CMS 把整篇文章塞進 description）
+                evidence=(
+                    f"description_length={description_length}"
+                    + (
+                        f", 開頭：「{parser.meta_description.strip()[:60]}」"
+                        if description_length
+                        else "（頁面沒有 meta description）"
+                    )
+                ),
                 selector='meta[name="description"]',
                 impact_area="metadata",
                 priority_score=38,
@@ -840,10 +848,30 @@ def analyze_aeo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list
     return findings
 
 
+_BLOCK_SPLIT = re.compile(
+    r"<(?:/?(?:p|div|li|dd|dt|td|th|blockquote|section|article|h[1-6])\b[^>]*|br\s*/?)>",
+    re.IGNORECASE,
+)
+
+
+def _text_block_count(html: str) -> int:
+    """可獨立引用的文字區塊數：以區塊標籤切段，計算去標籤後 40 字以上的段落。
+
+    舊版只數 <p>，許多 CMS 以 <div>／<br> 排版，會出現「全文 9000 字卻只有 1 段」的誤判。
+    """
+    body = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", html, flags=re.IGNORECASE | re.DOTALL)
+    count = 0
+    for chunk in _BLOCK_SPLIT.split(body):
+        text = re.sub(r"\s+", "", re.sub(r"<[^>]+>", " ", chunk))
+        if len(text) >= 40:
+            count += 1
+    return count
+
+
 def analyze_geo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list[dict]:
     findings: list[dict] = []
     text = re.sub(r"<[^>]+>", " ", page_input.html or "")
-    paragraph_count = len(re.findall(r"<p[\s>]", page_input.html or "", flags=re.IGNORECASE))
+    paragraph_count = _text_block_count(page_input.html or "")
     json_ld_text = "\n".join(parser.json_ld_blocks).lower()
     if not parser.json_ld_blocks:
         findings.append(
@@ -914,7 +942,10 @@ def analyze_geo(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> list
                     "可補充更清楚的段落、定義、數據來源與具體事實。"
                 ),
                 remediation="增加清楚的小段落、定義、數據來源與具體事實，讓內容更容易被引用。",
-                evidence=f"paragraph_count={paragraph_count}, text_length={len(text.strip())}",
+                evidence=(
+                    f"text_block_count={paragraph_count}（40 字以上的文字區塊）, "
+                    f"text_length={len(text.strip())}"
+                ),
                 selector="main",
                 bounding_box=page_input.element_boxes.get("main"),
                 impact_area="chunkability",
@@ -1058,53 +1089,172 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     if total == 0 and not dev_artifacts:
         return []
 
-    # 每類最多列前 50 筆，避免 evidence 欄位被個資灌爆（make_finding 還會截到 4000 字）
-    pii_labels = [
-        ("email", "email"),
-        ("mobile", "台灣手機"),
-        ("national_id", "身分證號"),
-        ("credit_card", "信用卡號"),
-    ]
-    parts: list[str] = []
-    for key, label in pii_labels:
-        values = pii[key]
-        if values:
-            comment_note = ""
-            if comment_only_counts.get(key):
-                comment_note = f"，其中 {comment_only_counts[key]} 筆在 HTML 註解中"
-            parts.append(f"{label}（{len(values)} 筆{comment_note}）：{', '.join(values[:50])}")
+    # 依「資料種類 × 出現脈絡」分級，而不是看到個資就一律高風險（2026-09-28 報告審查）：
+    # 身分證、信用卡幾乎不會刻意公開 → 高風險；手機、非本網域 Email、藏在 HTML 註解的
+    # 資料 → 中風險；網站自己網域的 Email 或 mailto/tel 連結 → 多半是刻意公開的聯絡資訊，
+    # 只列為資訊提示請網站主確認，不當成外洩。
+    page_url = page_input.final_url or page_input.url or ""
+    site_domain = _registrable_domain(urlparse(page_url).hostname or "")
+    mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
+    tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
+    comment_values = {v for vals in pii_comments.values() for v in (vals or [])}
 
-    # B5: 開發者預留字串獨立一行顯示（CTF flag / TODO placeholder / Lorem 等）
+    sensitive: list[str] = []
+    personal: list[str] = []
+    public_contact: list[str] = []
+    for label_key, label in (("national_id", "身分證號"), ("credit_card", "信用卡號")):
+        if pii[label_key]:
+            sensitive.append(_pii_line(label, pii[label_key], comment_only_counts[label_key]))
+    personal_emails, public_emails = [], []
+    for email in pii["email"]:
+        domain = _registrable_domain(email.rsplit("@", 1)[-1].lower())
+        in_comment = email in comment_values
+        if not in_comment and (email.lower() in mailto or (site_domain and domain == site_domain)):
+            public_emails.append(email)
+        else:
+            personal_emails.append(email)
+    personal_mobiles, public_mobiles = [], []
+    for mobile in pii["mobile"]:
+        if mobile not in comment_values and re.sub(r"\D", "", mobile) in tel:
+            public_mobiles.append(mobile)
+        else:
+            personal_mobiles.append(mobile)
+    if personal_emails:
+        personal.append(_pii_line("email（非本網域或位於 HTML 註解）", personal_emails, 0))
+    if personal_mobiles:
+        personal.append(_pii_line("台灣手機", personal_mobiles, comment_only_counts["mobile"]))
     if dev_artifacts:
-        parts.append(
+        personal.append(
             f"⚠️ 開發者預留字串（{len(dev_artifacts)} 筆）：{', '.join(dev_artifacts[:50])}"
         )
+    if public_emails:
+        public_contact.append(_pii_line("email（本網域或 mailto 連結）", public_emails, 0))
+    if public_mobiles:
+        public_contact.append(_pii_line("手機（tel 連結）", public_mobiles, 0))
 
-    evidence = "\n".join(parts)
-
-    return [
-        make_finding(
-            category=Finding.Category.SECURITY,
-            severity=Finding.Severity.HIGH,
-            title="頁面外洩個人資料 (PII)",
-            description=(
-                "⚠️ 此項目顯示原始個資，請依個資法妥善處理本報告。\n"
-                f"在頁面內容中偵測到 {total} 筆疑似個資（email、手機、身分證、信用卡）。"
-                "若這些資料非刻意公開（如聯絡資訊頁），可能違反個資法第 27 條的妥善保管義務，"
-                "並讓網站使用者面臨身分盜用、詐騙、釣魚等風險。"
-            ),
-            remediation=(
-                "1. 確認這些資料是否為刻意公開（如官方聯絡頁、開源貢獻者名單）。\n"
-                "2. 若為意外外洩，立即下架該頁或加上登入驗證。\n"
-                "3. 檢查成因：DB 直連 API 未驗證、debug 訊息洩漏、後台路徑未限制存取、"
-                "JSON-LD/comment 內嵌入個資、靜態檔案誤上傳等。\n"
-                "4. 對歷史快取（Google cache、Wayback Machine）發起移除請求。"
-            ),
-            evidence=evidence,
-            impact_area="data_exposure",
-            priority_score=85,
+    findings: list[dict] = []
+    if sensitive:
+        findings.append(
+            _pii_finding(
+                severity=Finding.Severity.HIGH,
+                rule_id="SECURITY_PII_8B24BB8B28",
+                title="頁面外洩個人資料 (PII)",
+                description=(
+                    "⚠️ 此項目顯示原始個資，請依個資法妥善處理本報告。\n"
+                    "頁面內容出現通過檢查碼驗證的身分證號或信用卡號。這類資料幾乎不會刻意公開，"
+                    "若非測試資料，可能違反個資法第 27 條的妥善保管義務，並讓當事人面臨冒用與詐"
+                    "騙風險。"
+                ),
+                lines=sensitive,
+                assessment={
+                    "condition": (
+                        "頁面對外公開、未經登入即可讀取，且內容含有真實的身分證號或信用卡號。"
+                    ),
+                    "observed": "頁面內容出現通過檢查碼驗證的號碼（見檢測依據，報告中已遮罩）。",
+                    "missing": (
+                        "檢查碼只能排除亂碼，無法證明號碼屬於真實當事人；也可能是測試資料或範例。"
+                    ),
+                    "verify": (
+                        "由網站管理者確認號碼來源與是否為真實當事人；確認為真實資料時才維持高風險。"
+                    ),
+                },
+                priority_score=85,
+            )
         )
-    ]
+    if personal:
+        findings.append(
+            _pii_finding(
+                severity=Finding.Severity.MEDIUM,
+                rule_id="security-pii-personal-contact",
+                title="頁面出現個人聯絡資料 (PII)",
+                description=(
+                    "⚠️ 此項目顯示原始個資，請依個資法妥善處理本報告。\n"
+                    "頁面出現手機號碼、非本網站網域的 Email，或藏在 HTML 註解中的資料。"
+                    "這些不一定是外洩（也可能是當事人同意公開的聯絡方式），但比網站官方聯絡信箱"
+                    "更可能屬於個人。"
+                ),
+                lines=personal,
+                assessment={
+                    "condition": (
+                        "資料屬於特定個人，且公開未經當事人同意（或不在網站的公開用途內）。"
+                    ),
+                    "observed": "頁面內容或 HTML 註解中出現上列資料（見檢測依據）。",
+                    "missing": (
+                        "無法從頁面判斷資料擁有者是否同意公開，以及公開是否為網站的既定用途。"
+                    ),
+                    "verify": (
+                        "請網站管理者確認每筆資料的擁有者與公開依據；HTML 註解中的資料通常不應出現"
+                        "在正式網站。"
+                    ),
+                },
+                priority_score=55,
+            )
+        )
+    if public_contact:
+        findings.append(
+            _pii_finding(
+                severity=Finding.Severity.INFO,
+                rule_id="security-pii-public-contact",
+                title="頁面公開了聯絡 Email／電話（請確認是否刻意公開）",
+                description=(
+                    "頁面出現網站自己網域的 Email，或以 mailto／tel 連結提供的聯絡方式。"
+                    "這通常是刻意公開的聯絡資訊，不屬於外洩；列出來是請你確認每一筆都是預期要公"
+                    "開的。"
+                ),
+                lines=public_contact,
+                assessment=None,
+                priority_score=10,
+            )
+        )
+    return findings
+
+
+_MAILTO_PATTERN = re.compile(r"mailto:([^\"'?>\s]+)", re.IGNORECASE)
+_TEL_PATTERN = re.compile(r"tel:([+\d][\d\s()-]{6,})", re.IGNORECASE)
+_SECOND_LEVEL_LABELS = {
+    "com", "edu", "gov", "org", "net", "ac", "co", "idv", "mil", "or", "ne", "go",
+}
+
+
+def _registrable_domain(host: str) -> str:
+    """近似的可註冊網域：imd.ntub.edu.tw → ntub.edu.tw、www.example.com → example.com。"""
+    labels = [label for label in (host or "").lower().strip(".").split(".") if label]
+    if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL_LABELS:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
+def _pii_line(label: str, values: list[str], comment_only: int) -> str:
+    note = f"，其中 {comment_only} 筆在 HTML 註解中" if comment_only else ""
+    return f"{label}（{len(values)} 筆{note}）：{', '.join(values[:50])}"
+
+
+def _pii_finding(*, severity, rule_id, title, description, lines, assessment, priority_score):
+    evidence_json = None
+    if assessment:
+        evidence_json = {
+            "type": "text",
+            "source": "rule_engine",
+            "excerpt": "\n".join(lines)[:1000],
+            "assessment": assessment,
+        }
+    return make_finding(
+        category=Finding.Category.SECURITY,
+        severity=severity,
+        rule_id=rule_id,
+        title=title,
+        description=description,
+        remediation=(
+            "1. 逐筆確認這些資料是否為刻意公開（如官方聯絡頁、承辦人信箱）。\n"
+            "2. 非刻意公開者：從頁面與 HTML 註解移除，或改為登入後才能查看。\n"
+            "3. 追查成因：後台資料直接輸出、除錯訊息、註解殘留、靜態檔案誤上傳等。\n"
+            "4. 已被搜尋引擎或網頁封存收錄時，向 Google、Wayback Machine 申請移除。"
+        ),
+        evidence="\n".join(lines),
+        evidence_json=evidence_json,
+        impact_area="data_exposure",
+        priority_score=priority_score,
+    )
 
 
 def visible_text_length(html: str) -> int:

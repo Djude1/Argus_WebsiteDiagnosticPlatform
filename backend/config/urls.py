@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from apps.scans.verify_views import verify_report
 from django.conf import settings
 from django.db import connection
@@ -35,7 +37,16 @@ def health_ready(request):
 
 
 def serve_review_image(request, path):
-    image_path = settings.MEDIA_ROOT / "review_images" / path
+    return _serve_media_image("review_images", path)
+
+
+def serve_avatar(request, path):
+    # 大頭貼一律是後端重新編碼的 PNG（apps.accounts.avatars），檔名為隨機 hex
+    return _serve_media_image("avatars", path)
+
+
+def _serve_media_image(subdir, path):
+    image_path = Path(settings.MEDIA_ROOT) / subdir / path
 
     if not image_path.is_file():
         raise Http404("找不到圖片。")
@@ -121,6 +132,13 @@ urlpatterns = [
         r"^media/review_images/(?P<path>[0-9a-f]{32}\.(?:jpg|png))$",
         serve_review_image,
         name="review-image",
+    ),
+
+
+    re_path(
+        r"^media/avatars/(?P<path>[0-9a-f]{32}\.png)$",
+        serve_avatar,
+        name="avatar-image",
     ),
 
 

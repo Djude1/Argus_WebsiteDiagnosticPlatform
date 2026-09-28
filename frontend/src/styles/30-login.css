@@ -308,3 +308,4 @@
 @media (prefers-reduced-motion: reduce) {
   .auth-spinner{ animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }
 }
+

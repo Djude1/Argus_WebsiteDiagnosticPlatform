@@ -290,6 +290,8 @@ REST_FRAMEWORK = {
         "password_reset": os.getenv("THROTTLE_PASSWORD_RESET", "5/hour"),
         "insights": os.getenv("THROTTLE_INSIGHTS", "30/hour"),
         "scan_create": os.getenv("THROTTLE_SCAN_CREATE", "30/hour"),
+        "avatar_upload": os.getenv("THROTTLE_AVATAR_UPLOAD", "20/hour"),
+        "partner_inquiry": os.getenv("THROTTLE_PARTNER_INQUIRY", "5/hour"),
     },
 }
 

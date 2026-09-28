@@ -98,8 +98,8 @@ class ReportPayloadSchemaTests(TestCase):
         self.assertEqual(len(categories), 5)
         self.assertIsNone(categories["使用者體驗"])
 
-    def test_findings_are_numbered_in_severity_order(self):
-        """report_render 依嚴重度分組顯示，編號必須先排好才會連續。"""
+    def test_findings_are_numbered_security_first_then_by_severity(self):
+        """資安與內容分段顯示：先資安、再內容，各段內依嚴重度；編號必須先排好才會連續。"""
         for index, severity in enumerate(["low", "critical", "medium"]):
             Finding.objects.create(
                 scan_job=self.scan_job, page=None, severity=severity,
@@ -111,8 +111,12 @@ class ReportPayloadSchemaTests(TestCase):
         findings = self._payload()["findings"]
 
         self.assertEqual([f["id"] for f in findings], ["4.1", "4.2", "4.3", "4.4"])
-        self.assertEqual(findings[0]["severity"], "嚴重風險")
-        self.assertEqual(findings[-1]["severity"], "低風險")
+        self.assertEqual(
+            [f["group"] for f in findings], ["security", "content", "content", "content"],
+        )
+        self.assertEqual(
+            [f["severity"] for f in findings[1:]], ["嚴重風險", "中風險", "低風險"],
+        )
 
     def test_authorization_never_leaks_ip_or_user_agent(self):
         AuthorizationConsent.objects.create(

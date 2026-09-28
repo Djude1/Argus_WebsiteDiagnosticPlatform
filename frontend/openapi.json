@@ -775,6 +775,208 @@
                 }
             }
         },
+        "/api/admin/cms/partner-inquiries/": {
+            "get": {
+                "operationId": "admin_cms_partner_inquiries_list",
+                "description": "商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。",
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PartnerInquiryListResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/cms/partner-inquiries/{id}/": {
+            "get": {
+                "operationId": "admin_cms_partner_inquiries_retrieve",
+                "description": "商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this partner inquiry.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PartnerInquiryAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "admin_cms_partner_inquiries_update",
+                "description": "商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this partner inquiry.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PartnerInquiryAdminRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PartnerInquiryAdminRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PartnerInquiryAdminRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PartnerInquiryAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "admin_cms_partner_inquiries_partial_update",
+                "description": "商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this partner inquiry.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPartnerInquiryAdminRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPartnerInquiryAdminRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPartnerInquiryAdminRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PartnerInquiryAdmin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "admin_cms_partner_inquiries_destroy",
+                "description": "商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this partner inquiry.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/admin/cms/plans/": {
             "get": {
                 "operationId": "admin_cms_plans_list",
@@ -2715,6 +2917,42 @@
                 }
             }
         },
+        "/api/auth/me/avatar/": {
+            "post": {
+                "operationId": "auth_me_avatar_create",
+                "description": "上傳（POST，multipart 欄位 `avatar`）或移除（DELETE）自己的大頭貼。\n\n圖片由 `apps.accounts.avatars.process_avatar` 解碼後重新編碼成 256×256 PNG；\n換圖或移除時一併刪掉舊檔。",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "auth_me_avatar_destroy",
+                "description": "上傳（POST，multipart 欄位 `avatar`）或移除（DELETE）自己的大頭貼。\n\n圖片由 `apps.accounts.avatars.process_avatar` 解碼後重新編碼成 256×256 PNG；\n換圖或移除時一併刪掉舊檔。",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/auth/password-reset/confirm/": {
             "post": {
                 "operationId": "auth_password_reset_confirm_create",
@@ -2987,6 +3225,26 @@
         "/api/content/milestones/": {
             "get": {
                 "operationId": "content_milestones_retrieve",
+                "tags": [
+                    "content"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/content/partner-inquiries/": {
+            "post": {
+                "operationId": "content_partner_inquiries_create",
+                "description": "公開的商業合作洽談表單（/partners）。",
                 "tags": [
                     "content"
                 ],
@@ -6538,6 +6796,133 @@
                     }
                 }
             },
+            "PartnerInquiryAdmin": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "company": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "site_count": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "預估網站數量（選填，自由文字）"
+                    },
+                    "partner_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PartnerTypeEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "partner_type_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "message": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/PartnerInquiryAdminStatusEnum"
+                    },
+                    "status_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "admin_note": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "admin_note",
+                    "company",
+                    "created_at",
+                    "email",
+                    "id",
+                    "message",
+                    "name",
+                    "partner_type",
+                    "partner_type_label",
+                    "phone",
+                    "site_count",
+                    "status",
+                    "status_label",
+                    "updated_at"
+                ]
+            },
+            "PartnerInquiryAdminRequest": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/PartnerInquiryAdminStatusEnum"
+                    },
+                    "admin_note": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PartnerInquiryAdminStatusEnum": {
+                "enum": [
+                    "new",
+                    "contacted",
+                    "closed"
+                ],
+                "type": "string",
+                "description": "* `new` - 待處理\n* `contacted` - 已聯繫\n* `closed` - 已結案"
+            },
+            "PartnerInquiryListResponse": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PartnerInquiryAdmin"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
+            "PartnerTypeEnum": {
+                "enum": [
+                    "agency",
+                    "operations",
+                    "platform",
+                    "other"
+                ],
+                "type": "string",
+                "description": "* `agency` - 網站開發與數位代理\n* `operations` - 維運與技術服務\n* `platform` - 平台與技術合作\n* `other` - 其他"
+            },
             "PatchedAdminModerateReviewRequest": {
                 "type": "object",
                 "properties": {
@@ -6624,6 +7009,17 @@
                     "released_at": {
                         "type": "string",
                         "format": "date-time"
+                    }
+                }
+            },
+            "PatchedPartnerInquiryAdminRequest": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/PartnerInquiryAdminStatusEnum"
+                    },
+                    "admin_note": {
+                        "type": "string"
                     }
                 }
             },

@@ -59,6 +59,14 @@ CATEGORY_DISPLAY = {
     "ux": "使用者體驗",
 }
 
+# 分數的算法要寫給讀者看，否則「71 分」無從檢驗（值與 scanners.calculate_scores 同步）
+SCORE_NOTE = (
+    "分數怎麼算：每個分類從 100 分起算，依該分類的發現扣分——嚴重風險 60、高風險 35、中風險 12、"
+    "低風險 4、資訊提示 0；同一條規則在同一分類只扣一次（出現在多頁不重複扣）。"
+    "分類分數＝100 × e^(−扣分總和 ÷ 50)，扣越多下降越慢、不會直接歸零；"
+    "總分是「已評估」各分類分數的平均，每個分類權重相同。"
+)
+
 SCORE_BANDS = [
     (80, "良好", "持續維持即可，建議定期複檢。"),
     (60, "需改善", "有幾項體質問題值得排入維護排程。"),
@@ -122,13 +130,13 @@ SEVERITY_URGENCY = {
 }
 
 CATEGORY_VERIFY = {
-    "security": "修補後重新執行一次 Argus 掃描，確認此項目不再出現。"
-                "若要立即自行確認，可請你的網站維護人員依上方「怎麼修」的步驟逐項檢查。",
-    "seo": "修補後重新執行一次 Argus 掃描確認此項目消失，"
-           "並可用 Google Search Console 觀察後續的索引狀態。",
-    "aeo": "修補後重新執行一次 Argus 掃描確認此項目消失。",
-    "geo": "修補後重新執行一次 Argus 掃描確認此項目消失。",
-    "ux": "修補後重新執行一次 Argus 掃描確認此項目消失，並請實際操作一次該流程。",
+    "security": "用檢測依據中的網址與請求重現一次（瀏覽器開發者工具或 curl），"
+                "確認原本觀察到的回應已不存在；再重新掃描作為輔助確認。",
+    "seo": "開啟逐頁證據列出的網址，以「檢視原始碼」確認對應標記已修正；"
+           "可再用 Google Search Console 觀察後續索引狀態。",
+    "aeo": "開啟逐頁證據列出的網址，確認問答內容已改用明確的問答結構（dl／details 或 FAQ 區塊）。",
+    "geo": "開啟逐頁證據列出的網址，以「檢視原始碼」確認對應的結構或內容已補上。",
+    "ux": "用手機或開發者工具的行動版模式開啟逐頁證據列出的網址，實際操作一次確認問題已不存在。",
 }
 
 # 「為什麼要在意」按 rule_id 客製：給出具體後果（會被怎樣、影響誰、花多少成本），
@@ -136,6 +144,9 @@ CATEGORY_VERIFY = {
 # CATEGORY_IMPACT，再退回 generic。report.py 2026-08-30 後新增。
 RULE_IMPACT = {
     # --- security ---
+    "security-pii-personal-contact":
+        "若這些資料不是當事人同意公開，可能構成個資法上的不當揭露，並讓當事人收到詐騙或騷擾；"
+        "若是刻意公開的聯絡方式，則不屬於外洩。需要網站管理者逐筆確認。",
     "SECURITY_PII_8B24BB8B28":
         "這類個資外洩通常會登上新聞。依台灣《個資法》第 27 條與第 29 條，"
         "未盡安全維護義務可處新台幣 5 萬至 50 萬元罰鍰；若個資被盜用，"
@@ -193,21 +204,21 @@ RULE_IMPACT = {
 
     # --- geo / aeo ---
     "GEO_JAVASCRIPT_EEE24E55B4":
-        "ChatGPT Search、Perplexity、Google AI Overview 等生成式搜尋引擎"
-        "不會執行 JavaScript——它們只看伺服器回傳的初始 HTML。你的核心內容"
-        "如果只在 JavaScript 渲染後才出現，等於在新的搜尋入口上完全隱形。"
-        "目前的客戶若改用 AI 搜尋，你的網站就搜不到。",
+        "部分 AI 爬蟲與搜尋服務不執行、或只有限度執行 JavaScript（各家做法不同且會變動）。"
+        "主要內容若只在 JavaScript 執行後才出現，這些系統較可能讀不到或讀不完整；"
+        "Google 會執行 JavaScript，但時間較晚、資源有限。這不代表網站不會被搜尋到，"
+        "而是讓「不執行 JavaScript 的讀取者」也能拿到主要內容，降低被遺漏的機會。",
     "GEO_JSON_LD_8B386F956C":
-        "沒有結構化資料時，AI 搜尋引擎只能用「猜的」方式理解你的頁面主題。"
-        "加上 JSON-LD 後，AI 能精準辨識 Organization、Product、FAQ 等實體，"
-        "回答使用者問題時更可能引用你。",
+        "結構化資料讓搜尋引擎與 AI 更明確知道頁面在講什麼實體（組織、文章、活動、FAQ）。"
+        "沒有它網站仍會被收錄與引用，只是系統要自行從內文推斷；是提升理解穩定度的建議，"
+        "不是被搜尋或引用的必要條件。",
     "GEO_GENERAL_0576832FB5":
         "沒有 <main> 等語意標籤時，AI 與螢幕閱讀器只能看到整頁文字流，"
         "難以分辨「這段是導航」「那段是內容」。加上後，你的核心內容會更"
         "容易被擷取為引用片段。",
     "GEO_GENERAL_A8C8023032":
-        "AI 引用內容時偏好「可獨立成立的段落」——有明確主題、定義、數據來源。"
-        "段落太短（< 50 字）或只有一句話時，AI 會跳過不引用。",
+        "AI 摘要與引用時，較容易取用「可獨立成立的段落」——有明確主題、定義、數據來源。"
+        "這是 Argus 依內容結構提出的建議，不是任何搜尋服務公布的門檻。",
     "GEO_ROBOTS_TXT_AI_AFFA24D778":
         "robots.txt 阻擋了 GPTBot / ClaudeBot / Google-Extended，代表這些"
         "AI 系統不會抓你的內容做訓練與引用——會大幅降低你在 AI 回答中的"
@@ -219,16 +230,20 @@ RULE_IMPACT = {
 # 而不是叫使用者「再掃一次 Argus」。
 RULE_VERIFY = {
     "SECURITY_PII_8B24BB8B28":
-        "在終端機執行 curl -s https://你的網域 | grep -E \"@|09[0-9]{8}\"，"
-        "應找不到明文個資。或用瀏覽器開發者工具搜尋頁面原始碼，確認電話、"
-        "Email、身分證字號都已遮罩或移除。",
+        "逐一開啟「逐頁證據」列出的網址，用瀏覽器「檢視原始碼」搜尋報告中遮罩前的號碼開頭，"
+        "確認已移除（含 HTML 註解）。",
+    "security-pii-personal-contact":
+        "逐一開啟「逐頁證據」列出的網址，確認每筆資料都有公開依據；不應公開者移除後，"
+        "用「檢視原始碼」確認頁面與 HTML 註解中都已找不到。",
     "SECURITY_CSRF_TOKEN_1BC47D8B6C":
         "檢視表單 HTML（瀏覽器右鍵 → 檢視原始碼）：每個 method=POST 的表單"
         "都應該有隱藏欄位如 csrfmiddlewaretoken 或 _csrf_token，"
         "且值會隨 session 更新。或用 Burp Suite 攔截請求確認。",
     "SECURITY_CSP_BD010B5BE0":
-        "在終端機執行 curl -I https://你的網域 | grep -i content-security-policy，"
-        "應看到 CSP header。或開瀏覽器開發者工具 → Network → 點首頁 → 看 Response Headers。",
+        "不能只看標頭是否存在：執行 curl -sI https://你的網域 | grep -i content-security-policy，"
+        "確認①是 Content-Security-Policy（不是只有 -Report-Only）；②有 default-src 或 script-src；"
+        "③script-src 沒有 'unsafe-inline'／'unsafe-eval' 或 *；④有 object-src 'none' 與 "
+        "frame-ancestors。可貼到 https://csp-evaluator.withgoogle.com 檢查。",
     "SECURITY_HSTS_6A08D9EE20":
         "在終端機執行 curl -I https://你的網域 | grep -i strict-transport-security，"
         "應看到 max-age=31536000 之類的設定。或到 https://hstspreload.org 查詢你的網域。",
@@ -251,8 +266,8 @@ RULE_VERIFY = {
         "在每個頁面的 HTML 中應該只有一個 <h1> 標籤。用瀏覽器開發者工具的"
         "Elements 面板搜尋 <h1，確認數量 = 1。",
     "SEO_META_TITLE_0D9B1FE9E2":
-        "用瀏覽器開發者工具看每頁 <title> 的字元數（含空白），應在 20-60 字元。"
-        "或在 https://www.seoreviewtools.com/serp-preview/ 預覽 Google 顯示效果。",
+        "用瀏覽器開發者工具看每頁 <title> 的字數；Argus 的判定門檻是 10–65 字元"
+        "（與「怎麼修」相同）。可在 https://www.seoreviewtools.com/serp-preview/ 預覽顯示效果。",
     "SEO_META_DESCRIPTION_3ABE67FCFF":
         "用瀏覽器開發者工具看每頁 <meta name=description> 內容，"
         "應在 50-160 字元之間且與頁面主題相關。",
@@ -260,9 +275,11 @@ RULE_VERIFY = {
         "用瀏覽器開發者工具看每頁 HTML 應有 <link rel=canonical href=...>。"
         "或在 https://search.google.com/search-console 提交 sitemap 觀察索引狀態。",
     "GEO_JAVASCRIPT_EEE24E55B4":
-        "在終端機執行 curl -s https://你的網域 | wc -m，數字應接近「用瀏覽器"
-        "開啟後可見到的文字量」（差異 < 30%）。若 curl 看到的字數明顯少於"
-        "瀏覽器看到的，代表核心內容依賴 JavaScript。",
+        "比較時要用同一種文字擷取方式，不能拿 HTML 原始碼的字元數和畫面文字量比："
+        "在瀏覽器開發者工具停用 JavaScript（Settings → Debugger → Disable JavaScript）"
+        "後重新整理，確認主要內容仍然看得到。Argus 的判定方式是對初始 HTML 與執行 "
+        "JavaScript 後的頁面，都移除 script／style 與標籤、不計空白後比較文字數，"
+        "前者少於後者一半即列出。",
     "GEO_JSON_LD_8B386F956C":
         "用瀏覽器開發者工具的 Elements 面板搜尋 application/ld+json，"
         "應至少有一個 JSON-LD 腳本。到 https://validator.schema.org 驗證語法。",
@@ -270,14 +287,145 @@ RULE_VERIFY = {
         "用瀏覽器開發者工具的 Elements 面板搜尋 <main，應該找到一個 "
         "（且只有一個）。或到 https://wave.webaim.org 跑無障礙檢查。",
     "GEO_GENERAL_A8C8023032":
-        "每個頁面至少要有 3 段以上、每段 50 字以上的文字內容（不含導航、"
-        "選單、頁尾）。可在開發者工具 Console 執行 document.querySelectorAll('p').length "
-        "看段落數量。",
+        "Argus 以區塊標籤（p、div、li、td、標題等）切段，計算 40 字以上的文字區塊；"
+        "少於 2 塊或全頁文字少於 300 字時列出。修改後確認主要內容有 2 段以上、"
+        "各自成立的完整段落即可。",
     "GEO_ROBOTS_TXT_AI_AFFA24D778":
         "在終端機執行 curl -s https://你的網域/robots.txt，"
         "應不再有 Disallow: / 對 GPTBot、ClaudeBot、Google-Extended。"
         "或到 https://support.google.com/webmasters/answer/6062596 測試 robots 規則。",
 }
+
+
+# 內容類（SEO／AEO／GEO／UX）建議的「規則依據與適用限制」：讓讀者知道 Argus 用什麼門檻判斷、
+# 以及這個結論「不代表」什麼，避免把「缺少 llms.txt」讀成「網站不會被 AI 引用」。
+RULE_BASIS = {
+    "SEO_META_TITLE_0D9B1FE9E2":
+        "依據：title 長度 10–65 字元（常見搜尋結果可完整顯示的範圍）。"
+        "限制：長度影響顯示與點擊，不是排名的決定因素。",
+    "SEO_META_DESCRIPTION_3ABE67FCFF":
+        "依據：meta description 50–160 字元。限制：Google 不以 description 排名，"
+        "也可能改用頁面內文當搜尋摘要。",
+    "SEO_H1_48F33C13CC":
+        "依據：每頁恰好 1 個 H1。限制：HTML 允許多個 H1、搜尋引擎也能處理；"
+        "這是讓頁面主題更明確的慣例，不是硬性規定。",
+    "SEO_CANONICAL_URL_A7D2F47ED2":
+        "依據：頁面是否有 <link rel=canonical>。限制：沒有重複網址的頁面缺 canonical 影響很小。",
+    "SEO_OPEN_GRAPH_BF05E222E7":
+        "依據：og:title／og:description／og:image／og:url 是否齊全。"
+        "限制：只影響社群與通訊軟體的分享預覽，不影響搜尋排名。",
+    "SEO_ALT_97B655BF66":
+        "依據：img 是否有非空的 alt。限制：裝飾性圖片使用空 alt 是正確做法，"
+        "列出的數量可能包含這類圖片。",
+    "GEO_JSON_LD_8B386F956C":
+        "依據：頁面是否含 application/ld+json。限制：缺少結構化資料不代表網站不會被搜尋或 AI 引"
+        "用。",
+    "GEO_LLMS_TXT_C8A1E5700E":
+        "依據：網站根目錄是否有 /llms.txt。限制：llms.txt 是新興慣例，"
+        "尚非主要搜尋或 AI 服務公認的標準，缺少不會讓網站無法被引用。",
+    "GEO_JAVASCRIPT_EEE24E55B4":
+        "依據：初始 HTML 的可見文字少於執行 JavaScript 後的一半（兩者以相同方式擷取）。"
+        "限制：各 AI 服務對 JavaScript 的支援不同，無法推論特定服務一定讀不到。",
+    "GEO_GENERAL_A8C8023032":
+        "依據：40 字以上的文字區塊少於 2 塊，或全頁文字少於 300 字。"
+        "限制：這是 Argus 自訂的門檻，不是搜尋服務公布的標準。",
+    "AEO_GENERAL_75C5FFBB7D":
+        "依據：頁面出現多個問句，但沒有 dl／details 等問答結構。"
+        "限制：問句以標點與字詞推測，可能把一般疑問句也算進去。",
+}
+CATEGORY_BASIS = {
+    "seo": "依據：Argus 規則比對頁面標記。限制：這是可改善的項目，不代表網站不會被搜尋；"
+           "排名仍取決於內容品質與外部因素。",
+    "aeo": "依據：Argus 規則比對頁面的問答結構。限制：結構只影響答案被擷取的難易度，"
+           "不保證也不排除被 AI 引用。",
+    "geo": "依據：Argus 規則比對頁面的結構與可讀性訊號。限制：不代表網站不會被 AI 搜尋或引用。",
+    "ux": "依據：以行動版視窗實際量測（版面寬度、觸控目標、表單標籤、JavaScript 錯誤）。"
+          "限制：只涵蓋可自動量測的項目，不取代實際使用者測試。",
+}
+
+# 「判定依據」：高風險以上與 AI 觀察項目固定交代成立條件、實際觀察、尚缺證據與驗證方法，
+# 讓讀者判斷評級是否站得住（2026-09-28 報告審查）。掃描器可在 evidence_json["assessment"]
+# 提供更貼近個案的內容；沒有時用這裡的預設。
+_AGENT_ASSESSMENT = {
+    "condition": "攻擊者能利用這項觀察，取得原本拿不到的資訊、權限或繞過既有防護。",
+    "observed": "AI Agent 送出的請求與擷取到的回應內容（見檢測依據）。",
+    "missing": "AI 對影響的判讀未經工具重現或人工確認；觀察到資訊不等於能被利用。",
+    "verify": "依檢測依據重送相同請求確認回應一致，再由資安人員評估該資訊能否被實際利用。",
+}
+DEFAULT_ASSESSMENT = {
+    "agent-observed-security": _AGENT_ASSESSMENT,
+    "SECURITY_PII_8B24BB8B28": {
+        "condition": "頁面對外公開、未經登入即可讀取，且內容是非刻意公開的真實個人資料。",
+        "observed": "頁面內容出現符合個資格式的資料（見檢測依據，報告中已遮罩）。",
+        "missing": "規則無法判斷資料是否為刻意公開的聯絡資訊、測試資料，或是否屬於真實當事人。",
+        "verify": (
+            "由網站管理者逐筆確認資料來源與公開依據；確認為非刻意公開的真實個資時才維持此評級。"
+        ),
+    },
+    "kali-sqlmap-sqli": {
+        "condition": "參數可被注入並影響資料庫查詢。",
+        "observed": "sqlmap 在授權範圍內實際送出測試請求，並確認注入成立（見檢測依據）。",
+        "missing": "尚未評估可讀取或修改的資料範圍。",
+        "verify": "以參數化查詢修正後，重新執行授權掃描，確認 sqlmap 不再成立。",
+    },
+}
+
+AGENT_SEVERITY_CAP = "medium"
+
+
+def _source_label(finding) -> str:
+    """每筆發現的來源：規則、外部工具、主動探測或 AI Agent。"""
+    rule = finding.rule_id or ""
+    source = finding.evidence_source or ""
+    if rule.startswith("agent-") or source == "hermes_agent":
+        return "AI Agent 觀察（附擷取證據，未經工具或人工驗證）"
+    if rule.startswith("kali-"):
+        return "工具驗證（sqlmap 實際確認可利用）"
+    if "Template：" in (finding.evidence or ""):
+        return "外部工具（Nuclei 範本比對，未另行驗證）"
+    if source.startswith("katana"):
+        return "外部工具（Katana 探索）"
+    if source == "exposure_probe":
+        return "主動探測（實際請求常見敏感路徑）"
+    if rule.split("-")[0] in {"ssl", "dns", "cookie", "sri", "header", "js", "service", "exposure"}:
+        return "規則引擎（TLS、DNS、回應標頭等被動檢查）"
+    return "規則引擎（爬蟲擷取的頁面內容）"
+
+
+def _assessment_for(finding) -> dict | None:
+    evidence_json = finding.evidence_json if isinstance(finding.evidence_json, dict) else {}
+    if isinstance(evidence_json.get("assessment"), dict):
+        return evidence_json["assessment"]
+    rule = finding.rule_id or ""
+    if rule in DEFAULT_ASSESSMENT:
+        return DEFAULT_ASSESSMENT[rule]
+    if finding.severity in (Finding.Severity.HIGH, Finding.Severity.CRITICAL):
+        return {
+            "condition": f"「{finding.title}」描述的狀況確實存在於正式網站，且能被外部利用。",
+            "observed": "見檢測依據：規則或工具在掃描當下的實際輸出。",
+            "missing": "規則或範本比對的結果未經人工重現，可能有誤判。",
+            "verify": "依附錄 6.3 的方式重現；確認後再決定是否維持此評級。",
+        }
+    return None
+
+
+def _report_severity(finding) -> str:
+    """報告顯示的嚴重度：AI 觀察項目上限為中風險（與 agent 新版回報規則一致，涵蓋舊紀錄）。"""
+    if (finding.rule_id or "").startswith("agent-") and _severity_rank(finding.severity) < 2:
+        return AGENT_SEVERITY_CAP
+    return finding.severity
+
+
+def _report_evidence(finding, evidence: str) -> str:
+    """報告用證據：遮罩個資；Cookie 值只留頭尾（舊紀錄可能存了完整值）。"""
+    text = mask_pii_evidence(evidence or "")
+    if (finding.rule_id or "").startswith("cookie-"):
+        from apps.scans.security.cookie_scanner import mask_cookie_line
+
+        first, sep, rest = text.partition("\n")
+        if "已遮蔽" not in first:
+            text = mask_cookie_line(first) + sep + rest
+    return text
 
 
 def _impact_for(finding) -> str:
@@ -389,6 +537,8 @@ def _group_findings_for_report(findings) -> list[dict]:
         page_label = finding.page.final_url if finding.page else "站台層級"
         if page_label not in group["pages"]:
             group["pages"].append(page_label)
+            # 合併後仍保留每個位置自己的證據（例如每頁實際的 title），讀者才能逐一核對
+            group.setdefault("locations", []).append((page_label, finding.evidence or ""))
     return list(groups.values())
 
 
@@ -443,7 +593,17 @@ def _description_for_report(finding) -> str:
     lines = (finding.description or "").splitlines()
     while lines and lines[0].lstrip().startswith("⚠️"):
         lines.pop(0)
-    return "\n".join(lines).strip() or "（無）"
+    text = "\n".join(lines).strip()
+    # 舊版 agent 回報的措辭（內部代號＋「攻擊性驗證結論另見工具確認項」）改成讀者看得懂、
+    # 且明講未經驗證的說法；新版回報已直接用新措辭。
+    text = text.replace(
+        "Hermes-Agent 在實際操作與 probe 觀察中發現：", "AI Agent 在實際操作網站時觀察到："
+    )
+    text = text.replace(
+        "此為 AI agent 帶證據的觀察型回報；攻擊性驗證結論另見工具確認項。",
+        "這是 AI 的觀察與判讀，附有擷取的回應作為證據，但未經工具或人工驗證可被利用。",
+    )
+    return text or "（無）"
 
 
 def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
@@ -465,16 +625,55 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
 
 
 def _scan_scope_rows(scan_job: ScanJob) -> dict:
-    """掃描範圍。scope 一律取自 scan_plan，不在這裡重複「max_pages==1 代表單頁」。"""
-    scope = "單頁" if build_scan_execution_plan(scan_job).scope == "single" else "全網站"
-    return {
+    """掃描範圍。scope 一律取自 scan_plan，不在這裡重複「max_pages==1 代表單頁」。
+
+    「全網站」只是探索方式，不代表每一頁都檢查過：這裡明講實際檢查了幾頁、是否碰到頁數上限、
+    有多少頁被擋或回應錯誤，以及哪些檢查這次沒有執行（2026-09-28 報告審查）。
+    """
+    plan = build_scan_execution_plan(scan_job)
+    pages = scan_job.pages.all()
+    checked = pages.count()
+    blocked = pages.exclude(blocked_reason="").count()
+    http_errors = pages.filter(blocked_reason="", status_code__gte=400).count()
+    analysed = max(checked - blocked - http_errors, 0)
+    if plan.scope == "single":
+        scope = "單頁（只檢查輸入的網址）"
+    else:
+        scope = (
+            "全網站模式（從入口頁沿同網域連結探索，"
+            f"最多 {scan_job.max_pages} 頁、深度 {scan_job.max_depth}）"
+        )
+    checked_text = f"已檢查 {checked} 頁"
+    if plan.scope != "single" and checked >= scan_job.max_pages:
+        checked_text += "（已達頁數上限，網站可能還有未檢查的頁面）"
+    rows = {
         "掃描範圍": scope,
         "探測模式": scan_job.get_scan_mode_display(),
         "頁數上限": str(scan_job.max_pages),
         "連結深度上限": str(scan_job.max_depth),
-        "實際掃描頁數": str(scan_job.pages.count()),
+        "實際掃描頁數": checked_text,
+        "完整分析的頁數": f"{analysed} 頁",
+        "被阻擋／回應錯誤": f"被阻擋 {blocked} 頁、HTTP 4xx／5xx {http_errors} 頁（這些頁不做內"
+        "容分析）",
         "遵守 robots.txt": "是" if scan_job.respect_robots else "否",
     }
+    skipped = []
+    if not plan.run_nuclei:
+        skipped.append("Nuclei 範本探測")
+    if not plan.run_katana:
+        skipped.append("Katana 深度探索")
+    if not plan.run_exposure:
+        skipped.append("敏感檔案路徑探測")
+    if not (settings.ARGUS_AGENT_ENABLED and (plan.run_agent or plan.run_agent_ux)):
+        skipped.append("AI Agent 互動測試")
+    not_selected = [
+        CATEGORY_DISPLAY.get(c, c) for c in Finding.Category.values
+        if c not in scan_job.effective_categories
+    ]
+    if not_selected:
+        skipped.append("未勾選的面向：" + "、".join(not_selected))
+    rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
+    return rows
 
 
 def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
@@ -579,14 +778,20 @@ def build_report_payload(scan_job: ScanJob) -> dict:
     抽換（本次就是），而這些領域規則與它們的測試一行都不用動。
     """
     grouped = _group_findings_for_report(scan_job.findings.select_related("page").all())
-    # 依嚴重度排序後才編號：report_render 會依嚴重度分組顯示，先排好編號才會連續。
-    grouped.sort(key=lambda item: _severity_rank(item["finding"].severity))
+    # 資安與網站內容改善分開呈現：先資安、再內容（SEO／AEO／GEO／UX），各自依嚴重度排序；
+    # report_render 依此順序分段顯示，先排好編號才會連續。
+    grouped.sort(
+        key=lambda item: (
+            item["finding"].category != Finding.Category.SECURITY,
+            _severity_rank(_report_severity(item["finding"])),
+        )
+    )
 
     category_scores = scan_job.category_scores or {}
     previous = _previous_completed_scan(scan_job)
-    scan_date = (scan_job.completed_at or scan_job.created_at or timezone.now()).strftime(
-        "%Y-%m-%d"
-    )
+    scan_date = timezone.localtime(
+        scan_job.completed_at or scan_job.created_at or timezone.now()
+    ).strftime("%Y-%m-%d")
 
     findings_payload = []
     ref_by_rule: dict[str, str] = {}
@@ -596,23 +801,48 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         ref = f"4.{index}"
         if finding.rule_id:
             ref_by_rule[finding.rule_id] = ref
+        is_security = finding.category == Finding.Category.SECURITY
+        observed_at = timezone.localtime(
+            finding.created_at or scan_job.completed_at or timezone.now()
+        ).strftime("%Y-%m-%d %H:%M")
         entry = {
             "id": ref,
             "title": finding.title,
-            "severity": _render_severity(finding.severity),
+            "severity": _render_severity(_report_severity(finding)),
             "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
+            "group": "security" if is_security else "content",
             "scope": _pages_label(pages),
             "problem": _description_for_report(finding),
             "fix": finding.remediation or "（無）",
             # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
             # 殘缺數字命不中 regex，反而以明文殘留。
-            "evidence": mask_pii_evidence(finding.evidence or "")[:_MAX_EVIDENCE_CHARS],
+            "evidence": _report_evidence(finding, finding.evidence)[:_MAX_EVIDENCE_CHARS],
+            # 讓每筆結果都能被重新核對：規則、觀測時間與來源（規則／工具／AI）
+            "trace": (
+                f"規則 {finding.rule_id or '—'}　·　觀測 {observed_at}"
+                f"　·　來源：{_source_label(finding)}"
+            ),
         }
         if len(pages) > 1:
-            shown = "、".join(pages[:_MAX_LISTED_PAGES])
+            locations = item.get("locations") or []
+            entry["locations"] = [
+                {"url": url, "evidence": _report_evidence(finding, evidence)[:160]}
+                for url, evidence in locations[:_MAX_LISTED_PAGES]
+            ]
             if len(pages) > _MAX_LISTED_PAGES:
-                shown += f" 等，另 {len(pages) - _MAX_LISTED_PAGES} 處"
-            entry["urls"] = shown
+                entry["locations_more"] = (
+                    f"等，另 {len(pages) - _MAX_LISTED_PAGES} 處"
+                    "（完整清單見 Argus 網頁版的掃描結果）"
+                )
+        assessment = _assessment_for(finding)
+        if assessment:
+            entry["assessment"] = dict(assessment)
+            if _report_severity(finding) != finding.severity:
+                entry["assessment"]["missing"] += "（AI 觀察項目在報告中以中風險為上限呈現。）"
+        if not is_security:
+            entry["basis"] = RULE_BASIS.get(finding.rule_id or "") or CATEGORY_BASIS.get(
+                finding.category, ""
+            )
         findings_payload.append(entry)
 
     payload: dict = {
@@ -627,6 +857,7 @@ def build_report_payload(scan_job: ScanJob) -> dict:
             "headline": _headline(
                 scan_job, previous, category_scores, _resolved_since(previous, grouped)
             ),
+            "score_note": SCORE_NOTE,
             # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
             # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。
             "categories": [
@@ -642,7 +873,7 @@ def build_report_payload(scan_job: ScanJob) -> dict:
 
     if previous is not None:
         payload["summary"]["previous"] = {
-            "date": previous.completed_at.strftime("%m-%d"),
+            "date": timezone.localtime(previous.completed_at).strftime("%m-%d"),
             "score": previous.overall_score,
         }
         previous_rules = {
@@ -657,9 +888,13 @@ def build_report_payload(scan_job: ScanJob) -> dict:
             payload["summary"]["new_findings"] = appeared
 
     priorities = []
+    severity_by_title = {f["title"]: f["severity"] for f in findings_payload}
     for action in scan_job.top_actions or []:
         priorities.append({
-            "severity": _render_severity(action.get("severity", "")),
+            # 與發現項目卡片同一個嚴重度（例如 AI 觀察項目的上限），不各說各話
+            "severity": severity_by_title.get(
+                action.get("title"), _render_severity(action.get("severity", ""))
+            ),
             "problem": action.get("title", ""),
             "category": CATEGORY_DISPLAY.get(
                 action.get("category", ""), str(action.get("category", "")).upper()
@@ -719,30 +954,46 @@ def build_report_payload(scan_job: ScanJob) -> dict:
                 [f["id"] for f in findings_payload], grouped, strict=True
             )
         ]
-    # 通用說明與 AI 用法一定要在，per-rule 驗收指令是補充而不是取代——只給
-    # per-rule 的話，沒有對應 rule 的發現就完全沒有驗證指引，AI 用法也整段消失。
-    verify_notes = [
-        "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；"
-        "下一份報告的摘要會列出這次解決了哪些項目。",
-        "想更深入了解任何一項：把該項的「問題是什麼」「怎麼修」「檢測依據」"
-        "三段文字複製起來，貼給 ChatGPT、Claude 等 AI 助手並補一句"
-        "「請說明這個問題的影響與具體修復步驟」即可。",
+    # 修補驗證要和原本的問題一一對應：每一項都給出手動確認方式（有 per-rule 指令用指令，
+    # 沒有就用分類通用說明）。並明講「重掃後沒出現」不等於修好——也可能是這次沒爬到或被擋。
+    appendix["verify_note"] = (
+        "完成修補後可重新執行一次 Argus 掃描，下一份報告的摘要會列出這次不再出現的項目。"
+        "但「重新掃描後沒有出現」不一定代表已修好：也可能是這次沒有爬到該頁、頁面被阻擋，"
+        "或掃描範圍與設定不同。請先對照新報告第 5 章，確認相同頁面確實有被檢查，"
+        "再用下表的方式逐項手動確認。"
+        "想更深入了解任何一項：把該項的「問題是什麼」「怎麼修」「檢測依據」三段文字複製起來，"
+        "貼給 ChatGPT、Claude 等 AI 助手並補一句「請說明這個問題的影響與具體修復步驟」即可。"
+    )
+    appendix["verify_items"] = [
+        {"ref": f["id"], "title": f["title"], "how": _verify_for(item["finding"])}
+        for f, item in zip(findings_payload, grouped, strict=True)
     ]
-    # 只取真正的 per-rule 驗收指令，不用 _verify_for()——它在沒有對應規則時會退回
-    # CATEGORY_VERIFY，而那段文字本來就含「重新執行一次 Argus 掃描」，會與上面的
-    # 通用說明重複。per-rule 是補充，通用說明已經涵蓋沒有對應規則的情況。
-    for item in grouped:
-        note = RULE_VERIFY.get(item["finding"].rule_id or "")
-        if note and note not in verify_notes:
-            verify_notes.append(note)
-    appendix["verify_note"] = " ".join(verify_notes)
+    agent_refs = [
+        f["id"] for f, item in zip(findings_payload, grouped, strict=True)
+        if _source_label(item["finding"]).startswith("AI Agent")
+    ]
+    method = [
+        "每一項發現都標示了來源（見卡片中的「來源」）：「規則引擎」是 Argus 以固定規則比對"
+        "爬蟲擷取的頁面、回應標頭、TLS 與 DNS；「外部工具」是 Nuclei 等工具的範本比對結果；"
+        "「主動探測」是實際對網站送出請求所得。這些項目的判斷不使用 AI。",
+    ]
+    if agent_refs:
+        method.append(
+            f"第 {'、'.join(agent_refs)} 項由 AI Agent 在實際操作網站時提出，"
+            "附有擷取的回應作為證據，"
+            "但其影響判讀由 AI 產生、未經工具或人工驗證，請以「判定依據」自行確認；"
+            "報告中這類項目以中風險為上限。"
+        )
+    method.append("本報告未經人工逐項確認，文字內容未經 AI 改寫。")
+    appendix["method_note"] = "".join(method)
     consent = getattr(scan_job, "authorization_consent", None)
     if consent is not None:
         # 刻意不寫 ip_address / user_agent / 授權帳號：報告會被下載轉寄給第三方，
         # 授權人的 IP 與瀏覽器指紋是個資，對收件者零價值只增加外洩面。
         appendix["authorization"] = {
             "授權網域": consent.authorized_domain,
-            "授權時間": consent.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            # 與封面、頁首一致用本地時區（先前直接印 UTC，比封面時間早 8 小時）
+            "授權時間": timezone.localtime(consent.created_at).strftime("%Y-%m-%d %H:%M:%S"),
             "主動測試授權": "是" if consent.active_testing_authorized else "否（僅被動偵測）",
             "授權聲明": consent.statement,
         }

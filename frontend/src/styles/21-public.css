@@ -362,56 +362,56 @@
     .tech-tile-mark{ @apply h-9 w-9 p-2; }
   }
 
+  
+  
+  
+  
 
+  
+  
+  
+  
+  
+  
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+  
+  
+  
   @keyframes avatar-ring-spin {
     to { transform: rotate(360deg); }
   }
+  
+  
+  
+  
 
+  
+  
+  
+  
+  
+  
 
+  
+  
+  
+  
+  
+  
+  
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /* --- Purchase plan grid --- */
   .public-plan-grid{
@@ -556,12 +556,12 @@
     box-shadow: 0 6px 22px rgba(99, 102, 241, 0.5);
   }
 
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
 
   /* Scan demo 視窗（純 CSS 動畫） */
   .project-demo{
@@ -682,16 +682,16 @@
   .project-demo-finding.sev-low    .project-demo-finding-sev{ background: rgba(56, 189, 248, 0.22); color: #7dd3fc; }
   .project-demo-finding-title{ color: #e2e8f0; font-size: 0.95rem; }
 
-
-
-
-
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /* --- Purchase 對比表 + 最終 CTA --- */
   .public-plan-note{

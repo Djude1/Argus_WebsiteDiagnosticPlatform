@@ -8,18 +8,18 @@
   }
   .admin-panel-head-actions a.admin-btn{ text-decoration: none; }
 
-
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
+  
 
   /* AdminMiniChart：所有顏色走 class，不在 JSX 寫死 */
   .admin-mini-chart{ display: block; overflow: visible; }
   .admin-chart-grid-line{ stroke: var(--admin-chart-grid); stroke-dasharray: 2 4; }
-
+  
   .admin-chart-series{ --admin-series: var(--admin-chart-1); }
   .admin-chart-series.series-2{ --admin-series: var(--admin-chart-2); }
   .admin-chart-series.series-3{ --admin-series: var(--admin-chart-3); }
@@ -33,11 +33,11 @@
     stroke-linejoin: round;
     stroke-linecap: round;
   }
-
+  
   .admin-chart-hover-line{ stroke: var(--admin-border-strong); stroke-width: 1; }
   .admin-chart-hit{ fill: transparent; cursor: crosshair; }
-
-
+  
+  
   .admin-chart-wrap{ position: relative; }
 
   /* 小倍數：每序列一列，各自縱軸 */
@@ -87,7 +87,7 @@
     font-size: 10px;
     color: var(--admin-chart-axis);
   }
-
+  
 
   /* --- AI Provider 用量 --- */
   .admin-provider-bars{ @apply flex flex-col gap-3; }

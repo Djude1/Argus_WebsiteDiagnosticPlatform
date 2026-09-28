@@ -13,7 +13,7 @@
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
 - **後端數百項測試**（以 `manage.py test apps` 實跑為準）、ruff、frontend build 均由 CI quality gate 驗證
 - **兩個介面層**：
-  - 前台（使用者）：`/dashboard /scans /history /billing /settings`；公開頁 `/project /free-tools /purchase /download /reviews /verify`（團隊頁已於 2026-09-28 移除）（首次進站播粒子過場動畫）
+  - 前台（使用者）：`/dashboard /scans /history /billing /settings`；公開頁 `/project /free-tools /purchase /download /reviews /verify /partners`（團隊頁已於 2026-09-28 移除；`/partners` 為商業合作洽談頁）（首次進站播粒子過場動畫）
   - React 後台：`/admin/*`（**唯一後台**；dark cyan + 淺色內容；staff 可進、`📜 操作紀錄`/`📢 公告管理` 僅 superuser）
   - （django-admin 已於 2026-06 整併移除；管理員改走前台 email 登入）
 - **真實 PWA**：可一鍵安裝到桌面/手機主畫面

@@ -12,7 +12,13 @@ from rest_framework.response import Response
 from apps.admin_api.models import AdminAuditLog, log_admin_action
 from apps.billing.models import PricingPlan
 from apps.billing.services import estimate_scan_cost
-from apps.content.models import AppRelease, ProjectFeature, ProjectMilestone, TeamMember
+from apps.content.models import (
+    AppRelease,
+    PartnerInquiry,
+    ProjectFeature,
+    ProjectMilestone,
+    TeamMember,
+)
 
 
 class ProjectFeatureWriteSerializer(serializers.ModelSerializer):
@@ -193,3 +199,33 @@ class ProjectMilestoneViewSet(_AuditedModelViewSet):
     queryset = ProjectMilestone.objects.all().order_by("sort_order", "-date")
     serializer_class = ProjectMilestoneWriteSerializer
     action_kind = AdminAuditLog.Action.OTHER
+
+
+class PartnerInquiryAdminSerializer(serializers.ModelSerializer):
+    partner_type_label = serializers.CharField(source="get_partner_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PartnerInquiry
+        fields = [
+            "id", "name", "company", "email", "phone", "site_count",
+            "partner_type", "partner_type_label", "message",
+            "status", "status_label", "admin_note",
+            "created_at", "updated_at",
+        ]
+        # 洽談內容是對方填的，後台只更新處理狀態與備註
+        read_only_fields = [
+            "id", "name", "company", "email", "phone", "site_count",
+            "partner_type", "partner_type_label", "message", "status_label",
+            "created_at", "updated_at",
+        ]
+
+
+@_items_list_schema(PartnerInquiryAdminSerializer, "PartnerInquiryListResponse")
+class PartnerInquiryViewSet(_AuditedModelViewSet):
+    """商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。"""
+
+    queryset = PartnerInquiry.objects.all().order_by("-created_at")
+    serializer_class = PartnerInquiryAdminSerializer
+    action_kind = AdminAuditLog.Action.OTHER
+    http_method_names = ["get", "put", "patch", "delete", "head", "options"]

@@ -330,8 +330,8 @@
     color: var(--admin-text-muted);
   }
 
-
-
+  
+  
   @keyframes admin-status-pulse {
     0% { box-shadow: 0 0 0 0 var(--admin-tone-good-border); }
     70% { box-shadow: 0 0 0 6px transparent; }
@@ -358,12 +358,12 @@
     @apply grid gap-4;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
-
-
+  
+  
   .admin-stat-card.hero{ grid-column: span 2; padding: 24px; }
-
+  
   @media (max-width: 560px) {
-
+    
     .admin-stat-card.hero{ grid-column: span 1; }
   }
 
@@ -945,7 +945,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-
+  
   .admin-status::before,
   .admin-loading::before{ animation: none; }
   .admin-page{ animation: none; }

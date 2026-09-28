@@ -113,3 +113,45 @@ class AppRelease(models.Model):
 
     def __str__(self) -> str:
         return f"{self.platform} v{self.version}"
+
+
+class PartnerInquiry(models.Model):
+    """商業合作洽談（公開頁 /partners 的表單）。
+
+    任何人都能送出，所以只收洽談必要欄位；後台在「內容管理 → 合作洽談」檢視並更新處理狀態。
+    """
+
+    class PartnerType(models.TextChoices):
+        AGENCY = "agency", "網站開發與數位代理"
+        OPERATIONS = "operations", "維運與技術服務"
+        PLATFORM = "platform", "平台與技術合作"
+        OTHER = "other", "其他"
+
+    class Status(models.TextChoices):
+        NEW = "new", "待處理"
+        CONTACTED = "contacted", "已聯繫"
+        CLOSED = "closed", "已結案"
+        # 誘餌欄位有值的送出：照樣存檔（避免瀏覽器自動填入讓真人的洽談默默消失），由管理員判斷
+        SPAM = "spam", "疑似垃圾訊息"
+
+    name = models.CharField(max_length=80)
+    company = models.CharField(max_length=120)
+    email = models.EmailField()
+    partner_type = models.CharField(max_length=16, choices=PartnerType.choices)
+    message = models.TextField(max_length=2000)
+    phone = models.CharField(max_length=40, blank=True)
+    site_count = models.CharField(
+        max_length=40, blank=True, help_text="預估網站數量（選填，自由文字）",
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.NEW, db_index=True,
+    )
+    admin_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.company}（{self.name}）"

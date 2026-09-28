@@ -396,3 +396,104 @@ class LoginEventTests(APITestCase):
         event = user.login_events.get()
         self.assertEqual(event.method, LoginEvent.Method.GOOGLE)
         self.assertIsNotNone(event.ip_address)
+
+
+class AvatarUploadTests(APITestCase):
+    """大頭貼：重新編碼成 256×256 PNG、拒絕非圖片與過大檔、換圖刪舊檔。"""
+
+    def setUp(self):
+        import tempfile
+
+        cache.clear()
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media)
+        self.override.enable()
+        self.user = get_user_model().objects.create_user(
+            username="avatar@example.com", email="avatar@example.com", password="Str0ng-pass-123",
+        )
+        self.client.force_authenticate(self.user)
+        self.url = reverse("me-avatar")
+
+    def tearDown(self):
+        import shutil
+
+        self.override.disable()
+        shutil.rmtree(self.media, ignore_errors=True)
+
+    def _image(self, fmt="JPEG", size=(640, 320), name="me.jpg"):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", size, (20, 120, 200)).save(buf, format=fmt)
+        return SimpleUploadedFile(name, buf.getvalue(), content_type="image/jpeg")
+
+    def test_upload_reencodes_to_square_png(self):
+        from PIL import Image
+
+        response = self.client.post(self.url, {"avatar": self._image()}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertRegex(self.user.avatar.name, r"^avatars/[0-9a-f]{32}\.png$")
+        with Image.open(self.user.avatar.path) as img:
+            self.assertEqual(img.format, "PNG")
+            self.assertEqual(img.size, (256, 256))
+        self.assertEqual(response.data["avatar_url"], self.user.avatar.url)
+        me = self.client.get(reverse("me"))
+        self.assertEqual(me.data["avatar_url"], self.user.avatar.url)
+
+    def test_rejects_non_image(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        fake = SimpleUploadedFile("x.png", b"<script>alert(1)</script>", content_type="image/png")
+        response = self.client.post(self.url, {"avatar": fake}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
+
+    def test_rejects_unsupported_format_and_oversize(self):
+        gif = self._image(fmt="GIF", name="a.gif")
+        self.assertEqual(
+            self.client.post(self.url, {"avatar": gif}, format="multipart").status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        with patch("apps.accounts.avatars.AVATAR_MAX_BYTES", 10):
+            response = self.client.post(self.url, {"avatar": self._image()}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_replace_and_delete_remove_old_files(self):
+        import os
+
+        self.client.post(self.url, {"avatar": self._image()}, format="multipart")
+        self.user.refresh_from_db()
+        first = self.user.avatar.path
+        png = self._image(fmt="PNG", name="b.png")
+        self.client.post(self.url, {"avatar": png}, format="multipart")
+        self.user.refresh_from_db()
+        second = self.user.avatar.path
+        self.assertFalse(os.path.exists(first))
+        self.assertTrue(os.path.exists(second))
+        response = self.client.delete(self.url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.avatar)
+        self.assertFalse(os.path.exists(second))
+
+    def test_requires_login(self):
+        self.client.force_authenticate(None)
+        response = self.client.post(self.url, {"avatar": self._image()}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_serve_route_only_accepts_generated_names(self):
+        self.client.post(self.url, {"avatar": self._image()}, format="multipart")
+        self.user.refresh_from_db()
+        served = self.client.get(self.user.avatar.url)
+        self.assertEqual(served.status_code, 200)
+        self.assertEqual(served["X-Content-Type-Options"], "nosniff")
+        bad_paths = (
+            "/media/avatars/../db.sqlite3", "/media/avatars/ABC.png", "/media/avatars/x.png.html",
+        )
+        for bad in bad_paths:
+            self.assertEqual(self.client.get(bad).status_code, 404, bad)

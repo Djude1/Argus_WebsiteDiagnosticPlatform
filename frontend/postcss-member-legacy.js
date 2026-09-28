@@ -9,6 +9,9 @@
 //   3. 只作用在外層框架的規則（:root／html／body／.argus-app／.argus-main）改掛到 SCOPE 或
 //      「含有 SCOPE 的外層元素」上，其餘外層樣式維持新版。
 //   4. 舊 keyframes 一律加 ml- 前綴，避免與新版同名動畫互相覆蓋。
+//   5. 深色主題：舊版只有淺色。每條含顏色的規則自動產生一條 :root[data-theme="dark"] 版本，
+//      依明度對映（淺底→深藍底、深字→淺字、淺框→暗框），色相保留，所以狀態色仍可辨識；
+//      對映不理想的地方在 legacy-member/91-dark.css 手動覆寫。
 import selectorParser from "postcss-selector-parser";
 
 const SCOPE = ":is(.member-legacy, #argus-member-legacy-scope)";
@@ -61,6 +64,102 @@ function scopeSelector(selector) {
   return results.join(", ");
 }
 
+// ── 深色主題對映 ───────────────────────────────────────────────
+const BG_PROPS = /^(background|background-color|background-image|--tw-gradient-(from|via|to|stops))$/;
+const TEXT_PROPS = /^(color|fill|stroke|caret-color|text-decoration-color|-webkit-text-fill-color|accent-color)$/;
+const BORDER_PROPS = /^(border(-(top|right|bottom|left))?(-color)?|outline(-color)?|--tw-ring-color|--tw-divide-color|column-rule-color)$/;
+const COLOR_RE = /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)\s*(?:[,/]\s*(var\([^()]*\)|[\d.]+%?)\s*)?\)|\bwhite\b/gi;
+
+function parseChannel(v) {
+  return v.endsWith("%") ? (parseFloat(v) * 255) / 100 : parseFloat(v);
+}
+
+function toHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+function mapLightness(kind, h, s, l) {
+  const neutral = s < 0.2;
+  if (kind === "bg") {
+    if (l < 0.8) return null;
+    // 淺中性底 → 深藍面：越淺（白）對映越亮，保留「卡片比頁面亮」的層次
+    if (neutral) return [222, 0.5, Math.max(0.05, 0.12 - (1 - l) * 0.55)];
+    return [h, Math.min(s, 0.75) * 0.55, 0.13 + (1 - l) * 0.35];
+  }
+  if (kind === "text") {
+    if (l > 0.62) return null;
+    return [h, neutral ? Math.min(s, 0.2) : s, 0.97 - l * 0.62];
+  }
+  if (l < 0.8) return null; // border
+  if (neutral) return [215, 0.35, 0.16 + (1 - l) * 0.7];
+  return [h, Math.min(s, 0.75) * 0.6, 0.2 + (1 - l) * 0.6];
+}
+
+function mapColor(kind, match, hex, r, g, b, alpha) {
+  let rgb;
+  let a = alpha;
+  if (hex) {
+    const full = hex.length <= 4 ? hex.split("").map((c) => c + c).join("") : hex;
+    rgb = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+    if (full.length === 8) a = (parseInt(full.slice(6, 8), 16) / 255).toFixed(3);
+  } else if (r !== undefined) {
+    rgb = [parseChannel(r), parseChannel(g), parseChannel(b)];
+  } else {
+    rgb = [255, 255, 255];
+  }
+  const [h, s, l] = toHsl(...rgb);
+  const mapped = mapLightness(kind, h, s, l);
+  if (!mapped) return match;
+  const [nh, ns, nl] = mapped;
+  const hsl = `${nh.toFixed(1)} ${(ns * 100).toFixed(1)}% ${(Math.min(Math.max(nl, 0), 1) * 100).toFixed(1)}%`;
+  return a !== undefined ? `hsl(${hsl} / ${a})` : `hsl(${hsl})`;
+}
+
+function darkValue(prop, value) {
+  const kind = BG_PROPS.test(prop) ? "bg" : TEXT_PROPS.test(prop) ? "text" : BORDER_PROPS.test(prop) ? "border" : null;
+  if (!kind) return null;
+  const next = value.replace(COLOR_RE, (...m) => mapColor(kind, ...m.slice(0, 6)));
+  return next === value ? null : next;
+}
+
+function darkSelector(selector) {
+  if (/data-theme/.test(selector)) return null;
+  return selector
+    .split(/,(?![^(]*\))/)
+    .map((s) => s.trim())
+    .map((s) => (/^(:root|html)\b/.test(s) ? s.replace(/^(:root|html)/, "$1[data-theme=\"dark\"]") : `:root[data-theme="dark"] ${s}`))
+    .join(", ");
+}
+
+function addDarkClones(root) {
+  const rules = [];
+  root.walkRules((r) => {
+    if (r.parent?.type === "atrule" && /keyframes$/.test(r.parent.name)) return;
+    rules.push(r);
+  });
+  for (const r of rules) {
+    const selector = darkSelector(r.selector);
+    if (!selector) continue;
+    const decls = [];
+    r.each((node) => {
+      if (node.type !== "decl") return;
+      const value = darkValue(node.prop, node.value);
+      if (value) decls.push(node.clone({ value }));
+    });
+    if (decls.length) r.cloneAfter({ selector, nodes: decls });
+  }
+}
+
 export default function memberLegacyScope() {
   return {
     postcssPlugin: "argus-member-legacy-scope",
@@ -79,6 +178,8 @@ export default function memberLegacyScope() {
           d.value = d.value.replace(pattern, "$1ml-$2");
         });
       }
+
+      addDarkClones(root);
 
       root.walkRules((r) => {
         if (r.parent?.type === "atrule" && /keyframes$/.test(r.parent.name)) return;

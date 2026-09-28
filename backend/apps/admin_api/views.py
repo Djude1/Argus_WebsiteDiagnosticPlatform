@@ -26,6 +26,7 @@ from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from apps.accounts.avatars import avatar_url
 from apps.admin_api import system_metrics
 from apps.admin_api.models import AdminAuditLog, Announcement, log_admin_action
 from apps.admin_api.permissions import IsSuperuser
@@ -1314,6 +1315,8 @@ def me(request):
         "email": user.email,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
+        # 導覽列的帳號頭像也吃這支（前端 store.me）
+        "avatar_url": avatar_url(user),
     })
 
 

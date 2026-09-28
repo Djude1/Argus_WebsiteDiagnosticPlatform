@@ -1,0 +1,29 @@
+/* ========================================
+   深色主題的手動調整（不是 462848b 原有內容）
+   多數規則由 postcss-member-legacy.js 依明度自動產生深色版本；這裡只放自動對映不理想、
+   或需要和公開頁深色風格對齊的地方。寫法同一般 CSS，外掛會自動限縮範圍。
+   ======================================== */
+
+:root[data-theme="dark"] {
+  /* 表單控制項（select、checkbox、捲軸）改用瀏覽器深色外觀 */
+  color-scheme: dark;
+}
+
+/* 頁面底色與公開頁深色一致（深藍漸層），卡片自動對映後比底色亮一階 */
+:root[data-theme="dark"] .argus-app {
+  background: linear-gradient(180deg, #050a18 0%, #0b1325 100%);
+}
+
+/* 輸入框：舊版沒有設定底色（沿用瀏覽器預設），深色時統一成深藍輸入框 */
+:root[data-theme="dark"] .input,
+:root[data-theme="dark"] input[type="text"],
+:root[data-theme="dark"] input[type="url"],
+:root[data-theme="dark"] input[type="email"],
+:root[data-theme="dark"] input[type="tel"],
+:root[data-theme="dark"] input[type="number"],
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  background-color: #0b1426;
+  border-color: #24344f;
+  color: #e2e8f0;
+}

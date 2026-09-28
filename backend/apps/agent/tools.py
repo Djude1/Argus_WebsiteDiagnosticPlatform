@@ -2071,15 +2071,19 @@ class ToolExecutor:
         """把 agent 觀察到的資安問題組成 security finding（走 probe_sql_injection
         同一條 security_finding 落地鏈，由 loop → persist_agent_security_findings 寫入）。
 
-        觀察型回報的 severity 上限 high：critical 保留給工具確認的漏洞
-        （sqlmap confirmed），與計分契約「證據等級」的設計一致。
+        觀察型回報的 severity 上限 medium：AI 的觀察只證明「看到了什麼」，不證明能被利用；
+        high／critical 保留給工具確認的漏洞（sqlmap confirmed）。2026-09-28 報告審查時，
+        agent 把 WAF 攔截頁回顯的來源 IP 判成「伺服器內部 IP 外洩」並列高風險，即為此例。
         """
+        from urllib.parse import urlparse
+
         from apps.scans.scanners import make_finding
+        from apps.scans.security.ip_context import describe_ips
 
         severity = str(args.get("severity", "low")).lower()
-        if severity == "critical":
-            severity = "high"
-        if severity not in {"high", "medium", "low", "info"}:
+        if severity in {"critical", "high"}:
+            severity = "medium"
+        if severity not in {"medium", "low", "info"}:
             severity = "low"
         title = (args.get("title") or "").strip()[:255]
         description = (args.get("description") or "").strip()[:5000]
@@ -2093,17 +2097,35 @@ class ToolExecutor:
 
         safe_url = redact_url_query_values(url) if url else ""
         full_description = description + (f"（觀察端點：{safe_url}）" if safe_url else "")
+        hostname = urlparse(url or getattr(self.scan_job, "normalized_url", "") or "").hostname
+        ip_notes = describe_ips(evidence, hostname or "")
+        ip_text = ("\n證據中的 IP 自動核對：" + "；".join(ip_notes) + "。") if ip_notes else ""
         finding = make_finding(
             category="security",
             severity=severity,
             rule_id="agent-observed-security",
             title=title,
             description=(
-                f"Hermes-Agent 在實際操作與 probe 觀察中發現：{full_description} "
-                "此為 AI agent 帶證據的觀察型回報；攻擊性驗證結論另見工具確認項。"
+                f"AI Agent 在實際操作網站時觀察到：{full_description}{ip_text}\n"
+                "這是 AI 的觀察與判讀，附有擷取的回應作為證據，但未經工具或人工驗證可被利用。"
             ),
             remediation=remediation or "依證據內容對應的存取控制／資料保護強化。",
             evidence=evidence,
+            evidence_source="hermes_agent",
+            evidence_json={
+                "type": "text",
+                "source": "hermes_agent",
+                "excerpt": evidence[:1000],
+                "assessment": {
+                    "condition": "攻擊者能利用這項觀察，取得原本拿不到的資訊、權限或繞過既有防護。",
+                    "observed": "AI Agent 送出的請求與擷取到的回應內容（見檢測依據）。"
+                    + (f"IP 核對：{'；'.join(ip_notes)}。" if ip_notes else ""),
+                    "missing": "AI 對影響的判讀未經工具重現或人工確認；觀察到資訊不等於能被利用。",
+                    "verify": (
+                        "依檢測依據重送相同請求確認回應一致，再由資安人員評估該資訊能否被實際利用。"
+                    ),
+                },
+            },
             impact_area="vulnerability",
         )
         return ToolOutcome(ok=True, result={"reported": title}, security_finding=finding)

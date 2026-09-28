@@ -14,6 +14,7 @@ const loadDomainPages = () => import("./features/domains/DomainVerifyPage.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
+const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
@@ -49,6 +50,7 @@ const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
 const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
 const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
 const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
+const PartnersPage = lazyNamed(loadPartnersPage, "PartnersPage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
 const AdminOverviewPage = lazyNamed(loadAdminOverview, "AdminOverviewPage");
@@ -62,6 +64,7 @@ const AdminScansPage = lazyNamed(loadAdminScans, "AdminScansPage");
 const AdminScanDetailPage = lazyNamed(loadAdminScans, "AdminScanDetailPage");
 const AdminDomainsPage = lazyNamed(loadAdminDomains, "AdminDomainsPage");
 const AdminContentPage = lazyNamed(loadAdminPages, "AdminContentPage");
+const AdminPartnerInquiriesPage = lazyNamed(loadAdminPages, "AdminPartnerInquiriesPage");
 const AdminPlansPage = lazyNamed(loadAdminPlans, "AdminPlansPage");
 const AdminSettingsPage = lazyNamed(loadAdminPages, "AdminSettingsPage");
 const AdminAuditLogPage = lazyNamed(loadAdminAuditLog, "AdminAuditLogPage");
@@ -82,7 +85,7 @@ function AppShell({ googleOAuthEnabled }) {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
   const isPublic = [
-    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify",
+    "/project", "/free-tools", "/purchase", "/download", "/reviews", "/verify", "/partners",
   ].some((p) =>
     location.pathname.startsWith(p),
   );
@@ -120,6 +123,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/download" element={<DownloadPage />} />
             <Route path="/verify" element={<VerifyReportPage />} />
             <Route path="/verify/:reportNumber" element={<VerifyReportPage />} />
+            <Route path="/partners" element={<PartnersPage />} />
             <Route path="/reviews" element={<ReviewsPage />} />
           </Route>
           <Route
@@ -206,6 +210,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/admin/scans/:scanId" element={<AdminScanDetailPage />} />
             <Route path="/admin/domains" element={<AdminDomainsPage />} />
             <Route path="/admin/content" element={<AdminContentPage />} />
+            <Route path="/admin/partner-inquiries" element={<AdminPartnerInquiriesPage />} />
             <Route path="/admin/plans" element={<AdminPlansPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />

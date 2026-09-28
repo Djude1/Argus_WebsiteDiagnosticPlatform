@@ -52,6 +52,15 @@ export function accountInitial(me) {
   return source.charAt(0).toUpperCase();
 }
 
+/** 帳號頭像：有上傳大頭貼就顯示圖片，否則顯示名稱縮寫。 */
+export function AccountAvatar({ me, className = "" }) {
+  return (
+    <span className={`app-avatar ${className}`} aria-hidden="true">
+      {me?.avatar_url ? <img src={me.avatar_url} alt="" className="app-avatar-img" /> : accountInitial(me)}
+    </span>
+  );
+}
+
 function AccountMenu() {
   const me = useArgusStore((s) => s.me);
   const navigate = useNavigate();
@@ -99,12 +108,12 @@ function AccountMenu() {
         aria-label="帳號選單"
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="app-avatar" aria-hidden="true">{accountInitial(me)}</span>
+        <AccountAvatar me={me} />
       </button>
       {open && (
         <div className="app-account-menu" id={menuId} role="menu" aria-label="帳號">
           <div className="app-account-head">
-            <span className="app-avatar is-lg" aria-hidden="true">{accountInitial(me)}</span>
+            <AccountAvatar me={me} className="is-lg" />
             <span className="app-account-id">
               <strong>{displayName}</strong>
               {me?.email && me.email !== displayName ? <small>{me.email}</small> : null}
@@ -135,7 +144,7 @@ function AccountMenu() {
   );
 }
 
-export default function NavActions() {
+export default function NavActions({ showThemeToggle = true }) {
   const { accessToken, wallet, fetchWallet, me, fetchMe } = useArgusStore();
   const navigate = useNavigate();
   const { canInstall, installed, trigger } = useInstallPrompt();
@@ -159,7 +168,7 @@ export default function NavActions() {
           <span>安裝 APP</span>
         </button>
       )}
-      <ThemeToggle />
+      {showThemeToggle && <ThemeToggle />}
       <button
         className="app-coin-chip"
         type="button"

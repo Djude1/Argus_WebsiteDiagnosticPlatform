@@ -221,11 +221,11 @@
   .score-badge.bad{ background: var(--ag-bad-soft); color: var(--ag-bad); }
   .score-badge.muted{ background: var(--ag-surface-2); color: var(--ag-text-3); }
 
+  
 
+  
 
-
-
-
+  
 
   .highlight-box{
     @apply pointer-events-auto absolute cursor-pointer border-2 opacity-70 transition-all;
@@ -242,9 +242,9 @@
     animation: pulse-soft 1.4s ease-in-out infinite;
   }
 
-
-
-
+  
+  
+  
 
   /* 分組顯示：同分類同標題的 finding 折成一個群組卡 */
   .finding-group{
@@ -316,14 +316,14 @@
   .category-pill.cat-geo{ --pill: var(--ag-cat-geo); }
   .category-pill.cat-ux{ --pill: var(--ag-cat-ux); }
 
+  
 
+  
 
+  
 
-
-
-
-
-
+  
+  
 
   /* 站台層級 finding 在截圖頂部畫紅色 banner */
   .site-banner-overlay{

@@ -420,18 +420,18 @@
     border-radius: var(--ag-r-sm) var(--ag-r-sm) 0 0;
   }
 
+  
 
+  
 
+  
 
-
-
-
-
+  
   .finding-group{
     transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
   }
 
-
+  
 
   .panel {
     animation: fade-up 0.4s ease-out;

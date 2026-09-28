@@ -156,6 +156,43 @@ export interface paths {
         patch: operations["admin_cms_milestones_partial_update"];
         trace?: never;
     };
+    "/api/admin/cms/partner-inquiries/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。 */
+        get: operations["admin_cms_partner_inquiries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/cms/partner-inquiries/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。 */
+        get: operations["admin_cms_partner_inquiries_retrieve"];
+        /** @description 商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。 */
+        put: operations["admin_cms_partner_inquiries_update"];
+        post?: never;
+        /** @description 商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。 */
+        delete: operations["admin_cms_partner_inquiries_destroy"];
+        options?: never;
+        head?: never;
+        /** @description 商業合作洽談：只能檢視、更新狀態／備註與刪除（不能從後台新增）。 */
+        patch: operations["admin_cms_partner_inquiries_partial_update"];
+        trace?: never;
+    };
     "/api/admin/cms/plans/": {
         parameters: {
             query?: never;
@@ -789,6 +826,34 @@ export interface paths {
         patch: operations["auth_me_partial_update"];
         trace?: never;
     };
+    "/api/auth/me/avatar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 上傳（POST，multipart 欄位 `avatar`）或移除（DELETE）自己的大頭貼。
+         *
+         *     圖片由 `apps.accounts.avatars.process_avatar` 解碼後重新編碼成 256×256 PNG；
+         *     換圖或移除時一併刪掉舊檔。
+         */
+        post: operations["auth_me_avatar_create"];
+        /**
+         * @description 上傳（POST，multipart 欄位 `avatar`）或移除（DELETE）自己的大頭貼。
+         *
+         *     圖片由 `apps.accounts.avatars.process_avatar` 解碼後重新編碼成 256×256 PNG；
+         *     換圖或移除時一併刪掉舊檔。
+         */
+        delete: operations["auth_me_avatar_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/password-reset/confirm/": {
         parameters: {
             query?: never;
@@ -1049,6 +1114,23 @@ export interface paths {
         get: operations["content_milestones_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/content/partner-inquiries/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 公開的商業合作洽談表單（/partners）。 */
+        post: operations["content_partner_inquiries_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2445,6 +2527,48 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["VerifiedDomain"][];
         };
+        PartnerInquiryAdmin: {
+            readonly id: number;
+            readonly name: string;
+            readonly company: string;
+            /** Format: email */
+            readonly email: string;
+            readonly phone: string;
+            /** @description 預估網站數量（選填，自由文字） */
+            readonly site_count: string;
+            readonly partner_type: components["schemas"]["PartnerTypeEnum"];
+            readonly partner_type_label: string;
+            readonly message: string;
+            status: components["schemas"]["PartnerInquiryAdminStatusEnum"];
+            readonly status_label: string;
+            admin_note: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PartnerInquiryAdminRequest: {
+            status?: components["schemas"]["PartnerInquiryAdminStatusEnum"];
+            admin_note?: string;
+        };
+        /**
+         * @description * `new` - 待處理
+         *     * `contacted` - 已聯繫
+         *     * `closed` - 已結案
+         * @enum {string}
+         */
+        PartnerInquiryAdminStatusEnum: "new" | "contacted" | "closed";
+        PartnerInquiryListResponse: {
+            items: components["schemas"]["PartnerInquiryAdmin"][];
+        };
+        /**
+         * @description * `agency` - 網站開發與數位代理
+         *     * `operations` - 維運與技術服務
+         *     * `platform` - 平台與技術合作
+         *     * `other` - 其他
+         * @enum {string}
+         */
+        PartnerTypeEnum: "agency" | "operations" | "platform" | "other";
         PatchedAdminModerateReviewRequest: {
             status?: components["schemas"]["Status9b8Enum"];
         };
@@ -2471,6 +2595,10 @@ export interface components {
             is_latest?: boolean;
             /** Format: date-time */
             released_at?: string;
+        };
+        PatchedPartnerInquiryAdminRequest: {
+            status?: components["schemas"]["PartnerInquiryAdminStatusEnum"];
+            admin_note?: string;
         };
         PatchedPricingPlanWriteRequest: {
             code?: string;
@@ -3360,6 +3488,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMilestoneWrite"];
+                };
+            };
+        };
+    };
+    admin_cms_partner_inquiries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInquiryListResponse"][];
+                };
+            };
+        };
+    };
+    admin_cms_partner_inquiries_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this partner inquiry. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInquiryAdmin"];
+                };
+            };
+        };
+    };
+    admin_cms_partner_inquiries_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this partner inquiry. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PartnerInquiryAdminRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerInquiryAdminRequest"];
+                "multipart/form-data": components["schemas"]["PartnerInquiryAdminRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInquiryAdmin"];
+                };
+            };
+        };
+    };
+    admin_cms_partner_inquiries_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this partner inquiry. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_cms_partner_inquiries_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this partner inquiry. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPartnerInquiryAdminRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPartnerInquiryAdminRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPartnerInquiryAdminRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInquiryAdmin"];
                 };
             };
         };
@@ -4485,6 +4731,42 @@ export interface operations {
             };
         };
     };
+    auth_me_avatar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_me_avatar_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auth_password_reset_confirm_create: {
         parameters: {
             query?: never;
@@ -4738,6 +5020,24 @@ export interface operations {
         };
     };
     content_milestones_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    content_partner_inquiries_create: {
         parameters: {
             query?: never;
             header?: never;

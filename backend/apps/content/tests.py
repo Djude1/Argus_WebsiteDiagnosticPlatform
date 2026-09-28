@@ -105,3 +105,83 @@ class ContentAPITests(APITestCase):
             self.assertNotIn(old, titles)
         # 時間軸應回溯到 2025（手冊起始 114/12）
         self.assertTrue(any(str(m["date"]).startswith("2025") for m in ms))
+
+
+class PartnerInquiryTests(APITestCase):
+    """/partners 洽談表單：公開可送、必填驗證、誘餌欄位、後台只能改狀態。"""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.url = "/api/content/partner-inquiries/"
+        self.payload = {
+            "name": "王小明",
+            "company": "範例數位",
+            "email": "ming@example.com",
+            "partner_type": "agency",
+            "message": "想在交付客戶網站前加入健檢報告。",
+        }
+
+    def test_anonymous_can_submit(self):
+        from apps.content.models import PartnerInquiry
+
+        response = self.client.post(self.url, self.payload, format="json")
+        self.assertEqual(response.status_code, 201)
+        inquiry = PartnerInquiry.objects.get()
+        self.assertEqual(inquiry.company, "範例數位")
+        self.assertEqual(inquiry.status, PartnerInquiry.Status.NEW)
+
+    def test_requires_fields_and_valid_email(self):
+        bad = {**self.payload, "email": "not-an-email", "message": "   "}
+        response = self.client.post(self.url, bad, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data)
+
+    def test_honeypot_is_kept_and_flagged_as_spam(self):
+        """誘餌欄位可能被瀏覽器自動填入：不能丟棄，要存檔並標成疑似垃圾訊息讓管理員判斷。"""
+        from apps.content.models import PartnerInquiry
+
+        response = self.client.post(
+            self.url, {**self.payload, "website": "http://spam.example"}, format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        inquiry = PartnerInquiry.objects.get()
+        self.assertEqual(inquiry.status, PartnerInquiry.Status.SPAM)
+
+    def test_admin_can_only_update_status_and_note(self):
+        from django.contrib.auth import get_user_model
+
+        from apps.content.models import PartnerInquiry
+
+        self.client.post(self.url, self.payload, format="json")
+        inquiry = PartnerInquiry.objects.get()
+        staff = get_user_model().objects.create_user(
+            username="staff@example.com", password="x-Strong-pass-1", is_staff=True,
+        )
+        self.client.force_authenticate(staff)
+        detail = f"/api/admin/cms/partner-inquiries/{inquiry.id}/"
+        response = self.client.patch(
+            detail,
+            {"status": "contacted", "admin_note": "已寄信", "company": "改掉"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        inquiry.refresh_from_db()
+        self.assertEqual(inquiry.status, "contacted")
+        self.assertEqual(inquiry.admin_note, "已寄信")
+        self.assertEqual(inquiry.company, "範例數位")
+        listing = self.client.get("/api/admin/cms/partner-inquiries/")
+        self.assertEqual(len(listing.data["items"]), 1)
+        self.assertEqual(
+            self.client.post("/api/admin/cms/partner-inquiries/", self.payload).status_code, 405,
+        )
+
+    def test_non_staff_cannot_list(self):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(
+            username="u@example.com", password="x-Strong-pass-1",
+        )
+        self.client.force_authenticate(user)
+        self.assertEqual(self.client.get("/api/admin/cms/partner-inquiries/").status_code, 403)

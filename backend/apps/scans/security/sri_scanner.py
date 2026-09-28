@@ -28,6 +28,28 @@ class _SriParser(HTMLParser):
                 self.refs.append((href, "link"))
 
 
+# 這些服務的腳本內容會隨時更新、網址不帶版本，官方也不提供 SRI hash；加上 integrity
+# 反而會讓腳本在下一次更新後被瀏覽器擋掉。對它們建議 SRI 是做不到的建議，改由 CSP
+# 限制可載入的來源，所以不列入 SRI 缺失。
+_DYNAMIC_SCRIPT_HOSTS = (
+    "googletagmanager.com",
+    "google-analytics.com",
+    "googleadservices.com",
+    "googlesyndication.com",
+    "connect.facebook.net",
+    "static.cloudflareinsights.com",
+    "www.google.com",
+    "www.gstatic.com",
+    "maps.googleapis.com",
+    "js.stripe.com",
+)
+
+
+def _is_dynamic_third_party(resolved_url: str) -> bool:
+    host = urlparse(resolved_url).hostname or ""
+    return any(host == h or host.endswith("." + h) for h in _DYNAMIC_SCRIPT_HOSTS)
+
+
 def _is_cross_origin(resource_url: str, page_url: str) -> bool:
     """解析後 host 與頁面 host 不同才算跨來源；相對路徑（無 host）視為同源。"""
     try:
@@ -59,6 +81,8 @@ def analyze_sri(pages: list[dict]) -> list[dict]:
                 if not _is_cross_origin(res_url, page_url):
                     continue
                 resolved = urljoin(page_url, res_url)
+                if _is_dynamic_third_party(resolved):
+                    continue
                 if resolved in seen:
                     continue
                 seen.add(resolved)
