@@ -53,7 +53,7 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
   - 範圍限制由 `postcss-member-legacy.js`（掛在 `postcss.config.js` 的 tailwind 之後）在 build 時處理：規則一律加上 `:is(.member-legacy, #…)` 前綴（ID 等級特異度），範圍內元素先 `all: revert` 擋掉新版同名 class；`:root`／`html`／`body` 規則改掛在包裝上，`.argus-app`／`.argus-main` 規則改為 `:has(.member-legacy)`，keyframes 加 `ml-` 前綴。包裝是 `App.jsx` 的 `MemberLegacy`（`display: contents`）。
   - **深色主題**：舊版只有淺色。外掛對每條含顏色的舊規則自動產生 `:root[data-theme="dark"]` 版本（淺底→深藍、深字→淺字、淺框→暗框，保留色相）；對映不理想處與頁面底色（對齊公開頁深藍漸層）在 `91-dark.css` 手動覆寫。新增舊版樣式時照淺色寫即可，深色會自動產生。
   - 修改這五頁的樣式：改 `legacy-member/` 對應檔，**不要**改 `11`／`14`／`16`／`61` 等新版檔（範圍內會被覆寫）；新頁面不要放進 `MemberLegacy`。
-- **頂部導覽列**：公開頁與登入後頁面共用 `components/navigation/SiteNav.jsx`（`.public-nav` 樣式，21-public／35-public-legacy），兩者只差連結清單與右側動作區（登入後是 `NavActions`：點數與帳號選單）。不要再為登入後另做一套導覽列樣式。**導覽列的尺寸與排版（高度、內距、logo、字級、連結高度、按鈕高度）日／夜共用**，寫在 `35-public-legacy.css` 的無主題規則；`:root[data-theme="light"]` 規則只能改顏色、陰影與背景——2026-09-28 前尺寸只寫在日間規則裡，切換主題時整條導覽列高度 93↔75px 跳動，且日間規則壓過響應式媒體查詢。會員導覽列項目見 `features/account/TopNav.jsx`（帳號設定在右側帳號選單）。
+- **頂部導覽列**：公開頁與登入後頁面共用 `components/navigation/SiteNav.jsx`（`.public-nav` 樣式，21-public／35-public-legacy），兩者只差連結清單與右側動作區（登入後是 `NavActions`：點數與帳號選單）。不要再為登入後另做一套導覽列樣式。**導覽列的尺寸與排版（高度、內距、logo、字級、連結高度、按鈕高度）日／夜共用**，寫在 `35-public-legacy.css` 的無主題規則；`:root[data-theme="light"]` 規則只能改顏色、陰影與背景——2026-09-28 前尺寸只寫在日間規則裡，切換主題時整條導覽列高度 93↔75px 跳動，且日間規則壓過響應式媒體查詢。會員導覽列項目見 `features/account/TopNav.jsx`（帳號設定與評論在右側頭像選單）。
 - 全域樣式入口是 `src/styles.css`，依序 `@import` `src/styles/*.css`；**匯入順序＝覆寫優先序，不可隨意重排**。
 - **顏色一律用 `--ag-*` 語意 token**（`03-tokens.css`）：深色值在 `:root`（預設主題），日間值在 `:root[data-theme="light"]`。規則只寫一次、兩個主題自動正確；**不要再寫 `:root[data-theme="light"] .xxx` 的逐條覆寫**，也不要寫死 Tailwind `slate-*`／`blue-*`／`indigo-*` 或青→紫漸層。
 - 品牌元件樣式在 `05-brand.css`（`ArgusMark`／`ArgusLogo`、`.ag-eyebrow`、`.ag-viewfinder`、`.ag-surface-grid`）；核心元件（`.panel`、`.primary-button`、`.secondary-button`、`.input`、`.severity`、`.status-badge`、`.category-pill`…）在 `10-components-core.css`，已全面 token 化。
@@ -128,7 +128,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
-| `/reviews` | `ReviewsPage`（未登入：`PublicLayout`；登入後：會員區，會員導覽列、無公開頁尾，網址相同） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
+| `/reviews` | `ReviewsPage`（未登入：`PublicLayout`；登入後：會員區，會員導覽列、無公開頁尾，網址相同；會員入口在頭像選單） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
 | `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
@@ -224,7 +224,7 @@ npm run typecheck
 | `src/shared/useListQuery.ts` | 列表頁的搜尋／篩選／排序／分頁狀態與網址同步（泛型綁定 `defaults`，未宣告的鍵無法存取）|
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
-| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、帳號選單（帳號設定／購點與訂閱／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（帳號設定／購點與訂閱／評論／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |

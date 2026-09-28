@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { to: "/domains", label: "網域驗證" },
   { to: "/history", label: "歷史" },
   { to: "/billing", label: "購點" },
-  { to: "/reviews", label: "評論" },
   { to: "/mcp", label: "MCP 接入中心" },
 ];
 
@@ -27,15 +26,10 @@ function TopNav() {
   if (["/project", "/purchase", "/download"].some((p) =>
     location.pathname.startsWith(p),
   )) return null;
-  // 掃描頁的 top bar 不顯示「評論」入口（首頁等其他頁保留）
-  const onScanPage = location.pathname.startsWith("/scans");
-  const visibleNavItems = onScanPage
-    ? NAV_ITEMS.filter((item) => item.to !== "/reviews")
-    : NAV_ITEMS;
   return (
     <SiteNav
       className="is-member"
-      items={visibleNavItems}
+      items={NAV_ITEMS}
       actions={(
         <>
           <SiteThemeToggle />
