@@ -528,3 +528,230 @@
     transform: none;
   }
 }
+
+/* ── 總覽儀表板（components/projects/DashboardWidgets.jsx） ── */
+.project-grid-3 {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1100px) {
+  .project-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.project-section-hint {
+  @apply text-xs text-slate-500;
+}
+.dash-category-list {
+  @apply grid list-none gap-2.5 p-0;
+}
+.dash-category-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) 120px 8.5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .dash-category-row {
+    grid-template-columns: 3rem minmax(0, 1fr) 6.5rem;
+  }
+  .dash-category-row .dash-spark,
+  .dash-category-row .dash-spark-empty {
+    display: none;
+  }
+}
+.dash-category-name {
+  @apply text-sm font-semibold text-slate-700;
+}
+.dash-category-score {
+  @apply text-right text-sm font-semibold text-slate-700;
+}
+.dash-spark {
+  display: block;
+  overflow: visible;
+}
+.dash-spark-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.dash-spark-last {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+.dash-spark-hit {
+  fill: transparent;
+  cursor: default;
+}
+.dash-spark-hit:hover {
+  fill: rgba(37, 99, 235, 0.25);
+}
+.dash-spark-empty {
+  @apply text-xs text-slate-400;
+}
+.dash-count-list {
+  @apply grid list-none gap-1 p-0;
+}
+.dash-count-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  @apply rounded-lg px-1 py-1 text-sm text-slate-700;
+}
+.dash-count-row.is-link:hover {
+  @apply bg-slate-50 text-blue-800;
+}
+.dash-count-label {
+  @apply font-semibold;
+}
+.dash-count-track {
+  @apply block h-2.5 overflow-hidden rounded-full bg-slate-100;
+}
+.dash-count-fill {
+  @apply block h-full rounded-full bg-blue-500;
+}
+.dash-count-value {
+  @apply text-right font-semibold;
+}
+.dash-stats {
+  display: grid;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+.dash-stats div {
+  @apply rounded-xl border border-slate-200 px-3 py-2;
+}
+.dash-stats dt {
+  @apply text-[11px] font-semibold text-slate-500;
+}
+.dash-stats dd {
+  @apply m-0 mt-0.5 text-sm font-bold text-slate-800;
+}
+.dash-stats .is-warn dd {
+  @apply text-amber-700;
+}
+.dash-recent-head {
+  @apply mt-4;
+}
+.dash-recent {
+  @apply grid list-none gap-1 p-0;
+}
+.dash-recent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  @apply rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50;
+}
+.dash-recent-meta {
+  @apply text-xs text-slate-500;
+}
+.dash-aeo {
+  @apply grid gap-2;
+}
+.dash-aeo-ratios {
+  @apply grid grid-cols-2 gap-2;
+}
+.dash-aeo-ratios div {
+  @apply grid rounded-xl border border-slate-200 px-3 py-2;
+}
+.dash-aeo-ratios strong {
+  @apply text-2xl font-bold text-slate-900;
+}
+.dash-aeo-ratios span {
+  @apply text-xs text-slate-500;
+}
+.dash-aeo-counts {
+  @apply text-xs text-slate-600;
+}
+
+/* ── 問題分析：工具列、分組與詳情 ── */
+.project-filter-toolbar {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+.project-issue-group + .project-issue-group {
+  @apply mt-4;
+}
+.project-issue-group-title {
+  @apply flex items-baseline gap-2 border-b border-slate-200 pb-2 text-base font-bold text-slate-800;
+}
+.project-issue-group-title span {
+  @apply text-xs font-normal text-slate-500;
+}
+.project-issue-detail {
+  @apply mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700;
+}
+.project-issue-detail h4 {
+  @apply mb-1 text-xs font-bold text-slate-500;
+}
+.project-issue-detail p {
+  white-space: pre-line;
+}
+.project-issue-detail ul {
+  @apply grid list-none gap-0.5 p-0 text-xs;
+}
+.project-issue-detail li {
+  @apply truncate;
+}
+
+/* ── 頁面清單 ── */
+.project-search {
+  @apply block max-w-md;
+}
+.project-search .input {
+  @apply w-full;
+}
+.project-sort {
+  @apply border-0 bg-transparent p-0 text-xs font-semibold text-slate-500 hover:text-blue-700;
+  cursor: pointer;
+}
+.project-pages-table td {
+  white-space: normal;
+}
+.project-page-cell {
+  max-width: 28rem;
+}
+.project-page-title-text {
+  @apply block truncate font-semibold text-slate-800;
+}
+.project-page-url {
+  @apply block truncate text-xs text-slate-500;
+}
+.project-status {
+  @apply inline-flex rounded-full px-2 py-0.5 text-xs font-bold;
+}
+.project-status.is-good { @apply bg-emerald-50 text-emerald-800; }
+.project-status.is-warn { @apply bg-amber-50 text-amber-800; }
+.project-status.is-bad { @apply bg-rose-50 text-rose-800; }
+.project-slow {
+  @apply font-semibold text-amber-700;
+}
+.project-page-issues {
+  @apply flex flex-wrap items-center gap-1.5 font-semibold;
+}
+.project-page-issues small {
+  @apply w-full text-[11px] font-normal text-slate-500;
+}
+.project-page-clean {
+  @apply text-xs text-slate-400;
+}
+.project-pages-table tr.is-open td {
+  @apply bg-slate-50;
+}
+.project-page-preview td {
+  @apply bg-slate-50;
+}
+.project-page-shot {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  object-position: top;
+  @apply rounded-lg border border-slate-200;
+}

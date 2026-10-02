@@ -126,9 +126,10 @@ D:\nodejs\npm.cmd install 套件名
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在會員頂部導覽列，取代原本的「設定」；帳號設定改由右側帳號選單進入）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/projects` | `ProjectsListPage`（`features/projects/ProjectWorkspace.jsx`） | 所有網站專案：跨網站總覽（網站數、平均分數、需要注意、進行中）＋專案卡片；可展開已封存的專案並恢復（`?archived=true`） |
 | `/projects/new` | `ProjectCreatePage` | 新增網站專案（網址＋選填名稱；同網站已有專案回 409 並引導過去，已封存的自動恢復） |
-| `/projects/:id` | `ProjectWorkspace` ＞ `ProjectOverviewPage`（`ProjectPages.jsx`） | 專案總覽：分數與上次相比、問題數、新增／持續／本次未出現、各維度分數、趨勢、優先改善建議、進行中掃描（有掃描在跑時每 5 秒更新）、公告 toast |
+| `/projects/:id` | `ProjectWorkspace` ＞ `ProjectOverviewPage`（`ProjectPages.jsx`） | 專案總覽儀表板：分數與上次相比、問題數、新增／持續／本次未出現、各維度分數與小走勢線、趨勢、嚴重度分布、各維度問題數、AEO 摘要、優先改善建議、本次掃描覆蓋、最近掃描、進行中掃描（有掃描在跑時每 5 秒更新）、公告 toast（區塊在 `components/projects/DashboardWidgets.jsx`） |
 | `/projects/:id/scans` | `ProjectScansPage` | 建立掃描（`ScanJobForm project=…`：預設專案起始網址、送出帶 `project`）＋此網站全部掃描（`ScanList`） |
-| `/projects/:id/issues` | `ProjectIssuesPage` | 問題分析：選擇掃描、維度／嚴重度／變化篩選（寫在網址、`replace` 不污染上一頁）、「連續 N 次」與受影響頁面、「查看證據」連到 `/scans/:id?finding=`、本次未出現 |
+| `/projects/:id/issues` | `ProjectIssuesPage` | 問題分析：選擇掃描、維度／嚴重度／變化篩選（寫在網址、`replace` 不污染上一頁）、「連續 N 次」與受影響頁面、「查看證據」連到 `/scans/:id?finding=`、本次未出現；可展開看說明／修法／全部受影響頁面、`?group=category` 依維度分組、匯出 CSV（`issuesToCsv`，含 BOM） |
+| `/projects/:id/pages` | `ProjectPagesPage` | 頁面：選擇掃描，每頁狀態碼、載入時間、問題數與最高嚴重度、各維度問題數；篩選（有問題／錯誤或被阻擋／載入 > 3 秒）、搜尋、表頭排序、截圖預覽、連到該頁問題 |
 | `/projects/:id/history` | `ProjectHistoryPage` | 歷史報告：分數趨勢、歷次掃描表格、問題分析與 Word 報告下載 |
 | `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、預設掃描設定（範圍、維度）、網域驗證狀態、封存 |
 | `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
@@ -202,7 +203,8 @@ npm run typecheck
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
 | `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
 | `src/features/projects/ProjectWorkspace.jsx` | 網站專案工作區外框（側邊欄、`useProject`）、`ProjectScanShell`、`ProjectHomeRedirect`、所有專案與新增專案頁 |
-| `src/features/projects/ProjectPages.jsx` | 專案的總覽、掃描、問題分析、歷史報告、專案設定五個分頁 |
+| `src/features/projects/ProjectPages.jsx` | 專案的總覽、掃描、問題分析、頁面、歷史報告、專案設定六個分頁 |
+| `src/components/projects/DashboardWidgets.jsx` | 總覽儀表板區塊：各維度分數＋小走勢線（small multiples，不靠顏色辨識維度）、單色數量長條、本次掃描覆蓋、AEO 摘要、最近掃描 |
 | `src/components/navigation/ProjectSwitcher.jsx` | 頂部工具列的網站專案切換器（目前專案、切換、設定入口、所有專案、新增專案；Esc／點外面關閉） |
 | `src/components/projects/OverviewWidgets.jsx` | 分數環 `ScoreRing` 與公告 toast（原 Dashboard 元件） |
 | `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from django.db.models import Count
+from django.db.models import Count, Q
 
 from apps.scans.models import Finding, ScanJob, SiteProject
 from apps.scans.services import user_owns_domain
@@ -23,6 +23,8 @@ TREND_LIMIT = 12
 STREAK_LOOKBACK = 30
 TOP_ACTIONS_LIMIT = 5
 SAMPLE_URLS_LIMIT = 3
+ISSUE_URLS_LIMIT = 50
+RECENT_SCANS_LIMIT = 5
 
 
 def completed_scans(project: SiteProject):
@@ -36,10 +38,7 @@ def active_scan(project: SiteProject) -> ScanJob | None:
 def previous_completed(project: SiteProject, scan: ScanJob) -> ScanJob | None:
     """同專案中比 scan 早完成的最近一次完成掃描（用來比較新增／持續／未出現）。"""
     return (
-        completed_scans(project)
-        .filter(created_at__lt=scan.created_at)
-        .exclude(id=scan.id)
-        .first()
+        completed_scans(project).filter(created_at__lt=scan.created_at).exclude(id=scan.id).first()
     )
 
 
@@ -57,7 +56,17 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
     rows = (
         Finding.objects.filter(scan_job=scan, category__in=scan.effective_categories)
         .order_by()
-        .values("id", "rule_id", "category", "severity", "title", "page__final_url", "page__url")
+        .values(
+            "id",
+            "rule_id",
+            "category",
+            "severity",
+            "title",
+            "description",
+            "remediation",
+            "page__final_url",
+            "page__url",
+        )
     )
     groups: dict[str, dict] = {}
     for row in rows:
@@ -72,6 +81,8 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
                 "category": row["category"],
                 "severity": row["severity"],
                 "finding_id": row["id"],
+                "description": row["description"],
+                "remediation": row["remediation"],
                 "occurrences": 0,
                 "_urls": [],
             }
@@ -82,10 +93,13 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
             group["severity"] = row["severity"]
             group["title"] = row["title"]
             group["finding_id"] = row["id"]
+            group["description"] = row["description"]
+            group["remediation"] = row["remediation"]
     for group in groups.values():
         urls = group.pop("_urls")
         group["pages"] = len(urls)
         group["sample_urls"] = urls[:SAMPLE_URLS_LIMIT]
+        group["urls"] = urls[:ISSUE_URLS_LIMIT]
     return groups
 
 
@@ -180,7 +194,19 @@ def project_overview(project: SiteProject) -> dict:
                 "persisting": sum(1 for issue in issues if issue["status"] == "persisting"),
                 "missing": len(missing),
             }
-        counts = latest.pages.aggregate(n=Count("id"))
+        counts = latest.pages.aggregate(
+            n=Count("id"), blocked=Count("id", filter=~Q(blocked_reason=""))
+        )
+        warnings = latest.warning_summary or {}
+        duration = (
+            int((latest.completed_at - latest.started_at).total_seconds())
+            if latest.completed_at and latest.started_at
+            else None
+        )
+        category_counts: dict[str, int] = {}
+        for issue in issues:
+            category_counts[issue["category"]] = category_counts.get(issue["category"], 0) + 1
+        aeo = latest.aeo_report or {}
         latest_payload = {
             **_scan_brief(latest),
             "category_scores": latest.category_scores or {},
@@ -194,7 +220,32 @@ def project_overview(project: SiteProject) -> dict:
                 for action in (latest.top_actions or [])
                 if action.get("category") in latest.effective_categories
             ][:TOP_ACTIONS_LIMIT],
-            "aeo_status": (latest.aeo_report or {}).get("status", ""),
+            "aeo_status": aeo.get("status", ""),
+            # 儀表板用：本次掃描統計、各維度問題數、AEO 問答摘要
+            "stats": {
+                "pages": counts["n"],
+                "pages_blocked": counts["blocked"],
+                "pages_failed": len(warnings.get("failed_urls") or []),
+                "max_pages": latest.max_pages,
+                "duration_seconds": duration,
+                "findings": latest.findings.filter(
+                    category__in=latest.effective_categories
+                ).count(),
+            },
+            "category_counts": category_counts,
+            "aeo": {
+                key: aeo.get(key)
+                for key in (
+                    "status",
+                    "reason",
+                    "questions_total",
+                    "answered_ratio",
+                    "evidence_ratio",
+                    "counts",
+                )
+            }
+            if aeo
+            else None,
         }
     trend = [
         {
@@ -205,8 +256,13 @@ def project_overview(project: SiteProject) -> dict:
         }
         for scan in reversed(list(completed_scans(project)[:TREND_LIMIT]))
     ]
+    recent_scans = [
+        {**_scan_brief(scan), "scan_mode": scan.scan_mode, "max_pages": scan.max_pages}
+        for scan in project.scans.order_by("-created_at", "-id")[:RECENT_SCANS_LIMIT]
+    ]
     return {
         "latest_scan": latest_payload,
+        "recent_scans": recent_scans,
         "previous_scan": _scan_brief(previous),
         "active_scan": (
             {**_scan_brief(running), "progress": running.progress or {}} if running else None
@@ -235,6 +291,69 @@ def project_issues(project: SiteProject, scan: ScanJob | None = None) -> dict:
     }
 
 
+def project_pages(project: SiteProject, scan: ScanJob | None = None) -> dict:
+    """頁面清單（最新一次或指定一次完成的掃描）：狀態碼、載入時間、每頁問題數與最高嚴重度。
+
+    只計本次有勾的維度；站台層級（沒有對應頁面）的發現不算在任何一頁上，另回總數。
+    """
+    scan = scan or completed_scans(project).first()
+    if scan is None:
+        return {"scan": None, "pages": [], "site_level_findings": 0}
+    checked = scan.effective_categories
+    per_page: dict[int, dict] = {}
+    site_level = 0
+    rows = (
+        Finding.objects.filter(scan_job=scan, category__in=checked)
+        .order_by()
+        .values("page_id", "severity", "category")
+    )
+    for row in rows:
+        if row["page_id"] is None:
+            site_level += 1
+            continue
+        entry = per_page.setdefault(
+            row["page_id"], {"findings": 0, "max_severity": None, "by_category": {}}
+        )
+        entry["findings"] += 1
+        entry["by_category"][row["category"]] = entry["by_category"].get(row["category"], 0) + 1
+        current = entry["max_severity"]
+        if current is None or _SEVERITY_RANK.get(row["severity"], 9) < _SEVERITY_RANK.get(
+            current, 9
+        ):
+            entry["max_severity"] = row["severity"]
+    pages = []
+    for page in scan.pages.order_by("depth", "id").only(
+        "id",
+        "url",
+        "final_url",
+        "status_code",
+        "title",
+        "load_time_ms",
+        "depth",
+        "blocked_reason",
+        "screenshot_path",
+    ):
+        entry = per_page.get(page.id, {"findings": 0, "max_severity": None, "by_category": {}})
+        pages.append(
+            {
+                "id": page.id,
+                "url": page.final_url or page.url,
+                "title": page.title,
+                "status_code": page.status_code,
+                "load_time_ms": page.load_time_ms,
+                "depth": page.depth,
+                "blocked_reason": page.blocked_reason,
+                "has_screenshot": bool(page.screenshot_path),
+                **entry,
+            }
+        )
+    return {
+        "scan": {**_scan_brief(scan), "categories": sorted(checked)},
+        "pages": pages,
+        "site_level_findings": site_level,
+    }
+
+
 def project_summaries(project_ids: list[int]) -> dict[int, dict]:
     """專案清單與切換器用的摘要：最新一次掃描、最新完成分數與前一次完成分數（算變化）。
 
@@ -255,8 +374,13 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
         ScanJob.objects.filter(project_id__in=project_ids)
         .order_by("-created_at", "-id")
         .values(
-            "id", "project_id", "status", "overall_score", "category_scores",
-            "created_at", "completed_at",
+            "id",
+            "project_id",
+            "status",
+            "overall_score",
+            "category_scores",
+            "created_at",
+            "completed_at",
         )
     )
     for row in rows:

@@ -1,15 +1,24 @@
 // 網站專案的五個分頁：總覽、掃描、問題分析、歷史報告、專案設定（外框見 ProjectWorkspace.jsx）。
 // 後端：/api/projects/<id>/（overview／issues）與 /api/scans/?project=<id>。
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
+import {
+  AeoSummary,
+  CATEGORY_ORDER,
+  CategoryPanel,
+  CountBars,
+  RecentScans,
+  ScanStatsList,
+} from "../../components/projects/DashboardWidgets.jsx";
 import { AnnouncementToast, ScoreRing } from "../../components/projects/OverviewWidgets.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
   CATEGORY_LABELS,
   LineChart,
   SEVERITY_LABEL,
+  SeverityBarChart,
   SEVERITY_ORDER,
   apiErrorMessage,
   isInProgress,
@@ -20,7 +29,6 @@ import { useArgusStore } from "../../store";
 import { ScanJobForm, ScanList, scanProgress } from "../scans/ScanExperience.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
 
-const CATEGORY_ORDER = ["seo", "aeo", "geo", "ux", "security"];
 const OVERVIEW_POLL_MS = 5000;
 const SCANS_POLL_MS = 3000;
 const SCAN_LIST_PARAMS = { page_size: 200 };
@@ -94,35 +102,6 @@ function useAnnouncements() {
 // ============================================================
 // 總覽
 // ============================================================
-
-function CategoryScores({ latest }) {
-  const scores = latest.category_scores || {};
-  return (
-    <ul className="project-category-list">
-      {CATEGORY_ORDER.map((category) => {
-        const checked = latest.categories.includes(category);
-        const score = scores[category];
-        let note = "";
-        if (!checked) note = "本次未勾選";
-        else if (score === undefined || score === null) {
-          note = category === "aeo" && latest.aeo_status === "insufficient" ? "未評估（內容不足）" : "未評估";
-        }
-        const tone = score >= 80 ? "good" : score >= 60 ? "medium" : "bad";
-        return (
-          <li key={category} className="project-category-row">
-            <span className="project-category-name">{CATEGORY_LABELS[category]}</span>
-            <span className="project-category-bar" aria-hidden="true">
-              {!note && (
-                <span className={`project-category-fill tone-${tone}`} style={{ width: `${score}%` }} />
-              )}
-            </span>
-            <span className="project-category-score">{note || Math.round(score)}</span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
 
 /** 進行中的掃描：目前階段與整體進度（與掃描詳情頁同一個公式 scanProgress）。 */
 function ActiveScanBanner({ scan }) {
@@ -263,11 +242,14 @@ function ProjectOverviewPage() {
 
           <div className="project-grid-2">
             <section className="panel">
-              <h2 className="project-section-title">各維度分數</h2>
-              <CategoryScores latest={latest} />
+              <div className="project-section-head">
+                <h2 className="project-section-title">各維度分數與走勢</h2>
+                <span className="project-section-hint">最近 {data.trend.length} 次完成的掃描</span>
+              </div>
+              <CategoryPanel latest={latest} trend={data.trend} />
             </section>
             <section className="panel">
-              <h2 className="project-section-title">分數趨勢</h2>
+              <h2 className="project-section-title">網站分數趨勢</h2>
               <LineChart
                 data={data.trend.map((point) => ({ label: formatDate(point.completed_at).slice(5), value: point.overall_score }))}
                 ariaLabel={`${project.name} 分數趨勢`}
@@ -276,25 +258,61 @@ function ProjectOverviewPage() {
             </section>
           </div>
 
-          <section className="panel">
-            <div className="project-section-head">
-              <h2 className="project-section-title">優先改善建議</h2>
-              <Link className="project-text-link" to={issuesPath}>到問題分析 →</Link>
-            </div>
-            {latest.top_actions.length ? (
-              <ol className="project-action-list">
-                {latest.top_actions.map((action) => (
-                  <li key={`${action.category}-${action.title}`}>
-                    <SeverityChip severity={action.severity} />
-                    <span className="project-action-title">{action.title}</span>
-                    <span className="project-action-cat">{CATEGORY_LABELS[action.category] || action.category}</span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="hint-text">這次沒有需要優先處理的項目。</p>
-            )}
-          </section>
+          <div className="project-grid-3">
+            <section className="panel">
+              <SeverityBarChart severityTotals={data.severity_counts} title="問題嚴重度分布" />
+            </section>
+            <section className="panel">
+              <h2 className="project-section-title">各維度問題數</h2>
+              <CountBars
+                items={CATEGORY_ORDER.filter((c) => latest.categories.includes(c)).map((c) => ({
+                  key: c,
+                  label: CATEGORY_LABELS[c],
+                  value: latest.category_counts[c] || 0,
+                }))}
+                emptyText="這次掃描沒有發現問題。"
+                linkFor={(item) => `${issuesPath}?category=${item.key}`}
+              />
+            </section>
+            <section className="panel">
+              <h2 className="project-section-title">AEO 問答檢測</h2>
+              <AeoSummary aeo={latest.aeo} scanId={latest.id} />
+            </section>
+          </div>
+
+          <div className="project-grid-2">
+            <section className="panel">
+              <div className="project-section-head">
+                <h2 className="project-section-title">優先改善建議</h2>
+                <Link className="project-text-link" to={issuesPath}>到問題分析 →</Link>
+              </div>
+              {latest.top_actions.length ? (
+                <ol className="project-action-list">
+                  {latest.top_actions.map((action) => (
+                    <li key={`${action.category}-${action.title}`}>
+                      <SeverityChip severity={action.severity} />
+                      <span className="project-action-title">{action.title}</span>
+                      <span className="project-action-cat">{CATEGORY_LABELS[action.category] || action.category}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="hint-text">這次沒有需要優先處理的項目。</p>
+              )}
+            </section>
+            <section className="panel">
+              <div className="project-section-head">
+                <h2 className="project-section-title">本次掃描</h2>
+                <Link className="project-text-link" to={projectPath(project.id, "pages")}>看每一頁 →</Link>
+              </div>
+              <ScanStatsList latest={latest} />
+              <div className="project-section-head dash-recent-head">
+                <h3 className="project-section-title">最近掃描</h3>
+                <Link className="project-text-link" to={projectPath(project.id, "history")}>全部 →</Link>
+              </div>
+              <RecentScans scans={data.recent_scans} />
+            </section>
+          </div>
         </>
       )}
 
@@ -361,6 +379,113 @@ function FilterChips({ label, options, value, onChange }) {
   );
 }
 
+/** 選擇要看哪一次完成的掃描（問題分析與頁面清單共用）；value 空字串＝最新一次。 */
+function ScanSelect({ completed, current, value, onChange }) {
+  return (
+    <label className="project-scan-select">
+      <span>掃描</span>
+      <select className="input" value={value || String(current.id)} onChange={(event) => onChange(event.target.value)}>
+        {completed.length === 0 && <option value={current.id}>{formatDateTime(current.completed_at)}</option>}
+        {completed.map((scan, index) => (
+          <option key={scan.id} value={scan.id}>
+            {formatDateTime(scan.completed_at)}（{scan.overall_score ?? "—"} 分）{index === 0 ? " · 最新" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const CSV_COLUMNS = [
+  ["嚴重度", (issue) => SEVERITY_LABEL[issue.severity] || issue.severity],
+  ["維度", (issue) => CATEGORY_LABELS[issue.category] || issue.category],
+  ["問題", (issue) => issue.title],
+  ["變化", (issue) => CHANGE_LABELS[issue.status] || ""],
+  ["連續出現次數", (issue) => issue.streak ?? ""],
+  ["受影響頁數", (issue) => issue.pages],
+  ["受影響頁面", (issue) => (issue.urls || issue.sample_urls).join(" ")],
+  ["怎麼修", (issue) => issue.remediation || ""],
+  ["規則", (issue) => issue.rule_id || ""],
+];
+
+/** 問題清單轉 CSV（逗號、引號、換行都正確跳脫）；前置 BOM 讓 Excel 以 UTF-8 開啟中文。 */
+export function issuesToCsv(issues) {
+  const escape = (value) => {
+    const text = String(value ?? "");
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const rows = [CSV_COLUMNS.map(([header]) => header)];
+  for (const issue of issues) rows.push(CSV_COLUMNS.map(([, pick]) => pick(issue)));
+  return `\uFEFF${rows.map((row) => row.map(escape).join(",")).join("\r\n")}`;
+}
+
+function downloadCsv(filename, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/** 單一問題：標題列＋可展開的說明、怎麼修與全部受影響頁面。 */
+function IssueItem({ issue, scanId }) {
+  const urls = issue.urls || issue.sample_urls;
+  return (
+    <li className="project-issue">
+      <SeverityChip severity={issue.severity} />
+      <div className="project-issue-body">
+        <p className="project-issue-title">
+          {issue.title}
+          {issue.status && (
+            <span className={`project-change-chip is-${issue.status}`}>{CHANGE_LABELS[issue.status]}</span>
+          )}
+          {issue.streak > 1 && (
+            <span
+              className={`project-streak-chip ${issue.streak >= 3 ? "is-long" : ""}`}
+              title={`自 ${formatDate(issue.since)} 起，連續 ${issue.streak} 次完成的掃描都出現`}
+            >
+              連續 {issue.streak} 次
+            </span>
+          )}
+        </p>
+        <p className="project-issue-meta">
+          {CATEGORY_LABELS[issue.category] || issue.category}
+          {" · "}
+          {issue.pages ? `${issue.pages} 頁` : "站台層級"}
+          {issue.streak > 1 ? ` · 自 ${formatDate(issue.since)} 起` : ""}
+        </p>
+        <details className="project-issue-pages">
+          <summary>說明與修補建議{urls.length ? `、受影響頁面（${issue.pages}）` : ""}</summary>
+          {issue.description && (
+            <div className="project-issue-detail">
+              <h4>問題是什麼</h4>
+              <p>{issue.description}</p>
+            </div>
+          )}
+          {issue.remediation && (
+            <div className="project-issue-detail">
+              <h4>怎麼修</h4>
+              <p>{issue.remediation}</p>
+            </div>
+          )}
+          {urls.length > 0 && (
+            <div className="project-issue-detail">
+              <h4>受影響頁面{issue.pages > urls.length ? `（列出 ${urls.length}／${issue.pages}）` : ""}</h4>
+              <ul>
+                {urls.map((url) => <li key={url}>{url}</li>)}
+              </ul>
+            </div>
+          )}
+        </details>
+      </div>
+      <Link className="project-text-link" to={`/scans/${scanId}?finding=${issue.finding_id}`}>
+        查看證據 →
+      </Link>
+    </li>
+  );
+}
+
 function ProjectIssuesPage() {
   const { project } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -368,6 +493,7 @@ function ProjectIssuesPage() {
   const category = searchParams.get("category") || "all";
   const severity = searchParams.get("severity") || "all";
   const change = searchParams.get("change") || "all";
+  const grouped = searchParams.get("group") === "category";
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const { scans } = useProjectScans(project.id);
@@ -432,20 +558,34 @@ function ProjectIssuesPage() {
               : "這是此網站第一次完成的掃描，下次掃描起會標示新增與持續的問題。"}
           </p>
         </div>
-        <label className="project-scan-select">
-          <span>掃描</span>
-          <select className="input" value={scanParam || String(data.scan.id)} onChange={(event) => setParam("scan", event.target.value)}>
-            {completed.length === 0 && <option value={data.scan.id}>{formatDateTime(data.scan.completed_at)}</option>}
-            {completed.map((scan, index) => (
-              <option key={scan.id} value={scan.id}>
-                {formatDateTime(scan.completed_at)}（{scan.overall_score ?? "—"} 分）{index === 0 ? " · 最新" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ScanSelect
+          completed={completed}
+          current={data.scan}
+          value={scanParam}
+          onChange={(value) => setParam("scan", value)}
+        />
       </header>
 
       <section className="panel project-filters">
+        <div className="project-filter-toolbar">
+          <FilterChips
+            label="顯示"
+            value={grouped ? "category" : "all"}
+            onChange={(value) => setParam("group", value)}
+            options={[
+              { value: "all", label: "依嚴重度排序" },
+              { value: "category", label: "依維度分組" },
+            ]}
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => downloadCsv(`${project.hostname}-issues-scan-${data.scan.id}.csv`, issuesToCsv(filtered))}
+            disabled={!filtered.length}
+          >
+            匯出 CSV（{filtered.length}）
+          </button>
+        </div>
         <FilterChips
           label="維度"
           value={category}
@@ -481,46 +621,23 @@ function ProjectIssuesPage() {
       <section className="panel">
         {filtered.length === 0 ? (
           <p className="hint-text">{issues.length ? "沒有符合篩選條件的問題。" : "這次掃描沒有發現問題。"}</p>
+        ) : grouped ? (
+          CATEGORY_ORDER.filter((c) => filtered.some((issue) => issue.category === c)).map((c) => {
+            const items = filtered.filter((issue) => issue.category === c);
+            return (
+              <div key={c} className="project-issue-group">
+                <h2 className="project-issue-group-title">
+                  {CATEGORY_LABELS[c]}<span>{items.length} 個問題</span>
+                </h2>
+                <ul className="project-issue-list">
+                  {items.map((issue) => <IssueItem key={issue.key} issue={issue} scanId={data.scan.id} />)}
+                </ul>
+              </div>
+            );
+          })
         ) : (
           <ul className="project-issue-list">
-            {filtered.map((issue) => (
-              <li key={issue.key} className="project-issue">
-                <SeverityChip severity={issue.severity} />
-                <div className="project-issue-body">
-                  <p className="project-issue-title">
-                    {issue.title}
-                    {issue.status && (
-                      <span className={`project-change-chip is-${issue.status}`}>{CHANGE_LABELS[issue.status]}</span>
-                    )}
-                    {issue.streak > 1 && (
-                      <span
-                        className={`project-streak-chip ${issue.streak >= 3 ? "is-long" : ""}`}
-                        title={`自 ${formatDate(issue.since)} 起，連續 ${issue.streak} 次完成的掃描都出現`}
-                      >
-                        連續 {issue.streak} 次
-                      </span>
-                    )}
-                  </p>
-                  <p className="project-issue-meta">
-                    {CATEGORY_LABELS[issue.category] || issue.category}
-                    {" · "}
-                    {issue.pages ? `${issue.pages} 頁` : "站台層級"}
-                    {issue.streak > 1 ? ` · 自 ${formatDate(issue.since)} 起` : ""}
-                  </p>
-                  {issue.sample_urls.length > 0 && (
-                    <details className="project-issue-pages">
-                      <summary>受影響頁面{issue.pages > issue.sample_urls.length ? `（列出 ${issue.sample_urls.length}／${issue.pages}）` : ""}</summary>
-                      <ul>
-                        {issue.sample_urls.map((url) => <li key={url}>{url}</li>)}
-                      </ul>
-                    </details>
-                  )}
-                </div>
-                <Link className="project-text-link" to={`/scans/${data.scan.id}?finding=${issue.finding_id}`}>
-                  查看證據 →
-                </Link>
-              </li>
-            ))}
+            {filtered.map((issue) => <IssueItem key={issue.key} issue={issue} scanId={data.scan.id} />)}
           </ul>
         )}
       </section>
@@ -545,6 +662,247 @@ function ProjectIssuesPage() {
           </ul>
         </section>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// 頁面（每一頁的狀態、載入時間與問題）
+// ============================================================
+
+const SLOW_PAGE_MS = 3000;
+const PAGE_FILTERS = {
+  all: { label: "全部", test: () => true },
+  issues: { label: "有問題", test: (page) => page.findings > 0 },
+  errors: { label: "錯誤／被阻擋", test: (page) => Boolean(page.blocked_reason) || (page.status_code ?? 0) >= 400 },
+  slow: { label: `載入慢（> ${SLOW_PAGE_MS / 1000} 秒）`, test: (page) => (page.load_time_ms ?? 0) > SLOW_PAGE_MS },
+};
+const PAGE_SORTS = {
+  url: { label: "頁面", value: (page) => page.url },
+  status: { label: "狀態", value: (page) => page.status_code ?? 999 },
+  load: { label: "載入時間", value: (page) => page.load_time_ms ?? -1 },
+  issues: { label: "問題", value: (page) => page.findings * 10 + (5 - (SEVERITY_ORDER.indexOf(page.max_severity) + 1 || 5)) },
+};
+
+function statusTone(page) {
+  if (page.blocked_reason) return "is-bad";
+  const code = page.status_code ?? 0;
+  if (code >= 400 || code === 0) return "is-bad";
+  if (code >= 300) return "is-warn";
+  return "is-good";
+}
+
+/** 截圖預覽：展開時才用 API 取圖（需要登入，不能直接用 <img src>）。 */
+function PageScreenshot({ scanId, pageId }) {
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let url = null;
+    let cancelled = false;
+    api
+      .get(`/scans/${scanId}/pages/${pageId}/screenshot/`, { responseType: "blob" })
+      .then((response) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(response.data);
+        setSrc(url);
+      })
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [scanId, pageId]);
+  if (failed) return <p className="hint-text">截圖無法載入（可能已超過保留期限）。</p>;
+  if (!src) return <p className="hint-text">載入截圖中…</p>;
+  return <img className="project-page-shot" src={src} alt="此頁掃描當下的截圖" />;
+}
+
+function ProjectPagesPage() {
+  const { project } = useOutletContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scanParam = searchParams.get("scan") || "";
+  const filter = PAGE_FILTERS[searchParams.get("filter")] ? searchParams.get("filter") : "all";
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState({ key: "issues", desc: true });
+  const [openId, setOpenId] = useState(null);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const { scans } = useProjectScans(project.id);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setError("");
+    api
+      .get(`/projects/${project.id}/pages/`, { params: scanParam ? { scan: scanParam } : {} })
+      .then((response) => !cancelled && setData(response.data))
+      .catch(() => !cancelled && setError("無法載入頁面清單。"));
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id, scanParam]);
+
+  function setParam(key, value) {
+    const params = new URLSearchParams(searchParams);
+    if (!value || value === "all") params.delete(key);
+    else params.set(key, value);
+    setSearchParams(params, { replace: true });
+  }
+
+  function toggleSort(key) {
+    setSort((current) => (current.key === key ? { key, desc: !current.desc } : { key, desc: key !== "url" }));
+  }
+
+  const pages = useMemo(() => data?.pages || [], [data]);
+  const keyword = query.trim().toLowerCase();
+  const visible = pages
+    .filter(PAGE_FILTERS[filter].test)
+    .filter((page) => !keyword || `${page.url} ${page.title}`.toLowerCase().includes(keyword))
+    .sort((a, b) => {
+      const pick = PAGE_SORTS[sort.key].value;
+      const av = pick(a);
+      const bv = pick(b);
+      const order = av < bv ? -1 : av > bv ? 1 : 0;
+      return sort.desc ? -order : order;
+    });
+  const completed = (scans || []).filter((scan) => scan.status === "completed");
+
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!data) return <section className="panel"><p className="hint-text">載入頁面清單中…</p></section>;
+  if (!data.scan) {
+    return (
+      <section className="panel project-empty">
+        <p className="project-empty-title">還沒有完成的掃描</p>
+        <p className="hint-text">完成一次掃描後，這裡會列出每個被檢查的頁面、狀態碼、載入時間與問題數。</p>
+        <Link className="primary-button" to={projectPath(project.id, "scans")}>建立掃描</Link>
+      </section>
+    );
+  }
+
+  const avgLoad = (() => {
+    const loads = pages.map((page) => page.load_time_ms).filter((ms) => typeof ms === "number");
+    return loads.length ? Math.round(loads.reduce((a, b) => a + b, 0) / loads.length) : null;
+  })();
+
+  return (
+    <div className="project-page">
+      <header className="project-page-head">
+        <div>
+          <p className="eyebrow">頁面</p>
+          <h1 className="project-page-title">{pages.length} 個頁面</h1>
+          <p className="project-page-sub">
+            這次掃描實際檢查的每一頁。平均載入 {avgLoad == null ? "—" : `${(avgLoad / 1000).toFixed(1)} 秒`}
+            {data.site_level_findings ? `；另有 ${data.site_level_findings} 個站台層級的發現（不屬於特定頁面，見問題分析）。` : "。"}
+          </p>
+        </div>
+        <ScanSelect completed={completed} current={data.scan} value={scanParam} onChange={(value) => setParam("scan", value)} />
+      </header>
+
+      <section className="panel project-filters">
+        <FilterChips
+          label="篩選"
+          value={filter}
+          onChange={(value) => setParam("filter", value)}
+          options={Object.entries(PAGE_FILTERS).map(([value, item]) => ({
+            value,
+            label: item.label,
+            count: pages.filter(item.test).length,
+          }))}
+        />
+        <label className="project-search">
+          <span className="project-sr-only">搜尋頁面</span>
+          <input
+            type="search"
+            className="input"
+            placeholder="搜尋網址或頁面標題"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </section>
+
+      <section className="panel">
+        {visible.length === 0 ? (
+          <p className="hint-text">沒有符合條件的頁面。</p>
+        ) : (
+          <div className="project-table-wrap">
+            <table className="project-table project-pages-table">
+              <thead>
+                <tr>
+                  {Object.entries(PAGE_SORTS).map(([key, item]) => (
+                    <th key={key} scope="col" aria-sort={sort.key === key ? (sort.desc ? "descending" : "ascending") : "none"}>
+                      <button type="button" className="project-sort" onClick={() => toggleSort(key)}>
+                        {item.label}
+                        <span aria-hidden="true">{sort.key === key ? (sort.desc ? " ▾" : " ▴") : ""}</span>
+                      </button>
+                    </th>
+                  ))}
+                  <th scope="col"><span className="project-sr-only">操作</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((page) => {
+                  const open = openId === page.id;
+                  return (
+                    <Fragment key={page.id}>
+                      <tr className={open ? "is-open" : ""}>
+                        <td className="project-page-cell">
+                          <span className="project-page-title-text">{page.title || "（無標題）"}</span>
+                          <span className="project-page-url">{page.url}</span>
+                        </td>
+                        <td>
+                          <span className={`project-status ${statusTone(page)}`} title={page.blocked_reason || undefined}>
+                            {page.blocked_reason ? "被阻擋" : page.status_code ?? "—"}
+                          </span>
+                        </td>
+                        <td className={(page.load_time_ms ?? 0) > SLOW_PAGE_MS ? "project-slow" : ""}>
+                          {page.load_time_ms == null ? "—" : `${(page.load_time_ms / 1000).toFixed(1)} 秒`}
+                        </td>
+                        <td>
+                          {page.findings ? (
+                            <span className="project-page-issues">
+                              <SeverityChip severity={page.max_severity} /> {page.findings}
+                              <small>
+                                {CATEGORY_ORDER.filter((c) => page.by_category[c])
+                                  .map((c) => `${CATEGORY_LABELS[c]} ${page.by_category[c]}`)
+                                  .join("、")}
+                              </small>
+                            </span>
+                          ) : (
+                            <span className="project-page-clean">無</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="project-table-actions">
+                            <Link className="project-text-link" to={`/scans/${data.scan.id}?page=${page.id}`}>看此頁問題</Link>
+                            {page.has_screenshot && (
+                              <button
+                                type="button"
+                                className="project-text-link"
+                                aria-expanded={open}
+                                onClick={() => setOpenId(open ? null : page.id)}
+                              >
+                                {open ? "收合截圖" : "截圖"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="project-page-preview">
+                          <td colSpan={5}>
+                            <PageScreenshot scanId={data.scan.id} pageId={page.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -864,6 +1222,7 @@ export {
   ProjectHistoryPage,
   ProjectIssuesPage,
   ProjectOverviewPage,
+  ProjectPagesPage,
   ProjectScansPage,
   ProjectSettingsPage,
 };
