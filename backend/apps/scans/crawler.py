@@ -40,8 +40,12 @@ CF_TURNSTILE_MARKERS = (
 # Cloudflare JavaScript challenge 特徵字串。
 # CF 邊緣注入的 challenge 載入器，body 出現這些字串代表此頁是攔截頁，不是真實內容。
 # 不收錄「Just a moment」短語，避免正常網站文章正文恰好出現該短語的 false positive。
+# 不收錄裸字串 "challenge-platform"：開啟 Bot 偵測的站，CF 會在「每一個正常頁面」尾端插入
+# /cdn-cgi/challenge-platform/scripts/（jsd、precursor）背景腳本；攔截頁才會載入 /h/ 下的
+# orchestrate 並帶 _cf_chl_opt。2026-10-02 ntubimdbirc.tw 首頁因此被誤判、整站只爬到 1 頁。
 CF_JS_CHALLENGE_MARKERS = (
-    "challenge-platform",
+    "/cdn-cgi/challenge-platform/h/",
+    "_cf_chl_opt",
     "cf-browser-verification",
     "cf_captcha",
 )
@@ -203,12 +207,41 @@ def parse_robots_sitemaps(robots_text: str) -> list[str]:
     return sitemaps
 
 
+def is_crawl_trap(url: str) -> bool:
+    """Cloudflare 保留路徑（/cdn-cgi/）：其中 /cdn-cgi/content?id=… 是給機器人的陷阱連結，
+    每次 id 都不同、可無限產生，跟進去只會用垃圾頁吃掉頁數上限。"""
+    return urlparse(url).path.startswith("/cdn-cgi/")
+
+
+def to_scan_origin(url: str, origin: str) -> str:
+    """sitemap 網址與掃描網址只差 `www.` 前綴時，改寫成掃描的 origin；其他情況原樣回傳。
+
+    網站常同時服務 example.com 與 www.example.com，sitemap 卻只寫其中一種；只認完全同源
+    的話整份 sitemap 都用不到。改寫後仍走同源爬取，實際不存在的頁面照常記錄。
+    """
+    parsed, target = urlparse(url), urlparse(origin)
+    host, target_host = parsed.hostname or "", target.hostname or ""
+    if (
+        parsed.scheme != target.scheme
+        or parsed.port != target.port
+        or host == target_host
+        or host.removeprefix("www.") != target_host.removeprefix("www.")
+    ):
+        return url
+    return parsed._replace(netloc=target.netloc).geturl()
+
+
 def sitemap_page_urls(locs: list[str], origin: str) -> list[str]:
-    """sitemap 的 <loc> 轉成可爬取的同源頁面網址（去重保序、排除二進位檔）。"""
+    """sitemap 的 <loc> 轉成可爬取的同源頁面網址（去重保序、排除二進位檔與陷阱路徑）。"""
     urls: list[str] = []
     for loc in locs:
-        normalized = normalize_crawl_url(loc.replace("&amp;", "&"))
-        if not normalized or not same_origin(normalized, origin) or is_binary_resource(normalized):
+        normalized = normalize_crawl_url(to_scan_origin(loc.replace("&amp;", "&"), origin))
+        if (
+            not normalized
+            or not same_origin(normalized, origin)
+            or is_binary_resource(normalized)
+            or is_crawl_trap(normalized)
+        ):
             continue
         if normalized not in urls:
             urls.append(normalized)
@@ -239,6 +272,7 @@ async def discover_sitemap_urls(context, origin: str, declared: list[str], limit
     被動、只讀網站公開給搜尋引擎的清單：只靠 <a> 連結 BFS 時，連結稀疏或以 JavaScript
     導覽的網站在有限深度內常找不到足夠頁面，整站掃描到不了頁數上限。
     """
+    declared = [to_scan_origin(url, origin) for url in declared]
     pending = [url for url in declared if same_origin(url, origin)] or [f"{origin}/sitemap.xml"]
     urls: list[str] = []
     children_left = _SITEMAP_MAX_CHILDREN
@@ -257,7 +291,7 @@ async def discover_sitemap_urls(context, origin: str, declared: list[str], limit
                 if children_left <= 0:
                     break
                 children_left -= 1
-                pending.append(child.replace("&amp;", "&"))
+                pending.append(to_scan_origin(child.replace("&amp;", "&"), origin))
             continue
         for url in sitemap_page_urls(locs, origin):
             if url not in urls:
@@ -464,7 +498,7 @@ async def extract_links(page, base_url: str, origin: str) -> list[str]:
             continue
         # 二進位/媒體檔案（.apk、.pdf、字型、圖片等）不是 HTML 頁面，
         # 加進爬蟲 queue 只會浪費請求並產生無意義的 finding。
-        if is_binary_resource(normalized):
+        if is_binary_resource(normalized) or is_crawl_trap(normalized):
             continue
         links.append(normalized)
     return sorted(set(links))

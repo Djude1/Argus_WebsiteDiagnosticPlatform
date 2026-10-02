@@ -54,6 +54,24 @@ class SitemapParsingTests(SimpleTestCase):
         )
         self.assertEqual(urls, [f"{ORIGIN}/about", f"{ORIGIN}/search?q=a&page=2"])
 
+    def test_www_alias_rewritten_to_scan_origin(self):
+        # 網站同時服務兩種主機名、sitemap 只寫 www 版（ntubimdbirc.tw 實例）
+        urls = crawler.sitemap_page_urls(
+            ["https://www.example.com/about", "http://www.example.com/x", "https://cdn.example.com/y"],
+            ORIGIN,
+        )
+        self.assertEqual(urls, [f"{ORIGIN}/about"])
+        self.assertEqual(
+            crawler.to_scan_origin("https://example.com/a", "https://www.example.com"),
+            "https://www.example.com/a",
+        )
+
+    def test_cloudflare_trap_paths_excluded(self):
+        self.assertTrue(crawler.is_crawl_trap(f"{ORIGIN}/cdn-cgi/content?id=abc"))
+        self.assertFalse(crawler.is_crawl_trap(f"{ORIGIN}/about/cdn-cgi"))
+        urls = crawler.sitemap_page_urls([f"{ORIGIN}/cdn-cgi/content?id=1", f"{ORIGIN}/a"], ORIGIN)
+        self.assertEqual(urls, [f"{ORIGIN}/a"])
+
 
 @patch("apps.scans.crawler.assert_public_http_url", side_effect=lambda url: url)
 class SitemapDiscoveryTests(SimpleTestCase):
@@ -78,6 +96,19 @@ class SitemapDiscoveryTests(SimpleTestCase):
         )
         urls = await crawler.discover_sitemap_urls(context, ORIGIN, [f"{ORIGIN}/index.xml"], 50)
         self.assertEqual(urls, [f"{ORIGIN}/a", f"{ORIGIN}/b"])
+
+    async def test_www_declared_sitemap_index_read_from_scan_origin(self, _assert):
+        index = "<sitemapindex><sitemap><loc>https://www.example.com/s0.xml</loc></sitemap></sitemapindex>"
+        context = _context(
+            {
+                f"{ORIGIN}/sitemap.xml": index,
+                f"{ORIGIN}/s0.xml": "<urlset><url><loc>https://www.example.com/a</loc></url></urlset>",
+            }
+        )
+        urls = await crawler.discover_sitemap_urls(
+            context, ORIGIN, ["https://www.example.com/sitemap.xml"], 50
+        )
+        self.assertEqual(urls, [f"{ORIGIN}/a"])
 
     async def test_cross_origin_and_missing_sitemaps_are_ignored(self, _assert):
         context = _context({})
