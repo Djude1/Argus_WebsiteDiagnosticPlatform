@@ -1,4 +1,4 @@
-// 網站專案的五個分頁：總覽、掃描、問題分析、歷史報告、專案設定（外框見 ProjectWorkspace.jsx）。
+// 網站專案的分頁：總覽、掃描、問題分析、頁面、AEO 問答、歷史報告、專案設定（外框見 ProjectWorkspace.jsx）。
 // 後端：/api/projects/<id>/（overview／issues）與 /api/scans/?project=<id>。
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
@@ -13,6 +13,8 @@ import {
   ScanStatsList,
 } from "../../components/projects/DashboardWidgets.jsx";
 import { AnnouncementToast, ScoreRing } from "../../components/projects/OverviewWidgets.jsx";
+import SiteFavicon from "../../components/projects/SiteFavicon.jsx";
+import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
   CATEGORY_LABELS,
@@ -133,7 +135,6 @@ function ActiveScanBanner({ scan }) {
 
 function ProjectOverviewPage() {
   const { project } = useOutletContext();
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const { toasts, dismiss } = useAnnouncements();
@@ -174,15 +175,18 @@ function ProjectOverviewPage() {
 
   return (
     <div className="project-page">
-      <header className="project-page-head">
+      <header className="project-page-head project-overview-head">
+        <SiteFavicon project={project} size="lg" />
         <div>
-          <p className="eyebrow">總覽</p>
           <h1 className="project-page-title">{project.name}</h1>
-          <p className="project-page-sub">{project.origin} · 共 {data.scans_count} 次掃描</p>
+          <p className="project-page-sub">
+            <a href={project.origin} target="_blank" rel="noopener noreferrer" className="project-origin-link">
+              {project.origin}
+            </a>
+            {" · "}共 {data.scans_count} 次掃描{" · "}
+            <Link className="project-text-link" to={projectPath(project.id, "scans")}>建立新掃描</Link>
+          </p>
         </div>
-        <button type="button" className="primary-button" onClick={() => navigate(projectPath(project.id, "scans"))}>
-          開始新掃描
-        </button>
       </header>
 
       {data.active_scan && <ActiveScanBanner scan={data.active_scan} />}
@@ -275,8 +279,11 @@ function ProjectOverviewPage() {
               />
             </section>
             <section className="panel">
-              <h2 className="project-section-title">AEO 問答檢測</h2>
-              <AeoSummary aeo={latest.aeo} scanId={latest.id} />
+              <div className="project-section-head">
+                <h2 className="project-section-title">AEO 問答檢測</h2>
+                <Link className="project-text-link" to={projectPath(project.id, "aeo")}>逐題結果 →</Link>
+              </div>
+              <AeoSummary aeo={latest.aeo} />
             </section>
           </div>
 
@@ -715,6 +722,120 @@ function PageScreenshot({ scanId, pageId }) {
   if (failed) return <p className="hint-text">截圖無法載入（可能已超過保留期限）。</p>;
   if (!src) return <p className="hint-text">載入截圖中…</p>;
   return <img className="project-page-shot" src={src} alt="此頁掃描當下的截圖" />;
+}
+
+/**
+ * /projects/:id/aeo：AEO 問答檢測（原本塞在掃描詳情最下方）。
+ * 依網站內容出題，逐題判定能否在網站上找到答案並附原文；可選看哪一次完成的掃描、依判定篩選。
+ */
+function ProjectAeoPage() {
+  const { project } = useOutletContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scanParam = searchParams.get("scan") || "";
+  const { scans } = useProjectScans(project.id);
+  const [scan, setScan] = useState(null);
+  const [error, setError] = useState("");
+  const completed = (scans || []).filter((item) => item.status === "completed");
+  const targetId = scanParam || (completed[0] ? String(completed[0].id) : "");
+
+  useEffect(() => {
+    if (!targetId) return undefined;
+    let cancelled = false;
+    setScan(null);
+    setError("");
+    api
+      .get(`/scans/${targetId}/`)
+      .then((response) => !cancelled && setScan(response.data))
+      .catch(() => !cancelled && setError("無法載入這次掃描的 AEO 結果。"));
+    return () => {
+      cancelled = true;
+    };
+  }, [targetId]);
+
+  if (scans === null) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!completed.length) {
+    return (
+      <section className="panel project-empty">
+        <p className="project-empty-title">還沒有完成的掃描</p>
+        <p className="hint-text">勾選 AEO 維度完成一次掃描後，這裡會列出依網站內容建立的問題，以及每一題能否在網站上找到答案。</p>
+        <Link className="primary-button" to={projectPath(project.id, "scans")}>建立掃描</Link>
+      </section>
+    );
+  }
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+
+  const report = scan?.aeo_report;
+  const checked = scan ? (scan.categories || []).includes("aeo") : true;
+  const aeoScore = scan?.category_scores?.aeo;
+  return (
+    <div className="project-page">
+      <header className="project-page-head">
+        <div>
+          <h1 className="project-page-title">AEO 問答檢測</h1>
+          <p className="project-page-sub">
+            AI 答案引擎（ChatGPT 搜尋、Perplexity、Google AI 摘要等）會從網站內容直接擷取答案。
+            這裡依網站自己的內容出題，檢查每一題能否在已掃描的頁面找到明確答案並附原文；目前以可重現的規則判定。
+          </p>
+        </div>
+        <ScanSelect
+          completed={completed}
+          current={completed[0]}
+          value={targetId}
+          onChange={(value) => {
+            const params = new URLSearchParams(searchParams);
+            if (value === String(completed[0].id)) params.delete("scan");
+            else params.set("scan", value);
+            setSearchParams(params, { replace: true });
+          }}
+        />
+      </header>
+      {!scan ? (
+        <section className="panel"><p className="hint-text">載入中…</p></section>
+      ) : !checked ? (
+        <section className="panel project-empty">
+          <p className="project-empty-title">這次掃描沒有勾選 AEO</p>
+          <p className="hint-text">建立掃描時勾選 AEO 維度，才會進行問答檢測。</p>
+        </section>
+      ) : !report?.status ? (
+        <section className="panel"><p className="hint-text">這次掃描沒有 AEO 問答檢測結果（可能是較早的掃描）。</p></section>
+      ) : (
+        <>
+          {report.status === "evaluated" && (
+            <dl className="project-portfolio">
+              <div className="project-portfolio-item">
+                <dt>AEO 分數</dt>
+                <dd className={scoreToneClass(aeoScore)}>{aeoScore == null ? "—" : Math.round(aeoScore)}</dd>
+              </div>
+              <div className="project-portfolio-item">
+                <dt>題目</dt>
+                <dd>{report.questions_total}</dd>
+              </div>
+              <div className="project-portfolio-item">
+                <dt>可從網站找到答案</dt>
+                <dd>{report.answered_ratio == null ? "—" : `${Math.round(report.answered_ratio * 100)}%`}</dd>
+              </div>
+              <div className="project-portfolio-item">
+                <dt>答案附有原文</dt>
+                <dd>{report.evidence_ratio == null ? "—" : `${Math.round(report.evidence_ratio * 100)}%`}</dd>
+              </div>
+            </dl>
+          )}
+          <section className="panel">
+            <AeoAnswerPanel report={report} withFilter />
+          </section>
+          <p className="project-note">
+            「無答案」與「資訊不足」代表在這次已掃描的頁面中找不到明確答案；答案若在沒被掃到的頁面，
+            請確認該頁可從首頁或選單連到，或已列在 sitemap。
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function scoreToneClass(score) {
+  if (score === null || score === undefined) return "";
+  return score >= 80 ? "is-good" : score >= 60 ? "is-medium" : "is-bad";
 }
 
 function ProjectPagesPage() {
@@ -1223,6 +1344,7 @@ export {
   ProjectIssuesPage,
   ProjectOverviewPage,
   ProjectPagesPage,
+  ProjectAeoPage,
   ProjectScansPage,
   ProjectSettingsPage,
 };

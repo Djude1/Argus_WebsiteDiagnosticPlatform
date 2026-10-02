@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import SiteFavicon from "../projects/SiteFavicon";
 import { GearIcon } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
 
@@ -9,7 +10,7 @@ import { useArgusStore } from "../../store";
 // 切換時停留在同一個分頁（A 的問題分析 → B 的問題分析）；從掃描詳情等其他頁切換則回到新專案的總覽。
 // 專案多於 SEARCH_THRESHOLD 個時顯示搜尋框；↑／↓ 在選項間移動，Esc 關閉並把焦點還給按鈕。
 
-const SECTION_PATTERN = /^\/projects\/\d+(\/(scans|issues|pages|history|settings))?\/?$/;
+const SECTION_PATTERN = /^\/projects\/\d+(\/(scans|issues|pages|aeo|history|settings))?\/?$/;
 const SEARCH_THRESHOLD = 6;
 
 /** 切換到 projectId 後要去的網址。 */
@@ -20,8 +21,7 @@ export function projectSwitchPath(pathname, projectId) {
 }
 
 function ProjectMark({ project }) {
-  const initial = (project?.name || project?.hostname || "?").trim().charAt(0).toUpperCase();
-  return <span className="project-switcher-mark" aria-hidden="true">{initial}</span>;
+  return <SiteFavicon project={project} className="project-switcher-mark" />;
 }
 
 function scoreTone(score) {

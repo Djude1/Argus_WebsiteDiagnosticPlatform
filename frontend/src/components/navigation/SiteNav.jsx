@@ -40,9 +40,10 @@ export function SiteThemeToggle() {
 
 /**
  * leading：品牌右側的區塊（登入後是網站專案切換器）；item.end＝只在網址完全相同時標示目前頁。
- * @param {{ items: {to: string, label: string, end?: boolean}[], actions: React.ReactNode, leading?: React.ReactNode, className?: string }} props
+ * brandTo：點品牌要去的頁面；沒給時（公開頁）回產品介紹並重播開場動畫。
+ * @param {{ items: {to: string, label: string, end?: boolean}[], actions: React.ReactNode, leading?: React.ReactNode, className?: string, brandTo?: {path: string, label: string} | null }} props
  */
-export default function SiteNav({ items, actions, leading = null, className = "" }) {
+export default function SiteNav({ items, actions, leading = null, className = "", brandTo = null }) {
   const replayIntro = useArgusStore((s) => s.replayIntro);
   const navigate = useNavigate();
   return (
@@ -51,9 +52,16 @@ export default function SiteNav({ items, actions, leading = null, className = ""
         <button
           type="button"
           className="public-brand active"
-          onClick={() => { replayIntro(); navigate("/project"); }}
-          title="重播開場動畫"
-          aria-label="重播 ARGUS 開場動畫"
+          onClick={() => {
+            if (brandTo) {
+              navigate(brandTo.path);
+              return;
+            }
+            replayIntro();
+            navigate("/project");
+          }}
+          title={brandTo ? brandTo.label : "重播開場動畫"}
+          aria-label={brandTo ? `ARGUS：${brandTo.label}` : "重播 ARGUS 開場動畫"}
         >
           <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
           <span className="public-brand-sub">AI 網站健檢平台</span>

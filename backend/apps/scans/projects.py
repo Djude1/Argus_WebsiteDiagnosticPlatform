@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from django.db.models import Count, Q
 
-from apps.scans.models import Finding, ScanJob, SiteProject
+from apps.scans.models import ALL_CATEGORIES, Finding, ScanJob, SiteProject
 from apps.scans.services import user_owns_domain
 
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
@@ -25,6 +25,7 @@ TOP_ACTIONS_LIMIT = 5
 SAMPLE_URLS_LIMIT = 3
 ISSUE_URLS_LIMIT = 50
 RECENT_SCANS_LIMIT = 5
+SUMMARY_HISTORY_LIMIT = 8
 
 
 def completed_scans(project: SiteProject):
@@ -355,9 +356,10 @@ def project_pages(project: SiteProject, scan: ScanJob | None = None) -> dict:
 
 
 def project_summaries(project_ids: list[int]) -> dict[int, dict]:
-    """專案清單與切換器用的摘要：最新一次掃描、最新完成分數與前一次完成分數（算變化）。
+    """專案清單與切換器用的摘要：最新一次掃描、最新完成分數與前一次完成分數（算變化）、
+    最近幾次完成分數（走勢）、最新完成掃描依嚴重度的問題數。
 
-    一次查詢撈回這些專案的掃描欄位，避免每個專案各查一次。
+    兩次查詢撈回這些專案的掃描與最新掃描的問題，避免每個專案各查一次。
     """
     summaries: dict[int, dict] = {
         pid: {
@@ -367,9 +369,12 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             "latest_category_scores": {},
             "previous_score": None,
             "last_completed_at": None,
+            "score_history": [],
+            "issue_counts": {},
         }
         for pid in project_ids
     }
+    latest_completed: dict[int, tuple[int, set[str]]] = {}
     rows = (
         ScanJob.objects.filter(project_id__in=project_ids)
         .order_by("-created_at", "-id")
@@ -379,6 +384,7 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             "status",
             "overall_score",
             "category_scores",
+            "categories",
             "created_at",
             "completed_at",
         )
@@ -392,10 +398,43 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             }
         if row["status"] != ScanJob.Status.COMPLETED:
             continue
+        if (
+            row["overall_score"] is not None
+            and len(summary["score_history"]) < SUMMARY_HISTORY_LIMIT
+        ):
+            summary["score_history"].insert(0, row["overall_score"])
         if summary["last_completed_at"] is None:
             summary["latest_score"] = row["overall_score"]
             summary["latest_category_scores"] = row["category_scores"] or {}
             summary["last_completed_at"] = row["completed_at"]
+            effective = {c for c in (row["categories"] or []) if c in ALL_CATEGORIES}
+            latest_completed[row["project_id"]] = (row["id"], effective or set(ALL_CATEGORIES))
         elif summary["previous_score"] is None and summary["latest_score"] is not None:
             summary["previous_score"] = row["overall_score"]
+    _attach_issue_counts(summaries, latest_completed)
     return summaries
+
+
+def _attach_issue_counts(
+    summaries: dict[int, dict], latest: dict[int, tuple[int, set[str]]]
+) -> None:
+    """最新完成掃描的問題數（同一條規則算一個、取最高嚴重度、只算有勾的維度、不含 info）。"""
+    project_by_scan = {scan_id: pid for pid, (scan_id, _) in latest.items()}
+    worst: dict[int, dict[str, int]] = {}
+    rows = Finding.objects.filter(scan_job_id__in=project_by_scan).values_list(
+        "scan_job_id", "severity", "rule_id", "category", "title"
+    )
+    for scan_id, severity, rule_id, category, title in rows:
+        pid = project_by_scan[scan_id]
+        if severity == "info" or category not in latest[pid][1]:
+            continue
+        key = issue_key(rule_id, category, title)
+        rank = _SEVERITY_RANK.get(severity, len(SEVERITY_ORDER))
+        issues = worst.setdefault(pid, {})
+        issues[key] = min(rank, issues.get(key, rank))
+    for pid, issues in worst.items():
+        counts: dict[str, int] = {}
+        for rank in issues.values():
+            if rank < len(SEVERITY_ORDER):
+                counts[SEVERITY_ORDER[rank]] = counts.get(SEVERITY_ORDER[rank], 0) + 1
+        summaries[pid]["issue_counts"] = counts

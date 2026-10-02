@@ -466,3 +466,24 @@ class ProjectDashboardDataTests(APITestCase):
         issue = next(item for item in data["issues"] if item["key"] == "seo-a")
         self.assertEqual(issue["remediation"], "修補 high")
         self.assertEqual(issue["urls"], ["https://example.com/"])
+
+
+class ProjectSummaryListTests(APITestCase):
+    """所有專案頁的摘要：分數走勢與最新完成掃描的問題數。"""
+
+    def test_score_history_and_issue_counts(self):
+        user = _user("summary")
+        self.client.force_authenticate(user)
+        old = _scan(user, completed_minutes_ago=60, overall_score=50)
+        latest = _scan(user, completed_minutes_ago=5, overall_score=70, categories=["seo"])
+        _scan(user)  # 進行中的掃描不影響走勢與問題數
+        _finding(old, "seo-old", severity="critical")
+        for severity in ("low", "high"):
+            _finding(latest, "seo-a", severity=severity)
+        _finding(latest, "seo-b", severity="info")
+        _finding(latest, "dns-spf-missing", category="security", severity="high")
+        rows = self.client.get(reverse("site-project-list")).data
+        summary = next(row for row in rows if row["id"] == latest.project_id)["summary"]
+        self.assertEqual(summary["score_history"], [50, 70])
+        # 同規則算一個並取最高嚴重度；info 與未勾維度（security）不算
+        self.assertEqual(summary["issue_counts"], {"high": 1})
