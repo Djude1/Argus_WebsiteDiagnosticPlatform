@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import importlib
+import io
+from contextlib import redirect_stdout
 from datetime import timedelta
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.core.management import call_command
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -260,8 +265,10 @@ class ProjectOverviewAndIssuesTests(APITestCase):
 
     def test_overview_without_completed_scan(self):
         empty = SiteProject.objects.create(
-            user=self.user, origin="https://empty.example.com",
-            name="empty", start_url="https://empty.example.com/",
+            user=self.user,
+            origin="https://empty.example.com",
+            name="empty",
+            start_url="https://empty.example.com/",
         )
         data = self.client.get(reverse("site-project-overview", args=[empty.id])).data
         self.assertIsNone(data["latest_scan"])
@@ -343,12 +350,119 @@ class ProjectIssueScopeTests(APITestCase):
         scan = _scan(user, completed_minutes_ago=5, categories=["seo"])
         _finding(scan, "seo-rule")
         _finding(scan, "dns-spf-missing", category="security")
-        ScanJob.objects.filter(id=scan.id).update(top_actions=[
-            {"title": "缺少 SPF", "category": "security", "severity": "medium"},
-            {"title": "seo-rule", "category": "seo", "severity": "medium"},
-        ])
+        ScanJob.objects.filter(id=scan.id).update(
+            top_actions=[
+                {"title": "缺少 SPF", "category": "security", "severity": "medium"},
+                {"title": "seo-rule", "category": "seo", "severity": "medium"},
+            ]
+        )
         data = self.client.get(reverse("site-project-issues", args=[scan.project_id])).data
         self.assertEqual([issue["key"] for issue in data["issues"]], ["seo-rule"])
         overview = self.client.get(reverse("site-project-overview", args=[scan.project_id])).data
         self.assertEqual(overview["latest_scan"]["issues_count"], 1)
         self.assertEqual([a["category"] for a in overview["latest_scan"]["top_actions"]], ["seo"])
+
+
+class SiteProjectMigrationRecoveryTests(TransactionTestCase):
+    """0019 遇到先前被回退版本留下的表與欄位時仍要能套用（2026-10-02 Docker migrate 失敗）。"""
+
+    BEFORE = [("scans", "0018_scanjob_aeo_report")]
+    AFTER = [("scans", "0019_site_projects")]
+
+    def tearDown(self):
+        call_command("migrate", verbosity=0)
+
+    def test_migration_recovers_from_leftover_schema(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.BEFORE)
+        old_apps = executor.loader.project_state(self.BEFORE).apps
+        user = old_apps.get_model("accounts", "User").objects.create(
+            username="leftover", email="leftover@example.com"
+        )
+        old_apps.get_model("scans", "ScanJob").objects.create(
+            user_id=user.id,
+            original_url="https://a.example/",
+            normalized_url="https://a.example/",
+            origin="https://a.example",
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE scans_siteproject (id integer PRIMARY KEY, name varchar(80))"
+            )
+            cursor.execute("ALTER TABLE scans_scanjob ADD COLUMN project_id bigint NULL")
+            cursor.execute(
+                "CREATE INDEX scans_scanjob_project_id_left ON scans_scanjob (project_id)"
+            )
+
+        executor = MigrationExecutor(connection)
+        with redirect_stdout(io.StringIO()):
+            executor.migrate(self.AFTER)
+        new_apps = executor.loader.project_state(self.AFTER).apps
+        project = new_apps.get_model("scans", "SiteProject").objects.get()
+        self.assertEqual(project.origin, "https://a.example")
+        self.assertEqual(project.default_scope, "site")
+        self.assertFalse(
+            new_apps.get_model("scans", "ScanJob").objects.filter(project=None).exists()
+        )
+
+
+class ProjectDashboardDataTests(APITestCase):
+    """總覽儀表板、頁面清單與問題詳情的資料。"""
+
+    def setUp(self):
+        self.user = _user("dashboard")
+        self.client.force_authenticate(self.user)
+        self.scan = _scan(self.user, completed_minutes_ago=5, categories=["seo", "security"])
+        Page = django_apps.get_model("scans", "Page")
+        self.home = Page.objects.create(
+            scan_job=self.scan,
+            url="https://example.com/",
+            final_url="https://example.com/",
+            origin="https://example.com",
+            status_code=200,
+            load_time_ms=420,
+            depth=0,
+        )
+        self.blocked = Page.objects.create(
+            scan_job=self.scan,
+            url="https://example.com/x",
+            final_url="https://example.com/x",
+            origin="https://example.com",
+            status_code=403,
+            depth=1,
+            blocked_reason="HTTP 403",
+        )
+        for severity in ("low", "high"):
+            finding = _finding(self.scan, "seo-a", severity=severity)
+            finding.page = self.home
+            finding.remediation = f"修補 {severity}"
+            finding.save()
+        _finding(self.scan, "dns-spf-missing", category="security")
+        geo = _finding(self.scan, "geo-x", category="geo")
+        geo.page = self.home
+        geo.save()
+
+    def test_overview_includes_stats_category_counts_and_recent_scans(self):
+        data = self.client.get(reverse("site-project-overview", args=[self.scan.project_id])).data
+        latest = data["latest_scan"]
+        self.assertEqual(latest["stats"]["pages"], 2)
+        self.assertEqual(latest["stats"]["pages_blocked"], 1)
+        self.assertEqual(latest["stats"]["findings"], 3)  # geo 沒勾，不計
+        self.assertEqual(latest["category_counts"], {"seo": 1, "security": 1})
+        self.assertEqual([s["id"] for s in data["recent_scans"]], [self.scan.id])
+
+    def test_pages_list_counts_issues_per_page(self):
+        data = self.client.get(reverse("site-project-pages", args=[self.scan.project_id])).data
+        by_url = {page["url"]: page for page in data["pages"]}
+        home = by_url["https://example.com/"]
+        self.assertEqual(home["findings"], 2)
+        self.assertEqual(home["max_severity"], "high")
+        self.assertEqual(home["by_category"], {"seo": 2})
+        self.assertEqual(by_url["https://example.com/x"]["blocked_reason"], "HTTP 403")
+        self.assertEqual(data["site_level_findings"], 1)
+
+    def test_issue_carries_remediation_and_page_list(self):
+        data = self.client.get(reverse("site-project-issues", args=[self.scan.project_id])).data
+        issue = next(item for item in data["issues"] if item["key"] == "seo-a")
+        self.assertEqual(issue["remediation"], "修補 high")
+        self.assertEqual(issue["urls"], ["https://example.com/"])

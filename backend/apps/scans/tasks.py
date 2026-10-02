@@ -465,6 +465,11 @@ def stage_crawl(ctx: ScanRunContext) -> None:
     ctx.warnings = redact_warning_summary(warnings)
     ctx.site_signals = site_signals
     ctx.discovered_endpoints = discovered_endpoints
+    if site_signals.get("sitemap_seeded"):
+        append_log(
+            scan_job_id,
+            f"sitemap 提供 {site_signals['sitemap_seeded']} 個頁面網址，已加入爬取佇列",
+        )
     append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
     if discovered_endpoints:
         append_log(

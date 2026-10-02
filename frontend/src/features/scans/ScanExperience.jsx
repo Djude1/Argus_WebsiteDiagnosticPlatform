@@ -46,6 +46,8 @@ import {
 const SCAN_POLL_INTERVAL_MS = 2000;
 const LIST_POLL_INTERVAL_MS = 3000;
 const MAX_SITE_SCAN_PAGES = 50;
+// 整站走訪深度（與後端 ARGUS_DEFAULT_MAX_DEPTH 一致）；頁數上限才是實際範圍，後端另讀 sitemap 補種子
+const SITE_SCAN_DEPTH = 6;
 
 // 掃描維度選項（value 必須與後端 ALL_CATEGORIES 一致）
 const SCAN_CATEGORY_OPTIONS = [
@@ -466,7 +468,7 @@ function ScanJobForm({ onCreated, project = null }) {
         active_testing_authorized: activeMode && activeAuthorized,
         categories,
         max_pages: scope === "single" ? 1 : MAX_SITE_SCAN_PAGES,
-        max_depth: scope === "single" ? 1 : 3,
+        max_depth: scope === "single" ? 1 : SITE_SCAN_DEPTH,
         ...(project ? { project: project.id } : {}),
       };
       const response = await api.post("/scans/", payload);

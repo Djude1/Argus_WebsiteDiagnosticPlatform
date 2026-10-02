@@ -9,7 +9,7 @@ import { useArgusStore } from "../../store";
 // 切換時停留在同一個分頁（A 的問題分析 → B 的問題分析）；從掃描詳情等其他頁切換則回到新專案的總覽。
 // 專案多於 SEARCH_THRESHOLD 個時顯示搜尋框；↑／↓ 在選項間移動，Esc 關閉並把焦點還給按鈕。
 
-const SECTION_PATTERN = /^\/projects\/\d+(\/(scans|issues|history|settings))?\/?$/;
+const SECTION_PATTERN = /^\/projects\/\d+(\/(scans|issues|pages|history|settings))?\/?$/;
 const SEARCH_THRESHOLD = 6;
 
 /** 切換到 projectId 後要去的網址。 */

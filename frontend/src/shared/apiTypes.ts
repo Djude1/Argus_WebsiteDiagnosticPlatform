@@ -1616,6 +1616,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{id}/pages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 頁面清單：最新（或 ?scan= 指定）一次完成掃描的每頁狀態與問題數。 */
+        get: operations["projects_pages_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{id}/restore/": {
         parameters: {
             query?: never;
@@ -3041,7 +3058,7 @@ export interface components {
              *     ]
              */
             categories: components["schemas"]["CategoriesEnum"][];
-            /** @default 3 */
+            /** @default 6 */
             max_depth: number;
             /** @default 50 */
             max_pages: number;
@@ -3068,7 +3085,7 @@ export interface components {
              *     ]
              */
             categories: components["schemas"]["CategoriesEnum"][];
-            /** @default 3 */
+            /** @default 6 */
             max_depth: number;
             /** @default 50 */
             max_pages: number;
@@ -5944,6 +5961,30 @@ export interface operations {
         };
     };
     projects_overview_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_pages_retrieve: {
         parameters: {
             query?: never;
             header?: never;

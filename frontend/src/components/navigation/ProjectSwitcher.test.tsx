@@ -42,6 +42,7 @@ beforeEach(() => {
 describe("projectSwitchPath", () => {
   it("切換時停留在同一個分頁；掃描詳情與其他頁面回到總覽", () => {
     expect(projectSwitchPath("/projects/1/issues", 2)).toBe("/projects/2/issues");
+    expect(projectSwitchPath("/projects/1/pages", 2)).toBe("/projects/2/pages");
     expect(projectSwitchPath("/projects/1", 2)).toBe("/projects/2");
     expect(projectSwitchPath("/scans/9/topology", 2)).toBe("/projects/2");
     expect(projectSwitchPath("/billing", 2)).toBe("/projects/2");

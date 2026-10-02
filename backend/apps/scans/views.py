@@ -39,7 +39,12 @@ from apps.scans.models import (
     default_project_name,
 )
 from apps.scans.process_runner import _terminate_process_tree
-from apps.scans.projects import project_issues, project_overview, project_summaries
+from apps.scans.projects import (
+    project_issues,
+    project_overview,
+    project_pages,
+    project_summaries,
+)
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
 from apps.scans.serializers import (
@@ -667,17 +672,28 @@ class SiteProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def issues(self, request, pk=None):
         project = self.get_object()
-        scan = None
-        scan_id = request.query_params.get("scan")
-        if scan_id:
-            scan = (
-                project.scans.filter(id=scan_id, status=ScanJob.Status.COMPLETED).first()
-                if str(scan_id).isdigit()
-                else None
-            )
-            if scan is None:
-                raise Http404("這個專案沒有這一次完成的掃描。")
-        return Response(project_issues(project, scan))
+        return Response(project_issues(project, self._requested_scan(project)))
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    @action(detail=True, methods=["get"])
+    def pages(self, request, pk=None):
+        """頁面清單：最新（或 ?scan= 指定）一次完成掃描的每頁狀態與問題數。"""
+        project = self.get_object()
+        return Response(project_pages(project, self._requested_scan(project)))
+
+    def _requested_scan(self, project):
+        """?scan=<id>：必須是這個專案、已完成的掃描；沒帶時回 None（＝最新一次）。"""
+        scan_id = self.request.query_params.get("scan")
+        if not scan_id:
+            return None
+        scan = (
+            project.scans.filter(id=scan_id, status=ScanJob.Status.COMPLETED).first()
+            if str(scan_id).isdigit()
+            else None
+        )
+        if scan is None:
+            raise Http404("這個專案沒有這一次完成的掃描。")
+        return scan
 
 
 class VerifiedDomainViewSet(viewsets.ModelViewSet):

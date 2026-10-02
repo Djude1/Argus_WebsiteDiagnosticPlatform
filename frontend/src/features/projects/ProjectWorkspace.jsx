@@ -7,13 +7,21 @@ import { api } from "../../api";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import { apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
 import { formatRelative } from "../../shared/formatters";
-import { ClockIcon, FlagIcon, GearIcon, HomeIcon, SpiderIcon } from "../../shared/LineIcons";
+import {
+  BrowserIcon,
+  ClockIcon,
+  FlagIcon,
+  GearIcon,
+  HomeIcon,
+  SpiderIcon,
+} from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
 
 const SECTIONS = [
   { key: "", label: "總覽", hint: "分數與本次變化", Icon: HomeIcon },
   { key: "scans", label: "掃描", hint: "建立與檢視掃描", Icon: SpiderIcon },
   { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
+  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
   { key: "history", label: "歷史報告", hint: "歷次分數與報告", Icon: ClockIcon },
   { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存", Icon: GearIcon },
 ];

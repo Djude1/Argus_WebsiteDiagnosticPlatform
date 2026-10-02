@@ -53,6 +53,7 @@ const ProjectCreatePage = lazyNamed(loadProjectWorkspace, "ProjectCreatePage");
 const ProjectOverviewPage = lazyNamed(loadProjectPages, "ProjectOverviewPage");
 const ProjectScansPage = lazyNamed(loadProjectPages, "ProjectScansPage");
 const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
+const ProjectPagesPage = lazyNamed(loadProjectPages, "ProjectPagesPage");
 const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
 const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
@@ -179,6 +180,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route index element={<ProjectOverviewPage />} />
             <Route path="scans" element={<ProjectScansPage />} />
             <Route path="issues" element={<ProjectIssuesPage />} />
+            <Route path="pages" element={<ProjectPagesPage />} />
             <Route path="history" element={<ProjectHistoryPage />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>

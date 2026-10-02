@@ -4193,6 +4193,44 @@
                 }
             }
         },
+        "/api/projects/{id}/pages/": {
+            "get": {
+                "operationId": "projects_pages_retrieve",
+                "description": "頁面清單：最新（或 ?scan= 指定）一次完成掃描的每頁狀態與問題數。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/projects/{id}/restore/": {
             "post": {
                 "operationId": "projects_restore_create",
@@ -8234,7 +8272,7 @@
                     "max_depth": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 3
+                        "default": 6
                     },
                     "max_pages": {
                         "type": "integer",
@@ -8307,7 +8345,7 @@
                     "max_depth": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 3
+                        "default": 6
                     },
                     "max_pages": {
                         "type": "integer",

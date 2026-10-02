@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -157,7 +158,12 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
     """
     from apps.scans.security.exposure_scanner import parse_robots_disallow
 
-    signals: dict = {"llms_txt_found": False, "blocked_ai_crawlers": [], "robots_disallow": []}
+    signals: dict = {
+        "llms_txt_found": False,
+        "blocked_ai_crawlers": [],
+        "robots_disallow": [],
+        "robots_sitemaps": [],
+    }
     try:
         llms_url = assert_public_http_url(f"{origin}/llms.txt")
         response = await context.request.get(llms_url, timeout=10000, max_redirects=0)
@@ -171,12 +177,92 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
             robots_text = await resp.text()
             robot_parser.parse(robots_text.splitlines())
             signals["robots_disallow"] = parse_robots_disallow(robots_text)
+            signals["robots_sitemaps"] = parse_robots_sitemaps(robots_text)
     except Exception:
         signals["robots_disallow"] = []
     for agent in AI_CRAWLER_USER_AGENTS:
         if not robot_parser.can_fetch(agent, f"{origin}/"):
             signals["blocked_ai_crawlers"].append(agent)
     return signals
+
+
+# sitemap 只當「網站自己列出的頁面清單」補爬取種子：讀取上限避免超大或惡意檔案撐爆記憶體，
+# sitemap index 最多再展開幾個子 sitemap；壓縮檔（.gz）不處理。
+_SITEMAP_MAX_BYTES = 2_000_000
+_SITEMAP_MAX_CHILDREN = 3
+_SITEMAP_LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
+
+
+def parse_robots_sitemaps(robots_text: str) -> list[str]:
+    """robots.txt 的 `Sitemap:` 宣告（不分大小寫）。"""
+    sitemaps = []
+    for line in robots_text.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() == "sitemap" and value.strip():
+            sitemaps.append(value.strip())
+    return sitemaps
+
+
+def sitemap_page_urls(locs: list[str], origin: str) -> list[str]:
+    """sitemap 的 <loc> 轉成可爬取的同源頁面網址（去重保序、排除二進位檔）。"""
+    urls: list[str] = []
+    for loc in locs:
+        normalized = normalize_crawl_url(loc.replace("&amp;", "&"))
+        if not normalized or not same_origin(normalized, origin) or is_binary_resource(normalized):
+            continue
+        if normalized not in urls:
+            urls.append(normalized)
+    return urls
+
+
+async def _fetch_sitemap(context, url: str, origin: str) -> str:
+    """抓單一 sitemap（同源、公開位址、不跟隨轉址）；失敗或過大回空字串。"""
+    try:
+        if not same_origin(url, origin) or url.lower().endswith(".gz"):
+            return ""
+        response = await context.request.get(
+            assert_public_http_url(url), timeout=10000, max_redirects=0
+        )
+        if not response.ok:
+            return ""
+        body = await response.body()
+        if len(body) > _SITEMAP_MAX_BYTES:
+            return ""
+        return body.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+async def discover_sitemap_urls(context, origin: str, declared: list[str], limit: int) -> list[str]:
+    """從 robots.txt 宣告的 sitemap（沒有就 /sitemap.xml）取出同源頁面網址，最多 limit 個。
+
+    被動、只讀網站公開給搜尋引擎的清單：只靠 <a> 連結 BFS 時，連結稀疏或以 JavaScript
+    導覽的網站在有限深度內常找不到足夠頁面，整站掃描到不了頁數上限。
+    """
+    pending = [url for url in declared if same_origin(url, origin)] or [f"{origin}/sitemap.xml"]
+    urls: list[str] = []
+    children_left = _SITEMAP_MAX_CHILDREN
+    seen: set[str] = set()
+    while pending and len(urls) < limit:
+        sitemap_url = pending.pop(0)
+        if sitemap_url in seen:
+            continue
+        seen.add(sitemap_url)
+        text = await _fetch_sitemap(context, sitemap_url, origin)
+        if not text:
+            continue
+        locs = _SITEMAP_LOC.findall(text)
+        if "<sitemapindex" in text.lower():
+            for child in locs:
+                if children_left <= 0:
+                    break
+                children_left -= 1
+                pending.append(child.replace("&amp;", "&"))
+            continue
+        for url in sitemap_page_urls(locs, origin):
+            if url not in urls:
+                urls.append(url)
+    return urls[:limit]
 
 
 async def collect_element_boxes(page) -> dict[str, dict]:
@@ -569,6 +655,20 @@ class _CrawlState:
             return url, depth
         return None
 
+    def seed(self, urls: list[str], depth: int = 1) -> int:
+        """把 sitemap 等來源的網址放進佇列（不超過頁數上限）；回傳實際加入的數量。"""
+        queued = {url for url, _ in self.queue}
+        added = 0
+        for url in urls:
+            if len(self.queue) >= self.max_pages:
+                break
+            if url in queued or url in self.visited:
+                continue
+            self.queue.append((url, depth))
+            queued.add(url)
+            added += 1
+        return added
+
     def enqueue_links(self, links: list[str], depth: int) -> None:
         for link in links:
             if link not in self.visited and len(self.pages) + len(self.queue) < self.max_pages:
@@ -938,6 +1038,11 @@ async def crawl_site(
         pages_in_context = 0
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
+            if max_pages > 1:
+                sitemap_urls = await discover_sitemap_urls(
+                    context, origin, site_signals.get("robots_sitemaps") or [], max_pages
+                )
+                site_signals["sitemap_seeded"] = state.seed(sitemap_urls)
             while (target := state.next_target(robot_parser, respect_robots)) is not None:
                 url, depth = target
                 await _throttle(state, min_interval)

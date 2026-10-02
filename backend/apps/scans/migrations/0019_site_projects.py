@@ -9,6 +9,43 @@ from django.db import migrations, models
 import apps.scans.models
 
 
+def drop_orphaned_site_project_schema(apps, schema_editor):
+    """清掉先前被回退的網站專案版本留下的表與欄位，讓本 migration 能從乾淨狀態建立。
+
+    這個 migration 還沒套用時，`scans_siteproject` 與 `scans_scanjob.project_id` 不應該存在；
+    若存在，只可能是同一功能較早的版本曾在這個資料庫跑過、之後程式與 migration 紀錄被回退
+    但資料表沒有一起刪除（2026-10-02 實際發生：Docker 的 migrate 報 relation already exists）。
+    專案資料可由下方 backfill 依既有掃描重建，掃描、finding 與點數紀錄都不受影響。
+    """
+    connection = schema_editor.connection
+    with connection.cursor() as cursor:
+        tables = set(connection.introspection.table_names(cursor))
+        scan_columns = {
+            column.name
+            for column in connection.introspection.get_table_description(cursor, "scans_scanjob")
+        }
+    if "project_id" in scan_columns:
+        if connection.vendor == "sqlite":
+            # SQLite 的 DROP COLUMN 會被欄位上的索引擋下，先刪索引
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(cursor, "scans_scanjob")
+            for name, info in constraints.items():
+                if info["index"] and info["columns"] == ["project_id"]:
+                    schema_editor.execute(f"DROP INDEX {schema_editor.quote_name(name)}")
+            schema_editor.execute("ALTER TABLE scans_scanjob DROP COLUMN project_id")
+        else:
+            # 用同欄名的一般整數欄位移除，不需解析關聯目標；
+            # PostgreSQL 以 DROP COLUMN ... CASCADE 連同外鍵與索引一起刪
+            stale_column = models.BigIntegerField(null=True)
+            stale_column.set_attributes_from_name("project_id")
+            schema_editor.remove_field(apps.get_model("scans", "ScanJob"), stale_column)
+        print("\n  已移除先前版本殘留的 scans_scanjob.project_id 欄位", end="")
+    if "scans_siteproject" in tables:
+        table = schema_editor.quote_name("scans_siteproject")
+        schema_editor.execute(schema_editor.sql_delete_table % {"table": table})
+        print("\n  已移除先前版本殘留的 scans_siteproject 表（專案會依既有掃描重新回填）", end="")
+
+
 def backfill_site_projects(apps, schema_editor):
     """既有掃描依 (使用者, origin) 建立網站專案並歸入；起始網址取該 origin 最新一次掃描的網址。"""
     ScanJob = apps.get_model("scans", "ScanJob")
@@ -37,13 +74,13 @@ def backfill_site_projects(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("scans", "0018_scanjob_aeo_report"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
+        migrations.RunPython(drop_orphaned_site_project_schema, migrations.RunPython.noop),
         migrations.CreateModel(
             name="SiteProject",
             fields=[
