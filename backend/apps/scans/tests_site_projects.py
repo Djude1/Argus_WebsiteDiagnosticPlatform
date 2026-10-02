@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import importlib
+import io
+from contextlib import redirect_stdout
 from datetime import timedelta
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.core.management import call_command
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -352,3 +357,46 @@ class ProjectIssueScopeTests(APITestCase):
         overview = self.client.get(reverse("site-project-overview", args=[scan.project_id])).data
         self.assertEqual(overview["latest_scan"]["issues_count"], 1)
         self.assertEqual([a["category"] for a in overview["latest_scan"]["top_actions"]], ["seo"])
+
+
+class SiteProjectMigrationRecoveryTests(TransactionTestCase):
+    """0019 遇到先前被回退版本留下的表與欄位時仍要能套用（2026-10-02 Docker migrate 失敗）。"""
+
+    BEFORE = [("scans", "0018_scanjob_aeo_report")]
+    AFTER = [("scans", "0019_site_projects")]
+
+    def tearDown(self):
+        call_command("migrate", verbosity=0)
+
+    def test_migration_recovers_from_leftover_schema(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.BEFORE)
+        old_apps = executor.loader.project_state(self.BEFORE).apps
+        user = old_apps.get_model("accounts", "User").objects.create(
+            username="leftover", email="leftover@example.com"
+        )
+        old_apps.get_model("scans", "ScanJob").objects.create(
+            user_id=user.id,
+            original_url="https://a.example/",
+            normalized_url="https://a.example/",
+            origin="https://a.example",
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE scans_siteproject (id integer PRIMARY KEY, name varchar(80))"
+            )
+            cursor.execute("ALTER TABLE scans_scanjob ADD COLUMN project_id bigint NULL")
+            cursor.execute(
+                "CREATE INDEX scans_scanjob_project_id_left ON scans_scanjob (project_id)"
+            )
+
+        executor = MigrationExecutor(connection)
+        with redirect_stdout(io.StringIO()):
+            executor.migrate(self.AFTER)
+        new_apps = executor.loader.project_state(self.AFTER).apps
+        project = new_apps.get_model("scans", "SiteProject").objects.get()
+        self.assertEqual(project.origin, "https://a.example")
+        self.assertEqual(project.default_scope, "site")
+        self.assertFalse(
+            new_apps.get_model("scans", "ScanJob").objects.filter(project=None).exists()
+        )

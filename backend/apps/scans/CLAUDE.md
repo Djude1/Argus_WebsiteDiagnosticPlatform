@@ -136,6 +136,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 - **連續次數**：`issue_streaks` 往回數同專案連續幾次完成的掃描都出現該問題（最多 `STREAK_LOOKBACK` 次，遇到沒出現或那次沒勾該維度就停），回傳 `streak`／`since`。
 - **預設掃描設定**：`SiteProject.default_scope`／`default_categories` 只是前端表單初始值，建立掃描時仍以實際送出的參數為準。
 - **問題的追蹤單位**＝一次掃描中同一條 `rule_id`（沒有就「分類:標題」），與報告合併規則一致；比較對象是同專案前一次「完成」的掃描。「本次未出現」只列本次仍有勾的維度，前端必須提醒不等於已修好。
+- **migration 0019 會先清掉殘留**（`drop_orphaned_site_project_schema`）：0019 未套用時若資料庫已有 `scans_siteproject` 表或 `scans_scanjob.project_id` 欄位，只可能是同功能較早版本跑過後被回退（程式與 migration 紀錄退回但表沒刪），會先移除再建立並回填。2026-10-02 Docker migrate 因此報 `relation "scans_siteproject" already exists`；由 `SiteProjectMigrationRecoveryTests` 鎖定（SQLite／PostgreSQL 皆驗證）。**回退含 migration 的功能時要用 `migrate <app> <前一版>` 反向套用，不要只退程式碼或刪 `django_migrations` 紀錄。**
 - **不提供硬刪除**：DELETE＝封存（`archived_at`），單筆讀取仍可讀封存專案（舊掃描詳情要顯示所屬專案），清單只列未封存。
 - 測試：`tests_site_projects.py`（歸入、回填、API、跨使用者 404、總覽與比較、預設掃描設定、已封存清單、連續次數、維度過濾）。
 
