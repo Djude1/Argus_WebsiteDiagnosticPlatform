@@ -32,6 +32,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
+| `projects.py` | 網站專案的彙整資料（只讀 DB）：`project_overview`、`project_issues`／`compare_issues`（新增／持續／本次未出現）、`project_summaries`（清單用，一次查詢） | 寫 DB、連線目標網站 |
 | `aeo/` | AEO 問答檢測（內容擷取、出題、找答案與判定、標記一致性、整站評估；見下「AEO 問答檢測」） | 修改 `ScanJob.status`、發出任何網路請求（只分析爬蟲已抓到的頁面） |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
 | `katana_scanner.py` | Katana 全站 JS/端點探索封裝；時間、大小、同主機與 RPS 預算 | 在單頁、passive 或未授權模式執行 |
@@ -123,6 +124,20 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 - 呈現：掃描詳情頁 `AeoAnswerPanel`、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
+
+## 網站專案（`SiteProject`，2026-10-02）
+
+會員區以網站專案為單位（[`docs/adr/0003-site-project-workspace.md`](../../../docs/adr/0003-site-project-workspace.md)）：
+
+- **每筆掃描都要有專案**：`ScanJob.save()` 新建時沒指定就依 `(user, origin)` 歸入（`SiteProject.objects.ensure_for`），所以 MCP、後台重排、`rerun_scan` 與測試不用改。指定了已封存的專案會恢復它。
+- **建立掃描可帶 `project`**：`ScanJobCreateSerializer` 檢查專案屬於本人，且網址的 origin 與專案相同（換網站＝換專案，回 400 `url`）。
+- **`/api/scans/?project=<id>`** 回該專案全部掃描；沒帶時維持「每個 origin 只回最新一筆」。
+- **問題只收本次有勾的維度**（`issue_groups` 以 `effective_categories` 過濾，總覽的 `top_actions` 同理）：部分站台層級檢查不論勾選都會寫 finding，問題分析必須與計分一致。
+- **連續次數**：`issue_streaks` 往回數同專案連續幾次完成的掃描都出現該問題（最多 `STREAK_LOOKBACK` 次，遇到沒出現或那次沒勾該維度就停），回傳 `streak`／`since`。
+- **預設掃描設定**：`SiteProject.default_scope`／`default_categories` 只是前端表單初始值，建立掃描時仍以實際送出的參數為準。
+- **問題的追蹤單位**＝一次掃描中同一條 `rule_id`（沒有就「分類:標題」），與報告合併規則一致；比較對象是同專案前一次「完成」的掃描。「本次未出現」只列本次仍有勾的維度，前端必須提醒不等於已修好。
+- **不提供硬刪除**：DELETE＝封存（`archived_at`），單筆讀取仍可讀封存專案（舊掃描詳情要顯示所屬專案），清單只列未封存。
+- 測試：`tests_site_projects.py`（歸入、回填、API、跨使用者 404、總覽與比較、預設掃描設定、已封存清單、連續次數、維度過濾）。
 
 ## 報告內容契約（`reports.py`）
 

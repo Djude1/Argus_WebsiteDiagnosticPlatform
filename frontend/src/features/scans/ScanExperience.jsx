@@ -109,6 +109,23 @@ function buildScanSteps(status, progress) {
   return { detailed: true, steps, currentIdx, current: steps[currentIdx] };
 }
 
+/**
+ * 掃描整體進度（掃描詳情的進度條與網站專案總覽共用，確保兩邊數字一致）。
+ * 細分階段模式：（已完成階段數＋目前階段完成比例）÷ 階段數；舊任務沿用 pages_done／pages_total。
+ */
+function scanProgress(status, progress) {
+  const built = buildScanSteps(status, progress);
+  const { detailed, steps, currentIdx } = built;
+  const stepTotal = detailed ? progress?.step_total || 0 : 0;
+  const stepDone = detailed ? Math.min(progress?.step_done || 0, stepTotal) : 0;
+  const stepFrac = stepTotal > 0 ? stepDone / stepTotal : 0;
+  const total = detailed ? steps.length : progress?.pages_total || 0;
+  const done = detailed ? currentIdx + stepFrac : progress?.pages_done || 0;
+  const hasProgress = total > 0 && (detailed ? status !== "queued" : true);
+  const percent = hasProgress ? Math.min(100, Math.round((done / total) * 100)) : null;
+  return { ...built, stepTotal, stepDone, stepFrac, total, done, hasProgress, percent };
+}
+
 function formatMMSS(totalSec) {
   const sec = Math.max(0, Math.floor(totalSec));
   const mm = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -132,18 +149,11 @@ function CrawlingAnimation({
     return () => clearInterval(t);
   }, []);
 
-  const { detailed, steps, currentIdx: safeIdx, current } = buildScanSteps(status, progress);
-
-  // 細分階段模式：整體進度＝（已完成階段數＋目前階段完成比例）÷ 階段數，
-  // 與下方階段列用同一個公式，進度條不會跑在階段前面或後面。
-  // 舊任務（沒有 steps）沿用 phase 的 pages_done／pages_total。
-  const stepTotal = detailed ? progress?.step_total || 0 : 0;
-  const stepDone = detailed ? Math.min(progress?.step_done || 0, stepTotal) : 0;
-  const stepFrac = stepTotal > 0 ? stepDone / stepTotal : 0;
-  const total = detailed ? steps.length : progress?.pages_total || 0;
-  const done = detailed ? safeIdx + stepFrac : progress?.pages_done || 0;
-  const hasProgress = total > 0 && (detailed ? status !== "queued" : true);
-  const pct = hasProgress ? Math.min(100, Math.round((done / total) * 100)) : null;
+  // 整體進度與下方階段列用同一個公式（scanProgress），進度條不會跑在階段前面或後面
+  const {
+    detailed, steps, currentIdx: safeIdx, current, stepTotal, stepDone, stepFrac, total, done, hasProgress,
+    percent: pct,
+  } = scanProgress(status, progress);
   const stepUnit = current?.key === "agent" ? "步" : "頁";
 
   // 已執行時間（從整個 scan 的 started_at 起算）
@@ -285,30 +295,49 @@ function CrawlingAnimation({
 // 建立掃描表單（含 F5 防丟失與草稿持久化）
 // ============================================================
 
-function loadScanDraft() {
+function loadScanDraft(key = SCAN_DRAFT_KEY) {
   try {
-    const raw = window.localStorage.getItem(SCAN_DRAFT_KEY);
+    const raw = window.localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function saveScanDraft(draft) {
+function saveScanDraft(draft, key = SCAN_DRAFT_KEY) {
   try {
-    window.localStorage.setItem(SCAN_DRAFT_KEY, JSON.stringify(draft));
+    window.localStorage.setItem(key, JSON.stringify(draft));
   } catch {
     // localStorage 滿了或被禁用時，安靜失敗
   }
 }
 
-function clearScanDraft() {
-  window.localStorage.removeItem(SCAN_DRAFT_KEY);
+function clearScanDraft(key = SCAN_DRAFT_KEY) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // localStorage 被禁用時安靜略過
+  }
 }
 
-function ScanJobForm({ onCreated }) {
+// 網站專案的預設值：起始網址、預設範圍與維度（專案設定頁可改）
+function projectFormDefaults(project) {
+  return project
+    ? { url: project.start_url, scope: project.default_scope, categories: project.default_categories }
+    : {};
+}
+
+// project：網站專案工作區的掃描分頁傳入。網址、範圍、維度以專案預設值起始，草稿按專案分開存
+// （A 網站沒送出的設定不會帶到 B 網站）；送出時帶 project，後端拒絕不同網站的網址。
+/**
+ * @param {{ onCreated: (scan: object) => void, project?: { id: number, name: string, origin: string,
+ *   start_url: string, default_scope: string, default_categories: string[] } | null }} props
+ */
+function ScanJobForm({ onCreated, project = null }) {
+  const draftKey = project ? `${SCAN_DRAFT_KEY}:project-${project.id}` : SCAN_DRAFT_KEY;
+  const defaults = projectFormDefaults(project);
   // 從 localStorage 還原草稿，避免 F5 後重打網址
-  const initial = loadScanDraft() || {};
+  const initial = loadScanDraft(draftKey) || defaults;
   const [scope, setScope] = useState(initial.scope || "site"); // "single" | "site"
   const [url, setUrl] = useState(initial.url || "");
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(
@@ -409,8 +438,8 @@ function ScanJobForm({ onCreated }) {
       activeMode,
       activeAuthorized,
       categories,
-    });
-  }, [scope, url, authorizationConfirmed, thirdPartyReconfirmed, activeMode, activeAuthorized, categories]);
+    }, draftKey);
+  }, [draftKey, scope, url, authorizationConfirmed, thirdPartyReconfirmed, activeMode, activeAuthorized, categories]);
 
   useEffect(() => {
     if (!submitting) return undefined;
@@ -438,17 +467,18 @@ function ScanJobForm({ onCreated }) {
         categories,
         max_pages: scope === "single" ? 1 : MAX_SITE_SCAN_PAGES,
         max_depth: scope === "single" ? 1 : 3,
+        ...(project ? { project: project.id } : {}),
       };
       const response = await api.post("/scans/", payload);
-      setUrl("");
+      setUrl(defaults.url || "");
       setAuthorizationConfirmed(false);
       setThirdPartyReconfirmed(false);
       setActiveMode(false);
       setActiveAuthorized(false);
-      setCategories(DEFAULT_SCAN_CATEGORIES);
+      setCategories(defaults.categories || DEFAULT_SCAN_CATEGORIES);
       setEstimate(null);
-      setScope("site");
-      clearScanDraft();
+      setScope(defaults.scope || "site");
+      clearScanDraft(draftKey);
       fetchWallet();
       onCreated(response.data);
       // 保險：直接 navigate 到新掃描的詳情頁。原本依賴 parent ScanLayout 的
@@ -490,9 +520,11 @@ function ScanJobForm({ onCreated }) {
     <form className="panel space-y-4" onSubmit={handleSubmit}>
       <div>
         <p className="eyebrow">新增任務</p>
-        <h2 className="section-title">建立授權掃描</h2>
+        <h2 className="section-title">{project ? `掃描 ${project.name}` : "建立授權掃描"}</h2>
         <p className="mt-1 text-xs text-slate-500">
-          表單會自動存草稿；F5 或不小心關閉分頁後再回來，欄位會保留。
+          {project
+            ? `網址需在 ${project.origin} 內；要掃描其他網站，請從上方切換或新增專案。`
+            : "表單會自動存草稿；F5 或不小心關閉分頁後再回來，欄位會保留。"}
         </p>
       </div>
 
@@ -697,11 +729,9 @@ function ScanJobForm({ onCreated }) {
 // 掃描列表
 // ============================================================
 
-// wide：/scans 概覽頁的主內容（卡片多欄、顯示時間與頁數／發現數）；預設是側欄窄版。
-function ScanList({ scans, onRefresh, wide = false }) {
+// 網站專案「掃描」分頁的掃描列表：該網站的全部掃描（卡片多欄、顯示時間與頁數／發現數）。
+function ScanList({ scans, onRefresh }) {
   const navigate = useNavigate();
-  const { scanId } = useParams();
-  const activeId = scanId ? Number(scanId) : null;
   const inProgressCount = scans.filter((scan) => isInProgress(scan.status)).length;
 
   // 每個 origin 上一次的分數，用來算 delta（同 origin 的 scans 已按 -created_at 排序）
@@ -724,32 +754,22 @@ function ScanList({ scans, onRefresh, wide = false }) {
   }, [scans]);
 
   return (
-    <section className={`panel space-y-3 ${wide ? "scan-list-wide" : ""}`}>
+    <section className="panel space-y-3 scan-list-wide">
       <div className="flex items-center justify-between">
         <div>
           <p className="eyebrow">任務</p>
-          <h2 className="section-title">{wide ? `掃描列表（${scans.length}）` : "掃描列表"}</h2>
+          <h2 className="section-title">此網站的掃描（{scans.length}）</h2>
           {inProgressCount > 0 && (
             <p className="mt-1 text-xs text-blue-600">
               🔄 {inProgressCount} 個進行中，畫面每 {LIST_POLL_INTERVAL_MS / 1000} 秒自動更新
             </p>
           )}
-          <p className="mt-1 text-[11px] text-slate-500">
-            同網址僅顯示最新一次掃描。
-            <button
-              type="button"
-              className="ml-1 underline hover:text-blue-600"
-              onClick={() => navigate("/history")}
-            >
-              查看歷史 →
-            </button>
-          </p>
         </div>
         <button className="secondary-button" type="button" onClick={onRefresh}>
           重新整理
         </button>
       </div>
-      <div className={wide ? "scan-list-grid" : "space-y-2"}>
+      <div className="scan-list-grid">
         {scans.map((scan) => {
           const tone =
             scan.overall_score === null || scan.overall_score === undefined
@@ -768,7 +788,7 @@ function ScanList({ scans, onRefresh, wide = false }) {
               : null;
           return (
             <button
-              className={`scan-card tone-${tone} ${activeId === scan.id ? "active" : ""} ${
+              className={`scan-card tone-${tone} ${
                 isInProgress(scan.status) ? "is-in-progress" : ""
               }`}
               key={scan.id}
@@ -780,27 +800,25 @@ function ScanList({ scans, onRefresh, wide = false }) {
                 <span className="scan-card-progress-shimmer" aria-hidden="true" />
               )}
               <div className="scan-card-body">
-                <p className="scan-card-origin" title={scan.origin}>
-                  {scan.origin.replace(/^https?:\/\//, "")}
+                <p className="scan-card-origin" title={scan.normalized_url}>
+                  {(scan.normalized_url || scan.origin).replace(/^https?:\/\//, "")}
                 </p>
                 <div className="scan-card-meta">
                   <ScanStatusBadge status={scan.status} />
                   {delta !== null && delta !== 0 && (
                     <span
                       className={`scan-card-delta tone-${delta > 0 ? "good" : "bad"}`}
-                      title="與該網址上一次分數比較"
+                      title="與上一次掃描的分數比較"
                     >
                       {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`}
                     </span>
                   )}
                 </div>
-                {wide && (
-                  <p className="scan-card-extra">
-                    {formatDateTime(scan.created_at)}
-                    {scan.pages_count ? ` · ${scan.pages_count} 頁` : ""}
-                    {scan.findings_count ? ` · ${scan.findings_count} 項發現` : ""}
-                  </p>
-                )}
+                <p className="scan-card-extra">
+                  {formatDateTime(scan.created_at)}
+                  {scan.pages_count ? ` · ${scan.pages_count} 頁` : ""}
+                  {scan.findings_count ? ` · ${scan.findings_count} 項發現` : ""}
+                </p>
               </div>
               <ScoreBadge score={scan.overall_score} />
             </button>
@@ -1707,113 +1725,46 @@ function FindingsWorkspace({ scan }) {
 // 路由保護與版面
 // ============================================================
 
-// ScanLayout 改為 parent route + Outlet：sidebar（表單 + 列表）只 mount 一次，
-// `/scans` ↔ `/scans/:id` 切換只重渲染右側 Outlet，避免每次按「建立掃描」
-// 版面整個 unmount 再 remount 造成的跳動。
-//
-// 兩種模式：
-//   list-mode（/scans）：sidebar inline 在左邊，固定 360px。
-//   detail-mode（/scans/:id）：sidebar 縮為 drawer overlay，主內容拿到全寬讓截圖變大。
-
+// 掃描詳情（含拓樸、複刻）的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，
+// 這裡只放返回與「詳情／拓樸」切換。建立掃描與掃描列表在專案的「掃描」分頁。
 function ScanLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { scanId } = useParams();
-  const isDetailPage = Boolean(scanId);
-  const isTopologyPage = isDetailPage && location.pathname.endsWith("/topology");
-  const [scans, setScans] = useState([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  async function loadScans() {
-    try {
-      const response = await api.get("/scans/");
-      setScans(response.data.results || response.data);
-    } catch {
-      // 401 之類靜默失敗，store 變動會自動導回 /login
-    }
-  }
-
-  useEffect(() => {
-    loadScans();
-  }, []);
-
-  // 從詳情頁切回列表頁時，自動關閉 drawer 避免 inline sidebar 與 drawer 同時出現
-  useEffect(() => {
-    if (!isDetailPage) setDrawerOpen(false);
-  }, [isDetailPage]);
-
-  // 有任何進行中的 scan 時，自動 polling 列表
-  const hasInProgress = scans.some((scan) => isInProgress(scan.status));
-  useEffect(() => {
-    if (!hasInProgress) return undefined;
-    const timer = setInterval(loadScans, LIST_POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [hasInProgress]);
-
-  function handleScanCreated(newScan) {
-    loadScans();
-    setDrawerOpen(false);
-    navigate(`/scans/${newScan.id}`);
-  }
+  const { project } = useOutletContext() || {};
+  const isTopologyPage = location.pathname.endsWith("/topology");
+  const backPath = project ? `/projects/${project.id}/scans` : "/projects";
 
   return (
-    <div
-      className={`scan-layout ${isDetailPage ? "detail-mode" : "list-mode"} ${
-        drawerOpen ? "drawer-open" : ""
-      }`}
-    >
-      <aside className="scan-sidebar">
-        <ScanJobForm onCreated={handleScanCreated} />
-        {/* 概覽頁的列表在右側主內容；詳情頁才把列表收進抽屜 */}
-        {isDetailPage && <ScanList scans={scans} onRefresh={loadScans} />}
-      </aside>
-      {isDetailPage && drawerOpen && (
-        <button
-          type="button"
-          className="scan-sidebar-backdrop"
-          aria-label="關閉列表"
-          onClick={() => setDrawerOpen(false)}
-        />
-      )}
+    <div className="scan-layout detail-mode is-project">
       <div className="scan-content">
-        {isDetailPage && (
-          <div className="scan-content-toolbar">
-            <button
-              type="button"
-              className="drawer-toggle"
-              onClick={() => setDrawerOpen((open) => !open)}
-              aria-expanded={drawerOpen}
-            >
-              <span aria-hidden="true">☰</span>
-              <span>{drawerOpen ? "收起列表" : "展開列表 / 建立掃描"}</span>
-            </button>
+        <div className="scan-content-toolbar">
+          <button
+            type="button"
+            className="back-to-list-button"
+            onClick={() => navigate(backPath)}
+          >
+            ← {project ? `回到 ${project.name} 的掃描` : "回到所有專案"}
+          </button>
+          {isTopologyPage ? (
             <button
               type="button"
               className="back-to-list-button"
-              onClick={() => navigate("/scans")}
+              onClick={() => navigate(`/scans/${scanId}`)}
             >
-              ← 回到掃描列表
+              📋 回詳情報告
             </button>
-            {isTopologyPage ? (
-              <button
-                type="button"
-                className="back-to-list-button"
-                onClick={() => navigate(`/scans/${scanId}`)}
-              >
-                📋 回詳情報告
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="back-to-list-button"
-                onClick={() => navigate(`/scans/${scanId}/topology`)}
-              >
-                🌐 拓撲圖
-              </button>
-            )}
-          </div>
-        )}
-        <Outlet context={{ scans, loadScans }} />
+          ) : (
+            <button
+              type="button"
+              className="back-to-list-button"
+              onClick={() => navigate(`/scans/${scanId}/topology`)}
+            >
+              🌐 拓撲圖
+            </button>
+          )}
+        </div>
+        <Outlet context={{ project }} />
       </div>
     </div>
   );
@@ -2118,12 +2069,6 @@ function TopologyPage() {
   );
 }
 
-// /scans 概覽：右側主內容直接是完整的掃描列表（左側是建立掃描表單）
-function ScansPlaceholder() {
-  const { scans, loadScans } = useOutletContext();
-  return <ScanList scans={scans} onRefresh={loadScans} wide />;
-}
-
 function ScanDetailPage() {
   const { scanId } = useParams();
   const navigate = useNavigate();
@@ -2172,9 +2117,9 @@ function ScanDetailPage() {
         <button
           className="secondary-button mt-3"
           type="button"
-          onClick={() => navigate("/scans")}
+          onClick={() => navigate("/projects")}
         >
-          回到掃描列表
+          回到所有專案
         </button>
       </section>
     );
@@ -2194,8 +2139,11 @@ function ScanDetailPage() {
 // ============================================================
 
 export {
+  scanProgress,
+  ScanJobForm,
   ScanLayout,
-  ScansPlaceholder,
+  ScanList,
   ScanDetailPage,
   TopologyPage,
+  isInProgress,
 };

@@ -43,7 +43,7 @@ function PublicNav() {
         <>
           <SiteThemeToggle />
           <NavLink to={accessToken ? "/dashboard" : "/login"} className="public-cta-primary">
-            {accessToken ? "進入 Dashboard" : "登入 / 註冊"}
+            {accessToken ? "進入我的網站" : "登入 / 註冊"}
           </NavLink>
         </>
       )}
