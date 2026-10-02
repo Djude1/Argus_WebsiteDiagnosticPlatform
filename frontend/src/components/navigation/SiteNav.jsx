@@ -39,9 +39,10 @@ export function SiteThemeToggle() {
 }
 
 /**
- * @param {{ items: {to: string, label: string}[], actions: React.ReactNode, className?: string }} props
+ * leading：品牌右側的區塊（登入後是網站專案切換器）；item.end＝只在網址完全相同時標示目前頁。
+ * @param {{ items: {to: string, label: string, end?: boolean}[], actions: React.ReactNode, leading?: React.ReactNode, className?: string }} props
  */
-export default function SiteNav({ items, actions, className = "" }) {
+export default function SiteNav({ items, actions, leading = null, className = "" }) {
   const replayIntro = useArgusStore((s) => s.replayIntro);
   const navigate = useNavigate();
   return (
@@ -57,11 +58,13 @@ export default function SiteNav({ items, actions, className = "" }) {
           <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
           <span className="public-brand-sub">AI 網站健檢平台</span>
         </button>
+        {leading}
         <div className="public-nav-links">
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.end}
               className={({ isActive }) => `public-nav-link ${isActive ? "active" : ""}`}
             >
               {item.label}

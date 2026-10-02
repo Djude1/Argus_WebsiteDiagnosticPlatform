@@ -48,12 +48,13 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 
 - **品牌規範**：見 [`docs/brand-guidelines.md`](../docs/brand-guidelines.md)（Night Watch：虹膜青主色、守望琥珀點綴、Sora／Noto Sans TC／JetBrains Mono）。
 - **公開頁（`.public-shell`）例外**：視覺維持改版前版本（系統字、深藍＋科技青），樣式在 `21-public.css`、`35-public-legacy.css`（取回的改版前日間／響應式規則）、`70-home.css`、`71-scan-pipeline.css`，最後由 `73-public-refine.css` 做克制整理（區塊節奏、減少外框與光暈）。公開頁新增樣式寫在 `73`，並限縮在 `.public-shell` 內；不要把 Night Watch 的 `--ag-*` 風格套回公開頁。
-- **會員區五頁例外（2026-09-28 起）**：Dashboard、掃描（`/scans` 全部子路由：列表／建立表單、互動報告、拓樸、複刻工作區）、網域驗證、歷史、購點恢復為 `462848b`（Night Watch 改版前）的 JSX 與外觀；設定頁維持改版後版本。Dashboard 與 `/scans` 概覽之後重新編排過（`92-layout.css`）：Dashboard 為「最近掃描＋各維度平均分」主列、兩張圖表並排；`/scans` 左側建立表單、右側完整掃描列表（`ScansPlaceholder` 經 `Outlet` context 取得列表），詳情頁才把列表收進抽屜。
+- **會員區舊版樣式範圍（2026-09-28 起）**：網站專案工作區（`/projects/*`，含掃描建立表單與列表）、掃描詳情（`/scans/:id` 全部子路由：互動報告、拓樸、複刻工作區）、網域驗證、購點使用 `462848b`（Night Watch 改版前）的 JSX 與外觀；設定頁、MCP 接入中心維持改版後版本。原本的 Dashboard 與歷史頁已由網站專案工作區取代（2026-10-02，見下「網站專案工作區」）。
   - 舊版樣式在 `src/styles/legacy-member/`（由 `main.jsx` 在 `styles.css` 之後匯入）：`NN-*.css` 是當時同名檔過濾出這些頁面用得到的規則，照舊版原樣書寫；`90-compat.css` 補共用元件（`shared/AppShared.jsx`）改版後的差異；`00-tailwind.css` 以 `@config` 指定 `tailwind.member-legacy.config.js`（當時的設定，系統字型）。
   - 範圍限制由 `postcss-member-legacy.js`（掛在 `postcss.config.js` 的 tailwind 之後）在 build 時處理：規則一律加上 `:is(.member-legacy, #…)` 前綴（ID 等級特異度），範圍內元素先 `all: revert` 擋掉新版同名 class；`:root`／`html`／`body` 規則改掛在包裝上，`.argus-app`／`.argus-main` 規則改為 `:has(.member-legacy)`，keyframes 加 `ml-` 前綴。包裝是 `App.jsx` 的 `MemberLegacy`（`display: contents`）。
   - **深色主題**：舊版只有淺色。外掛對每條含顏色的舊規則自動產生 `:root[data-theme="dark"]` 版本（淺底→深藍、深字→淺字、淺框→暗框，保留色相）；對映不理想處與頁面底色（對齊公開頁深藍漸層）在 `91-dark.css` 手動覆寫。新增舊版樣式時照淺色寫即可，深色會自動產生。
-  - 修改這五頁的樣式：改 `legacy-member/` 對應檔，**不要**改 `11`／`14`／`16`／`61` 等新版檔（範圍內會被覆寫）；新頁面不要放進 `MemberLegacy`。
-- **頂部導覽列**：公開頁與登入後頁面共用 `components/navigation/SiteNav.jsx`（`.public-nav` 樣式，21-public／35-public-legacy），兩者只差連結清單與右側動作區（登入後是 `NavActions`：點數與帳號選單）。不要再為登入後另做一套導覽列樣式。**導覽列的尺寸與排版（高度、內距、logo、字級、連結高度、按鈕高度）日／夜共用**，寫在 `35-public-legacy.css` 的無主題規則；`:root[data-theme="light"]` 規則只能改顏色、陰影與背景——2026-09-28 前尺寸只寫在日間規則裡，切換主題時整條導覽列高度 93↔75px 跳動，且日間規則壓過響應式媒體查詢。會員導覽列項目見 `features/account/TopNav.jsx`（帳號設定與評論在右側頭像選單）。
+  - 修改這些頁面的樣式：改 `legacy-member/` 對應檔，**不要**改 `11`／`14`／`16`／`61` 等新版檔（範圍內會被覆寫）；與工作區無關的新頁面不要放進 `MemberLegacy`。
+- **網站專案工作區（2026-10-02，`docs/adr/0003-site-project-workspace.md`）**：會員區以網站為單位。頂部導覽列品牌右側是專案切換器（`components/navigation/ProjectSwitcher.jsx`，經 `SiteNav` 的 `leading` 插入，樣式 `64-project-switcher.css` 用 `--ag-*` token）；導覽列連結只放帳號層級入口（首頁、所有專案、網域驗證、購點、MCP）。目前網站的功能在工作區側邊欄（`features/projects/ProjectWorkspace.jsx`），各分頁在 `ProjectPages.jsx`，樣式 `legacy-member/93-projects.css`。「目前專案」存在 store（`currentProjectId`，localStorage `argus_current_project`，只是個人便利設定）；切換時停留在同一個分頁（`projectSwitchPath`）。切換器每列顯示最新分數與設定齒輪，專案多於 6 個時出現搜尋框，↑／↓ 移動焦點。掃描表單在專案內以專案預設（起始網址、`default_scope`、`default_categories`）起始，草稿 key 為 `argus_scan_draft_v1:project-<id>`；掃描整體進度一律用 `ScanExperience.jsx` 的 `scanProgress()`（總覽進度條與掃描詳情共用）。掃描詳情網址維持 `/scans/:id`，由 `ProjectScanShell` 依掃描所屬專案顯示同一個側邊欄。`/dashboard`、`/scans`、`/history` 由 `ProjectHomeRedirect` 轉到目前專案的對應分頁，沒有專案時到 `/projects/new`。判斷公開頁一律用路徑段比對（`/project` 不能吃到 `/projects`）。
+- **頂部導覽列**：公開頁與登入後頁面共用 `components/navigation/SiteNav.jsx`（`.public-nav` 樣式，21-public／35-public-legacy），兩者只差連結清單與右側動作區（登入後是 `NavActions`：點數與帳號選單）。不要再為登入後另做一套導覽列樣式。**導覽列的尺寸與排版（高度、內距、logo、字級、連結高度、按鈕高度）日／夜共用**，寫在 `35-public-legacy.css` 的無主題規則；`:root[data-theme="light"]` 規則只能改顏色、陰影與背景——2026-09-28 前尺寸只寫在日間規則裡，切換主題時整條導覽列高度 93↔75px 跳動，且日間規則壓過響應式媒體查詢。會員導覽列項目見 `features/account/TopNav.jsx`（帳號設定與評論在右側頭像選單；網站專案切換器在品牌右側）。
 - 全域樣式入口是 `src/styles.css`，依序 `@import` `src/styles/*.css`；**匯入順序＝覆寫優先序，不可隨意重排**。
 - **顏色一律用 `--ag-*` 語意 token**（`03-tokens.css`）：深色值在 `:root`（預設主題），日間值在 `:root[data-theme="light"]`。規則只寫一次、兩個主題自動正確；**不要再寫 `:root[data-theme="light"] .xxx` 的逐條覆寫**，也不要寫死 Tailwind `slate-*`／`blue-*`／`indigo-*` 或青→紫漸層。
 - 品牌元件樣式在 `05-brand.css`（`ArgusMark`／`ArgusLogo`、`.ag-eyebrow`、`.ag-viewfinder`、`.ag-surface-grid`）；核心元件（`.panel`、`.primary-button`、`.secondary-button`、`.input`、`.severity`、`.status-badge`、`.category-pill`…）在 `10-components-core.css`，已全面 token 化。
@@ -123,9 +124,16 @@ D:\nodejs\npm.cmd install 套件名
 | `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
 | `/settings` | `SettingsPage` | 帳號設定：個人資料、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀 |
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在會員頂部導覽列，取代原本的「設定」；帳號設定改由右側帳號選單進入）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
-| `/scans` | `ScansPlaceholder` → `ScanListPage` | 掃描列表（需登入） |
+| `/projects` | `ProjectsListPage`（`features/projects/ProjectWorkspace.jsx`） | 所有網站專案：跨網站總覽（網站數、平均分數、需要注意、進行中）＋專案卡片；可展開已封存的專案並恢復（`?archived=true`） |
+| `/projects/new` | `ProjectCreatePage` | 新增網站專案（網址＋選填名稱；同網站已有專案回 409 並引導過去，已封存的自動恢復） |
+| `/projects/:id` | `ProjectWorkspace` ＞ `ProjectOverviewPage`（`ProjectPages.jsx`） | 專案總覽：分數與上次相比、問題數、新增／持續／本次未出現、各維度分數、趨勢、優先改善建議、進行中掃描（有掃描在跑時每 5 秒更新）、公告 toast |
+| `/projects/:id/scans` | `ProjectScansPage` | 建立掃描（`ScanJobForm project=…`：預設專案起始網址、送出帶 `project`）＋此網站全部掃描（`ScanList`） |
+| `/projects/:id/issues` | `ProjectIssuesPage` | 問題分析：選擇掃描、維度／嚴重度／變化篩選（寫在網址、`replace` 不污染上一頁）、「連續 N 次」與受影響頁面、「查看證據」連到 `/scans/:id?finding=`、本次未出現 |
+| `/projects/:id/history` | `ProjectHistoryPage` | 歷史報告：分數趨勢、歷次掃描表格、問題分析與 Word 報告下載 |
+| `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、預設掃描設定（範圍、維度）、網域驗證狀態、封存 |
+| `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
-| `/scans/:scanId` | `ScanDetailPage` | 掃描結果詳情 + findings；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」）；完成後顯示 `AeoAnswerPanel`；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
+| `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描結果詳情 + findings（外框是所屬專案的側邊欄，返回鈕回專案的掃描分頁）；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」）；完成後顯示 `AeoAnswerPanel`；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站拓樸圖（ReactFlow） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
 | `/reviews` | `ReviewsPage`（未登入：`PublicLayout`；登入後：會員區，會員導覽列、無公開頁尾，網址相同；會員入口在頭像選單） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
@@ -193,13 +201,17 @@ npm run typecheck
 |---|---|
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
 | `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
-| `src/features/scans/ScanExperience.jsx` | 掃描建立表單、列表、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
+| `src/features/projects/ProjectWorkspace.jsx` | 網站專案工作區外框（側邊欄、`useProject`）、`ProjectScanShell`、`ProjectHomeRedirect`、所有專案與新增專案頁 |
+| `src/features/projects/ProjectPages.jsx` | 專案的總覽、掃描、問題分析、歷史報告、專案設定五個分頁 |
+| `src/components/navigation/ProjectSwitcher.jsx` | 頂部工具列的網站專案切換器（目前專案、切換、設定入口、所有專案、新增專案；Esc／點外面關閉） |
+| `src/components/projects/OverviewWidgets.jsx` | 分數環 `ScoreRing` 與公告 toast（原 Dashboard 元件） |
+| `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
 | `src/components/scans/AeoAnswerPanel.jsx` | 掃描詳情的「AEO 問答檢測」：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
 | `src/components/scans/FixOutputSection.jsx` | 掃描詳情的「修正產出」專區：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
-| `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`DashboardPage`／`HistoryPage`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；Dashboard／歷史／購點為 462848b 舊版 |
+| `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |
 | `src/features/public/PublicPages.jsx` | 公開頁 layout（導覽＋分組頁尾）與專案、免費工具、購買介紹、下載、報告查驗頁 |
 | `src/features/public/PartnersPage.jsx` | 商業合作頁與洽談表單（樣式在 `73-public-refine.css` 的 `partners-*`）|
@@ -231,10 +243,10 @@ npm run typecheck
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |
 | `src/shared/apiTypes.ts` | **自動產生，禁止手改**：OpenAPI → TS 型別 |
 | `src/shared/apiContracts.ts` | 從 `apiTypes.ts` 取好名字的後台型別出入口 |
-| `src/store.js` | Zustand 全域狀態（user、wallet 等） |
+| `src/store.js` | Zustand 全域狀態（user、wallet、網站專案清單 `projects` 與目前專案 `currentProjectId` 等） |
 | `src/main.jsx` | React entry point，Provider 掛載 |
 | `src/styles.css` | 樣式入口：依序 `@import` `src/styles/*.css`（順序即覆寫優先序）|
-| `src/styles/legacy-member/index.css` | 會員區五頁的舊版樣式入口（只作用在 `.member-legacy` 內）|
+| `src/styles/legacy-member/index.css` | 會員區舊版樣式入口（只作用在 `.member-legacy` 內；網站專案工作區在 `93-projects.css`）|
 | `postcss-member-legacy.js` | 把 `legacy-member/` 的規則限縮到 `.member-legacy` 範圍的 PostCSS 外掛 |
 | `src/styles/03-tokens.css` | 品牌設計 token（`--ag-*`，深色 `:root`／日間 `[data-theme="light"]`）與全站基礎排版 |
 | `src/components/brand/ArgusMark.tsx` | 品牌標誌 `ArgusLogo`（brand-logo.webp）／`ArgusMark`（argus-eye-still.webp） |

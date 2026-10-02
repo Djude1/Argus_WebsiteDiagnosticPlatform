@@ -1,0 +1,259 @@
+/* ========================================
+   頂部工具列的網站專案切換器（components/navigation/ProjectSwitcher.jsx）。
+   導覽列不在舊版樣式範圍內，顏色一律用 --ag-* token，日／夜自動切換；
+   尺寸日夜共用（同導覽列規則，見 frontend/CLAUDE.md「頂部導覽列」）。
+   ======================================== */
+.project-switcher {
+  position: relative;
+  flex: 0 1 240px;
+  min-width: 0;
+}
+.project-switcher-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.4rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-md);
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--ag-dur-1) var(--ag-ease), background var(--ag-dur-1) var(--ag-ease);
+}
+.project-switcher-trigger:hover,
+.project-switcher-trigger[aria-expanded="true"] {
+  border-color: var(--ag-border-accent);
+  background: var(--ag-surface-3);
+}
+.project-switcher-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+.project-switcher-mark {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ag-r-sm);
+  background: var(--ag-primary-soft);
+  color: var(--ag-primary);
+  font-weight: 800;
+}
+.project-switcher-label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.project-switcher-kicker {
+  color: var(--ag-text-3);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+.project-switcher-name {
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-caret {
+  color: var(--ag-text-3);
+  font-size: 0.8rem;
+}
+
+.project-switcher-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 70;
+  width: min(340px, calc(100vw - 2rem));
+  padding: 0.4rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-lg);
+  background: var(--ag-bg-raised);
+  box-shadow: var(--ag-shadow-3);
+  animation: app-pop-in var(--ag-dur-2) var(--ag-ease);
+  transform-origin: top left;
+}
+.project-switcher-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.project-switcher-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--ag-r-sm);
+}
+.project-switcher-row.is-current {
+  background: var(--ag-primary-soft);
+}
+.project-switcher-item {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: var(--ag-r-sm);
+  background: transparent;
+  color: var(--ag-text);
+  text-align: left;
+  cursor: pointer;
+}
+.project-switcher-item-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.project-switcher-item-text strong,
+.project-switcher-item-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-item-text strong {
+  font-size: 0.9rem;
+}
+.project-switcher-item-text small {
+  color: var(--ag-text-3);
+  font-family: var(--ag-font-mono);
+  font-size: 0.72rem;
+}
+.project-switcher-score {
+  min-width: 2.2rem;
+  flex: 0 0 auto;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--ag-r-pill);
+  background: var(--ag-surface-2);
+  color: var(--ag-text-3);
+  font-family: var(--ag-font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+.project-switcher-score.is-good { background: var(--ag-good-soft); color: var(--ag-good); }
+.project-switcher-score.is-medium { background: var(--ag-warn-soft); color: var(--ag-warn); }
+.project-switcher-score.is-bad { background: var(--ag-bad-soft); color: var(--ag-bad); }
+.project-switcher-search {
+  width: 100%;
+  min-height: 2.4rem;
+  margin-bottom: 0.35rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-sm);
+  background: var(--ag-surface);
+  color: var(--ag-text);
+  font-size: 0.85rem;
+}
+.project-switcher-search:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+/* 非目前專案的設定齒輪平時淡化，滑到該列才清楚（與 Sitechecker 相同的低干擾做法） */
+.project-switcher-row:not(.is-current) .project-switcher-gear {
+  opacity: 0.35;
+}
+.project-switcher-row:hover .project-switcher-gear,
+.project-switcher-gear:focus-visible {
+  opacity: 1;
+}
+.project-switcher-gear {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.25rem;
+  border: 0;
+  border-radius: var(--ag-r-sm);
+  background: transparent;
+  color: var(--ag-text-3);
+  cursor: pointer;
+}
+.project-switcher-gear svg {
+  width: 18px;
+  height: 18px;
+}
+.project-switcher-item:hover,
+.project-switcher-item:focus-visible,
+.project-switcher-gear:hover,
+.project-switcher-gear:focus-visible {
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+  outline: none;
+}
+.project-switcher-item:focus-visible,
+.project-switcher-gear:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ag-primary);
+}
+.project-switcher-empty {
+  padding: 0.6rem;
+  color: var(--ag-text-2);
+  font-size: 0.85rem;
+}
+.project-switcher-foot {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ag-border);
+}
+.project-switcher-all,
+.project-switcher-new {
+  flex: 1;
+  min-height: 2.5rem;
+  border-radius: var(--ag-r-sm);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.project-switcher-all {
+  border: 1px solid var(--ag-border-strong);
+  background: transparent;
+  color: var(--ag-text-2);
+}
+.project-switcher-new {
+  border: 0;
+  background: var(--ag-primary);
+  color: var(--ag-on-primary);
+}
+.project-switcher-all:hover,
+.project-switcher-all:focus-visible {
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+}
+.project-switcher-new:hover,
+.project-switcher-new:focus-visible {
+  background: var(--ag-primary-hover);
+}
+.project-switcher-all:focus-visible,
+.project-switcher-new:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+
+/* 窄螢幕：切換器獨立一列（品牌與帳號在第一列、切換器第二列、連結第三列） */
+@media (max-width: 920px) {
+  .public-nav.is-member .project-switcher {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .public-nav.is-member .public-nav-links {
+    grid-row: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-switcher-menu {
+    animation: none;
+  }
+}

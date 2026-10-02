@@ -1503,6 +1503,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_list"];
+        put?: never;
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        post: operations["projects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        delete: operations["projects_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        patch: operations["projects_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/{id}/issues/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_issues_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/overview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_overview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/restore/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        post: operations["projects_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rebuilds/": {
         parameters: {
             query?: never;
@@ -2422,6 +2558,21 @@ export interface components {
          * @enum {string}
          */
         CategoryEnum: "seo" | "aeo" | "geo" | "security" | "ux";
+        /**
+         * @description * `seo` - seo
+         *     * `aeo` - aeo
+         *     * `geo` - geo
+         *     * `ux` - ux
+         *     * `security` - security
+         * @enum {string}
+         */
+        DefaultCategoriesEnum: "seo" | "aeo" | "geo" | "ux" | "security";
+        /**
+         * @description * `site` - 整個網站
+         *     * `single` - 單一頁面
+         * @enum {string}
+         */
+        DefaultScopeEnum: "site" | "single";
         /** @description 網域驗證人工審核：approve=True 人工核准；approve=False 否決。 */
         DomainOverrideRequest: {
             approve: boolean;
@@ -2699,6 +2850,13 @@ export interface components {
             sort_order?: number;
             is_active?: boolean;
         };
+        /** @description 修改專案名稱、起始網址與預設掃描設定；起始網址必須仍在同一個網站。 */
+        PatchedSiteProjectUpdateRequest: {
+            name?: string;
+            start_url?: string;
+            default_scope?: components["schemas"]["DefaultScopeEnum"];
+            default_categories?: components["schemas"]["DefaultCategoriesEnum"][];
+        };
         PatchedTeamMemberWriteRequest: {
             name?: string;
             /** @description 例如：前端工程師、UX 設計師 */
@@ -2822,8 +2980,18 @@ export interface components {
             sort_order?: number;
             is_active?: boolean;
         };
+        ProjectScanBrief: {
+            id: number;
+            status: string;
+            overall_score: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+        };
         ScanJob: {
             readonly id: number;
+            readonly project: number | null;
             /** Format: uri */
             readonly original_url: string;
             /** Format: uri */
@@ -2879,6 +3047,7 @@ export interface components {
             max_pages: number;
             /** @default true */
             respect_robots: boolean;
+            project: number | null;
         };
         ScanJobCreateRequest: {
             url: string;
@@ -2907,6 +3076,7 @@ export interface components {
             respect_robots: boolean;
             test_auth_email?: string;
             test_auth_password?: string;
+            project?: number | null;
         };
         ScanJobStatus: {
             readonly id: number;
@@ -2938,6 +3108,44 @@ export interface components {
          * @enum {string}
          */
         SeverityEnum: "critical" | "high" | "medium" | "low" | "info";
+        /**
+         * @description 網站專案（清單、切換器、各分頁共用）。
+         *
+         *     summary 由 view 以 projects.project_summaries 批次算好放進 context。
+         */
+        SiteProject: {
+            readonly id: number;
+            readonly name: string;
+            readonly origin: string;
+            readonly hostname: string;
+            /** Format: uri */
+            readonly start_url: string;
+            readonly default_scope: components["schemas"]["DefaultScopeEnum"];
+            readonly default_categories: unknown;
+            /** Format: date-time */
+            readonly archived_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly summary: components["schemas"]["SiteProjectSummary"];
+        };
+        /** @description 新增網站專案：網址決定 origin（重複與恢復封存由 view 處理）。 */
+        SiteProjectCreateRequest: {
+            start_url: string;
+            name?: string;
+        };
+        SiteProjectSummary: {
+            scans_count: number;
+            latest_scan: components["schemas"]["ProjectScanBrief"] | null;
+            latest_score: number | null;
+            latest_category_scores: {
+                [key: string]: number;
+            };
+            previous_score: number | null;
+            /** Format: date-time */
+            last_completed_at: string | null;
+        };
         SiteRebuild: {
             readonly id: number;
             readonly scan_job: number;
@@ -5579,6 +5787,204 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page"];
+                };
+            };
+        };
+    };
+    projects_list: {
+        parameters: {
+            query?: {
+                /** @description true＝改列已封存的專案 */
+                archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteProject"][];
+                };
+            };
+        };
+    };
+    projects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteProjectCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SiteProjectCreateRequest"];
+                "multipart/form-data": components["schemas"]["SiteProjectCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteProject"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteProject"];
+                };
+            };
+        };
+    };
+    projects_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSiteProjectUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSiteProjectUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSiteProjectUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteProject"];
+                };
+            };
+        };
+    };
+    projects_issues_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_overview_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_restore_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteProject"];
                 };
             };
         };
