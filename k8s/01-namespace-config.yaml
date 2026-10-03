@@ -1,4 +1,4 @@
-# Namespace + 非機密環境變數（機密另見 02-secret.example.yaml）
+# Namespace + 非機密環境變數 （機密另見 02-secret.example.yaml）
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -84,3 +84,4 @@ data:
   ARGUS_KALI_BACKEND: "disabled"
   ARGUS_KALI_NAMESPACE: "argus-kali"
   ARGUS_KALI_RUNNER_IMAGE: "shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  
