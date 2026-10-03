@@ -182,3 +182,17 @@ class TurnstileDeployCheckTests(APITestCase):
             self.assertIn("accounts.E003", self.ids())
         with override_settings(**{**ENABLED, "TURNSTILE_HOSTNAMES": hostnames}, DEBUG=True):
             self.assertNotIn("accounts.E003", self.ids())
+
+
+class TurnstileHostnameSettingTests(APITestCase):
+    def test_urls_in_setting_become_bare_hostnames(self):
+        # siteverify 回傳的 hostname 不含協定；設定誤填成網址時不能讓整個網域的驗證都失敗
+        from config.settings import _bare_hostname
+
+        self.assertEqual(_bare_hostname("https://xn--gst.tw"), "xn--gst.tw")
+        self.assertEqual(_bare_hostname("www.xn--gst.tw"), "www.xn--gst.tw")
+        self.assertEqual(
+            _bare_hostname("HTTPS://Argus.Clouda.dpdns.org:443/"), "argus.clouda.dpdns.org"
+        )
+        self.assertEqual(_bare_hostname("localhost:8000"), "localhost")
+        self.assertEqual(_bare_hostname("  "), "")
