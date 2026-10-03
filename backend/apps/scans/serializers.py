@@ -372,6 +372,10 @@ class SiteProjectSummarySerializer(serializers.Serializer):
     latest_category_scores = serializers.DictField(child=serializers.FloatField())
     previous_score = serializers.IntegerField(allow_null=True)
     last_completed_at = serializers.DateTimeField(allow_null=True)
+    # 最近幾次完成掃描的分數（舊→新），清單畫走勢用
+    score_history = serializers.ListField(child=serializers.IntegerField())
+    # 最新完成掃描依嚴重度的問題數（同規則算一個、只算有勾的維度、不含 info）
+    issue_counts = serializers.DictField(child=serializers.IntegerField())
 
 
 class SiteProjectSerializer(serializers.ModelSerializer):
@@ -393,6 +397,7 @@ class SiteProjectSerializer(serializers.ModelSerializer):
             "start_url",
             "default_scope",
             "default_categories",
+            "favicon",
             "archived_at",
             "created_at",
             "updated_at",

@@ -117,7 +117,7 @@ function PageRebuildPanel({ scan, page }) {
 
   return (
     <div className="rebuild-box">
-      <p className="rebuild-title">🧬 網頁複刻與優化</p>
+      <p className="rebuild-title">複刻並優化這一頁</p>
       <p className="rebuild-desc">
         複刻這一頁的原始樣貌，並依本頁的診斷結果產生優化版本。
         {pricing &&

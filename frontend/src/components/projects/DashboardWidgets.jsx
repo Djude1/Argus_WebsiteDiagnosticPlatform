@@ -137,8 +137,8 @@ function percent(ratio) {
   return ratio == null ? "—" : `${Math.round(ratio * 100)}%`;
 }
 
-/** AEO 問答檢測摘要（詳細逐題在掃描詳情）。 */
-export function AeoSummary({ aeo, scanId }) {
+/** AEO 問答檢測摘要（逐題結果在專案的「AEO 問答」分頁）。 */
+export function AeoSummary({ aeo }) {
   if (!aeo) return <p className="hint-text">這次掃描沒有勾選 AEO。</p>;
   if (aeo.status !== "evaluated") {
     return <p className="hint-text">未充分評估：{aeo.reason}</p>;
@@ -160,7 +160,6 @@ export function AeoSummary({ aeo, scanId }) {
         共 {aeo.questions_total} 題：可回答 {counts.answered ?? 0}、資訊不足 {counts.insufficient ?? 0}、
         衝突 {counts.conflict ?? 0}、無答案 {counts.missing ?? 0}
       </p>
-      <Link className="project-text-link" to={`/scans/${scanId}`}>看逐題證據 →</Link>
     </div>
   );
 }

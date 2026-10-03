@@ -88,6 +88,9 @@ class SiteProject(models.Model):
     # 專案層級的預設掃描設定：掃描表單以此為初始值（每次掃描仍可調整）
     default_scope = models.CharField(max_length=8, choices=Scope.choices, default=Scope.SITE)
     default_categories = models.JSONField(default=default_categories)
+    # 網站圖示（data URL，掃描時由 favicon.py 抓取並縮成小 PNG）；空字串＝還沒抓到
+    favicon = models.TextField(blank=True, default="")
+    favicon_checked_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

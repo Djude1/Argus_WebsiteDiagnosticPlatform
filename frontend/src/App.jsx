@@ -38,6 +38,7 @@ const PasswordResetConfirmPage = lazyNamed(loadAuthPages, "PasswordResetConfirmP
 const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const TopologyPage = lazyNamed(loadScanExperience, "TopologyPage");
+const ScanFixOutputPage = lazyNamed(loadScanExperience, "ScanFixOutputPage");
 const RebuildWorkspace = lazyNamed(loadRebuildWorkspace, "RebuildWorkspace");
 const DomainVerifyPage = lazyNamed(loadDomainPages, "DomainVerifyPage");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
@@ -54,6 +55,7 @@ const ProjectOverviewPage = lazyNamed(loadProjectPages, "ProjectOverviewPage");
 const ProjectScansPage = lazyNamed(loadProjectPages, "ProjectScansPage");
 const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
 const ProjectPagesPage = lazyNamed(loadProjectPages, "ProjectPagesPage");
+const ProjectAeoPage = lazyNamed(loadProjectPages, "ProjectAeoPage");
 const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
 const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
@@ -181,6 +183,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="scans" element={<ProjectScansPage />} />
             <Route path="issues" element={<ProjectIssuesPage />} />
             <Route path="pages" element={<ProjectPagesPage />} />
+            <Route path="aeo" element={<ProjectAeoPage />} />
             <Route path="history" element={<ProjectHistoryPage />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>
@@ -196,6 +199,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route element={<ScanLayout />}>
               <Route path="/scans/:scanId" element={<ScanDetailPage />} />
               <Route path="/scans/:scanId/topology" element={<TopologyPage />} />
+              <Route path="/scans/:scanId/fixes" element={<ScanFixOutputPage />} />
               <Route
                 path="/scans/:scanId/rebuild/:rebuildId"
                 element={<RebuildWorkspace />}

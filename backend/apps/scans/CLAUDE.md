@@ -32,7 +32,8 @@ queued → crawling → scanning → [agent_testing] → completed
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
-| `projects.py` | 網站專案的彙整資料（只讀 DB）：`project_overview`（含本次掃描覆蓋 `stats`、各維度問題數、AEO 摘要、最近掃描）、`project_issues`／`compare_issues`（新增／持續／本次未出現；每個問題含說明、修法、最多 `ISSUE_URLS_LIMIT` 個網址）、`project_pages`（逐頁狀態與問題數）、`project_summaries`（清單用，一次查詢） | 寫 DB、連線目標網站 |
+| `projects.py` | 網站專案的彙整資料（只讀 DB）：`project_overview`（含本次掃描覆蓋 `stats`、各維度問題數、AEO 摘要、最近掃描）、`project_issues`／`compare_issues`（新增／持續／本次未出現；每個問題含說明、修法、最多 `ISSUE_URLS_LIMIT` 個網址）、`project_pages`（逐頁狀態與問題數）、`project_summaries`（清單用：最新分數與變化、`score_history` 走勢、最新完成掃描依嚴重度的 `issue_counts`；兩次查詢） | 寫 DB、連線目標網站 |
+| `favicon.py` | 網站專案圖示：從首頁宣告的 `<link rel=icon>`（沒有就 `/favicon.ico`）抓取，每一跳轉址都過 `assert_public_http_url`、讀取上限 200KB、逾時 5 秒；點陣圖以 Pillow 縮成 64px PNG、SVG 限 20KB 原樣；存成 `SiteProject.favicon`（data URL）。每 7 天最多抓一次，失敗保留舊圖示 | 修改 `ScanJob.status`、讓掃描因圖示失敗 |
 | `aeo/` | AEO 問答檢測（內容擷取、出題、找答案與判定、標記一致性、整站評估；見下「AEO 問答檢測」） | 修改 `ScanJob.status`、發出任何網路請求（只分析爬蟲已抓到的頁面） |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
 | `katana_scanner.py` | Katana 全站 JS/端點探索封裝；時間、大小、同主機與 RPS 預算 | 在單頁、passive 或未授權模式執行 |
@@ -121,7 +122,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | `aeo/evaluate.py` | 整站評估 `evaluate_site(pages)`：正文 < `MIN_MAIN_TEXT_CHARS` 或題目 < `MIN_QUESTIONS` → `status=insufficient`、**不給分**（`tested_categories_for` 移除 aeo，報告顯示「未評估」）；否則依逐題判定加權算分，產生 `aeo-answer-*` finding 與 `aeo-render-dependent`（主要文字需執行 JS 才出現） |
 
 - 結果存在 `ScanJob.aeo_report`（migration 0018）：`status`、`reason`、`questions_total`、`counts`、`answered_ratio`（有答案的問題比例）、`evidence_ratio`（答案附有原文的比例）、`score`、`questions[]`（逐題判定、理由、證據），`method` 目前是 `rules-v1`。
-- 呈現：掃描詳情頁 `AeoAnswerPanel`、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
+- 呈現：網站專案的「AEO 問答」分頁（`/projects/:id/aeo`，`AeoAnswerPanel`；2026-10-02 前在掃描詳情最下方）、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
 
@@ -357,6 +358,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
+| `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
 | `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |

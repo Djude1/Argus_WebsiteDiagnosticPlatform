@@ -11,7 +11,7 @@ import {
   ShieldAdminIcon,
   SunIcon,
 } from "../../shared/ActionIcons";
-import { CoinIcon, GearIcon, StarIcon } from "../../shared/LineIcons";
+import { BrowserIcon, CoinIcon, GearIcon, StarIcon } from "../../shared/LineIcons";
 
 /** 登出：先通知後端撤銷 refresh cookie，無論成功與否都清掉前端 token 並回登入頁。 */
 export function useLogout() {
@@ -127,6 +127,9 @@ function AccountMenu() {
           </button>
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/reviews")}>
             <StarIcon /> 評論
+          </button>
+          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/project")}>
+            <BrowserIcon /> 產品介紹
           </button>
           {me?.is_staff && (
             <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/admin")}>

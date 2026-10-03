@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Link,
+  NavLink,
   Outlet,
   useOutletContext,
-  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -23,7 +24,6 @@ import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
-import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
 import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
 import { useArgusStore } from "../../store";
 import {
@@ -31,6 +31,7 @@ import {
   CATEGORY_FILTERS,
   CATEGORY_LABELS,
   SEVERITY_FILTERS,
+  SEVERITY_LABEL,
   apiErrorMessage,
   isInProgress,
   SeverityBarChart,
@@ -285,7 +286,7 @@ function CrawlingAnimation({
             onClick={onCancel}
             disabled={cancelBusy}
           >
-            {cancelBusy ? "終止中..." : "✖ 終止掃描"}
+            {cancelBusy ? "終止中..." : "終止掃描"}
           </button>
         </div>
       ) : null}
@@ -537,9 +538,9 @@ function ScanJobForm({ onCreated, project = null }) {
           <button
             type="button"
             className={`scope-card ${scope === "single" ? "active" : ""}`}
+            aria-pressed={scope === "single"}
             onClick={() => setScope("single")}
           >
-            <span className="scope-icon" aria-hidden="true">🎯</span>
             <span className="scope-title">單一頁面</span>
             <span className="scope-desc">只掃描你輸入的這一頁，最快、最省 coin</span>
             <span className="scope-meta">1 頁 = {coinPerPage} coin</span>
@@ -547,9 +548,9 @@ function ScanJobForm({ onCreated, project = null }) {
           <button
             type="button"
             className={`scope-card ${scope === "site" ? "active" : ""}`}
+            aria-pressed={scope === "site"}
             onClick={() => setScope("site")}
           >
-            <span className="scope-icon" aria-hidden="true">🌐</span>
             <span className="scope-title">整個網站</span>
             <span className="scope-desc">從入口出發爬同網域多頁，產出完整健檢報告</span>
             <span className="scope-meta">最多 {MAX_SITE_SCAN_PAGES} 頁，依實際爬到頁數計費</span>
@@ -732,102 +733,97 @@ function ScanJobForm({ onCreated, project = null }) {
 // ============================================================
 
 // 網站專案「掃描」分頁的掃描列表：該網站的全部掃描（卡片多欄、顯示時間與頁數／發現數）。
+// 此網站的掃描：一列一次掃描的表格（時間、範圍與模式、頁數、發現、狀態、分數與變化）。
+// 不用卡片：同一個網站的歷次掃描本來就是要逐列比較的紀錄。
 function ScanList({ scans, onRefresh }) {
   const navigate = useNavigate();
   const inProgressCount = scans.filter((scan) => isInProgress(scan.status)).length;
 
-  // 每個 origin 上一次的分數，用來算 delta（同 origin 的 scans 已按 -created_at 排序）
-  const previousByOrigin = useMemo(() => {
-    const seen = new Map();
+  // 每次掃描與「前一次有分數的掃描」比較（scans 已按 -created_at 排序，同一專案同一個 origin）
+  const deltaById = useMemo(() => {
     const result = new Map();
-    for (const scan of scans) {
-      if (scan.overall_score === null || scan.overall_score === undefined) continue;
-      if (seen.has(scan.origin)) {
-        // 第二次見到此 origin，視為「上一次分數」對應第一次見到的那筆
-        const firstScanId = seen.get(scan.origin);
-        if (!result.has(firstScanId)) {
-          result.set(firstScanId, scan.overall_score);
-        }
-      } else {
-        seen.set(scan.origin, scan.id);
-      }
-    }
+    const scored = scans.filter((scan) => scan.overall_score !== null && scan.overall_score !== undefined);
+    scored.forEach((scan, index) => {
+      const previous = scored[index + 1];
+      if (previous) result.set(scan.id, scan.overall_score - previous.overall_score);
+    });
     return result;
   }, [scans]);
 
+  function openRow(event, scanId) {
+    // 列本身可點；列內的連結自己處理
+    if (event.target.closest("a, button")) return;
+    navigate(`/scans/${scanId}`);
+  }
+
   return (
-    <section className="panel space-y-3 scan-list-wide">
-      <div className="flex items-center justify-between">
+    <section className="panel scan-list-wide">
+      <div className="scan-list-head">
         <div>
-          <p className="eyebrow">任務</p>
-          <h2 className="section-title">此網站的掃描（{scans.length}）</h2>
-          {inProgressCount > 0 && (
-            <p className="mt-1 text-xs text-blue-600">
-              🔄 {inProgressCount} 個進行中，畫面每 {LIST_POLL_INTERVAL_MS / 1000} 秒自動更新
-            </p>
-          )}
+          <h2 className="section-title">此網站的掃描</h2>
+          <p className="scan-list-sub">
+            共 {scans.length} 次
+            {inProgressCount > 0 && `，${inProgressCount} 次進行中（每 ${LIST_POLL_INTERVAL_MS / 1000} 秒自動更新）`}
+          </p>
         </div>
         <button className="secondary-button" type="button" onClick={onRefresh}>
           重新整理
         </button>
       </div>
-      <div className="scan-list-grid">
-        {scans.map((scan) => {
-          const tone =
-            scan.overall_score === null || scan.overall_score === undefined
-              ? "muted"
-              : scan.overall_score >= 80
-                ? "good"
-                : scan.overall_score >= 60
-                  ? "medium"
-                  : "bad";
-          const previous = previousByOrigin.get(scan.id);
-          const delta =
-            previous !== undefined &&
-            scan.overall_score !== null &&
-            scan.overall_score !== undefined
-              ? scan.overall_score - previous
-              : null;
-          return (
-            <button
-              className={`scan-card tone-${tone} ${
-                isInProgress(scan.status) ? "is-in-progress" : ""
-              }`}
-              key={scan.id}
-              type="button"
-              onClick={() => navigate(`/scans/${scan.id}`)}
-            >
-              <span className={`scan-card-stripe tone-${tone}`} aria-hidden="true" />
-              {isInProgress(scan.status) && (
-                <span className="scan-card-progress-shimmer" aria-hidden="true" />
-              )}
-              <div className="scan-card-body">
-                <p className="scan-card-origin" title={scan.normalized_url}>
-                  {(scan.normalized_url || scan.origin).replace(/^https?:\/\//, "")}
-                </p>
-                <div className="scan-card-meta">
-                  <ScanStatusBadge status={scan.status} />
-                  {delta !== null && delta !== 0 && (
-                    <span
-                      className={`scan-card-delta tone-${delta > 0 ? "good" : "bad"}`}
-                      title="與上一次掃描的分數比較"
-                    >
-                      {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`}
-                    </span>
-                  )}
-                </div>
-                <p className="scan-card-extra">
-                  {formatDateTime(scan.created_at)}
-                  {scan.pages_count ? ` · ${scan.pages_count} 頁` : ""}
-                  {scan.findings_count ? ` · ${scan.findings_count} 項發現` : ""}
-                </p>
-              </div>
-              <ScoreBadge score={scan.overall_score} />
-            </button>
-          );
-        })}
-        {!scans.length && <p className="hint-text">尚無掃描任務。</p>}
-      </div>
+      {scans.length ? (
+        <div className="scan-ledger-wrap">
+          <table className="scan-ledger">
+            <thead>
+              <tr>
+                <th scope="col">建立時間</th>
+                <th scope="col">範圍</th>
+                <th scope="col" className="is-num">頁數</th>
+                <th scope="col" className="is-num">發現</th>
+                <th scope="col">狀態</th>
+                <th scope="col" className="is-num">分數</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scans.map((scan) => {
+                const delta = deltaById.get(scan.id);
+                const running = isInProgress(scan.status);
+                return (
+                  <tr
+                    key={scan.id}
+                    className={running ? "is-running" : ""}
+                    onClick={(event) => openRow(event, scan.id)}
+                  >
+                    <th scope="row">
+                      <Link to={`/scans/${scan.id}`} className="scan-ledger-link">
+                        {formatDateTime(scan.created_at)}
+                      </Link>
+                    </th>
+                    <td>
+                      {scan.max_pages > 1 ? "整個網站" : "單一頁面"}
+                      {scan.scan_mode === "active" && <span className="scan-ledger-tag">主動</span>}
+                    </td>
+                    <td className="is-num">{scan.pages_count ?? "—"}</td>
+                    <td className="is-num">{scan.findings_count ?? "—"}</td>
+                    <td>
+                      <ScanStatusBadge status={scan.status} />
+                    </td>
+                    <td className="is-num">
+                      <ScoreBadge score={scan.overall_score} />
+                      {delta !== undefined && delta !== 0 && (
+                        <span className={`scan-ledger-delta ${delta > 0 ? "is-up" : "is-down"}`}>
+                          {delta > 0 ? `+${delta}` : delta}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="hint-text">這個網站還沒有掃描；用左側表單建立第一次掃描。</p>
+      )}
     </section>
   );
 }
@@ -936,7 +932,7 @@ function FindingsGroupList({
   }
 
   return (
-    <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
+    <div className="finding-group-list">
       {groups.map((group) => {
         const isExpanded = expanded.has(group.key);
         const containsSelected =
@@ -956,9 +952,9 @@ function FindingsGroupList({
               type="button"
               onClick={() => toggle(group.key)}
             >
-              <span className={`severity ${group.severity}`}>{group.severity}</span>
+              <span className={`severity ${group.severity}`}>{SEVERITY_LABEL[group.severity] || group.severity}</span>
               <span className={`category-pill cat-${group.category}`}>
-                {group.category.toUpperCase()}
+                {CATEGORY_LABELS[group.category] || group.category}
               </span>
               <span className="finding-group-title">{group.title}</span>
               <span className="finding-group-count">{group.items.length}</span>
@@ -1045,9 +1041,9 @@ function EvidencePanel({ finding }) {
     return (
       <div className="evidence-panel is-empty">
         <div className="evidence-panel-header">
-          <span className="evidence-panel-title">Deterministic Evidence</span>
+          <span className="evidence-panel-title">判定證據</span>
         </div>
-        <p>此 Finding 尚未提供可追溯證據。</p>
+        <p>這個發現沒有可追溯的證據。</p>
       </div>
     );
   }
@@ -1055,8 +1051,8 @@ function EvidencePanel({ finding }) {
   return (
     <details className="evidence-panel" open>
       <summary className="evidence-panel-header">
-        <span className="evidence-panel-title">Deterministic Evidence</span>
-        <span className="evidence-panel-subtitle">規則引擎產生，AI 僅負責解釋</span>
+        <span className="evidence-panel-title">判定證據</span>
+        <span className="evidence-panel-subtitle">由規則引擎產生，可重現</span>
       </summary>
 
       <div className="evidence-meta-grid">
@@ -1128,6 +1124,9 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
   const [imageUrl, setImageUrl] = useState("");
   const [scale, setScale] = useState(1);
   const imageRef = useRef(null);
+  // 截圖放在固定高度的捲動視窗裡（整頁截圖動輒上萬像素高，不該把版面撐開）；
+  // 選到有位置的發現時，把視窗捲到那個元素
+  const viewportRef = useRef(null);
 
   useEffect(() => {
     let objectUrl = "";
@@ -1171,6 +1170,17 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     return () => window.removeEventListener("resize", syncScale);
   }, []);
 
+  const focusBox =
+    selectedFinding?.bounding_box && selectedFinding.page === targetPage?.id
+      ? selectedFinding.bounding_box
+      : null;
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !imageUrl) return;
+    const top = focusBox ? Math.max(0, focusBox.y * scale - 80) : 0;
+    viewport.scrollTo?.({ top, behavior: "smooth" });
+  }, [focusBox, scale, imageUrl]);
+
   // 高光框：選中的 finding 在當前頁面且有座標時，畫紅色高光框
   const overlayFindings = findings.filter(
     (finding) => finding.bounding_box && finding.page === targetPage?.id,
@@ -1191,8 +1201,8 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     <div className="screenshot-shell">
       {targetPage && (
         <div className="screenshot-caption-row">
-          <p className="screenshot-caption">
-            📷 {targetPage.title || targetPage.url}
+          <p className="screenshot-caption" title={targetPage.url}>
+            {targetPage.title || targetPage.url}
           </p>
           <a
             className="screenshot-open-link"
@@ -1201,7 +1211,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
             rel="noopener noreferrer"
             title="在新分頁開啟原網站（可實際互動，但會脫離 Argus 的紅框跳轉）"
           >
-            🔗 在新分頁開啟原網站
+            開啟原網頁 ↗
           </a>
         </div>
       )}
@@ -1220,6 +1230,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
         )
       )}
       {imageUrl && (
+        <div className="screenshot-viewport" ref={viewportRef}>
         <div className="relative inline-block">
           <img
             alt="頁面截圖"
@@ -1231,13 +1242,13 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
           {showSiteBanner && (
             <div className="site-banner-overlay">
               <span className={`severity ${selectedFinding.severity}`}>
-                {selectedFinding.severity}
+                {SEVERITY_LABEL[selectedFinding.severity] || selectedFinding.severity}
               </span>
               <span className={`category-pill cat-${selectedFinding.category}`}>
-                {selectedFinding.category.toUpperCase()}
+                {CATEGORY_LABELS[selectedFinding.category] || selectedFinding.category}
               </span>
               <span className="site-banner-title">
-                ⚠ {selectedFinding.title}
+                {selectedFinding.title}（整頁或站台層級，沒有單一元素位置）
               </span>
             </div>
           )}
@@ -1274,6 +1285,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
               );
             })}
           </div>
+        </div>
         </div>
       )}
     </div>
@@ -1465,35 +1477,50 @@ function FindingsWorkspace({ scan }) {
   }, [findingStats, findings]);
 
   const completed = scan.status === "completed";
+  const selectedPage = pageTabParam === "all" ? null : pages.find((p) => String(p.id) === pageTabParam) || null;
+  const topActions = scan.top_actions || [];
+
+  function pageOptionLabel(page) {
+    if (page.depth === 0) return "首頁";
+    const path = (page.url || "").replace(scan.origin, "").split("?")[0] || "/";
+    const label = page.title?.trim() || path;
+    return label.length > 40 ? `${label.slice(0, 40)}…` : label;
+  }
 
   return (
     <>
-    <section className="panel lg:col-span-2">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <p className="eyebrow">互動報告</p>
-          <h2 className="section-title">{scan.origin}</h2>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+    <section className="scan-report">
+      <header className="scan-report-head">
+        <div className="scan-report-id">
+          <h1 className="scan-report-title">{scan.origin.replace(/^https?:\/\//, "")}</h1>
+          <p className="scan-report-meta">
             <ScanStatusBadge status={scan.status} />
-            <span>頁面: {scan.pages_count ?? 0}</span>
-            <span>Findings: {scan.findings_count ?? 0}</span>
-            {scan.overall_score !== null && scan.overall_score !== undefined && (
-              <span>分數: {scan.overall_score}</span>
-            )}
-          </div>
+            <span>{formatDateTime(scan.completed_at || scan.created_at)}</span>
+            <span>{scan.max_pages > 1 ? "整個網站" : "單一頁面"}</span>
+            <span>{scan.scan_mode === "active" ? "主動測試" : "被動偵測"}</span>
+            <span>{scan.pages_count ?? 0} 頁</span>
+            <span>{scan.findings_count ?? 0} 項發現</span>
+          </p>
         </div>
+        {scan.overall_score !== null && scan.overall_score !== undefined && (
+          <p className="scan-report-score">
+            <ScoreBadge score={scan.overall_score} />
+            <span>網站分數</span>
+          </p>
+        )}
         <button
           className="secondary-button"
           type="button"
           onClick={downloadReport}
           disabled={!completed}
+          title={completed ? "下載這次掃描的 Word 報告" : "掃描完成後可下載"}
         >
-          匯出 Word{!completed && "（完成後可用）"}
+          下載 Word 報告
         </button>
-      </div>
+      </header>
 
       {isInProgress(scan.status) && (
-        <div className="mb-4 space-y-2">
+        <div className="scan-report-progress">
           <CrawlingAnimation
             status={scan.status}
             progress={scan.progress}
@@ -1503,7 +1530,7 @@ function FindingsWorkspace({ scan }) {
             hint={`畫面每 ${SCAN_POLL_INTERVAL_MS / 1000} 秒自動更新；可離開此頁，背景會繼續執行`}
           />
           <p className="text-xs text-slate-500">
-            ℹ️ 為避免無意義的建議，後台路徑（/admin、/wp-admin、/dashboard 等）會跳過 SEO/AEO/GEO
+            為避免無意義的建議，後台路徑（/admin、/wp-admin、/dashboard 等）會跳過 SEO/AEO/GEO
             評分（安全頭部與 CSRF 仍會檢查）；.apk、.zip、.pdf、圖片等下載連結不會列入頁面分析。
           </p>
           {scan.warning_summary && scan.warning_summary.blocked_urls?.length > 0 && (
@@ -1515,22 +1542,163 @@ function FindingsWorkspace({ scan }) {
       )}
 
       {scan.status === "failed" && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          ✗ 掃描失敗：{scan.error_message || "未知錯誤"}
-        </div>
+        <p className="scan-report-alert is-bad">掃描失敗：{scan.error_message || "未知錯誤"}</p>
       )}
-
       {scan.status === "cancelled" && (
-        <div className="mb-4 rounded-xl border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
-          ✖ 掃描已終止。已收集到的頁面與 finding 仍保留在下方。
+        <p className="scan-report-alert">掃描已終止。已收集到的頁面與發現仍保留在下方。</p>
+      )}
+
+      {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
+      {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (
+        <div className="scan-summary">
+          <section className="scan-summary-block">
+            <SeverityBarChart severityTotals={severityTotals} title="嚴重度分布" />
+          </section>
+          <section className="scan-summary-block">
+            {/* 數的是原始筆數：同一問題出現在多個頁面會分別計入，與下方清單對得上；
+                報告裡同名圖數的是合併重複後的項目數 */}
+            <h2 className="scan-summary-title">各維度佔比</h2>
+            <p className="scan-summary-note">依原始筆數（同一問題在多頁出現會分別計入）</p>
+            <StackedBar
+              data={Object.keys(CATEGORY_LABELS).map((cat) => ({
+                label: CATEGORY_LABELS[cat],
+                value: categoryTotals[cat] || 0,
+                color: CATEGORY_COLOR[cat],
+              }))}
+            />
+          </section>
+          <section className="scan-summary-block is-actions">
+            <h2 className="scan-summary-title">優先處理</h2>
+            {topActions.length ? (
+              <ol className="scan-priority-list">
+                {topActions.map((action, idx) => (
+                  <li key={`${action.category}-${action.title}-${idx}`}>
+                    <button
+                      className="scan-priority-row"
+                      type="button"
+                      onClick={() => {
+                        // 從現有發現找同分類同標題的第一筆，選中後清單與截圖都會跟著跳過去
+                        const matched = findings.find(
+                          (f) => f.category === action.category && f.title === action.title,
+                        );
+                        if (matched) selectFinding(matched);
+                      }}
+                    >
+                      <span className={`severity ${action.severity}`}>
+                        {SEVERITY_LABEL[action.severity] || action.severity}
+                      </span>
+                      <span className="scan-priority-title">{action.title}</span>
+                      <span className="category-pill">{CATEGORY_LABELS[action.category] || action.category}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="hint-text">
+                {isInProgress(scan.status) ? "掃描完成後產生。" : "這次沒有需要優先處理的項目。"}
+              </p>
+            )}
+          </section>
         </div>
       )}
 
-      {/* 掃描執行 Log */}
+      {/* 檢視器：左邊問題清單、右邊選中問題的說明與頁面截圖 */}
+      <div className="scan-inspector">
+        <div className="scan-inspector-list">
+          <div className="scan-inspector-filters">
+            <label className="scan-filter">
+              <span>頁面</span>
+              <select className="input" value={pageTabParam} onChange={(event) => setPageTab(event.target.value)}>
+                <option value="all">全站（{findings.length}）</option>
+                {pages.map((page) => (
+                  <option key={page.id} value={String(page.id)}>
+                    {pageOptionLabel(page)}（{findingsPerPage.perPage.get(page.id) || 0}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="scan-filter">
+              <span>維度</span>
+              <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                {CATEGORY_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="scan-filter">
+              <span>嚴重度</span>
+              <select className="input" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
+                {SEVERITY_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="scan-inspector-count">
+            {filteredFindings.length} 項
+            {selectedPage ? `（此頁 ${findingsPerPage.perPage.get(selectedPage.id) || 0} 項＋站台層級 ${findingsPerPage.siteLevel} 項）` : ""}
+          </p>
+          <FindingsGroupList
+            findings={filteredFindings}
+            pages={pages}
+            scanStatus={scan.status}
+            totalFindings={findings.length}
+            selectedFinding={selectedFinding}
+            onSelectFinding={selectFinding}
+          />
+        </div>
+
+        <div className="scan-inspector-preview">
+          {selectedFinding ? (
+            <article className="finding-detail">
+              <p className="finding-detail-meta">
+                <span className={`severity ${selectedFinding.severity}`}>
+                  {SEVERITY_LABEL[selectedFinding.severity] || selectedFinding.severity}
+                </span>
+                <span className="category-pill">{CATEGORY_LABELS[selectedFinding.category] || selectedFinding.category}</span>
+              </p>
+              <h3 className="finding-detail-title">{selectedFinding.title}</h3>
+              <p>{selectedFinding.description}</p>
+              <p className="finding-detail-label">怎麼修</p>
+              <p>{selectedFinding.remediation}</p>
+              <EvidencePanel finding={selectedFinding} />
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => navigator.clipboard.writeText(selectedFinding.ai_handoff_prompt)}
+                title="複製問題、證據與修法，貼給 ChatGPT／Claude 取得更深入的說明"
+              >
+                複製給 AI 的提示詞
+              </button>
+            </article>
+          ) : (
+            <p className="scan-inspector-hint">從左側選一個問題，這裡會顯示說明、修法與證據，截圖會標出位置。</p>
+          )}
+          <ScreenshotCanvas
+            findings={filteredFindings}
+            targetPage={targetPage}
+            scan={scan}
+            selectedFinding={selectedFinding}
+            onSelectFinding={selectFinding}
+          />
+          {/* 複刻是「針對某一頁」的產出，只在選定單一頁面時出現；key 讓切頁時重新掛載，
+              避免前一頁還在跑的 polling 把舊結果寫進新頁面的狀態 */}
+          {selectedPage ? (
+            <PageRebuildPanel key={selectedPage.id} scan={scan} page={selectedPage} />
+          ) : (
+            pages.length > 0 && (
+              <p className="scan-inspector-hint">
+                想複刻並優化某一頁？先在左上「頁面」選擇那一頁。
+              </p>
+            )
+          )}
+        </div>
+      </div>
+
       {scan.scan_log?.length > 0 && (
         <details className="scan-log-panel">
           <summary className="scan-log-summary">
-            執行日誌
+            執行紀錄
             <span className="scan-log-count">{scan.scan_log.length} 筆</span>
           </summary>
           <div className="scan-log-body">
@@ -1546,177 +1714,6 @@ function FindingsWorkspace({ scan }) {
           </div>
         </details>
       )}
-
-      {/* 頁面 tabs：依不同頁面切換中間截圖區與右側 findings 範圍 */}
-      {pages.length > 0 && (
-        <div className="page-tabs">
-          <button
-            type="button"
-            className={`page-tab ${pageTabParam === "all" ? "active" : ""}`}
-            onClick={() => setPageTab("all")}
-          >
-            <span className="page-tab-label">全站</span>
-            <span className="page-tab-count">{findings.length}</span>
-          </button>
-          {pages.map((page) => {
-            const isHome = page.depth === 0;
-            const urlPath = (page.url || "")
-              .replace(scan.origin, "")
-              .split("?")[0]
-              .replace(/^\//, "");
-            // 標籤優先用 page.title（更語意化），缺則 fallback 到 URL path
-            // 截斷統一 18 字並加 ellipsis，避免「p/412-1000-172.ph」這種被切掉副檔名字尾的歧義
-            const rawLabel = (page.title?.trim() || urlPath || `Page ${page.id}`);
-            const label = isHome ? "首頁" : (rawLabel.length > 18 ? rawLabel.slice(0, 18) + "…" : rawLabel);
-            const cnt = findingsPerPage.perPage.get(page.id) || 0;
-            return (
-              <button
-                key={page.id}
-                type="button"
-                className={`page-tab ${String(page.id) === pageTabParam ? "active" : ""}`}
-                onClick={() => setPageTab(page.id)}
-                title={page.url}
-              >
-                <span className="page-tab-label">{label}</span>
-                <span className="page-tab-count">{cnt}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 整體 viz：嚴重度長條 + 各類別佔比堆疊條 — 完成或進行中皆顯示（進行中是部分資料） */}
-      {(findingStats?.total > 0 || findings.length > 0) && (
-        <div className="report-viz">
-          <div className="report-viz-block">
-            <SeverityBarChart severityTotals={severityTotals} />
-          </div>
-          <div className="report-viz-block">
-            {/* 標題要講清楚在數什麼。這裡數的是原始筆數：同一個問題出現在 37 個
-                頁面就算 37 筆，與下方 finding 清單對得上。報告裡的同名圖數的是
-                合併重複後的項目數，兩個數字都對、但回答的是不同問題，沒標註就會
-                讓人以為其中一邊算錯了。 */}
-            <h4 className="bar-chart-header-h4">各類別 finding 佔比</h4>
-            <p className="text-[11px] text-slate-400 -mt-1 mb-2">
-              依原始筆數計算（同一問題出現在多個頁面會分別計入）
-            </p>
-            <StackedBar
-              data={Object.keys(CATEGORY_LABELS).map((cat) => ({
-                label: CATEGORY_LABELS[cat],
-                value: categoryTotals[cat] || 0,
-                color: CATEGORY_COLOR[cat],
-              }))}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-        <ScreenshotCanvas
-          findings={filteredFindings}
-          targetPage={targetPage}
-          scan={scan}
-          selectedFinding={selectedFinding}
-          onSelectFinding={selectFinding}
-        />
-        <div className="space-y-3">
-          {/* 複刻是「針對某一頁」的產出，全站頁籤下沒有明確對象，所以只在
-              選定單一頁面時出現，避免使用者按了不知道會產出哪一頁。 */}
-          {/* key 讓面板隨頁面重新掛載：不這樣做的話，切頁籤時前一頁還在跑的
-              polling 會把舊結果寫進新頁面的狀態。 */}
-          {targetPage && (
-            <PageRebuildPanel key={targetPage.id} scan={scan} page={targetPage} />
-          )}
-          <div className="top-actions-box">
-            <p className="top-actions-title">⚡ Top Actions</p>
-            {(scan.top_actions || []).map((action, idx) => (
-              <button
-                className="top-action-row"
-                type="button"
-                key={`${action.category}-${action.title}-${idx}`}
-                onClick={() => {
-                  // 試著從現有 findings 找符合的 finding 自動選中
-                  const matched = findings.find(
-                    (f) =>
-                      f.category === action.category && f.title === action.title,
-                  );
-                  if (matched) selectFinding(matched);
-                }}
-              >
-                <span className={`severity ${action.severity}`}>{action.severity}</span>
-                <span className={`category-pill cat-${action.category}`}>
-                  {action.category.toUpperCase()}
-                </span>
-                <span className="top-action-title">{action.title}</span>
-              </button>
-            ))}
-            {!(scan.top_actions && scan.top_actions.length) && (
-              <p className="mt-2 text-sm text-slate-400">
-                {isInProgress(scan.status) ? "尚未產生（掃描完成後出現）" : "—"}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">分類</span>
-              <select
-                className="input"
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value)}
-              >
-                {CATEGORY_FILTERS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">嚴重度</span>
-              <select
-                className="input"
-                value={severityFilter}
-                onChange={(event) => setSeverityFilter(event.target.value)}
-              >
-                {SEVERITY_FILTERS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <FindingsGroupList
-            findings={filteredFindings}
-            pages={pages}
-            scanStatus={scan.status}
-            totalFindings={findings.length}
-            selectedFinding={selectedFinding}
-            onSelectFinding={selectFinding}
-          />
-          {selectedFinding && (
-            <div className="finding-detail">
-              <h3 className="font-semibold text-slate-900">{selectedFinding.title}</h3>
-              <p>{selectedFinding.description}</p>
-              <p className="font-semibold">修補方向</p>
-              <p>{selectedFinding.remediation}</p>
-              <EvidencePanel finding={selectedFinding} />
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => navigator.clipboard.writeText(selectedFinding.ai_handoff_prompt)}
-              >
-                複製問題 Prompt
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 修正產出專區：全寬獨立區塊，只在掃描完成後出現——進行中的掃描
-          沒有完整爬取內容可當事實基礎，也不該讓使用者誤觸計費。 */}
-      {scan.status === "completed" && <AeoAnswerPanel report={scan.aeo_report} />}
-      {scan.status === "completed" && <FixOutputSection scan={scan} />}
     </section>
     {dialogHost}
     </>
@@ -1729,47 +1726,73 @@ function FindingsWorkspace({ scan }) {
 
 // 掃描詳情（含拓樸、複刻）的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，
 // 這裡只放返回與「詳情／拓樸」切換。建立掃描與掃描列表在專案的「掃描」分頁。
+const SCAN_TABS = [
+  { path: "", label: "報告" },
+  { path: "topology", label: "網站結構圖" },
+  { path: "fixes", label: "修正產出" },
+];
+
 function ScanLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { scanId } = useParams();
   const { project } = useOutletContext() || {};
-  const isTopologyPage = location.pathname.endsWith("/topology");
   const backPath = project ? `/projects/${project.id}/scans` : "/projects";
 
   return (
     <div className="scan-layout detail-mode is-project">
       <div className="scan-content">
-        <div className="scan-content-toolbar">
-          <button
-            type="button"
-            className="back-to-list-button"
-            onClick={() => navigate(backPath)}
-          >
-            ← {project ? `回到 ${project.name} 的掃描` : "回到所有專案"}
-          </button>
-          {isTopologyPage ? (
-            <button
-              type="button"
-              className="back-to-list-button"
-              onClick={() => navigate(`/scans/${scanId}`)}
-            >
-              📋 回詳情報告
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="back-to-list-button"
-              onClick={() => navigate(`/scans/${scanId}/topology`)}
-            >
-              🌐 拓撲圖
-            </button>
-          )}
-        </div>
+        <nav className="scan-subnav" aria-label="這次掃描">
+          <Link className="scan-subnav-back" to={backPath}>
+            ← {project ? `${project.name} 的所有掃描` : "所有專案"}
+          </Link>
+          <div className="scan-subnav-tabs">
+            {SCAN_TABS.map((tab) => (
+              <NavLink
+                key={tab.path || "report"}
+                to={`/scans/${scanId}${tab.path ? `/${tab.path}` : ""}`}
+                end
+                className={({ isActive }) => `scan-subnav-tab ${isActive ? "active" : ""}`}
+              >
+                {tab.label}
+              </NavLink>
+            ))}
+          </div>
+        </nav>
         <Outlet context={{ project }} />
       </div>
     </div>
   );
+}
+
+/**
+ * /scans/:scanId/fixes：修正產出（JSON-LD、OG／meta、llms.txt、FAQ Schema）。
+ * 原本放在互動報告最下方；它是要另外產生、另外計點的交付物，獨立成分頁比較清楚。
+ */
+function ScanFixOutputPage() {
+  const { scanId } = useParams();
+  const [scan, setScan] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/scans/${scanId}/`)
+      .then((response) => !cancelled && setScan(response.data))
+      .catch(() => !cancelled && setError("無法載入掃描資料，可能不存在或無權限。"));
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (scan.status !== "completed") {
+    return (
+      <section className="panel">
+        <p className="hint-text">
+          修正產出以完整爬取的內容為事實基礎，掃描完成後才能產生。
+        </p>
+      </section>
+    );
+  }
+  return <FixOutputSection scan={scan} />;
 }
 
 function shortenUrl(url) {
@@ -2146,6 +2169,7 @@ export {
   ScanLayout,
   ScanList,
   ScanDetailPage,
+  ScanFixOutputPage,
   TopologyPage,
   isInProgress,
 };

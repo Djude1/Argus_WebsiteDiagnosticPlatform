@@ -4,27 +4,28 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api } from "../../api";
-import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
-import { apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
-import { formatRelative } from "../../shared/formatters";
-import {
-  BrowserIcon,
-  ClockIcon,
-  FlagIcon,
-  GearIcon,
-  HomeIcon,
-  SpiderIcon,
-} from "../../shared/LineIcons";
+import { CATEGORY_ORDER, Sparkline } from "../../components/projects/DashboardWidgets.jsx";
+import SiteFavicon from "../../components/projects/SiteFavicon.jsx";
+import { CATEGORY_LABELS, apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
+import { formatDateTime, formatRelative } from "../../shared/formatters";
 import { useArgusStore } from "../../store";
 
+// 側邊欄只用文字（名稱＋一行說明），目前頁以底色與字重標示——不用圖示與彩色左邊條。
 const SECTIONS = [
-  { key: "", label: "總覽", hint: "分數與本次變化", Icon: HomeIcon },
-  { key: "scans", label: "掃描", hint: "建立與檢視掃描", Icon: SpiderIcon },
-  { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
-  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
-  { key: "history", label: "歷史報告", hint: "歷次分數與報告", Icon: ClockIcon },
-  { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存", Icon: GearIcon },
+  { key: "", label: "總覽", hint: "分數與本次變化" },
+  { key: "scans", label: "掃描", hint: "建立與檢視掃描" },
+  { key: "issues", label: "問題分析", hint: "新增、持續、未出現" },
+  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題" },
+  { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案" },
+  { key: "history", label: "歷史報告", hint: "歷次分數與報告" },
+  { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存" },
 ];
+
+/** 分數的文字色調（數字本身上色，不用彩色底的徽章）。 */
+export function scoreTone(score) {
+  if (score === null || score === undefined) return "is-none";
+  return score >= 80 ? "is-good" : score >= 60 ? "is-medium" : "is-bad";
+}
 
 function sectionOf(pathname) {
   const match = pathname.match(/^\/projects\/\d+\/(\w+)/);
@@ -39,10 +40,15 @@ function ProjectSidebar({ project, activeSection }) {
   return (
     <aside className="project-sidebar" aria-label="網站專案功能">
       <div className="project-sidebar-head">
-        <p className="project-sidebar-kicker">網站專案</p>
         <div className="project-sidebar-title">
+          <SiteFavicon project={project} />
           <p className="project-sidebar-name">{project.name}</p>
-          <ScoreBadge score={project.summary?.latest_score ?? null} />
+          <span
+            className={`project-score-num ${scoreTone(project.summary?.latest_score)}`}
+            title="最近一次完成的掃描分數"
+          >
+            {project.summary?.latest_score ?? "—"}
+          </span>
         </div>
         <a
           className="project-sidebar-origin"
@@ -64,7 +70,6 @@ function ProjectSidebar({ project, activeSection }) {
               className={`project-sidebar-link ${active ? "active" : ""}`}
               aria-current={active ? "page" : undefined}
             >
-              <section.Icon className="project-sidebar-icon" aria-hidden="true" />
               <span className="project-sidebar-link-text">
                 <span className="project-sidebar-link-label">{section.label}</span>
                 <span className="project-sidebar-link-hint">{section.hint}</span>
@@ -74,8 +79,8 @@ function ProjectSidebar({ project, activeSection }) {
         })}
       </nav>
       {activeSection !== "scans" && (
-        <Link className="secondary-button project-sidebar-cta" to={projectPath(project.id, "scans")}>
-          ＋ 新掃描
+        <Link className="project-sidebar-cta" to={projectPath(project.id, "scans")}>
+          建立新掃描 →
         </Link>
       )}
     </aside>
@@ -243,16 +248,21 @@ function scoreDelta(summary) {
   return summary.latest_score - summary.previous_score;
 }
 
-/** 跨網站的總覽（取代原本的 Dashboard 全帳號統計）：網站數、平均分、需要注意、進行中。 */
+/** 跨網站的總覽（取代原本的 Dashboard 全帳號統計）：一列數字，不做成四張卡片。 */
 function PortfolioSummary({ projects }) {
   const scored = projects.map((p) => p.summary.latest_score).filter((score) => score != null);
   const average = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
   const attention = scored.filter((score) => score < 60).length;
   const running = projects.filter((p) => p.summary.latest_scan && isInProgress(p.summary.latest_scan.status)).length;
+  const openIssues = projects.reduce(
+    (sum, p) => sum + Object.values(p.summary.issue_counts || {}).reduce((a, b) => a + b, 0),
+    0,
+  );
   const items = [
     { label: "網站", value: projects.length },
     { label: "平均分數", value: average ?? "—", hint: scored.length < projects.length ? `${projects.length - scored.length} 個尚未完成掃描` : "" },
-    { label: "需要注意", value: attention, hint: "最新分數低於 60", tone: attention ? "is-bad" : "" },
+    { label: "低於 60 分", value: attention, tone: attention ? "is-bad" : "" },
+    { label: "目前問題", value: openIssues, hint: "各網站最新一次完成掃描" },
     { label: "掃描進行中", value: running },
   ];
   return (
@@ -268,48 +278,144 @@ function PortfolioSummary({ projects }) {
   );
 }
 
-function ProjectCard({ project, onOpen, onRestore, restoring }) {
+const ISSUE_SEVERITIES = [
+  ["critical", "嚴重"],
+  ["high", "高"],
+  ["medium", "中"],
+  ["low", "低"],
+];
+
+const PROJECT_SORTS = {
+  attention: { label: "需要注意", compare: (a, b) => (a.summary.latest_score ?? 101) - (b.summary.latest_score ?? 101) },
+  recent: {
+    label: "最近掃描",
+    compare: (a, b) =>
+      String(b.summary.latest_scan?.created_at || "").localeCompare(String(a.summary.latest_scan?.created_at || "")),
+  },
+  name: { label: "名稱", compare: (a, b) => a.name.localeCompare(b.name, "zh-Hant") },
+};
+
+/** 一個網站的一列：圖示與名稱、分數與變化、走勢、各維度、目前問題、上次掃描。 */
+function ProjectRow({ project, onRestore, restoring }) {
   const summary = project.summary;
   const delta = scoreDelta(summary);
   const latest = summary.latest_scan;
   const archived = Boolean(project.archived_at);
-  const body = (
-    <>
-      <span className="project-card-head">
-        <span className="project-card-name">{project.name}</span>
-        <ScoreBadge score={summary.latest_score} />
-      </span>
-      <span className="project-card-origin">{project.origin}</span>
-      <span className="project-card-meta">
-        {latest && isInProgress(latest.status) ? <ScanStatusBadge status={latest.status} /> : null}
-        {delta !== null && delta !== 0 && (
-          <span className={`project-delta ${delta > 0 ? "is-up" : "is-down"}`}>
-            {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`}
-          </span>
-        )}
-        <span>
-          {latest ? `上次掃描 ${formatRelative(latest.created_at)}` : "尚未掃描"}
-          {summary.scans_count ? ` · 共 ${summary.scans_count} 次` : ""}
-        </span>
-      </span>
-    </>
-  );
-  if (!archived) {
-    return (
-      <button type="button" className="project-card" onClick={() => onOpen(project)}>
-        {body}
-      </button>
-    );
-  }
+  const running = latest && isInProgress(latest.status);
+  const history = (summary.score_history || []).map((value, index) => ({ label: `第 ${index + 1} 次`, value }));
+  const issues = summary.issue_counts || {};
+  const issueTotal = Object.values(issues).reduce((a, b) => a + b, 0);
   return (
-    <div className="project-card is-archived">
-      {body}
-      <span className="project-card-actions">
-        <button type="button" className="secondary-button" onClick={() => onRestore(project)} disabled={restoring}>
-          {restoring ? "恢復中…" : "恢復專案"}
-        </button>
-        <Link className="project-text-link" to={projectPath(project.id, "history")}>查看歷史</Link>
-      </span>
+    <tr className={archived ? "is-archived" : ""}>
+      <th scope="row">
+        <span className="project-row-site">
+        <SiteFavicon project={project} />
+        <span className="project-row-name">
+          {archived ? (
+            <strong>{project.name}</strong>
+          ) : (
+            <Link to={projectPath(project.id)} className="project-row-link">{project.name}</Link>
+          )}
+          <small>{project.hostname}</small>
+        </span>
+        </span>
+      </th>
+      <td className="project-row-score">
+        <span className={`project-score-num is-lg ${scoreTone(summary.latest_score)}`}>{summary.latest_score ?? "—"}</span>
+        {delta !== null && delta !== 0 && (
+          <span className={`project-delta ${delta > 0 ? "is-up" : "is-down"}`}>{delta > 0 ? `+${delta}` : delta}</span>
+        )}
+      </td>
+      <td className="project-row-trend">
+        <Sparkline points={history} label={`${project.name} 的分數`} />
+      </td>
+      <td className="project-row-cats">
+        {summary.last_completed_at ? (
+          <ul className="project-mini-cats">
+            {CATEGORY_ORDER.map((category) => {
+              const score = summary.latest_category_scores?.[category];
+              return (
+                <li key={category} title={`${CATEGORY_LABELS[category]}：${score == null ? "未評估" : Math.round(score)}`}>
+                  <span>{CATEGORY_LABELS[category]}</span>
+                  <span className="project-mini-track" aria-hidden="true">
+                    {score != null && <span className={`project-mini-fill ${scoreTone(score)}`} style={{ width: `${score}%` }} />}
+                  </span>
+                  <b>{score == null ? "—" : Math.round(score)}</b>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <span className="hint-text">尚無完成的掃描</span>
+        )}
+      </td>
+      <td className="project-row-issues">
+        {issueTotal ? (
+          <span className="project-issue-tally">
+            {ISSUE_SEVERITIES.filter(([key]) => issues[key]).map(([key, label]) => (
+              <span key={key} className={`project-sev-dot sev-${key}`}>{label} {issues[key]}</span>
+            ))}
+          </span>
+        ) : (
+          <span className="hint-text">{summary.last_completed_at ? "沒有待處理問題" : "—"}</span>
+        )}
+      </td>
+      <td className="project-row-last">
+        {running ? (
+          <Link className="project-running" to={`/scans/${latest.id}`}>掃描進行中</Link>
+        ) : latest ? (
+          <span title={formatDateTime(latest.created_at)}>{formatRelative(latest.created_at)}</span>
+        ) : (
+          <span className="hint-text">尚未掃描</span>
+        )}
+        <small>{summary.scans_count ? `共 ${summary.scans_count} 次` : ""}</small>
+      </td>
+      <td className="project-row-actions">
+        {archived ? (
+          <>
+            <button type="button" className="secondary-button" onClick={() => onRestore(project)} disabled={restoring}>
+              {restoring ? "恢復中…" : "恢復專案"}
+            </button>
+            <Link className="project-text-link" to={projectPath(project.id, "history")}>查看歷史</Link>
+          </>
+        ) : (
+          <>
+            <Link className="project-text-link" to={projectPath(project.id, "issues")}>問題</Link>
+            <Link className="project-text-link" to={projectPath(project.id, "scans")}>掃描</Link>
+          </>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function ProjectTable({ projects, caption, onRestore, restoringId }) {
+  return (
+    <div className="project-table-wrap">
+      <table className="project-registry">
+        <caption className="project-sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">網站</th>
+            <th scope="col">分數</th>
+            <th scope="col">走勢</th>
+            <th scope="col">各維度</th>
+            <th scope="col">目前問題</th>
+            <th scope="col">上次掃描</th>
+            <th scope="col"><span className="project-sr-only">操作</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((project) => (
+            <ProjectRow
+              key={project.id}
+              project={project}
+              onRestore={onRestore}
+              restoring={restoringId === project.id}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -318,12 +424,12 @@ function ProjectCard({ project, onOpen, onRestore, restoring }) {
 function ProjectsListPage() {
   const projects = useArgusStore((s) => s.projects);
   const fetchProjects = useArgusStore((s) => s.fetchProjects);
-  const setCurrentProject = useArgusStore((s) => s.setCurrentProject);
   const upsertProject = useArgusStore((s) => s.upsertProject);
-  const navigate = useNavigate();
   const [archived, setArchived] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
+  const [sort, setSort] = useState("attention");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     fetchProjects();
@@ -337,11 +443,6 @@ function ProjectsListPage() {
       .catch(() => setArchived([]));
   }, [showArchived, archived]);
 
-  function open(project) {
-    setCurrentProject(project.id);
-    navigate(projectPath(project.id));
-  }
-
   async function restore(project) {
     setRestoringId(project.id);
     try {
@@ -353,6 +454,11 @@ function ProjectsListPage() {
     }
   }
 
+  const keyword = query.trim().toLowerCase();
+  const visible = (projects || [])
+    .filter((p) => !keyword || `${p.name} ${p.origin}`.toLowerCase().includes(keyword))
+    .sort(PROJECT_SORTS[sort].compare);
+
   return (
     <div className="project-page project-list-page">
       <header className="project-page-head">
@@ -361,7 +467,6 @@ function ProjectsListPage() {
           <h1 className="project-page-title">所有專案</h1>
           <p className="project-page-sub">一個專案對應一個網站；掃描、問題分析與歷史報告都以網站為單位保存。</p>
         </div>
-        <Link className="primary-button" to="/projects/new">＋ 新增專案</Link>
       </header>
       {projects === null && <p className="hint-text">載入中…</p>}
       {projects && projects.length === 0 && (
@@ -374,11 +479,35 @@ function ProjectsListPage() {
       {projects && projects.length > 0 && (
         <>
           <PortfolioSummary projects={projects} />
-          <div className="project-card-grid">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} onOpen={open} />
-            ))}
+          <div className="project-list-toolbar">
+            <Link className="primary-button" to="/projects/new">新增網站專案</Link>
+            <div className="project-filter" role="group" aria-label="排序">
+              <span className="project-filter-label">排序</span>
+              {Object.entries(PROJECT_SORTS).map(([key, option]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`project-chip ${sort === key ? "active" : ""}`}
+                  aria-pressed={sort === key}
+                  onClick={() => setSort(key)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {projects.length > 4 && (
+              <input
+                type="search"
+                className="input project-list-search"
+                placeholder="搜尋網站名稱或網址"
+                aria-label="搜尋網站專案"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            )}
           </div>
+          <ProjectTable projects={visible} caption="網站專案" />
+          {!visible.length && <p className="hint-text">找不到符合「{query}」的網站。</p>}
         </>
       )}
       <section className="project-archived">
@@ -393,16 +522,7 @@ function ProjectsListPage() {
         {showArchived && archived === null && <p className="hint-text">載入中…</p>}
         {showArchived && archived?.length === 0 && <p className="hint-text">沒有已封存的專案。</p>}
         {showArchived && archived?.length > 0 && (
-          <div className="project-card-grid">
-            {archived.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onRestore={restore}
-                restoring={restoringId === project.id}
-              />
-            ))}
-          </div>
+          <ProjectTable projects={archived} caption="已封存的網站專案" onRestore={restore} restoringId={restoringId} />
         )}
       </section>
     </div>

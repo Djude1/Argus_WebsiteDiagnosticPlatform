@@ -5,8 +5,9 @@
    ======================================== */
 .project-switcher {
   position: relative;
-  flex: 0 1 240px;
-  min-width: 0;
+  flex: 0 1 250px;
+  /* 下限：中等寬度（分屏）時不能被連結列擠成一條直線 */
+  min-width: 176px;
 }
 .project-switcher-trigger {
   display: flex;
@@ -32,17 +33,26 @@
   outline: none;
   box-shadow: 0 0 0 2px var(--ag-focus);
 }
-.project-switcher-mark {
+/* 網站圖示（components/projects/SiteFavicon.jsx）：favicon 或名稱首字 */
+.site-favicon {
   display: inline-flex;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: var(--ag-r-sm);
-  background: var(--ag-primary-soft);
-  color: var(--ag-primary);
+  overflow: hidden;
+  border: 1px solid var(--ag-border);
+  border-radius: 6px;
+  background: var(--ag-surface);
+  color: var(--ag-text-2);
+  font-size: 0.85rem;
   font-weight: 800;
+}
+.site-favicon img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
 }
 .project-switcher-label {
   display: flex;
@@ -92,7 +102,7 @@
   border-radius: var(--ag-r-sm);
 }
 .project-switcher-row.is-current {
-  background: var(--ag-primary-soft);
+  background: var(--ag-surface-2);
 }
 .project-switcher-item {
   display: flex;
@@ -128,20 +138,18 @@
   font-size: 0.72rem;
 }
 .project-switcher-score {
-  min-width: 2.2rem;
+  min-width: 2rem;
   flex: 0 0 auto;
-  padding: 0.15rem 0.4rem;
-  border-radius: var(--ag-r-pill);
-  background: var(--ag-surface-2);
   color: var(--ag-text-3);
   font-family: var(--ag-font-mono);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
-.project-switcher-score.is-good { background: var(--ag-good-soft); color: var(--ag-good); }
-.project-switcher-score.is-medium { background: var(--ag-warn-soft); color: var(--ag-warn); }
-.project-switcher-score.is-bad { background: var(--ag-bad-soft); color: var(--ag-bad); }
+.project-switcher-score.is-good { color: var(--ag-good); }
+.project-switcher-score.is-medium { color: var(--ag-warn); }
+.project-switcher-score.is-bad { color: var(--ag-bad); }
 .project-switcher-search {
   width: 100%;
   min-height: 2.4rem;
@@ -241,14 +249,71 @@
   box-shadow: 0 0 0 2px var(--ag-focus);
 }
 
-/* 窄螢幕：切換器獨立一列（品牌與帳號在第一列、切換器第二列、連結第三列） */
-@media (max-width: 920px) {
-  .public-nav.is-member .project-switcher {
-    grid-column: 1 / -1;
-    grid-row: 2;
+/* ── 登入後導覽列的響應式（公開頁不受影響） ──
+   1180px 以下（含分屏）：日夜切換只留圖示、切換器不顯示「目前網站」小標，讓連結列放得下。
+   920px 以下：第一列「品牌｜切換器｜帳號」、第二列連結（可左右滑動）；
+   切換器只佔一格、寬度有上限，不再獨佔一整列變成一大塊。 */
+@media (max-width: 1180px) {
+  .public-nav.is-member .project-switcher-kicker {
+    display: none;
+  }
+  .public-nav.is-member .project-switcher-trigger {
+    min-height: 2.5rem;
   }
   .public-nav.is-member .public-nav-links {
-    grid-row: 3;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .public-nav.is-member .public-nav-link {
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+    font-size: 0.95rem;
+  }
+  .public-nav.is-member .theme-toggle {
+    min-width: 0;
+    width: 2.75rem;
+    padding: 0;
+    justify-content: center;
+  }
+  .public-nav.is-member .theme-toggle span:not(.theme-toggle-icon) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 920px) {
+  .public-nav.is-member .public-nav-inner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .public-nav.is-member .project-switcher {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    width: 100%;
+    max-width: 260px;
+    min-width: 0;
+  }
+  .public-nav.is-member .public-nav-cta {
+    grid-column: 3;
+  }
+  .public-nav.is-member .public-nav-links {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .public-nav.is-member .public-brand-logo {
+    height: 38px;
+  }
+  .public-nav.is-member .project-switcher-trigger {
+    gap: 0.4rem;
+    padding: 0.25rem 0.45rem 0.25rem 0.3rem;
+  }
+  .public-nav.is-member .project-switcher-caret {
+    display: none;
   }
 }
 
@@ -256,4 +321,17 @@
   .project-switcher-menu {
     animation: none;
   }
+}
+
+/* 登入後導覽列的目前頁：文字加底線，不用填色膠囊（兩個主題共用；特異度高於 35 的日間規則） */
+.public-nav.is-member .public-nav-link.active {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 currentColor;
+  color: var(--ag-text);
+}
+.public-nav.is-member .public-nav-link:hover {
+  box-shadow: inset 0 -2px 0 var(--ag-border-strong);
+}
+.public-nav.is-member .public-nav-link.active:hover {
+  box-shadow: inset 0 -2px 0 currentColor;
 }
