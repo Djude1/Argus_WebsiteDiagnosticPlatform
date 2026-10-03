@@ -67,6 +67,7 @@ export default function SiteNav({ items, actions, leading = null, className = ""
           <span className="public-brand-sub">AI 網站健檢平台</span>
         </button>
         {leading}
+        {items.length > 0 && (
         <div className="public-nav-links">
           {items.map((item) => (
             <NavLink
@@ -79,6 +80,7 @@ export default function SiteNav({ items, actions, leading = null, className = ""
             </NavLink>
           ))}
         </div>
+        )}
         <div className="public-nav-cta">{actions}</div>
       </div>
     </nav>

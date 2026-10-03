@@ -11,7 +11,15 @@ import {
   ShieldAdminIcon,
   SunIcon,
 } from "../../shared/ActionIcons";
-import { BrowserIcon, CoinIcon, GearIcon, StarIcon } from "../../shared/LineIcons";
+import {
+  BrowserIcon,
+  CoinIcon,
+  GearIcon,
+  HomeIcon,
+  RobotIcon,
+  ShieldIcon,
+  StarIcon,
+} from "../../shared/LineIcons";
 
 /** 登出：先通知後端撤銷 refresh cookie，無論成功與否都清掉前端 token 並回登入頁。 */
 export function useLogout() {
@@ -119,6 +127,15 @@ function AccountMenu() {
               {me?.email && me.email !== displayName ? <small>{me.email}</small> : null}
             </span>
           </div>
+          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/projects")}>
+            <HomeIcon /> 所有專案
+          </button>
+          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/domains")}>
+            <ShieldIcon /> 網域驗證
+          </button>
+          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/mcp")}>
+            <RobotIcon /> MCP 接入中心
+          </button>
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/settings")}>
             <GearIcon /> 帳號設定
           </button>

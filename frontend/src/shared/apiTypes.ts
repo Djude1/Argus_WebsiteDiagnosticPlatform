@@ -3139,6 +3139,8 @@ export interface components {
             readonly start_url: string;
             readonly default_scope: components["schemas"]["DefaultScopeEnum"];
             readonly default_categories: unknown;
+            readonly favicon: string;
+            readonly domain_verified: boolean;
             /** Format: date-time */
             readonly archived_at: string | null;
             /** Format: date-time */
@@ -3162,6 +3164,10 @@ export interface components {
             previous_score: number | null;
             /** Format: date-time */
             last_completed_at: string | null;
+            score_history: number[];
+            issue_counts: {
+                [key: string]: number;
+            };
         };
         SiteRebuild: {
             readonly id: number;

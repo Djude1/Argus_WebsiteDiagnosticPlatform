@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 from django.db.models import Count, Q
 
 from apps.scans.models import ALL_CATEGORIES, Finding, ScanJob, SiteProject
@@ -26,6 +28,7 @@ SAMPLE_URLS_LIMIT = 3
 ISSUE_URLS_LIMIT = 50
 RECENT_SCANS_LIMIT = 5
 SUMMARY_HISTORY_LIMIT = 8
+SITE_DESCRIPTION_LIMIT = 160
 
 
 def completed_scans(project: SiteProject):
@@ -273,7 +276,39 @@ def project_overview(project: SiteProject) -> dict:
         "trend": trend,
         "scans_count": project.scans.count(),
         "domain_verified": user_owns_domain(project.user, project.hostname),
+        "site_description": site_description(latest),
     }
+
+
+class _MetaDescriptionParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.values: dict[str, str] = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "meta":
+            return
+        attr = {name.lower(): (value or "") for name, value in attrs}
+        key = (attr.get("name") or attr.get("property") or "").lower()
+        if key in ("description", "og:description") and attr.get("content", "").strip():
+            self.values.setdefault(key, " ".join(attr["content"].split()))
+
+
+def site_description(scan: ScanJob | None) -> str:
+    """網站自己寫的簡介：最新完成掃描首頁的 meta description（沒有就 og:description）。"""
+    if scan is None:
+        return ""
+    home = scan.pages.order_by("depth", "id").values_list("html", flat=True).first()
+    if not home:
+        return ""
+    parser = _MetaDescriptionParser()
+    try:
+        # 只需要 <head>
+        parser.feed(home[:100_000])
+    except Exception:  # noqa: BLE001 - 壞掉的 HTML 就當作沒有簡介
+        return ""
+    text = parser.values.get("description") or parser.values.get("og:description") or ""
+    return text[:SITE_DESCRIPTION_LIMIT]
 
 
 def project_issues(project: SiteProject, scan: ScanJob | None = None) -> dict:

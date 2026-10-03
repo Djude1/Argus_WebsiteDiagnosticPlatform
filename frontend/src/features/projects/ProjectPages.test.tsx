@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { issuesToCsv, ProjectPagesPage } from "./ProjectPages";
+import { issuesToCsv, ProjectIssuesPage, ProjectPagesPage } from "./ProjectPages";
 
 vi.mock("../../api", () => ({ api: { get: vi.fn() }, setAccessToken: vi.fn() }));
 const { api } = vi.mocked(await import("../../api"));
@@ -46,9 +46,42 @@ beforeEach(() => {
         },
       };
     }
+    if (url === "/projects/7/issues/") {
+      return {
+        data: {
+          scan: { id: 3, completed_at: "2026-10-01T00:00:00Z", categories: ["seo", "security"] },
+          compared_with: null,
+          missing: [],
+          issues: [
+            issue("a", { severity: "high", category: "security", title: "缺少 CSP", remediation: "設定 content-security-policy" }),
+            issue("b", { severity: "medium", category: "seo", title: "H1 數量不正確" }),
+            issue("c", { severity: "low", category: "seo", title: "缺少 canonical" }),
+          ],
+        },
+      };
+    }
     return { data: { results: [] } };
   });
 });
+
+function issue(key: string, overrides: Record<string, unknown>) {
+  return {
+    key, rule_id: key, status: "new", streak: 1, pages: 1, urls: ["https://a.example/"], description: "說明",
+    remediation: "修法", ...overrides,
+  };
+}
+
+function renderIssuesTab(path = "/projects/7/issues") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/projects/:projectId" element={<Outlet context={{ project: PROJECT }} />}>
+          <Route path="issues" element={<ProjectIssuesPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 describe("issuesToCsv", () => {
   it("跳脫逗號、引號與換行，並以 BOM 開頭讓 Excel 正確顯示中文", () => {
@@ -94,5 +127,28 @@ describe("ProjectPagesPage", () => {
     expect(within(screen.getAllByRole("row")[1]!).getByText("頁 3")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /載入時間/ }));
     expect(within(screen.getAllByRole("row")[1]!).getByText("頁 1")).toBeInTheDocument();
+  });
+});
+
+describe("ProjectIssuesPage", () => {
+  it("網址的 ?q= 只列出符合的問題，清除搜尋後回到全部", async () => {
+    const user = userEvent.setup();
+    renderIssuesTab("/projects/7/issues?q=CSP");
+    expect(await screen.findByText("缺少 CSP")).toBeInTheDocument();
+    expect(screen.queryByText("H1 數量不正確")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "清除搜尋" }));
+    expect(screen.getByText("H1 數量不正確")).toBeInTheDocument();
+  });
+
+  it("依嚴重度分組顯示分組列，點嚴重度數量只看該級", async () => {
+    const user = userEvent.setup();
+    renderIssuesTab();
+    await screen.findByText("缺少 CSP");
+    await user.click(screen.getByRole("button", { name: /依嚴重度分組/ }));
+    const groups = Array.from(document.querySelectorAll(".issue-group-row")).map((row) => row.textContent?.replace(/\s+/g, ""));
+    expect(groups).toEqual(["高1個問題", "中1個問題", "低1個問題"]);
+    await user.click(within(document.querySelector(".issue-summary-sev") as HTMLElement).getByRole("button", { name: /低/ }));
+    expect(screen.getByText("缺少 canonical")).toBeInTheDocument();
+    expect(screen.queryByText("缺少 CSP")).not.toBeInTheDocument();
   });
 });
