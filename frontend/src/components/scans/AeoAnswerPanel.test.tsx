@@ -47,22 +47,3 @@ describe("AeoAnswerPanel", () => {
     expect(screen.getByRole("link", { name: "https://x.example/" })).toHaveAttribute("target", "_blank");
   });
 });
-
-describe("AeoAnswerPanel 的 AEO 問答分頁模式（withFilter）", () => {
-  it("可依判定篩選題目；沒有符合時提示", async () => {
-    const user = userEvent.setup();
-    render(<AeoAnswerPanel report={evaluated} withFilter />);
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
-    await user.click(screen.getByRole("button", { name: "資訊不足 1" }));
-    expect(screen.getAllByRole("listitem")).toHaveLength(1);
-    expect(screen.getByText("申請或報名截止日期是何時？")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "衝突 0" }));
-    expect(screen.getByText("沒有符合的題目。")).toBeInTheDocument();
-  });
-
-  it("不重複顯示標題與計數（頁首已有）", () => {
-    render(<AeoAnswerPanel report={evaluated} withFilter />);
-    expect(screen.queryByRole("heading", { name: "AEO 問答檢測" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/有答案的問題比例/)).not.toBeInTheDocument();
-  });
-});

@@ -124,17 +124,17 @@ export async function deleteAvatar() {
   await api.delete("/auth/me/avatar/");
 }
 
-// ---- 網域驗證（/api/domains/）：主動式資安測試的技術性閘門 ----
+// ---- 網域驗證（scans/domains）：主動式資安測試的技術性閘門 ----
 
 // 自己的網域驗證清單；回傳 DRF 分頁 { count, next, previous, results }
 export async function fetchVerifiedDomains() {
-  const response = await api.get("/domains/");
+  const response = await api.get("/scans/domains/");
   return response.data;
 }
 
 // 新增待驗證網域；成功（201）回傳 { ...網域欄位, token, instructions }，重複時 409
 export async function createVerifiedDomain(domain: string) {
-  const response = await api.post("/domains/", { domain });
+  const response = await api.post("/scans/domains/", { domain });
   return response.data;
 }
 
@@ -143,13 +143,13 @@ export async function verifyVerifiedDomain(
   domainId: number,
   method: "dns_txt" | "meta_tag" | "html_file",
 ) {
-  const response = await api.post(`/domains/${domainId}/verify/`, { method });
+  const response = await api.post(`/scans/domains/${domainId}/verify/`, { method });
   return response.data;
 }
 
 // 刪除網域（204 無內容）
 export async function deleteVerifiedDomain(domainId: number) {
-  await api.delete(`/domains/${domainId}/`);
+  await api.delete(`/scans/domains/${domainId}/`);
 }
 
 // ---- Admin：網域人工審核 / 使用者登入事件 / 訂閱管理 ----

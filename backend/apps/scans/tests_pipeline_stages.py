@@ -42,7 +42,7 @@ class PipelineShapeTests(TestCase):
             [
                 "target_validation", "crawl", "enter_scanning", "page_analysis",
                 "aeo_answers", "site_security", "active_probe", "deep_security", "exposure",
-                "geo_site", "favicon", "agent", "kali", "scoring",
+                "geo_site", "agent", "kali", "scoring",
             ],
         )
         # 每個階段都是可單獨呼叫的函式

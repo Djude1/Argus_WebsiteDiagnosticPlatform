@@ -20,7 +20,7 @@ export default function NotFoundPage() {
               to={accessToken ? "/dashboard" : "/project"}
               className="public-cta-primary"
             >
-              {accessToken ? "回我的網站" : "回首頁"}
+              {accessToken ? "回 Dashboard" : "回首頁"}
             </Link>
             <Link to="/free-tools" className="public-cta-ghost">
               免費快速檢查

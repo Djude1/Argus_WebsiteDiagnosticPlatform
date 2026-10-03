@@ -654,25 +654,6 @@ class CrawlerHelperTests(APITestCase):
         self.assertEqual(classify_cf_challenge(""), "")
         self.assertEqual(classify_cf_challenge(None), "")
 
-    def test_classify_cf_challenge_ignores_bot_detection_script_on_normal_page(self):
-        # CF Bot 偵測在正常頁面尾端插入的背景腳本（實際取自 ntubimdbirc.tw 首頁）不是攔截頁
-        html = (
-            "<html><head><title>NTUB BIRC</title></head><body><a href=\"/about\">關於</a>"
-            "<script>window.__CF$cv$params={r:'a4454a895a20420b'};"
-            "(function(){var s=document.createElement('script');"
-            "s.src='/cdn-cgi/challenge-platform/scripts/precursor/main.js';"
-            "document.head.appendChild(s);})();</script>"
-            '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script></body></html>'
-        )
-        self.assertEqual(classify_cf_challenge(html), "")
-
-    def test_classify_cf_challenge_detects_challenge_options(self):
-        html = "<script>window._cf_chl_opt={cvId: '3'};</script>"
-        self.assertEqual(
-            classify_cf_challenge(html),
-            "Cloudflare JavaScript 驗證，自動掃描無法通過",
-        )
-
     def test_classify_cf_challenge_ignores_just_a_moment_phrase(self):
         # 不收錄「Just a moment」短語標記，避免正常文章正文出現該短語時誤判
         html = "<p>Just a moment, please wait while I finish typing...</p>"

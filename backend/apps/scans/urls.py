@@ -5,7 +5,6 @@ from apps.scans.views import (
     FindingViewSet,
     PageViewSet,
     ScanJobViewSet,
-    SiteProjectViewSet,
     VerifiedDomainViewSet,
     audit_log,
     dashboard_summary,
@@ -19,7 +18,6 @@ router.register("scans", ScanJobViewSet, basename="scan")
 router.register("pages", PageViewSet, basename="page")
 router.register("findings", FindingViewSet, basename="finding")
 router.register("domains", VerifiedDomainViewSet, basename="verified-domain")
-router.register("projects", SiteProjectViewSet, basename="site-project")
 
 urlpatterns = router.urls + [
     path("dashboard/", dashboard_summary, name="dashboard-summary"),
