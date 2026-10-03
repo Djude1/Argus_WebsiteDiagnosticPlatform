@@ -210,6 +210,9 @@ spec:
     spec:
       backoffLimit: 2
       template:
+        metadata:
+          labels:
+            app: reap
         spec:
           restartPolicy: OnFailure
           containers:

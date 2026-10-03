@@ -174,7 +174,7 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
         postgres_sources = postgres["spec"]["ingress"][0]["from"][0]["podSelector"]
         self.assertEqual(
             set(postgres_sources["matchExpressions"][0]["values"]),
-            {"web", "worker", "migrate"},
+            {"web", "worker", "migrate", "reap"},
         )
         redis = self.policies["redis-ingress-from-backend"]
         redis_sources = redis["spec"]["ingress"][0]["from"][0]["podSelector"]
