@@ -3,6 +3,16 @@ import { useState } from "react";
 // AEO 問答檢測逐題結果（scan.aeo_report，後端 apps/scans/aeo/evaluate.py）。
 // 每一題顯示判定與證據：可回答的題目附原文與位置；其他題目附理由與相關段落。
 // 內容不足以出題時只顯示「未充分評估」與原因，不顯示分數。
+// 用在網站專案的「AEO 問答」分頁（features/projects/ProjectPages.jsx 的 ProjectAeoPage）；
+// withFilter 時可依判定篩選題目。
+
+const VERDICT_FILTERS = [
+  ["all", "全部"],
+  ["answered", "可回答"],
+  ["insufficient", "資訊不足"],
+  ["conflict", "衝突"],
+  ["missing", "無答案"],
+];
 
 const VERDICT_TONE = {
   answered: "is-good",
@@ -15,8 +25,9 @@ function percent(ratio) {
   return ratio == null ? "—" : `${Math.round(ratio * 100)}%`;
 }
 
-function AeoAnswerPanel({ report }) {
+function AeoAnswerPanel({ report, withFilter = false }) {
   const [openKey, setOpenKey] = useState(null);
+  const [verdict, setVerdict] = useState("all");
   if (!report || !report.status) return null;
 
   if (report.status !== "evaluated") {
@@ -29,10 +40,11 @@ function AeoAnswerPanel({ report }) {
   }
 
   const counts = report.counts || {};
-  const questions = report.questions || [];
+  const questions = (report.questions || []).filter((q) => verdict === "all" || q.verdict === verdict);
   return (
-    <section className="aeo-panel" aria-labelledby="aeo-panel-title">
-      <div className="aeo-panel-head">
+    <section className="aeo-panel" aria-labelledby={withFilter ? undefined : "aeo-panel-title"} aria-label={withFilter ? "逐題結果" : undefined}>
+      {/* 分頁模式時，標題與數字已在頁首的數字列，不再重複 */}
+      {!withFilter && <div className="aeo-panel-head">
         <div>
           <h3 id="aeo-panel-title" className="aeo-panel-title">AEO 問答檢測</h3>
           <p className="aeo-panel-note">
@@ -46,7 +58,25 @@ function AeoAnswerPanel({ report }) {
           <div className="is-bad"><dt>衝突</dt><dd>{counts.conflict ?? 0}</dd></div>
           <div className="is-bad"><dt>無答案</dt><dd>{counts.missing ?? 0}</dd></div>
         </dl>
-      </div>
+      </div>}
+      {withFilter && (
+        <div className="project-filter" role="group" aria-label="依判定篩選">
+          <span className="project-filter-label">判定</span>
+          {VERDICT_FILTERS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`project-chip ${verdict === key ? "active" : ""}`}
+              aria-pressed={verdict === key}
+              onClick={() => setVerdict(key)}
+            >
+              {label}
+              {key !== "all" ? ` ${counts[key] ?? 0}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+      {questions.length === 0 && <p className="aeo-panel-note">沒有符合的題目。</p>}
       <ul className="aeo-question-list">
         {questions.map((q) => {
           const key = `${q.key}-${q.text}`;

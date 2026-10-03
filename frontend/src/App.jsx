@@ -16,6 +16,8 @@ const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
 const loadMcpAccessPage = () => import("./features/account/McpAccessPage.jsx");
+const loadProjectWorkspace = () => import("./features/projects/ProjectWorkspace.jsx");
+const loadProjectPages = () => import("./features/projects/ProjectPages.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
@@ -34,18 +36,28 @@ const LoginPage = lazyNamed(loadAuthPages, "LoginPage");
 const PasswordResetRequestPage = lazyNamed(loadAuthPages, "PasswordResetRequestPage");
 const PasswordResetConfirmPage = lazyNamed(loadAuthPages, "PasswordResetConfirmPage");
 const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
-const ScansPlaceholder = lazyNamed(loadScanExperience, "ScansPlaceholder");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const TopologyPage = lazyNamed(loadScanExperience, "TopologyPage");
+const ScanFixOutputPage = lazyNamed(loadScanExperience, "ScanFixOutputPage");
 const RebuildWorkspace = lazyNamed(loadRebuildWorkspace, "RebuildWorkspace");
 const DomainVerifyPage = lazyNamed(loadDomainPages, "DomainVerifyPage");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
-const DashboardPage = lazyNamed(loadAuthenticatedPages, "DashboardPage");
-const HistoryPage = lazyNamed(loadAuthenticatedPages, "HistoryPage");
 const BillingPage = lazyNamed(loadAuthenticatedPages, "BillingPage");
 const ReviewsPage = lazyNamed(loadReviewsPage, "ReviewsPage");
 const SettingsPage = lazyNamed(loadAuthenticatedPages, "SettingsPage");
 const McpAccessPage = lazyNamed(loadMcpAccessPage, "McpAccessPage");
+const ProjectWorkspace = lazyNamed(loadProjectWorkspace, "ProjectWorkspace");
+const ProjectScanShell = lazyNamed(loadProjectWorkspace, "ProjectScanShell");
+const ProjectHomeRedirect = lazyNamed(loadProjectWorkspace, "ProjectHomeRedirect");
+const ProjectsListPage = lazyNamed(loadProjectWorkspace, "ProjectsListPage");
+const ProjectCreatePage = lazyNamed(loadProjectWorkspace, "ProjectCreatePage");
+const ProjectOverviewPage = lazyNamed(loadProjectPages, "ProjectOverviewPage");
+const ProjectScansPage = lazyNamed(loadProjectPages, "ProjectScansPage");
+const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
+const ProjectPagesPage = lazyNamed(loadProjectPages, "ProjectPagesPage");
+const ProjectAeoPage = lazyNamed(loadProjectPages, "ProjectAeoPage");
+const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
+const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
 const ProjectPage = lazyNamed(loadPublicPages, "ProjectPage");
 const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
@@ -74,7 +86,7 @@ const AdminAnnouncementsPage = lazyNamed(loadAdminAnnouncements, "AdminAnnouncem
 const IntroSequence = lazy(() => import("./components/brand/IntroSequence.jsx"));
 const NotFoundPage = lazy(() => import("./features/public/NotFoundPage.jsx"));
 
-// Dashboard／掃描／網域驗證／歷史／購點維持改版前（462848b）外觀：舊版樣式只在這個包裝內生效，
+// 網站專案工作區（含掃描詳情）、網域驗證、購點維持改版前（462848b）外觀：舊版樣式只在這個包裝內生效，
 // 見 styles/legacy-member/index.css。包裝本身是 display: contents，不影響版面。
 function MemberLegacy({ children }) {
   return <div className="member-legacy">{children}</div>;
@@ -91,7 +103,8 @@ function AppShell({ googleOAuthEnabled }) {
     "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners",
     ...(accessToken ? [] : ["/reviews"]),
   ].some((p) =>
-    location.pathname.startsWith(p),
+    // 以路徑段比對：/projects（會員的網站專案）不能被當成公開頁 /project
+    location.pathname === p || location.pathname.startsWith(`${p}/`),
   );
   const showTopNav = !isAdmin && !isPublic;
   // 首次進站才播過場動畫（旗標在 store/localStorage）；品牌 ⟡ icon 可呼叫 replayIntro 重播
@@ -131,43 +144,68 @@ function AppShell({ googleOAuthEnabled }) {
             {!accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           </Route>
           {accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
+          {/* 會員區以網站專案為單位（docs/adr/0003-site-project-workspace.md）；
+              /dashboard、/scans、/history 是舊入口，轉到目前專案的對應分頁 */}
+          <Route path="/dashboard" element={<RequireAuth><ProjectHomeRedirect /></RequireAuth>} />
+          <Route path="/scans" element={<RequireAuth><ProjectHomeRedirect section="scans" /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth><ProjectHomeRedirect section="history" /></RequireAuth>} />
           <Route
-            path="/dashboard"
+            path="/projects"
             element={
               <RequireAuth>
                 <MemberLegacy>
-                  <DashboardPage />
+                  <ProjectsListPage />
                 </MemberLegacy>
               </RequireAuth>
             }
           />
           <Route
+            path="/projects/new"
             element={
               <RequireAuth>
                 <MemberLegacy>
-                  <ScanLayout />
+                  <ProjectCreatePage />
+                </MemberLegacy>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/projects/:projectId"
+            element={
+              <RequireAuth>
+                <MemberLegacy>
+                  <ProjectWorkspace />
                 </MemberLegacy>
               </RequireAuth>
             }
           >
-            <Route path="/scans" element={<ScansPlaceholder />} />
-            <Route path="/scans/:scanId" element={<ScanDetailPage />} />
-            <Route path="/scans/:scanId/topology" element={<TopologyPage />} />
-            <Route
-              path="/scans/:scanId/rebuild/:rebuildId"
-              element={<RebuildWorkspace />}
-            />
+            <Route index element={<ProjectOverviewPage />} />
+            <Route path="scans" element={<ProjectScansPage />} />
+            <Route path="issues" element={<ProjectIssuesPage />} />
+            <Route path="pages" element={<ProjectPagesPage />} />
+            <Route path="aeo" element={<ProjectAeoPage />} />
+            <Route path="history" element={<ProjectHistoryPage />} />
+            <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>
           <Route
-            path="/history"
             element={
               <RequireAuth>
                 <MemberLegacy>
-                  <HistoryPage />
+                  <ProjectScanShell />
                 </MemberLegacy>
               </RequireAuth>
             }
-          />
+          >
+            <Route element={<ScanLayout />}>
+              <Route path="/scans/:scanId" element={<ScanDetailPage />} />
+              <Route path="/scans/:scanId/topology" element={<TopologyPage />} />
+              <Route path="/scans/:scanId/fixes" element={<ScanFixOutputPage />} />
+              <Route
+                path="/scans/:scanId/rebuild/:rebuildId"
+                element={<RebuildWorkspace />}
+              />
+            </Route>
+          </Route>
           <Route
             path="/domains"
             element={

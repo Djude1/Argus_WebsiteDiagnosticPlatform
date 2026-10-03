@@ -1,0 +1,590 @@
+/* ========================================
+   頂部工具列的網站專案切換器（components/navigation/ProjectSwitcher.jsx）。
+   導覽列不在舊版樣式範圍內，顏色一律用 --ag-* token，日／夜自動切換；
+   尺寸日夜共用（同導覽列規則，見 frontend/CLAUDE.md「頂部導覽列」）。
+   ======================================== */
+.project-switcher {
+  position: relative;
+  flex: 0 1 250px;
+  /* 下限：中等寬度（分屏）時不能被連結列擠成一條直線 */
+  min-width: 176px;
+}
+.project-switcher-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.4rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-md);
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--ag-dur-1) var(--ag-ease), background var(--ag-dur-1) var(--ag-ease);
+}
+.project-switcher-trigger:hover,
+.project-switcher-trigger[aria-expanded="true"] {
+  border-color: var(--ag-border-accent);
+  background: var(--ag-surface-3);
+}
+.project-switcher-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+/* 網站圖示（components/projects/SiteFavicon.jsx）：favicon 或名稱首字 */
+.site-favicon {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--ag-border);
+  border-radius: 6px;
+  background: var(--ag-surface);
+  color: var(--ag-text-2);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.site-favicon img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+}
+.project-switcher-label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.project-switcher-kicker {
+  color: var(--ag-text-3);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+.project-switcher-name {
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-caret {
+  color: var(--ag-text-3);
+  font-size: 0.8rem;
+}
+
+.project-switcher-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 70;
+  width: min(340px, calc(100vw - 2rem));
+  padding: 0.4rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-lg);
+  background: var(--ag-bg-raised);
+  box-shadow: var(--ag-shadow-3);
+  animation: app-pop-in var(--ag-dur-2) var(--ag-ease);
+  transform-origin: top left;
+}
+.project-switcher-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.project-switcher-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--ag-r-sm);
+}
+.project-switcher-row.is-current {
+  background: var(--ag-primary-soft);
+}
+.project-switcher-item {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: var(--ag-r-sm);
+  background: transparent;
+  color: var(--ag-text);
+  text-align: left;
+  cursor: pointer;
+}
+.project-switcher-item-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.project-switcher-item-text strong,
+.project-switcher-item-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-item-text strong {
+  font-size: 0.9rem;
+}
+.project-switcher-item-text small {
+  color: var(--ag-text-3);
+  font-family: var(--ag-font-mono);
+  font-size: 0.72rem;
+}
+.project-switcher-score {
+  min-width: 2.2rem;
+  flex: 0 0 auto;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--ag-r-pill);
+  background: var(--ag-surface-2);
+  color: var(--ag-text-3);
+  font-family: var(--ag-font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+.project-switcher-score.is-good { background: var(--ag-good-soft); color: var(--ag-good); }
+.project-switcher-score.is-medium { background: var(--ag-warn-soft); color: var(--ag-warn); }
+.project-switcher-score.is-bad { background: var(--ag-bad-soft); color: var(--ag-bad); }
+.project-switcher-search {
+  width: 100%;
+  min-height: 2.4rem;
+  margin-bottom: 0.35rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-sm);
+  background: var(--ag-surface);
+  color: var(--ag-text);
+  font-size: 0.85rem;
+}
+.project-switcher-search:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+/* 非目前專案的設定齒輪平時淡化，滑到該列才清楚（與 Sitechecker 相同的低干擾做法） */
+.project-switcher-row:not(.is-current) .project-switcher-gear {
+  opacity: 0.35;
+}
+.project-switcher-row:hover .project-switcher-gear,
+.project-switcher-gear:focus-visible {
+  opacity: 1;
+}
+.project-switcher-gear {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.25rem;
+  border: 0;
+  border-radius: var(--ag-r-sm);
+  background: transparent;
+  color: var(--ag-text-3);
+  cursor: pointer;
+}
+.project-switcher-gear svg {
+  width: 18px;
+  height: 18px;
+}
+.project-switcher-item:hover,
+.project-switcher-item:focus-visible,
+.project-switcher-gear:hover,
+.project-switcher-gear:focus-visible {
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+  outline: none;
+}
+.project-switcher-item:focus-visible,
+.project-switcher-gear:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ag-primary);
+}
+.project-switcher-empty {
+  padding: 0.6rem;
+  color: var(--ag-text-2);
+  font-size: 0.85rem;
+}
+.project-switcher-foot {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ag-border);
+}
+.project-switcher-all,
+.project-switcher-new {
+  flex: 1;
+  min-height: 2.5rem;
+  border-radius: var(--ag-r-sm);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.project-switcher-all {
+  border: 1px solid var(--ag-border-strong);
+  background: transparent;
+  color: var(--ag-text-2);
+}
+.project-switcher-new {
+  border: 0;
+  background: var(--ag-primary);
+  color: var(--ag-on-primary);
+}
+.project-switcher-all:hover,
+.project-switcher-all:focus-visible {
+  background: var(--ag-surface-2);
+  color: var(--ag-text);
+}
+.project-switcher-new:hover,
+.project-switcher-new:focus-visible {
+  background: var(--ag-primary-hover);
+}
+.project-switcher-all:focus-visible,
+.project-switcher-new:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+
+/* ── 登入後導覽列（2026-10-03 依參考設計）：品牌｜網站切換器｜搜尋｜日夜｜通知｜點數｜帳號 ──
+   沒有文字連結；搜尋框吃掉中間的空間。公開頁不受影響（都限定 .is-member）。 */
+.public-nav.is-member .public-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.public-nav.is-member .public-nav-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+/* 日夜切換只留圓形圖示 */
+.public-nav.is-member .theme-toggle {
+  min-width: 0;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  justify-content: center;
+}
+.public-nav.is-member .theme-toggle span:not(.theme-toggle-icon) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 搜尋框（按下開啟 ⌘K 搜尋視窗） */
+.nav-search {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 420px;
+  max-width: 560px;
+  min-height: 2.6rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.5rem 0 0.85rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-md);
+  background: var(--ag-surface-2);
+  color: var(--ag-text-3);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--ag-dur-1) var(--ag-ease);
+}
+.nav-search:hover {
+  border-color: var(--ag-border-accent);
+}
+.nav-search:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+.nav-search svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.nav-search-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-search-kbd {
+  flex: 0 0 auto;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: 6px;
+  background: var(--ag-surface);
+  color: var(--ag-text-3);
+  font-family: var(--ag-font-mono);
+  font-size: 0.72rem;
+}
+
+/* 圓形圖示按鈕（通知） */
+.nav-icon-button {
+  position: relative;
+  display: inline-flex;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: 999px;
+  background: var(--ag-surface-2);
+  color: var(--ag-text-2);
+  cursor: pointer;
+}
+.nav-icon-button:hover {
+  color: var(--ag-text);
+  border-color: var(--ag-border-accent);
+}
+.nav-icon-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ag-focus);
+}
+.nav-icon-button svg {
+  width: 19px;
+  height: 19px;
+}
+.nav-bell-wrap {
+  position: relative;
+}
+.nav-bell-dot {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid var(--ag-surface-2);
+  border-radius: 999px;
+  background: var(--ag-bad);
+}
+.nav-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  width: min(360px, calc(100vw - 2rem));
+  padding: 0.5rem;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-lg);
+  background: var(--ag-bg-raised);
+  box-shadow: var(--ag-shadow-3);
+  animation: app-pop-in var(--ag-dur-2) var(--ag-ease);
+}
+.nav-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem 0.6rem;
+  color: var(--ag-text);
+}
+.nav-popover-action {
+  border: 0;
+  background: transparent;
+  color: var(--ag-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.nav-popover-empty {
+  padding: 0.75rem 0.5rem;
+  color: var(--ag-text-3);
+  font-size: 0.85rem;
+}
+.nav-bell-list {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 60vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.nav-bell-list li {
+  padding: 0.6rem 0.65rem;
+  border-radius: var(--ag-r-sm);
+}
+.nav-bell-list li.is-unread {
+  background: var(--ag-primary-soft);
+}
+.nav-bell-title {
+  color: var(--ag-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.nav-bell-content {
+  margin-top: 0.2rem;
+  color: var(--ag-text-2);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.nav-bell-date {
+  margin-top: 0.3rem;
+  color: var(--ag-text-3);
+  font-size: 0.72rem;
+}
+
+/* ⌘K 搜尋視窗 */
+.nav-command-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 1rem 1rem;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(3px);
+}
+.nav-command {
+  width: min(640px, 100%);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ag-border-strong);
+  border-radius: var(--ag-r-lg);
+  background: var(--ag-bg-raised);
+  box-shadow: var(--ag-shadow-3);
+}
+.nav-command-input {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--ag-border);
+  color: var(--ag-text-3);
+}
+.nav-command-input svg {
+  width: 20px;
+  height: 20px;
+}
+.nav-command-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ag-text);
+  font-size: 1rem;
+  outline: none;
+}
+.nav-command-list {
+  margin: 0;
+  padding: 0.4rem;
+  overflow-y: auto;
+  list-style: none;
+}
+.nav-command-group {
+  padding: 0.6rem 0.6rem 0.25rem;
+  color: var(--ag-text-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.nav-command-item {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: var(--ag-r-sm);
+  background: transparent;
+  color: var(--ag-text);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.nav-command-item.is-active {
+  background: var(--ag-primary-soft);
+}
+.nav-command-item small {
+  flex: 0 0 auto;
+  color: var(--ag-text-3);
+  font-size: 0.75rem;
+}
+.nav-command-empty,
+.nav-command-tip {
+  padding: 0.75rem 1rem;
+  color: var(--ag-text-3);
+  font-size: 0.82rem;
+}
+.nav-command-tip {
+  border-top: 1px solid var(--ag-border);
+}
+
+/* 中等寬度（含分屏）：切換器不顯示小標、搜尋框縮短只留圖示與快捷鍵 */
+@media (max-width: 1180px) {
+  .public-nav.is-member .project-switcher-kicker {
+    display: none;
+  }
+  .public-nav.is-member .project-switcher-trigger {
+    min-height: 2.5rem;
+  }
+  .nav-search {
+    flex-basis: 220px;
+  }
+}
+/* 窄螢幕：第一列「品牌｜切換器｜帳號」，搜尋在第二列整列 */
+@media (max-width: 920px) {
+  .public-nav.is-member .public-nav-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .public-nav.is-member .project-switcher {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    width: 100%;
+    max-width: 260px;
+    min-width: 0;
+  }
+  .public-nav.is-member .public-nav-cta {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .public-nav.is-member .nav-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+  }
+}
+@media (max-width: 560px) {
+  .public-nav.is-member .public-brand-logo {
+    height: 38px;
+  }
+  .public-nav.is-member .public-nav-cta {
+    gap: 0.35rem;
+  }
+  .public-nav.is-member .project-switcher-trigger {
+    gap: 0.4rem;
+    padding: 0.25rem 0.45rem 0.25rem 0.3rem;
+  }
+  .public-nav.is-member .project-switcher-caret {
+    display: none;
+  }
+  .public-nav.is-member .theme-toggle,
+  .nav-icon-button {
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-switcher-menu,
+  .nav-popover {
+    animation: none;
+  }
+}

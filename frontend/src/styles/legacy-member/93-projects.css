@@ -1,0 +1,1453 @@
+/* ========================================
+   網站專案工作區（docs/adr/0003-site-project-workspace.md）：側邊欄＋各分頁。
+   照舊版淺色書寫，深色由 postcss-member-legacy 依明度自動產生（不理想處在 91-dark.css 覆寫）。
+   ======================================== */
+
+/* ── 外框：左側目前網站的功能、右側內容 ── */
+.project-shell {
+  display: grid;
+  /* minmax(0, 1fr)：寬表格只在自己的區塊內捲動，不把整頁撐出水平捲動 */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .project-shell {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+  /* 頂部導覽列是 sticky（桌面版高約 76px），側邊欄要停在它下方，不能滑進導覽列底下 */
+  .project-sidebar {
+    position: sticky;
+    top: calc(76px + 1rem);
+  }
+}
+.project-main {
+  min-width: 0;
+}
+
+/* 側邊欄卡片；目前頁＝淺藍底＋藍字粗體（不用彩色左邊條） */
+.project-sidebar {
+  @apply rounded-2xl border border-slate-200 bg-white p-3 shadow-sm;
+}
+.project-sidebar-head {
+  @apply border-b border-slate-200 px-2 pb-3 pt-1;
+}
+.project-sidebar-title {
+  @apply flex items-center gap-2;
+}
+.project-sidebar-name {
+  @apply min-w-0 flex-1 truncate text-base font-bold text-slate-900;
+}
+.project-sidebar-origin {
+  @apply mt-1 block truncate text-xs text-slate-500 hover:text-blue-700;
+}
+.project-sidebar-nav {
+  @apply mt-3 grid gap-0.5;
+}
+.project-sidebar-link {
+  @apply flex items-center rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50;
+}
+.project-sidebar-link-text {
+  @apply flex min-w-0 flex-col;
+}
+.project-sidebar-cta {
+  @apply mt-3 block rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50;
+}
+.project-sidebar-link:focus-visible,
+.project-sidebar-cta:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+.project-sidebar-link.active {
+  @apply bg-blue-50 text-blue-800;
+}
+.project-sidebar-link-label {
+  @apply text-sm font-medium;
+}
+.project-sidebar-link.active .project-sidebar-link-label {
+  @apply font-bold;
+}
+.project-sidebar-link.active .project-sidebar-link-hint {
+  @apply text-blue-700/80;
+}
+.project-sidebar-link-hint {
+  @apply text-[11px] text-slate-500;
+}
+
+/* 網站圖示（components/projects/SiteFavicon.jsx）；導覽列內的同名樣式在 64-project-switcher.css */
+.site-favicon {
+  @apply inline-flex shrink-0 items-center justify-center overflow-hidden border border-slate-200 bg-white font-bold text-slate-500;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.site-favicon.is-lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
+  font-size: 1.1rem;
+}
+.site-favicon img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+}
+
+/* 分數徽章（彩色底） */
+.project-score-num {
+  @apply inline-flex min-w-[2.4rem] shrink-0 justify-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500;
+  font-variant-numeric: tabular-nums;
+}
+.project-score-num.is-lg {
+  @apply min-w-[3.2rem] px-3 py-1 text-lg;
+}
+.project-score-num.is-good { @apply bg-emerald-100 text-emerald-700; }
+.project-score-num.is-medium { @apply bg-amber-100 text-amber-700; }
+.project-score-num.is-bad { @apply bg-rose-100 text-rose-700; }
+
+/* 窄螢幕：側邊欄改成可左右滑動的分頁列，不出現水平捲動 */
+@media (max-width: 1023px) {
+  .project-sidebar {
+    @apply p-2;
+  }
+  .project-sidebar-head {
+    @apply flex items-center gap-3 border-b-0 pb-1;
+  }
+  .project-sidebar-nav {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  /* 橫向分頁列：目前頁淺藍底 */
+  .project-sidebar-link {
+    @apply shrink-0 px-3 py-1.5;
+  }
+  .project-sidebar-link-hint,
+  .project-sidebar-cta {
+    display: none;
+  }
+}
+
+.project-archived-banner {
+  @apply mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900;
+}
+
+/* ── 分頁共用 ── */
+.project-page {
+  @apply grid gap-4;
+  grid-template-columns: minmax(0, 1fr);
+}
+.project-page-head {
+  @apply flex flex-wrap items-end justify-between gap-3;
+}
+.project-page-title {
+  @apply mt-1 text-2xl font-bold text-slate-900;
+}
+.project-page-sub {
+  @apply mt-1 max-w-3xl text-sm text-slate-500;
+}
+.project-section-head {
+  @apply mb-3 flex flex-wrap items-center justify-between gap-2;
+}
+.project-section-title {
+  @apply mb-3 text-base font-bold text-slate-800;
+}
+.project-section-head .project-section-title {
+  @apply mb-0;
+}
+.project-text-link {
+  @apply inline-flex items-center border-0 bg-transparent p-0 text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline disabled:cursor-wait disabled:text-slate-400;
+  cursor: pointer;
+}
+.project-note {
+  @apply flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600;
+}
+.project-empty {
+  @apply grid justify-items-start gap-2;
+}
+.project-empty-title {
+  @apply text-base font-bold text-slate-800;
+}
+.project-success {
+  @apply text-sm font-semibold text-emerald-700;
+}
+.project-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.project-delta {
+  @apply text-sm font-semibold text-slate-500;
+}
+.project-delta.is-up {
+  @apply text-emerald-700;
+}
+.project-delta.is-down {
+  @apply text-rose-700;
+}
+/* 嚴重度徽章（彩色底）；.project-sev-dot 是所有專案表格裡「高 3」這種帶數字的版本 */
+.project-sev,
+.project-sev-dot {
+  @apply inline-flex shrink-0 justify-center rounded-full px-2 py-0.5 text-[11px] font-bold;
+}
+.project-sev {
+  @apply min-w-[2.6rem];
+}
+.project-sev.sev-critical, .project-sev-dot.sev-critical { @apply bg-rose-100 text-rose-800; }
+.project-sev.sev-high, .project-sev-dot.sev-high { @apply bg-orange-100 text-orange-800; }
+.project-sev.sev-medium, .project-sev-dot.sev-medium { @apply bg-amber-100 text-amber-800; }
+.project-sev.sev-low, .project-sev-dot.sev-low { @apply bg-sky-100 text-sky-800; }
+.project-sev.sev-info, .project-sev-dot.sev-info { @apply bg-slate-100 text-slate-600; }
+
+/* ── 總覽 ── */
+.project-active-banner {
+  @apply grid gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900;
+}
+.project-active-head {
+  @apply flex flex-wrap items-center gap-3;
+}
+.project-active-text {
+  flex: 1 1 16rem;
+  @apply font-semibold;
+}
+.project-active-text small {
+  @apply ml-1 font-normal text-blue-700;
+}
+.project-active-bar {
+  @apply h-2 overflow-hidden rounded-full bg-blue-100;
+}
+.project-active-bar > span {
+  @apply block h-full rounded-full bg-blue-600;
+  transition: width 0.4s ease;
+}
+.project-active-bar.is-indeterminate > span {
+  animation: project-indeterminate 1.4s ease-in-out infinite;
+}
+@keyframes project-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+.project-kpis {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.project-kpi {
+  @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+}
+/* 分數環沿用舊 Dashboard 元件；它的深色字只寫在 .panel 內，這裡補上同樣的對比 */
+.project-kpi .score-ring-value {
+  @apply text-slate-900;
+}
+.project-kpi .score-ring-label {
+  color: rgba(71, 85, 105, 0.7);
+}
+.project-kpi-value.is-small {
+  @apply text-xl;
+}
+.project-kpi-hint {
+  @apply mt-1 text-xs text-slate-500;
+}
+.project-grid-2 {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 1100px) {
+  .project-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* ── 掃描：左側建立表單、右側此網站的掃描 ── */
+.project-scans-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 1280px) {
+  .project-scans-page {
+    grid-template-columns: 400px minmax(0, 1fr);
+  }
+}
+
+/* ── 問題分析 ── */
+.project-filters {
+  @apply grid gap-3;
+}
+.project-filter {
+  @apply flex flex-wrap items-center gap-2;
+}
+.project-filter-label {
+  @apply w-12 text-xs font-semibold text-slate-500;
+}
+.project-chip {
+  @apply rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-blue-400 hover:text-blue-700;
+}
+.project-chip.active {
+  @apply border-blue-600 bg-blue-600 text-white;
+}
+.project-chip:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-issue-list {
+  @apply grid list-none gap-0 p-0;
+}
+.project-issue {
+  @apply flex items-start gap-3 border-b border-slate-100 py-3;
+}
+.project-issue:last-child {
+  @apply border-b-0;
+}
+.project-issue-body {
+  @apply min-w-0 flex-1;
+}
+.project-issue-title {
+  @apply flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800;
+}
+.project-issue-meta {
+  @apply mt-0.5 truncate text-xs text-slate-500;
+}
+.project-issue-list.is-muted .project-issue-title {
+  @apply font-medium text-slate-600;
+}
+.project-change-chip {
+  @apply rounded-full px-2 py-0.5 text-[11px] font-bold;
+}
+.project-change-chip.is-new { @apply bg-rose-50 text-rose-700; }
+.project-change-chip.is-persisting { @apply bg-slate-100 text-slate-600; }
+.project-streak-chip {
+  @apply rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800;
+}
+.project-streak-chip.is-long {
+  @apply bg-rose-50 text-rose-800;
+}
+.project-page-alert {
+  @apply mt-1 text-sm font-semibold text-rose-700;
+}
+.project-issue-pages {
+  @apply mt-1 text-xs text-slate-500;
+}
+.project-issue-pages summary {
+  @apply cursor-pointer font-semibold text-blue-700;
+}
+.project-issue-pages ul {
+  @apply mt-1 grid list-none gap-0.5 p-0;
+}
+.project-issue-pages li {
+  @apply truncate;
+}
+
+/* ── 歷史報告 ── */
+.project-table-wrap {
+  /* relative：表頭的 .project-sr-only 是絕對定位，沒有定位祖先時會跳出捲動容器、撐寬整頁 */
+  position: relative;
+  overflow-x: auto;
+}
+.project-table {
+  @apply w-full border-collapse text-sm;
+}
+.project-table th {
+  @apply border-b border-slate-200 px-3 py-2 text-left text-xs font-semibold text-slate-500;
+}
+.project-table td {
+  @apply border-b border-slate-100 px-3 py-2.5 align-middle text-slate-700;
+  white-space: nowrap;
+}
+.project-table-actions {
+  @apply flex gap-4;
+}
+
+/* ── 所有專案：跨網站數字卡片＋網站登記表 ── */
+.project-portfolio {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.project-portfolio-item {
+  @apply rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm;
+}
+.project-portfolio-item dt {
+  @apply text-xs font-semibold text-slate-500;
+}
+.project-portfolio-item dd {
+  @apply m-0 mt-1 text-2xl font-bold text-slate-900;
+  font-variant-numeric: tabular-nums;
+}
+.project-portfolio-item p {
+  @apply mt-0.5 text-[11px] text-slate-500;
+}
+.project-portfolio-item.is-bad dd {
+  @apply text-rose-700;
+}
+.project-list-toolbar {
+  @apply flex flex-wrap items-center gap-x-6 gap-y-3;
+}
+.project-list-toolbar .project-filter-label {
+  @apply w-auto;
+}
+.project-list-search {
+  @apply ml-auto max-w-xs;
+}
+.project-registry {
+  @apply w-full border-collapse text-sm;
+}
+.project-registry thead th {
+  @apply border-b border-slate-200 px-3 py-2 text-left text-xs font-semibold text-slate-500;
+  white-space: nowrap;
+}
+.project-registry tbody th,
+.project-registry tbody td {
+  @apply border-b border-slate-200 px-3 py-3 text-left align-middle font-normal text-slate-700;
+}
+.project-registry tbody tr:hover {
+  @apply bg-slate-50;
+}
+.project-registry tr.is-archived {
+  @apply text-slate-500;
+}
+.project-row-site {
+  @apply flex items-center gap-3;
+  min-width: 14rem;
+}
+.project-row-name {
+  @apply grid min-w-0;
+}
+.project-row-name strong,
+.project-row-link {
+  @apply truncate text-[15px] font-bold text-slate-900;
+}
+.project-row-link:hover {
+  @apply text-blue-700 underline;
+}
+.project-row-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-row-name small {
+  @apply truncate font-mono text-xs text-slate-500;
+}
+.project-row-score {
+  white-space: nowrap;
+}
+.project-row-score .project-delta {
+  @apply ml-2 text-xs;
+}
+.project-mini-cats {
+  @apply m-0 grid list-none gap-0.5 p-0;
+  min-width: 12rem;
+}
+.project-mini-cats li {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(3rem, 1fr) 1.8rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  color: #64748b;
+}
+.project-mini-cats b {
+  @apply text-right font-mono font-semibold text-slate-700;
+}
+.project-mini-track {
+  @apply block h-1.5 overflow-hidden rounded-sm bg-slate-100;
+}
+.project-mini-fill {
+  @apply block h-full;
+  background: #94a3b8;
+}
+.project-mini-fill.is-good { background: #10b981; }
+.project-mini-fill.is-medium { background: #f59e0b; }
+.project-mini-fill.is-bad { background: #e11d48; }
+.project-issue-tally {
+  @apply flex flex-wrap gap-x-3 gap-y-1;
+  min-width: 8rem;
+}
+.project-row-last {
+  white-space: nowrap;
+}
+.project-row-last small {
+  @apply block text-[11px] text-slate-500;
+}
+.project-running {
+  @apply font-semibold text-blue-700 hover:underline;
+}
+.project-row-actions {
+  @apply text-right;
+  white-space: nowrap;
+}
+.project-row-actions > * + * {
+  @apply ml-4;
+}
+.project-archived {
+  @apply grid justify-items-start gap-3;
+}
+.project-archived .project-table-wrap {
+  width: 100%;
+}
+
+/* 窄螢幕：表格每列改成兩欄的區塊（網站與分數一列，其餘依序往下） */
+@media (max-width: 1100px) {
+  .project-registry thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .project-registry,
+  .project-registry tbody {
+    display: block;
+  }
+  .project-registry tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem 1rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid #e2e6ec;
+  }
+  .project-registry tbody th,
+  .project-registry tbody td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .project-row-site {
+    min-width: 0;
+  }
+  .project-row-trend {
+    display: none !important;
+  }
+  .project-row-cats,
+  .project-row-issues,
+  .project-row-last,
+  .project-row-actions {
+    grid-column: 1 / -1;
+  }
+  .project-row-actions {
+    text-align: left;
+  }
+  .project-row-last small {
+    display: inline;
+    margin-left: 0.5rem;
+  }
+}
+
+.project-fieldset {
+  @apply m-0 grid gap-2 border-0 p-0;
+}
+.project-fieldset legend {
+  @apply mb-2 text-sm font-semibold text-slate-700;
+}
+.project-choice-row {
+  @apply flex flex-wrap gap-2;
+}
+.project-choice {
+  @apply flex cursor-pointer items-start gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-blue-400;
+}
+.project-choice.active {
+  @apply border-blue-600 bg-blue-50 text-blue-900;
+}
+.project-choice:focus-within {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-choice input {
+  @apply mt-1;
+}
+.project-choice span {
+  @apply grid;
+}
+.project-choice small {
+  @apply text-xs text-slate-500;
+}
+.project-choice.is-compact {
+  @apply items-center;
+}
+.project-choice.is-compact input {
+  @apply mt-0;
+}
+.project-create-page {
+  @apply mx-auto grid w-full max-w-xl gap-3;
+}
+.project-create-form,
+.project-settings-form {
+  @apply grid gap-4;
+}
+.project-field {
+  @apply grid gap-1 text-sm font-semibold text-slate-700;
+}
+.project-field small {
+  @apply text-xs font-normal text-slate-500;
+}
+.project-danger-zone {
+  @apply grid justify-items-start gap-2 border-rose-200;
+}
+.project-danger-button {
+  @apply border-rose-300 text-rose-700 hover:bg-rose-50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-sidebar-link,
+  .project-active-bar > span {
+    transition: none;
+  }
+  .project-active-bar.is-indeterminate > span {
+    animation: none;
+  }
+}
+
+/* ── 總覽儀表板（components/projects/DashboardWidgets.jsx） ── */
+.project-grid-3 {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1100px) {
+  .project-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.project-section-hint {
+  @apply text-xs text-slate-500;
+}
+.dash-count-list {
+  @apply grid list-none gap-1 p-0;
+}
+.dash-count-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  @apply rounded-lg px-1 py-1 text-sm text-slate-700;
+}
+.dash-count-row.is-link:hover {
+  @apply bg-slate-50 text-blue-800;
+}
+.dash-count-label {
+  @apply font-semibold;
+}
+.dash-count-track {
+  @apply block h-2.5 overflow-hidden rounded-full bg-slate-100;
+}
+.dash-count-fill {
+  @apply block h-full rounded-full bg-blue-500;
+}
+.dash-count-value {
+  @apply text-right font-semibold;
+}
+/* ── 頁面清單 ── */
+.project-search {
+  @apply block max-w-md;
+}
+.project-search .input {
+  @apply w-full;
+}
+.project-sort {
+  @apply border-0 bg-transparent p-0 text-xs font-semibold text-slate-500 hover:text-blue-700;
+  cursor: pointer;
+}
+.project-pages-table td {
+  white-space: normal;
+}
+.project-page-cell {
+  max-width: 28rem;
+}
+.project-page-title-text {
+  @apply block truncate font-semibold text-slate-800;
+}
+.project-page-url {
+  @apply block truncate text-xs text-slate-500;
+}
+.project-status {
+  @apply inline-flex rounded-full px-2 py-0.5 text-xs font-bold;
+}
+.project-status.is-good { @apply bg-emerald-50 text-emerald-800; }
+.project-status.is-warn { @apply bg-amber-50 text-amber-800; }
+.project-status.is-bad { @apply bg-rose-50 text-rose-800; }
+.project-slow {
+  @apply font-semibold text-amber-700;
+}
+.project-page-issues {
+  @apply flex flex-wrap items-center gap-1.5 font-semibold;
+}
+.project-page-issues small {
+  @apply w-full text-[11px] font-normal text-slate-500;
+}
+.project-page-clean {
+  @apply text-xs text-slate-400;
+}
+.project-pages-table tr.is-open td {
+  @apply bg-slate-50;
+}
+.project-page-preview td {
+  @apply bg-slate-50;
+}
+.project-page-shot {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  object-position: top;
+  @apply rounded-lg border border-slate-200;
+}
+
+/* ── 掃描分頁：此網站的掃描（ScanExperience.jsx 的 ScanList） ── */
+.scan-list-head {
+  @apply mb-3 flex flex-wrap items-end justify-between gap-3;
+}
+.scan-list-sub {
+  @apply mt-0.5 text-xs text-slate-500;
+}
+.scan-ledger-wrap {
+  position: relative;
+  overflow-x: auto;
+}
+.scan-ledger {
+  @apply w-full border-collapse text-sm;
+}
+.scan-ledger thead th {
+  @apply border-b border-slate-300 px-3 py-2 text-left text-xs font-semibold text-slate-500;
+  white-space: nowrap;
+}
+.scan-ledger tbody th,
+.scan-ledger tbody td {
+  @apply border-b border-slate-200 px-3 py-2.5 text-left align-middle font-normal text-slate-700;
+  white-space: nowrap;
+}
+.scan-ledger tbody tr {
+  cursor: pointer;
+}
+.scan-ledger tbody tr:hover {
+  @apply bg-slate-50;
+}
+.scan-ledger .is-num {
+  @apply text-right;
+  font-variant-numeric: tabular-nums;
+}
+.scan-ledger-link {
+  @apply font-semibold text-slate-900 hover:underline;
+  font-variant-numeric: tabular-nums;
+}
+.scan-ledger-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.scan-ledger-tag {
+  @apply ml-2 text-[11px] font-bold text-rose-700;
+}
+.scan-ledger-delta {
+  @apply ml-2 text-xs font-semibold;
+}
+.scan-ledger-delta.is-up { @apply text-emerald-700; }
+.scan-ledger-delta.is-down { @apply text-rose-700; }
+.scan-ledger tr.is-running th,
+.scan-ledger tr.is-running td {
+  @apply bg-blue-50;
+}
+
+/* 總覽標題：網站圖示＋名稱，建立掃描是標題下的一個文字連結（不放右上角主按鈕） */
+.project-overview-head {
+  @apply flex-nowrap items-center justify-start;
+}
+.project-origin-link {
+  @apply text-slate-500 hover:text-slate-900 hover:underline;
+}
+
+/* ========================================
+   2026-10-03 依參考設計：頁首、總覽儀表板、問題分析表格、側邊欄方案卡
+   分數色調：≥80 藍（良好）、60–79 琥珀（中等）、<60 紅（待加強）
+   ======================================== */
+
+/* ── 共用頁首（components/projects/ProjectHeader.jsx） ── */
+.project-breadcrumb {
+  @apply flex flex-wrap items-center gap-2 text-sm text-slate-500;
+}
+.project-breadcrumb a {
+  @apply text-slate-500 hover:text-blue-700;
+}
+.project-breadcrumb [aria-current="page"] {
+  @apply font-semibold text-slate-800;
+}
+.project-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem 1.75rem;
+  align-items: center;
+}
+@media (min-width: 1100px) {
+  .project-hero {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  }
+  .project-hero-desc {
+    padding-left: 1.75rem;
+    border-left: 1px solid #e2e8f0;
+  }
+}
+.project-hero-id {
+  @apply flex min-w-0 items-center gap-4;
+}
+.site-favicon.is-xl {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 16px;
+  font-size: 1.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.project-hero-text {
+  @apply grid min-w-0 gap-1;
+}
+.project-hero-name {
+  @apply flex items-center gap-2 text-2xl font-bold text-slate-900;
+}
+.project-hero-verified {
+  @apply inline-flex text-emerald-500;
+}
+.project-hero-verified svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.project-hero-url {
+  @apply inline-flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-blue-700 hover:underline;
+}
+.project-hero-url svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 auto;
+}
+.project-hero-meta {
+  @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500;
+}
+.project-state-pill {
+  @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+}
+.project-state-pill::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+.project-state-pill.is-done { @apply border-emerald-200 bg-emerald-50 text-emerald-700; }
+.project-state-pill.is-running { @apply border-blue-200 bg-blue-50 text-blue-700; }
+.project-state-pill.is-failed { @apply border-rose-200 bg-rose-50 text-rose-700; }
+.project-state-pill.is-none { @apply border-slate-200 bg-slate-50 text-slate-500; }
+.project-hero-desc {
+  @apply text-sm leading-relaxed text-slate-600;
+}
+.project-hero-aside {
+  @apply flex flex-wrap items-center gap-2;
+}
+.project-hero-primary {
+  @apply gap-2 px-5 py-2.5;
+}
+.project-hero-primary svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ── 總覽：四張數字卡 ── */
+.project-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.project-kpi {
+  @apply grid content-start gap-2;
+}
+.project-kpi-label {
+  @apply text-sm font-semibold text-slate-700;
+}
+.project-kpi-value {
+  @apply mt-0 flex items-baseline gap-2 text-4xl font-bold text-slate-900;
+}
+.project-kpi-value small {
+  @apply text-sm font-medium text-slate-500;
+}
+.project-kpi-score {
+  @apply flex items-center gap-4;
+}
+.project-kpi .score-ring-label {
+  font-size: 0.75rem;
+}
+.project-grade {
+  @apply inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold;
+}
+.project-grade.tone-good { @apply bg-blue-100 text-blue-700; }
+.project-grade.tone-medium { @apply bg-amber-100 text-amber-700; }
+.project-grade.tone-bad { @apply bg-rose-100 text-rose-700; }
+.project-kpi-sub {
+  @apply mt-2 text-xs text-slate-500;
+}
+.project-kpi-delta {
+  @apply text-sm font-semibold text-slate-800;
+}
+.project-sev-row {
+  @apply mt-0 flex flex-wrap gap-2;
+}
+.project-sev-count {
+  @apply inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1 text-sm font-semibold transition;
+  cursor: pointer;
+}
+.project-sev-count b {
+  @apply font-bold;
+}
+.project-sev-count.sev-critical { @apply bg-rose-100 text-rose-800; }
+.project-sev-count.sev-high { @apply bg-orange-100 text-orange-800; }
+.project-sev-count.sev-medium { @apply bg-amber-100 text-amber-800; }
+.project-sev-count.sev-low { @apply bg-sky-100 text-sky-800; }
+.project-sev-count.sev-info { @apply bg-slate-100 text-slate-600; }
+.project-sev-count:hover,
+.project-sev-count.active {
+  border-color: currentColor;
+}
+.project-sev-count:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-kpi-hint a {
+  @apply font-semibold text-blue-700 hover:underline;
+}
+.project-kpi-status {
+  @apply flex items-center gap-2 text-lg font-bold text-emerald-600;
+}
+.project-kpi-status svg {
+  width: 2rem;
+  height: 2rem;
+}
+.project-kpi-facts {
+  @apply m-0 grid gap-1.5 border-t border-slate-100 pt-2;
+}
+.project-kpi-facts div {
+  @apply flex items-center justify-between text-sm;
+}
+.project-kpi-facts dt {
+  @apply flex items-center gap-2 text-slate-500;
+}
+.project-kpi-facts dt svg {
+  width: 1rem;
+  height: 1rem;
+}
+.project-kpi-facts dd {
+  @apply m-0 font-semibold text-slate-800;
+}
+.project-kpi-date {
+  @apply flex items-center gap-3;
+}
+.project-kpi-date-icon {
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600;
+}
+.project-kpi-date-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.project-kpi-date strong {
+  @apply block text-lg font-bold text-slate-900;
+}
+.project-kpi-date small {
+  @apply text-xs text-slate-500;
+}
+.project-kpi-change {
+  @apply flex items-baseline gap-3 text-sm text-slate-600;
+}
+.project-kpi-change b {
+  @apply text-2xl font-bold text-slate-900;
+}
+
+/* ── 總覽：第二、三排 ── */
+@media (min-width: 1100px) {
+  .project-grid-3.is-wide-first {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.project-range-select {
+  @apply w-auto py-1 text-xs;
+}
+.dash-cat-list {
+  @apply m-0 grid list-none gap-3 p-0;
+}
+.dash-cat-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(7rem, 1.2fr) minmax(4rem, 1fr) 2.6rem 3.6rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+.dash-cat-icon {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg;
+}
+.dash-cat-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.dash-cat-icon.cat-seo { @apply bg-indigo-50 text-indigo-600; }
+.dash-cat-icon.cat-aeo { @apply bg-violet-50 text-violet-600; }
+.dash-cat-icon.cat-geo { @apply bg-cyan-50 text-cyan-700; }
+.dash-cat-icon.cat-ux { @apply bg-emerald-50 text-emerald-700; }
+.dash-cat-icon.cat-security { @apply bg-rose-50 text-rose-600; }
+.dash-cat-name {
+  @apply grid min-w-0;
+}
+.dash-cat-name strong {
+  @apply text-sm font-bold text-slate-800;
+}
+.dash-cat-name small {
+  @apply truncate text-[11px] text-slate-500;
+}
+.dash-cat-track {
+  @apply block h-2.5 overflow-hidden rounded-full bg-slate-100;
+}
+.dash-cat-fill {
+  @apply block h-full rounded-full bg-slate-400;
+}
+.dash-cat-row.tone-good .dash-cat-fill { @apply bg-blue-500; }
+.dash-cat-row.tone-medium .dash-cat-fill { @apply bg-amber-400; }
+.dash-cat-row.tone-bad .dash-cat-fill { @apply bg-rose-500; }
+.dash-cat-score {
+  @apply text-right text-sm font-bold text-slate-800;
+}
+.dash-cat-row.tone-none .dash-cat-score {
+  @apply text-[11px] font-normal text-slate-400;
+}
+.dash-cat-trend {
+  @apply text-right text-[11px] text-slate-400;
+}
+.dash-cat-trend .dash-spark {
+  width: 3.6rem;
+}
+@media (max-width: 560px) {
+  .dash-cat-row {
+    grid-template-columns: 2rem minmax(0, 1fr) 5rem 2.6rem;
+  }
+  .dash-cat-trend {
+    display: none;
+  }
+}
+.dash-donut {
+  @apply flex flex-wrap items-center justify-center gap-6;
+}
+.dash-donut-chart {
+  width: 9.5rem;
+  height: 9.5rem;
+}
+.dash-donut-track {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 16;
+}
+.dash-donut-seg {
+  fill: none;
+  stroke-width: 16;
+  transform: rotate(-90deg);
+  transform-origin: 70px 70px;
+}
+.dash-donut-seg.sev-critical { stroke: #b91c1c; }
+.dash-donut-seg.sev-high { stroke: #f97316; }
+.dash-donut-seg.sev-medium { stroke: #f59e0b; }
+.dash-donut-seg.sev-low { stroke: #38bdf8; }
+.dash-donut-seg.sev-info { stroke: #94a3b8; }
+.dash-donut-total {
+  fill: #0f172a;
+  font-size: 30px;
+  font-weight: 800;
+}
+.dash-donut-unit {
+  fill: #64748b;
+  font-size: 11px;
+}
+.dash-donut-legend {
+  @apply m-0 grid list-none gap-2 p-0 text-sm;
+  min-width: 9rem;
+}
+.dash-donut-legend li {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr 2rem 2.6rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dash-donut-dot {
+  @apply block h-3 w-3 rounded-full;
+}
+.dash-donut-dot.sev-critical { background: #b91c1c; }
+.dash-donut-dot.sev-high { background: #f97316; }
+.dash-donut-dot.sev-medium { background: #f59e0b; }
+.dash-donut-dot.sev-low { background: #38bdf8; }
+.dash-donut-dot.sev-info { background: #94a3b8; }
+.dash-donut-name {
+  @apply text-slate-700;
+}
+.dash-donut-count {
+  @apply text-right font-bold text-slate-800;
+}
+.dash-donut-pct {
+  @apply text-right text-xs text-slate-500;
+}
+.dash-aeo-tiles {
+  @apply grid grid-cols-2 gap-3;
+}
+.dash-aeo-tile {
+  @apply flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3;
+}
+.dash-aeo-tile-icon {
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-600;
+}
+.dash-aeo-tile-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.dash-aeo-tile strong {
+  @apply block text-2xl font-bold text-slate-900;
+}
+.dash-aeo-tile small {
+  @apply block text-[11px] leading-snug text-slate-500;
+}
+.dash-aeo-counts {
+  @apply mt-3 text-xs text-slate-600;
+}
+.project-panel-cta {
+  @apply mt-3 w-fit py-1.5 text-xs;
+}
+.dash-count-row {
+  grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) 2rem;
+}
+.dash-count-label {
+  @apply flex items-baseline gap-2;
+}
+.dash-count-label small {
+  @apply truncate text-[11px] font-normal text-slate-500;
+}
+.dash-count-fill.tone-good { @apply bg-blue-500; }
+.dash-count-fill.tone-medium { @apply bg-amber-400; }
+.dash-count-fill.tone-bad { @apply bg-rose-500; }
+.project-priority-list {
+  @apply m-0 grid list-none gap-2 p-0;
+}
+.project-priority-list li {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.project-priority-num {
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800;
+}
+.project-priority-title {
+  @apply truncate text-sm text-slate-700 hover:text-blue-700 hover:underline;
+}
+
+/* ── 頁首右側的掃描時間卡 ── */
+.project-scan-card {
+  @apply flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm;
+  cursor: pointer;
+}
+.project-scan-card-icon {
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600;
+}
+.project-scan-card-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.project-scan-card-body {
+  @apply grid min-w-0;
+}
+.project-scan-card-label {
+  @apply text-xs text-slate-500;
+}
+.project-scan-card-select {
+  @apply max-w-[20rem] border-0 bg-transparent p-0 pr-4 text-base font-bold text-slate-900;
+  cursor: pointer;
+}
+.project-scan-card-select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-scan-card-sub {
+  @apply text-xs text-slate-500;
+}
+
+/* ── 問題分析 ── */
+.issue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+.issue-summary-total {
+  @apply grid gap-1 pr-6;
+  border-right: 1px solid #e2e8f0;
+}
+.issue-summary-sev {
+  @apply flex flex-wrap gap-2;
+}
+.issue-summary-cats {
+  @apply ml-auto grid gap-2;
+}
+.issue-cat-chips {
+  @apply flex flex-wrap gap-2;
+}
+.issue-summary-note {
+  @apply w-full text-xs text-slate-500;
+}
+.issue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  @apply py-3;
+}
+.issue-toolbar-group {
+  @apply flex items-center gap-2;
+}
+.issue-toolbar-label {
+  @apply whitespace-nowrap text-sm text-slate-500;
+}
+.issue-toolbar .input {
+  @apply w-auto py-1.5 text-sm;
+}
+.issue-segmented {
+  @apply inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1;
+}
+.issue-segmented button {
+  @apply inline-flex items-center gap-1.5 rounded-lg border-0 bg-transparent px-3 py-1.5 text-sm font-semibold text-slate-600;
+  cursor: pointer;
+}
+.issue-segmented button.active {
+  @apply bg-white text-blue-700 shadow-sm;
+}
+.issue-segmented button svg,
+.issue-export svg {
+  width: 1rem;
+  height: 1rem;
+}
+.issue-export {
+  @apply ml-auto gap-2;
+}
+.issue-query {
+  @apply flex flex-wrap items-center gap-3 text-sm text-slate-600;
+}
+.issue-table-card {
+  @apply p-0;
+  overflow: hidden;
+}
+.issue-table-card > .hint-text {
+  @apply p-5;
+}
+.issue-table {
+  @apply w-full border-collapse text-sm;
+}
+.issue-table thead th {
+  @apply border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold text-slate-500;
+  white-space: nowrap;
+}
+.issue-table tbody td,
+.issue-table tbody th {
+  @apply border-b border-slate-100 px-4 py-3 text-left align-middle font-normal text-slate-700;
+}
+.issue-table tbody tr:hover > * {
+  @apply bg-slate-50;
+}
+.issue-table tr.is-open > * {
+  @apply bg-blue-50;
+}
+.issue-col-sev {
+  width: 5rem;
+}
+.issue-title {
+  @apply flex flex-wrap items-center gap-2 text-[15px] font-bold text-slate-900;
+}
+.issue-desc {
+  @apply mt-0.5 block text-xs text-slate-500;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issue-cat {
+  @apply inline-flex whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold;
+}
+.issue-cat.cat-seo { @apply border-indigo-200 bg-indigo-50 text-indigo-700; }
+.issue-cat.cat-aeo { @apply border-violet-200 bg-violet-50 text-violet-700; }
+.issue-cat.cat-geo { @apply border-cyan-200 bg-cyan-50 text-cyan-800; }
+.issue-cat.cat-ux { @apply border-emerald-200 bg-emerald-50 text-emerald-700; }
+.issue-cat.cat-security { @apply border-rose-200 bg-rose-50 text-rose-700; }
+.issue-col-pages {
+  @apply text-center font-semibold;
+  width: 5.5rem;
+}
+.issue-col-fix {
+  min-width: 16rem;
+}
+.issue-fix {
+  @apply flex items-start gap-2 text-xs leading-relaxed text-slate-600;
+}
+.issue-fix svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  @apply text-amber-500;
+}
+.issue-fix span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issue-col-action {
+  @apply text-right;
+  white-space: nowrap;
+}
+.issue-group-row td {
+  @apply bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600;
+}
+.issue-detail-row td {
+  @apply border-b border-slate-200 bg-blue-50/40 px-6 py-4;
+}
+.issue-detail {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  align-items: start;
+}
+.issue-detail h4 {
+  @apply mb-1 text-xs font-bold text-slate-500;
+}
+.issue-detail p {
+  @apply text-sm text-slate-700;
+  white-space: pre-line;
+}
+.issue-detail ul {
+  @apply m-0 grid max-h-48 list-none gap-0.5 overflow-auto p-0 text-xs text-slate-600;
+}
+.issue-detail li {
+  @apply truncate;
+}
+.issue-evidence-link {
+  @apply w-fit self-end;
+}
+/* 窄螢幕：表格每列改成區塊 */
+@media (max-width: 900px) {
+  .issue-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .issue-table,
+  .issue-table tbody {
+    display: block;
+  }
+  .issue-table tbody tr:not(.issue-detail-row):not(.issue-group-row) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.4rem 0.75rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .issue-table tbody td,
+  .issue-table tbody th {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .issue-col-sev {
+    width: auto;
+  }
+  .issue-col-title {
+    grid-column: 2 / -1;
+  }
+  .issue-col-pages {
+    width: auto;
+    text-align: left;
+  }
+  .issue-col-pages::before {
+    content: "影響頁數 ";
+    @apply font-normal text-slate-500;
+  }
+  .issue-col-fix {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .issue-col-action {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .issue-detail-row,
+  .issue-group-row {
+    display: block;
+  }
+  .issue-summary-total {
+    border-right: 0;
+  }
+  .issue-summary-cats {
+    margin-left: 0;
+  }
+  .issue-export {
+    margin-left: 0;
+  }
+}
+
+/* ── 側邊欄：圖示、方案卡、頁尾連結 ── */
+.project-sidebar-link {
+  @apply gap-3;
+}
+.project-sidebar-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  color: #64748b;
+}
+.project-sidebar-link.active .project-sidebar-icon {
+  color: #1d4ed8;
+}
+.project-plan-card {
+  @apply mt-4 grid gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3;
+}
+.project-plan-label {
+  @apply text-[11px] text-slate-500;
+}
+.project-plan-name {
+  @apply text-sm font-bold text-slate-900;
+}
+.project-plan-bar {
+  @apply block h-1.5 overflow-hidden rounded-full bg-slate-200;
+}
+.project-plan-bar > span {
+  @apply block h-full rounded-full bg-blue-500;
+}
+.project-plan-coins {
+  @apply text-xs text-slate-600;
+}
+.project-plan-hint {
+  @apply text-[11px] text-slate-500;
+}
+.project-plan-cta {
+  @apply mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-center text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700;
+}
+.project-sidebar-footer {
+  @apply mt-3 flex flex-wrap gap-x-3 gap-y-1 px-1 text-[11px];
+}
+.project-sidebar-footer a {
+  @apply text-slate-500 hover:text-blue-700;
+}
+@media (max-width: 1023px) {
+  .project-plan-card,
+  .project-sidebar-footer {
+    display: none;
+  }
+  .project-sidebar-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+/* 深色主題：自動轉換會把實心藍底壓暗，選中的維度籤需要明確保留藍底白字 */
+:root[data-theme="dark"] .project-chip.active {
+  border-color: #3b82f6;
+  background: #2563eb;
+  color: #ffffff;
+}
+:root[data-theme="dark"] .project-scan-card-select {
+  background: transparent;
+}

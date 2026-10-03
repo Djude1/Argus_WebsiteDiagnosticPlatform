@@ -9,7 +9,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | URL 前綴 | Django App | 主要端點 |
 |---|---|---|
 | `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/` |
-| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`、`audit/`、`findings-by-category/` |
+| `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/pages/?scan=` |
+| `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
+| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
@@ -52,7 +54,20 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          max_depth、max_pages、progress（JSON 即時進度）、
          overall_score、category_scores（JSON）、top_actions（JSON）、
          aeo_report（JSON，AEO 問答檢測逐題結果與「未充分評估」原因，
-         見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）
+         見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）、
+         project（所屬網站專案，見下 SiteProject）
+```
+
+**SiteProject**（`apps/scans/models.py`，2026-10-02）
+```
+網站專案：user FK、name、origin（協定＋網域＋連接埠）、start_url（同 origin）、
+  default_scope（site/single）、default_categories（預設掃描設定）、archived_at、
+  favicon（網站圖示 data URL：新增專案時立刻抓、掃描時更新，縮成 64px PNG；migration 0020；
+  舊專案補抓 manage.py refresh_project_favicons）
+UniqueConstraint(user, origin)；移除＝封存，不刪掃描
+ScanJob.project FK（SET_NULL）：ScanJob.save() 新建時未指定就依 origin 歸入
+  （SiteProject.objects.ensure_for，已封存的自動恢復）；migration 0019 回填既有掃描
+→ 總覽與跨掃描問題比較在 apps/scans/projects.py；設計見 docs/adr/0003-site-project-workspace.md
 ```
 
 **Finding**（`apps/scans/models.py`）

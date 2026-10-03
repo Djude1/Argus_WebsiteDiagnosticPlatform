@@ -27,11 +27,13 @@ queued → crawling → scanning → [agent_testing] → completed
 | `tasks.py` | Celery task 入口、狀態機推進、呼叫 billing；掃描流程拆成 `SCAN_PIPELINE` 階段函式（見下「掃描流程階段」）；`request_scan_cancel()` 為網頁與 MCP 共用的取消＋退款入口 | 直接執行爬蟲邏輯 |
 | `scan_plan.py` | 將單頁／全網站範圍與主動授權集中轉成各工具的執行閘門 | 寫 DB、執行任何掃描工具 |
 | `process_runner.py` | 以 `Popen` 執行 Nuclei/Katana，輪詢 DB 取消並終止 process tree | 吞掉 `ScanCancelled`、記錄 raw stdout/stderr |
-| `crawler.py` | Playwright BFS 爬蟲、收集頁面 | 修改 ScanJob.status、呼叫 billing |
+| `crawler.py` | Playwright BFS 爬蟲、收集頁面；整站模式以 robots.txt 宣告的 sitemap（或 `/sitemap.xml`）補種子（`discover_sitemap_urls` → `_CrawlState.seed`，同 origin、非 `.gz`、≤2 MB、索引最多展開 3 個子檔；與掃描網址只差 `www.` 前綴的 sitemap 網址由 `to_scan_origin` 改寫成掃描 origin），連結稀疏的網站也能達到頁數上限；預設深度 `ARGUS_DEFAULT_MAX_DEPTH`＝6。`/cdn-cgi/` 路徑一律不爬（`is_crawl_trap`：Cloudflare 給機器人的無限陷阱連結）。Cloudflare 攔截頁判定只認 `/cdn-cgi/challenge-platform/h/`、`_cf_chl_opt` 等攔截頁專屬標記——**不可用裸字串 `challenge-platform`**：CF Bot 偵測會在每個正常頁面插入 `/cdn-cgi/challenge-platform/scripts/` 背景腳本，曾讓整站只爬到首頁且被誤標為被阻擋（`waf_scanner.py` 同理） | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
+| `projects.py` | 網站專案的彙整資料（只讀 DB）：`project_overview`（含本次掃描覆蓋 `stats`、各維度問題數、AEO 摘要、最近掃描，以及 `site_description`：最新完成掃描首頁 HTML 的 meta description／og:description，前 100k 字元、最多 `SITE_DESCRIPTION_LIMIT` 字）、`project_issues`／`compare_issues`（新增／持續／本次未出現；每個問題含說明、修法、最多 `ISSUE_URLS_LIMIT` 個網址）、`project_pages`（逐頁狀態與問題數）、`project_summaries`（清單用：最新分數與變化、`score_history` 走勢、最新完成掃描依嚴重度的 `issue_counts`；兩次查詢） | 寫 DB、連線目標網站 |
+| `favicon.py` | 網站專案圖示：**新增／恢復專案時立刻抓**（`refresh_project_favicon_from_url`：先抓首頁 HTML 前 512KB 找 `<link rel=icon>`，整體上限 8 秒），掃描時再用爬到的首頁更新（`stage_favicon`，每 7 天最多一次）；沒宣告就 `/favicon.ico`。每一跳轉址都過 `assert_public_http_url`、圖示上限 200KB、逾時 5 秒、帶 `ARGUS_SCANNER_USER_AGENT`（Wikipedia 等會拒絕沒有 UA 的請求）；任何 `image/*`（含 gov.tw 的 `image/x-png`）交給 Pillow 縮成 64px PNG、SVG 限 20KB；存成 `SiteProject.favicon`（data URL），失敗保留舊圖示。舊專案補抓：`manage.py refresh_project_favicons`（`--all`／`--dry-run`） | 修改 `ScanJob.status`、讓掃描因圖示失敗 |
 | `aeo/` | AEO 問答檢測（內容擷取、出題、找答案與判定、標記一致性、整站評估；見下「AEO 問答檢測」） | 修改 `ScanJob.status`、發出任何網路請求（只分析爬蟲已抓到的頁面） |
 | `nuclei_scanner.py` | Nuclei binary 封裝；工具預算、JSONL 解析、Finding mapping | 在 passive 或未授權模式執行 |
 | `katana_scanner.py` | Katana 全站 JS/端點探索封裝；時間、大小、同主機與 RPS 預算 | 在單頁、passive 或未授權模式執行 |
@@ -120,9 +122,26 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | `aeo/evaluate.py` | 整站評估 `evaluate_site(pages)`：正文 < `MIN_MAIN_TEXT_CHARS` 或題目 < `MIN_QUESTIONS` → `status=insufficient`、**不給分**（`tested_categories_for` 移除 aeo，報告顯示「未評估」）；否則依逐題判定加權算分，產生 `aeo-answer-*` finding 與 `aeo-render-dependent`（主要文字需執行 JS 才出現） |
 
 - 結果存在 `ScanJob.aeo_report`（migration 0018）：`status`、`reason`、`questions_total`、`counts`、`answered_ratio`（有答案的問題比例）、`evidence_ratio`（答案附有原文的比例）、`score`、`questions[]`（逐題判定、理由、證據），`method` 目前是 `rules-v1`。
-- 呈現：掃描詳情頁 `AeoAnswerPanel`、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
+- 呈現：網站專案的「AEO 問答」分頁（`/projects/:id/aeo`，`AeoAnswerPanel`；2026-10-02 前在掃描詳情最下方）、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
+
+## 網站專案（`SiteProject`，2026-10-02）
+
+會員區以網站專案為單位（[`docs/adr/0003-site-project-workspace.md`](../../../docs/adr/0003-site-project-workspace.md)）：
+
+- **每筆掃描都要有專案**：`ScanJob.save()` 新建時沒指定就依 `(user, origin)` 歸入（`SiteProject.objects.ensure_for`），所以 MCP、後台重排、`rerun_scan` 與測試不用改。指定了已封存的專案會恢復它。
+- **建立掃描可帶 `project`**：`ScanJobCreateSerializer` 檢查專案屬於本人，且網址的 origin 與專案相同（換網站＝換專案，回 400 `url`）。
+- **`/api/scans/?project=<id>`** 回該專案全部掃描；沒帶時維持「每個 origin 只回最新一筆」。
+- **問題只收本次有勾的維度**（`issue_groups` 以 `effective_categories` 過濾，總覽的 `top_actions` 同理）：部分站台層級檢查不論勾選都會寫 finding，問題分析必須與計分一致。
+- **連續次數**：`issue_streaks` 往回數同專案連續幾次完成的掃描都出現該問題（最多 `STREAK_LOOKBACK` 次，遇到沒出現或那次沒勾該維度就停），回傳 `streak`／`since`。
+- **`domain_verified`**：`SiteProjectSerializer` 的唯讀欄位，等於 `user_owns_domain(user, hostname)`，前端頁首顯示已驗證勾勾；權限判斷仍以 view 內的檢查為準。
+- **預設掃描設定**：`SiteProject.default_scope`／`default_categories` 只是前端表單初始值，建立掃描時仍以實際送出的參數為準。
+- **問題的追蹤單位**＝一次掃描中同一條 `rule_id`（沒有就「分類:標題」），與報告合併規則一致；比較對象是同專案前一次「完成」的掃描。「本次未出現」只列本次仍有勾的維度，前端必須提醒不等於已修好。
+- **migration 0019 會先清掉殘留**（`drop_orphaned_site_project_schema`）：0019 未套用時若資料庫已有 `scans_siteproject` 表或 `scans_scanjob.project_id` 欄位，只可能是同功能較早版本跑過後被回退（程式與 migration 紀錄退回但表沒刪），會先移除再建立並回填。2026-10-02 Docker migrate 因此報 `relation "scans_siteproject" already exists`；由 `SiteProjectMigrationRecoveryTests` 鎖定（SQLite／PostgreSQL 皆驗證）。**回退含 migration 的功能時要用 `migrate <app> <前一版>` 反向套用，不要只退程式碼或刪 `django_migrations` 紀錄。**
+- **不提供硬刪除**：DELETE＝封存（`archived_at`），單筆讀取仍可讀封存專案（舊掃描詳情要顯示所屬專案），清單只列未封存。
+- **頁面分頁**：`/api/projects/<id>/pages/?scan=` 回一次掃描的每一頁與其問題數（只算有勾的維度），沒有對應頁面的站台層級發現另計 `site_level_findings`。
+- 測試：`tests_site_projects.py`（儀表板資料、頁面清單、歸入、回填、API、跨使用者 404、總覽與比較、預設掃描設定、已封存清單、連續次數、維度過濾）。
 
 ## 報告內容契約（`reports.py`）
 
@@ -340,6 +359,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
+| `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
 | `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |
