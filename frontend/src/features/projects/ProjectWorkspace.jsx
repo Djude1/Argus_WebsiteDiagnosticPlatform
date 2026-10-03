@@ -49,7 +49,7 @@ export function projectPath(projectId, section = "") {
   return `/projects/${projectId}${section ? `/${section}` : ""}`;
 }
 
-function ProjectSidebar({ project, activeSection }) {
+function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
   return (
     <aside className="project-sidebar" aria-label="網站專案功能">
       <div className="project-sidebar-head">
@@ -74,7 +74,11 @@ function ProjectSidebar({ project, activeSection }) {
         </a>
       </div>
       <nav className="project-sidebar-nav">
-        <Link to="/projects" className="project-sidebar-link is-all-projects">
+        <Link
+          to="/projects"
+          className={`project-sidebar-link is-all-projects ${allProjectsActive ? "active" : ""}`}
+          aria-current={allProjectsActive ? "page" : undefined}
+        >
           <LayersIcon className="project-sidebar-icon" />
           <span className="project-sidebar-link-text">
             <span className="project-sidebar-link-label">所有專案</span>
@@ -82,7 +86,7 @@ function ProjectSidebar({ project, activeSection }) {
           </span>
         </Link>
         {SECTIONS.map((section) => {
-          const active = activeSection === section.key;
+          const active = !allProjectsActive && activeSection === section.key;
           return (
             <Link
               key={section.key || "overview"}
@@ -534,6 +538,7 @@ function ProjectsListPage() {
   const projects = useArgusStore((s) => s.projects);
   const fetchProjects = useArgusStore((s) => s.fetchProjects);
   const upsertProject = useArgusStore((s) => s.upsertProject);
+  const currentProjectId = useArgusStore((s) => s.currentProjectId);
   const [archived, setArchived] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
@@ -564,11 +569,13 @@ function ProjectsListPage() {
   }
 
   const keyword = query.trim().toLowerCase();
+  // 側邊欄與其他分頁一樣固定在左側：顯示目前專案（沒有就第一個），選中項目是「所有專案」
+  const sidebarProject = (projects || []).find((p) => p.id === currentProjectId) || (projects || [])[0];
   const visible = (projects || [])
     .filter((p) => !keyword || `${p.name} ${p.origin}`.toLowerCase().includes(keyword))
     .sort(PROJECT_SORTS[sort].compare);
 
-  return (
+  const page = (
     <div className="project-page project-list-page">
       <header className="project-page-head">
         <div>
@@ -634,6 +641,13 @@ function ProjectsListPage() {
           <ProjectTable projects={archived} caption="已封存的網站專案" onRestore={restore} restoringId={restoringId} />
         )}
       </section>
+    </div>
+  );
+  if (!sidebarProject) return page;
+  return (
+    <div className="project-shell">
+      <ProjectSidebar project={sidebarProject} allProjectsActive />
+      <div className="project-main">{page}</div>
     </div>
   );
 }

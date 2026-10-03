@@ -12,13 +12,10 @@ import {
   SunIcon,
 } from "../../shared/ActionIcons";
 import {
-  BrowserIcon,
   CoinIcon,
   GearIcon,
-  HomeIcon,
   RobotIcon,
   ShieldIcon,
-  StarIcon,
 } from "../../shared/LineIcons";
 
 /** 登出：先通知後端撤銷 refresh cookie，無論成功與否都清掉前端 token 並回登入頁。 */
@@ -127,9 +124,6 @@ function AccountMenu() {
               {me?.email && me.email !== displayName ? <small>{me.email}</small> : null}
             </span>
           </div>
-          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/projects")}>
-            <HomeIcon /> 所有專案
-          </button>
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/domains")}>
             <ShieldIcon /> 網域驗證
           </button>
@@ -141,12 +135,6 @@ function AccountMenu() {
           </button>
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/billing")}>
             <CoinIcon /> 購點與訂閱
-          </button>
-          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/reviews")}>
-            <StarIcon /> 評論
-          </button>
-          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/project")}>
-            <BrowserIcon /> 產品介紹
           </button>
           {me?.is_staff && (
             <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/admin")}>
