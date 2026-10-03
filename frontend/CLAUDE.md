@@ -122,6 +122,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/download` | `DownloadPage` | 下載報告 |
 | `/verify` | `VerifyReportPage` | 報告查驗（公開導覽列有入口） |
 | `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
+| `/privacy`、`/terms` | `PrivacyPolicyPage`、`TermsOfServicePage`（`features/public/LegalPages.jsx`） | 隱私權政策與服務條款（公開，頁尾「條款」分組；也是 Google OAuth 同意畫面要求的公開連結）。隱私權政策含 Google API 服務使用者資料政策／Limited Use 聲明與 Search Console 資料的使用、保存、撤銷說明；資料流程改變（新第三方、保存期限、登入方式）時要同步更新內容與 `EFFECTIVE_DATE`。樣式在 `73-public-refine.css` 的 `legal-*` |
 | `/settings` | `SettingsPage` | 帳號設定：個人資料、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀 |
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在右側頭像選單）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/projects` | `ProjectsListPage`（`features/projects/ProjectWorkspace.jsx`） | 所有網站專案（有專案時左側固定顯示目前專案的工作區側邊欄，選中項目是「所有專案」，與其他分頁一致）：一列跨網站數字（網站數、平均分數、低於 60 分、目前問題、進行中）＋網站登記表（圖示與名稱、分數與變化、走勢、各維度分數、目前問題依嚴重度、上次掃描；可依需要注意／最近掃描／名稱排序，超過 4 個網站可搜尋；窄螢幕每列改為區塊）；可展開已封存的專案並恢復（`?archived=true`） |
@@ -248,7 +249,7 @@ npm run typecheck
 | `src/shared/useListQuery.ts` | 列表頁的搜尋／篩選／排序／分頁狀態與網址同步（泛型綁定 `defaults`，未宣告的鍵無法存取）|
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
-| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（所有專案／網域驗證／MCP 接入中心／帳號設定／購點與訂閱／評論／產品介紹／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（網域驗證／MCP 接入中心／帳號設定／購點與訂閱／管理後台／登出）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
 | `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、註冊、忘記密碼、商業合作洽談 |
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |

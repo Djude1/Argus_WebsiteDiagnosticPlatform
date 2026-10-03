@@ -709,3 +709,56 @@
   font-size: clamp(2rem, 3.4vw, 3rem);
   line-height: 1.25;
 }
+
+/* 隱私權政策／服務條款（features/public/LegalPages.jsx）：閱讀型長文，限制行寬 */
+.public-shell .legal-hero .public-hero-content {
+  max-width: 820px;
+}
+.public-shell .legal-hero .public-hero-title {
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.25;
+}
+.public-shell .legal-date {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--pub-text);
+  opacity: 0.8;
+}
+.public-shell .legal-body {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+  color: var(--pub-text);
+  line-height: 1.85;
+}
+.public-shell .legal-body section + section {
+  margin-top: 2.25rem;
+}
+.public-shell .legal-body h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.3rem;
+  color: var(--pub-heading);
+}
+.public-shell .legal-body h3 {
+  margin: 1.25rem 0 0.4rem;
+  font-size: 1.05rem;
+  color: var(--pub-heading);
+}
+.public-shell .legal-body ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+.public-shell .legal-body li + li {
+  margin-top: 0.4rem;
+}
+.public-shell .legal-body p {
+  margin: 0 0 0.75rem;
+}
+.public-shell .legal-body a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.public-shell .legal-body code {
+  overflow-wrap: anywhere;
+}
