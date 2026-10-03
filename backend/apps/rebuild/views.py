@@ -69,6 +69,12 @@ class SiteRebuildViewSet(
         ).select_related("scan_job").first()
         if page is None:
             raise Http404("找不到頁面。")
+        if page.scan_job.project_id and page.scan_job.project.is_demo:
+            # 示範專案是虛構網站，複刻會連不到目標又白花點數
+            return Response(
+                {"detail": "示範專案不提供網頁複刻；請對你自己的網站使用。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         rebuild = SiteRebuild.objects.create(scan_job=page.scan_job, page=page)
         # 先扣再排任務。反過來的話，餘額不足的人已經讓 agent 花掉真錢了才被擋。

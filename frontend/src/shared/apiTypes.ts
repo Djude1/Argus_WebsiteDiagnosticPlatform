@@ -930,6 +930,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/turnstile/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。 */
+        get: operations["auth_turnstile_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/billing/ecpay/callback/": {
         parameters: {
             query?: never;
@@ -2585,6 +2602,12 @@ export interface components {
          */
         DefaultCategoriesEnum: "seo" | "aeo" | "geo" | "ux" | "security";
         /**
+         * @description * `passive` - 被動偵測
+         *     * `active` - 主動測試
+         * @enum {string}
+         */
+        DefaultScanModeEnum: "passive" | "active";
+        /**
          * @description * `site` - 整個網站
          *     * `single` - 單一頁面
          * @enum {string}
@@ -2871,6 +2894,8 @@ export interface components {
         PatchedSiteProjectUpdateRequest: {
             name?: string;
             start_url?: string;
+            description?: string;
+            default_scan_mode?: components["schemas"]["DefaultScanModeEnum"];
             default_scope?: components["schemas"]["DefaultScopeEnum"];
             default_categories?: components["schemas"]["DefaultCategoriesEnum"][];
         };
@@ -3038,6 +3063,7 @@ export interface components {
             readonly completed_at: string | null;
             readonly findings_count: number;
             readonly pages_count: number;
+            readonly is_demo: boolean;
         };
         ScanJobCreate: {
             url: string;
@@ -3139,6 +3165,9 @@ export interface components {
             readonly start_url: string;
             readonly default_scope: components["schemas"]["DefaultScopeEnum"];
             readonly default_categories: unknown;
+            readonly default_scan_mode: string;
+            readonly description: string;
+            readonly is_demo: boolean;
             readonly favicon: string;
             readonly domain_verified: boolean;
             /** Format: date-time */
@@ -3149,10 +3178,14 @@ export interface components {
             readonly updated_at: string;
             readonly summary: components["schemas"]["SiteProjectSummary"];
         };
-        /** @description 新增網站專案：網址決定 origin（重複與恢復封存由 view 處理）。 */
+        /** @description 新增網站專案：網址決定 origin（重複與恢復封存由 view 處理），可一併設定預設掃描設定。 */
         SiteProjectCreateRequest: {
             start_url: string;
             name?: string;
+            description?: string;
+            default_scope?: components["schemas"]["DefaultScopeEnum"];
+            default_categories?: components["schemas"]["DefaultCategoriesEnum"][];
+            default_scan_mode?: components["schemas"]["DefaultScanModeEnum"];
         };
         SiteProjectSummary: {
             scans_count: number;
@@ -5120,6 +5153,24 @@ export interface operations {
         };
     };
     auth_register_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_turnstile_retrieve: {
         parameters: {
             query?: never;
             header?: never;

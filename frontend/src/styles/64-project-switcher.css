@@ -588,3 +588,15 @@
     animation: none;
   }
 }
+
+/* 示範專案標示（切換器清單） */
+.project-switcher-demo {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--ag-primary-soft);
+  color: var(--ag-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+}

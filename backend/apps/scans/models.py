@@ -88,6 +88,12 @@ class SiteProject(models.Model):
     # 專案層級的預設掃描設定：掃描表單以此為初始值（每次掃描仍可調整）
     default_scope = models.CharField(max_length=8, choices=Scope.choices, default=Scope.SITE)
     default_categories = models.JSONField(default=default_categories)
+    # 預設掃描模式：被動偵測或主動測試（主動仍須網域驗證，建立掃描時檢查）
+    default_scan_mode = models.CharField(max_length=16, default="passive")
+    # 使用者自己的專案說明（選填）；頁首在還沒掃描、抓不到網站說明時顯示
+    description = models.CharField(max_length=300, blank=True, default="")
+    # 示範專案：新帳號自動建立，資料來自虛構網站的掃描（apps/scans/demo/），唯讀、不能建立掃描
+    is_demo = models.BooleanField(default=False)
     # 網站圖示（data URL，掃描時由 favicon.py 抓取並縮成小 PNG）；空字串＝還沒抓到
     favicon = models.TextField(blank=True, default="")
     favicon_checked_at = models.DateTimeField(null=True, blank=True)

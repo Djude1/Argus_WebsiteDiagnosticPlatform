@@ -326,7 +326,12 @@ function clearScanDraft(key = SCAN_DRAFT_KEY) {
 // 網站專案的預設值：起始網址、預設範圍與維度（專案設定頁可改）
 function projectFormDefaults(project) {
   return project
-    ? { url: project.start_url, scope: project.default_scope, categories: project.default_categories }
+    ? {
+        url: project.start_url,
+        scope: project.default_scope,
+        categories: project.default_categories,
+        activeMode: project.default_scan_mode === "active",
+      }
     : {};
 }
 
@@ -1683,7 +1688,8 @@ function FindingsWorkspace({ scan }) {
           />
           {/* 複刻是「針對某一頁」的產出，只在選定單一頁面時出現；key 讓切頁時重新掛載，
               避免前一頁還在跑的 polling 把舊結果寫進新頁面的狀態 */}
-          {selectedPage ? (
+          {/* 示範專案是虛構網站，複刻連不到目標，不提供 */}
+          {scan.is_demo ? null : selectedPage ? (
             <PageRebuildPanel key={selectedPage.id} scan={scan} page={selectedPage} />
           ) : (
             pages.length > 0 && (

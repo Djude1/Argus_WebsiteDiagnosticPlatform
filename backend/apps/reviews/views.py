@@ -65,6 +65,8 @@ def _latest_completed_experience(user):
     return (
         ScanJob.objects
         .filter(user=user, status=ScanJob.Status.COMPLETED)
+        # 示範專案的掃描不是使用者自己的使用經驗，不能拿來發表評論
+        .exclude(project__is_demo=True)
         .order_by("-completed_at", "-created_at")
         .values("completed_at", "created_at")
         .first()

@@ -26,6 +26,7 @@ from apps.accounts.emails import send_password_reset_email
 from apps.accounts.models import LoginEvent, PasswordResetToken
 from apps.accounts.turnstile import turnstile_enabled, turnstile_rejection
 from apps.billing.services import grant_monthly_bonus_if_needed, settle_subscription_safe
+from apps.scans.demo.seed import create_demo_project_safely
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class GoogleLoginView(views.APIView):
             )
 
         user_model = get_user_model()
-        user, _ = user_model.objects.get_or_create(
+        user, created = user_model.objects.get_or_create(
             username=email,
             defaults={
                 "email": email,
@@ -134,6 +135,9 @@ class GoogleLoginView(views.APIView):
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
         _record_login_event(request, user, LoginEvent.Method.GOOGLE)
+        if created:
+            # 新帳號先有一個示範專案，進來就看得到完整的分析結果（失敗不影響登入）
+            create_demo_project_safely(user)
         settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_200_OK)
@@ -189,6 +193,8 @@ class EmailRegisterView(views.APIView):
             user.save(update_fields=["last_login"])
             grant_monthly_bonus_if_needed(user)
         _record_login_event(request, user, LoginEvent.Method.REGISTER)
+        # 新帳號先有一個示範專案，進來就看得到完整的分析結果（失敗不影響註冊）
+        create_demo_project_safely(user)
         settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_201_CREATED)

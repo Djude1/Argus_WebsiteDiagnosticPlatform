@@ -145,7 +145,10 @@ function ProjectSwitcher() {
                   >
                     <ProjectMark project={project} />
                     <span className="project-switcher-item-text">
-                      <strong>{project.name}</strong>
+                      <strong>
+                        {project.name}
+                        {project.is_demo && <span className="project-switcher-demo">示範</span>}
+                      </strong>
                       <small>{project.origin}</small>
                     </span>
                     <span

@@ -63,7 +63,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 網站專案：user FK、name、origin（協定＋網域＋連接埠）、start_url（同 origin）、
   default_scope（site/single）、default_categories（預設掃描設定）、archived_at、
   favicon（網站圖示 data URL：新增專案時立刻抓、掃描時更新，縮成 64px PNG；migration 0020；
-  舊專案補抓 manage.py refresh_project_favicons）
+  舊專案補抓 manage.py refresh_project_favicons）、
+  default_scan_mode（passive/active）、description（選填說明）、is_demo（示範專案，唯讀；migration 0021，
+  見 apps/scans/demo/README.md）
 UniqueConstraint(user, origin)；移除＝封存，不刪掃描
 ScanJob.project FK（SET_NULL）：ScanJob.save() 新建時未指定就依 origin 歸入
   （SiteProject.objects.ensure_for，已封存的自動恢復）；migration 0019 回填既有掃描

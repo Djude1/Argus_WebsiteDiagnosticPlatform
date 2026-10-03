@@ -3032,6 +3032,23 @@
                 }
             }
         },
+        "/api/auth/turnstile/": {
+            "get": {
+                "operationId": "auth_turnstile_retrieve",
+                "description": "公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/billing/ecpay/callback/": {
             "post": {
                 "operationId": "billing_ecpay_callback_create",
@@ -6814,6 +6831,14 @@
                 "type": "string",
                 "description": "* `seo` - seo\n* `aeo` - aeo\n* `geo` - geo\n* `ux` - ux\n* `security` - security"
             },
+            "DefaultScanModeEnum": {
+                "enum": [
+                    "passive",
+                    "active"
+                ],
+                "type": "string",
+                "description": "* `passive` - 被動偵測\n* `active` - 主動測試"
+            },
             "DefaultScopeEnum": {
                 "enum": [
                     "site",
@@ -7608,6 +7633,13 @@
                         "minLength": 1,
                         "maxLength": 2048
                     },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "default_scan_mode": {
+                        "$ref": "#/components/schemas/DefaultScanModeEnum"
+                    },
                     "default_scope": {
                         "$ref": "#/components/schemas/DefaultScopeEnum"
                     },
@@ -8200,6 +8232,10 @@
                     "pages_count": {
                         "type": "integer",
                         "readOnly": true
+                    },
+                    "is_demo": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -8211,6 +8247,7 @@
                     "error_message",
                     "findings_count",
                     "id",
+                    "is_demo",
                     "max_depth",
                     "max_pages",
                     "normalized_url",
@@ -8480,6 +8517,18 @@
                     "default_categories": {
                         "readOnly": true
                     },
+                    "default_scan_mode": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "is_demo": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "favicon": {
                         "type": "string",
                         "readOnly": true
@@ -8517,11 +8566,14 @@
                     "archived_at",
                     "created_at",
                     "default_categories",
+                    "default_scan_mode",
                     "default_scope",
+                    "description",
                     "domain_verified",
                     "favicon",
                     "hostname",
                     "id",
+                    "is_demo",
                     "name",
                     "origin",
                     "start_url",
@@ -8531,7 +8583,7 @@
             },
             "SiteProjectCreateRequest": {
                 "type": "object",
-                "description": "新增網站專案：網址決定 origin（重複與恢復封存由 view 處理）。",
+                "description": "新增網站專案：網址決定 origin（重複與恢復封存由 view 處理），可一併設定預設掃描設定。",
                 "properties": {
                     "start_url": {
                         "type": "string",
@@ -8541,6 +8593,22 @@
                     "name": {
                         "type": "string",
                         "maxLength": 80
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "default_scope": {
+                        "$ref": "#/components/schemas/DefaultScopeEnum"
+                    },
+                    "default_categories": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DefaultCategoriesEnum"
+                        }
+                    },
+                    "default_scan_mode": {
+                        "$ref": "#/components/schemas/DefaultScanModeEnum"
                     }
                 },
                 "required": [
