@@ -16,6 +16,7 @@ import {
 } from "../../components/projects/DashboardWidgets.jsx";
 import { ScoreRing } from "../../components/projects/OverviewWidgets.jsx";
 import ProjectHeader from "../../components/projects/ProjectHeader.jsx";
+import ScanDefaultsFields from "../../components/projects/ScanDefaultsFields.jsx";
 import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
@@ -163,13 +164,20 @@ function ProjectOverviewPage() {
     <div className="project-page">
       <ProjectHeader
         project={{ ...project, ...data.project }}
-        description={data.site_description}
+        description={data.site_description || project.description}
         aside={(
           <>
-            {latest && <Link className="secondary-button" to={`/scans/${latest.id}`}>查看最新報告</Link>}
-            <Link className="primary-button project-hero-primary" to={projectPath(project.id, "scans")}>
-              <PlayIcon /> 開始新的掃描
-            </Link>
+            {latest && (
+              <Link className={project.is_demo ? "primary-button" : "secondary-button"} to={`/scans/${latest.id}`}>
+                查看最新報告
+              </Link>
+            )}
+            {/* 示範專案的「新增你的網站」在頁面上方的示範說明列 */}
+            {project.is_demo ? null : (
+              <Link className="primary-button project-hero-primary" to={projectPath(project.id, "scans")}>
+                <PlayIcon /> 開始新的掃描
+              </Link>
+            )}
           </>
         )}
       />
@@ -339,7 +347,7 @@ function ProjectOverviewPage() {
         </>
       )}
 
-      {!data.domain_verified && (
+      {!data.domain_verified && !project.is_demo && (
         <p className="project-note">
           主動式資安測試需先驗證 {project.hostname} 的網域所有權。
           <Link className="project-text-link" to="/domains">前往網域驗證 →</Link>
@@ -367,7 +375,18 @@ function ProjectScansPage() {
     <div className="project-page">
       <ProjectHeader project={project} section="掃描" description="建立新的掃描，或查看這個網站的歷次掃描與進度。" />
       <div className="project-scans-page">
-        <ScanJobForm project={project} onCreated={handleCreated} />
+        {project.is_demo ? (
+          <section className="panel project-demo-scan-note">
+            <h2 className="project-section-title">示範專案不能建立掃描</h2>
+            <p className="hint-text">
+              右邊是示範網站的三次掃描，點開任一筆可以看完整報告、網站結構圖與修正產出。
+              想檢查自己的網站，先新增網站專案，就能在那裡建立第一次掃描。
+            </p>
+            <Link className="primary-button" to="/projects/new">新增你的網站</Link>
+          </section>
+        ) : (
+          <ScanJobForm project={project} onCreated={handleCreated} />
+        )}
         {scans === null ? (
           <section className="panel"><p className="hint-text">載入掃描中…</p></section>
         ) : (
@@ -1268,25 +1287,16 @@ function ProjectHistoryPage() {
 // 專案設定
 // ============================================================
 
-const SCOPE_OPTIONS = [
-  { value: "site", label: "整個網站", hint: "從起始網址爬同網站多頁" },
-  { value: "single", label: "單一頁面", hint: "只檢查起始網址這一頁" },
-];
-
 /** 專案層級的預設掃描設定：「掃描」分頁的表單以此為初始值，每次掃描仍可調整。 */
-function ScanDefaultsForm({ project, setProject }) {
-  const [scope, setScope] = useState(project.default_scope);
-  const [categories, setCategories] = useState(project.default_categories);
+function ScanDefaultsForm({ project, setProject, domainVerified }) {
+  const [value, setValue] = useState({
+    default_scope: project.default_scope,
+    default_categories: project.default_categories,
+    default_scan_mode: project.default_scan_mode || "passive",
+  });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  function toggle(category) {
-    const next = categories.includes(category)
-      ? categories.filter((item) => item !== category)
-      : [...categories, category];
-    if (next.length) setCategories(next); // 至少保留一個維度
-  }
 
   async function save(event) {
     event.preventDefault();
@@ -1294,10 +1304,7 @@ function ScanDefaultsForm({ project, setProject }) {
     setMessage("");
     setError("");
     try {
-      const response = await api.patch(`/projects/${project.id}/`, {
-        default_scope: scope,
-        default_categories: categories,
-      });
+      const response = await api.patch(`/projects/${project.id}/`, value);
       setProject(response.data);
       setMessage("已儲存。下次在「掃描」分頁建立掃描時會以此為預設。");
     } catch (err) {
@@ -1310,41 +1317,13 @@ function ScanDefaultsForm({ project, setProject }) {
   return (
     <form className="panel project-settings-form" onSubmit={save}>
       <h2 className="project-section-title">預設掃描設定</h2>
-      <fieldset className="project-fieldset">
-        <legend>掃描範圍</legend>
-        <div className="project-choice-row">
-          {SCOPE_OPTIONS.map((option) => (
-            <label key={option.value} className={`project-choice ${scope === option.value ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="default-scope"
-                value={option.value}
-                checked={scope === option.value}
-                onChange={() => setScope(option.value)}
-              />
-              <span>
-                <strong>{option.label}</strong>
-                <small>{option.hint}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset className="project-fieldset">
-        <legend>掃描維度（至少一項）</legend>
-        <div className="project-choice-row">
-          {CATEGORY_ORDER.map((category) => (
-            <label key={category} className={`project-choice is-compact ${categories.includes(category) ? "active" : ""}`}>
-              <input
-                type="checkbox"
-                checked={categories.includes(category)}
-                onChange={() => toggle(category)}
-              />
-              <span><strong>{CATEGORY_LABELS[category]}</strong></span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ScanDefaultsFields
+        value={value}
+        onChange={setValue}
+        domainVerified={domainVerified}
+        hostname={project.hostname}
+        idPrefix="settings"
+      />
       {error && <p className="error-text" role="alert">{error}</p>}
       {message && <p className="project-success" role="status">{message}</p>}
       <button type="submit" className="secondary-button" disabled={saving}>{saving ? "儲存中…" : "儲存預設"}</button>
@@ -1359,6 +1338,7 @@ function ProjectSettingsPage() {
   const { confirmDialog, dialogHost } = useConfirmDialogs();
   const [name, setName] = useState(project.name);
   const [startUrl, setStartUrl] = useState(project.start_url);
+  const [description, setDescription] = useState(project.description || "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -1381,7 +1361,7 @@ function ProjectSettingsPage() {
     setMessage("");
     setError("");
     try {
-      const response = await api.patch(`/projects/${project.id}/`, { name, start_url: startUrl });
+      const response = await api.patch(`/projects/${project.id}/`, { name, start_url: startUrl, description });
       setProject(response.data);
       setStartUrl(response.data.start_url);
       setMessage("已儲存。");
@@ -1414,6 +1394,16 @@ function ProjectSettingsPage() {
         section="專案設定"
         description={`名稱、起始網址、預設掃描設定與封存。專案建立於 ${formatDate(project.created_at)}。`}
       />
+      {project.is_demo ? (
+        <section className="panel">
+          <h2 className="project-section-title">示範專案無法修改設定</h2>
+          <p className="hint-text">
+            示範專案的資料是固定的；要調整名稱、網址與預設掃描設定，請
+            <Link className="project-text-link" to="/projects/new">新增你自己的網站專案</Link>。不需要時可以在下方封存。
+          </p>
+        </section>
+      ) : (
+      <>
       <form className="panel project-settings-form" onSubmit={save}>
         <h2 className="project-section-title">基本資料</h2>
         <label className="project-field" htmlFor="project-setting-name">
@@ -1425,12 +1415,24 @@ function ProjectSettingsPage() {
           <input id="project-setting-url" className="input" value={startUrl} onChange={(event) => setStartUrl(event.target.value)} required />
           <small>新掃描的預設網址，必須在 {project.origin} 內。網站換了網域請新增專案。</small>
         </label>
+        <label className="project-field" htmlFor="project-setting-description">
+          <span>專案說明（選填）</span>
+          <textarea
+            id="project-setting-description"
+            className="input"
+            rows={3}
+            maxLength={300}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+          <small>網站還沒掃描、抓不到網站自己的說明時，顯示在頁首。</small>
+        </label>
         {error && <p className="error-text" role="alert">{error}</p>}
         {message && <p className="project-success" role="status">{message}</p>}
         <button type="submit" className="primary-button" disabled={saving}>{saving ? "儲存中…" : "儲存變更"}</button>
       </form>
 
-      <ScanDefaultsForm project={project} setProject={setProject} />
+      <ScanDefaultsForm project={project} setProject={setProject} domainVerified={domainVerified} />
 
       <section className="panel">
         <h2 className="project-section-title">網域所有權</h2>
@@ -1445,6 +1447,8 @@ function ProjectSettingsPage() {
           </p>
         )}
       </section>
+      </>
+      )}
 
       {!project.archived_at && (
         <section className="panel project-danger-zone">

@@ -334,6 +334,8 @@ ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"
 ARGUS_AUTO_QUEUE_SCANS = env_bool("ARGUS_AUTO_QUEUE_SCANS", default=not DEBUG)
+# 新帳號自動建立示範專案（apps/scans/demo/：虛構網站的三次真實掃描結果）
+ARGUS_DEMO_PROJECT_ENABLED = env_bool("ARGUS_DEMO_PROJECT_ENABLED", default=True)
 # 網域所有權驗證通過後的有效天數（主動測試閘門以此判斷是否過期）
 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS = int(
     os.getenv("ARGUS_DOMAIN_VERIFICATION_TTL_DAYS", "90")

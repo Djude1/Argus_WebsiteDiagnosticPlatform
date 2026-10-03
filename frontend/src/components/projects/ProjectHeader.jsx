@@ -40,6 +40,7 @@ export default function ProjectHeader({ project, section = "", description = "",
           <div className="project-hero-text">
             <h1 className="project-hero-name">
               {project.name}
+              {project.is_demo && <span className="project-demo-badge">示範</span>}
               {project.domain_verified && (
                 <span className="project-hero-verified" title="已通過網域所有權驗證，可進行主動式資安測試">
                   <CheckCircleIcon />

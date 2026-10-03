@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { api } from "../../api";
+import { api, fetchVerifiedDomains } from "../../api";
 import { CATEGORY_ORDER, Sparkline } from "../../components/projects/DashboardWidgets.jsx";
+import ScanDefaultsFields, { DEFAULT_SCAN_SETTINGS } from "../../components/projects/ScanDefaultsFields.jsx";
 import SiteFavicon from "../../components/projects/SiteFavicon.jsx";
 import { CATEGORY_LABELS, apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
-import { formatDate, formatDateTime, formatRelative } from "../../shared/formatters";
+import { formatDate, formatDateTime, formatNumber, formatRelative } from "../../shared/formatters";
 import {
   BrowserIcon,
   ChatIcon,
@@ -181,6 +182,47 @@ function useProject(projectId) {
   return { project, error, setProject };
 }
 
+/**
+ * 示範專案的說明列：資料來自虛構網站的三次真實掃描（後端 apps/scans/demo/），唯讀。
+ * 每個分頁都顯示，讓使用者知道這不是自己的網站，並直接引導新增自己的網站或封存示範專案。
+ */
+function DemoProjectBanner({ project }) {
+  const navigate = useNavigate();
+  const removeProject = useArgusStore((s) => s.removeProject);
+  const [archiving, setArchiving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function archive() {
+    setArchiving(true);
+    setError("");
+    try {
+      await api.delete(`/projects/${project.id}/`);
+      removeProject(project.id);
+      navigate("/projects");
+    } catch (err) {
+      setError(apiErrorMessage(err, "封存失敗，請稍後再試。"));
+      setArchiving(false);
+    }
+  }
+
+  return (
+    <div className="project-demo-banner" role="note">
+      <span className="project-demo-badge">示範專案</span>
+      <p>
+        這是 Argus 的示範：「{project.name}」是虛構網站，資料來自它的三次真實掃描。
+        總覽、問題分析、頁面、AEO 問答、報告與修正產出都能點開看看；示範專案不能建立新掃描。
+      </p>
+      <div className="project-demo-actions">
+        <Link className="primary-button" to="/projects/new">新增你的網站</Link>
+        <button type="button" className="secondary-button" onClick={archive} disabled={archiving}>
+          {archiving ? "封存中…" : "看完了，封存示範"}
+        </button>
+      </div>
+      {error && <p className="error-text" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 function ProjectFrame({ project, activeSection, setProject, children }) {
   const setCurrentProject = useArgusStore((s) => s.setCurrentProject);
   const [restoring, setRestoring] = useState(false);
@@ -208,6 +250,7 @@ function ProjectFrame({ project, activeSection, setProject, children }) {
             </button>
           </div>
         )}
+        {project.is_demo && !project.archived_at && <DemoProjectBanner project={project} />}
         {children}
       </div>
     </div>
@@ -371,6 +414,7 @@ function ProjectRow({ project, onRestore, restoring }) {
           ) : (
             <Link to={projectPath(project.id)} className="project-row-link">{project.name}</Link>
           )}
+          {project.is_demo && <span className="project-demo-badge">示範</span>}
           <small>{project.hostname}</small>
         </span>
         </span>
@@ -585,16 +629,76 @@ function ProjectsListPage() {
 }
 
 /** /projects/new：新增網站專案。同一網站已有專案時引導過去，已封存的會自動恢復。 */
+/** 把使用者輸入的網址正規化成「網站」（協定＋網域＋連接埠）；沒打協定時補 https://。 */
+export function parseSiteUrl(raw) {
+  const value = (raw || "").trim();
+  if (!value) return null;
+  for (const candidate of [value, `https://${value}`]) {
+    try {
+      const url = new URL(candidate);
+      if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname.includes(".")) {
+        return { href: url.href, origin: url.origin, hostname: url.hostname.toLowerCase() };
+      }
+    } catch {
+      // 試下一種寫法
+    }
+  }
+  return null;
+}
+
+// 整站掃描的頁數上限（與掃描表單的 MAX_SITE_SCAN_PAGES 一致），用來估算每次掃描的點數上限
+const MAX_SITE_PAGES = 50;
+
+const AFTER_CREATE_OPTIONS = [
+  { value: "scan", label: "前往建立第一次掃描", hint: "以下方的預設設定開好掃描表單，確認後再送出（送出前不扣點）" },
+  { value: "overview", label: "先到專案總覽", hint: "之後再從「掃描」分頁建立" },
+];
+
+/**
+ * 新增網站專案：網址與名稱、專案說明、預設掃描設定（範圍、維度、模式）、建立後要做什麼。
+ * 右側即時預覽：網站、同網站是否已有專案、網域驗證狀態、以預設設定掃一次大約多少點數。
+ */
 function ProjectCreatePage() {
   const navigate = useNavigate();
   const upsertProject = useArgusStore((s) => s.upsertProject);
   const setCurrentProject = useArgusStore((s) => s.setCurrentProject);
   const projects = useArgusStore((s) => s.projects);
+  const wallet = useArgusStore((s) => s.wallet);
+  const fetchWallet = useArgusStore((s) => s.fetchWallet);
   const [startUrl, setStartUrl] = useState("");
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [defaults, setDefaults] = useState(DEFAULT_SCAN_SETTINGS);
+  const [afterCreate, setAfterCreate] = useState("scan");
+  const [verifiedDomains, setVerifiedDomains] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [existing, setExisting] = useState(null);
+
+  useEffect(() => {
+    if (!wallet) fetchWallet?.();
+    let cancelled = false;
+    fetchVerifiedDomains()
+      .then((data) => !cancelled && setVerifiedDomains(data.results || []))
+      .catch(() => !cancelled && setVerifiedDomains([]));
+    return () => {
+      cancelled = true;
+    };
+    // 只在進頁面時抓一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const site = parseSiteUrl(startUrl);
+  const duplicate = site ? (projects || []).find((p) => p.origin === site.origin) : null;
+  const domainVerified = site && verifiedDomains
+    ? verifiedDomains.some(
+        (item) => item.is_effectively_verified && (site.hostname === item.domain || site.hostname.endsWith(`.${item.domain}`)),
+      )
+    : null;
+  const coinPerCategory = wallet?.coin_per_category ?? 2;
+  const pages = defaults.default_scope === "single" ? 1 : MAX_SITE_PAGES;
+  const estimate = pages * defaults.default_categories.length * coinPerCategory;
+  const urlInvalid = Boolean(startUrl.trim()) && !site;
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -602,10 +706,15 @@ function ProjectCreatePage() {
     setError("");
     setExisting(null);
     try {
-      const response = await api.post("/projects/", { start_url: startUrl, name });
+      const response = await api.post("/projects/", {
+        start_url: startUrl,
+        name,
+        description,
+        ...defaults,
+      });
       upsertProject(response.data);
       setCurrentProject(response.data.id);
-      navigate(projectPath(response.data.id, "scans"));
+      navigate(projectPath(response.data.id, afterCreate === "scan" ? "scans" : ""));
     } catch (err) {
       if (err?.response?.status === 409) {
         setExisting(err.response.data.project);
@@ -623,48 +732,165 @@ function ProjectCreatePage() {
       {projects && projects.length > 0 && (
         <Link className="back-to-list-button" to="/projects">← 回到所有專案</Link>
       )}
-      <form className="panel project-create-form" onSubmit={handleSubmit}>
+      <header className="project-create-head">
         <p className="eyebrow">新增網站專案</p>
         <h1 className="project-page-title">你要管理哪個網站？</h1>
         <p className="project-page-sub">
-          一個專案對應一個網站（同一個協定、網域與連接埠）。新增後即可建立第一次掃描，
-          之後的分數變化、問題與報告都會保存在專案裡。
+          一個專案對應一個網站（同一個協定、網域與連接埠）。歷次掃描的分數變化、問題與報告都會保存在專案裡；
+          下面的掃描設定是之後建立掃描時的預設值，每次仍可調整，建立專案本身不扣點。
         </p>
-        <label className="project-field" htmlFor="project-url">
-          <span>網站網址</span>
-          <input
-            id="project-url"
-            className="input"
-            type="text"
-            inputMode="url"
-            placeholder="https://example.com/"
-            value={startUrl}
-            onChange={(event) => setStartUrl(event.target.value)}
-            required
-          />
-          <small>也是之後掃描的預設起始網址，可在專案設定修改。</small>
-        </label>
-        <label className="project-field" htmlFor="project-name">
-          <span>專案名稱（選填）</span>
-          <input
-            id="project-name"
-            className="input"
-            type="text"
-            maxLength={80}
-            placeholder="預設為網域名稱"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        {error && <p className="error-text" role="alert">{error}</p>}
-        {existing && (
-          <Link className="secondary-button" to={projectPath(existing.id)}>
-            前往「{existing.name}」
-          </Link>
-        )}
-        <button type="submit" className="primary-button" disabled={submitting || !startUrl.trim()}>
-          {submitting ? "建立中，正在取得網站圖示…" : "建立專案並開始掃描"}
-        </button>
+      </header>
+
+      <form className="project-create-layout" onSubmit={handleSubmit}>
+        <div className="project-create-main">
+          <section className="panel project-create-section">
+            <h2 className="project-create-step"><span>1</span>網站資料</h2>
+            <label className="project-field" htmlFor="project-url">
+              <span>網站網址 <em className="project-required">必填</em></span>
+              <input
+                id="project-url"
+                className="input"
+                type="text"
+                inputMode="url"
+                placeholder="https://example.com/"
+                value={startUrl}
+                onChange={(event) => setStartUrl(event.target.value)}
+                aria-invalid={urlInvalid || undefined}
+                aria-describedby="project-url-hint"
+                required
+              />
+              <small id="project-url-hint">
+                {urlInvalid ? "請輸入完整網址，例如 https://example.com/。" : "也是之後掃描的起始網址；可以是首頁或網站內的任何一頁。"}
+              </small>
+            </label>
+            <label className="project-field" htmlFor="project-name">
+              <span>專案名稱</span>
+              <input
+                id="project-name"
+                className="input"
+                type="text"
+                maxLength={80}
+                placeholder={site ? site.hostname : "預設為網域名稱"}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <label className="project-field" htmlFor="project-description">
+              <span>專案說明</span>
+              <textarea
+                id="project-description"
+                className="input"
+                rows={3}
+                maxLength={300}
+                placeholder="例如：公司官網、2025 改版後的電商網站、客戶 A 的活動頁"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+              <small>選填，最多 300 字；網站還沒掃描前會顯示在專案頁首。</small>
+            </label>
+          </section>
+
+          <section className="panel project-create-section">
+            <h2 className="project-create-step"><span>2</span>預設掃描設定</h2>
+            <ScanDefaultsFields
+              value={defaults}
+              onChange={setDefaults}
+              domainVerified={domainVerified}
+              hostname={site?.hostname || ""}
+              idPrefix="create"
+            />
+          </section>
+
+          <section className="panel project-create-section">
+            <h2 className="project-create-step"><span>3</span>建立之後</h2>
+            <div className="project-choice-row">
+              {AFTER_CREATE_OPTIONS.map((option) => (
+                <label key={option.value} className={`project-choice ${afterCreate === option.value ? "active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="after-create"
+                    value={option.value}
+                    checked={afterCreate === option.value}
+                    onChange={() => setAfterCreate(option.value)}
+                  />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>{option.hint}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="project-create-aside">
+          <section className="panel project-create-preview" aria-live="polite">
+            <p className="project-create-preview-label">專案預覽</p>
+            <div className="project-create-site">
+              <SiteFavicon project={{ name: name || site?.hostname || "?", favicon: "" }} size="lg" />
+              <div>
+                <strong>{name.trim() || site?.hostname || "尚未輸入網址"}</strong>
+                <small>{site ? site.origin : "輸入網址後顯示網站"}</small>
+              </div>
+            </div>
+            <dl className="project-create-facts">
+              <div>
+                <dt>網域驗證</dt>
+                <dd>
+                  {!site
+                    ? "—"
+                    : domainVerified === null
+                      ? "檢查中…"
+                      : domainVerified
+                        ? <span className="project-create-ok">已驗證，可做主動測試</span>
+                        : <span>未驗證（只能被動偵測）</span>}
+                </dd>
+              </div>
+              <div>
+                <dt>預設範圍</dt>
+                <dd>{defaults.default_scope === "single" ? "單一頁面" : `整個網站（最多 ${MAX_SITE_PAGES} 頁）`}</dd>
+              </div>
+              <div>
+                <dt>預設維度</dt>
+                <dd>{defaults.default_categories.map((c) => CATEGORY_LABELS[c] || c).join("、")}</dd>
+              </div>
+              <div>
+                <dt>每次掃描約</dt>
+                <dd>
+                  <strong>最多 {formatNumber(estimate)} coin</strong>
+                  <small>依實際頁數結算，多扣的會退回</small>
+                </dd>
+              </div>
+              <div>
+                <dt>目前餘額</dt>
+                <dd>{wallet ? `${formatNumber(wallet.balance ?? 0)} coin` : "—"}</dd>
+              </div>
+            </dl>
+            {wallet && (wallet.balance ?? 0) < estimate && (
+              <p className="project-field-note" role="note">
+                目前餘額不足以用這組預設掃描整個網站（依實際頁數結算，頁數少時可能夠用）。
+                可改成單一頁面或減少維度，或<Link className="project-text-link" to="/billing">購點</Link>。
+                建立專案本身不扣點。
+              </p>
+            )}
+            {duplicate && (
+              <p className="project-field-note" role="note">
+                這個網站已經是你的專案「{duplicate.name}」。
+                <Link className="project-text-link" to={projectPath(duplicate.id)}>前往該專案 →</Link>
+              </p>
+            )}
+            {error && <p className="error-text" role="alert">{error}</p>}
+            {existing && (
+              <Link className="secondary-button" to={projectPath(existing.id)}>前往「{existing.name}」</Link>
+            )}
+            <button type="submit" className="primary-button project-create-submit" disabled={submitting || !site || Boolean(duplicate)}>
+              {submitting ? "建立中，正在取得網站圖示…" : afterCreate === "scan" ? "建立專案並前往掃描" : "建立專案"}
+            </button>
+            <p className="project-create-note">
+              只掃描你擁有或已取得授權的網站；建立掃描時會再確認授權範圍。
+            </p>
+          </section>
+        </aside>
       </form>
     </div>
   );

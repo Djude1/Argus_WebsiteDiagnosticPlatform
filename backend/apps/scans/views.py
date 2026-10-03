@@ -379,6 +379,11 @@ class ScanJobViewSet(viewsets.ModelViewSet):
         計費在派工之前（同 rebuild 規則），餘額不足回 400 且不派工。
         """
         scan_job = self.get_object()
+        if scan_job.project_id and scan_job.project.is_demo:
+            return Response(
+                {"detail": "示範專案的修正產出已預先產生，無法重新產生。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not settings.ARGUS_FIXGEN_ENABLED:
             return Response(
                 {"detail": "修正產出功能目前未開放。"},
@@ -635,6 +640,12 @@ class SiteProjectViewSet(viewsets.ModelViewSet):
             origin=data["origin"],
             start_url=data["start_url"],
             name=data["name"] or default_project_name(data["origin"]),
+            description=data["description"],
+            **{
+                field: data[field]
+                for field in ("default_scope", "default_categories", "default_scan_mode")
+                if field in data
+            },
         )
         # 加入網站當下就抓網站圖示（不必等第一次掃描）；有時間上限，抓不到不影響建立
         refresh_project_favicon_from_url(project)

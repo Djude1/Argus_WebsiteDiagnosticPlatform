@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { issuesToCsv, ProjectIssuesPage, ProjectPagesPage } from "./ProjectPages";
+import { issuesToCsv, ProjectIssuesPage, ProjectPagesPage, ProjectScansPage } from "./ProjectPages";
 
 vi.mock("../../api", () => ({ api: { get: vi.fn() }, setAccessToken: vi.fn() }));
 const { api } = vi.mocked(await import("../../api"));
@@ -150,5 +150,23 @@ describe("ProjectIssuesPage", () => {
     await user.click(within(document.querySelector(".issue-summary-sev") as HTMLElement).getByRole("button", { name: /低/ }));
     expect(screen.getByText("缺少 canonical")).toBeInTheDocument();
     expect(screen.queryByText("缺少 CSP")).not.toBeInTheDocument();
+  });
+});
+
+describe("ProjectScansPage 示範專案", () => {
+  it("示範專案不顯示建立掃描表單，改引導新增自己的網站", async () => {
+    render(
+      <MemoryRouter initialEntries={["/projects/7/scans"]}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<Outlet context={{ project: { ...PROJECT, is_demo: true, summary: {} } }} />}>
+            <Route path="scans" element={<ProjectScansPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("heading", { name: "示範專案不能建立掃描" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新增你的網站" })).toHaveAttribute("href", "/projects/new");
+    expect(screen.queryByRole("button", { name: "建立掃描" })).not.toBeInTheDocument();
+    expect(screen.getByText("示範")).toBeInTheDocument();
   });
 });

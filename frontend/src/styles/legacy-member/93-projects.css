@@ -572,9 +572,8 @@
   @apply mt-0;
 }
 .project-create-page {
-  @apply mx-auto grid w-full max-w-xl gap-3;
+  @apply mx-auto grid w-full max-w-6xl gap-4;
 }
-.project-create-form,
 .project-settings-form {
   @apply grid gap-4;
 }
@@ -1450,4 +1449,159 @@
 }
 :root[data-theme="dark"] .project-scan-card-select {
   background: transparent;
+}
+
+
+/* ========================================
+   2026-10-03 新增專案頁（三段表單＋右側預覽）與示範專案標示
+   ======================================== */
+.project-create-head {
+  @apply grid gap-1;
+}
+.project-create-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .project-create-layout {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+  }
+  .project-create-aside {
+    position: sticky;
+    top: calc(76px + 1rem);
+  }
+}
+.project-create-main {
+  @apply grid min-w-0 gap-4;
+}
+.project-create-section {
+  @apply grid gap-4;
+}
+.project-create-step {
+  @apply flex items-center gap-3 text-lg font-bold text-slate-900;
+}
+.project-create-step span {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white;
+}
+.project-required {
+  @apply ml-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold not-italic text-rose-600;
+}
+.project-field textarea {
+  resize: vertical;
+}
+.project-field input[aria-invalid] {
+  @apply border-rose-400;
+}
+.project-create-preview {
+  @apply grid gap-4;
+}
+.project-create-preview-label {
+  @apply text-xs font-semibold text-slate-500;
+}
+.project-create-site {
+  @apply flex min-w-0 items-center gap-3;
+}
+.project-create-site > div {
+  @apply grid min-w-0;
+}
+.project-create-site strong {
+  @apply truncate text-base font-bold text-slate-900;
+}
+.project-create-site small {
+  @apply truncate text-xs text-slate-500;
+}
+.project-create-facts {
+  @apply m-0 grid gap-2 border-y border-slate-100 py-3;
+}
+.project-create-facts div {
+  @apply grid gap-0.5;
+  grid-template-columns: 6rem minmax(0, 1fr);
+}
+.project-create-facts dt {
+  @apply text-xs text-slate-500;
+}
+.project-create-facts dd {
+  @apply m-0 grid text-sm text-slate-800;
+}
+.project-create-facts dd small {
+  @apply text-[11px] text-slate-500;
+}
+.project-create-ok {
+  @apply font-semibold text-emerald-700;
+}
+.project-create-submit {
+  @apply w-full justify-center py-3;
+}
+.project-create-note {
+  @apply text-[11px] leading-relaxed text-slate-500;
+}
+.project-field-note {
+  @apply mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900;
+}
+
+/* 掃描維度選項：圖示＋名稱＋說明 */
+.project-category-choices {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+.project-choice.is-category {
+  @apply items-center;
+}
+.project-choice.is-category input {
+  @apply mt-0;
+}
+.project-choice-icon {
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+}
+.project-choice-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+.project-choice-icon.cat-seo { @apply bg-indigo-50 text-indigo-600; }
+.project-choice-icon.cat-aeo { @apply bg-violet-50 text-violet-600; }
+.project-choice-icon.cat-geo { @apply bg-cyan-50 text-cyan-700; }
+.project-choice-icon.cat-ux { @apply bg-emerald-50 text-emerald-700; }
+.project-choice-icon.cat-security { @apply bg-rose-50 text-rose-600; }
+
+/* 示範專案 */
+.project-demo-badge {
+  @apply inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-bold text-violet-700;
+  white-space: nowrap;
+}
+.project-hero-name .project-demo-badge {
+  @apply text-xs;
+}
+.project-demo-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  @apply rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900;
+}
+.project-demo-banner p {
+  @apply m-0 leading-relaxed;
+}
+.project-demo-actions {
+  @apply flex flex-wrap gap-2;
+}
+.project-demo-actions .primary-button,
+.project-demo-actions .secondary-button {
+  @apply whitespace-nowrap py-1.5 text-sm;
+}
+.project-demo-banner .error-text {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .project-demo-banner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.project-demo-scan-note {
+  @apply grid content-start justify-items-start gap-3;
+}
+.project-demo-banner > .project-demo-badge {
+  justify-self: start;
 }
