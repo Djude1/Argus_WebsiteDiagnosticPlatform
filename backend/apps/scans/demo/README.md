@@ -5,7 +5,7 @@
 
 | 檔案 | 內容 |
 |---|---|
-| `dataset.json.gz` | 三次掃描的 `ScanJob`、`Page`、`Finding` 欄位，以及最新一次的 `FixOutput`；約 100 KB |
+| `dataset.json.gz` | 三次掃描的 `ScanJob`（含 `aeo_report`、`seo_report`）、`Page`、`Finding` 欄位，以及最新一次的 `FixOutput`；約 100 KB |
 | `screenshots/` | 每頁截圖，128 色 PNG，約 1.5 MB。`Page.screenshot_path` 指向這裡（相對 `BASE_DIR`），所有示範專案共用，不複製到 media |
 | `seed.py` | `create_demo_project(user)`：複製成使用者自己的資料，並把三次掃描的時間平移到 29 天前、15 天前、1 天前 |
 
@@ -21,6 +21,9 @@
   - 行動版溢出、觸控目標過小、JS 錯誤
   - `.env` 外洩、舊版 jQuery、Apache／PHP 版本與 CVE、缺 CSP／HSTS、Cookie 旗標、個資
   - 404 頁、慢頁面
+  - 連結（SEO 分析頁）：站內 404（v1 秋季活動、v1–v2 去年菜單）、站內 301（/shop）、站外 404（v1–v2 引用已刪除的維基頁面）、
+    沒有文字的圖片連結（v1–v2 LINE 圖示缺 alt）、「點此」（v1）、子網域商店、Instagram（對方限制檢查）、
+    裸網域重複內容（v1；v2 起 301 到 www）
 - 修正產出：以 `fixgen.engine.build_artifacts` 依爬取事實產生。LLM 回覆是手寫的，但仍經過事實驗證。網站沒有的電話與地址會變成【請填寫】佔位符。
 
 網站內容、電話、Email、金鑰全部是虛構的。
@@ -30,10 +33,12 @@
 需要 DEBUG 本機環境，並且能跑 Playwright。
 
 ```bash
-# 1. 讓虛構網域指到本機，啟動 v1（需要 80 port）
-echo "127.0.0.1 www.morninglight-coffee.example" | sudo tee -a /etc/hosts
+# 1. 讓虛構網域指到本機（www、裸網域、shop 子網域），啟動 v1（需要 80 port）
+printf "127.0.0.1 www.morninglight-coffee.example\n127.0.0.1 morninglight-coffee.example\n127.0.0.1 shop.morninglight-coffee.example\n" | sudo tee -a /etc/hosts
 python scripts/demo_site/server.py --version 1 --port 80
 
+#    有出網代理的環境，runserver 要設 NO_PROXY=morninglight-coffee.example,.morninglight-coffee.example，
+#    否則 SEO 連結檢查會把虛構網域送到代理（站外連結仍經代理檢查）
 # 2. 以 DEBUG＋ARGUS_ALLOW_PRIVATE_TARGETS 啟動 runserver，用 staff 帳號
 #    （主動模式的網域驗證旁路）新增專案 http://www.morninglight-coffee.example/
 #    並建立「整個網站＋主動測試＋五個維度」的掃描，等它完成。

@@ -87,6 +87,28 @@ class DemoDatasetTests(APITestCase):
         pages = self.client.get(f"/api/projects/{self.project.id}/pages/").json()
         self.assertGreaterEqual(len(pages["pages"]), 15)
 
+    def test_seo_analysis_has_link_checks_with_evidence(self):
+        """示範資料要能展示 SEO 分析頁：每次掃描都有連結檢查，v1 的連結問題到 v3 有改善。"""
+        self.client.force_authenticate(self.user)
+        scans = list(ScanJob.objects.filter(project=self.project).order_by("completed_at"))
+        self.assertTrue(all(scan.seo_report.get("checked_at") for scan in scans))
+
+        def seo(scan):
+            url = f"/api/projects/{self.project.id}/seo/?scan={scan.id}"
+            return self.client.get(url).json()
+
+        first, latest = seo(scans[0]), seo(scans[-1])
+        titles = {issue["title"]: issue for issue in first["issues"]}
+        broken = titles["站內失效連結"]
+        self.assertTrue(broken["pages"][0]["url"].startswith("http://www.morninglight-coffee.example"))
+        self.assertTrue(broken["pages"][0]["detected_at"])
+        self.assertIn("連結沒有可讀文字", titles)
+        self.assertEqual(
+            {row["type"] for row in first["links"]["rows"]}, {"internal", "subdomain", "external"}
+        )
+        self.assertTrue(any(check["key"] == "www" for check in first["site_checks"]))
+        self.assertLess(latest["overview"]["broken_links"], first["overview"]["broken_links"])
+
     def test_idempotent_and_not_recreated_after_archive(self):
         self.assertIsNone(create_demo_project(self.user))
         self.project.archived_at = timezone.now()

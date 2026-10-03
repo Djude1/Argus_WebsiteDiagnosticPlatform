@@ -46,6 +46,7 @@ SCAN_FIELDS = (
     "top_actions",
     "warning_summary",
     "aeo_report",
+    "seo_report",
     "progress",
     "scan_log",
 )

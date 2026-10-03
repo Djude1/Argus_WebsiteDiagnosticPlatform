@@ -9,7 +9,8 @@
 
 用法（重產步驟見 backend/apps/scans/demo/README.md）：
   python scripts/demo_site/server.py --version 1 --port 80
-網域需在 /etc/hosts 指到 127.0.0.1；所有內容（電話、Email、金鑰）都是虛構的。
+www.morninglight-coffee.example、morninglight-coffee.example 與 shop.morninglight-coffee.example
+需在 /etc/hosts 指到 127.0.0.1（裸網域在 v1 重複提供內容、v2 起 301 到 www；shop 是子網域商店）；所有內容（電話、Email、金鑰）都是虛構的。
 """
 
 from __future__ import annotations
@@ -89,7 +90,12 @@ def layout(title: str, body: str, *, description: str | None, canonical: bool = 
     jquery = "/static/js/jquery-1.8.2.min.js" if v < 3 else "/static/js/jquery-3.7.1.min.js"
     # 外部 CDN 腳本沒有 SRI（每版都有，屬持續問題）
     cdn = '<script src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js" async></script>'
-    social = '<span class="social"><a href="/stores" aria-label="IG">IG</a><a href="/contact" aria-label="FB">FB</a><a href="/faq" aria-label="LINE">LN</a></span>'
+    # 連結問題（SEO 分析頁的「連結」）：外部社群、子網域商店；LINE 是純圖片連結，v1、v2 缺 alt＝沒有可讀文字
+    line_alt = ' alt="LINE 官方帳號"' if v >= 3 else ""
+    social = ('<span class="social"><a href="https://www.instagram.com/morninglight.coffee/" aria-label="Instagram">IG</a>'
+              '<a href="https://zh.wikipedia.org/wiki/%E5%92%96%E5%95%A1" aria-label="認識咖啡">Wiki</a>'
+              f'<a href="https://line.me/R/ti/p/@morninglight"><img src="/static/img/line.svg" width="18" height="18"{line_alt}></a></span>'
+              f' <a href="http://shop.{HOST.removeprefix("www.")}/" style="color:#f6c48a">線上商店</a>')
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -127,6 +133,7 @@ def page_home() -> str:
     # v1 首頁有兩個 H1、v2 起修正；v1 有一條壞掉的活動連結
     h1 = '<h1>每一天，從一杯好咖啡開始</h1>' + ('<h1>新鮮烘焙，48 小時內出貨</h1>' if v == 1 else "")
     promo = '<p><a class="btn" href="/promo/2025-autumn">秋季限定活動 →</a></p>' if v == 1 else ""
+    generic = '<p>會員優惠詳情請<a href="/faq">點此</a>。</p>' if v == 1 else ""
     broken_script = "" if v >= 2 else "<script>window.addEventListener('load',function(){trackHero.init();});</script>"
     # v3 新的追蹤碼又引入一個執行期錯誤（新增問題）
     new_error = "<script>window.addEventListener('load',function(){analyticsQueue.push({page:'home'});});</script>" if v >= 3 else ""
@@ -134,7 +141,7 @@ def page_home() -> str:
 <a class="btn" href="/products/house-blend">選購招牌綜合豆</a>{promo}</section>
 <main><h2>本週推薦</h2><div class="grid">{cards}</div>
 <h2>為什麼選擇晨光</h2><p>我們與衣索比亞、哥倫比亞與台灣阿里山的小農直接合作，每一批生豆都經過杯測評分 84 分以上才進烘焙機。門市提供手沖、義式與冷萃三種萃取方式，也開設週末杯測與手沖課程。</p>
-<p>訂購滿 NT$ 1,000 免運，宅配與超商取貨皆可；企業送禮可客製禮盒與卡片。</p></main>{broken_script}{new_error}"""
+<p>訂購滿 NT$ 1,000 免運，宅配與超商取貨皆可；企業送禮可客製禮盒與卡片。<a href="/shop">前往線上選購</a></p>{generic}</main>{broken_script}{new_error}"""
     return layout(
         f"{BRAND}｜台北精品咖啡豆、手沖與禮盒",
         body,
@@ -164,9 +171,10 @@ def page_menu() -> str:
             ("焦糖瑪奇朵", "熱／冰", 150, "自製焦糖醬"), ("司康", "—", 85, "每日現烤，原味／伯爵"),
         ]
     )
+    old_menu = '<p><a href="/menu/2024">去年的菜單</a></p>' if VERSION < 3 else ""
     body = f"""<main><h1>門市菜單</h1><p>以下價格為門市內用與外帶價格，大杯加 NT$ 20。</p>
 <table class="menu-table"><tr><th>品項</th><th>溫度</th><th>中杯</th><th>大杯</th><th>說明</th></tr>{rows}</table>
-<p class="notice">冷萃咖啡每日限量 40 杯，售完為止。</p></main>"""
+<p class="notice">冷萃咖啡每日限量 40 杯，售完為止。</p>{old_menu}</main>"""
     return layout(f"門市菜單｜{BRAND}", body, description=None, path="/menu")
 
 
@@ -213,6 +221,8 @@ def page_post(slug: str) -> str:
 <h2>水溫與研磨</h2><p>淺焙豆使用 92–94°C，深焙豆使用 86–88°C。研磨度約為砂糖顆粒大小。</p>
 <h2>步驟</h2><ol><li>濾紙以熱水沖洗並預熱器材。</li><li>注入兩倍粉量的水悶蒸 30 秒。</li><li>分三段注水，總時間控制在 2 分 30 秒。</li></ol>
 <p>根據我們 2024 年對 312 位門市顧客的調查，76% 的新手在掌握「悶蒸」這一步後，覺得咖啡明顯變得更甜。</p>"""
+        if v < 3:
+            content += '<p>完整的沖煮紀錄表可參考<a href="https://zh.wikipedia.org/wiki/%E6%99%A8%E5%85%89%E5%92%96%E5%95%A1%E7%83%98%E7%84%99%E6%89%80%E6%B2%96%E7%85%AE%E7%AD%86%E8%A8%98">我們的沖煮筆記</a>。</p>'
     elif slug == "latte-art-basics":
         title = POSTS[1][1]
         content = """<p>拉花的關鍵在於奶泡的質地：細緻、有光澤、沒有大氣泡。打發時讓蒸氣管口剛好在奶面下 1 公分。</p>
@@ -361,6 +371,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0].split("#")[0]
+        host = (self.headers.get("Host") or HOST).split(":")[0].lower()
+        bare = HOST.removeprefix("www.")
+        if host == bare and VERSION >= 2:
+            return self._send(301, "", extra={"Location": f"http://{HOST}{self.path}"})
+        if host == f"shop.{bare}":
+            return self._send(200, layout(f"線上商店｜{BRAND}", "<main><h1>晨光線上商店</h1><p>咖啡豆、濾掛與禮盒線上訂購。</p></main>",
+                                          description="晨光咖啡線上商店：咖啡豆、濾掛與禮盒。", canonical=False))
+        if path == "/shop":
+            return self._send(301, "", extra={"Location": "/products/house-blend"})
+        if path == "/static/img/line.svg":
+            return self._send(200, svg_image("#06c755", "LINE"), "image/svg+xml")
         if path != "/" and path.endswith("/") and not path.startswith("/files"):
             path = path.rstrip("/")
         routes = {
