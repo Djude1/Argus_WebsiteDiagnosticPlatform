@@ -43,7 +43,7 @@ data:
   # HOSTNAMES 是 siteverify 回傳的前端網域允許清單，正式環境不可含 localhost／127.0.0.1（accounts.E003）；
   # 對外換新網域時這裡與 Cloudflare widget 的網域都要加。
   TURNSTILE_SITE_KEY: "0x4AAAAAAFML-ooGY_tDnVk8"
-  TURNSTILE_HOSTNAMES: "xn--gst.tw,www.xn--gst.tw,argus6.qzz.io,argus.clouda.dpdns.org"
+  TURNSTILE_HOSTNAMES: "https://xn--gst.tw,www.xn--gst.tw,https://argus6.qzz.io,https://argus.clouda.dpdns.org"
   # Hermes-Agent 預設關閉
   ARGUS_AGENT_ENABLED: "true"
   # 修正產出（Fix Output）：啟用才花 token（觸發時計費，失敗全額退點）。
