@@ -325,6 +325,7 @@ class AeoPipelineTests(TransactionTestCase):
             ("assert_public_http_url", {"return_value": "https://shop.example/"}),
             ("crawl_site", {"new": mock.AsyncMock(return_value=([page], {}, {}, []))}),
             ("analyze_ssl", {"return_value": []}),
+            ("build_link_report", {"return_value": {}}),
             ("analyze_cookies", {"return_value": []}),
             ("analyze_headers", {"return_value": []}),
             ("analyze_sri", {"return_value": []}),

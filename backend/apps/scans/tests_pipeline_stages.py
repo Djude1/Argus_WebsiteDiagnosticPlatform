@@ -42,7 +42,7 @@ class PipelineShapeTests(TestCase):
             [
                 "target_validation", "crawl", "enter_scanning", "page_analysis",
                 "aeo_answers", "site_security", "active_probe", "deep_security", "exposure",
-                "geo_site", "favicon", "agent", "kali", "scoring",
+                "geo_site", "seo_links", "favicon", "agent", "kali", "scoring",
             ],
         )
         # 每個階段都是可單獨呼叫的函式
@@ -77,6 +77,7 @@ class PipelineFailureLabelTests(TransactionTestCase):
             ("assert_public_http_url", {"return_value": "https://example.com/"}),
             ("crawl_site", {"new": mock.AsyncMock(return_value=([], {}, {}, []))}),
             ("analyze_ssl", {"return_value": []}),
+            ("build_link_report", {"return_value": {}}),
             ("analyze_cookies", {"return_value": []}),
             ("analyze_headers", {"return_value": []}),
             ("analyze_sri", {"return_value": []}),

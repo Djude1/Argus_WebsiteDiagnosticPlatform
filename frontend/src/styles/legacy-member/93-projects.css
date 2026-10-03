@@ -1605,3 +1605,13 @@
 .project-demo-banner > .project-demo-badge {
   justify-self: start;
 }
+
+/* 側邊欄「所有專案」：跨網站入口，與目前網站的分頁之間用分隔線隔開 */
+.project-sidebar-link.is-all-projects {
+  @apply mb-1 border-b border-slate-100 pb-3;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+/* 掃描時間卡在手機寬度不可被選單的長選項撐開（390px 曾水平溢出 29px） */
+.project-scan-card { max-width: 100%; min-width: 0; }
+.project-scan-card-body { min-width: 0; }
+.project-scan-card-select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }

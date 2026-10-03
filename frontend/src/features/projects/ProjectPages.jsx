@@ -1188,7 +1188,7 @@ function ProjectHistoryPage() {
       const url = URL.createObjectURL(response.data);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `argus-scan-${scan.id}-report.docx`;
+      anchor.download = `argus-scan-${scan.id}-report.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -1215,7 +1215,7 @@ function ProjectHistoryPage() {
       <ProjectHeader
         project={project}
         section="歷史報告"
-        description={`共 ${scans.length} 次掃描，其中 ${completed.length} 次完成。完成的掃描可查看問題分析並下載 Word 報告。`}
+        description={`共 ${scans.length} 次掃描，其中 ${completed.length} 次完成。完成的掃描可查看問題分析並下載 PDF 報告。`}
       />
       {completed.length > 1 && (
         <section className="panel">
@@ -1463,6 +1463,9 @@ function ProjectSettingsPage() {
 }
 
 export {
+  FilterChips,
+  ScanTimeCard,
+  useProjectScans,
   ProjectHistoryPage,
   ProjectIssuesPage,
   ProjectOverviewPage,

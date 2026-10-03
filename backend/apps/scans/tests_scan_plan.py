@@ -133,6 +133,7 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
                 return_value=[],
             ),
             "ssl": mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),
+            "seo_links": mock.patch("apps.scans.tasks.build_link_report", return_value={}),
             "cookies": mock.patch("apps.scans.tasks.analyze_cookies", return_value=[]),
             "headers": mock.patch("apps.scans.tasks.analyze_headers", return_value=[]),
             "sri": mock.patch("apps.scans.tasks.analyze_sri", return_value=[]),

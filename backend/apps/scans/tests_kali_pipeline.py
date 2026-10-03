@@ -58,6 +58,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
             mock.patch("apps.scans.tasks.run_katana", return_value=([], [])),
             mock.patch("apps.scans.tasks.run_nuclei", return_value=[]),
             mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),
+            mock.patch("apps.scans.tasks.build_link_report", return_value={}),
             mock.patch("apps.scans.tasks.analyze_cookies", return_value=[]),
             mock.patch("apps.scans.tasks.analyze_headers", return_value=[]),
             mock.patch("apps.scans.tasks.analyze_sri", return_value=[]),

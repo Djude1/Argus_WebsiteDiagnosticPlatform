@@ -15,10 +15,12 @@ from django.test import TestCase
 
 from apps.scans.models import ReportVerification, ScanJob
 from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.tests_report_pdf import fake_pdf_conversion
 
 User = get_user_model()
 
 
+@fake_pdf_conversion
 class CleanupReportsCommandTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="cleanup", password="safe-test-password")

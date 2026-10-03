@@ -52,7 +52,7 @@
    一般掃描**不會執行**——必須同時滿足：`ARGUS_AGENT_ENABLED=true`、掃描模式為 `active`、勾選主動測試授權、且非單頁掃描（`scan_plan.py` 的 `run_agent`），
    並設定 `MINIMAX_API_KEY` / `GLM_API_KEY` / `GOOGLE_API_KEY` 其中之一。條件未滿足時整段跳過，不會有 UX finding
 4. **可互動工作區**：長截圖 + Canvas 高光標示 + 側邊欄 Findings 列表，支援篩選與一鍵複製問題 Prompt
-5. **Word 報告匯出**：封面 → 摘要統計 → 逐頁問題條列 → 附錄，由 `python-docx` 產生
+5. **PDF 報告匯出**：封面 → 摘要統計 → 逐頁問題條列 → 附錄，由 `python-docx` 排版後以 LibreOffice 轉成 PDF（對外只提供 PDF）
 
 ---
 
@@ -291,7 +291,7 @@ GET  /api/scans/{id}/                詳情
 GET  /api/scans/{id}/status/         即時進度（含 progress JSON）
 POST /api/scans/{id}/cancel/         終止（自動退款）
 GET  /api/scans/{id}/topology/       網站拓樸圖（nodes + edges）
-GET  /api/scans/{id}/report/         下載 Word 報告（.docx）
+GET  /api/scans/{id}/report/         下載 PDF 報告
 GET  /api/findings/?scan_id=         Findings 列表
 ```
 

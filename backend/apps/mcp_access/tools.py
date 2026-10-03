@@ -396,7 +396,7 @@ def get_scan_report(ctx: ToolContext, args: dict) -> dict:
         "report_number": build_report_number(scan),
         "download_url": public_url(ctx.request, path),
         "expires_in_seconds": settings.ARGUS_MCP_REPORT_LINK_TTL,
-        "format": "docx",
+        "format": "pdf",
         "verify": "收件者可在 Argus 的「報告查驗」頁輸入報告編號核對真偽。",
     }
 
@@ -523,8 +523,8 @@ TOOLS: tuple[Tool, ...] = (
         get_scan_findings,
     ),
     Tool(
-        "get_scan_report", "Word 報告下載連結",
-        "取得已完成掃描的 Word 報告短效下載連結與防偽報告編號。",
+        "get_scan_report", "PDF 報告下載連結",
+        "取得已完成掃描的 PDF 報告短效下載連結與防偽報告編號。",
         {"type": "object", "properties": _SCAN_ID, "required": ["scan_id"],
          "additionalProperties": False},
         get_scan_report,

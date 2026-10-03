@@ -196,7 +196,7 @@ const PROJECT_FEATURES_FALLBACK = [
   { id: -2, icon: "🔍", title: "四維安全掃描", description: "涵蓋 SEO、AEO、GEO、Security 四個維度的全面分析。" },
   { id: -3, icon: "🤖", title: "Hermes AI Agent", description: "LLM 驅動的智慧代理人，提供主動式漏洞驗證。" },
   { id: -4, icon: "📊", title: "即時進度追蹤", description: "掃描進度即時更新，支援多任務並行管理。" },
-  { id: -5, icon: "📝", title: "Word 報告匯出", description: "一鍵產生專業 Word 格式掃描報告，方便交付客戶。" },
+  { id: -5, icon: "📝", title: "PDF 報告匯出", description: "一鍵產生專業 PDF 掃描報告，方便交付客戶。" },
   { id: -6, icon: "💎", title: "點數計費系統", description: "靈活的 Coin 計費模式，按頁計費，精準控制成本。" },
 ];
 
@@ -279,7 +279,7 @@ const PROJECT_METHODS = [
   { title: "被動為預設", desc: "預設只讀取公開回應；主動式資安工具必須先完成網域所有權驗證才會啟用。" },
 ];
 
-// 使用者會拿到什麼：對應 ScanDetailPage、reports.py（Word）、fixgen、/verify。
+// 使用者會拿到什麼：對應 ScanDetailPage、reports.py（PDF）、fixgen、/verify。
 const PROJECT_DELIVERABLES = [
   {
     no: "01",
@@ -288,8 +288,8 @@ const PROJECT_DELIVERABLES = [
   },
   {
     no: "02",
-    title: "Word 報告",
-    desc: "一鍵匯出 .docx，附唯一報告編號；收件者可在「報告查驗」頁以 SHA-256 指紋核對內容未被竄改。",
+    title: "PDF 報告",
+    desc: "一鍵匯出 PDF，附唯一報告編號；收件者可在「報告查驗」頁以 SHA-256 指紋核對內容未被竄改。",
   },
   {
     no: "03",
@@ -600,7 +600,7 @@ const COMPARE_ROWS = [
     argus: true, self: "Lighthouse 純文字", competitor: "PDF 為主",
   },
   {
-    feature: "Word 報告自動匯出",
+    feature: "PDF 報告自動匯出",
     argus: true, self: "手寫", competitor: "額外加購",
   },
   {
@@ -1077,7 +1077,7 @@ function formatDateTime(value) {
 
 
 function VerifyReportPage() {
-  // 讀者可能是「收到 .docx 的第三方」而不是 Argus 使用者：網址帶編號就直接查，
+  // 讀者可能是「收到 PDF 報告的第三方」而不是 Argus 使用者：網址帶編號就直接查，
   // 沒帶就給輸入框讓他照著報告封面上的編號輸入。
   const { reportNumber: routeNumber } = useParams();
   const [input, setInput] = useState(routeNumber || "");
@@ -1181,7 +1181,7 @@ function VerifyReportPage() {
                 </dl>
                 <p className="verify-result-note">
                   請核對上列資訊與你手上的報告是否一致。若要進一步確認檔案未被竄改，
-                  可自行計算該 .docx 的 SHA-256 並與下方指紋比對。
+                  可自行計算該 PDF 的 SHA-256 並與下方指紋比對。
                 </p>
                 <code className="verify-fingerprint">{state.data.content_sha256}</code>
               </div>
