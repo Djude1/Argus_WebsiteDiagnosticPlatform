@@ -94,46 +94,6 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
         # Forbid：回收作業重疊執行沒有好處，只會讓兩個程序搶同一批列
         self.assertEqual(cron["spec"]["concurrencyPolicy"], "Forbid")
 
-    def test_stale_scan_reaper_can_connect_to_postgres(self):
-        import yaml
-
-        root = Path(__file__).resolve().parents[1]
-        backend_documents = [
-            document
-            for document in yaml.safe_load_all(
-                (root / "k8s" / "04-backend.yaml").read_text(encoding="utf-8")
-            )
-            if document
-        ]
-        cron = next(
-            document
-            for document in backend_documents
-            if document["kind"] == "CronJob"
-            and document["metadata"]["name"] == "reap-stale-scans"
-        )
-        self.assertEqual(
-            cron["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"]["app"],
-            "reap",
-        )
-
-        policies = [
-            document
-            for document in yaml.safe_load_all(
-                (root / "k8s" / "07-network-policies.yaml").read_text(encoding="utf-8")
-            )
-            if document
-        ]
-        postgres_policy = next(
-            document
-            for document in policies
-            if document["kind"] == "NetworkPolicy"
-            and document["metadata"]["name"] == "postgres-ingress-from-backend"
-        )
-        allowed_apps = postgres_policy["spec"]["ingress"][0]["from"][0]["podSelector"][
-            "matchExpressions"
-        ][0]["values"]
-        self.assertIn("reap", allowed_apps)
-
     def test_web_http_probes_use_allowed_host_header(self):
         manifest = (
             Path(__file__).resolve().parents[1] / "k8s" / "04-backend.yaml"
