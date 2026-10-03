@@ -158,6 +158,14 @@ class TestChallengeSignatureHelpers(TestCase):
         self.assertFalse(
             waf_scanner._has_challenge_signature("聯絡我們", '<div class="g-recaptcha"></div>')
         )
+        # CF Bot 偵測在正常頁面插入的背景腳本不是攔截頁
+        self.assertFalse(
+            waf_scanner._has_challenge_signature(
+                "NTUB BIRC",
+                "<script>s.src='/cdn-cgi/challenge-platform/scripts/precursor/main.js'</script>"
+                '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>',
+            )
+        )
         self.assertFalse(waf_scanner._has_challenge_signature("", ""))
 
     def test_summarize_and_thresholds(self):
