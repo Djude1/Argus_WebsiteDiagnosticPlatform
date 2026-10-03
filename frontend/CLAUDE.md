@@ -17,6 +17,8 @@ Claude Code 進 `frontend/` 工作時，本檔會在專案層 `CLAUDE.md` 之後
 
 ## Build 規則
 
+**網站所有權驗證檔須持續保留**：`public/google*.html` 等已發布的網站驗證資產不是一次性暫存檔。Google 驗證成功後仍會重新確認檔案；不得以「任務／驗證已完成」為由刪除，或從後續 image／build 產物排除。只有網站管理者明確要求撤銷該驗證方式時才處理移除。[Google 官方驗證檔要求](https://support.google.com/webmasters/answer/9008080?hl=zh-Hant)
+
 **必須使用 `build-node22.ps1`，禁止直接執行 `npm run build`。**
 
 原因：系統 Node v24.x + Rollup 4.x 在 Windows 有已知 bug（`STATUS_STACK_BUFFER_OVERRUN`，exit code `-1073740791`），build 會無聲 crash。`build-node22.ps1` 會自動偵測 portable Node 22 位置（候選路徑與安裝方式見 [`docs/node22-guide.md`](../docs/node22-guide.md)）。
