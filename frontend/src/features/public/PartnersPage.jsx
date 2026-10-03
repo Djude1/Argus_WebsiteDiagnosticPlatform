@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 
 import { api } from "../../api";
 import { apiErrorMessage } from "../../shared/AppShared.jsx";
+import { TURNSTILE_FIELD, TurnstileWidget, useTurnstileConfig } from "../../shared/TurnstileWidget";
 
 // 商業合作（/partners）：讓潛在合作方看懂「可以怎麼合作、客戶會得到什麼、如何開始討論」。
 // 內容只寫目前真的做得到的事：白牌、固定分潤與 MCP 以外的系統整合都寫成「依需求討論」。
@@ -71,6 +72,10 @@ const EMPTY_FORM = {
 function PartnerInquiryForm() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [state, setState] = useState({ busy: false, done: "", error: "", fieldErrors: {} });
+  const turnstile = useTurnstileConfig();
+  const [captcha, setCaptcha] = useState("");
+  const captchaRef = useRef(null);
+  const captchaBlocking = turnstile.loading || (turnstile.enabled && !captcha);
 
   function update(key) {
     return (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -80,7 +85,8 @@ function PartnerInquiryForm() {
     e.preventDefault();
     setState({ busy: true, done: "", error: "", fieldErrors: {} });
     try {
-      const res = await api.post("/content/partner-inquiries/", form);
+      const body = turnstile.enabled ? { ...form, [TURNSTILE_FIELD]: captcha } : form;
+      const res = await api.post("/content/partner-inquiries/", body);
       setState({ busy: false, done: res.data?.detail || "已收到你的洽談需求。", error: "", fieldErrors: {} });
       setForm(EMPTY_FORM);
     } catch (err) {
@@ -91,6 +97,9 @@ function PartnerInquiryForm() {
         error: data ? "請檢查標示的欄位。" : apiErrorMessage(err, "送出失敗，請稍後再試。"),
         fieldErrors: data || {},
       });
+    } finally {
+      // 人機驗證 token 只能用一次，不論成功失敗都重設取得新的
+      captchaRef.current?.reset();
     }
   }
 
@@ -171,9 +180,12 @@ function PartnerInquiryForm() {
           onChange={update("website")}
         />
       </label>
+      {turnstile.enabled && (
+        <TurnstileWidget ref={captchaRef} siteKey={turnstile.siteKey} action="contact" onToken={setCaptcha} />
+      )}
       {state.error && <p className="partners-form-error" role="alert">{state.error}</p>}
       <div className="partners-form-actions">
-        <button type="submit" className="public-cta-primary" disabled={state.busy}>
+        <button type="submit" className="public-cta-primary" disabled={state.busy || captchaBlocking}>
           {state.busy ? "送出中…" : "送出洽談需求"}
         </button>
         <p className="partners-form-note">送出的資料只用於聯繫這次合作洽談。</p>

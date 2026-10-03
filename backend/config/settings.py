@@ -573,3 +573,12 @@ SPECTACULAR_SETTINGS = {
     ],
     "SCHEMA_PATH_PREFIX": "/api",
 }
+
+# Cloudflare Turnstile：註冊、Email 登入、忘記密碼、商業合作洽談的人機驗證
+# （apps/accounts/turnstile.py）。site key 是公開值；secret 只放 .env／K8s Secret；
+# 兩者都有值才啟用。
+# TURNSTILE_HOSTNAMES：siteverify 回傳的前端 hostname 允許清單（逗號分隔），
+# 正式環境不可含 localhost（accounts.E003）。
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "").strip()
+TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "").strip()
+TURNSTILE_HOSTNAMES = env_list("TURNSTILE_HOSTNAMES", "")

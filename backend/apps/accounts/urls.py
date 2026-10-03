@@ -11,9 +11,11 @@ from apps.accounts.views import (
     MeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    TurnstileConfigView,
 )
 
 urlpatterns = [
+    path("turnstile/", TurnstileConfigView.as_view(), name="turnstile-config"),
     path("google/", GoogleLoginView.as_view(), name="google-login"),
     path("register/", EmailRegisterView.as_view(), name="email-register"),
     path("email-login/", EmailLoginView.as_view(), name="email-login"),

@@ -24,7 +24,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.avatars import AvatarError, avatar_url, process_avatar
 from apps.accounts.emails import send_password_reset_email
 from apps.accounts.models import LoginEvent, PasswordResetToken
+from apps.accounts.turnstile import turnstile_enabled, turnstile_rejection
 from apps.billing.services import grant_monthly_bonus_if_needed, settle_subscription_safe
+from apps.scans.demo.seed import create_demo_project_safely
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +122,7 @@ class GoogleLoginView(views.APIView):
             )
 
         user_model = get_user_model()
-        user, _ = user_model.objects.get_or_create(
+        user, created = user_model.objects.get_or_create(
             username=email,
             defaults={
                 "email": email,
@@ -133,9 +135,24 @@ class GoogleLoginView(views.APIView):
         user.save(update_fields=["last_login"])
         grant_monthly_bonus_if_needed(user)
         _record_login_event(request, user, LoginEvent.Method.GOOGLE)
+        if created:
+            # 新帳號先有一個示範專案，進來就看得到完整的分析結果（失敗不影響登入）
+            create_demo_project_safely(user)
         settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_200_OK)
+
+
+class TurnstileConfigView(views.APIView):
+    """公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。"""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        enabled = turnstile_enabled()
+        site_key = settings.TURNSTILE_SITE_KEY if enabled else ""
+        return Response({"enabled": enabled, "site_key": site_key})
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -147,6 +164,8 @@ class EmailRegisterView(views.APIView):
     throttle_scope = "register"
 
     def post(self, request):
+        if rejection := turnstile_rejection(request, "signup"):
+            return rejection
         email = (request.data.get("email") or "").strip().lower()
         password = request.data.get("password") or ""
 
@@ -174,6 +193,8 @@ class EmailRegisterView(views.APIView):
             user.save(update_fields=["last_login"])
             grant_monthly_bonus_if_needed(user)
         _record_login_event(request, user, LoginEvent.Method.REGISTER)
+        # 新帳號先有一個示範專案，進來就看得到完整的分析結果（失敗不影響註冊）
+        create_demo_project_safely(user)
         settle_subscription_safe(user)
         get_token(request)
         return _auth_response(user, response_status=status.HTTP_201_CREATED)
@@ -188,6 +209,8 @@ class EmailLoginView(views.APIView):
     throttle_scope = "login"
 
     def post(self, request):
+        if rejection := turnstile_rejection(request, "login"):
+            return rejection
         email = (request.data.get("email") or "").strip().lower()
         password = request.data.get("password") or ""
 
@@ -360,6 +383,8 @@ class PasswordResetRequestView(views.APIView):
     }
 
     def post(self, request):
+        if rejection := turnstile_rejection(request, "password_reset"):
+            return rejection
         email = (request.data.get("email") or "").strip().lower()
         if not email or "@" not in email:
             # 連格式都不對也回成功（不暗示 email 是否註冊）
