@@ -20,7 +20,7 @@ from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.reports import (
     _impact_for,
     _verify_for,
-    build_scan_report,
+    render_report_docx,
 )
 
 
@@ -189,7 +189,7 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
             rule_id="SECURITY_CSP_BD010B5BE0",
             priority_score=50.0,
         )
-        path = build_scan_report(scan)
+        path = render_report_docx(scan)
         all_text = _full_doc_text(path)
 
         # summary 表格區段：包含「這些分類為什麼重要」標題與 per-rule 客製文案。
@@ -213,7 +213,7 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
             rule_id="SECURITY_CSP_BD010B5BE0",
             priority_score=50.0,
         )
-        path = build_scan_report(scan)
+        path = render_report_docx(scan)
         all_text = _full_doc_text(path)
 
         # 附錄「修補後如何驗證」小節：通用模板 + per-category 驗收指令
@@ -239,7 +239,7 @@ class ReportHasRuleSpecificSectionsTests(TestCase):
                 ai_handoff_prompt="p", rule_id=rid,
                 priority_score=75.0,
             )
-        path = build_scan_report(scan)
+        path = render_report_docx(scan)
         all_text = _full_doc_text(path)
 
         # per-rule 客製各在 summary/附錄出現 1 次（不重複）
@@ -269,7 +269,7 @@ class ReportHasTitleImageTests(TestCase):
             origin="example.com",
             status=ScanJob.Status.COMPLETED,
         )
-        path = build_scan_report(scan)
+        path = render_report_docx(scan)
         with zipfile.ZipFile(path) as z:
             media = [n for n in z.namelist() if n.startswith("word/media/")]
         # 至少有 1 張媒體（封面 title PNG 或 fallback logo）
@@ -316,7 +316,7 @@ class ReportThumbnailScreenshotTests(TestCase):
             screenshot_path=str(self.scan_img_path),  # relative to BASE_DIR
         )
 
-        path = build_scan_report(scan)
+        path = render_report_docx(scan)
         with zipfile.ZipFile(path) as z:
             media = [n for n in z.namelist() if n.startswith("word/media/")]
             sizes = [z.getinfo(n).file_size for n in media]

@@ -20,11 +20,13 @@ from rest_framework.test import APIClient
 
 from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.report_render import RENDERER_VERSION
-from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.reports import build_scan_report, render_report_docx, report_output_path
+from apps.scans.tests_report_pdf import fake_pdf_conversion
 
 User = get_user_model()
 
 
+@fake_pdf_conversion
 class ReportVerificationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="verify", password="safe-test-password")
@@ -45,7 +47,7 @@ class ReportVerificationTests(TestCase):
         )
 
     def _text(self) -> str:
-        document = Document(build_scan_report(self.scan_job))
+        document = Document(render_report_docx(self.scan_job))
         parts = [p.text for p in document.paragraphs]
         parts += [p.text for p in document.sections[0].footer.paragraphs]
         for table in document.tables:
@@ -120,6 +122,7 @@ class ReportVerificationTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+@fake_pdf_conversion
 class ReportCacheTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="cache", password="safe-test-password")

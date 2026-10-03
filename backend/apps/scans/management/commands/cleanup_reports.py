@@ -1,7 +1,7 @@
-"""清理逾期的 Word 報告檔案。
+"""清理逾期的報告檔案（PDF，以及改版前留下的 .docx）。
 
 報告寫進 MEDIA_ROOT/reports/ 後永久堆積，加上下載改走快取（不再每次重產），
-檔案只會越積越多。這支命令依檔案修改時間刪除逾期的 .docx。
+檔案只會越積越多。這支命令依檔案修改時間刪除逾期的 .pdf 與舊版 .docx。
 
 **不刪 ReportVerification 資料列**：收件者手上的那份報告不會因為伺服器清檔就
 失效，查驗頁要能繼續回答「這個編號確實是 Argus 為這個網站出具的」。
@@ -51,7 +51,7 @@ class Command(BaseCommand):
         cutoff = time.time() - days * 86400
         removed = 0
         freed_bytes = 0
-        for path in sorted(report_dir.glob("*.docx")):
+        for path in sorted([*report_dir.glob("*.pdf"), *report_dir.glob("*.docx")]):
             try:
                 stat = path.stat()
             except OSError:

@@ -53,6 +53,7 @@ from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.security.waf_scanner import detect_waf_block
+from apps.scans.seo.collect import build_link_report
 from apps.scans.services import assert_public_http_url
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,8 @@ def planned_scan_steps(scan_job, execution_plan) -> list[str]:
         steps.append("exposure_probe")
     if "geo" in cats:
         steps.append("geo_site")
+    if "seo" in cats:
+        steps.append("seo_links")
     if settings.ARGUS_AGENT_ENABLED and (execution_plan.run_agent or execution_plan.run_agent_ux):
         steps.append("agent")
     steps.append("scoring")
@@ -907,7 +910,7 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
     append_log(ctx.scan_job_id, f"深度被動安全掃描完成：{len(findings)} 項發現")
     ctx.scanning_progress(
         ctx.scanning_total + 3,
-        _first_step(ctx.steps, "exposure_probe", "geo_site", "agent", "scoring"),
+        _first_step(ctx.steps, "exposure_probe", "geo_site", "seo_links", "agent", "scoring"),
     )
 
 
@@ -961,7 +964,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
         scan_job.warning_summary = updated_warnings
         scan_job.save(update_fields=["warning_summary", "updated_at"])
     ctx.scanning_progress(
-        ctx.deep_scan_total, _first_step(ctx.steps, "geo_site", "agent", "scoring")
+        ctx.deep_scan_total, _first_step(ctx.steps, "geo_site", "seo_links", "agent", "scoring")
     )
     append_log(
         scan_job_id,
@@ -978,6 +981,39 @@ def stage_geo_site(ctx: ScanRunContext) -> None:
     findings = analyze_site_signals(ctx.site_signals)
     ctx.record(findings)
     append_log(ctx.scan_job_id, f"站台訊號分析完成：{len(findings)} 項發現")
+
+
+def stage_seo_links(ctx: ScanRunContext) -> None:
+    """SEO 連結狀態與站台層級網址檢查（勾 SEO 才跑），結果寫 ScanJob.seo_report。
+
+    只是 SEO 分析頁的輔助資料：失敗只記 log、不產生 finding、不影響計分與掃描完成。
+    """
+    scan_job = ctx.scan_job
+    if "seo" not in scan_job.effective_categories or not ctx.pages:
+        return
+    ctx.scanning_progress(ctx.deep_scan_total, "seo_links")
+    start_url = scan_job.normalized_url or scan_job.original_url
+    try:
+        report = build_link_report(
+            start_url,
+            [page for page, _data in ctx.pages],
+            should_stop=lambda: raise_if_cancelled(ctx.scan_job_id),
+        )
+    except ScanCancelled:
+        raise
+    except Exception as exc:  # noqa: BLE001 - 輔助資料，失敗不影響掃描
+        logger.warning("SEO 連結檢查失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
+        append_log(ctx.scan_job_id, f"SEO 連結檢查失敗：{exc.__class__.__name__}", level="warning")
+        return
+    scan_job.seo_report = report
+    scan_job.save(update_fields=["seo_report", "updated_at"])
+    links = report.get("links") or {}
+    broken = sum(1 for r in links.values() if r["verdict"] == "broken")
+    append_log(
+        ctx.scan_job_id,
+        f"SEO 連結檢查完成：{len(links)} 個連結（失效 {broken}），"
+        f"未檢查 {report.get('unchecked', 0)} 個",
+    )
 
 
 def stage_favicon(ctx: ScanRunContext) -> None:
@@ -1257,6 +1293,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("deep_security", stage_deep_security),
     ("exposure", stage_exposure),
     ("geo_site", stage_geo_site),
+    ("seo_links", stage_seo_links),
     ("favicon", stage_favicon),
     ("agent", stage_agent),
     ("kali", stage_kali),

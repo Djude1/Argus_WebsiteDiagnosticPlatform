@@ -257,6 +257,19 @@
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  /* 全螢幕時貼齊兩側（公開頁維持 1440px 置中） */
+  max-width: none;
+  padding-inline: clamp(1rem, 2.2vw, 2rem);
+}
+/* 「AI 網站健檢平台」與頭像在會員工具列放大一級 */
+.public-nav.is-member .public-brand-sub {
+  font-size: 1.12rem !important;
+  font-weight: 700;
+}
+.public-nav.is-member .app-account-trigger .app-avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 1.1rem;
 }
 .public-nav.is-member .public-nav-cta {
   display: flex;

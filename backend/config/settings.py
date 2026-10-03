@@ -293,6 +293,8 @@ REST_FRAMEWORK = {
         "scan_create": os.getenv("THROTTLE_SCAN_CREATE", "30/hour"),
         "avatar_upload": os.getenv("THROTTLE_AVATAR_UPLOAD", "20/hour"),
         "partner_inquiry": os.getenv("THROTTLE_PARTNER_INQUIRY", "5/hour"),
+        # Search Console API 有每日配額（網址檢查 2000 次／日／資源）
+        "gsc": os.getenv("THROTTLE_GSC", "120/hour"),
     },
 }
 
@@ -416,6 +418,18 @@ ARGUS_KALI_REDIS_URL = os.getenv(
 # Google OAuth Client ID（從 Google Cloud Console > Credentials 取得）
 # 一般使用者透過 Google 帳號登入時用於驗證 ID Token；空字串代表未啟用
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+# Google Search Console 串接（SEO 分析頁，apps/scans/seo/gsc.py）：與登入共用同一個 OAuth
+# 用戶端，另需 client secret；兩者都有值才啟用。重新導向 URI 預設為目前網域的
+# /api/gsc/callback/，必須登記在 Google Cloud OAuth 用戶端。
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+ARGUS_GSC_REDIRECT_URI = os.getenv("ARGUS_GSC_REDIRECT_URI", "")
+# refresh token 加密金鑰（Fernet）；空值時由 SECRET_KEY 推導（輪替 SECRET_KEY 需重新連接）
+ARGUS_GSC_TOKEN_KEY = os.getenv("ARGUS_GSC_TOKEN_KEY", "")
+# SEO 連結檢查（掃描階段 seo_links）：最多檢查幾個不重複的連結、總時間上限（秒）
+ARGUS_SEO_LINK_CHECK_LIMIT = int(os.getenv("ARGUS_SEO_LINK_CHECK_LIMIT", "150"))
+ARGUS_SEO_LINK_CHECK_SECONDS = int(os.getenv("ARGUS_SEO_LINK_CHECK_SECONDS", "120"))
+# PDF 報告轉檔（LibreOffice）逾時秒數
+ARGUS_REPORT_PDF_TIMEOUT_SECONDS = int(os.getenv("ARGUS_REPORT_PDF_TIMEOUT_SECONDS", "120"))
 
 # 點數制度（取代舊的 UserScanQuota 月次數配額）
 # - 每月自動發放給所有使用者的贈點

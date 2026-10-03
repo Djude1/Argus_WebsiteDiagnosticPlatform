@@ -6,6 +6,7 @@ readme = "Project_說明.md"
 requires-python = ">=3.12"
 dependencies = [
     "celery>=5.4,<6",
+    "cryptography>=44",
     "dj-database-url>=2.2,<3",
     "django>=5.0,<6",
     "django-cors-headers>=4.4,<5",

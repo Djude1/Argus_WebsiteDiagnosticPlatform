@@ -18,6 +18,7 @@ const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
 const loadMcpAccessPage = () => import("./features/account/McpAccessPage.jsx");
 const loadProjectWorkspace = () => import("./features/projects/ProjectWorkspace.jsx");
 const loadProjectPages = () => import("./features/projects/ProjectPages.jsx");
+const loadProjectSeoPage = () => import("./features/projects/ProjectSeoPage.jsx");
 const loadAdminPages = () => import("./features/admin/AdminPages.jsx");
 const loadAdminOrders = () => import("./features/admin/AdminOrdersPage.jsx");
 const loadAdminOverview = () => import("./features/admin/AdminOverviewPage.jsx");
@@ -56,6 +57,7 @@ const ProjectScansPage = lazyNamed(loadProjectPages, "ProjectScansPage");
 const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
 const ProjectPagesPage = lazyNamed(loadProjectPages, "ProjectPagesPage");
 const ProjectAeoPage = lazyNamed(loadProjectPages, "ProjectAeoPage");
+const ProjectSeoPage = lazyNamed(loadProjectSeoPage, "ProjectSeoPage");
 const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
 const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
@@ -181,6 +183,7 @@ function AppShell({ googleOAuthEnabled }) {
           >
             <Route index element={<ProjectOverviewPage />} />
             <Route path="scans" element={<ProjectScansPage />} />
+            <Route path="seo" element={<ProjectSeoPage />} />
             <Route path="issues" element={<ProjectIssuesPage />} />
             <Route path="pages" element={<ProjectPagesPage />} />
             <Route path="aeo" element={<ProjectAeoPage />} />

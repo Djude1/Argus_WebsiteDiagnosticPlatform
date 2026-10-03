@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from apps.scans.seo_views import gsc_callback
 from apps.scans.views import (
     FindingViewSet,
     PageViewSet,
@@ -27,5 +28,6 @@ urlpatterns = router.urls + [
     path("audit/", audit_log, name="audit-log"),
     path("findings-by-category/", findings_by_category, name="findings-by-category"),
     path("estimate/", estimate_scan, name="estimate-scan"),
+    path("gsc/callback/", gsc_callback, name="gsc-callback"),
 ]
 

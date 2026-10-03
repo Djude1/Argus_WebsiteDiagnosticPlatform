@@ -90,6 +90,7 @@ const SCAN_STEP_META = {
   deep_security: { label: "深度資安", title: "深度資安檢查", hint: "檢查 HTTPS 與安全標頭、TLS 憑證、Cookie、SRI、DNS 與前端套件版本", Icon: StatusScanGlyph },
   exposure_probe: { label: "敏感檔案", title: "敏感檔案探測", hint: "探測常見的敏感檔案路徑是否外洩", Icon: StatusScanGlyph },
   geo_site: { label: "AI 爬蟲", title: "檢查 AI 爬蟲訊號", hint: "檢查 llms.txt 與 robots.txt 對 AI 爬蟲的設定", Icon: StatusScanGlyph },
+  seo_links: { label: "連結檢查", title: "檢查連結與網址", hint: "檢查站內外連結的狀態與轉址，以及 robots.txt、HTTPS、www 與 404 頁設定", Icon: StatusScanGlyph },
   agent: { label: "AI Agent", title: "AI Agent 測試", hint: "AI Agent 以擬真使用者操作網站，測試互動流程", Icon: StatusAgentGlyph },
   scoring: { label: "評分", title: "彙整評分", hint: "計算各維度分數並排出優先處理項目", Icon: StatusScanGlyph },
 };
@@ -1413,7 +1414,7 @@ function FindingsWorkspace({ scan }) {
     const url = URL.createObjectURL(response.data);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `argus-scan-${scan.id}-report.docx`;
+    anchor.download = `argus-scan-${scan.id}-report.pdf`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -1518,9 +1519,9 @@ function FindingsWorkspace({ scan }) {
           type="button"
           onClick={downloadReport}
           disabled={!completed}
-          title={completed ? "下載這次掃描的 Word 報告" : "掃描完成後可下載"}
+          title={completed ? "下載這次掃描的 PDF 報告" : "掃描完成後可下載"}
         >
-          下載 Word 報告
+          下載 PDF 報告
         </button>
       </header>
 

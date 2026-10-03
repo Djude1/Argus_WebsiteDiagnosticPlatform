@@ -32,7 +32,7 @@ from apps.scans.crawler import (
     compute_min_interval,
 )
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob, VerifiedDomain
-from apps.scans.reports import build_scan_report, get_severity_display, mask_pii_evidence
+from apps.scans.reports import get_severity_display, mask_pii_evidence, render_report_docx
 from apps.scans.scanners import (
     PageAnalysisInput,
     analyze_aeo,
@@ -274,7 +274,7 @@ class StaticScannerTests(APITestCase):
         )
 
         self.assertEqual(get_severity_display("warning"), "warning")
-        self.assertTrue(build_scan_report(scan_job).endswith(".docx"))
+        self.assertTrue(render_report_docx(scan_job).endswith(".docx"))
 
     def test_report_masks_pii_evidence_even_when_truncated(self):
         # 60 筆信用卡號串接，總長度超過報告的 1000 字截斷點，最後一筆極可能被
@@ -304,7 +304,7 @@ class StaticScannerTests(APITestCase):
         )
         Finding.objects.create(scan_job=scan_job, **finding_payload)
 
-        output_path = build_scan_report(scan_job)
+        output_path = render_report_docx(scan_job)
         document = Document(output_path)
         full_text = "\n".join(p.text for p in document.paragraphs)
 
@@ -338,7 +338,7 @@ class StaticScannerTests(APITestCase):
         )
         Finding.objects.create(scan_job=scan_job, **finding_payload)
 
-        output_path = build_scan_report(scan_job)
+        output_path = render_report_docx(scan_job)
         document = Document(output_path)
         full_text = "\n".join(p.text for p in document.paragraphs)
 
