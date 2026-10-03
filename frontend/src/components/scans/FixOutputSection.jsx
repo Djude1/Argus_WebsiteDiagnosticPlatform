@@ -167,7 +167,7 @@ function FixOutputSection({ scan }) {
     <section className="fixoutput-box">
       <div className="fixoutput-header">
         <div>
-          <p className="fixoutput-title">🛠️ 修正產出</p>
+          <h2 className="fixoutput-title">修正產出</h2>
           <p className="fixoutput-desc">
             以本次掃描爬到的內容為事實基礎，產生可直接貼上的修正內容。
             爬不到的欄位以【請填寫：…】標示，請人工確認後再替換。

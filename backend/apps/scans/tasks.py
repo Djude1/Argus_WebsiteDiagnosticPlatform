@@ -24,6 +24,7 @@ from apps.billing.services import (
 from apps.scans.aeo.evaluate import SitePage, evaluate_site
 from apps.scans.cancellation import ScanCancelled, is_cancelled, raise_if_cancelled
 from apps.scans.crawler import crawl_site
+from apps.scans.favicon import needs_refresh, refresh_project_favicon
 from apps.scans.katana_scanner import run_katana
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.nuclei_scanner import run_nuclei
@@ -465,6 +466,11 @@ def stage_crawl(ctx: ScanRunContext) -> None:
     ctx.warnings = redact_warning_summary(warnings)
     ctx.site_signals = site_signals
     ctx.discovered_endpoints = discovered_endpoints
+    if site_signals.get("sitemap_seeded"):
+        append_log(
+            scan_job_id,
+            f"sitemap 提供 {site_signals['sitemap_seeded']} 個頁面網址，已加入爬取佇列",
+        )
     append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
     if discovered_endpoints:
         append_log(
@@ -974,6 +980,18 @@ def stage_geo_site(ctx: ScanRunContext) -> None:
     append_log(ctx.scan_job_id, f"站台訊號分析完成：{len(findings)} 項發現")
 
 
+def stage_favicon(ctx: ScanRunContext) -> None:
+    """更新所屬網站專案的圖示（會員區辨識網站用）；最多每 7 天抓一次，失敗不影響掃描。"""
+    project = ctx.scan_job.project
+    if project is None or not ctx.pages or not needs_refresh(project):
+        return
+    page, _data = ctx.pages[0]
+    try:
+        refresh_project_favicon(project, page.html or "", page.final_url or page.url)
+    except Exception:  # noqa: BLE001 - 圖示只是輔助資料
+        logger.warning("網站圖示更新失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
+
+
 def stage_agent(ctx: ScanRunContext) -> None:
     """可選的 Hermes-Agent（資安 deep_mode 與／或擬真使用者 UX 測試）。
 
@@ -1239,6 +1257,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("deep_security", stage_deep_security),
     ("exposure", stage_exposure),
     ("geo_site", stage_geo_site),
+    ("favicon", stage_favicon),
     ("agent", stage_agent),
     ("kali", stage_kali),
     ("scoring", stage_scoring),

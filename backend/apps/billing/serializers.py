@@ -202,6 +202,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     plan_code = serializers.CharField(source="plan.code", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
+    plan_monthly_coins = serializers.IntegerField(source="plan.monthly_coins", read_only=True)
 
     class Meta:
         model = UserSubscription
@@ -210,6 +211,7 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             "status_label",
             "plan_code",
             "plan_name",
+            "plan_monthly_coins",
             "periods_remaining",
             "started_at",
             "current_period_end",

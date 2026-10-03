@@ -37,6 +37,92 @@ def decrypt_test_auth(signed: str) -> str:
         return ""
 
 
+class SiteProjectQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(archived_at__isnull=True)
+
+
+class SiteProjectManager(models.Manager.from_queryset(SiteProjectQuerySet)):
+    def ensure_for(self, user_id: int, origin: str, start_url: str = "") -> "SiteProject":
+        """取得（沒有就建立）使用者某個 origin 的網站專案；已封存的一併恢復。
+
+        建立掃描時沒指定專案（MCP、舊用戶端、後台重排）一律走這裡，確保每筆掃描都有專案。
+        """
+        project, created = self.get_or_create(
+            user_id=user_id,
+            origin=origin,
+            defaults={
+                "name": default_project_name(origin),
+                "start_url": start_url or f"{origin}/",
+            },
+        )
+        if not created and project.archived_at is not None:
+            project.restore()
+        return project
+
+
+def default_project_name(origin: str) -> str:
+    return (get_hostname(origin) or origin)[:80]
+
+
+class SiteProject(models.Model):
+    """網站專案：使用者的一個網站（origin），會員區以它為單位管理歷次掃描與問題。
+
+    設計與取捨見 docs/adr/0003-site-project-workspace.md。不提供硬刪除，
+    「移除」＝封存（archived_at），掃描與點數紀錄全數保留。
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="site_projects",
+    )
+    name = models.CharField(max_length=80)
+    origin = models.CharField(max_length=255, db_index=True)
+    class Scope(models.TextChoices):
+        SITE = "site", "整個網站"
+        SINGLE = "single", "單一頁面"
+
+    # 新掃描的預設網址；必須與 origin 相同網站
+    start_url = models.URLField(max_length=2048)
+    # 專案層級的預設掃描設定：掃描表單以此為初始值（每次掃描仍可調整）
+    default_scope = models.CharField(max_length=8, choices=Scope.choices, default=Scope.SITE)
+    default_categories = models.JSONField(default=default_categories)
+    # 預設掃描模式：被動偵測或主動測試（主動仍須網域驗證，建立掃描時檢查）
+    default_scan_mode = models.CharField(max_length=16, default="passive")
+    # 使用者自己的專案說明（選填）；頁首在還沒掃描、抓不到網站說明時顯示
+    description = models.CharField(max_length=300, blank=True, default="")
+    # 示範專案：新帳號自動建立，資料來自虛構網站的掃描（apps/scans/demo/），唯讀、不能建立掃描
+    is_demo = models.BooleanField(default=False)
+    # 網站圖示（data URL，掃描時由 favicon.py 抓取並縮成小 PNG）；空字串＝還沒抓到
+    favicon = models.TextField(blank=True, default="")
+    favicon_checked_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SiteProjectManager()
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "origin"], name="uniq_site_project_user_origin"
+            ),
+        ]
+
+    @property
+    def hostname(self) -> str:
+        return get_hostname(self.origin)
+
+    def restore(self) -> None:
+        self.archived_at = None
+        self.save(update_fields=["archived_at", "updated_at"])
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.origin})"
+
+
 class ScanJob(models.Model):
     class Status(models.TextChoices):
         QUEUED = "queued", "等待中"
@@ -56,6 +142,15 @@ class ScanJob(models.Model):
         on_delete=models.CASCADE,
         related_name="scan_jobs",
         db_index=True,
+    )
+    # 所屬網站專案。save() 在沒指定時依 origin 自動歸入；SET_NULL：專案不會被硬刪，
+    # 只有刪除使用者時才可能消失，此時掃描本身也會隨使用者刪除。
+    project = models.ForeignKey(
+        SiteProject,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="scans",
     )
     original_url = models.URLField(max_length=2048)
     normalized_url = models.URLField(max_length=2048, db_index=True)
@@ -131,6 +226,18 @@ class ScanJob(models.Model):
             and "security" not in self.effective_categories
         ):
             raise ValidationError("主動測試屬資安檢測，必須勾選「資安」維度。")
+
+    def save(self, *args, **kwargs):
+        # 每筆新掃描都要屬於一個網站專案：沒指定就依 origin 歸入（沒有就建立），
+        # 指定了已封存的專案則恢復它——有新掃描代表使用者還在管理這個網站。
+        if self._state.adding and self.user_id and self.origin:
+            if self.project_id is None:
+                self.project = SiteProject.objects.ensure_for(
+                    self.user_id, self.origin, self.normalized_url
+                )
+            elif self.project.archived_at is not None:
+                self.project.restore()
+        super().save(*args, **kwargs)
 
     @property
     def effective_categories(self) -> set[str]:

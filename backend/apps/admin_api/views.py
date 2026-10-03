@@ -117,6 +117,11 @@ ORDERS_ORDERING = {
 }
 
 
+def real_scans():
+    """後台統計與清單只算真實掃描：示範專案（新帳號自動建立，apps/scans/demo/）的掃描不列入。"""
+    return ScanJob.objects.exclude(project__is_demo=True)
+
+
 def _apply_ordering(request, queryset, allowed: dict, default: str):
     """依 `ordering` 查詢參數排序；只接受白名單欄位。
 
@@ -161,8 +166,8 @@ def overview(request):
     total_wallets = CoinWallet.objects.count()
     total_balance = CoinWallet.objects.aggregate(s=Sum("balance"))["s"] or 0
     total_revenue = CoinWallet.objects.aggregate(s=Sum("total_purchased_ntd"))["s"] or 0
-    total_scans = ScanJob.objects.count()
-    scans_this_month = ScanJob.objects.filter(created_at__gte=month_start).count()
+    total_scans = real_scans().count()
+    scans_this_month = real_scans().filter(created_at__gte=month_start).count()
     pending_reviews = _reviews_with_status().filter(is_pending=True).count()
     total_reviews = PlatformReview.objects.count()
     avg_rating = None
@@ -177,7 +182,7 @@ def overview(request):
         .order_by("-created_at")[:5]
     )
     recent_scans = (
-        ScanJob.objects.select_related("user")
+        real_scans().select_related("user")
         .annotate(findings_count=Count("findings"), pages_count=Count("pages"))
         .order_by("-created_at")[:5]
     )
@@ -223,7 +228,7 @@ def overview(request):
             "reports_pending": ReviewReport.objects.filter(
                 status=ReviewReport.Status.PENDING,
             ).count(),
-            "scans_today": ScanJob.objects.filter(created_at__gte=today_start).count(),
+            "scans_today": real_scans().filter(created_at__gte=today_start).count(),
         },
         "totals": {
             "users": total_users,
@@ -286,7 +291,7 @@ def dashboard(request):
         if key in series_index:
             series_index[key]["ai_tokens"] += s["total_tokens"] or 0
 
-    for s in ScanJob.objects.filter(created_at__gte=start).values("created_at"):
+    for s in real_scans().filter(created_at__gte=start).values("created_at"):
         key = s["created_at"].date().isoformat()
         if key in series_index:
             series_index[key]["scans"] += 1
@@ -444,7 +449,7 @@ def user_detail(request, user_id: int):
     # 客服最常見的問題是「我的掃描失敗了／被扣點了」，先前要從使用者詳情
     # 切到掃描頁再搜一次網址才找得到，這裡直接帶出來。
     recent_scans = (
-        ScanJob.objects.filter(user=user)
+        real_scans().filter(user=user)
         .annotate(
             findings_count=Count("findings", distinct=True),
             pages_count=Count("pages", distinct=True),
@@ -452,7 +457,7 @@ def user_detail(request, user_id: int):
         .order_by("-created_at")[:10]
     )
     data["recent_scans"] = AdminScanJobSerializer(recent_scans, many=True).data
-    data["scans_total"] = ScanJob.objects.filter(user=user).count()
+    data["scans_total"] = real_scans().filter(user=user).count()
     return Response(data)
 
 
@@ -862,7 +867,7 @@ def audit_log(request):
 @permission_classes([permissions.IsAdminUser])
 def scans_list(request):
     qs = (
-        ScanJob.objects.select_related("user")
+        real_scans().select_related("user")
         .annotate(
             findings_count=Count("findings", distinct=True),
             pages_count=Count("pages", distinct=True),
@@ -909,7 +914,7 @@ def scans_list(request):
 @permission_classes([permissions.IsAdminUser])
 def scan_detail(request, scan_id: int):
     scan = get_object_or_404(
-        ScanJob.objects.select_related("user").annotate(
+        real_scans().select_related("user").annotate(
             findings_count=Count("findings", distinct=True),
             pages_count=Count("pages", distinct=True),
         ),

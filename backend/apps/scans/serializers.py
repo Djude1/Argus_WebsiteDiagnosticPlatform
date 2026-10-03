@@ -19,6 +19,7 @@ from apps.scans.models import (
     FixOutput,
     Page,
     ScanJob,
+    SiteProject,
     VerifiedDomain,
     encrypt_test_auth,
 )
@@ -91,6 +92,8 @@ class ScanJobCreateSerializer(serializers.Serializer):
                                             write_only=True, max_length=255)
     test_auth_password = serializers.CharField(required=False, allow_blank=True,
                                                write_only=True, max_length=255)
+    # 網站專案（選填）：沒帶時 ScanJob.save() 依 origin 自動歸入
+    project = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, attrs: dict) -> dict:
         if not attrs["authorization_confirmed"]:
@@ -157,13 +160,39 @@ class ScanJobCreateSerializer(serializers.Serializer):
         attrs["normalized_url"] = normalized_url
         attrs["origin"] = get_origin(normalized_url)
         attrs["hostname"] = hostname
+        attrs["project"] = self._resolve_project(attrs.get("project"), attrs["origin"])
         return attrs
+
+    def _resolve_project(self, project_id, origin: str):
+        """指定專案時：必須是自己的專案，且網址與專案是同一個網站（換網站＝換專案）。"""
+        if project_id is None:
+            return None
+        project = SiteProject.objects.filter(
+            id=project_id, user=self.context["request"].user
+        ).first()
+        if project is None:
+            raise serializers.ValidationError({"project": "找不到這個網站專案。"})
+        if project.is_demo:
+            raise serializers.ValidationError(
+                {"project": "示範專案不能建立掃描；請新增你自己的網站專案。"}
+            )
+        if project.origin != origin:
+            raise serializers.ValidationError(
+                {
+                    "url": (
+                        f"網址不屬於專案「{project.name}」（{project.origin}）。"
+                        "要掃描其他網站，請先切換或新增專案。"
+                    )
+                }
+            )
+        return project
 
     @transaction.atomic
     def create(self, validated_data: dict) -> ScanJob:
         request = self.context["request"]
         scan_job = ScanJob.objects.create(
             user=request.user,
+            project=validated_data.get("project"),
             original_url=validated_data["url"],
             normalized_url=validated_data["normalized_url"],
             origin=validated_data["origin"],
@@ -201,11 +230,14 @@ class ScanJobCreateSerializer(serializers.Serializer):
 class ScanJobSerializer(serializers.ModelSerializer):
     findings_count = serializers.IntegerField(read_only=True)
     pages_count = serializers.IntegerField(read_only=True)
+    # 屬於示範專案（唯讀）：前端據此隱藏重新產生修正產出、網頁複刻等會花點數的動作
+    is_demo = serializers.SerializerMethodField()
 
     class Meta:
         model = ScanJob
         fields = [
             "id",
+            "project",
             "original_url",
             "normalized_url",
             "origin",
@@ -229,8 +261,12 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "completed_at",
             "findings_count",
             "pages_count",
+            "is_demo",
         ]
         read_only_fields = fields
+
+    def get_is_demo(self, obj) -> bool:
+        return bool(obj.project_id and obj.project.is_demo)
 
 
 class ScanJobStatusSerializer(serializers.ModelSerializer):
@@ -329,6 +365,171 @@ class FixOutputSerializer(serializers.ModelSerializer):
 # ============================================================
 # 網域所有權驗證（VerifiedDomain）
 # ============================================================
+
+
+class ProjectScanBriefSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    status = serializers.CharField()
+    overall_score = serializers.IntegerField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    completed_at = serializers.DateTimeField(allow_null=True)
+
+
+class SiteProjectSummarySerializer(serializers.Serializer):
+    scans_count = serializers.IntegerField()
+    latest_scan = ProjectScanBriefSerializer(allow_null=True)
+    latest_score = serializers.IntegerField(allow_null=True)
+    latest_category_scores = serializers.DictField(child=serializers.FloatField())
+    previous_score = serializers.IntegerField(allow_null=True)
+    last_completed_at = serializers.DateTimeField(allow_null=True)
+    # 最近幾次完成掃描的分數（舊→新），清單畫走勢用
+    score_history = serializers.ListField(child=serializers.IntegerField())
+    # 最新完成掃描依嚴重度的問題數（同規則算一個、只算有勾的維度、不含 info）
+    issue_counts = serializers.DictField(child=serializers.IntegerField())
+
+
+class SiteProjectSerializer(serializers.ModelSerializer):
+    """網站專案（清單、切換器、各分頁共用）。
+
+    summary 由 view 以 projects.project_summaries 批次算好放進 context。
+    """
+
+    hostname = serializers.CharField(read_only=True)
+    summary = serializers.SerializerMethodField()
+    # 網域所有權已驗證（可進行主動測試）；頁首的驗證標記用
+    domain_verified = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SiteProject
+        fields = [
+            "id",
+            "name",
+            "origin",
+            "hostname",
+            "start_url",
+            "default_scope",
+            "default_categories",
+            "default_scan_mode",
+            "description",
+            "is_demo",
+            "favicon",
+            "domain_verified",
+            "archived_at",
+            "created_at",
+            "updated_at",
+            "summary",
+        ]
+        read_only_fields = fields
+
+    def get_domain_verified(self, obj) -> bool:
+        from apps.scans.services import user_owns_domain
+
+        return user_owns_domain(obj.user, obj.hostname)
+
+    def get_summary(self, obj) -> SiteProjectSummarySerializer:
+        from apps.scans.projects import project_summaries
+
+        summaries = self.context.get("summaries")
+        if summaries is None or obj.id not in summaries:
+            summaries = project_summaries([obj.id])
+        return SiteProjectSummarySerializer(summaries[obj.id]).data
+
+
+def _validated_start_url(value: str) -> str:
+    try:
+        return assert_public_http_url(value)
+    except ValueError as exc:
+        raise serializers.ValidationError(str(exc)) from exc
+
+
+SCAN_MODE_CHOICES = [("passive", "被動偵測"), ("active", "主動測試")]
+
+
+class SiteProjectCreateSerializer(serializers.Serializer):
+    """新增網站專案：網址決定 origin（重複與恢復封存由 view 處理），可一併設定預設掃描設定。"""
+
+    start_url = serializers.CharField(max_length=2048)
+    name = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    description = serializers.CharField(max_length=300, required=False, allow_blank=True)
+    default_scope = serializers.ChoiceField(choices=SiteProject.Scope.choices, required=False)
+    default_categories = serializers.ListField(
+        child=serializers.ChoiceField(choices=ALL_CATEGORIES),
+        allow_empty=False,
+        required=False,
+    )
+    default_scan_mode = serializers.ChoiceField(choices=SCAN_MODE_CHOICES, required=False)
+
+    def validate_start_url(self, value: str) -> str:
+        return _validated_start_url(value.strip())
+
+    def validate_default_categories(self, value: list[str]) -> list[str]:
+        return [c for c in ALL_CATEGORIES if c in set(value)]
+
+    def validate(self, attrs: dict) -> dict:
+        attrs["origin"] = get_origin(attrs["start_url"])
+        attrs["name"] = (attrs.get("name") or "").strip()
+        attrs["description"] = (attrs.get("description") or "").strip()
+        _check_active_needs_security(attrs)
+        return attrs
+
+
+def _check_active_needs_security(attrs: dict, instance=None) -> None:
+    """預設主動測試時，預設維度必須含資安（與 ScanJob.clean 的規則一致）。"""
+    mode = attrs.get("default_scan_mode", getattr(instance, "default_scan_mode", "passive"))
+    categories = attrs.get("default_categories", getattr(instance, "default_categories", None))
+    if mode == "active" and categories is not None and "security" not in categories:
+        raise serializers.ValidationError(
+            {"default_scan_mode": "主動測試屬資安檢測，預設維度必須包含「資安」。"}
+        )
+
+
+class SiteProjectUpdateSerializer(serializers.Serializer):
+    """修改專案名稱、起始網址與預設掃描設定；起始網址必須仍在同一個網站。"""
+
+    name = serializers.CharField(max_length=80, required=False)
+    start_url = serializers.CharField(max_length=2048, required=False)
+    description = serializers.CharField(max_length=300, required=False, allow_blank=True)
+    default_scan_mode = serializers.ChoiceField(choices=SCAN_MODE_CHOICES, required=False)
+    default_scope = serializers.ChoiceField(choices=SiteProject.Scope.choices, required=False)
+    default_categories = serializers.ListField(
+        child=serializers.ChoiceField(choices=ALL_CATEGORIES),
+        allow_empty=False,
+        required=False,
+    )
+
+    def validate_default_categories(self, value: list[str]) -> list[str]:
+        # 去重並維持固定順序，與 ScanJob.categories 一致
+        return [c for c in ALL_CATEGORIES if c in set(value)]
+
+    def validate_name(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("專案名稱不可空白。")
+        return value
+
+    def validate_start_url(self, value: str) -> str:
+        normalized = _validated_start_url(value.strip())
+        if get_origin(normalized) != self.instance.origin:
+            raise serializers.ValidationError(
+                f"起始網址必須在 {self.instance.origin} 內；要管理其他網站請新增專案。"
+            )
+        return normalized
+
+    def validate(self, attrs: dict) -> dict:
+        if self.instance is not None and self.instance.is_demo:
+            raise serializers.ValidationError(
+                "示範專案無法修改設定；可以封存，或新增你自己的網站專案。"
+            )
+        if "description" in attrs:
+            attrs["description"] = attrs["description"].strip()
+        _check_active_needs_security(attrs, self.instance)
+        return attrs
+
+    def update(self, instance, validated_data):
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
 
 
 class VerifiedDomainSerializer(serializers.ModelSerializer):

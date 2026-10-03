@@ -3032,6 +3032,23 @@
                 }
             }
         },
+        "/api/auth/turnstile/": {
+            "get": {
+                "operationId": "auth_turnstile_retrieve",
+                "description": "公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/billing/ecpay/callback/": {
             "post": {
                 "operationId": "billing_ecpay_callback_create",
@@ -3896,6 +3913,370 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Page"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/": {
+            "get": {
+                "operationId": "projects_list",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "archived",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "true＝改列已封存的專案"
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/SiteProject"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "projects_create",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "tags": [
+                    "projects"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SiteProjectCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SiteProjectCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SiteProjectCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteProject"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/": {
+            "get": {
+                "operationId": "projects_retrieve",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteProject"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "projects_partial_update",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSiteProjectUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSiteProjectUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSiteProjectUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteProject"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "projects_destroy",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/issues/": {
+            "get": {
+                "operationId": "projects_issues_retrieve",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/overview/": {
+            "get": {
+                "operationId": "projects_overview_retrieve",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/pages/": {
+            "get": {
+                "operationId": "projects_pages_retrieve",
+                "description": "頁面清單：最新（或 ?scan= 指定）一次完成掃描的每頁狀態與問題數。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/projects/{id}/restore/": {
+            "post": {
+                "operationId": "projects_restore_create",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteProject"
                                 }
                             }
                         },
@@ -6439,6 +6820,33 @@
                 "type": "string",
                 "description": "* `seo` - SEO\n* `aeo` - AEO\n* `geo` - GEO\n* `security` - 資安\n* `ux` - UX"
             },
+            "DefaultCategoriesEnum": {
+                "enum": [
+                    "seo",
+                    "aeo",
+                    "geo",
+                    "ux",
+                    "security"
+                ],
+                "type": "string",
+                "description": "* `seo` - seo\n* `aeo` - aeo\n* `geo` - geo\n* `ux` - ux\n* `security` - security"
+            },
+            "DefaultScanModeEnum": {
+                "enum": [
+                    "passive",
+                    "active"
+                ],
+                "type": "string",
+                "description": "* `passive` - 被動偵測\n* `active` - 主動測試"
+            },
+            "DefaultScopeEnum": {
+                "enum": [
+                    "site",
+                    "single"
+                ],
+                "type": "string",
+                "description": "* `site` - 整個網站\n* `single` - 單一頁面"
+            },
             "DomainOverrideRequest": {
                 "type": "object",
                 "description": "網域驗證人工審核：approve=True 人工核准；approve=False 否決。",
@@ -7211,6 +7619,38 @@
                     }
                 }
             },
+            "PatchedSiteProjectUpdateRequest": {
+                "type": "object",
+                "description": "修改專案名稱、起始網址與預設掃描設定；起始網址必須仍在同一個網站。",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                    },
+                    "start_url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "default_scan_mode": {
+                        "$ref": "#/components/schemas/DefaultScanModeEnum"
+                    },
+                    "default_scope": {
+                        "$ref": "#/components/schemas/DefaultScopeEnum"
+                    },
+                    "default_categories": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DefaultCategoriesEnum"
+                        }
+                    }
+                }
+            },
             "PatchedTeamMemberWriteRequest": {
                 "type": "object",
                 "properties": {
@@ -7648,12 +8088,48 @@
                     "title"
                 ]
             },
+            "ProjectScanBrief": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "overall_score": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "completed_at",
+                    "created_at",
+                    "id",
+                    "overall_score",
+                    "status"
+                ]
+            },
             "ScanJob": {
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "integer",
                         "readOnly": true
+                    },
+                    "project": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
                     },
                     "original_url": {
                         "type": "string",
@@ -7756,6 +8232,10 @@
                     "pages_count": {
                         "type": "integer",
                         "readOnly": true
+                    },
+                    "is_demo": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -7767,6 +8247,7 @@
                     "error_message",
                     "findings_count",
                     "id",
+                    "is_demo",
                     "max_depth",
                     "max_pages",
                     "normalized_url",
@@ -7775,6 +8256,7 @@
                     "overall_score",
                     "pages_count",
                     "progress",
+                    "project",
                     "respect_robots",
                     "scan_log",
                     "scan_mode",
@@ -7827,7 +8309,7 @@
                     "max_depth": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 3
+                        "default": 6
                     },
                     "max_pages": {
                         "type": "integer",
@@ -7838,6 +8320,10 @@
                     "respect_robots": {
                         "type": "boolean",
                         "default": true
+                    },
+                    "project": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -7846,6 +8332,7 @@
                     "categories",
                     "max_depth",
                     "max_pages",
+                    "project",
                     "respect_robots",
                     "scan_mode",
                     "third_party_reconfirmed",
@@ -7895,7 +8382,7 @@
                     "max_depth": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 3
+                        "default": 6
                     },
                     "max_pages": {
                         "type": "integer",
@@ -7916,6 +8403,10 @@
                         "type": "string",
                         "writeOnly": true,
                         "maxLength": 255
+                    },
+                    "project": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -7989,6 +8480,198 @@
                 ],
                 "type": "string",
                 "description": "* `critical` - 嚴重\n* `high` - 高\n* `medium` - 中\n* `low` - 低\n* `info` - 資訊"
+            },
+            "SiteProject": {
+                "type": "object",
+                "description": "網站專案（清單、切換器、各分頁共用）。\n\nsummary 由 view 以 projects.project_summaries 批次算好放進 context。",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "origin": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "hostname": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "start_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true
+                    },
+                    "default_scope": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DefaultScopeEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "default_categories": {
+                        "readOnly": true
+                    },
+                    "default_scan_mode": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "is_demo": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "favicon": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "domain_verified": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "archived_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "summary": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SiteProjectSummary"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "archived_at",
+                    "created_at",
+                    "default_categories",
+                    "default_scan_mode",
+                    "default_scope",
+                    "description",
+                    "domain_verified",
+                    "favicon",
+                    "hostname",
+                    "id",
+                    "is_demo",
+                    "name",
+                    "origin",
+                    "start_url",
+                    "summary",
+                    "updated_at"
+                ]
+            },
+            "SiteProjectCreateRequest": {
+                "type": "object",
+                "description": "新增網站專案：網址決定 origin（重複與恢復封存由 view 處理），可一併設定預設掃描設定。",
+                "properties": {
+                    "start_url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "default_scope": {
+                        "$ref": "#/components/schemas/DefaultScopeEnum"
+                    },
+                    "default_categories": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DefaultCategoriesEnum"
+                        }
+                    },
+                    "default_scan_mode": {
+                        "$ref": "#/components/schemas/DefaultScanModeEnum"
+                    }
+                },
+                "required": [
+                    "start_url"
+                ]
+            },
+            "SiteProjectSummary": {
+                "type": "object",
+                "properties": {
+                    "scans_count": {
+                        "type": "integer"
+                    },
+                    "latest_scan": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ProjectScanBrief"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "latest_score": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "latest_category_scores": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number",
+                            "format": "double"
+                        }
+                    },
+                    "previous_score": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "last_completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "score_history": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "issue_counts": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "required": [
+                    "issue_counts",
+                    "last_completed_at",
+                    "latest_category_scores",
+                    "latest_scan",
+                    "latest_score",
+                    "previous_score",
+                    "scans_count",
+                    "score_history"
+                ]
             },
             "SiteRebuild": {
                 "type": "object",
