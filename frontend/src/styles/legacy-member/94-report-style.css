@@ -1,142 +1,15 @@
 /* ========================================
-   會員區的「報告式」外觀（2026-10-02，不是 462848b 原有內容）
-   使用者回饋：圓角白卡片＋淡灰底＋彩色左邊條＋彩色徽章＋線條圖示＋右上角主按鈕，
-   全部疊在一起是典型的「AI SaaS 儀表板味」。這裡統一改成像一份檢測報告的版面：
-   - 白底，區塊用 1px 細線分隔；圓角 6px、不加陰影（不再是浮起來的卡片）
-   - 選中狀態用字重＋中性底色或底線，不用彩色左邊條
-   - 嚴重度／分數／狀態用「色點或上色的數字＋文字」，不用彩色底的膠囊
-   - 小標（eyebrow）用中性灰、不加大寫字距
-   覆寫的是舊版核心元件（10-components-core 等），寫在這裡集中說明；深色由外掛自動產生。
+   會員工作區的版面整理（2026-10-02 起，不是 462848b 原有內容）
+   外觀沿用舊版元件：淺灰底上的圓角白卡片、彩色徽章、選中項目用淺色底標示。
+   這裡只放新版面需要的規則：掃描表單的勾選清單、掃描詳情的子分頁／摘要／檢視器／截圖視窗。
+   2026-10-03 使用者回饋「報告式（白底細線、色點徽章、底線選中）太素」，已改回卡片與彩色徽章；
+   唯一保留的限制是選中狀態不用彩色左邊條。
    ======================================== */
 
-.argus-app {
-  background: #ffffff;
-}
-
-.panel {
-  border-radius: 6px;
-  border-color: #e2e6ec;
-  box-shadow: none;
-}
-
-.eyebrow {
-  color: #64748b;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-
-.primary-button,
-.secondary-button {
-  border-radius: 6px;
-}
-.primary-button {
-  background: #0f2a4a;
-}
-.primary-button:hover {
-  background: #173d69;
-}
-.primary-button:disabled {
-  background: #94a3b8;
-}
-
-/* 分數：上色的等寬數字，不用彩色底 */
-.score-badge {
-  min-width: 2rem;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.score-badge.good { background: transparent; color: #047857; }
-.score-badge.medium { background: transparent; color: #b45309; }
-.score-badge.bad { background: transparent; color: #be123c; }
-.score-badge.muted { background: transparent; color: #94a3b8; font-family: inherit; font-size: 0.75rem; }
-
-/* 嚴重度：色點＋文字 */
-.severity {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #334155;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.severity::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  flex: 0 0 auto;
-  border-radius: 2px;
-  background: #94a3b8;
-}
-.severity.critical,
-.severity.high,
-.severity.medium,
-.severity.low,
-.severity.info {
-  background: transparent;
-  color: #334155;
-}
-.severity.critical::before { background: #b91c1c; }
-.severity.high::before { background: #ea580c; }
-.severity.medium::before { background: #d97706; }
-.severity.low::before { background: #0284c7; }
-.severity.info::before { background: #94a3b8; }
-
-/* 維度：純文字縮寫（灰），不用五種底色 */
-.category-pill,
-.category-pill.cat-security,
-.category-pill.cat-seo,
-.category-pill.cat-aeo,
-.category-pill.cat-geo,
-.category-pill.cat-ux {
-  padding: 0;
-  background: transparent;
-  color: #64748b;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-/* 掃描狀態：色點＋文字 */
-.status-badge {
-  gap: 0.35rem;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #334155;
-}
-.status-badge.status-slate,
-.status-badge.status-blue,
-.status-badge.status-emerald,
-.status-badge.status-red {
-  background: transparent;
-}
-.status-badge.status-slate { color: #475569; }
-.status-badge.status-blue { color: #1d4ed8; }
-.status-badge.status-emerald { color: #047857; }
-.status-badge.status-red { color: #be123c; }
-
-/* 掃描表單的範圍與維度選項：細框＋左上角勾選方塊，選中＝深色框與實心方塊（不發光、不漸層） */
+/* ── 掃描表單：範圍二選一（圓形）、維度一列一項的勾選清單 ── */
 .scope-card {
   position: relative;
   padding-left: 2.25rem;
-  border-radius: 6px;
-  border-color: #cbd5e1;
-  background: #ffffff;
-}
-.scope-card:hover {
-  border-color: #64748b;
-  box-shadow: none;
-  transform: none;
 }
 .scope-card::before {
   content: "";
@@ -149,78 +22,98 @@
   border-radius: 3px;
   background: #ffffff;
 }
-.scope-card.active {
-  border-color: #475569;
-  background: #f8fafc;
-  box-shadow: none;
-}
 .scope-card.active::before {
-  border-color: #0f172a;
-  background: #0f172a;
+  border-color: #0891b2;
+  background: #0891b2;
   box-shadow: inset 0 0 0 2px #ffffff;
 }
-.category-card::before {
-  top: 0.65rem;
-}
-.scope-meta {
-  color: #475569;
-}
-.scope-card.active .scope-meta {
-  color: #0f172a;
-}
-/* 範圍是二選一：圓形 */
 .scope-grid .scope-card::before {
   border-radius: 50%;
+}
+.category-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+}
+.category-card {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0.55rem 0.75rem 0.55rem 2.25rem;
+  box-shadow: none;
+}
+.category-card + .category-card {
+  border-top: 1px solid #e2e8f0;
+}
+.category-card.active {
+  background: linear-gradient(90deg, #ecfeff 0%, #ffffff 100%);
+  box-shadow: none;
+}
+.category-card:hover {
+  box-shadow: none;
+  transform: none;
+}
+.category-card::before {
+  top: 50%;
+  transform: translateY(-50%);
+}
+.category-card .scope-meta {
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 /* ========== 掃描詳情（ScanExperience.jsx：ScanLayout／FindingsWorkspace） ========== */
 
-/* 子導覽：返回所屬專案的掃描清單＋這次掃描的三個分頁（報告／網站結構圖／修正產出），文字＋底線 */
+/* 子導覽：返回所屬專案的掃描清單＋這次掃描的分頁（報告／網站結構圖／修正產出）；目前分頁用淺藍底 */
 .scan-subnav {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1.5rem;
-  margin-bottom: 1.25rem;
-  border-bottom: 1px solid #e2e6ec;
-}
-.scan-subnav-back {
-  padding-bottom: 0.6rem;
-  color: #475569;
-  font-size: 0.85rem;
-}
-.scan-subnav-back:hover {
-  color: #0f172a;
-  text-decoration: underline;
+  margin-bottom: 1rem;
 }
 .scan-subnav-tabs {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
 }
 .scan-subnav-tab {
-  padding: 0.35rem 0 0.6rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 9px;
   color: #475569;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .scan-subnav-tab:hover {
+  background: #f1f5f9;
   color: #0f172a;
 }
 .scan-subnav-tab.active {
-  color: #0f172a;
-  box-shadow: inset 0 -2px 0 #0f172a;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
-.scan-subnav-back:focus-visible,
 .scan-subnav-tab:focus-visible {
-  outline: 2px solid #0f2a4a;
+  outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
 
+/* 報告：每個區塊是一張卡片 */
 .scan-report {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   min-width: 0;
 }
 .scan-report-head {
@@ -236,7 +129,7 @@
 .scan-report-title {
   overflow-wrap: anywhere;
   color: #0f172a;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.25;
 }
@@ -244,19 +137,21 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.9rem;
-  margin-top: 0.35rem;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.4rem;
   color: #64748b;
   font-size: 0.8rem;
 }
 .scan-report-score {
   display: grid;
-  justify-items: end;
+  justify-items: center;
+  gap: 0.2rem;
   color: #64748b;
   font-size: 0.72rem;
 }
 .scan-report-score .score-badge {
-  font-size: 2rem;
+  padding: 0.35rem 0.9rem;
+  font-size: 1.5rem;
   line-height: 1;
 }
 .scan-report-progress {
@@ -264,41 +159,31 @@
   gap: 0.5rem;
 }
 .scan-report-alert {
-  padding: 0.65rem 0.9rem;
+  padding: 0.75rem 1rem;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border-radius: 12px;
+  background: #f8fafc;
   color: #334155;
   font-size: 0.875rem;
 }
 .scan-report-alert.is-bad {
-  border-color: #fecdd3;
-  background: #fff1f2;
-  color: #9f1239;
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
 }
 
-/* 摘要：三欄（嚴重度｜各維度｜優先處理），細線分隔；窄螢幕依序往下 */
+/* 摘要：嚴重度｜各維度｜優先處理，三張卡片；中等寬度兩張並排、優先處理整列；窄螢幕依序往下 */
 .scan-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid #e2e6ec;
-  border-bottom: 1px solid #e2e6ec;
+  gap: 1rem;
 }
 .scan-summary-block {
   min-width: 0;
-  padding: 1rem 0;
 }
-.scan-summary-block + .scan-summary-block {
-  border-top: 1px solid #eef1f5;
-}
-/* 中等寬度（含分屏）：嚴重度與各維度並排，優先處理在下方整列 */
 @media (min-width: 760px) and (max-width: 1099px) {
   .scan-summary {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .scan-summary-block:nth-child(2) {
-    padding-left: 1.25rem;
-    border-top: 0;
-    border-left: 1px solid #eef1f5;
   }
   .scan-summary-block.is-actions {
     grid-column: 1 / -1;
@@ -308,25 +193,11 @@
   .scan-summary {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
   }
-  .scan-summary-block {
-    padding: 1rem 1.25rem;
-  }
-  .scan-summary-block:first-child {
-    padding-left: 0;
-  }
-  .scan-summary-block:last-child {
-    padding-right: 0;
-  }
-  .scan-summary-block + .scan-summary-block {
-    border-top: 0;
-    border-left: 1px solid #eef1f5;
-  }
 }
-.scan-summary-title,
-.scan-summary-block .bar-chart-header h4 {
-  color: #0f172a;
-  font-size: 0.9rem;
-  font-weight: 700;
+.scan-summary-title {
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .scan-summary-note {
   margin: 0.1rem 0 0.6rem;
@@ -334,30 +205,34 @@
   font-size: 11px;
 }
 .scan-priority-list {
-  margin: 0.5rem 0 0;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0;
   padding: 0;
   list-style: none;
 }
 .scan-priority-row {
   display: grid;
-  grid-template-columns: 3.4rem minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  padding: 0.4rem 0;
-  border: 0;
-  border-bottom: 1px solid #f1f5f9;
-  background: transparent;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
   color: #1e293b;
   font-size: 0.85rem;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
-.scan-priority-row:hover .scan-priority-title {
-  text-decoration: underline;
+.scan-priority-row:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
 }
 .scan-priority-row:focus-visible {
-  outline: 2px solid #0f2a4a;
+  outline: 2px solid #2563eb;
   outline-offset: 1px;
 }
 .scan-priority-title {
@@ -366,16 +241,16 @@
   white-space: nowrap;
 }
 
-/* 檢視器：左清單（固定寬）＋右預覽（說明＋截圖，捲動時固定在畫面內） */
+/* 檢視器：左清單卡片（固定寬）＋右預覽卡片（說明＋截圖，捲動時固定在畫面內） */
 .scan-inspector {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
+  gap: 1rem;
   align-items: start;
 }
 @media (min-width: 900px) {
   .scan-inspector {
-    grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 410px) minmax(0, 1fr);
   }
   .scan-inspector-preview {
     position: sticky;
@@ -388,10 +263,14 @@
   gap: 0.75rem;
   min-width: 0;
 }
+/* 頁面選單一整列（標題可能很長），維度與嚴重度並排 */
 .scan-inspector-filters {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.5rem;
+}
+.scan-inspector-filters .scan-filter:first-child {
+  grid-column: 1 / -1;
 }
 .scan-filter {
   display: grid;
@@ -403,8 +282,7 @@
 }
 .scan-filter .input {
   min-width: 0;
-  padding-top: 0.35rem;
-  padding-bottom: 0.35rem;
+  padding: 0.35rem 1.5rem 0.35rem 0.6rem;
   font-size: 0.8rem;
 }
 .scan-inspector-count {
@@ -412,60 +290,23 @@
   font-size: 0.75rem;
 }
 .scan-inspector-hint {
-  padding: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
   color: #64748b;
   font-size: 0.85rem;
 }
 .finding-group-list {
   display: grid;
-  gap: 0;
+  gap: 0.5rem;
   max-height: min(70vh, 720px);
   overflow: auto;
-  border-top: 1px solid #e2e6ec;
-}
-.finding-group {
-  border: 0;
-  border-bottom: 1px solid #eef1f5;
-  border-radius: 0;
-  background: transparent;
-}
-.finding-group.active {
-  border-color: #eef1f5;
-  background: #f8fafc;
-  box-shadow: none;
-  --tw-ring-shadow: 0 0 #0000;
-}
-.finding-group-header {
-  border-radius: 0;
-  padding: 0.55rem 0.25rem;
-}
-.finding-group-count {
-  min-width: 1.5rem;
-  padding: 0;
-  background: transparent;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-}
-.finding-group-items {
-  border-top: 0;
-  padding: 0 0 0.5rem 0.75rem;
-}
-.finding-item {
-  border-radius: 4px;
-}
-.finding-item.active {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-.finding-detail {
-  border: 1px solid #e2e6ec;
-  border-radius: 6px;
-  background: #ffffff;
+  padding-right: 0.25rem;
 }
 .finding-detail-meta {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 .finding-detail-title {
   color: #0f172a;
@@ -476,294 +317,65 @@
   color: #0f172a;
   font-weight: 700;
 }
-.evidence-panel {
-  border-color: #e2e6ec;
-  border-radius: 6px;
-}
 
-/* 截圖：固定高度的捲動視窗 */
+/* 截圖：卡片內固定高度的捲動視窗（整頁截圖動輒上萬像素高，不撐開版面） */
 .screenshot-shell {
   min-height: 0;
-  padding: 0;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
 }
 .screenshot-caption-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 .screenshot-caption {
   overflow: hidden;
-  color: #334155;
-  font-size: 0.8rem;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .screenshot-viewport {
   max-height: min(62vh, 640px);
   overflow: auto;
-  border: 1px solid #e2e6ec;
-  border-radius: 6px;
-  background: #f8fafc;
+  border-radius: 12px;
 }
 .screenshot-image {
   display: block;
-  border: 0;
-  border-radius: 0;
 }
 .screenshot-pending {
   min-height: 220px;
 }
 
-/* 複刻：截圖下方的一列工具，不是另一張漸層卡片 */
-.rebuild-box {
-  padding: 0.9rem 0 0;
-  border-top: 1px solid #e2e6ec;
-  border-radius: 0;
-  background: transparent;
-}
-.rebuild-title {
-  color: #0f172a;
-  font-size: 0.9rem;
-}
+/* 複刻：跟在截圖後面的一張卡片，按鈕不撐滿 */
 .rebuild-action {
   width: auto;
   padding-left: 1rem;
   padding-right: 1rem;
 }
 
-/* 執行紀錄：預設收合的一列，放在最下方 */
+/* 執行紀錄：淺色、預設收合 */
 .scan-log-panel {
   margin-bottom: 0;
-  border: 1px solid #e2e6ec;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   background: #ffffff;
 }
 .scan-log-summary {
   color: #475569;
 }
 .scan-log-count {
-  background: transparent;
-  color: #94a3b8;
+  background: #f1f5f9;
+  color: #64748b;
 }
 .scan-log-body {
-  border-top-color: #e2e6ec;
+  border-top-color: #e2e8f0;
   color: #334155;
 }
 
-/* 修正產出分頁 */
+/* 修正產出分頁：沒有側欄，區塊不需要上邊距 */
 .fixoutput-box {
   margin-top: 0;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
 }
 .fixoutput-title {
-  color: #0f172a;
-  font-size: 1.25rem;
-}
-.fixoutput-desc {
-  font-size: 0.85rem;
-}
-.fixoutput-status {
-  border-radius: 0;
-  background: transparent;
-}
-
-/* AEO 問答：判定用色點＋文字 */
-.aeo-verdict,
-.aeo-verdict.is-good,
-.aeo-verdict.is-warn,
-.aeo-verdict.is-bad {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #334155;
-}
-.aeo-verdict::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 2px;
-  background: #94a3b8;
-}
-.aeo-verdict.is-good::before { background: #059669; }
-.aeo-verdict.is-warn::before { background: #d97706; }
-.aeo-verdict.is-bad::before { background: #e11d48; }
-.aeo-panel {
-  margin-top: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-/* 維度改成一列一項的勾選清單（名稱｜說明｜每頁點數），五個全選時不會變成五個粗框方塊 */
-.category-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  border: 1px solid #e2e6ec;
-  border-radius: 6px;
-}
-.category-card {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  border: 0;
-  border-radius: 0;
-  padding: 0.55rem 0.75rem 0.55rem 2.25rem;
-}
-.category-card + .category-card {
-  border-top: 1px solid #eef1f5;
-}
-.category-card.active {
-  background: transparent;
-}
-.category-card::before {
-  top: 50%;
-  transform: translateY(-50%);
-}
-.category-card .scope-meta {
-  margin-top: 0;
-  white-space: nowrap;
-}
-
-/* 輸入框與下拉選單：方角，不是膠囊 */
-.input {
-  border-radius: 6px;
-}
-.screenshot-open-link {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #334155;
-  font-size: 0.8rem;
-}
-.screenshot-open-link:hover {
-  background: transparent;
-  color: #0f172a;
-  text-decoration: underline;
-}
-.scan-inspector-filters {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
-}
-.scan-filter .input {
-  padding-left: 0.5rem;
-  padding-right: 1.5rem;
-}
-
-/* 深色：外掛會替舊版元件產生帶彩色底的深色規則（:root[data-theme="dark"] 特異度較高），
-   這裡明確清掉，讓深色主題也是「色點＋文字」 */
-:root[data-theme="dark"] .severity,
-:root[data-theme="dark"] .severity.critical,
-:root[data-theme="dark"] .severity.high,
-:root[data-theme="dark"] .severity.medium,
-:root[data-theme="dark"] .severity.low,
-:root[data-theme="dark"] .severity.info,
-:root[data-theme="dark"] .category-pill,
-:root[data-theme="dark"] .category-pill.cat-security,
-:root[data-theme="dark"] .category-pill.cat-seo,
-:root[data-theme="dark"] .category-pill.cat-aeo,
-:root[data-theme="dark"] .category-pill.cat-geo,
-:root[data-theme="dark"] .category-pill.cat-ux,
-:root[data-theme="dark"] .score-badge,
-:root[data-theme="dark"] .score-badge.good,
-:root[data-theme="dark"] .score-badge.medium,
-:root[data-theme="dark"] .score-badge.bad,
-:root[data-theme="dark"] .score-badge.muted,
-:root[data-theme="dark"] .status-badge,
-:root[data-theme="dark"] .status-badge.status-slate,
-:root[data-theme="dark"] .status-badge.status-blue,
-:root[data-theme="dark"] .status-badge.status-emerald,
-:root[data-theme="dark"] .status-badge.status-red,
-:root[data-theme="dark"] .finding-group-count,
-:root[data-theme="dark"] .aeo-verdict,
-:root[data-theme="dark"] .aeo-verdict.is-good,
-:root[data-theme="dark"] .aeo-verdict.is-warn,
-:root[data-theme="dark"] .aeo-verdict.is-bad,
-:root[data-theme="dark"] .fixoutput-status,
-:root[data-theme="dark"] .scan-log-count,
-:root[data-theme="dark"] .screenshot-open-link,
-:root[data-theme="dark"] .rebuild-box,
-:root[data-theme="dark"] .fixoutput-box,
-:root[data-theme="dark"] .aeo-panel {
-  background: transparent;
-  box-shadow: none;
-}
-:root[data-theme="dark"] .severity,
-:root[data-theme="dark"] .severity.critical,
-:root[data-theme="dark"] .severity.high,
-:root[data-theme="dark"] .severity.medium,
-:root[data-theme="dark"] .severity.low,
-:root[data-theme="dark"] .severity.info,
-:root[data-theme="dark"] .aeo-verdict,
-:root[data-theme="dark"] .aeo-verdict.is-good,
-:root[data-theme="dark"] .aeo-verdict.is-warn,
-:root[data-theme="dark"] .aeo-verdict.is-bad {
-  color: #cbd5e1;
-}
-:root[data-theme="dark"] .category-pill,
-:root[data-theme="dark"] .category-pill.cat-security,
-:root[data-theme="dark"] .category-pill.cat-seo,
-:root[data-theme="dark"] .category-pill.cat-aeo,
-:root[data-theme="dark"] .category-pill.cat-geo,
-:root[data-theme="dark"] .category-pill.cat-ux,
-:root[data-theme="dark"] .finding-group-count {
-  color: #94a3b8;
-}
-:root[data-theme="dark"] .score-badge.good { color: #34d399; }
-:root[data-theme="dark"] .score-badge.medium { color: #fbbf24; }
-:root[data-theme="dark"] .score-badge.bad { color: #fb7185; }
-:root[data-theme="dark"] .status-badge.status-emerald { color: #34d399; }
-:root[data-theme="dark"] .status-badge.status-blue { color: #93c5fd; }
-:root[data-theme="dark"] .status-badge.status-red { color: #fb7185; }
-:root[data-theme="dark"] .status-badge.status-slate { color: #cbd5e1; }
-/* 深色：主按鈕改淺底深字（深藍底在深色頁面上對比不足）；勾選方塊實心 */
-:root[data-theme="dark"] .primary-button {
-  background: #e2e8f0;
-  color: #0b1426;
-}
-:root[data-theme="dark"] .primary-button:hover {
-  background: #ffffff;
-}
-:root[data-theme="dark"] .primary-button:disabled {
-  background: #475569;
-  color: #cbd5e1;
-}
-:root[data-theme="dark"] .scope-card.active::before {
-  border-color: #e2e8f0;
-  background: #e2e8f0;
-  box-shadow: inset 0 0 0 2px #0b1426;
-}
-:root[data-theme="dark"] .scope-card.active {
-  border-color: #94a3b8;
-}
-:root[data-theme="dark"] .project-sidebar-link.active,
-:root[data-theme="dark"] .scan-subnav-tab.active,
-:root[data-theme="dark"] .project-chip.active {
-  color: #f8fafc;
-}
-:root[data-theme="dark"] .scan-subnav-tab.active,
-:root[data-theme="dark"] .project-chip.active {
-  box-shadow: inset 0 -2px 0 #e2e8f0;
-}
-.evidence-panel-header {
-  border-bottom-color: #e2e6ec;
-  background: #f8fafc;
-}
-.evidence-panel-title {
-  color: #0f172a;
-}
-:root[data-theme="dark"] .evidence-panel-title {
-  color: #e2e8f0;
+  font-size: 1.1rem;
 }

@@ -1490,7 +1490,7 @@ function FindingsWorkspace({ scan }) {
   return (
     <>
     <section className="scan-report">
-      <header className="scan-report-head">
+      <header className="panel scan-report-head">
         <div className="scan-report-id">
           <h1 className="scan-report-title">{scan.origin.replace(/^https?:\/\//, "")}</h1>
           <p className="scan-report-meta">
@@ -1551,10 +1551,10 @@ function FindingsWorkspace({ scan }) {
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (
         <div className="scan-summary">
-          <section className="scan-summary-block">
+          <section className="panel scan-summary-block">
             <SeverityBarChart severityTotals={severityTotals} title="嚴重度分布" />
           </section>
-          <section className="scan-summary-block">
+          <section className="panel scan-summary-block">
             {/* 數的是原始筆數：同一問題出現在多個頁面會分別計入，與下方清單對得上；
                 報告裡同名圖數的是合併重複後的項目數 */}
             <h2 className="scan-summary-title">各維度佔比</h2>
@@ -1567,7 +1567,7 @@ function FindingsWorkspace({ scan }) {
               }))}
             />
           </section>
-          <section className="scan-summary-block is-actions">
+          <section className="panel scan-summary-block is-actions">
             <h2 className="scan-summary-title">優先處理</h2>
             {topActions.length ? (
               <ol className="scan-priority-list">
@@ -1588,7 +1588,7 @@ function FindingsWorkspace({ scan }) {
                         {SEVERITY_LABEL[action.severity] || action.severity}
                       </span>
                       <span className="scan-priority-title">{action.title}</span>
-                      <span className="category-pill">{CATEGORY_LABELS[action.category] || action.category}</span>
+                      <span className={`category-pill cat-${action.category}`}>{CATEGORY_LABELS[action.category] || action.category}</span>
                     </button>
                   </li>
                 ))}
@@ -1604,7 +1604,7 @@ function FindingsWorkspace({ scan }) {
 
       {/* 檢視器：左邊問題清單、右邊選中問題的說明與頁面截圖 */}
       <div className="scan-inspector">
-        <div className="scan-inspector-list">
+        <div className="panel scan-inspector-list">
           <div className="scan-inspector-filters">
             <label className="scan-filter">
               <span>頁面</span>
@@ -1648,14 +1648,14 @@ function FindingsWorkspace({ scan }) {
           />
         </div>
 
-        <div className="scan-inspector-preview">
+        <div className="panel scan-inspector-preview">
           {selectedFinding ? (
             <article className="finding-detail">
               <p className="finding-detail-meta">
                 <span className={`severity ${selectedFinding.severity}`}>
                   {SEVERITY_LABEL[selectedFinding.severity] || selectedFinding.severity}
                 </span>
-                <span className="category-pill">{CATEGORY_LABELS[selectedFinding.category] || selectedFinding.category}</span>
+                <span className={`category-pill cat-${selectedFinding.category}`}>{CATEGORY_LABELS[selectedFinding.category] || selectedFinding.category}</span>
               </p>
               <h3 className="finding-detail-title">{selectedFinding.title}</h3>
               <p>{selectedFinding.description}</p>

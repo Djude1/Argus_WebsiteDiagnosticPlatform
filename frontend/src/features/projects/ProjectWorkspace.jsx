@@ -391,7 +391,7 @@ function ProjectRow({ project, onRestore, restoring }) {
 
 function ProjectTable({ projects, caption, onRestore, restoringId }) {
   return (
-    <div className="project-table-wrap">
+    <div className="panel project-table-wrap">
       <table className="project-registry">
         <caption className="project-sr-only">{caption}</caption>
         <thead>
@@ -608,7 +608,7 @@ function ProjectCreatePage() {
           </Link>
         )}
         <button type="submit" className="primary-button" disabled={submitting || !startUrl.trim()}>
-          {submitting ? "建立中…" : "建立專案並開始掃描"}
+          {submitting ? "建立中，正在取得網站圖示…" : "建立專案並開始掃描"}
         </button>
       </form>
     </div>

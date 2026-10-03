@@ -6,6 +6,7 @@ import importlib
 import io
 from contextlib import redirect_stdout
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
@@ -114,6 +115,21 @@ class ProjectApiTests(APITestCase):
     def setUp(self):
         self.user = _user("api")
         self.client.force_authenticate(self.user)
+        # 新增專案會立刻抓網站圖示（連外網）；這裡只驗證有被呼叫，抓取本身在 tests_favicon.py
+        patcher = patch("apps.scans.views.refresh_project_favicon_from_url")
+        self.fetch_favicon = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_create_fetches_favicon_immediately(self):
+        def fake_fetch(project):
+            project.favicon = "data:image/png;base64,AAAA"
+            project.save(update_fields=["favicon"])
+
+        self.fetch_favicon.side_effect = fake_fetch
+        response = self._create("https://example.com/about")
+        self.assertEqual(response.status_code, 201)
+        self.fetch_favicon.assert_called_once()
+        self.assertEqual(response.data["favicon"], "data:image/png;base64,AAAA")
 
     def _create(self, url, **extra):
         return self.client.post(

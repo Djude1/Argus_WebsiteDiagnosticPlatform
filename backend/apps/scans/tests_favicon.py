@@ -144,6 +144,40 @@ class FetchTests(SimpleTestCase):
             data_url = favicon.discover_favicon(html, "https://example.com/")
         self.assertTrue(data_url.startswith("data:image/png"))
 
+    def test_favicon_for_url_reads_homepage_declared_icon(self, mock_assert):
+        # 新增專案時：先抓首頁（含轉址），用最終網址解析相對路徑的 <link rel=icon>
+        def handler(request):
+            if request.url.path == "/":
+                return httpx.Response(301, headers={"location": "https://www.example.com/home"})
+            if request.url.path == "/home":
+                html = '<html><head><link rel="icon" sizes="32x32" href="img/i.png"></head></html>'
+                return httpx.Response(200, headers={"content-type": "text/html"}, content=html)
+            if request.url.path == "/img/i.png":
+                return httpx.Response(200, headers={"content-type": "image/png"}, content=_png())
+            return httpx.Response(404)
+
+        with self._client(handler):
+            data_url = favicon.favicon_for_url("https://example.com/")
+        self.assertTrue(data_url.startswith("data:image/png"))
+        checked = [call.args[0] for call in mock_assert.call_args_list]
+        self.assertIn("https://www.example.com/img/i.png", checked)
+
+    def test_favicon_for_url_falls_back_when_homepage_fails(self, _assert):
+        def handler(request):
+            if request.url.path == "/favicon.ico":
+                return httpx.Response(200, headers={"content-type": "image/x-icon"}, content=_ico())
+            return httpx.Response(500)
+
+        with self._client(handler):
+            self.assertTrue(
+                favicon.favicon_for_url("https://example.com/").startswith("data:image/png")
+            )
+
+    def test_deadline_stops_trying_candidates(self, _assert):
+        with patch("apps.scans.favicon._fetch") as fetch:
+            self.assertEqual(favicon.discover_favicon("", "https://example.com/", deadline=0), "")
+        fetch.assert_not_called()
+
 
 class RefreshTests(TestCase):
     def setUp(self):
@@ -164,6 +198,13 @@ class RefreshTests(TestCase):
         )
         self.assertTrue(favicon.needs_refresh(self.project))
 
+    def test_refresh_from_url_never_raises(self):
+        with patch("apps.scans.favicon.favicon_for_url", side_effect=RuntimeError("boom")):
+            favicon.refresh_project_favicon_from_url(self.project)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.favicon, "")
+        self.assertIsNotNone(self.project.favicon_checked_at)
+
     def test_failure_keeps_previous_icon(self):
         self.project.favicon = "data:image/png;base64,OLD"
         self.project.save()
@@ -172,3 +213,28 @@ class RefreshTests(TestCase):
         self.project.refresh_from_db()
         self.assertEqual(self.project.favicon, "data:image/png;base64,OLD")
         self.assertIsNotNone(self.project.favicon_checked_at)
+
+
+class RealWorldQuirkTests(SimpleTestCase):
+    def test_nonstandard_image_type_accepted(self):
+        # gov.tw 以 image/x-png 回傳圖示
+        self.assertTrue(favicon.to_data_url("image/x-png", _png()).startswith("data:image/png"))
+
+    @patch("apps.scans.favicon.assert_public_http_url", side_effect=lambda url: url)
+    def test_requests_send_identifiable_user_agent(self, _assert):
+        seen = []
+
+        def handler(request):
+            seen.append(request.headers.get("user-agent"))
+            return httpx.Response(404)
+
+        real = httpx.Client
+
+        def factory(*args, **kwargs):
+            kwargs["transport"] = httpx.MockTransport(handler)
+            return real(*args, **kwargs)
+
+        with patch("apps.scans.favicon.httpx.Client", side_effect=factory):
+            favicon.favicon_for_url("https://example.com/")
+        self.assertTrue(seen)
+        self.assertTrue(all(ua and ua.startswith("SiteSense-AI-Scanner") for ua in seen))
