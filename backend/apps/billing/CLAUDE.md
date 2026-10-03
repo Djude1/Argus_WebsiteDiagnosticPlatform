@@ -88,7 +88,7 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 
 - Model：`SubscriptionPlan`（方案清單，seed migration 建立內建方案）/ `UserSubscription`（OneToOne；`periods_remaining` 預付期數、`current_period_end` 下次贈點時間、`last_grant_period` 同月冪等）。
 - lazy 結算：沒有 celery beat——`settle_subscription` 掛在①登入成功後②`wallet/` 與 `subscription/*` API 進場時（用 `settle_subscription_safe`，失敗只 log）。
-- 端點：`GET /api/billing/subscription/plans/`（公開）、`GET /api/billing/subscription/`（自己；無訂閱回 null；含 `plan_monthly_coins` 供會員側邊欄方案卡算進度）、`POST /api/billing/subscription/subscribe/`、`POST /api/billing/subscription/cancel/`。
+- 端點：`GET /api/billing/subscription/plans/`（公開）、`GET /api/billing/subscription/`（自己；無訂閱回 null）、`POST /api/billing/subscription/subscribe/`、`POST /api/billing/subscription/cancel/`。
 - `subscribe/` 行為比照 purchase：`ARGUS_PAYMENT_MODE != "ecpay_test"` 回 503 不入點；`ecpay_test` 模擬首月一次付款（不接綠界定期定額），直接 `grant_subscription`＋`settle_subscription` 入帳。
 - 月份前進用 `_advance_month`（calendar 安全，1/31 → 2/28），禁止手寫 `month + 1`。
 - 後台調整：`POST /api/admin/users/<id>/subscription/`（grant/cancel，寫 `AdminAuditLog(action=subscription_adjust)`）；`GET /api/admin/subscriptions/plans/`（方案唯讀）。

@@ -23,10 +23,7 @@ _TITLE_MARKERS = (
 # 刻意不收純 "captcha"：正常網頁的表單常內嵌 reCAPTCHA，會把正常頁誤判成防護頁。
 _BODY_MARKERS = (
     "cf-chl",              # Cloudflare challenge 相關 DOM（cf-chl-bypass 等）
-    # CF 攔截頁的 orchestrate 載入器；不收裸 "challenge-platform"——CF Bot 偵測會在正常頁面
-    # 插入 /cdn-cgi/challenge-platform/scripts/ 背景腳本（與 crawler.py 同理）
-    "/cdn-cgi/challenge-platform/h/",
-    "_cf_chl_opt",         # CF 攔截頁的設定物件
+    "challenge-platform",  # CF challenge 載入器路徑（/cdn-cgi/challenge-platform/）
     "cf_captcha",          # CF 舊式 captcha 標記（與 crawler.py 同款）
 )
 

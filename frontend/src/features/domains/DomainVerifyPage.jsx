@@ -291,7 +291,7 @@ export function DomainVerifyPage() {
         className="domain-back"
         onClick={() => navigate("/dashboard")}
       >
-        ← 返回網站專案
+        ← 返回 Dashboard
       </button>
 
       <header className="domain-header">

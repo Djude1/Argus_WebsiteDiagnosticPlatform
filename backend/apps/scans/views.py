@@ -11,9 +11,6 @@ from django.db import close_old_connections, connections
 from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404, HttpResponse
-from django.utils import timezone
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
@@ -26,7 +23,6 @@ from apps.billing.services import (
     get_or_create_wallet,
 )
 from apps.scans.domain_verification import generate_token, run_verification
-from apps.scans.favicon import refresh_project_favicon_from_url
 from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
 from apps.scans.models import (
     AuthorizationConsent,
@@ -35,17 +31,9 @@ from apps.scans.models import (
     Page,
     ReportVerification,
     ScanJob,
-    SiteProject,
     VerifiedDomain,
-    default_project_name,
 )
 from apps.scans.process_runner import _terminate_process_tree
-from apps.scans.projects import (
-    project_issues,
-    project_overview,
-    project_pages,
-    project_summaries,
-)
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
 from apps.scans.serializers import (
@@ -57,9 +45,6 @@ from apps.scans.serializers import (
     ScanJobCreateSerializer,
     ScanJobSerializer,
     ScanJobStatusSerializer,
-    SiteProjectCreateSerializer,
-    SiteProjectSerializer,
-    SiteProjectUpdateSerializer,
     VerifiedDomainCreateSerializer,
     VerifiedDomainSerializer,
     build_verification_instructions,
@@ -256,12 +241,6 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             )
             .order_by("-created_at")
         )
-        # 網站專案的掃描分頁：?project=<id> 回該專案全部掃描（不做下方的 origin 收合）
-        project_id = self.request.query_params.get("project")
-        if self.action == "list" and project_id:
-            if not str(project_id).isdigit():
-                return qs.none()
-            return qs.filter(project_id=int(project_id))
         # 列表預設「每個 origin 只回最新一筆」；舊掃描透過 /api/history/ 取得。
         # detail / status / topology / report / screenshot 等動作仍走 self.queryset 不受影響。
         # 加 ?include_history=true 可覆寫，給歷史頁或 admin 使用。
@@ -549,156 +528,6 @@ class FindingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
         if scan_id:
             queryset = queryset.filter(scan_job_id=scan_id)
         return queryset
-
-
-class SiteProjectViewSet(viewsets.ModelViewSet):
-    """網站專案（docs/adr/0003-site-project-workspace.md）。
-
-    清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
-    overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
-    DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
-    """
-
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-    permission_classes = [IsAuthenticated]
-    pagination_class = None
-
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):  # 產生 OpenAPI schema 時沒有登入者
-            return SiteProject.objects.none()
-        qs = SiteProject.objects.filter(user=self.request.user)
-        if self.action == "list":
-            if _truthy(self.request.query_params.get("archived")):
-                return qs.filter(archived_at__isnull=False)
-            qs = qs.active()
-        return qs
-
-    def get_serializer_class(self):
-        if self.action == "create":
-            return SiteProjectCreateSerializer
-        if self.action == "partial_update":
-            return SiteProjectUpdateSerializer
-        return SiteProjectSerializer
-
-    def _project_data(self, project, status_code=status.HTTP_200_OK):
-        return Response(
-            SiteProjectSerializer(project, context=self.get_serializer_context()).data,
-            status=status_code,
-        )
-
-    @extend_schema(
-        parameters=[
-            OpenApiParameter("archived", bool, description="true＝改列已封存的專案"),
-        ]
-    )
-    def list(self, request, *args, **kwargs):
-        projects = list(self.get_queryset())
-        summaries = project_summaries([p.id for p in projects])
-        # 最近有動靜的網站排前面：最新一次掃描時間，沒掃過的以建立時間
-        projects.sort(
-            key=lambda p: (summaries[p.id]["latest_scan"] or {}).get("created_at")
-            or p.created_at,
-            reverse=True,
-        )
-        context = {**self.get_serializer_context(), "summaries": summaries}
-        return Response(SiteProjectSerializer(projects, many=True, context=context).data)
-
-    @extend_schema(responses={201: SiteProjectSerializer, 409: OpenApiTypes.OBJECT})
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        existing = SiteProject.objects.filter(user=request.user, origin=data["origin"]).first()
-        if existing is not None and existing.archived_at is None:
-            # 同一網站只有一個專案：回 409 帶現況，前端直接引導到那個專案
-            return Response(
-                {
-                    "detail": f"「{existing.name}」已是你的專案。",
-                    "project": SiteProjectSerializer(
-                        existing, context=self.get_serializer_context()
-                    ).data,
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        if existing is not None:
-            # 已封存的同網站專案：恢復並沿用原本的掃描歷史
-            existing.archived_at = None
-            existing.start_url = data["start_url"]
-            if data["name"]:
-                existing.name = data["name"]
-            existing.save()
-            if not existing.favicon:
-                refresh_project_favicon_from_url(existing)
-            return self._project_data(existing, status.HTTP_201_CREATED)
-        project = SiteProject.objects.create(
-            user=request.user,
-            origin=data["origin"],
-            start_url=data["start_url"],
-            name=data["name"] or default_project_name(data["origin"]),
-        )
-        # 加入網站當下就抓網站圖示（不必等第一次掃描）；有時間上限，抓不到不影響建立
-        refresh_project_favicon_from_url(project)
-        return self._project_data(project, status.HTTP_201_CREATED)
-
-    @extend_schema(responses=SiteProjectSerializer)
-    def partial_update(self, request, *args, **kwargs):
-        project = self.get_object()
-        serializer = self.get_serializer(project, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return self._project_data(project)
-
-    def destroy(self, request, *args, **kwargs):
-        project = self.get_object()
-        if project.archived_at is None:
-            project.archived_at = timezone.now()
-            project.save(update_fields=["archived_at", "updated_at"])
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @extend_schema(request=None, responses=SiteProjectSerializer)
-    @action(detail=True, methods=["post"])
-    def restore(self, request, pk=None):
-        project = self.get_object()
-        if project.archived_at is not None:
-            project.restore()
-        return self._project_data(project)
-
-    # 回應結構見 projects.project_overview（前端頁面為 .jsx，不經產生型別）
-    @extend_schema(responses=OpenApiTypes.OBJECT)
-    @action(detail=True, methods=["get"])
-    def overview(self, request, pk=None):
-        project = self.get_object()
-        return Response({
-            "project": SiteProjectSerializer(project, context=self.get_serializer_context()).data,
-            **project_overview(project),
-        })
-
-    @extend_schema(responses=OpenApiTypes.OBJECT)
-    @action(detail=True, methods=["get"])
-    def issues(self, request, pk=None):
-        project = self.get_object()
-        return Response(project_issues(project, self._requested_scan(project)))
-
-    @extend_schema(responses=OpenApiTypes.OBJECT)
-    @action(detail=True, methods=["get"])
-    def pages(self, request, pk=None):
-        """頁面清單：最新（或 ?scan= 指定）一次完成掃描的每頁狀態與問題數。"""
-        project = self.get_object()
-        return Response(project_pages(project, self._requested_scan(project)))
-
-    def _requested_scan(self, project):
-        """?scan=<id>：必須是這個專案、已完成的掃描；沒帶時回 None（＝最新一次）。"""
-        scan_id = self.request.query_params.get("scan")
-        if not scan_id:
-            return None
-        scan = (
-            project.scans.filter(id=scan_id, status=ScanJob.Status.COMPLETED).first()
-            if str(scan_id).isdigit()
-            else None
-        )
-        if scan is None:
-            raise Http404("這個專案沒有這一次完成的掃描。")
-        return scan
 
 
 class VerifiedDomainViewSet(viewsets.ModelViewSet):
