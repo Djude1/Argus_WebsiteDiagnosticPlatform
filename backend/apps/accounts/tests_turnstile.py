@@ -1,8 +1,10 @@
 """Cloudflare Turnstile：設定端點、四個受保護的公開表單、siteverify 判定與部署檢查。"""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
+import yaml
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import override_settings
@@ -196,3 +198,30 @@ class TurnstileHostnameSettingTests(APITestCase):
         )
         self.assertEqual(_bare_hostname("localhost:8000"), "localhost")
         self.assertEqual(_bare_hostname("  "), "")
+
+
+class TurnstileK8sConfigTests(APITestCase):
+    """正式 ConfigMap 的 TURNSTILE_HOSTNAMES 必須是純主機名。
+
+    siteverify 回傳的 hostname 不含協定與連接埠；寫成 https://xn--gst.tw 會讓該網域的
+    登入、註冊、忘記密碼與洽談在補上 secret 後全部被 403 擋下（2026-10-03 曾發生）。
+    """
+
+    def test_configmap_hostnames_are_bare_public_hostnames(self):
+        manifest = Path(__file__).resolve().parents[3] / "k8s" / "01-namespace-config.yaml"
+        config = next(
+            document
+            for document in yaml.safe_load_all(manifest.read_text(encoding="utf-8"))
+            if document and document.get("kind") == "ConfigMap"
+            and "TURNSTILE_HOSTNAMES" in document.get("data", {})
+        )
+        raw = config["data"]["TURNSTILE_HOSTNAMES"]
+        hostnames = [h.strip() for h in raw.split(",") if h.strip()]
+        self.assertTrue(hostnames)
+        for hostname in hostnames:
+            with self.subTest(hostname=hostname):
+                self.assertNotIn("://", hostname)
+                self.assertNotIn("/", hostname)
+                self.assertNotIn(":", hostname)
+                self.assertEqual(hostname, hostname.lower())
+                self.assertNotIn(hostname, {"localhost", "127.0.0.1"})

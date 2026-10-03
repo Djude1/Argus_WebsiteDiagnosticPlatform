@@ -176,6 +176,18 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             set(postgres_sources["matchExpressions"][0]["values"]),
             {"web", "worker", "migrate", "reap"},
         )
+        # 白名單是以 Pod 的 app 標籤比對：回收卡住掃描的 CronJob 一定要帶 app=reap，
+        # 否則它連不到 PostgreSQL，掃描卡住也不會被回收退點（2026-10-03 事故）
+        reap_cronjob = next(
+            document
+            for document in _documents("04-backend.yaml")
+            if document.get("kind") == "CronJob"
+            and document["metadata"]["name"] == "reap-stale-scans"
+        )
+        self.assertEqual(
+            reap_cronjob["spec"]["jobTemplate"]["spec"]["template"]["metadata"]["labels"],
+            {"app": "reap"},
+        )
         redis = self.policies["redis-ingress-from-backend"]
         redis_sources = redis["spec"]["ingress"][0]["from"][0]["podSelector"]
         self.assertEqual(
