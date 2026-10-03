@@ -581,4 +581,17 @@ SPECTACULAR_SETTINGS = {
 # 正式環境不可含 localhost（accounts.E003）。
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "").strip()
 TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "").strip()
-TURNSTILE_HOSTNAMES = env_list("TURNSTILE_HOSTNAMES", "")
+
+
+def _bare_hostname(value: str) -> str:
+    """siteverify 回傳的 hostname 不含協定與連接埠；設定誤填成網址（https://xn--gst.tw）時取出主機名，
+    否則該網域的所有驗證都會失敗。"""
+    value = value.strip().lower()
+    if "://" not in value:
+        value = f"//{value}"
+    return urlparse(value).hostname or ""
+
+
+TURNSTILE_HOSTNAMES = [
+    host for host in (_bare_hostname(item) for item in env_list("TURNSTILE_HOSTNAMES", "")) if host
+]
