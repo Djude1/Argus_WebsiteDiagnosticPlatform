@@ -315,7 +315,6 @@
   display: grid;
   gap: 0.4rem;
   min-height: 65px;
-  justify-items: center;   /* ← 加這行，讓 widget 與錯誤文字都置中 */
 }
 .turnstile-widget {
   max-width: 100%;
