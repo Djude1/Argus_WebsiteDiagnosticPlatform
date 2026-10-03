@@ -309,3 +309,18 @@
   .auth-spinner{ animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }
 }
 
+
+/* Cloudflare Turnstile 人機驗證（shared/TurnstileWidget.jsx）；元件本身是 Cloudflare 的 iframe，只控制外框與錯誤文字 */
+.turnstile-field {
+  display: grid;
+  gap: 0.4rem;
+  min-height: 65px;
+}
+.turnstile-widget {
+  max-width: 100%;
+  overflow: hidden;
+}
+.turnstile-error {
+  color: var(--ag-bad);
+  font-size: 0.8rem;
+}

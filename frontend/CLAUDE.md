@@ -115,7 +115,7 @@ D:\nodejs\npm.cmd install 套件名
 
 | 路由 | 元件 / 頁面 | 說明 |
 |---|---|---|
-| `/login` | `LoginPage` | Email 登入/註冊；有 Google Client ID 時才顯示 Google OAuth |
+| `/login` | `LoginPage` | Email 登入/註冊；有 Google Client ID 時才顯示 Google OAuth；後端啟用 Turnstile 時 Email 登入（`login`）與註冊（`signup`）表單顯示驗證元件，通過前不能送出 |
 | `/project` | `ProjectPage` | 公開行銷頁：hero、產品預覽、檢測面向與方法、掃描流程、交付物與證據、核心功能、安全邊界、技術棧、FAQ（團隊頁、平台規模與開發歷程已於 2026-09-28 移除） |
 | `/free-tools` | `FreeToolsPage` | 公開免費分析（測速 / URL 風險 / 郵件風險），呼叫 `/api/insights/*` |
 | `/purchase` | `PurchasePage` | 購買點數（3 步驟結帳 wizard） |
@@ -246,6 +246,7 @@ npm run typecheck
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
 | `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（所有專案／網域驗證／MCP 接入中心／帳號設定／購點與訂閱／評論／產品介紹／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、註冊、忘記密碼、商業合作洽談 |
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |

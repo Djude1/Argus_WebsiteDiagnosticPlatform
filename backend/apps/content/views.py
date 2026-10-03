@@ -3,6 +3,7 @@ from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 
+from apps.accounts.turnstile import turnstile_rejection
 from apps.content.models import AppRelease, ProjectFeature, ProjectMilestone, TeamMember
 from apps.content.serializers import (
     AppReleaseSerializer,
@@ -52,6 +53,8 @@ class PartnerInquiryThrottle(UserRateThrottle):
 @throttle_classes([PartnerInquiryThrottle])
 def partner_inquiry_create(request):
     """公開的商業合作洽談表單（/partners）。"""
+    if rejection := turnstile_rejection(request, "contact"):
+        return rejection
     serializer = PartnerInquiryCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     # 誘餌欄位有值時仍然寫入、只把狀態標成疑似垃圾訊息：曾因瀏覽器自動填入誘餌欄位，

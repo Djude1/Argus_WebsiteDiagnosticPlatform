@@ -7,7 +7,9 @@ import { PartnersPage } from "./PartnersPage";
 
 // 洽談表單的承諾：送出後有明確成功回饋；後端欄位錯誤會標在對應欄位旁。
 
-vi.mock("../../api", () => ({ api: { post: vi.fn() } }));
+vi.mock("../../api", () => ({
+  api: { post: vi.fn(), get: vi.fn(async () => ({ data: { enabled: false, site_key: "" } })) },
+}));
 const { api } = vi.mocked(await import("../../api"));
 
 function renderPage() {

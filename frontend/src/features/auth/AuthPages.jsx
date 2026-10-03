@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -9,6 +9,7 @@ import { useArgusStore } from "../../store";
 import { ArrowLeftIcon, CheckIcon } from "../../shared/ActionIcons";
 import { LockIcon, ScoreIcon, ShieldIcon } from "../../shared/LineIcons";
 import PasswordInput from "../../shared/PasswordInput";
+import { TURNSTILE_FIELD, TurnstileWidget, useTurnstileConfig } from "../../shared/TurnstileWidget";
 
 function RequireAuth({ children }) {
   const accessToken = useArgusStore((state) => state.accessToken);
@@ -137,6 +138,11 @@ function LoginPage({ googleOAuthEnabled }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const uid = useId();
+  const turnstile = useTurnstileConfig();
+  const [captcha, setCaptcha] = useState("");
+  const captchaRef = useRef(null);
+  // 設定還沒讀到、或已啟用但還沒通過驗證時不能送出（送了也會被後端 403）
+  const captchaBlocking = turnstile.loading || (turnstile.enabled && !captcha);
 
   const next = searchParams.get("next");
   const redirect = (!next || next === "/login" || !next.startsWith("/")) ? "/dashboard" : next;
@@ -144,6 +150,11 @@ function LoginPage({ googleOAuthEnabled }) {
   // 已登入則直接跳轉
   if (accessToken) {
     return <Navigate to={redirect} replace />;
+  }
+
+  // token 只能用一次；每次送出後由 finally 重設元件取得新的
+  function withCaptcha(body) {
+    return turnstile.enabled ? { ...body, [TURNSTILE_FIELD]: captcha } : body;
   }
 
   function handleToken(access) {
@@ -156,12 +167,13 @@ function LoginPage({ googleOAuthEnabled }) {
     setError("");
     setLoading(true);
     try {
-      const res = await api.post("/auth/email-login/", { email, password });
+      const res = await api.post("/auth/email-login/", withCaptcha({ email, password }));
       handleToken(res.data.access);
     } catch (err) {
       setError(err.response?.data?.detail || "登入失敗，請確認 Email 與密碼。");
     } finally {
       setLoading(false);
+      captchaRef.current?.reset();
     }
   }
 
@@ -174,13 +186,14 @@ function LoginPage({ googleOAuthEnabled }) {
     }
     setLoading(true);
     try {
-      const res = await api.post("/auth/register/", { email, password });
+      const res = await api.post("/auth/register/", withCaptcha({ email, password }));
       handleToken(res.data.access);
     } catch (err) {
       const d = err.response?.data || {};
       setError(d.email || d.password || d.detail || "註冊失敗。");
     } finally {
       setLoading(false);
+      captchaRef.current?.reset();
     }
   }
 
@@ -207,7 +220,7 @@ function LoginPage({ googleOAuthEnabled }) {
             aria-selected={tab === t.key}
             aria-controls={`${uid}-panel`}
             className={`auth-tab ${tab === t.key ? "is-active" : ""}`}
-            onClick={() => { setTab(t.key); setError(""); }}
+            onClick={() => { setTab(t.key); setError(""); setCaptcha(""); }}
           >
             {t.label}
           </button>
@@ -271,7 +284,10 @@ function LoginPage({ googleOAuthEnabled }) {
                 autoComplete="current-password"
               />
             </div>
-            <SubmitButton loading={loading} loadingText="登入中…">登入</SubmitButton>
+            {turnstile.enabled && (
+              <TurnstileWidget key="login" ref={captchaRef} siteKey={turnstile.siteKey} action="login" onToken={setCaptcha} />
+            )}
+            <SubmitButton loading={loading} loadingText="登入中…" disabled={captchaBlocking}>登入</SubmitButton>
           </form>
         )}
 
@@ -311,7 +327,10 @@ function LoginPage({ googleOAuthEnabled }) {
                 invalid={Boolean(confirmPassword) && confirmPassword !== password}
               />
             </AuthField>
-            <SubmitButton loading={loading} loadingText="建立中…">建立帳號</SubmitButton>
+            {turnstile.enabled && (
+              <TurnstileWidget key="signup" ref={captchaRef} siteKey={turnstile.siteKey} action="signup" onToken={setCaptcha} />
+            )}
+            <SubmitButton loading={loading} loadingText="建立中…" disabled={captchaBlocking}>建立帳號</SubmitButton>
           </form>
         )}
       </div>
@@ -333,24 +352,36 @@ function PasswordResetRequestPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [serverMessage, setServerMessage] = useState("");
+  const [error, setError] = useState("");
   const uid = useId();
+  const turnstile = useTurnstileConfig();
+  const [captcha, setCaptcha] = useState("");
+  const captchaRef = useRef(null);
+  const captchaBlocking = turnstile.loading || (turnstile.enabled && !captcha);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
+    setError("");
     try {
-      const res = await api.post("/auth/password-reset/request/", {
-        email: email.trim().toLowerCase(),
-      });
+      const body = { email: email.trim().toLowerCase() };
+      if (turnstile.enabled) body[TURNSTILE_FIELD] = captcha;
+      const res = await api.post("/auth/password-reset/request/", body);
       setServerMessage(res.data?.detail || "若該 Email 已註冊，重設信已寄出。");
       setSubmitted(true);
-    } catch {
-      // 後端設計為永遠成功；網路錯誤才會走到這
-      setServerMessage("送出失敗，請檢查網路連線後再試。");
-      setSubmitted(true);
+    } catch (err) {
+      if (err.response?.status === 403) {
+        // 人機驗證未通過：留在表單讓使用者重新驗證
+        setError(err.response.data?.detail || "人機驗證未通過，請重新驗證後再送出。");
+      } else {
+        // 後端設計為永遠成功；網路錯誤才會走到這
+        setServerMessage("送出失敗，請檢查網路連線後再試。");
+        setSubmitted(true);
+      }
     } finally {
       setLoading(false);
+      captchaRef.current?.reset();
     }
   }
 
@@ -391,7 +422,11 @@ function PasswordResetRequestPage() {
               autoFocus
             />
           </AuthField>
-          <SubmitButton loading={loading} loadingText="送出中…" disabled={!email.trim()}>
+          <AuthError>{error}</AuthError>
+          {turnstile.enabled && (
+            <TurnstileWidget ref={captchaRef} siteKey={turnstile.siteKey} action="password_reset" onToken={setCaptcha} />
+          )}
+          <SubmitButton loading={loading} loadingText="送出中…" disabled={!email.trim() || captchaBlocking}>
             寄出重設連結
           </SubmitButton>
           <p className="auth-notice">
