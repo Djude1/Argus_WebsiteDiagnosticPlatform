@@ -26,6 +26,7 @@ from apps.billing.services import (
     get_or_create_wallet,
 )
 from apps.scans.domain_verification import generate_token, run_verification
+from apps.scans.favicon import refresh_project_favicon_from_url
 from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
 from apps.scans.models import (
     AuthorizationConsent,
@@ -626,6 +627,8 @@ class SiteProjectViewSet(viewsets.ModelViewSet):
             if data["name"]:
                 existing.name = data["name"]
             existing.save()
+            if not existing.favicon:
+                refresh_project_favicon_from_url(existing)
             return self._project_data(existing, status.HTTP_201_CREATED)
         project = SiteProject.objects.create(
             user=request.user,
@@ -633,6 +636,8 @@ class SiteProjectViewSet(viewsets.ModelViewSet):
             start_url=data["start_url"],
             name=data["name"] or default_project_name(data["origin"]),
         )
+        # 加入網站當下就抓網站圖示（不必等第一次掃描）；有時間上限，抓不到不影響建立
+        refresh_project_favicon_from_url(project)
         return self._project_data(project, status.HTTP_201_CREATED)
 
     @extend_schema(responses=SiteProjectSerializer)
