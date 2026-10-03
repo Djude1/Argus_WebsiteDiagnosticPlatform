@@ -1,4 +1,4 @@
-"""Word（.docx）健檢報告產生器。
+"""健檢報告產生器（排版產生 .docx，對外只提供轉檔後的 PDF）。
 
 報告的讀者是網站主，不是資安工程師（見 docs/scan-report-quality-audit-2026-08-30.md）。
 所以這裡的原則是：
@@ -15,6 +15,7 @@
 """
 
 import hmac
+import tempfile
 from collections import OrderedDict
 from hashlib import sha256
 from pathlib import Path
@@ -23,6 +24,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.scans.models import Finding, ReportVerification, ScanJob
+from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.redaction import redact_pii_in_text
@@ -1108,23 +1110,38 @@ def build_report_payload(scan_job: ScanJob) -> dict:
 
 
 def report_output_path(scan_job: ScanJob) -> Path:
-    """報告檔案位置。views.py 判斷快取時也用這支，避免兩邊各寫一次檔名慣例。"""
-    return Path(settings.MEDIA_ROOT) / "reports" / f"scan-{scan_job.id}-report.docx"
+    """報告檔案位置（PDF）。views.py 判斷快取時也用這支，避免兩邊各寫一次檔名慣例。"""
+    return Path(settings.MEDIA_ROOT) / "reports" / f"scan-{scan_job.id}-report.pdf"
 
 
-def build_scan_report(scan_job: ScanJob) -> str:
-    """產生 Word 報告。
+def render_report_docx(scan_job: ScanJob, output_path: Path | None = None) -> str:
+    """只產生排版用的 .docx（不寫防偽紀錄）。
 
     資料層與排版層分離：本模組只負責把掃描結果整理成 report_render 的輸入
     （build_report_payload），版面、配色、圖表、浮水印全部由 report_render 決定。
     分開的好處是排版可以整套抽換，而領域規則與它們的測試一行都不用動。
+    內容測試直接讀這份 .docx；對外交付的是 build_scan_report 轉出的 PDF。
+    """
+    if output_path is None:
+        output_path = Path(settings.MEDIA_ROOT) / "reports" / f"scan-{scan_job.id}-report.docx"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    generate_report(build_report_payload(scan_job), str(output_path))
+    return str(output_path)
+
+
+def build_scan_report(scan_job: ScanJob) -> str:
+    """產生 PDF 報告並寫入防偽紀錄，回傳 PDF 路徑。
+
+    .docx 只是中間產物，寫在暫存目錄、轉完即刪；磁碟上與使用者手上只有 PDF。
     """
     output_path = report_output_path(scan_job)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    payload = build_report_payload(scan_job)
     generated_at = timezone.now()
-    generate_report(payload, str(output_path))
+    with tempfile.TemporaryDirectory(prefix="argus-report-") as workdir:
+        docx_path = Path(workdir) / f"scan-{scan_job.id}-report.docx"
+        render_report_docx(scan_job, docx_path)
+        convert_docx_to_pdf(docx_path, output_path)
 
     # 雜湊算完才寫防偽紀錄：報告本身不印雜湊（印了就循環相依——雜湊要涵蓋整份
     # 檔案，而檔案裡又要有雜湊），收件者拿編號到查驗頁取得雜湊自行比對。
@@ -1140,7 +1157,7 @@ def build_scan_report(scan_job: ScanJob) -> str:
     ReportVerification.objects.update_or_create(
         scan_job=scan_job,
         defaults={
-            "report_number": payload["meta"]["report_id"],
+            "report_number": build_report_number(scan_job),
             "content_sha256": content_sha256,
             "generated_at": generated_at,
             "renderer_version": RENDERER_VERSION,

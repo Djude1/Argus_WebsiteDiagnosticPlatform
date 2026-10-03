@@ -31,7 +31,9 @@ queued → crawling → scanning → [agent_testing] → completed
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
-| `reports.py` | 產生 Word 報告（.docx） | 任何 DB 寫入 |
+| `reports.py` | 報告 payload 與排版：`render_report_docx` 產生 .docx（內容測試直接讀它），`build_scan_report` 再交給 `report_pdf.py` 轉成 PDF 並寫 `ReportVerification`；**對外只提供 PDF**（2026-10-03） | 防偽紀錄以外的 DB 寫入 |
+| `report_pdf.py` | LibreOffice headless 把 .docx 轉成 PDF：每次用獨立暫存使用者設定檔（web／worker 同時轉檔不互鎖）、逾時 `ARGUS_REPORT_PDF_TIMEOUT_SECONDS`、原子寫入；失敗拋 `ReportConversionError`，**不退回提供 .docx**。Docker image 裝 `libreoffice-writer-nogui` | 退回 .docx、共用 LibreOffice 設定檔 |
+| `seo/`、`seo_views.py` | SEO 分析頁與 Google Search Console（見下「SEO 分析與 Search Console」） | 修改 `ScanJob.status`、產生 Finding、回傳 refresh token |
 | `projects.py` | 網站專案的彙整資料（只讀 DB）：`project_overview`（含本次掃描覆蓋 `stats`、各維度問題數、AEO 摘要、最近掃描，以及 `site_description`：最新完成掃描首頁 HTML 的 meta description／og:description，前 100k 字元、最多 `SITE_DESCRIPTION_LIMIT` 字）、`project_issues`／`compare_issues`（新增／持續／本次未出現；每個問題含說明、修法、最多 `ISSUE_URLS_LIMIT` 個網址）、`project_pages`（逐頁狀態與問題數）、`project_summaries`（清單用：最新分數與變化、`score_history` 走勢、最新完成掃描依嚴重度的 `issue_counts`；兩次查詢） | 寫 DB、連線目標網站 |
 | `favicon.py` | 網站專案圖示：**新增／恢復專案時立刻抓**（`refresh_project_favicon_from_url`：先抓首頁 HTML 前 512KB 找 `<link rel=icon>`，整體上限 8 秒），掃描時再用爬到的首頁更新（`stage_favicon`，每 7 天最多一次）；沒宣告就 `/favicon.ico`。每一跳轉址都過 `assert_public_http_url`、圖示上限 200KB、逾時 5 秒、帶 `ARGUS_SCANNER_USER_AGENT`（Wikipedia 等會拒絕沒有 UA 的請求）；任何 `image/*`（含 gov.tw 的 `image/x-png`）交給 Pillow 縮成 64px PNG、SVG 限 20KB；存成 `SiteProject.favicon`（data URL），失敗保留舊圖示。舊專案補抓：`manage.py refresh_project_favicons`（`--all`／`--dry-run`） | 修改 `ScanJob.status`、讓掃描因圖示失敗 |
 | `aeo/` | AEO 問答檢測（內容擷取、出題、找答案與判定、標記一致性、整站評估；見下「AEO 問答檢測」） | 修改 `ScanJob.status`、發出任何網路請求（只分析爬蟲已抓到的頁面） |
@@ -122,7 +124,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | `aeo/evaluate.py` | 整站評估 `evaluate_site(pages)`：正文 < `MIN_MAIN_TEXT_CHARS` 或題目 < `MIN_QUESTIONS` → `status=insufficient`、**不給分**（`tested_categories_for` 移除 aeo，報告顯示「未評估」）；否則依逐題判定加權算分，產生 `aeo-answer-*` finding 與 `aeo-render-dependent`（主要文字需執行 JS 才出現） |
 
 - 結果存在 `ScanJob.aeo_report`（migration 0018）：`status`、`reason`、`questions_total`、`counts`、`answered_ratio`（有答案的問題比例）、`evidence_ratio`（答案附有原文的比例）、`score`、`questions[]`（逐題判定、理由、證據），`method` 目前是 `rules-v1`。
-- 呈現：網站專案的「AEO 問答」分頁（`/projects/:id/aeo`，`AeoAnswerPanel`；2026-10-02 前在掃描詳情最下方）、Word 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
+- 呈現：網站專案的「AEO 問答」分頁（`/projects/:id/aeo`，`AeoAnswerPanel`；2026-10-02 前在掃描詳情最下方）、PDF 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
 
@@ -144,9 +146,44 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 - **頁面分頁**：`/api/projects/<id>/pages/?scan=` 回一次掃描的每一頁與其問題數（只算有勾的維度），沒有對應頁面的站台層級發現另計 `site_level_findings`。
 - 測試：`tests_site_projects.py`（儀表板資料、頁面清單、歸入、回填、API、跨使用者 404、總覽與比較、預設掃描設定、已封存清單、連續次數、維度過濾）。
 
+## SEO 分析與 Search Console（2026-10-03，`seo/`）
+
+會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層。**不產生 Finding、不影響計分**——SEO 分數仍由 `scanners.analyze_seo` 決定，這裡是給網站主逐頁查證與修正的工作清單。
+
+| 模組 | 職責 |
+|---|---|
+| `seo/page_audit.py` | 逐頁解析已保存的 HTML（`rendered_dom` 優先）：Title、Description、H1–H6 清單與跳號、正文（沿用 `aeo/content.extract_page_content`）、canonical、robots meta＋`X-Robots-Tag`、圖片 alt、連結（錨文字含圖片 alt）、OG、hreflang、載入時間。**只讀 DB，不連線** |
+| `seo/link_check.py` | 連結狀態：每一跳都過 `assert_public_http_url`、手動跟隨轉址最多 5 跳並記錄跳轉鏈；HEAD 不支援時改 GET（不讀內容）。站台檢查：robots.txt（`User-agent: *` 的 Disallow）、sitemap、HTTP→HTTPS、www／非 www、隨機路徑 404、`/index.html`、結尾斜線 |
+| `seo/collect.py` | `stage_seo_links` 主體：收集所有頁面的不重複連結（爬蟲已直接造訪且沒轉址的頁面不重查），依站內→子網域→站外排序，前 `ARGUS_SEO_LINK_CHECK_LIMIT`（150）個、總時間 `ARGUS_SEO_LINK_CHECK_SECONDS`（120） |
+| `seo/report.py` | API 資料：概覽（掃描頁數、受影響頁數、重大／警告／提示、可索引頁數、失效連結、優先修復事項）、頁面、問題（每處附網址、檢測時間、證據）、連結（依目標合併、來源頁與錨文字）、站台檢查、關鍵字報告；以「掃描 id＋連結檢查時間」快取 1 小時 |
+| `seo/keywords.py` | 目標關鍵字（`SiteProject.target_keywords`，最多 20 個、每個 60 字）字面比對 Title／H1／Description／H2–H6／網址／正文 |
+| `seo/gsc.py`、`seo_views.py` | Google Search Console（下表） |
+
+**判定原則（使用者需求，測試鎖定在 `tests_seo_analysis.py`）**：
+- H1 不必與 Title 相同，不做相同／不同的判定。
+- 302 → 200（轉址後正常）不算失效連結；401／403／429／999 是「對方限制檢查、無法確認」，不是失效；只有站內轉址列為提示。
+- 中文不套用英文字符門檻：Title／Description 以顯示寬度計算（全形字＝2，Title 20–60、Description 70–160），正文以「英文詞＋中文字÷1.5」換算（< 150 為正文偏少，只是提示）。
+- 每項結論附受影響網址、檢測時間（頁面類＝`Page.created_at`，連結與站台類＝`seo_report.checked_at`）與證據（原始值或跳轉鏈）。
+- 「可索引」（HTTP 200、無 noindex、canonical 指向自己、robots.txt 未擋）是 Argus 的判斷；「Google 已收錄」只由 Search Console 回答（期間內有曝光，或網址檢查 API），兩者分開顯示。GSC 平均排名一律標示為期間統計值。
+
+**API**（`SiteProjectViewSet` 繼承 `seo_views.ProjectSeoActions`）：`GET /api/projects/<id>/seo/?scan=`、`GET seo/pages/<頁面 id>/`（單頁證據）、`POST seo/keywords/`（示範專案也可設定）、`GET|PATCH|DELETE gsc/`、`POST gsc/connect/`、`GET gsc/properties/`、`GET gsc/performance/?days=7|28|90`、`POST gsc/inspect/`（只接受本專案網站的網址）；callback 是 `GET /api/gsc/callback/`（`AllowAny`）。GSC 相關端點有 `gsc` throttle（`THROTTLE_GSC`，預設 120/hour）。
+
+**Search Console 串接**：
+| 規則 | 為什麼 |
+|---|---|
+| scope 只有 `webmasters.readonly`，`access_type=offline`＋`prompt=consent` 取得 refresh token；callback 確認 Google 回傳的 scope 確實含 Search Console | 使用者在同意畫面可以取消勾選 |
+| state 以 `signing.dumps`（salt `argus-gsc-oauth`，10 分鐘）簽章並含 nonce，nonce 另寫進只在 `/api/gsc/callback/` 送出的 HttpOnly cookie，兩者必須相符 | callback 時瀏覽器沒有記憶體中的 JWT；只靠 state 會讓攻擊者把受害者的 Google 帳號接到攻擊者的專案（OAuth CSRF） |
+| refresh token 以 Fernet 加密存 `SearchConsoleConnection.refresh_token_encrypted`（金鑰 `ARGUS_GSC_TOKEN_KEY`，空值由 `SECRET_KEY` 推導）；不保存 access token、不回傳、不寫 log | 機密外洩面最小化；輪替 `SECRET_KEY` 的代價是使用者要重新連接 |
+| 選擇資源時以 Google 回傳的清單驗證；`property_matches` 只用來提示，不擋 | 使用者可能用網域資源涵蓋多個子網域 |
+| 授權失效（`invalid_grant`／401）寫 `last_error`，前端顯示重新連接 | 使用者可能在 Google 帳號頁撤銷授權 |
+| 中斷連線時呼叫 Google revoke，失敗不影響本地刪除 | |
+| 示範專案不能連接 | 虛構網站 |
+
+設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
+
 ## 報告內容契約（`reports.py`）
 
-`.docx` 會被下載、轉寄、存檔給第三方，內容邊界是硬規則：
+報告（PDF）會被下載、轉寄、存檔給第三方，內容邊界是硬規則：
 
 | 必須有 | 為什麼 |
 |---|---|
@@ -289,14 +326,14 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 
 ## 報告防偽與快取（`ReportVerification`）
 
-每次 `build_scan_report()` 完成時寫入一列 `ReportVerification`：報告編號、檔案內容 SHA-256、產生時間。
+每次 `build_scan_report()` 完成時寫入一列 `ReportVerification`：報告編號、**PDF** 檔案內容 SHA-256、產生時間（.docx 只是暫存目錄裡的中間產物，轉檔失敗不寫紀錄）。
 
 | 規則 | 為什麼 |
 |---|---|
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動 `.docx` 版面就要把 `RENDERER_VERSION` +1** | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -337,7 +374,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 `step`／`steps` 是 phase 之下的細分階段（前端掃描進度條據此顯示「正在分析 GEO／UX／資安…」）：
 `steps` 由 `tasks.planned_scan_steps()` 依勾選維度與範圍／授權算出本次實際會跑的子步驟，`step` 是目前這一步。
 可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度）、`aeo_answers`（勾 AEO，接在逐維度分析之後）、
-`active_probe`（`run_nuclei`）、`deep_security`、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`agent`（Agent 啟用且可執行）、`scoring`。
+`active_probe`（`run_nuclei`）、`deep_security`、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`seo_links`（勾 SEO）、`agent`（Agent 啟用且可執行）、`scoring`。
 頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
 
 `step_done`／`step_total` 是**本階段**內的進度（爬取＝頁、逐維度分析＝該維度已分析頁數、Agent＝步數；其他子步驟 0/0＝不定進度），`step_started_at` 在同一步內保留不變（供前端估算本階段剩餘時間）。前端整體百分比由階段序號加上本階段比例算出，進度條才會和階段一起走（2026-09-28 前整體進度只看頁數，爬完就 100%、後面十個階段進度條不動）。
@@ -360,6 +397,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
+| `seo_links` | `stage_seo_links` | 勾 SEO 才跑：連結狀態與跳轉鏈、robots.txt／sitemap／HTTPS／www／404／結尾斜線檢查，寫 `ScanJob.seo_report`；失敗只記 log（`seo/collect.py`） |
 | `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |

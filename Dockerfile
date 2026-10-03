@@ -16,8 +16,12 @@ ENV PATH="/app/.venv/bin:$PATH"
 # 報告圖表用 matplotlib 繪製，需要 CJK 字型才不會把中文畫成一整排 □。
 # 缺字型時 report_render/theme.py 會直接 RuntimeError（刻意大聲失敗——退回預設
 # 字型的話報告照樣產出、照樣寄給客戶，沒有人會發現圖表中文全是方塊）。
+# 報告對外只提供 PDF：排版產生的 .docx 由 LibreOffice Writer（無 GUI 版）轉檔，
+# 見 backend/apps/scans/report_pdf.py。soffice --version 讓缺套件時 build 直接失敗。
 RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
+    libreoffice-writer-nogui \
+    && rm -rf /var/lib/apt/lists/* \
+    && soffice --version
 
 # 安裝 ProjectDiscovery 資安工具（Nuclei + Katana）
 ARG NUCLEI_VERSION=3.8.0

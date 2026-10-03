@@ -16,6 +16,8 @@ import {
   FlagIcon,
   GearIcon,
   HomeIcon,
+  LayersIcon,
+  MagnifierIcon,
   SpiderIcon,
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
@@ -24,6 +26,7 @@ import { useArgusStore } from "../../store";
 const SECTIONS = [
   { key: "", label: "總覽", hint: "分數與本次變化", Icon: HomeIcon },
   { key: "scans", label: "掃描", hint: "建立與檢視掃描", Icon: SpiderIcon },
+  { key: "seo", label: "SEO 分析", hint: "頁面內容、連結、關鍵字", Icon: MagnifierIcon },
   { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
   { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
   { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案", Icon: ChatIcon },
@@ -71,6 +74,13 @@ function ProjectSidebar({ project, activeSection }) {
         </a>
       </div>
       <nav className="project-sidebar-nav">
+        <Link to="/projects" className="project-sidebar-link is-all-projects">
+          <LayersIcon className="project-sidebar-icon" />
+          <span className="project-sidebar-link-text">
+            <span className="project-sidebar-link-label">所有專案</span>
+            <span className="project-sidebar-link-hint">回到跨網站總覽</span>
+          </span>
+        </Link>
         {SECTIONS.map((section) => {
           const active = activeSection === section.key;
           return (

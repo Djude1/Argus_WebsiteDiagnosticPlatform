@@ -94,6 +94,8 @@ class SiteProject(models.Model):
     description = models.CharField(max_length=300, blank=True, default="")
     # 示範專案：新帳號自動建立，資料來自虛構網站的掃描（apps/scans/demo/），唯讀、不能建立掃描
     is_demo = models.BooleanField(default=False)
+    # SEO 分析頁的目標關鍵字（字串清單，上限見 seo/keywords.py）
+    target_keywords = models.JSONField(default=list, blank=True)
     # 網站圖示（data URL，掃描時由 favicon.py 抓取並縮成小 PNG）；空字串＝還沒抓到
     favicon = models.TextField(blank=True, default="")
     favicon_checked_at = models.DateTimeField(null=True, blank=True)
@@ -186,6 +188,9 @@ class ScanJob(models.Model):
     # AEO 可回答性檢測結果（apps/scans/aeo/evaluate.py）：狀態、指標與逐題判定＋原文證據。
     # 空 dict＝本次沒跑（未勾 AEO 或舊掃描）。
     aeo_report = models.JSONField(default=dict, blank=True)
+    # SEO 連結狀態與站台層級網址檢查（apps/scans/seo/link_check.py，勾 SEO 時執行）。
+    # 空 dict＝本次沒跑。逐頁的 Title／H1 等由保存的 HTML 即時分析，不存這裡。
+    seo_report = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}
@@ -406,8 +411,31 @@ class Finding(models.Model):
         return f"{self.category}:{self.severity}:{self.title}"
 
 
+class SearchConsoleConnection(models.Model):
+    """網站專案與 Google Search Console 的連線（OAuth，scope 只有 webmasters.readonly）。
+
+    refresh token 以 seo/gsc.py 的 Fernet 金鑰加密後保存，絕不回傳給前端或寫進 log；
+    property_url 是使用者選定的資源（https://example.com/ 或 sc-domain:example.com）。
+    """
+
+    project = models.OneToOneField(
+        SiteProject, on_delete=models.CASCADE, related_name="search_console"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="search_consoles"
+    )
+    refresh_token_encrypted = models.TextField()
+    property_url = models.CharField(max_length=255, blank=True, default="")
+    last_error = models.CharField(max_length=255, blank=True, default="")
+    connected_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"GSC {self.project_id} {self.property_url or '(未選資源)'}"
+
+
 class ReportVerification(models.Model):
-    """報告防偽紀錄：每次產生 .docx 時寫入，供公開查驗端點比對。
+    """報告防偽紀錄：每次產生 PDF 報告時寫入，供公開查驗端點比對。
 
     report_number 對外揭露且**跨重新產生保持不變**——報告一旦交付出去就可能被
     轉寄存檔，重新產生時換編號會讓已流出的副本失效。content_sha256 是檔案內容

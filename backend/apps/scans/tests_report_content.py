@@ -19,7 +19,7 @@ from django.test import TestCase
 from docx import Document
 
 from apps.scans.models import AuthorizationConsent, Finding, Page, ScanJob
-from apps.scans.reports import build_scan_report
+from apps.scans.reports import render_report_docx
 
 User = get_user_model()
 
@@ -45,7 +45,7 @@ class ReportContentTests(TestCase):
 
         資訊改放表格後，只讀 document.paragraphs 會漏掉大半內容。
         """
-        document = Document(build_scan_report(self.scan_job))
+        document = Document(render_report_docx(self.scan_job))
         parts = [p.text for p in document.paragraphs]
         for table in document.tables:
             for row in table.rows:

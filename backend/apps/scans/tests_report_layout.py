@@ -13,7 +13,7 @@ from django.test import TestCase
 from docx import Document
 
 from apps.scans.models import Finding, Page, ScanJob
-from apps.scans.reports import build_scan_report
+from apps.scans.reports import render_report_docx
 
 User = get_user_model()
 
@@ -48,7 +48,7 @@ class ReportLayoutTests(TestCase):
         )
 
     def _doc(self) -> Document:
-        return Document(build_scan_report(self.scan_job))
+        return Document(render_report_docx(self.scan_job))
 
     def _text(self) -> str:
         doc = self._doc()

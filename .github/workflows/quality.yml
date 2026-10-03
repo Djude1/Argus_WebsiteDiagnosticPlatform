@@ -32,15 +32,15 @@ jobs:
           version: "0.9.17"
       - name: 同步鎖定依賴
         run: uv sync --frozen
-      - name: 安裝報告圖表所需的 CJK 字型
+      - name: 安裝報告圖表所需的 CJK 字型與 PDF 轉檔工具
         # 報告測試會實際產生 .docx（含 matplotlib 圖表），缺字型會在畫圖時
-        # RuntimeError。與 Dockerfile 裝的是同一個套件。
+        # RuntimeError；PDF 轉檔測試需要 LibreOffice Writer。與 Dockerfile 裝的是同樣的套件。
         # GitHub runner 映像內建的第三方套件庫（如 packages.microsoft.com）偶爾回 403，
         # 會讓 apt-get update 整體以非零結束、在跑任何測試前就失敗。字型只來自 Ubuntu
         # 官方庫，所以 update 失敗只記警告；官方庫真的抓不到時，install 仍會失敗。
         run: |
           sudo apt-get update || echo "::warning::apt-get update 有套件庫失敗，改用現有索引安裝字型"
-          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk libreoffice-writer-nogui
       - name: Ruff
         run: uv run ruff check backend
       - name: Django 設定與 migration 漂移

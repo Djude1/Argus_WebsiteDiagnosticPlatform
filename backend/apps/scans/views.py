@@ -48,6 +48,7 @@ from apps.scans.projects import (
 )
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.seo_views import ProjectSeoActions
 from apps.scans.serializers import (
     DomainVerifySerializer,
     FindingSerializer,
@@ -167,7 +168,7 @@ def enqueue_created_scan(scan_job: ScanJob) -> bool:
 
 
 def ensure_report_file(scan_job: ScanJob) -> Path:
-    """取得掃描的 Word 報告檔；快取失效時重新產生（網頁下載與 MCP 報告連結共用）。
+    """取得掃描的 PDF 報告檔；快取失效時重新產生（網頁下載與 MCP 報告連結共用）。
 
     三個條件都成立才算快取有效：
       1. 有防偽紀錄——舊版留在磁碟上、沒有編號的報告要重新產生
@@ -193,7 +194,7 @@ def report_file_response(report_path: Path) -> FileResponse:
         report_path.open("rb"),
         as_attachment=True,
         filename=report_path.name,
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        content_type="application/pdf",
     )
 
 
@@ -556,7 +557,7 @@ class FindingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
         return queryset
 
 
-class SiteProjectViewSet(viewsets.ModelViewSet):
+class SiteProjectViewSet(ProjectSeoActions, viewsets.ModelViewSet):
     """網站專案（docs/adr/0003-site-project-workspace.md）。
 
     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含

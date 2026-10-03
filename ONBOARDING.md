@@ -209,7 +209,7 @@ Argus/
 | app | 是什麼 | 關鍵檔 |
 |---|---|---|
 | `accounts` | User 模型；Email 登入/註冊、可選 Google OAuth、記憶體 access + HttpOnly refresh cookie、密碼重設；refresh 原子輪替，登出/變更密碼/重設會撤銷 token；`LoginEvent` 記錄每次登入（方法/IP/UA，admin 可查時間軸） | `views.py` `models.py` |
-| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`/`VerifiedDomain`；Playwright BFS 爬蟲、四維 scanner、Word 報告、主動式資安 probe（**需先通過網域所有權驗證：DNS TXT/meta tag/HTML 檔三選一，90 天效期**）、WAF 阻擋偵測、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` `domain_verification.py` |
+| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`/`VerifiedDomain`；Playwright BFS 爬蟲、四維 scanner、PDF 報告、SEO 分析與 Search Console、主動式資安 probe（**需先通過網域所有權驗證：DNS TXT/meta tag/HTML 檔三選一，90 天效期**）、WAF 阻擋偵測、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` `domain_verification.py` |
 | `agent` | Hermes-Agent：MiniMax-M3/GLM/Gemini provider chain + 26 工具（觀察/主動/知識庫檢索/UI 送出）+ 8 specialist 角色目錄 + observe-think-act loop + token 安全閘；架構與已知限制見 `docs/hermes-agent-architecture.md`；預設 `ARGUS_AGENT_ENABLED=false` | `providers.py` `tools.py` `loop.py` `runner.py` `knowledge/*.md` |
 | `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點；輕量訂閱（`SubscriptionPlan`/`UserSubscription`，月費→每月贈點，惰性冪等結算，admin 可開通/取消） | `ecpay.py` `models.py` `services.py` `views.py` |
 | `reviews` | 已驗證平台評論：完成掃描才可發表、`PlatformReview` OneToOne、本人可編修/刪除；`ReviewResponse` 單一官方回覆、`ReviewRevision` 修訂稽核、`ReviewReport` 檢舉治理 | `models.py` `views.py` |
@@ -291,7 +291,7 @@ Argus/
 | GET | `/api/scans/{id}/status/` | auth | — | 狀態（含 progress） |
 | POST | `/api/scans/{id}/cancel/` | auth | 無 body | 終止（合作式 cancel，自動退款） |
 | GET | `/api/scans/{id}/topology/` | auth | — | 拓撲 nodes+edges |
-| GET | `/api/scans/{id}/report/` | auth | — | Word 報告 blob |
+| GET | `/api/scans/{id}/report/` | auth | — | PDF 報告 blob |
 | GET | `/api/scans/{id}/pages/{page_id}/screenshot/` | auth | path：`page_id` | 截圖 |
 | POST | `/api/estimate/` | auth | body：`url`、`max_pages`（1～系統上限） | 純計算掃描預扣上限（不扣點、不連線目標；完成後依實際頁數結算並退回差額） |
 | GET | `/api/pages/?scan_id=` | auth | query：`scan_id` | 頁面列表 |

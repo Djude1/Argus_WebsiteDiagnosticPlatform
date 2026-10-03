@@ -176,8 +176,11 @@ class PlannedScanStepsTests(TestCase):
     def test_passive_single_page_lists_only_selected_categories(self):
         steps = self._steps(categories=["ux", "seo"], max_pages=1)
         self.assertEqual(
-            steps, ["crawl", "analyze_seo", "analyze_ux", "deep_security", "scoring"],
+            steps,
+            ["crawl", "analyze_seo", "analyze_ux", "deep_security", "seo_links", "scoring"],
         )
+        # 沒勾 SEO 就沒有連結檢查
+        self.assertNotIn("seo_links", self._steps(categories=["ux"], max_pages=1))
 
     def test_all_categories_include_geo_site_and_keep_fixed_order(self):
         steps = self._steps(categories=["security", "geo", "aeo", "seo", "ux"])

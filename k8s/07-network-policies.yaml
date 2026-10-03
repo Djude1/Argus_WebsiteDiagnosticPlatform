@@ -38,7 +38,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [web, worker, migrate]
+                values: [web, worker, migrate, reap]
       ports:
         - protocol: TCP
           port: 5432

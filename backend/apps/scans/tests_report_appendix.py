@@ -17,7 +17,7 @@ from django.utils import timezone
 from docx import Document
 
 from apps.scans.models import Finding, Page, ScanJob
-from apps.scans.reports import build_scan_report
+from apps.scans.reports import render_report_docx
 
 User = get_user_model()
 
@@ -39,7 +39,7 @@ class ReportAppendixTests(TestCase):
         )
 
     def _text(self, scan_job=None) -> str:
-        document = Document(build_scan_report(scan_job or self.scan_job))
+        document = Document(render_report_docx(scan_job or self.scan_job))
         parts = [p.text for p in document.paragraphs]
         for table in document.tables:
             for row in table.rows:
@@ -154,7 +154,7 @@ class ReportScreenshotTests(TestCase):
         return relative_path
 
     def _image_count(self) -> int:
-        return len(Document(build_scan_report(self.scan_job)).inline_shapes)
+        return len(Document(render_report_docx(self.scan_job)).inline_shapes)
 
     def _caption_count(self) -> int:
         """截圖說明文字出現幾次——比數總圖片數可靠。
@@ -163,7 +163,7 @@ class ReportScreenshotTests(TestCase):
         趨勢），總圖片數會隨圖表增減而變；寫死總數只會變成每次調圖表就要改測試
         的雜訊。真正要鎖的是「入口頁截圖有出現，且不隨頁數成長」。
         """
-        document = Document(build_scan_report(self.scan_job))
+        document = Document(render_report_docx(self.scan_job))
         # 用帶全形括號的完整字串：report_render 的章節導言裡也有「掃描當下擷取的
         # 網站畫面」，只比對前四個字會永遠命中而讓測試失去意義。
         return sum(1 for p in document.paragraphs if "（掃描當下擷取）" in p.text)

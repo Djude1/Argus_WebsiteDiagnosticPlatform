@@ -14,6 +14,7 @@ import { useArgusStore } from "../../store";
 const SECTIONS = [
   { key: "", label: "總覽" },
   { key: "scans", label: "掃描" },
+  { key: "seo", label: "SEO 分析" },
   { key: "issues", label: "問題分析" },
   { key: "pages", label: "頁面" },
   { key: "aeo", label: "AEO 問答" },
