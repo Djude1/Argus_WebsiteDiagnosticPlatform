@@ -8,13 +8,13 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 
 | URL 前綴 | Django App | 主要端點 |
 |---|---|---|
-| `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/` |
+| `/api/auth/` | `accounts` | `google/`（OAuth）、`register/`、`email-login/`、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/`、`turnstile/`（公開，Turnstile 是否啟用與 site key） |
 | `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/pages/?scan=` |
 | `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
-| `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS） |
+| `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/mcp/` | `mcp_access` | MCP Streamable HTTP 端點（只吃 `Bearer argus_mcp_…` 憑證）＋`reports/<token>/` 短效報告連結 |
 | `/api/mcp-access/` | `mcp_access` | 會員頁管理 API：`overview/`、`keys/`（建立）、`keys/<id>/revoke/`、`connection/`（驗證連線） |
