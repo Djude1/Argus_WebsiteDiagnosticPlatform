@@ -8480,6 +8480,14 @@
                     "default_categories": {
                         "readOnly": true
                     },
+                    "favicon": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "domain_verified": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "archived_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8510,6 +8518,8 @@
                     "created_at",
                     "default_categories",
                     "default_scope",
+                    "domain_verified",
+                    "favicon",
                     "hostname",
                     "id",
                     "name",
@@ -8570,15 +8580,29 @@
                         "type": "string",
                         "format": "date-time",
                         "nullable": true
+                    },
+                    "score_history": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "issue_counts": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer"
+                        }
                     }
                 },
                 "required": [
+                    "issue_counts",
                     "last_completed_at",
                     "latest_category_scores",
                     "latest_scan",
                     "latest_score",
                     "previous_score",
-                    "scans_count"
+                    "scans_count",
+                    "score_history"
                 ]
             },
             "SiteRebuild": {

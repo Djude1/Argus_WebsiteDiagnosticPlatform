@@ -386,6 +386,8 @@ class SiteProjectSerializer(serializers.ModelSerializer):
 
     hostname = serializers.CharField(read_only=True)
     summary = serializers.SerializerMethodField()
+    # 網域所有權已驗證（可進行主動測試）；頁首的驗證標記用
+    domain_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteProject
@@ -398,12 +400,18 @@ class SiteProjectSerializer(serializers.ModelSerializer):
             "default_scope",
             "default_categories",
             "favicon",
+            "domain_verified",
             "archived_at",
             "created_at",
             "updated_at",
             "summary",
         ]
         read_only_fields = fields
+
+    def get_domain_verified(self, obj) -> bool:
+        from apps.scans.services import user_owns_domain
+
+        return user_owns_domain(obj.user, obj.hostname)
 
     def get_summary(self, obj) -> SiteProjectSummarySerializer:
         from apps.scans.projects import project_summaries

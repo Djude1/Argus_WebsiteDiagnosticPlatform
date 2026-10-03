@@ -265,3 +265,120 @@ export function GearIcon(props) {
     </svg>
   );
 }
+
+// ── 網站專案工作區（2026-10-03 依參考設計：頂部搜尋／通知、各維度、問題表格） ──
+
+export function SearchIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="11" cy="11" r="6.4" />
+      <path d="M20 20l-4.4-4.4" />
+    </svg>
+  );
+}
+
+export function BellIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M6.2 16.4V11a5.8 5.8 0 0111.6 0v5.4l1.6 1.8H4.6z" />
+      <path d="M10 20.2a2.2 2.2 0 004 0" />
+    </svg>
+  );
+}
+
+export function ChatIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M4.2 5.6h15.6v10.2H10l-4.4 3.6v-3.6H4.2z" />
+      <path d="M8.4 9.8h7.2M8.4 12.6h4.4" />
+    </svg>
+  );
+}
+
+export function PinIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M12 21s-6.4-5.6-6.4-10.6a6.4 6.4 0 0112.8 0C18.4 15.4 12 21 12 21z" />
+      <circle cx="12" cy="10.4" r="2.2" />
+    </svg>
+  );
+}
+
+export function PhoneIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <rect className="ln-fill" x="6.6" y="3" width="10.8" height="18" rx="2.2" />
+      <path d="M10.6 18h2.8" />
+    </svg>
+  );
+}
+
+export function CalendarIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <rect className="ln-fill" x="3.8" y="5.2" width="16.4" height="15" rx="2.2" />
+      <path d="M3.8 9.6h16.4M8.4 3.4v3.6M15.6 3.4v3.6" />
+    </svg>
+  );
+}
+
+export function CheckCircleIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle className="ln-fill" cx="12" cy="12" r="8.6" />
+      <path d="M8.4 12.2l2.4 2.4 4.8-5" />
+    </svg>
+  );
+}
+
+export function BulbIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M12 3.4a6 6 0 00-3.6 10.8c.8.6 1.2 1.4 1.2 2.4h4.8c0-1 .4-1.8 1.2-2.4A6 6 0 0012 3.4z" />
+      <path d="M9.8 19.2h4.4M10.6 21.4h2.8" />
+    </svg>
+  );
+}
+
+export function ListIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9 6.4h11M9 12h11M9 17.6h11" />
+      <path d="M4.6 6.4h.01M4.6 12h.01M4.6 17.6h.01" strokeWidth="2.6" />
+    </svg>
+  );
+}
+
+export function BarsIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5.4 20V12M10.4 20V5M15.4 20v-6M20.2 20V9" />
+    </svg>
+  );
+}
+
+export function DownloadIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3.8v11M7.6 10.6L12 15l4.4-4.4" />
+      <path d="M4.6 16.6v2.6a1 1 0 001 1h12.8a1 1 0 001-1v-2.6" />
+    </svg>
+  );
+}
+
+export function ExternalIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M13.6 4.4h6v6M19.6 4.4L11 13" />
+      <path d="M17.4 14v4.6a1 1 0 01-1 1H5.4a1 1 0 01-1-1v-11a1 1 0 011-1H10" />
+    </svg>
+  );
+}
+
+export function PlayIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M7.4 5.2v13.6l11-6.8z" />
+    </svg>
+  );
+}

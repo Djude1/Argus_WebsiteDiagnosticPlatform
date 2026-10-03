@@ -503,3 +503,27 @@ class ProjectSummaryListTests(APITestCase):
         self.assertEqual(summary["score_history"], [50, 70])
         # 同規則算一個並取最高嚴重度；info 與未勾維度（security）不算
         self.assertEqual(summary["issue_counts"], {"high": 1})
+
+
+class ProjectHeaderDataTests(APITestCase):
+    """頁首資料：網站簡介（首頁 meta description）與網域驗證標記。"""
+
+    def test_site_description_and_verified_flag(self):
+        user = _user("header")
+        self.client.force_authenticate(user)
+        scan = _scan(user, completed_minutes_ago=3)
+        Page = django_apps.get_model("scans", "Page")
+        Page.objects.create(
+            scan_job=scan,
+            url="https://example.com/",
+            final_url="https://example.com/",
+            origin="https://example.com",
+            depth=0,
+            html=(
+                '<html><head><meta property="og:description" content="OG 簡介">'
+                '<meta name="description" content="  臺北商業大學\n官方網站  "></head></html>'
+            ),
+        )
+        overview = self.client.get(reverse("site-project-overview", args=[scan.project_id])).data
+        self.assertEqual(overview["site_description"], "臺北商業大學 官方網站")
+        self.assertIs(overview["project"]["domain_verified"], False)

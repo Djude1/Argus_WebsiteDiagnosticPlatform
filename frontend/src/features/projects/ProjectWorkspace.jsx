@@ -7,18 +7,27 @@ import { api } from "../../api";
 import { CATEGORY_ORDER, Sparkline } from "../../components/projects/DashboardWidgets.jsx";
 import SiteFavicon from "../../components/projects/SiteFavicon.jsx";
 import { CATEGORY_LABELS, apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
-import { formatDateTime, formatRelative } from "../../shared/formatters";
+import { formatDate, formatDateTime, formatRelative } from "../../shared/formatters";
+import {
+  BrowserIcon,
+  ChatIcon,
+  ClockIcon,
+  FlagIcon,
+  GearIcon,
+  HomeIcon,
+  SpiderIcon,
+} from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
 
-// 側邊欄只用文字（名稱＋一行說明），目前頁以底色與字重標示——不用圖示與彩色左邊條。
+// 側邊欄：圖示＋名稱＋一行說明；目前頁用淺色底（不用彩色左邊條）
 const SECTIONS = [
-  { key: "", label: "總覽", hint: "分數與本次變化" },
-  { key: "scans", label: "掃描", hint: "建立與檢視掃描" },
-  { key: "issues", label: "問題分析", hint: "新增、持續、未出現" },
-  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題" },
-  { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案" },
-  { key: "history", label: "歷史報告", hint: "歷次分數與報告" },
-  { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存" },
+  { key: "", label: "總覽", hint: "分數與本次變化", Icon: HomeIcon },
+  { key: "scans", label: "掃描", hint: "建立與檢視掃描", Icon: SpiderIcon },
+  { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
+  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
+  { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案", Icon: ChatIcon },
+  { key: "history", label: "歷史報告", hint: "歷次分數與報告", Icon: ClockIcon },
+  { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存", Icon: GearIcon },
 ];
 
 /** 分數的文字色調（數字本身上色，不用彩色底的徽章）。 */
@@ -70,6 +79,7 @@ function ProjectSidebar({ project, activeSection }) {
               className={`project-sidebar-link ${active ? "active" : ""}`}
               aria-current={active ? "page" : undefined}
             >
+              <section.Icon className="project-sidebar-icon" />
               <span className="project-sidebar-link-text">
                 <span className="project-sidebar-link-label">{section.label}</span>
                 <span className="project-sidebar-link-hint">{section.hint}</span>
@@ -78,12 +88,57 @@ function ProjectSidebar({ project, activeSection }) {
           );
         })}
       </nav>
-      {activeSection !== "scans" && (
-        <Link className="project-sidebar-cta" to={projectPath(project.id, "scans")}>
-          建立新掃描 →
-        </Link>
-      )}
+      <SidebarPlanCard />
+      <p className="project-sidebar-footer">
+        <Link to="/project">產品介紹</Link>
+        <Link to="/partners">聯絡我們</Link>
+        <Link to="/reviews">使用者評論</Link>
+      </p>
     </aside>
+  );
+}
+
+/**
+ * 側邊欄底部的方案卡：目前訂閱方案（/api/billing/subscription/）與點數餘額（store 的 wallet）。
+ * 有訂閱時進度條＝餘額／方案每月點數；沒有訂閱時只顯示餘額。
+ */
+function SidebarPlanCard() {
+  const wallet = useArgusStore((s) => s.wallet);
+  const fetchWallet = useArgusStore((s) => s.fetchWallet);
+  const [subscription, setSubscription] = useState(undefined);
+
+  useEffect(() => {
+    if (wallet === null) fetchWallet();
+  }, [wallet, fetchWallet]);
+  useEffect(() => {
+    api
+      .get("/billing/subscription/")
+      .then((response) => setSubscription(response.data.subscription))
+      .catch(() => setSubscription(null));
+  }, []);
+
+  const balance = wallet?.balance;
+  const active = subscription && subscription.status === "active" ? subscription : null;
+  const monthly = active?.plan_monthly_coins || 0;
+  const ratio = monthly && balance != null ? Math.min(1, balance / monthly) : null;
+  return (
+    <section className="project-plan-card" aria-label="目前方案">
+      <p className="project-plan-label">目前方案</p>
+      <p className="project-plan-name">{subscription === undefined ? "…" : active ? active.plan_name : "未訂閱"}</p>
+      {ratio !== null && (
+        <span className="project-plan-bar" aria-hidden="true">
+          <span style={{ width: `${ratio * 100}%` }} />
+        </span>
+      )}
+      <p className="project-plan-coins">
+        {balance == null ? "—" : balance.toLocaleString()}
+        {monthly ? ` / ${monthly.toLocaleString()}` : ""} coin
+      </p>
+      {active?.current_period_end && (
+        <p className="project-plan-hint">下次贈點 {formatDate(active.current_period_end)}</p>
+      )}
+      <Link className="project-plan-cta" to="/billing">{active ? "購點與訂閱 →" : "購點或訂閱方案 →"}</Link>
+    </section>
   );
 }
 

@@ -239,9 +239,6 @@
 .project-kpi {
   @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
 }
-.project-kpi.is-score {
-  @apply flex items-center gap-4;
-}
 /* 分數環沿用舊 Dashboard 元件；它的深色字只寫在 .panel 內，這裡補上同樣的對比 */
 .project-kpi .score-ring-value {
   @apply text-slate-900;
@@ -249,26 +246,11 @@
 .project-kpi .score-ring-label {
   color: rgba(71, 85, 105, 0.7);
 }
-.project-kpi-label {
-  @apply text-xs font-semibold text-slate-500;
-}
-.project-kpi-value {
-  @apply mt-1 text-3xl font-bold text-slate-900;
-}
 .project-kpi-value.is-small {
   @apply text-xl;
 }
 .project-kpi-hint {
   @apply mt-1 text-xs text-slate-500;
-}
-.project-sev-row {
-  @apply mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600;
-}
-.project-change-list {
-  @apply mt-2 grid list-none gap-1 p-0 text-sm;
-}
-.project-change-list a {
-  @apply flex justify-between rounded-lg px-2 py-1 text-slate-700 hover:bg-slate-50 hover:text-blue-800;
 }
 .project-grid-2 {
   display: grid;
@@ -279,43 +261,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-.project-category-list {
-  @apply grid list-none gap-2.5 p-0;
-}
-.project-category-row {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) 8.5rem;
-  align-items: center;
-  gap: 0.75rem;
-}
-.project-category-name {
-  @apply text-sm font-semibold text-slate-700;
-}
-.project-category-bar {
-  @apply block h-2.5 overflow-hidden rounded-full bg-slate-100;
-}
-.project-category-fill {
-  @apply block h-full rounded-full;
-}
-.project-category-fill.tone-good { @apply bg-emerald-500; }
-.project-category-fill.tone-medium { @apply bg-amber-500; }
-.project-category-fill.tone-bad { @apply bg-rose-500; }
-.project-category-score {
-  @apply text-right text-sm font-semibold text-slate-700;
-}
-.project-action-list {
-  @apply grid gap-2 pl-5 text-sm;
-}
-.project-action-list li {
-  @apply flex flex-wrap items-center gap-2;
-}
-.project-action-title {
-  @apply flex-1 text-slate-800;
-}
-.project-action-cat {
-  @apply text-xs text-slate-500;
-}
-
 /* ── 掃描：左側建立表單、右側此網站的掃描 ── */
 .project-scans-page {
   display: grid;
@@ -330,12 +275,6 @@
 }
 
 /* ── 問題分析 ── */
-.project-scan-select {
-  @apply grid gap-1 text-xs font-semibold text-slate-500;
-}
-.project-scan-select .input {
-  min-width: 15rem;
-}
 .project-filters {
   @apply grid gap-3;
 }
@@ -676,56 +615,6 @@
 .project-section-hint {
   @apply text-xs text-slate-500;
 }
-.dash-category-list {
-  @apply grid list-none gap-2.5 p-0;
-}
-.dash-category-row {
-  display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) 120px 8.5rem;
-  align-items: center;
-  gap: 0.75rem;
-}
-@media (max-width: 640px) {
-  .dash-category-row {
-    grid-template-columns: 3rem minmax(0, 1fr) 6.5rem;
-  }
-  .dash-category-row .dash-spark,
-  .dash-category-row .dash-spark-empty {
-    display: none;
-  }
-}
-.dash-category-name {
-  @apply text-sm font-semibold text-slate-700;
-}
-.dash-category-score {
-  @apply text-right text-sm font-semibold text-slate-700;
-}
-.dash-spark {
-  display: block;
-  overflow: visible;
-}
-.dash-spark-line {
-  fill: none;
-  stroke: #2563eb;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-.dash-spark-last {
-  fill: #2563eb;
-  stroke: #ffffff;
-  stroke-width: 2;
-}
-.dash-spark-hit {
-  fill: transparent;
-  cursor: default;
-}
-.dash-spark-hit:hover {
-  fill: rgba(37, 99, 235, 0.25);
-}
-.dash-spark-empty {
-  @apply text-xs text-slate-400;
-}
 .dash-count-list {
   @apply grid list-none gap-1 p-0;
 }
@@ -751,88 +640,6 @@
 .dash-count-value {
   @apply text-right font-semibold;
 }
-.dash-stats {
-  display: grid;
-  gap: 0.5rem 1rem;
-  margin: 0;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-}
-.dash-stats div {
-  @apply rounded-xl border border-slate-200 px-3 py-2;
-}
-.dash-stats dt {
-  @apply text-[11px] font-semibold text-slate-500;
-}
-.dash-stats dd {
-  @apply m-0 mt-0.5 text-sm font-bold text-slate-800;
-}
-.dash-stats .is-warn dd {
-  @apply text-amber-700;
-}
-.dash-recent-head {
-  @apply mt-4;
-}
-.dash-recent {
-  @apply grid list-none gap-1 p-0;
-}
-.dash-recent-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 0.6rem;
-  @apply rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50;
-}
-.dash-recent-meta {
-  @apply text-xs text-slate-500;
-}
-.dash-aeo {
-  @apply grid gap-2;
-}
-.dash-aeo-ratios {
-  @apply grid grid-cols-2 gap-2;
-}
-.dash-aeo-ratios div {
-  @apply grid rounded-xl border border-slate-200 px-3 py-2;
-}
-.dash-aeo-ratios strong {
-  @apply text-2xl font-bold text-slate-900;
-}
-.dash-aeo-ratios span {
-  @apply text-xs text-slate-500;
-}
-.dash-aeo-counts {
-  @apply text-xs text-slate-600;
-}
-
-/* ── 問題分析：工具列、分組與詳情 ── */
-.project-filter-toolbar {
-  @apply flex flex-wrap items-center justify-between gap-2;
-}
-.project-issue-group + .project-issue-group {
-  @apply mt-4;
-}
-.project-issue-group-title {
-  @apply flex items-baseline gap-2 border-b border-slate-200 pb-2 text-base font-bold text-slate-800;
-}
-.project-issue-group-title span {
-  @apply text-xs font-normal text-slate-500;
-}
-.project-issue-detail {
-  @apply mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700;
-}
-.project-issue-detail h4 {
-  @apply mb-1 text-xs font-bold text-slate-500;
-}
-.project-issue-detail p {
-  white-space: pre-line;
-}
-.project-issue-detail ul {
-  @apply grid list-none gap-0.5 p-0 text-xs;
-}
-.project-issue-detail li {
-  @apply truncate;
-}
-
 /* ── 頁面清單 ── */
 .project-search {
   @apply block max-w-md;
@@ -949,4 +756,698 @@
 }
 .project-origin-link {
   @apply text-slate-500 hover:text-slate-900 hover:underline;
+}
+
+/* ========================================
+   2026-10-03 依參考設計：頁首、總覽儀表板、問題分析表格、側邊欄方案卡
+   分數色調：≥80 藍（良好）、60–79 琥珀（中等）、<60 紅（待加強）
+   ======================================== */
+
+/* ── 共用頁首（components/projects/ProjectHeader.jsx） ── */
+.project-breadcrumb {
+  @apply flex flex-wrap items-center gap-2 text-sm text-slate-500;
+}
+.project-breadcrumb a {
+  @apply text-slate-500 hover:text-blue-700;
+}
+.project-breadcrumb [aria-current="page"] {
+  @apply font-semibold text-slate-800;
+}
+.project-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem 1.75rem;
+  align-items: center;
+}
+@media (min-width: 1100px) {
+  .project-hero {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  }
+  .project-hero-desc {
+    padding-left: 1.75rem;
+    border-left: 1px solid #e2e8f0;
+  }
+}
+.project-hero-id {
+  @apply flex min-w-0 items-center gap-4;
+}
+.site-favicon.is-xl {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 16px;
+  font-size: 1.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.project-hero-text {
+  @apply grid min-w-0 gap-1;
+}
+.project-hero-name {
+  @apply flex items-center gap-2 text-2xl font-bold text-slate-900;
+}
+.project-hero-verified {
+  @apply inline-flex text-emerald-500;
+}
+.project-hero-verified svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.project-hero-url {
+  @apply inline-flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-blue-700 hover:underline;
+}
+.project-hero-url svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 auto;
+}
+.project-hero-meta {
+  @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500;
+}
+.project-state-pill {
+  @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+}
+.project-state-pill::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+.project-state-pill.is-done { @apply border-emerald-200 bg-emerald-50 text-emerald-700; }
+.project-state-pill.is-running { @apply border-blue-200 bg-blue-50 text-blue-700; }
+.project-state-pill.is-failed { @apply border-rose-200 bg-rose-50 text-rose-700; }
+.project-state-pill.is-none { @apply border-slate-200 bg-slate-50 text-slate-500; }
+.project-hero-desc {
+  @apply text-sm leading-relaxed text-slate-600;
+}
+.project-hero-aside {
+  @apply flex flex-wrap items-center gap-2;
+}
+.project-hero-primary {
+  @apply gap-2 px-5 py-2.5;
+}
+.project-hero-primary svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ── 總覽：四張數字卡 ── */
+.project-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.project-kpi {
+  @apply grid content-start gap-2;
+}
+.project-kpi-label {
+  @apply text-sm font-semibold text-slate-700;
+}
+.project-kpi-value {
+  @apply mt-0 flex items-baseline gap-2 text-4xl font-bold text-slate-900;
+}
+.project-kpi-value small {
+  @apply text-sm font-medium text-slate-500;
+}
+.project-kpi-score {
+  @apply flex items-center gap-4;
+}
+.project-kpi .score-ring-label {
+  font-size: 0.75rem;
+}
+.project-grade {
+  @apply inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold;
+}
+.project-grade.tone-good { @apply bg-blue-100 text-blue-700; }
+.project-grade.tone-medium { @apply bg-amber-100 text-amber-700; }
+.project-grade.tone-bad { @apply bg-rose-100 text-rose-700; }
+.project-kpi-sub {
+  @apply mt-2 text-xs text-slate-500;
+}
+.project-kpi-delta {
+  @apply text-sm font-semibold text-slate-800;
+}
+.project-sev-row {
+  @apply mt-0 flex flex-wrap gap-2;
+}
+.project-sev-count {
+  @apply inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1 text-sm font-semibold transition;
+  cursor: pointer;
+}
+.project-sev-count b {
+  @apply font-bold;
+}
+.project-sev-count.sev-critical { @apply bg-rose-100 text-rose-800; }
+.project-sev-count.sev-high { @apply bg-orange-100 text-orange-800; }
+.project-sev-count.sev-medium { @apply bg-amber-100 text-amber-800; }
+.project-sev-count.sev-low { @apply bg-sky-100 text-sky-800; }
+.project-sev-count.sev-info { @apply bg-slate-100 text-slate-600; }
+.project-sev-count:hover,
+.project-sev-count.active {
+  border-color: currentColor;
+}
+.project-sev-count:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-kpi-hint a {
+  @apply font-semibold text-blue-700 hover:underline;
+}
+.project-kpi-status {
+  @apply flex items-center gap-2 text-lg font-bold text-emerald-600;
+}
+.project-kpi-status svg {
+  width: 2rem;
+  height: 2rem;
+}
+.project-kpi-facts {
+  @apply m-0 grid gap-1.5 border-t border-slate-100 pt-2;
+}
+.project-kpi-facts div {
+  @apply flex items-center justify-between text-sm;
+}
+.project-kpi-facts dt {
+  @apply flex items-center gap-2 text-slate-500;
+}
+.project-kpi-facts dt svg {
+  width: 1rem;
+  height: 1rem;
+}
+.project-kpi-facts dd {
+  @apply m-0 font-semibold text-slate-800;
+}
+.project-kpi-date {
+  @apply flex items-center gap-3;
+}
+.project-kpi-date-icon {
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600;
+}
+.project-kpi-date-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.project-kpi-date strong {
+  @apply block text-lg font-bold text-slate-900;
+}
+.project-kpi-date small {
+  @apply text-xs text-slate-500;
+}
+.project-kpi-change {
+  @apply flex items-baseline gap-3 text-sm text-slate-600;
+}
+.project-kpi-change b {
+  @apply text-2xl font-bold text-slate-900;
+}
+
+/* ── 總覽：第二、三排 ── */
+@media (min-width: 1100px) {
+  .project-grid-3.is-wide-first {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.project-range-select {
+  @apply w-auto py-1 text-xs;
+}
+.dash-cat-list {
+  @apply m-0 grid list-none gap-3 p-0;
+}
+.dash-cat-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(7rem, 1.2fr) minmax(4rem, 1fr) 2.6rem 3.6rem;
+  align-items: center;
+  gap: 0.65rem;
+}
+.dash-cat-icon {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-lg;
+}
+.dash-cat-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.dash-cat-icon.cat-seo { @apply bg-indigo-50 text-indigo-600; }
+.dash-cat-icon.cat-aeo { @apply bg-violet-50 text-violet-600; }
+.dash-cat-icon.cat-geo { @apply bg-cyan-50 text-cyan-700; }
+.dash-cat-icon.cat-ux { @apply bg-emerald-50 text-emerald-700; }
+.dash-cat-icon.cat-security { @apply bg-rose-50 text-rose-600; }
+.dash-cat-name {
+  @apply grid min-w-0;
+}
+.dash-cat-name strong {
+  @apply text-sm font-bold text-slate-800;
+}
+.dash-cat-name small {
+  @apply truncate text-[11px] text-slate-500;
+}
+.dash-cat-track {
+  @apply block h-2.5 overflow-hidden rounded-full bg-slate-100;
+}
+.dash-cat-fill {
+  @apply block h-full rounded-full bg-slate-400;
+}
+.dash-cat-row.tone-good .dash-cat-fill { @apply bg-blue-500; }
+.dash-cat-row.tone-medium .dash-cat-fill { @apply bg-amber-400; }
+.dash-cat-row.tone-bad .dash-cat-fill { @apply bg-rose-500; }
+.dash-cat-score {
+  @apply text-right text-sm font-bold text-slate-800;
+}
+.dash-cat-row.tone-none .dash-cat-score {
+  @apply text-[11px] font-normal text-slate-400;
+}
+.dash-cat-trend {
+  @apply text-right text-[11px] text-slate-400;
+}
+.dash-cat-trend .dash-spark {
+  width: 3.6rem;
+}
+@media (max-width: 560px) {
+  .dash-cat-row {
+    grid-template-columns: 2rem minmax(0, 1fr) 5rem 2.6rem;
+  }
+  .dash-cat-trend {
+    display: none;
+  }
+}
+.dash-donut {
+  @apply flex flex-wrap items-center justify-center gap-6;
+}
+.dash-donut-chart {
+  width: 9.5rem;
+  height: 9.5rem;
+}
+.dash-donut-track {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 16;
+}
+.dash-donut-seg {
+  fill: none;
+  stroke-width: 16;
+  transform: rotate(-90deg);
+  transform-origin: 70px 70px;
+}
+.dash-donut-seg.sev-critical { stroke: #b91c1c; }
+.dash-donut-seg.sev-high { stroke: #f97316; }
+.dash-donut-seg.sev-medium { stroke: #f59e0b; }
+.dash-donut-seg.sev-low { stroke: #38bdf8; }
+.dash-donut-seg.sev-info { stroke: #94a3b8; }
+.dash-donut-total {
+  fill: #0f172a;
+  font-size: 30px;
+  font-weight: 800;
+}
+.dash-donut-unit {
+  fill: #64748b;
+  font-size: 11px;
+}
+.dash-donut-legend {
+  @apply m-0 grid list-none gap-2 p-0 text-sm;
+  min-width: 9rem;
+}
+.dash-donut-legend li {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr 2rem 2.6rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dash-donut-dot {
+  @apply block h-3 w-3 rounded-full;
+}
+.dash-donut-dot.sev-critical { background: #b91c1c; }
+.dash-donut-dot.sev-high { background: #f97316; }
+.dash-donut-dot.sev-medium { background: #f59e0b; }
+.dash-donut-dot.sev-low { background: #38bdf8; }
+.dash-donut-dot.sev-info { background: #94a3b8; }
+.dash-donut-name {
+  @apply text-slate-700;
+}
+.dash-donut-count {
+  @apply text-right font-bold text-slate-800;
+}
+.dash-donut-pct {
+  @apply text-right text-xs text-slate-500;
+}
+.dash-aeo-tiles {
+  @apply grid grid-cols-2 gap-3;
+}
+.dash-aeo-tile {
+  @apply flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3;
+}
+.dash-aeo-tile-icon {
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-600;
+}
+.dash-aeo-tile-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.dash-aeo-tile strong {
+  @apply block text-2xl font-bold text-slate-900;
+}
+.dash-aeo-tile small {
+  @apply block text-[11px] leading-snug text-slate-500;
+}
+.dash-aeo-counts {
+  @apply mt-3 text-xs text-slate-600;
+}
+.project-panel-cta {
+  @apply mt-3 w-fit py-1.5 text-xs;
+}
+.dash-count-row {
+  grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) 2rem;
+}
+.dash-count-label {
+  @apply flex items-baseline gap-2;
+}
+.dash-count-label small {
+  @apply truncate text-[11px] font-normal text-slate-500;
+}
+.dash-count-fill.tone-good { @apply bg-blue-500; }
+.dash-count-fill.tone-medium { @apply bg-amber-400; }
+.dash-count-fill.tone-bad { @apply bg-rose-500; }
+.project-priority-list {
+  @apply m-0 grid list-none gap-2 p-0;
+}
+.project-priority-list li {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.project-priority-num {
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800;
+}
+.project-priority-title {
+  @apply truncate text-sm text-slate-700 hover:text-blue-700 hover:underline;
+}
+
+/* ── 頁首右側的掃描時間卡 ── */
+.project-scan-card {
+  @apply flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm;
+  cursor: pointer;
+}
+.project-scan-card-icon {
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600;
+}
+.project-scan-card-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.project-scan-card-body {
+  @apply grid min-w-0;
+}
+.project-scan-card-label {
+  @apply text-xs text-slate-500;
+}
+.project-scan-card-select {
+  @apply max-w-[20rem] border-0 bg-transparent p-0 pr-4 text-base font-bold text-slate-900;
+  cursor: pointer;
+}
+.project-scan-card-select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.project-scan-card-sub {
+  @apply text-xs text-slate-500;
+}
+
+/* ── 問題分析 ── */
+.issue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+.issue-summary-total {
+  @apply grid gap-1 pr-6;
+  border-right: 1px solid #e2e8f0;
+}
+.issue-summary-sev {
+  @apply flex flex-wrap gap-2;
+}
+.issue-summary-cats {
+  @apply ml-auto grid gap-2;
+}
+.issue-cat-chips {
+  @apply flex flex-wrap gap-2;
+}
+.issue-summary-note {
+  @apply w-full text-xs text-slate-500;
+}
+.issue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  @apply py-3;
+}
+.issue-toolbar-group {
+  @apply flex items-center gap-2;
+}
+.issue-toolbar-label {
+  @apply whitespace-nowrap text-sm text-slate-500;
+}
+.issue-toolbar .input {
+  @apply w-auto py-1.5 text-sm;
+}
+.issue-segmented {
+  @apply inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1;
+}
+.issue-segmented button {
+  @apply inline-flex items-center gap-1.5 rounded-lg border-0 bg-transparent px-3 py-1.5 text-sm font-semibold text-slate-600;
+  cursor: pointer;
+}
+.issue-segmented button.active {
+  @apply bg-white text-blue-700 shadow-sm;
+}
+.issue-segmented button svg,
+.issue-export svg {
+  width: 1rem;
+  height: 1rem;
+}
+.issue-export {
+  @apply ml-auto gap-2;
+}
+.issue-query {
+  @apply flex flex-wrap items-center gap-3 text-sm text-slate-600;
+}
+.issue-table-card {
+  @apply p-0;
+  overflow: hidden;
+}
+.issue-table-card > .hint-text {
+  @apply p-5;
+}
+.issue-table {
+  @apply w-full border-collapse text-sm;
+}
+.issue-table thead th {
+  @apply border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold text-slate-500;
+  white-space: nowrap;
+}
+.issue-table tbody td,
+.issue-table tbody th {
+  @apply border-b border-slate-100 px-4 py-3 text-left align-middle font-normal text-slate-700;
+}
+.issue-table tbody tr:hover > * {
+  @apply bg-slate-50;
+}
+.issue-table tr.is-open > * {
+  @apply bg-blue-50;
+}
+.issue-col-sev {
+  width: 5rem;
+}
+.issue-title {
+  @apply flex flex-wrap items-center gap-2 text-[15px] font-bold text-slate-900;
+}
+.issue-desc {
+  @apply mt-0.5 block text-xs text-slate-500;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issue-cat {
+  @apply inline-flex whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-semibold;
+}
+.issue-cat.cat-seo { @apply border-indigo-200 bg-indigo-50 text-indigo-700; }
+.issue-cat.cat-aeo { @apply border-violet-200 bg-violet-50 text-violet-700; }
+.issue-cat.cat-geo { @apply border-cyan-200 bg-cyan-50 text-cyan-800; }
+.issue-cat.cat-ux { @apply border-emerald-200 bg-emerald-50 text-emerald-700; }
+.issue-cat.cat-security { @apply border-rose-200 bg-rose-50 text-rose-700; }
+.issue-col-pages {
+  @apply text-center font-semibold;
+  width: 5.5rem;
+}
+.issue-col-fix {
+  min-width: 16rem;
+}
+.issue-fix {
+  @apply flex items-start gap-2 text-xs leading-relaxed text-slate-600;
+}
+.issue-fix svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  @apply text-amber-500;
+}
+.issue-fix span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issue-col-action {
+  @apply text-right;
+  white-space: nowrap;
+}
+.issue-group-row td {
+  @apply bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600;
+}
+.issue-detail-row td {
+  @apply border-b border-slate-200 bg-blue-50/40 px-6 py-4;
+}
+.issue-detail {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  align-items: start;
+}
+.issue-detail h4 {
+  @apply mb-1 text-xs font-bold text-slate-500;
+}
+.issue-detail p {
+  @apply text-sm text-slate-700;
+  white-space: pre-line;
+}
+.issue-detail ul {
+  @apply m-0 grid max-h-48 list-none gap-0.5 overflow-auto p-0 text-xs text-slate-600;
+}
+.issue-detail li {
+  @apply truncate;
+}
+.issue-evidence-link {
+  @apply w-fit self-end;
+}
+/* 窄螢幕：表格每列改成區塊 */
+@media (max-width: 900px) {
+  .issue-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .issue-table,
+  .issue-table tbody {
+    display: block;
+  }
+  .issue-table tbody tr:not(.issue-detail-row):not(.issue-group-row) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.4rem 0.75rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .issue-table tbody td,
+  .issue-table tbody th {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .issue-col-sev {
+    width: auto;
+  }
+  .issue-col-title {
+    grid-column: 2 / -1;
+  }
+  .issue-col-pages {
+    width: auto;
+    text-align: left;
+  }
+  .issue-col-pages::before {
+    content: "影響頁數 ";
+    @apply font-normal text-slate-500;
+  }
+  .issue-col-fix {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .issue-col-action {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .issue-detail-row,
+  .issue-group-row {
+    display: block;
+  }
+  .issue-summary-total {
+    border-right: 0;
+  }
+  .issue-summary-cats {
+    margin-left: 0;
+  }
+  .issue-export {
+    margin-left: 0;
+  }
+}
+
+/* ── 側邊欄：圖示、方案卡、頁尾連結 ── */
+.project-sidebar-link {
+  @apply gap-3;
+}
+.project-sidebar-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  color: #64748b;
+}
+.project-sidebar-link.active .project-sidebar-icon {
+  color: #1d4ed8;
+}
+.project-plan-card {
+  @apply mt-4 grid gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3;
+}
+.project-plan-label {
+  @apply text-[11px] text-slate-500;
+}
+.project-plan-name {
+  @apply text-sm font-bold text-slate-900;
+}
+.project-plan-bar {
+  @apply block h-1.5 overflow-hidden rounded-full bg-slate-200;
+}
+.project-plan-bar > span {
+  @apply block h-full rounded-full bg-blue-500;
+}
+.project-plan-coins {
+  @apply text-xs text-slate-600;
+}
+.project-plan-hint {
+  @apply text-[11px] text-slate-500;
+}
+.project-plan-cta {
+  @apply mt-1 block rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-center text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700;
+}
+.project-sidebar-footer {
+  @apply mt-3 flex flex-wrap gap-x-3 gap-y-1 px-1 text-[11px];
+}
+.project-sidebar-footer a {
+  @apply text-slate-500 hover:text-blue-700;
+}
+@media (max-width: 1023px) {
+  .project-plan-card,
+  .project-sidebar-footer {
+    display: none;
+  }
+  .project-sidebar-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+/* 深色主題：自動轉換會把實心藍底壓暗，選中的維度籤需要明確保留藍底白字 */
+:root[data-theme="dark"] .project-chip.active {
+  border-color: #3b82f6;
+  background: #2563eb;
+  color: #ffffff;
+}
+:root[data-theme="dark"] .project-scan-card-select {
+  background: transparent;
 }
