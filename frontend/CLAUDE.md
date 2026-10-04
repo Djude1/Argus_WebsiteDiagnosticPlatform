@@ -63,6 +63,7 @@ Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollu
 - 多數 `10`–`22` 號檔包在 `@layer components` 內（Tailwind 會提到 `@tailwind components` 的位置輸出）。
 - 命名採 BEM-like：`.頁面名-元素名`（例如 `.admin-panel`、`.scan-card`）。
 - **禁止使用 inline style**（除非動態計算值，如進度條寬度、分數環尺寸）。
+- **全站禁用彩色左邊條**（使用者明確要求，2026-10-04 起不分公開頁／會員區／後台）：不准用 `border-left: Npx solid <顏色>` 或 `::before` 細長色條表示狀態、強調或選中。狀態用彩色徽章＋文字、選中用淺藍底、提示框用整圈 1px 邊框＋淡底。從舊版樣式（`legacy-member/` 等）沿用規則時要先刪掉這類條。2026-10-04 已清掉網域驗證列、評論卡與官方回覆、首頁與 `/project` 的示範問題、toast、報告查驗側欄、後台錯誤狀態／系統健康摘要／頁面備註。
 - 動畫須尊重 `prefers-reduced-motion`（`03-tokens.css` 已全域處理）；390px 寬不得出現水平捲動。
 
 ## 元件新增規範
