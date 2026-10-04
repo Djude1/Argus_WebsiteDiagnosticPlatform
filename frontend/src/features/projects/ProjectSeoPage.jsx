@@ -134,7 +134,6 @@ function ProjectSeoPage() {
     const params = new URLSearchParams(searchParams);
     params.delete("gsc");
     params.delete("reason");
-    params.delete("verified");
     setSearchParams(params, { replace: true });
   }
 
@@ -143,30 +142,13 @@ function ProjectSeoPage() {
 
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!data) return <section className="panel"><p className="hint-text">載入 SEO 分析中…</p></section>;
-  const gscNotice = gscFlash && (
-    <div className={`seo-flash ${gscFlash === "connected" ? "is-good" : "is-bad"}`} role="status">
-      <span>
-        {gscFlash === "connected" ? "已連接 Google Search Console，請選擇要對應的資源。" : searchParams.get("reason") || "Search Console 連接失敗。"}
-        {gscFlash === "connected" && searchParams.get("verified") && (
-          <> 你是 Search Console 的擁有者，已自動完成網域驗證（{searchParams.get("verified")}），可以使用主動式資安測試。</>
-        )}
-      </span>
-      <button type="button" className="project-text-link" onClick={dismissFlash}>知道了</button>
-    </div>
-  );
   if (!data.scan) {
     return (
-      <div className="project-page seo-page">
-        {gscNotice}
-        <section className="panel project-empty">
-          <p className="project-empty-title">還沒有完成的掃描</p>
-          <p className="hint-text">完成一次勾選「SEO」的掃描後，這裡會列出每頁的 Title、Description、H1–H6、canonical、robots 與連結狀態。</p>
-          <Link className={gsc?.enabled ? "secondary-button" : "primary-button"} to={projectPath(project.id, "scans")}>建立掃描</Link>
-        </section>
-        {gsc?.enabled && (
-          <GscPanel project={project} gsc={gsc} performance={performance} keyword={keyword} onChanged={() => setVersion((value) => value + 1)} />
-        )}
-      </div>
+      <section className="panel project-empty">
+        <p className="project-empty-title">還沒有完成的掃描</p>
+        <p className="hint-text">完成一次勾選「SEO」的掃描後，這裡會列出每頁的 Title、Description、H1–H6、canonical、robots 與連結狀態。</p>
+        <Link className="primary-button" to={projectPath(project.id, "scans")}>建立掃描</Link>
+      </section>
     );
   }
 
@@ -183,7 +165,12 @@ function ProjectSeoPage() {
         aside={<ScanTimeCard completed={completed} current={{ id: data.scan.id, completed_at: data.scan.completed_at }} value={scanParam} onChange={(value) => setParam("scan", value)} />}
       />
 
-      {gscNotice}
+      {gscFlash && (
+        <div className={`seo-flash ${gscFlash === "connected" ? "is-good" : "is-bad"}`} role="status">
+          <span>{gscFlash === "connected" ? "已連接 Google Search Console，請選擇要對應的資源。" : searchParams.get("reason") || "Search Console 連接失敗。"}</span>
+          <button type="button" className="project-text-link" onClick={dismissFlash}>知道了</button>
+        </div>
+      )}
       {!data.scan.seo_checked && (
         <p className="seo-note">這次掃描沒有勾選 SEO 維度：頁面內容仍可分析，但沒有連結狀態與站台層級檢查。</p>
       )}

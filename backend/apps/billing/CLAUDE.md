@@ -50,12 +50,6 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | `settle_subscription(user)` | 訂閱 lazy 結算：到期期數逐月補發 `monthly_coins`（kind=subscription_grant）；cancelled 只補已開始的當期；期數歸零且過期 → expired | ✅ 交易鎖＋last_grant_period 同期不重發 |
 | `cancel_subscription(user)` | status=cancelled＋cancelled_at（冪等；當期權益保留到期滿） | ✅ 重複取消不動 |
 | `settle_subscription_safe(user)` | settle 的輕量包裝：失敗只記 log（登入／API 進場觸發用） | — |
-| `activate_subscription_order(order_id, *, provider_trade_no, amount, rtn_msg)` | 綠界定期定額首期授權成功：委託 active、記第 1 期扣款、`grant_subscription(1)`＋settle | ✅ success_times≥1 就不再處理 |
-| `record_subscription_period_charge(order_id, *, total_success_times, amount, gwsr, process_date, rtn_msg)` | 第 2 期起每月扣款成功：依綠界 `TotalSuccessTimes` 與已記錄次數的差額加期數並結算；次數用完標 ended | ✅ 以 TotalSuccessTimes 冪等 |
-| `record_subscription_failure(order_id, *, rtn_code, rtn_msg, amount)` | 首期或某期扣款失敗：只記失敗紀錄（首期失敗＝委託 failed），不發點 | — |
-| `stop_recurring_charges(user)` | 呼叫綠界 CreditCardPeriodAction(Cancel) 停止所有 active 委託，成功才標 cancelled；失敗丟 `EcpayActionError` | ✅ |
-| `cancel_subscription_and_recurring(user)` | 先 `stop_recurring_charges`、成功後 `cancel_subscription`（使用者取消、後台取消都走這個） | — |
-| `has_active_recurring(user)` | 是否有每月自動扣款中的委託 | 純查詢 |
 
 ---
 
@@ -82,29 +76,22 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 
 `grant_monthly_bonus_if_needed` 利用 `last_bonus_year` / `last_bonus_month` 欄位判斷是否已執行。
 
-## 金流模式（2026-10-04 起支援正式扣款）
+## 金流模式
 
-- `ARGUS_PAYMENT_MODE`：`disabled`（預設）／`ecpay_test`（綠界 payment-stage，測試商店、不扣款）／`ecpay`（綠界正式 payment，實際扣款）。`settings.ARGUS_PAYMENT_ENABLED` 是後兩者的布林，程式一律用它判斷（測試要同時 override 兩個設定）。
-- 結帳網址 `ECPAY_CHECKOUT_URL`、定期定額操作網址 `ECPAY_PERIOD_ACTION_URL` 由模式自動決定；環境變數 `ECPAY_CHECKOUT_URL` 若有設定必須與模式一致，否則拒絕啟動。`ecpay` 模式拒絕綠界公開測試商店代號（`ECPAY_PUBLIC_TEST_MERCHANT_IDS`）。`ECPAY_RETURN_URL`、`ECPAY_CLIENT_BACK_URL`、`ECPAY_PERIOD_RETURN_URL`（未設定＝ReturnURL 同網域的 `/api/billing/ecpay/period-callback/`）都必須是公開合法網域的 HTTPS 443、200 字元內。
-- `disabled` 時購點與訂閱 API 回 503，且不得建立訂單或入點；綠界通知也一律回 `0|ERROR`。
-- 建立訂單時維持 pending，ReturnURL 驗證 CheckMacValue、MerchantID、MerchantTradeNo、TradeAmt 後才呼叫 `complete_purchase_order()` 冪等入點。
-- `MerchantTradeNo`：購點 `ARGUS`＋15 位數字、訂閱 `ARGUSS`＋14 位數字（`ecpay.parse_trade_no` 分流；ReturnURL 同時接購點與訂閱首期）。
-- 電子發票：**人工開立**（2026-10-04 使用者決策，未串綠界電子發票 API）。購點訂單與訂閱每期扣款（`SubscriptionCharge`）都保留買受人與發票資料，後台「訂單」頁列出供開立。
+- `ARGUS_PAYMENT_MODE` 只允許 `disabled`（預設）或 `ecpay_test`。
+- `disabled` 時購點 API 回 503，且不得建立訂單或入點。
+- `ecpay_test` 只能送往綠界 `payment-stage`；建立訂單時維持 pending，ReturnURL 驗證 CheckMacValue、MerchantID、MerchantTradeNo、TradeAmt 後才呼叫 `complete_purchase_order()` 冪等入點。
 - `SimulatePaid=1` 是綠界後台測試 ReturnURL 的模擬通知，不代表消費者付款，必須回 `1|OK` 但禁止入點。
 - HashKey / HashIV 只放 `.env`，不得寫進程式、測試 fixture、log 或前端。
 
-## 訂閱（綠界信用卡定期定額＋lazy 贈點）
+## 輕量訂閱（無週期扣款、無新基礎設施）
 
-- Model：`SubscriptionPlan`（方案清單，seed migration 建立內建方案）/ `UserSubscription`（OneToOne；`periods_remaining` 預付期數、`current_period_end` 下次贈點時間、`last_grant_period` 同月冪等）/ `SubscriptionOrder`（綠界定期定額委託：月費與點數快照、買受人／發票資料、`status` pending/active/cancelled/failed/ended、`success_times`）/ `SubscriptionCharge`（每次扣款結果，成功與失敗都記；`(order, sequence)` 成功的唯一）。
-- 付款流程（2026-10-04 起取代「模擬首月」）：`subscribe/` 只建 pending 委託並回綠界結帳表單（`PeriodAmount=TotalAmount=月費`、`PeriodType=M`、`Frequency=1`、`ExecTimes=99`、`PeriodReturnURL`）→ 首期授權結果到 ReturnURL（`activate_subscription_order`）→ 第 2 期起每月結果到 `ecpay/period-callback/`（`record_subscription_period_charge`）。每次成功扣款 = `grant_subscription(1 期)`；點數仍由 `settle_subscription` 在期別開始時發放。
-- 自動續訂中（有 active 委託）時，`settle_subscription` 在 `current_period_end` 後多給 `SUBSCRIPTION_RENEWAL_GRACE`（3 天）才判定 expired，等下一期扣款通知。
-- 取消：`cancel_subscription_and_recurring` 先呼叫綠界 `CreditCardPeriodAction(Action=Cancel)`，失敗時再查 `QueryCreditCardPeriodInfo`，ExecStatus 0（已終止）／2（已完成）視同已停止；其他失敗回 502、訂閱不變（**絕不在綠界還會扣款時把訂閱標成已取消**）。刪除帳號（`accounts/deletion.py`）也先停止扣款，停不了就不刪。
-- 已有 active 委託時再 `subscribe/` 回 409；要換方案先取消。
+- Model：`SubscriptionPlan`（方案清單，seed migration 建立內建方案）/ `UserSubscription`（OneToOne；`periods_remaining` 預付期數、`current_period_end` 下次贈點時間、`last_grant_period` 同月冪等）。
 - lazy 結算：沒有 celery beat——`settle_subscription` 掛在①登入成功後②`wallet/` 與 `subscription/*` API 進場時（用 `settle_subscription_safe`，失敗只 log）。
 - 端點：`GET /api/billing/subscription/plans/`（公開）、`GET /api/billing/subscription/`（自己；無訂閱回 null；含 `plan_monthly_coins` 供會員側邊欄方案卡算進度）、`POST /api/billing/subscription/subscribe/`、`POST /api/billing/subscription/cancel/`。
-- `subscribe/` body 與 purchase 相同（`SubscribeRequestSerializer` 繼承 `PurchaseRequestSerializer`：方案代碼＋買受人／發票欄位＋`agree_terms`）；付款未啟用回 503；`subscription/` 回應含 `auto_renew`（是否每月自動扣款中）。
+- `subscribe/` 行為比照 purchase：`ARGUS_PAYMENT_MODE != "ecpay_test"` 回 503 不入點；`ecpay_test` 模擬首月一次付款（不接綠界定期定額），直接 `grant_subscription`＋`settle_subscription` 入帳。
 - 月份前進用 `_advance_month`（calendar 安全，1/31 → 2/28），禁止手寫 `month + 1`。
-- 後台調整：`POST /api/admin/users/<id>/subscription/`（grant/cancel，cancel 也會先停止綠界扣款，寫 `AdminAuditLog(action=subscription_adjust)`）；`GET /api/admin/subscriptions/plans/`（方案唯讀）；`GET /api/admin/subscription-charges/`（每期扣款＋發票資料，人工開立發票用）。
+- 後台調整：`POST /api/admin/users/<id>/subscription/`（grant/cancel，寫 `AdminAuditLog(action=subscription_adjust)`）；`GET /api/admin/subscriptions/plans/`（方案唯讀）。
 
 ---
 
@@ -145,5 +132,3 @@ Billing 事件訂閱只在 `signals.py` 中處理，禁止在 `views.py` 或 `ta
 | 在 `views.py` 手動扣款邏輯 | 邏輯應集中在 services.py |
 | callback 未驗 CheckMacValue / 訂單編號 / 金額就入點 | 可偽造或錯帳 |
 | 對 `SimulatePaid=1` 入點 | 綠界官方明示這只是 ReturnURL 測試通知 |
-| 綠界還沒確認停止扣款就把訂閱標成取消／刪除帳號 | 使用者會被繼續扣款卻收不到點數 |
-| 在資料庫交易內呼叫綠界 API | 網路延遲時長時間鎖住資料列；`stop_recurring_charges` 先呼叫綠界再更新 |

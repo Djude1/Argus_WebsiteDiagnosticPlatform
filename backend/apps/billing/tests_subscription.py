@@ -268,7 +268,7 @@ class SubscriptionAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data["subscription"])
 
-    @override_settings(ARGUS_PAYMENT_MODE="disabled", ARGUS_PAYMENT_ENABLED=False)
+    @override_settings(ARGUS_PAYMENT_MODE="disabled")
     def test_subscribe_returns_503_when_payment_disabled(self):
         response = self.client.post(
             reverse("billing-subscribe"),
@@ -285,7 +285,28 @@ class SubscriptionAPITests(APITestCase):
             ).exists(),
         )
 
-    @override_settings(ARGUS_PAYMENT_MODE="ecpay_test", ARGUS_PAYMENT_ENABLED=True)
+    @override_settings(ARGUS_PAYMENT_MODE="ecpay_test")
+    def test_subscribe_ecpay_test_grants_first_month_coins(self):
+        response = self.client.post(
+            reverse("billing-subscribe"),
+            {"plan_code": "sub-api"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        sub = UserSubscription.objects.get(user=self.user)
+        self.assertEqual(sub.status, UserSubscription.Status.ACTIVE)
+        self.assertEqual(sub.source, UserSubscription.Source.ECPAY_TEST)
+        self.assertEqual(sub.periods_remaining, 0)  # 首月已結算
+        tx = CoinTransaction.objects.get(
+            wallet__user=self.user,
+            kind=CoinTransaction.Kind.SUBSCRIPTION_GRANT,
+        )
+        self.assertEqual(tx.amount, 300)  # monthly_coins
+        self.assertEqual(CoinWallet.objects.get(user=self.user).balance, 200 + 300)
+        self.assertEqual(response.data["subscription"]["plan_code"], "sub-api")
+
+    @override_settings(ARGUS_PAYMENT_MODE="ecpay_test")
     def test_subscribe_unknown_plan_returns_400(self):
         response = self.client.post(
             reverse("billing-subscribe"),
@@ -295,10 +316,9 @@ class SubscriptionAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_cancel_endpoint_marks_cancelled_without_recurring(self):
-        # 管理員授予（沒有綠界自動扣款）的訂閱：取消只動本地狀態
-        grant_subscription(self.user, self.plan, 1, source=UserSubscription.Source.ADMIN_GRANT)
-        settle_subscription(self.user)
+    @override_settings(ARGUS_PAYMENT_MODE="ecpay_test")
+    def test_cancel_endpoint_marks_cancelled_and_404_when_absent(self):
+        self.client.post(reverse("billing-subscribe"), {"plan_code": "sub-api"}, format="json")
 
         response = self.client.post(reverse("billing-subscription-cancel"))
 
@@ -307,7 +327,6 @@ class SubscriptionAPITests(APITestCase):
             response.data["subscription"]["status"],
             UserSubscription.Status.CANCELLED,
         )
-        self.assertFalse(response.data["subscription"]["auto_renew"])
 
         # 取消後再查詢：狀態正確
         query = self.client.get(reverse("billing-subscription"))
@@ -318,9 +337,9 @@ class SubscriptionAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    @override_settings(ARGUS_PAYMENT_MODE="ecpay_test")
     def test_wallet_entry_triggers_lazy_settle(self):
-        grant_subscription(self.user, self.plan, 1, source=UserSubscription.Source.ADMIN_GRANT)
-        settle_subscription(self.user)
+        self.client.post(reverse("billing-subscribe"), {"plan_code": "sub-api"}, format="json")
         # 模擬再買一期未入帳（admin 加碼），且時間前進到期滿之後
         grant_subscription(
             self.user, self.plan, 1, source=UserSubscription.Source.ADMIN_GRANT,

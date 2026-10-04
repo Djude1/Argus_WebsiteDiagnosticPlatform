@@ -7,7 +7,6 @@ from apps.billing.models import (
     CoinWallet,
     PricingPlan,
     PurchaseOrder,
-    SubscriptionOrder,
     SubscriptionPlan,
     UserSubscription,
 )
@@ -204,13 +203,6 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
     plan_code = serializers.CharField(source="plan.code", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
     plan_monthly_coins = serializers.IntegerField(source="plan.monthly_coins", read_only=True)
-    auto_renew = serializers.SerializerMethodField()
-
-    def get_auto_renew(self, obj) -> bool:
-        """是否有綠界定期定額每月自動扣款中。"""
-        return SubscriptionOrder.objects.filter(
-            user_id=obj.user_id, status=SubscriptionOrder.Status.ACTIVE
-        ).exists()
 
     class Meta:
         model = UserSubscription
@@ -224,12 +216,11 @@ class UserSubscriptionSerializer(serializers.ModelSerializer):
             "started_at",
             "current_period_end",
             "cancelled_at",
-            "auto_renew",
         ]
 
 
-class SubscribeRequestSerializer(PurchaseRequestSerializer):
-    """訂閱：方案代碼＋與購點相同的買受人／發票資料（每期扣款由管理員依此開立發票）。"""
+class SubscribeRequestSerializer(serializers.Serializer):
+    plan_code = serializers.SlugField()
 
     def validate_plan_code(self, value: str) -> str:
         try:
@@ -268,16 +259,3 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "created_at", "paid_at",
         ]
         read_only_fields = fields
-
-
-class SubscriptionOrderSerializer(serializers.ModelSerializer):
-    status_label = serializers.CharField(source="get_status_display", read_only=True)
-    plan_name = serializers.CharField(source="plan.name", read_only=True)
-    plan_code = serializers.CharField(source="plan.code", read_only=True)
-
-    class Meta:
-        model = SubscriptionOrder
-        fields = [
-            "id", "plan_code", "plan_name", "price_ntd", "monthly_coins",
-            "status", "status_label", "success_times", "created_at", "activated_at",
-        ]

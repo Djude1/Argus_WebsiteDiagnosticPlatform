@@ -783,7 +783,6 @@
   .admin-role-row p{ @apply m-0; color: var(--admin-text-secondary); line-height: 1.6; }
   .admin-role-row strong{ color: var(--admin-text); }
   .admin-role-actions{ @apply flex flex-wrap items-center gap-2; }
-  .admin-checkbox-row{ @apply my-3 inline-flex items-center gap-2 text-sm; color: var(--admin-text-secondary); }
   .admin-role-actions .admin-input{ min-width: min(100%, 18rem); }
   .admin-quick-row{ @apply mt-2 flex flex-wrap gap-2; }
   .admin-quick-btn{

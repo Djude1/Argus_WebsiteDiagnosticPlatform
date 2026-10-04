@@ -1,10 +1,6 @@
 """網域所有權驗證引擎（主動測試的技術性授權證明）。
 
-主要方法（2026-10-04）：Google Search Console——使用者連接的 Google 帳號在 Search Console
-對涵蓋這個網域的資源是「擁有者」（permissionLevel=siteOwner）就通過；只有使用者／受限權限不算。
-連接 Search Console 時會自動驗證涵蓋該專案網站的資源（`sync_search_console_ownership`）。
-
-備用的三種方法共用一支 token（`argus-site-verification=<token>`）：
+三種驗證方法共用一支 token（`argus-site-verification=<token>`）：
 - DNS TXT：`_argus-verification.<domain>` TXT（其次 `<domain>` 本身）
 - meta tag：首頁 HTML 前 64KB 需同時出現標籤名與 token
 - HTML 檔：`/.well-known/argus-verification.txt` 內容 strip 後等於 token
@@ -192,41 +188,6 @@ def verify_html_file(domain: str, token: str) -> tuple[bool, str]:
     return False, f"{url} 的內容與 token 不符。"
 
 
-def verify_search_console(user, domain: str) -> tuple[bool, str]:
-    """以使用者已連接的 Search Console 確認是否為涵蓋此網域之資源的擁有者。"""
-    from apps.scans.models import SearchConsoleConnection
-    from apps.scans.seo import gsc
-
-    if not gsc.is_enabled():
-        return False, "網站尚未設定 Google Search Console 串接，請改用其他驗證方式。"
-    connections = list(SearchConsoleConnection.objects.filter(user=user))
-    if not connections:
-        return False, (
-            "尚未連接 Google Search Console：請在網域驗證頁按「連接 Google Search Console」。"
-        )
-    not_owner, errors = "", ""
-    for connection in connections:
-        try:
-            sites = gsc.list_sites(connection)
-        except gsc.GscError as exc:
-            errors = str(exc)
-            continue
-        for site in sites:
-            if not gsc.property_covers_domain(site["site_url"], domain):
-                continue
-            if site["permission"] == "siteOwner":
-                return True, f"Search Console 確認你是 {site['site_url']} 的擁有者。"
-            not_owner = site["site_url"]
-    if not_owner:
-        return False, f"你在 Search Console 對 {not_owner} 只有使用者權限，需要是「擁有者」。"
-    if errors:
-        return False, f"讀取 Search Console 失敗：{errors}"
-    return False, (
-        "連接的 Google 帳號在 Search Console 沒有涵蓋這個網域的資源；"
-        "請先在 Search Console 新增並驗證這個網站（建議用「網域」資源）。"
-    )
-
-
 _VERIFIERS = {
     "dns_txt": verify_dns_txt,
     "meta_tag": verify_meta_tag,
@@ -242,11 +203,7 @@ def run_verification(verified_domain, method: str) -> bool:
     失敗 → status 停在 pending／expired（已過期的續驗）並記錄 last_error；
     rejected（人工否決）不因驗證失敗翻動。
     """
-    if method == "search_console":
-        def verifier(domain, _token):
-            return verify_search_console(verified_domain.user, domain)
-    else:
-        verifier = _VERIFIERS.get(method)
+    verifier = _VERIFIERS.get(method)
     if verifier is None:
         raise ValueError(f"不支援的驗證方法：{method}")
 
@@ -260,11 +217,6 @@ def run_verification(verified_domain, method: str) -> bool:
         verified_domain.status = verified_domain.Status.EXPIRED
 
     ok, detail = verifier(verified_domain.domain, verified_domain.token)
-    _apply_result(verified_domain, method, ok, detail, now)
-    return ok
-
-
-def _apply_result(verified_domain, method: str, ok: bool, detail: str, now) -> None:
     verified_domain.last_checked_at = now
     if ok:
         verified_domain.status = verified_domain.Status.VERIFIED
@@ -276,69 +228,4 @@ def _apply_result(verified_domain, method: str, ok: bool, detail: str, now) -> N
         # 失敗：pending 維持 pending、expired 維持 expired、rejected 維持人工否決
         verified_domain.last_error = detail[:255]
     verified_domain.save()
-
-
-def sync_search_console_ownership(connection, project) -> list[str]:
-    """連接 Search Console 後：涵蓋這個專案網站、且使用者是擁有者的資源，自動完成網域驗證。
-
-    網域資源記錄該網域（涵蓋子網域），網址前置字元資源記錄該主機。管理員否決的網域不動。
-    回傳本次驗證通過的網域。呼叫端負責吞例外（失敗不影響連接）。
-    """
-    from apps.scans.models import VerifiedDomain
-    from apps.scans.seo import gsc
-
-    verified: list[str] = []
-    for site in gsc.list_sites(connection):
-        if site["permission"] != "siteOwner" or not gsc.property_matches(
-            site["site_url"], project.origin
-        ):
-            continue
-        try:
-            domain = normalize_domain(gsc.property_domain(site["site_url"]))
-        except DomainValidationError:
-            continue
-        record, _ = VerifiedDomain.objects.get_or_create(
-            user=connection.user, domain=domain, defaults={"token": generate_token()}
-        )
-        if record.status == VerifiedDomain.Status.REJECTED:
-            continue
-        _apply_result(
-            record, VerifiedDomain.Method.SEARCH_CONSOLE, True,
-            f"Search Console 確認你是 {site['site_url']} 的擁有者。", timezone.now(),
-        )
-        verified.append(domain)
-    return verified
-
-
-def sync_owned_domains(connection) -> list[str]:
-    """帳號層級同步：Search Console 裡使用者是「擁有者」的資源全部匯入為已驗證網域，
-    並順便驗證清單中被這些資源涵蓋、尚未生效的網域。管理員否決的網域不動。回傳通過的網域。
-    """
-    from apps.scans.models import VerifiedDomain
-    from apps.scans.seo import gsc
-
-    owned = [s["site_url"] for s in gsc.list_sites(connection) if s["permission"] == "siteOwner"]
-    now = timezone.now()
-    verified: list[str] = []
-    for site_url in owned:
-        try:
-            domain = normalize_domain(gsc.property_domain(site_url))
-        except DomainValidationError:
-            continue
-        VerifiedDomain.objects.get_or_create(
-            user=connection.user, domain=domain, defaults={"token": generate_token()}
-        )
-    for record in VerifiedDomain.objects.filter(user=connection.user).exclude(
-        status=VerifiedDomain.Status.REJECTED
-    ):
-        covering = next(
-            (url for url in owned if gsc.property_covers_domain(url, record.domain)), None
-        )
-        if covering is None:
-            continue
-        _apply_result(
-            record, VerifiedDomain.Method.SEARCH_CONSOLE, True,
-            f"Search Console 確認你是 {covering} 的擁有者。", now,
-        )
-        verified.append(record.domain)
-    return verified
+    return ok

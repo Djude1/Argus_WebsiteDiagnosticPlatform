@@ -83,18 +83,18 @@ kubectl -n argus get clientsettingspolicies.gateway.nginx.org
 
 > ⚠ **不要用 `kubectl apply -f .` 套整個目錄**——那會把 `02-secret.example.yaml` 的佔位值一起套進去，蓋掉你真正的 `secret.yaml`。請照上面逐檔套用（web/worker 的 initContainer 會自動等 migrate Job 完成，套用順序不怕錯）。
 
-## 綠界金流啟用與回滾（Stage 測試／正式扣款）
+## 綠界 Stage 啟用與回滾
 
-`ARGUS_PAYMENT_MODE`：`ecpay_test` 走綠界 payment-stage（測試商店、不扣款），`ecpay` 走正式 payment（實際扣款）。購點是信用卡一次付清，月訂閱是信用卡定期定額（每月自動扣款，第 2 期起通知 `/api/billing/ecpay/period-callback/`）。結帳與定期定額操作網址由模式自動決定，ConfigMap 不再設定 `ECPAY_CHECKOUT_URL`。`ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV` 只放 live `argus-secret`；不得把值寫進本 repo、命令輸出或 log。
+`origin/main` 已包含建立訂單、Stage 結帳表單、ReturnURL 驗章及冪等入點流程。GitOps 啟用前必須先把 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV` 寫入 live `argus-secret`；不得把值寫進本 repo、命令輸出或 log。`01-namespace-config.yaml` 固定使用公開 Stage 端點與正式公開 HTTPS callback，不支援正式金流模式。
 
-切換到正式扣款（`ecpay`）的順序（**順序錯了 Django 會拒絕啟動，web／worker 起不來**）：
+啟用順序：
 
-1. 先把 live `argus-secret` 的三個 ECPAY 鍵換成綠界**正式**商店的值，只用布林方式確認三個鍵存在且非空（正式模式拒絕公開測試商店代號 2000132／2000214／3002599／3002607）。
-2. 再把 ConfigMap 的 `ARGUS_PAYMENT_MODE` 改成 `ecpay`，讓 Argo CD 同步；`04-backend.yaml` 的 config revision annotation 會觸發 web／worker rollout。
-3. 確認 PreSync migrate 為 `Completed / 0`、web／worker Pod Ready，且 `GET /api/billing/plans/` 回傳 `payment_mode=ecpay`、`purchase_enabled=true`。
-4. 用真實信用卡買最便宜的方案一次，確認訂單從 pending 變 paid 並入點；訂閱一個月訂閱方案，確認開通與入點後，到購點頁取消訂閱，確認綠界廠商後台的定期定額狀態為已停止。需要退款時在綠界廠商後台操作，並在 Argus 後台用 `admin_adjust` 扣回點數。
+1. 先更新 live `argus-secret`，只用布林方式確認三個鍵存在且非空。
+2. 再讓 Argo CD 同步本次 ConfigMap；`04-backend.yaml` 的 config revision annotation 會觸發 web／worker rollout，避免 Pod 繼續使用舊環境變數。
+3. 確認 PreSync migrate 為 `Completed / 0`、web／worker Pod Ready，且 `GET /api/billing/plans/` 回傳 `payment_mode=ecpay_test`、`purchase_enabled=true`。
+4. 從購點頁完成一筆 Stage 測試交易，確認 ReturnURL 後訂單從 pending 變 paid，重送相同通知不會重複入點。
 
-若 rollout 或付款驗證失敗，將 `ARGUS_PAYMENT_MODE` 改回 `disabled`，同步 ConfigMap 並再次更新 config revision annotation；確認購點與訂閱 API 回到 503、既有 web／worker Pod Ready。**改回 disabled 不會停止已綁定的訂閱每月扣款**——綠界仍會扣款並通知，但 disabled 時通知會被拒絕（不入點）；要停止扣款必須讓使用者取消訂閱，或在綠界廠商後台終止該筆定期定額。切勿刪除訂單、`CoinTransaction` 或 `AdminAuditLog` 當作回滾。
+若 rollout 或付款驗證失敗，將 `ARGUS_PAYMENT_MODE` 改回 `disabled`，同步 ConfigMap 並再次更新 config revision annotation；確認購點 API 回到 503、既有 web／worker Pod Ready。切勿刪除訂單、`CoinTransaction` 或 `AdminAuditLog` 當作回滾。
 
 ## 對外存取（Gateway API）
 

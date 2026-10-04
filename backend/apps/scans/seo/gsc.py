@@ -81,15 +81,11 @@ def redirect_uri(request) -> str:
     return settings.ARGUS_GSC_REDIRECT_URI or request.build_absolute_uri(CALLBACK_PATH)
 
 
-def build_authorization(request, project=None) -> tuple[str, str]:
-    """回傳 (Google 授權網址, nonce)。nonce 由 view 寫進 HttpOnly cookie。
-
-    project 為 None＝帳號層級連線（/domains 一鍵連接，只用來驗證網域所有權）。
-    """
+def build_authorization(request, project) -> tuple[str, str]:
+    """回傳 (Google 授權網址, nonce)。nonce 由 view 寫進 HttpOnly cookie。"""
     nonce = secrets.token_urlsafe(16)
     state = signing.dumps(
-        {"p": project.id if project else None, "u": request.user.pk, "n": nonce},
-        salt=STATE_SALT,
+        {"p": project.id, "u": request.user.pk, "n": nonce}, salt=STATE_SALT
     )
     params = {
         "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
@@ -196,25 +192,6 @@ def property_matches(property_url: str, origin: str) -> bool:
     prefix = urlsplit(property_url)
     target = urlsplit(origin)
     return (prefix.scheme, (prefix.hostname or "").lower()) == (target.scheme, host)
-
-
-def property_covers_domain(property_url: str, domain: str) -> bool:
-    """資源是否證明擁有這個網域：網域資源涵蓋自己與子網域，網址前置字元資源只證明那一個主機。"""
-    domain = (domain or "").lower().rstrip(".")
-    if not domain:
-        return False
-    if property_url.startswith("sc-domain:"):
-        owned = property_url.split(":", 1)[1].lower().rstrip(".")
-        return domain == owned or domain.endswith(f".{owned}")
-    return (urlsplit(property_url).hostname or "").lower() == domain
-
-
-def property_domain(property_url: str) -> str:
-    """資源代表的網域：sc-domain:example.com → example.com；
-    https://www.example.com/ → www.example.com。"""
-    if property_url.startswith("sc-domain:"):
-        return property_url.split(":", 1)[1].lower().rstrip(".")
-    return (urlsplit(property_url).hostname or "").lower()
 
 
 def period(days: int, today: date | None = None) -> tuple[date, date]:

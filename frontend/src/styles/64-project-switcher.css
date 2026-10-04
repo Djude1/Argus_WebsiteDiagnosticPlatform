@@ -298,8 +298,8 @@
 .nav-search {
   display: flex;
   min-width: 0;
-  flex: 0 1 300px;
-  max-width: 320px;
+  flex: 1 1 420px;
+  max-width: 560px;
   min-height: 2.6rem;
   align-items: center;
   gap: 0.6rem;
@@ -341,51 +341,6 @@
   color: var(--ag-text-3);
   font-family: var(--ag-font-mono);
   font-size: 0.72rem;
-}
-
-/* 帳號層級工具（網域驗證、MCP 接入）：搜尋框右側，選中用淺藍底。
-   .nav-search-row 寬螢幕不產生盒子，窄螢幕成為第二列（搜尋＋工具） */
-.nav-search-row {
-  display: contents;
-}
-.nav-tools {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.35rem;
-}
-.nav-tool-link {
-  display: inline-flex;
-  min-height: 2.6rem;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0 0.8rem;
-  border: 1px solid var(--ag-border-strong);
-  border-radius: var(--ag-r-md);
-  background: var(--ag-surface-2);
-  color: var(--ag-text-2);
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.nav-tool-link:hover {
-  color: var(--ag-text);
-  border-color: var(--ag-border-accent);
-}
-.nav-tool-link:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--ag-focus);
-}
-.nav-tool-link.is-active {
-  border-color: var(--ag-border-accent);
-  background: var(--ag-primary-soft);
-  color: var(--ag-primary);
-}
-.nav-tool-link svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
 }
 
 /* 圓形圖示按鈕（通知） */
@@ -595,23 +550,7 @@
     flex-basis: 220px;
   }
 }
-/* 再窄一些：網域驗證、MCP 接入只留圖示（可及名稱仍是文字，滑過有 title） */
-@media (max-width: 1080px) {
-  .nav-tool-link {
-    width: 2.6rem;
-    padding: 0;
-    justify-content: center;
-  }
-  .nav-tool-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-}
-/* 窄螢幕：第一列「品牌｜切換器｜帳號」，第二列是搜尋＋網域驗證／MCP 接入 */
+/* 窄螢幕：第一列「品牌｜切換器｜帳號」，搜尋在第二列整列 */
 @media (max-width: 920px) {
   .public-nav.is-member .public-nav-inner {
     display: grid;
@@ -629,15 +568,9 @@
     grid-column: 3;
     grid-row: 1;
   }
-  .public-nav.is-member .nav-search-row {
-    display: flex;
+  .public-nav.is-member .nav-search {
     grid-column: 1 / -1;
     grid-row: 2;
-    min-width: 0;
-    gap: 0.5rem;
-  }
-  .public-nav.is-member .nav-search {
-    flex: 1 1 auto;
     max-width: none;
   }
 }
@@ -656,13 +589,9 @@
     display: none;
   }
   .public-nav.is-member .theme-toggle,
-  .nav-icon-button,
-  .nav-tool-link {
+  .nav-icon-button {
     width: 2.3rem;
     height: 2.3rem;
-  }
-  .nav-tool-link {
-    min-height: 2.3rem;
   }
 }
 
