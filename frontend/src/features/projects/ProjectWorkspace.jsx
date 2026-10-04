@@ -18,6 +18,8 @@ import {
   HomeIcon,
   LayersIcon,
   MagnifierIcon,
+  RobotIcon,
+  ShieldIcon,
   SpiderIcon,
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
@@ -35,6 +37,12 @@ const SECTIONS = [
 ];
 
 /** 分數的文字色調（數字本身上色，不用彩色底的徽章）。 */
+// 帳號層級的工具：放在側邊欄讓使用者容易找到（2026-10-04 使用者要求，不藏在頭像選單）
+const ACCOUNT_TOOLS = [
+  { key: "domains", to: "/domains", label: "網域驗證", hint: "開啟主動式資安測試", Icon: ShieldIcon },
+  { key: "mcp", to: "/mcp", label: "MCP 接入", hint: "讓 AI 工具呼叫 Argus", Icon: RobotIcon },
+];
+
 export function scoreTone(score) {
   if (score === null || score === undefined) return "is-none";
   return score >= 80 ? "is-good" : score >= 60 ? "is-medium" : "is-bad";
@@ -49,9 +57,11 @@ export function projectPath(projectId, section = "") {
   return `/projects/${projectId}${section ? `/${section}` : ""}`;
 }
 
-function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
+// project 為 null（還沒有網站專案）時只顯示「所有專案」與帳號工具；activeTool 標示目前的帳號工具頁
+function ProjectSidebar({ project, activeSection, allProjectsActive = false, activeTool = "" }) {
   return (
     <aside className="project-sidebar" aria-label="網站專案功能">
+      {project && (
       <div className="project-sidebar-head">
         <div className="project-sidebar-title">
           <SiteFavicon project={project} />
@@ -73,6 +83,7 @@ function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
           {project.hostname} ↗
         </a>
       </div>
+      )}
       <nav className="project-sidebar-nav">
         <Link
           to="/projects"
@@ -85,8 +96,8 @@ function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
             <span className="project-sidebar-link-hint">回到跨網站總覽</span>
           </span>
         </Link>
-        {SECTIONS.map((section) => {
-          const active = !allProjectsActive && activeSection === section.key;
+        {project && SECTIONS.map((section) => {
+          const active = !allProjectsActive && !activeTool && activeSection === section.key;
           return (
             <Link
               key={section.key || "overview"}
@@ -98,6 +109,24 @@ function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
               <span className="project-sidebar-link-text">
                 <span className="project-sidebar-link-label">{section.label}</span>
                 <span className="project-sidebar-link-hint">{section.hint}</span>
+              </span>
+            </Link>
+          );
+        })}
+        <p className="project-sidebar-group" aria-hidden="true">帳號工具</p>
+        {ACCOUNT_TOOLS.map((tool) => {
+          const active = activeTool === tool.key;
+          return (
+            <Link
+              key={tool.key}
+              to={tool.to}
+              className={`project-sidebar-link ${active ? "active" : ""}`}
+              aria-current={active ? "page" : undefined}
+            >
+              <tool.Icon className="project-sidebar-icon" />
+              <span className="project-sidebar-link-text">
+                <span className="project-sidebar-link-label">{tool.label}</span>
+                <span className="project-sidebar-link-hint">{tool.hint}</span>
               </span>
             </Link>
           );
@@ -643,11 +672,28 @@ function ProjectsListPage() {
       </section>
     </div>
   );
-  if (!sidebarProject) return page;
+  if (projects === null) return page;
   return (
     <div className="project-shell">
-      <ProjectSidebar project={sidebarProject} allProjectsActive />
+      <ProjectSidebar project={sidebarProject || null} allProjectsActive />
       <div className="project-main">{page}</div>
+    </div>
+  );
+}
+
+/** 帳號工具頁（/domains）的外框：左側同一個側邊欄（目前專案；沒有專案時只有所有專案與帳號工具）。 */
+function WorkspaceShell({ activeTool, children }) {
+  const projects = useArgusStore((s) => s.projects);
+  const fetchProjects = useArgusStore((s) => s.fetchProjects);
+  const currentProjectId = useArgusStore((s) => s.currentProjectId);
+  useEffect(() => {
+    if (projects === null) fetchProjects();
+  }, [projects, fetchProjects]);
+  const sidebarProject = (projects || []).find((p) => p.id === currentProjectId) || (projects || [])[0] || null;
+  return (
+    <div className="project-shell">
+      <ProjectSidebar project={sidebarProject} activeTool={activeTool} />
+      <div className="project-main">{children}</div>
     </div>
   );
 }
@@ -926,4 +972,5 @@ export {
   ProjectScanShell,
   ProjectsListPage,
   ProjectWorkspace,
+  WorkspaceShell,
 };

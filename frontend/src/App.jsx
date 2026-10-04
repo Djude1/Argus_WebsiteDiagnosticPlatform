@@ -54,6 +54,7 @@ const ProjectScanShell = lazyNamed(loadProjectWorkspace, "ProjectScanShell");
 const ProjectHomeRedirect = lazyNamed(loadProjectWorkspace, "ProjectHomeRedirect");
 const ProjectsListPage = lazyNamed(loadProjectWorkspace, "ProjectsListPage");
 const ProjectCreatePage = lazyNamed(loadProjectWorkspace, "ProjectCreatePage");
+const WorkspaceShell = lazyNamed(loadProjectWorkspace, "WorkspaceShell");
 const ProjectOverviewPage = lazyNamed(loadProjectPages, "ProjectOverviewPage");
 const ProjectScansPage = lazyNamed(loadProjectPages, "ProjectScansPage");
 const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
@@ -220,7 +221,9 @@ function AppShell({ googleOAuthEnabled }) {
             element={
               <RequireAuth>
                 <MemberLegacy>
-                  <DomainVerifyPage />
+                  <WorkspaceShell activeTool="domains">
+                    <DomainVerifyPage />
+                  </WorkspaceShell>
                 </MemberLegacy>
               </RequireAuth>
             }

@@ -1427,12 +1427,21 @@
 .project-sidebar-footer {
   @apply mt-3 flex flex-wrap gap-x-3 gap-y-1 px-1 text-[11px];
 }
+/* 側邊欄「帳號工具」分組標題（網域驗證、MCP 接入；2026-10-04 從頭像選單移出） */
+.project-sidebar-group {
+  @apply mt-2 border-t border-slate-100 px-3 pb-1 pt-3 text-[11px] font-semibold tracking-wide text-slate-500;
+}
+/* 沒有網站專案時緊接在「所有專案」之後，那裡已經有分隔線 */
+.project-sidebar-link.is-all-projects + .project-sidebar-group {
+  @apply mt-0 border-t-0 pt-2;
+}
 .project-sidebar-footer a {
   @apply text-slate-500 hover:text-blue-700;
 }
 @media (max-width: 1023px) {
   .project-plan-card,
-  .project-sidebar-footer {
+  .project-sidebar-footer,
+  .project-sidebar-group {
     display: none;
   }
   .project-sidebar-icon {
