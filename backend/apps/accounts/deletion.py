@@ -90,7 +90,7 @@ def _revoke_search_console(user) -> None:
 
 def delete_account(user) -> None:
     from apps.accounts.models import LoginEvent, PasswordResetToken
-    from apps.billing.models import PurchaseOrder
+    from apps.billing.models import PurchaseOrder, SubscriptionOrder
     from apps.mcp_access.models import McpApiKey, McpCallLog
     from apps.reviews.models import (
         PlatformReview,
@@ -107,6 +107,15 @@ def delete_account(user) -> None:
         is_superuser=True, is_active=True
     ).exclude(pk=user.pk).exists():
         raise PermissionError("這是最後一位超級管理員，不能刪除；請先指定另一位超級管理員。")
+
+    # 先停止綠界每月自動扣款，避免刪除後仍持續扣款；綠界取消失敗就不刪除（請使用者稍後再試）
+    from apps.billing.ecpay import EcpayActionError
+    from apps.billing.services import stop_recurring_charges
+
+    try:
+        stop_recurring_charges(user)
+    except EcpayActionError as exc:
+        raise PermissionError(f"無法取消訂閱的每月扣款，帳號尚未刪除：{exc}") from exc
 
     _revoke_search_console(user)
     files = _collect_files(user)
@@ -128,6 +137,13 @@ def delete_account(user) -> None:
         LoginEvent.objects.filter(user=user).delete()
         PasswordResetToken.objects.filter(user=user).delete()
 
+        SubscriptionOrder.objects.filter(user=user).update(
+            buyer_name="已刪除用戶",
+            buyer_email=f"deleted-{user_id}@deleted.invalid",
+            company_name="",
+            tax_id="",
+            carrier_id="",
+        )
         PurchaseOrder.objects.filter(user=user).update(
             buyer_name="已刪除用戶",
             buyer_email=f"deleted-{user_id}@deleted.invalid",

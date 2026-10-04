@@ -2388,6 +2388,58 @@
                 }
             }
         },
+        "/api/admin/subscription-charges/": {
+            "get": {
+                "operationId": "admin_subscription_charges_retrieve",
+                "description": "訂閱每期扣款紀錄（最新在前）：成功的每一筆都要人工開立發票。",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "頁碼，從 1 起算；超過總頁數時取最後一頁。"
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "模糊搜尋 buyer_email／姓名／公司／統編／使用者名稱"
+                    },
+                    {
+                        "in": "query",
+                        "name": "succeeded",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "只看成功（true）或失敗（false）的扣款"
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminSubscriptionChargeListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/admin/subscriptions/plans/": {
             "get": {
                 "operationId": "admin_subscriptions_plans_retrieve",
@@ -3273,7 +3325,24 @@
         "/api/billing/ecpay/callback/": {
             "post": {
                 "operationId": "billing_ecpay_callback_create",
-                "description": "驗證綠界付款通知並冪等入點；回應必須是純文字 1|OK。",
+                "description": "綠界 ReturnURL：購點付款與訂閱首期授權的結果通知，驗證後冪等處理；回應必須是 1|OK。",
+                "tags": [
+                    "billing"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/billing/ecpay/period-callback/": {
+            "post": {
+                "operationId": "billing_ecpay_period_callback_create",
+                "description": "綠界 PeriodReturnURL：訂閱第 2 期起每月扣款結果；成功才加一期並發點。",
                 "tags": [
                     "billing"
                 ],
@@ -3329,7 +3398,7 @@
         "/api/billing/purchase/": {
             "post": {
                 "operationId": "billing_purchase_create",
-                "description": "建立 pending 訂單並回傳綠界測試環境的簽章表單。",
+                "description": "建立 pending 訂單並回傳綠界結帳的簽章表單（測試或正式環境依 ARGUS_PAYMENT_MODE）。",
                 "tags": [
                     "billing"
                 ],
@@ -3367,7 +3436,7 @@
         "/api/billing/subscription/cancel/": {
             "post": {
                 "operationId": "billing_subscription_cancel_create",
-                "description": "取消自己的訂閱（當前期權益保留到期滿；之後不再發點）。",
+                "description": "取消自己的訂閱：先請綠界停止每月扣款，成功後才取消（當期權益保留到期滿）。",
                 "tags": [
                     "billing"
                 ],
@@ -3406,7 +3475,7 @@
         "/api/billing/subscription/subscribe/": {
             "post": {
                 "operationId": "billing_subscription_subscribe_create",
-                "description": "訂閱方案（輕量版：ARGUS_PAYMENT_MODE=ecpay_test 時模擬首月一次付款）。\n\n不接綠界定期定額：測試環境下視為已付款一個月，直接入訂閱並結算首月點數。\ndisabled 模式回 503，不建立訂閱、不入點。",
+                "description": "訂閱方案：建立綠界信用卡定期定額委託，回傳結帳表單（每月自動扣款）。\n\n首期授權成功的通知（ReturnURL）才開通訂閱並發點；這裡不入點。\n已有自動續訂中的訂閱時回 409（避免重複扣款），要換方案請先取消。",
                 "tags": [
                     "billing"
                 ],
@@ -6323,6 +6392,24 @@
                         "type": "string",
                         "maxLength": 16
                     },
+                    "carrier_type": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CarrierTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "carrier_type_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "carrier_id": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
                     "status": {
                         "$ref": "#/components/schemas/AdminPurchaseOrderStatusEnum"
                     },
@@ -6334,6 +6421,9 @@
                 "required": [
                     "buyer_email",
                     "buyer_name",
+                    "carrier_id",
+                    "carrier_type",
+                    "carrier_type_label",
                     "coin_amount",
                     "company_name",
                     "created_at",
@@ -6735,6 +6825,154 @@
                 },
                 "required": [
                     "action"
+                ]
+            },
+            "AdminSubscriptionCharge": {
+                "type": "object",
+                "description": "訂閱每期扣款（後台人工開立發票用）：扣款結果＋該訂閱委託的買受人與發票資料。",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "sequence": {
+                        "type": "integer",
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "format": "int64"
+                    },
+                    "succeeded": {
+                        "type": "boolean"
+                    },
+                    "amount": {
+                        "type": "integer",
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "format": "int64"
+                    },
+                    "rtn_code": {
+                        "type": "string",
+                        "maxLength": 10
+                    },
+                    "rtn_msg": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "provider_ref": {
+                        "type": "string",
+                        "maxLength": 40
+                    },
+                    "order_id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "merchant_trade_no": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "username": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "plan_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "order_status": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "order_status_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "buyer_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "buyer_email": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "invoice_type": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "invoice_type_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "company_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "tax_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "carrier_type_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "carrier_id": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "amount",
+                    "buyer_email",
+                    "buyer_name",
+                    "carrier_id",
+                    "carrier_type_label",
+                    "company_name",
+                    "created_at",
+                    "id",
+                    "invoice_type",
+                    "invoice_type_label",
+                    "merchant_trade_no",
+                    "order_id",
+                    "order_status",
+                    "order_status_label",
+                    "plan_name",
+                    "provider_ref",
+                    "rtn_code",
+                    "rtn_msg",
+                    "sequence",
+                    "succeeded",
+                    "tax_id",
+                    "username"
+                ]
+            },
+            "AdminSubscriptionChargeListResponse": {
+                "type": "object",
+                "properties": {
+                    "charges": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AdminSubscriptionCharge"
+                        }
+                    },
+                    "page": {
+                        "type": "integer"
+                    },
+                    "total_pages": {
+                        "type": "integer"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "charges",
+                    "page",
+                    "total",
+                    "total_pages"
                 ]
             },
             "AdminSubscriptionPlan": {
@@ -7517,6 +7755,15 @@
                 "enum": [
                     ""
                 ]
+            },
+            "CarrierTypeEnum": {
+                "enum": [
+                    "cloud",
+                    "mobile_barcode",
+                    "citizen_digital"
+                ],
+                "type": "string",
+                "description": "* `cloud` - 雲端發票（寄 email）\n* `mobile_barcode` - 手機條碼\n* `citizen_digital` - 自然人憑證"
             },
             "CategoriesEnum": {
                 "enum": [

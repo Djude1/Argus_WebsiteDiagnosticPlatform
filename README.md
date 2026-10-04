@@ -197,19 +197,21 @@ AWS_SECRET_ACCESS_KEY=<secret>
 
 掃描 worker 若需透過受控 outbound proxy，再設定 `ARGUS_EGRESS_PROXY_URL=http://proxy-host:port`。應用程式會讓 HTTP client、外部 scanner 與 Playwright 使用此代理；正式環境仍須用 firewall / NetworkPolicy 阻止繞過代理的直接 egress。
 
-專題的付款測試使用綠界 `payment-stage`。從綠界測試商店取得測試參數後，在 `.env` 設定：
+金流串接綠界（購點＝信用卡一次付清、月訂閱＝信用卡定期定額每月自動扣款）。正式收款在 `.env` 設定（測試時改 `ARGUS_PAYMENT_MODE=ecpay_test` 並填綠界測試商店參數）：
 
 ```env
-ARGUS_PAYMENT_MODE=ecpay_test
-ECPAY_MERCHANT_ID=<test merchant id>
-ECPAY_HASH_KEY=<test hash key>
-ECPAY_HASH_IV=<test hash iv>
-ECPAY_CHECKOUT_URL=https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5
-ECPAY_RETURN_URL=https://<public-test-domain>/api/billing/ecpay/callback/
-ECPAY_CLIENT_BACK_URL=https://<public-test-domain>/billing
+# disabled（暫停）／ecpay_test（綠界測試環境）／ecpay（正式扣款）
+ARGUS_PAYMENT_MODE=ecpay
+ECPAY_MERCHANT_ID=<綠界正式商店代號>
+ECPAY_HASH_KEY=<正式 HashKey>
+ECPAY_HASH_IV=<正式 HashIV>
+ECPAY_RETURN_URL=https://<正式網域>/api/billing/ecpay/callback/
+ECPAY_CLIENT_BACK_URL=https://<正式網域>/billing
+# 選填：訂閱第 2 期起的扣款通知；不填自動用 https://<ReturnURL 網域>/api/billing/ecpay/period-callback/
+# ECPAY_PERIOD_RETURN_URL=
 ```
 
-`ReturnURL` 與 `ClientBackURL` 必須是外網可達、使用合法網域的 HTTPS 443 網址。綠界後台產生的 `SimulatePaid=1` 只用來測試通知接收，本系統會確認收到但不會入點；使用 payment-stage 結帳頁完成的測試交易，才會在簽章、訂單與金額驗證後入點。
+`ReturnURL`、`ClientBackURL` 與訂閱的 PeriodReturnURL 必須是外網可達、使用合法網域的 HTTPS 443 網址。綠界後台產生的 `SimulatePaid=1` 只用來測試通知接收，本系統會確認收到但不會入點；實際完成的交易才會在簽章、商店代號、訂單與金額驗證後入點。電子發票目前由管理員依後台「訂單」頁的購點訂單與訂閱每期扣款人工開立。
 
 ### 4. 初始化資料庫
 

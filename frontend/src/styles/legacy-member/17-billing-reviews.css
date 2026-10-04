@@ -203,6 +203,12 @@
     background: linear-gradient(135deg, rgba(254, 243, 199, 0.9), rgba(240, 249, 255, 0.92));
   }
 
+  .billing-environment-notice.tone-live {
+    color: #065f46;
+    border-color: rgba(16, 185, 129, 0.36);
+    background: linear-gradient(135deg, rgba(209, 250, 229, 0.85), rgba(240, 249, 255, 0.92));
+  }
+
   .billing-environment-notice.tone-paused {
     color: #475569;
     border-color: rgba(148, 163, 184, 0.38);
@@ -544,5 +550,16 @@
   .billing-checkout .input.is-error {
     border-color: #e11d48;
     box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.1);
+  }
+
+  /* 月訂閱：選定方案後的付款資料表單（2026-10-04 綠界定期定額） */
+  .billing-sub-checkout {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.38);
+    border-radius: 1rem;
+    background: #ffffff;
   }
 }

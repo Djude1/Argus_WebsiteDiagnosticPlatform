@@ -148,7 +148,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理（`AdminUsersPages.tsx`）|
 | `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 帳號狀態（停用／恢復、輸入「刪除帳號」後永久刪除，原因選填寫入操作日誌；對自己、超級管理員、已刪除帳號只顯示說明，對象是管理員時只有超級管理員能操作——與後端 `_manage_target_error` 相同）+ 管理權限（只有超級管理員看得到：設為／取消一般管理員，確認對話框；自己與超級管理員帳號不顯示按鈕）、點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
-| `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
+| `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal 含載具）＋下方「訂閱每期扣款」（`AdminSubscriptionCharges.jsx`，`/api/admin/subscription-charges/`，預設只看成功）。電子發票由管理員依這兩份資料人工開立 |
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄（`AdminTransactionsPage.tsx`；類型篩選涵蓋 `CoinTransaction.Kind` 全部 11 種）|
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開；`AdminReviewsPage.tsx`） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理（`AdminScansPages.tsx`）|
@@ -224,6 +224,7 @@ npm run typecheck
 | `src/components/projects/SiteFavicon.jsx` | 網站圖示（`project.favicon` 或名稱首字）；切換器、側邊欄、總覽、所有專案共用 |
 | `src/components/scans/AeoAnswerPanel.jsx` | 專案「AEO 問答」分頁的逐題結果（`withFilter` 時可依判定篩選、不重複顯示標題與計數）：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
 | `src/components/scans/FixOutputSection.jsx` | 掃描的「修正產出」分頁（`/scans/:id/fixes`）：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
+| `src/components/billing/BuyerInvoiceFields.jsx` | 購點與訂閱共用：買受人／發票欄位、`validateBuyer`、`buyerPayload`、`submitEcpayForm`（只允許綠界測試／正式兩個結帳網址）。`live`（`payment_mode === "ecpay"`）切換正式與測試文案 |
 | `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |
 | `src/features/public/PublicPages.jsx` | 公開頁 layout（導覽＋分組頁尾）與專案、免費工具、購買介紹、下載、報告查驗頁 |

@@ -97,10 +97,12 @@ export async function fetchMySubscription() {
   return response.data;
 }
 
-// 訂閱方案（plan_code）；成功回傳 { subscription, payment_mode }，付費關閉時 503
-export async function subscribePlan(planCode: string) {
+// 訂閱方案：送出方案與買受人／發票資料，回傳 { order, payment }（綠界定期定額結帳表單）；
+// 首期付款成功的通知到達後才開通。付費關閉 503、已有自動扣款中的訂閱 409
+export async function subscribePlan(planCode: string, buyer: Record<string, unknown>) {
   const response = await api.post("/billing/subscription/subscribe/", {
     plan_code: planCode,
+    ...buyer,
   });
   return response.data;
 }
