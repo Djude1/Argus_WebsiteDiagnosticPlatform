@@ -13,13 +13,13 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/gsc/callback/` | `scans` | Google Search Console OAuth 導回（`AllowAny`；身分由簽章 state＋HttpOnly nonce cookie 證明），完成後轉回 `/projects/<id>/seo?gsc=…` |
 | `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
-| `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`） |
+| `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`）、`ecpay/callback/`（綠界 ReturnURL：購點＋訂閱首期）、`ecpay/period-callback/`（訂閱第 2 期起每月扣款） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/mcp/` | `mcp_access` | MCP Streamable HTTP 端點（只吃 `Bearer argus_mcp_…` 憑證）＋`reports/<token>/` 短效報告連結 |
 | `/api/mcp-access/` | `mcp_access` | 會員頁管理 API：`overview/`、`keys/`（建立）、`keys/<id>/revoke/`、`connection/`（驗證連線） |
-| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`（+ `<id>/cancel/`、`<id>/requeue/`）、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`health/`、`audit-log/`、`announcements/*`、`cms/*` |
+| `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`（+ `<id>/cancel/`、`<id>/requeue/`）、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`subscription-charges/`（訂閱每期扣款，人工開立發票用）、`health/`、`audit-log/`、`announcements/*`、`cms/*` |
 | `/favicon.svg` | 靜態資產 | 直接服務被 Git 追蹤的 `frontend/public/favicon.svg`，不依賴 frontend build |
 | `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
 | `/` ～ `/*` | SPA fallback | 回傳 `frontend/dist/index.html`，由 React Router 處理 |
@@ -33,7 +33,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `accounts` | User model（`handle` 用戶名、`deleted_at`）、Google 授權註冊、Email／用戶名登入、自行刪除帳號（`deletion.py`）、記憶體 access + HttpOnly refresh、密碼重設、LoginEvent 登入事件 | `views.py` `models.py` |
 | `scans` | **核心**：ScanJob 狀態機、Playwright 爬蟲、四維 scanner、PDF 報告（.docx 排版＋LibreOffice 轉檔）、SEO 分析與 Search Console、合作式 cancel | `tasks.py` `crawler.py` `scanners.py` |
 | `agent` | Hermes-Agent 滲透測試：recon→orchestrator(subagent 派工)→6 specialist、20 工具、MiniMax-M3 鏈（預設 `ARGUS_AGENT_ENABLED=false`）——完整架構見 `docs/hermes-agent-architecture.md` | `runner.py` `loop.py` `tools.py` `providers.py` `findings.py` |
-| `billing` | 點數錢包＋輕量訂閱；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
+| `billing` | 點數錢包＋綠界金流（購點一次付清、訂閱信用卡定期定額；`ARGUS_PAYMENT_MODE` disabled／ecpay_test／ecpay）；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
 | `reviews` | 已驗證平台評論（一人一則 + 本人編修/刪除 + 官方單一回覆 + 評論／回覆各自按讚與檢舉） | `models.py` `views.py` |
 | `admin_api` | React `/admin/*` 用的 REST API + AdminAuditLog | `views.py` `permissions.py` |
 | `content` | CMS（ProjectFeature / TeamMember / AppRelease），公開 API | `models.py` `admin.py` |
@@ -131,12 +131,14 @@ scan_job FK（nullable）、plan FK（nullable）、admin_actor FK（nullable）
 
 **SubscriptionPlan / UserSubscription**（`apps/billing/models.py`）
 ```
-輕量訂閱（無週期扣款、無 celery beat）：
+訂閱（綠界信用卡定期定額每月扣款＋lazy 贈點，無 celery beat）：
 SubscriptionPlan：code(_slug unique)/name/monthly_price_ntd/monthly_coins/
   features(JSON)/badge/sort_order/is_active
 UserSubscription：user(OneToOne)/plan(PROTECT)/status(active/cancelled/expired)/
   periods_remaining（預付期數，每月 settle 消耗 1）/current_period_end（下次贈點時間）/
-  last_grant_period（"YYYY-MM"，同月冪等）/source(admin_grant/ecpay_test)/cancelled_at
+  last_grant_period（"YYYY-MM"，同月冪等）/source(admin_grant/ecpay_test/ecpay)/cancelled_at
+SubscriptionOrder：綠界定期定額委託（月費／點數快照、買受人與發票資料、status、success_times）
+SubscriptionCharge：每次扣款結果（成功／失敗；後台依成功紀錄人工開立發票）
 → 點數一律走 services.settle_subscription（lazy 結算：登入、wallet/subscription
   API 進場時觸發；cancel 後已開始的當期仍可領、期滿不再發）
 ```
@@ -154,7 +156,8 @@ ip_address、user_agent、created_at
 ```
 admin_actor FK（staff user）、target_user FK（nullable）、
 action（coin_adjust / subscription_adjust / review_reply / review_moderate /
-  review_delete / user_toggle_staff / domain_override / scan_control / other）、
+  review_delete / user_toggle_staff / user_suspend / user_delete / domain_override /
+  scan_control / other）、
 target_object_repr、payload（JSON）、created_at
 → 透過 log_admin_action() 集中寫入（調整點數、調整訂閱、回覆評論等）
 ```

@@ -7,6 +7,7 @@ from apps.billing.models import (
     CoinTransaction,
     CoinWallet,
     PurchaseOrder,
+    SubscriptionCharge,
     SubscriptionPlan,
     UserSubscription,
 )
@@ -239,6 +240,9 @@ class AdminPurchaseOrderSerializer(serializers.ModelSerializer):
     invoice_type_label = serializers.CharField(
         source="get_invoice_type_display", read_only=True,
     )
+    carrier_type_label = serializers.CharField(
+        source="get_carrier_type_display", read_only=True,
+    )
 
     class Meta:
         model = PurchaseOrder
@@ -249,7 +253,43 @@ class AdminPurchaseOrderSerializer(serializers.ModelSerializer):
             "buyer_name", "buyer_email",
             "invoice_type", "invoice_type_label",
             "company_name", "tax_id",
+            "carrier_type", "carrier_type_label", "carrier_id",
             "status", "status_label",
+        ]
+
+
+class AdminSubscriptionChargeSerializer(serializers.ModelSerializer):
+    """訂閱每期扣款（後台人工開立發票用）：扣款結果＋該訂閱委託的買受人與發票資料。"""
+
+    order_id = serializers.IntegerField(source="order.id", read_only=True)
+    merchant_trade_no = serializers.CharField(source="order.merchant_no", read_only=True)
+    username = serializers.CharField(source="order.user.username", read_only=True)
+    plan_name = serializers.CharField(source="order.plan.name", read_only=True)
+    order_status = serializers.CharField(source="order.status", read_only=True)
+    order_status_label = serializers.CharField(
+        source="order.get_status_display", read_only=True
+    )
+    buyer_name = serializers.CharField(source="order.buyer_name", read_only=True)
+    buyer_email = serializers.CharField(source="order.buyer_email", read_only=True)
+    invoice_type = serializers.CharField(source="order.invoice_type", read_only=True)
+    invoice_type_label = serializers.CharField(
+        source="order.get_invoice_type_display", read_only=True
+    )
+    company_name = serializers.CharField(source="order.company_name", read_only=True)
+    tax_id = serializers.CharField(source="order.tax_id", read_only=True)
+    carrier_type_label = serializers.CharField(
+        source="order.get_carrier_type_display", read_only=True
+    )
+    carrier_id = serializers.CharField(source="order.carrier_id", read_only=True)
+
+    class Meta:
+        model = SubscriptionCharge
+        fields = [
+            "id", "created_at", "sequence", "succeeded", "amount", "rtn_code", "rtn_msg",
+            "provider_ref", "order_id", "merchant_trade_no", "username", "plan_name",
+            "order_status", "order_status_label", "buyer_name", "buyer_email",
+            "invoice_type", "invoice_type_label", "company_name", "tax_id",
+            "carrier_type_label", "carrier_id",
         ]
 
 

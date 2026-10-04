@@ -593,6 +593,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/subscription-charges/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 訂閱每期扣款紀錄（最新在前）：成功的每一筆都要人工開立發票。 */
+        get: operations["admin_subscription_charges_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/subscriptions/plans/": {
         parameters: {
             query?: never;
@@ -1071,8 +1088,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 驗證綠界付款通知並冪等入點；回應必須是純文字 1|OK。 */
+        /** @description 綠界 ReturnURL：購點付款與訂閱首期授權的結果通知，驗證後冪等處理；回應必須是 1|OK。 */
         post: operations["billing_ecpay_callback_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/ecpay/period-callback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 綠界 PeriodReturnURL：訂閱第 2 期起每月扣款結果；成功才加一期並發點。 */
+        post: operations["billing_ecpay_period_callback_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1122,7 +1156,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 建立 pending 訂單並回傳綠界測試環境的簽章表單。 */
+        /** @description 建立 pending 訂單並回傳綠界結帳的簽章表單（測試或正式環境依 ARGUS_PAYMENT_MODE）。 */
         post: operations["billing_purchase_create"];
         delete?: never;
         options?: never;
@@ -1156,7 +1190,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 取消自己的訂閱（當前期權益保留到期滿；之後不再發點）。 */
+        /** @description 取消自己的訂閱：先請綠界停止每月扣款，成功後才取消（當期權益保留到期滿）。 */
         post: operations["billing_subscription_cancel_create"];
         delete?: never;
         options?: never;
@@ -1191,10 +1225,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description 訂閱方案（輕量版：ARGUS_PAYMENT_MODE=ecpay_test 時模擬首月一次付款）。
+         * @description 訂閱方案：建立綠界信用卡定期定額委託，回傳結帳表單（每月自動扣款）。
          *
-         *     不接綠界定期定額：測試環境下視為已付款一個月，直接入訂閱並結算首月點數。
-         *     disabled 模式回 503，不建立訂閱、不入點。
+         *     首期授權成功的通知（ReturnURL）才開通訂閱並發點；這裡不入點。
+         *     已有自動續訂中的訂閱時回 409（避免重複扣款），要換方案請先取消。
          */
         post: operations["billing_subscription_subscribe_create"];
         delete?: never;
@@ -2529,6 +2563,9 @@ export interface components {
             readonly invoice_type_label: string;
             company_name: string;
             tax_id: string;
+            carrier_type: components["schemas"]["CarrierTypeEnum"] | components["schemas"]["BlankEnum"];
+            readonly carrier_type_label: string;
+            carrier_id: string;
             status: components["schemas"]["AdminPurchaseOrderStatusEnum"];
             readonly status_label: string;
         };
@@ -2641,6 +2678,40 @@ export interface components {
             plan_code?: string;
             /** @default 1 */
             periods: number;
+        };
+        /** @description 訂閱每期扣款（後台人工開立發票用）：扣款結果＋該訂閱委託的買受人與發票資料。 */
+        AdminSubscriptionCharge: {
+            readonly id: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: int64 */
+            sequence: number;
+            succeeded: boolean;
+            /** Format: int64 */
+            amount: number;
+            rtn_code: string;
+            rtn_msg: string;
+            provider_ref: string;
+            readonly order_id: number;
+            readonly merchant_trade_no: string;
+            readonly username: string;
+            readonly plan_name: string;
+            readonly order_status: string;
+            readonly order_status_label: string;
+            readonly buyer_name: string;
+            readonly buyer_email: string;
+            readonly invoice_type: string;
+            readonly invoice_type_label: string;
+            readonly company_name: string;
+            readonly tax_id: string;
+            readonly carrier_type_label: string;
+            readonly carrier_id: string;
+        };
+        AdminSubscriptionChargeListResponse: {
+            charges: components["schemas"]["AdminSubscriptionCharge"][];
+            page: number;
+            total_pages: number;
+            total: number;
         };
         /** @description 後台訂閱方案清單（本 wave 唯讀，不做方案 CRUD）。 */
         AdminSubscriptionPlan: {
@@ -2850,6 +2921,13 @@ export interface components {
         };
         /** @enum {unknown} */
         BlankEnum: "";
+        /**
+         * @description * `cloud` - 雲端發票（寄 email）
+         *     * `mobile_barcode` - 手機條碼
+         *     * `citizen_digital` - 自然人憑證
+         * @enum {string}
+         */
+        CarrierTypeEnum: "cloud" | "mobile_barcode" | "citizen_digital";
         /**
          * @description * `seo` - seo
          *     * `aeo` - aeo
@@ -5021,6 +5099,32 @@ export interface operations {
             };
         };
     };
+    admin_subscription_charges_retrieve: {
+        parameters: {
+            query?: {
+                /** @description 頁碼，從 1 起算；超過總頁數時取最後一頁。 */
+                page?: number;
+                /** @description 模糊搜尋 buyer_email／姓名／公司／統編／使用者名稱 */
+                q?: string;
+                /** @description 只看成功（true）或失敗（false）的扣款 */
+                succeeded?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSubscriptionChargeListResponse"];
+                };
+            };
+        };
+    };
     admin_subscriptions_plans_retrieve: {
         parameters: {
             query?: never;
@@ -5606,6 +5710,24 @@ export interface operations {
         };
     };
     billing_ecpay_callback_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    billing_ecpay_period_callback_create: {
         parameters: {
             query?: never;
             header?: never;

@@ -27,6 +27,9 @@ from apps.scans.models import ScanJob
 
 ECPAY_TEST_SETTINGS = {
     "ARGUS_PAYMENT_MODE": "ecpay_test",
+    "ARGUS_PAYMENT_ENABLED": True,
+    "ECPAY_PERIOD_ACTION_URL": "https://payment-stage.ecpay.com.tw/Cashier/CreditCardPeriodAction",
+    "ECPAY_PERIOD_RETURN_URL": "https://pay.argus.example.com/api/billing/ecpay/period-callback/",
     "ECPAY_MERCHANT_ID": "test-merchant",
     "ECPAY_HASH_KEY": "test-hash-key-not-secret",
     "ECPAY_HASH_IV": "test-hash-iv",
@@ -37,7 +40,7 @@ ECPAY_TEST_SETTINGS = {
 
 
 class EcpaySettingsTests(SimpleTestCase):
-    def _settings_process(self, *, return_url: str, client_back_url: str):
+    def _settings_process(self, *, return_url: str, client_back_url: str, **extra: str):
         env = os.environ.copy()
         env.update(
             {
@@ -52,6 +55,7 @@ class EcpaySettingsTests(SimpleTestCase):
                 "ECPAY_CLIENT_BACK_URL": client_back_url,
             }
         )
+        env.update(extra)
         return subprocess.run(
             [sys.executable, "-c", "from config import settings"],
             cwd=Path(__file__).resolve().parents[2],
@@ -76,6 +80,28 @@ class EcpaySettingsTests(SimpleTestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ECPAY_RETURN_URL", result.stderr)
+
+    def test_production_mode_requires_real_merchant_and_production_checkout(self):
+        urls = {
+            "return_url": ECPAY_TEST_SETTINGS["ECPAY_RETURN_URL"],
+            "client_back_url": ECPAY_TEST_SETTINGS["ECPAY_CLIENT_BACK_URL"],
+        }
+        test_merchant = self._settings_process(
+            **urls, ARGUS_PAYMENT_MODE="ecpay", ECPAY_MERCHANT_ID="3002607",
+            ECPAY_CHECKOUT_URL="",
+        )
+        self.assertNotEqual(test_merchant.returncode, 0)
+        self.assertIn("測試商店代號", test_merchant.stderr)
+        stage_url = self._settings_process(
+            **urls, ARGUS_PAYMENT_MODE="ecpay", ECPAY_MERCHANT_ID="1234567",
+        )
+        self.assertNotEqual(stage_url.returncode, 0)
+        self.assertIn("ECPAY_CHECKOUT_URL", stage_url.stderr)
+        ok = self._settings_process(
+            **urls, ARGUS_PAYMENT_MODE="ecpay", ECPAY_MERCHANT_ID="1234567",
+            ECPAY_CHECKOUT_URL="https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5",
+        )
+        self.assertEqual(ok.returncode, 0, ok.stderr)
 
     def test_ecpay_test_rejects_invalid_port(self):
         result = self._settings_process(
@@ -371,7 +397,7 @@ class BillingAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @override_settings(ARGUS_PAYMENT_MODE="disabled")
+    @override_settings(ARGUS_PAYMENT_MODE="disabled", ARGUS_PAYMENT_ENABLED=False)
     def test_purchase_endpoint_fails_closed_when_payment_is_disabled(self):
         response = self.client.post(
             reverse("billing-purchase"),
