@@ -1,4 +1,4 @@
-# Namespace + 非機密環境變數（機密另見 02-secret.example.yaml）
+# Namespace + 非機密環境變數 （機密另見 02-secret.example.yaml）
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -18,8 +18,10 @@ data:
   # 推送前必須先在 live argus-secret 補齊 ECPAY_MERCHANT_ID / ECPAY_HASH_KEY / ECPAY_HASH_IV。
   ARGUS_PAYMENT_MODE: "ecpay_test"
   ECPAY_CHECKOUT_URL: "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
-  ECPAY_RETURN_URL: "https://xn--gst.tw/api/billing/ecpay/callback/"
-  ECPAY_CLIENT_BACK_URL: "https://xn--gst.tw/billing"
+  #ECPAY_RETURN_URL: "https://xn--gst.tw/api/billing/ecpay/callback/"
+  #ECPAY_CLIENT_BACK_URL: "https://xn--gst.tw/billing"
+  ECPAY_RETURN_URL: "https://argus.clouda.dpdns.org/api/billing/ecpay/callback/"
+  ECPAY_CLIENT_BACK_URL: "https://argus.clouda.dpdns.org/billing"
   # Host 白名單（比對用不含 port）。含三個節點 IP + 對外域名；換新域名這裡要加一筆。
   DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,web,frontend,172.16.2.122,172.16.2.123,172.16.2.124,xn--gst.tw,www.xn--gst.tw,argus6.qzz.io,argus.clouda.dpdns.org"
   REDIS_URL: "redis://redis:6379/0"
@@ -84,3 +86,4 @@ data:
   ARGUS_KALI_BACKEND: "disabled"
   ARGUS_KALI_NAMESPACE: "argus-kali"
   ARGUS_KALI_RUNNER_IMAGE: "shijie85/argus-kali-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  
