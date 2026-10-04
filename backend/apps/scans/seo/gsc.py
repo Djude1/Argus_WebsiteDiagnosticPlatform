@@ -78,7 +78,14 @@ def decrypt_token(value: str) -> str:
 
 
 def redirect_uri(request) -> str:
-    return settings.ARGUS_GSC_REDIRECT_URI or request.build_absolute_uri(CALLBACK_PATH)
+    if settings.ARGUS_GSC_REDIRECT_URI:
+        return settings.ARGUS_GSC_REDIRECT_URI
+    uri = request.build_absolute_uri(CALLBACK_PATH)
+    # 正式環境一律 https：cloudflared → Gateway 走 http 時 X-Forwarded-Proto 會是 http，
+    # 組出 http:// 回呼網址會被 Google 以 redirect_uri_mismatch 拒絕（2026-10-04）。
+    if not settings.DEBUG and uri.startswith("http://"):
+        uri = "https://" + uri[len("http://"):]
+    return uri
 
 
 def build_authorization(request, project=None) -> tuple[str, str]:
