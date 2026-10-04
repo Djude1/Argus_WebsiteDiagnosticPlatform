@@ -2832,7 +2832,7 @@ export interface components {
             domain: string;
             status: components["schemas"]["StatusA7fEnum"];
             readonly status_label: string;
-            method: components["schemas"]["MethodCbbEnum"] | components["schemas"]["BlankEnum"];
+            method: components["schemas"]["MethodBe3Enum"] | components["schemas"]["BlankEnum"];
             readonly method_label: string;
             /** Format: date-time */
             verified_at: string | null;
@@ -2973,10 +2973,10 @@ export interface components {
             note?: string;
         };
         DomainVerify: {
-            method: components["schemas"]["MethodCbbEnum"];
+            method: components["schemas"]["MethodBe3Enum"];
         };
         DomainVerifyRequest: {
-            method: components["schemas"]["MethodCbbEnum"];
+            method: components["schemas"]["MethodBe3Enum"];
         };
         /**
          * @description * `live` - 即時爬取
@@ -3040,9 +3040,10 @@ export interface components {
          * @description * `dns_txt` - DNS TXT 記錄
          *     * `meta_tag` - HTML meta 標籤
          *     * `html_file` - 驗證檔案
+         *     * `search_console` - Google Search Console
          * @enum {string}
          */
-        MethodCbbEnum: "dns_txt" | "meta_tag" | "html_file";
+        MethodBe3Enum: "dns_txt" | "meta_tag" | "html_file" | "search_console";
         Page: {
             readonly id: number;
             /** Format: uri */
@@ -3710,7 +3711,7 @@ export interface components {
             readonly id: number;
             readonly domain: string;
             readonly status: components["schemas"]["StatusA7fEnum"];
-            readonly method: components["schemas"]["MethodCbbEnum"];
+            readonly method: components["schemas"]["MethodBe3Enum"];
             /** Format: date-time */
             readonly verified_at: string | null;
             /** Format: date-time */

@@ -137,7 +137,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/projects/:id/history` | `ProjectHistoryPage` | 歷史報告：分數趨勢、歷次掃描表格、問題分析與 PDF 報告下載 |
 | `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、專案說明、預設掃描設定（`ScanDefaultsFields`：範圍、維度、模式）、網域驗證狀態、封存；示範專案只顯示說明與封存 |
 | `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
-| `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 三方法設定說明（DNS TXT / meta / 驗證檔，一鍵複製）→ 執行驗證；主動式資安測試的閘門 |
+| `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 設定說明（預設「Search Console（建議）」：到 Search Console 驗證網站並在對應網站專案的 SEO 分析連接，連接時自動通過，連結由 store 的 `projects` 比對網域找出；DNS TXT / meta / 驗證檔保留為備用，一鍵複製）→ 執行驗證；主動式資安測試的閘門。SEO 分析頁 OAuth 導回帶 `?verified=` 時顯示已自動完成網域驗證 |
 | `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站結構圖／修正產出三個分頁）：標題與分數 → 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖、選定單頁時的複刻工具）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站結構圖（ReactFlow） |
 | `/scans/:scanId/fixes` | `ScanFixOutputPage` | 修正產出（`FixOutputSection`；掃描完成才可產生，原本在報告最下方） |

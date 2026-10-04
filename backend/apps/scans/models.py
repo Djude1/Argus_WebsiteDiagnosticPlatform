@@ -579,7 +579,8 @@ class FixOutput(models.Model):
 class VerifiedDomain(models.Model):
     """網域所有權驗證（主動測試的技術性閘門）。
 
-    使用者以 DNS TXT / meta tag / HTML 檔三種方法證明自己控制該網域；
+    使用者以 Google Search Console（擁有者權限，2026-10-04 起為主要方法）或
+    DNS TXT / meta tag / HTML 檔（備用）證明自己控制該網域；
     驗證通過後 `expires_at` 前可用於主動掃描（`is_effectively_verified`）。
     admin_override=True 代表管理員人工核准（人工審核機制），同等生效。
     """
@@ -594,6 +595,7 @@ class VerifiedDomain(models.Model):
         DNS_TXT = "dns_txt", "DNS TXT 記錄"
         META_TAG = "meta_tag", "HTML meta 標籤"
         HTML_FILE = "html_file", "驗證檔案"
+        SEARCH_CONSOLE = "search_console", "Google Search Console"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

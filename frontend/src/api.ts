@@ -142,10 +142,10 @@ export async function createVerifiedDomain(domain: string) {
   return response.data;
 }
 
-// 以指定方法（dns_txt / meta_tag / html_file）驗證既有網域；回傳 { ...網域欄位, verified }
+// 以指定方法（search_console / dns_txt / meta_tag / html_file）驗證既有網域；回傳 { ...網域欄位, verified }
 export async function verifyVerifiedDomain(
   domainId: number,
-  method: "dns_txt" | "meta_tag" | "html_file",
+  method: "search_console" | "dns_txt" | "meta_tag" | "html_file",
 ) {
   const response = await api.post(`/domains/${domainId}/verify/`, { method });
   return response.data;

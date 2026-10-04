@@ -53,7 +53,7 @@ function PrivacyPolicyPage() {
         </ul>
         <h3>Google Search Console 資料（僅在你主動連接時）</h3>
         <ul>
-          <li>你在 SEO 分析頁連接 Search Console 時，我們透過 Google OAuth 申請唯讀權限（<code>webmasters.readonly</code>），讀取你所選擇的網站資源之搜尋成效（搜尋字詞、曝光、點擊、點閱率、平均排名與對應頁面）及網址檢查結果（是否已被 Google 收錄）。</li>
+          <li>你在 SEO 分析頁連接 Search Console 時，我們透過 Google OAuth 申請唯讀權限（<code>webmasters.readonly</code>），讀取你可存取的網站資源清單與權限等級（用來確認網域所有權），以及你所選擇的網站資源之搜尋成效（搜尋字詞、曝光、點擊、點閱率、平均排名與對應頁面）及網址檢查結果（是否已被 Google 收錄）。</li>
           <li>我們只保存加密後的長期授權憑證（refresh token）與你選擇的資源網址；搜尋成效資料只在你查看時向 Google 讀取，短暫快取（最長 1 小時）以減少重複請求，不另行永久保存。</li>
         </ul>
         <h3>Cookie 與瀏覽器儲存</h3>
@@ -84,7 +84,7 @@ function PrivacyPolicyPage() {
           ，包括其中的「有限使用」（Limited Use）規定。具體而言：
         </p>
         <ul>
-          <li>Search Console 資料只用來在本服務中向你本人顯示你網站的搜尋成效與收錄狀態。</li>
+          <li>Search Console 資料只用來在本服務中向你本人顯示你網站的搜尋成效與收錄狀態，以及確認你是該網站在 Search Console 的擁有者（用於網域所有權驗證，開放主動式資安測試）。</li>
           <li>不會轉移或出售給第三方，不用於廣告，也不用於訓練任何人工智慧模型。</li>
           <li>除非取得你的明確同意、為了安全調查或法律要求，工作人員不會讀取這些資料。</li>
           <li>你可以隨時在 SEO 分析頁按「中斷連線」：我們會向 Google 撤銷授權並刪除保存的憑證；你也可以在 Google 帳號的「第三方存取權」頁面移除授權。</li>

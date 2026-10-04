@@ -194,6 +194,25 @@ def property_matches(property_url: str, origin: str) -> bool:
     return (prefix.scheme, (prefix.hostname or "").lower()) == (target.scheme, host)
 
 
+def property_covers_domain(property_url: str, domain: str) -> bool:
+    """資源是否證明擁有這個網域：網域資源涵蓋自己與子網域，網址前置字元資源只證明那一個主機。"""
+    domain = (domain or "").lower().rstrip(".")
+    if not domain:
+        return False
+    if property_url.startswith("sc-domain:"):
+        owned = property_url.split(":", 1)[1].lower().rstrip(".")
+        return domain == owned or domain.endswith(f".{owned}")
+    return (urlsplit(property_url).hostname or "").lower() == domain
+
+
+def property_domain(property_url: str) -> str:
+    """資源代表的網域：sc-domain:example.com → example.com；
+    https://www.example.com/ → www.example.com。"""
+    if property_url.startswith("sc-domain:"):
+        return property_url.split(":", 1)[1].lower().rstrip(".")
+    return (urlsplit(property_url).hostname or "").lower()
+
+
 def period(days: int, today: date | None = None) -> tuple[date, date]:
     end = (today or date.today()) - timedelta(days=DATA_LAG_DAYS)
     return end - timedelta(days=days - 1), end

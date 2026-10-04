@@ -100,7 +100,7 @@ artifacts（JSON）：json_ld / og_meta / llms_txt / faq_schema，
 網域所有權驗證（主動測試的技術性閘門）
 user FK + domain（正規化小寫）UniqueConstraint(user, domain)
 status：pending / verified / rejected / expired
-method：dns_txt / meta_tag / html_file（最後成功的方法）
+method：search_console（主要，Search Console 擁有者）/ dns_txt / meta_tag / html_file（最後成功的方法；migration 0023）
 token（32 hex）、verified_at、expires_at（驗證成功=now+90 天，
   TTL 設定 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS）
 is_effectively_verified：admin_override 或（verified 且未過期）
