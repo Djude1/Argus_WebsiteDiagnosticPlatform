@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
 import { ArgusLogo, ArgusMark } from "../../components/brand/ArgusMark";
@@ -14,10 +14,23 @@ import { TURNSTILE_FIELD, TurnstileWidget, useTurnstileConfig } from "../../shar
 function RequireAuth({ children }) {
   const accessToken = useArgusStore((state) => state.accessToken);
   const authReady = useArgusStore((state) => state.authReady);
+  const profile = useArgusStore((state) => state.profile);
+  const fetchProfile = useArgusStore((state) => state.fetchProfile);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (accessToken && !profile) fetchProfile();
+  }, [accessToken, profile, fetchProfile]);
+
   if (!authReady) {
     return <p className="loading-state">正在驗證登入狀態…</p>;
   }
   if (accessToken) {
+    // 舊帳號缺用戶名或密碼：先補設才能使用其他功能（後端 /api/auth/me/ 的 needs_setup）
+    if (profile?.needs_setup && location.pathname !== "/account/setup") {
+      const back = encodeURIComponent(location.pathname + location.search);
+      return <Navigate to={`/account/setup?next=${back}`} replace />;
+    }
     return children;
   }
   // 使用者直接輸入 /scans/123 之類 deep link 但未登入時，帶 next 讓登入後跳回
@@ -126,16 +139,111 @@ function SubmitButton({ loading, loadingText, children, disabled }) {
 // 登入／註冊
 // ============================================================
 
+const HANDLE_HINT = "3–30 個英文小寫字母、數字或 _ . -，可用來登入";
+
+function fieldError(data, fallback) {
+  const first = (value) => (Array.isArray(value) ? value[0] : value);
+  return first(data?.handle) || first(data?.password) || first(data?.signup_token) || data?.detail || fallback;
+}
+
+function TermsNote() {
+  return (
+    <p className="auth-hint auth-terms">
+      建立帳號即表示你同意 <Link to="/terms" target="_blank">服務條款</Link> 與{" "}
+      <Link to="/privacy" target="_blank">隱私權政策</Link>。
+    </p>
+  );
+}
+
+/**
+ * 註冊第二步：Google 已確認 Email，設定用戶名與密碼後建立帳號（POST /auth/register/）。
+ * signup 由 /auth/register/google/ 或 Google 登入時「尚未註冊」的 409 回應取得（15 分鐘有效）。
+ */
+function RegisterDetailsForm({ signup, onDone, onRestart }) {
+  const uid = useId();
+  const [handle, setHandle] = useState(signup.suggested_handle || "");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (password !== confirmPassword) {
+      setError("兩次密碼輸入不一致。");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/register/", { signup_token: signup.signup_token, handle, password });
+      onDone(res.data.access);
+    } catch (err) {
+      setError(fieldError(err.response?.data, "註冊失敗，請稍後再試。"));
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form className="auth-form" onSubmit={submit}>
+      <p className="auth-step">步驟 2／2：設定用戶名與密碼</p>
+      <AuthError>{error}</AuthError>
+      <AuthField id={`${uid}-email`} label="Google 帳號 Email">
+        <input id={`${uid}-email`} className="input" type="email" value={signup.email} readOnly />
+      </AuthField>
+      <AuthField id={`${uid}-handle`} label="用戶名" hint={HANDLE_HINT}>
+        <input
+          id={`${uid}-handle`}
+          className="input"
+          value={handle}
+          onChange={(e) => setHandle(e.target.value.toLowerCase())}
+          required
+          minLength={3}
+          maxLength={30}
+          autoComplete="username"
+          aria-describedby={`${uid}-handle-hint`}
+        />
+      </AuthField>
+      <AuthField id={`${uid}-password`} label="密碼" hint="至少 10 個字元，需包含英文字母與數字">
+        <PasswordInput
+          id={`${uid}-password`}
+          placeholder="設定密碼"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+          aria-describedby={`${uid}-password-hint`}
+        />
+      </AuthField>
+      <AuthField id={`${uid}-confirm`} label="確認密碼">
+        <PasswordInput
+          id={`${uid}-confirm`}
+          placeholder="再輸入一次"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+          invalid={Boolean(confirmPassword) && confirmPassword !== password}
+        />
+      </AuthField>
+      <TermsNote />
+      <SubmitButton loading={loading} loadingText="建立中…">建立帳號</SubmitButton>
+      <button type="button" className="auth-link auth-restart" onClick={onRestart}>改用其他 Google 帳號</button>
+    </form>
+  );
+}
+
 function LoginPage({ googleOAuthEnabled }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const accessToken = useArgusStore((s) => s.accessToken);
   const setToken = useArgusStore((s) => s.setToken);
-  const [tab, setTab] = useState("login");
-  const [email, setEmail] = useState("");
+  const [tab, setTab] = useState(searchParams.get("tab") === "register" ? "register" : "login");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [signup, setSignup] = useState(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState(searchParams.get("deleted") ? "帳號已刪除。感謝你使用 Argus。" : "");
   const [loading, setLoading] = useState(false);
   const uid = useId();
   const turnstile = useTurnstileConfig();
@@ -162,44 +270,68 @@ function LoginPage({ googleOAuthEnabled }) {
     navigate(redirect, { replace: true });
   }
 
-  async function handleEmailLogin(e) {
+  function switchTab(key) {
+    setTab(key);
+    setError("");
+    setNotice("");
+    setSignup(null);
+    setCaptcha("");
+  }
+
+  async function handleLogin(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await api.post("/auth/email-login/", withCaptcha({ email, password }));
+      const res = await api.post("/auth/email-login/", withCaptcha({ email: identifier, password }));
       handleToken(res.data.access);
     } catch (err) {
-      setError(err.response?.data?.detail || "登入失敗，請確認 Email 與密碼。");
+      setError(err.response?.data?.detail || "登入失敗，請確認帳號與密碼。");
     } finally {
       setLoading(false);
       captchaRef.current?.reset();
     }
   }
 
-  async function handleRegister(e) {
-    e.preventDefault();
+  // 登入分頁的 Google：已註冊直接登入；尚未註冊（409）直接進入設定用戶名與密碼
+  async function googleLogin(credential) {
     setError("");
-    if (password !== confirmPassword) {
-      setError("兩次密碼輸入不一致。");
-      return;
-    }
-    setLoading(true);
     try {
-      const res = await api.post("/auth/register/", withCaptcha({ email, password }));
+      const res = await api.post("/auth/google/", { credential });
       handleToken(res.data.access);
     } catch (err) {
-      const d = err.response?.data || {};
-      setError(d.email || d.password || d.detail || "註冊失敗。");
-    } finally {
-      setLoading(false);
-      captchaRef.current?.reset();
+      const data = err.response?.data;
+      if (err.response?.status === 409 && data?.code === "registration_required") {
+        setTab("register");
+        setSignup(data);
+        setNotice("這個 Google 帳號還沒有註冊，請設定用戶名與密碼完成註冊。");
+      } else {
+        setError(data?.credential || data?.detail || "Google 登入失敗，請稍後再試。");
+      }
+    }
+  }
+
+  // 註冊分頁的 Google：只確認 Email，回傳 signup_token，帳號在第二步才建立
+  async function googleRegister(credential) {
+    setError("");
+    try {
+      const res = await api.post("/auth/register/google/", { credential });
+      setSignup(res.data);
+      setNotice("");
+    } catch (err) {
+      const data = err.response?.data;
+      if (err.response?.status === 409 && data?.code === "already_registered") {
+        setTab("login");
+        setNotice("這個 Google 帳號已經註冊，請直接登入。");
+      } else {
+        setError(data?.credential || data?.detail || "Google 授權失敗，請稍後再試。");
+      }
     }
   }
 
   const tabs = [
-    { key: "login", label: "Email 登入" },
-    { key: "register", label: "新帳號" },
+    { key: "login", label: "登入" },
+    { key: "register", label: "註冊" },
   ];
   const isRegister = tab === "register";
 
@@ -210,7 +342,7 @@ function LoginPage({ googleOAuthEnabled }) {
         <p className="auth-sub">授權式 AI 網站健檢平台</p>
       </header>
 
-      <div className="auth-tabs" role="tablist" aria-label="登入方式">
+      <div className="auth-tabs" role="tablist" aria-label="登入或註冊">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -220,7 +352,7 @@ function LoginPage({ googleOAuthEnabled }) {
             aria-selected={tab === t.key}
             aria-controls={`${uid}-panel`}
             className={`auth-tab ${tab === t.key ? "is-active" : ""}`}
-            onClick={() => { setTab(t.key); setError(""); setCaptcha(""); }}
+            onClick={() => switchTab(t.key)}
           >
             {t.label}
           </button>
@@ -228,97 +360,189 @@ function LoginPage({ googleOAuthEnabled }) {
       </div>
 
       <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${tab}`} className="auth-panel">
-        {googleOAuthEnabled && (
+        {notice && <p className="auth-notice-inline" role="status">{notice}</p>}
+
+        {!isRegister && (
           <>
-            <div className="auth-google">
-              <GoogleLogin
-                onSuccess={(credentialResponse) => {
-                  api.post("/auth/google/", { credential: credentialResponse.credential })
-                    .then((res) => handleToken(res.data.access))
-                    .catch(() => setError("Google 登入失敗，請稍後再試。"));
-                }}
-                onError={() => setError("Google 登入元件錯誤，請重新整理。")}
-                useOneTap={false}
-                theme="filled_black"
-                shape="pill"
-                text={isRegister ? "signup_with" : "signin_with"}
-              />
-            </div>
-            <p className="auth-divider"><span>或使用 Email</span></p>
+            {googleOAuthEnabled && (
+              <>
+                <div className="auth-google">
+                  <GoogleLogin
+                    onSuccess={(response) => googleLogin(response.credential)}
+                    onError={() => setError("Google 登入元件錯誤，請重新整理。")}
+                    useOneTap={false}
+                    theme="filled_black"
+                    shape="pill"
+                    text="signin_with"
+                  />
+                </div>
+                <p className="auth-divider"><span>或使用帳號密碼</span></p>
+              </>
+            )}
+            <AuthError>{error}</AuthError>
+            <form className="auth-form" onSubmit={handleLogin}>
+              <AuthField id={`${uid}-identifier`} label="Email 或用戶名">
+                <input
+                  id={`${uid}-identifier`}
+                  className="input"
+                  type="text"
+                  placeholder="you@example.com 或用戶名"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  required
+                  autoComplete="username"
+                />
+              </AuthField>
+              <div className="auth-field">
+                <div className="auth-label-row">
+                  <label className="auth-label" htmlFor={`${uid}-password`}>密碼</label>
+                  <button
+                    type="button"
+                    className="auth-link"
+                    onClick={() => navigate("/password-reset")}
+                  >
+                    忘記密碼？
+                  </button>
+                </div>
+                <PasswordInput
+                  id={`${uid}-password`}
+                  placeholder="輸入密碼"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              {turnstile.enabled && (
+                <TurnstileWidget key="login" ref={captchaRef} siteKey={turnstile.siteKey} action="login" onToken={setCaptcha} />
+              )}
+              <SubmitButton loading={loading} loadingText="登入中…" disabled={captchaBlocking}>登入</SubmitButton>
+            </form>
           </>
         )}
 
-        <AuthError>{error}</AuthError>
-
-        {!isRegister && (
-          <form className="auth-form" onSubmit={handleEmailLogin}>
-            <AuthField id={`${uid}-email`} label="Email">
-              <input
-                id={`${uid}-email`}
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </AuthField>
-            <div className="auth-field">
-              <div className="auth-label-row">
-                <label className="auth-label" htmlFor={`${uid}-password`}>密碼</label>
-                <button
-                  type="button"
-                  className="auth-link"
-                  onClick={() => navigate("/password-reset")}
-                >
-                  忘記密碼？
-                </button>
+        {isRegister && !signup && (
+          <div className="auth-form">
+            <p className="auth-step">步驟 1／2：使用 Google 帳號授權</p>
+            <p className="auth-hint">
+              註冊需要以 Google 帳號確認 Email，下一步再設定用戶名與密碼；之後可用 Email 或用戶名加密碼登入，也能繼續用 Google 登入。
+            </p>
+            <AuthError>{error}</AuthError>
+            {googleOAuthEnabled ? (
+              <div className="auth-google">
+                <GoogleLogin
+                  onSuccess={(response) => googleRegister(response.credential)}
+                  onError={() => setError("Google 授權元件錯誤，請重新整理。")}
+                  useOneTap={false}
+                  theme="filled_black"
+                  shape="pill"
+                  text="signup_with"
+                />
               </div>
-              <PasswordInput
-                id={`${uid}-password`}
-                placeholder="輸入密碼"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            {turnstile.enabled && (
-              <TurnstileWidget key="login" ref={captchaRef} siteKey={turnstile.siteKey} action="login" onToken={setCaptcha} />
+            ) : (
+              <p className="auth-error" role="alert">網站尚未設定 Google 授權，暫時無法註冊新帳號。</p>
             )}
-            <SubmitButton loading={loading} loadingText="登入中…" disabled={captchaBlocking}>登入</SubmitButton>
-          </form>
+            <TermsNote />
+          </div>
         )}
 
-        {isRegister && (
-          <form className="auth-form" onSubmit={handleRegister}>
-            <AuthField id={`${uid}-reg-email`} label="Email">
-              <input
-                id={`${uid}-reg-email`}
-                className="input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </AuthField>
-            <AuthField id={`${uid}-reg-password`} label="密碼" hint="至少 8 字元">
+        {isRegister && signup && (
+          <RegisterDetailsForm
+            signup={signup}
+            onDone={handleToken}
+            onRestart={() => { setSignup(null); setNotice(""); }}
+          />
+        )}
+      </div>
+
+      <p className="auth-notice">
+        管理員請用上方帳號密碼登入，登入後於右上角帳號選單進入 <code>/admin</code> 後台。
+      </p>
+    </AuthShell>
+  );
+}
+
+/**
+ * /account/setup：舊帳號缺用戶名或密碼時，登入後一律先到這裡補設（RequireAuth 依 profile.needs_setup 導過來）。
+ */
+function AccountSetupPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const profile = useArgusStore((s) => s.profile);
+  const fetchProfile = useArgusStore((s) => s.fetchProfile);
+  const uid = useId();
+  const [handle, setHandle] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const next = searchParams.get("next");
+  const redirect = next && next.startsWith("/") && !next.startsWith("/account/setup") ? next : "/dashboard";
+
+  if (!profile) return <p className="loading-state">載入帳號資料中…</p>;
+  if (!profile.needs_setup) return <Navigate to={redirect} replace />;
+  const needHandle = !profile.handle;
+  const needPassword = !profile.has_password;
+
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (needPassword && password !== confirmPassword) {
+      setError("兩次密碼輸入不一致。");
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post("/auth/me/setup/", { handle, password });
+      await fetchProfile();
+      navigate(redirect, { replace: true });
+    } catch (err) {
+      setError(fieldError(err.response?.data, "設定失敗，請稍後再試。"));
+      setLoading(false);
+    }
+  }
+
+  return (
+    <AuthShell backTo="/project" backLabel="返回首頁">
+      <header className="auth-head">
+        <h1 className="auth-title">完成帳號設定</h1>
+        <p className="auth-sub">
+          {profile.email} 需要設定{[needHandle && "用戶名", needPassword && "密碼"].filter(Boolean).join("與")}後才能繼續使用。
+        </p>
+      </header>
+      <form className="auth-form" onSubmit={submit}>
+        <AuthError>{error}</AuthError>
+        {needHandle && (
+          <AuthField id={`${uid}-handle`} label="用戶名" hint={HANDLE_HINT}>
+            <input
+              id={`${uid}-handle`}
+              className="input"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value.toLowerCase())}
+              required
+              minLength={3}
+              maxLength={30}
+              autoComplete="username"
+              aria-describedby={`${uid}-handle-hint`}
+            />
+          </AuthField>
+        )}
+        {needPassword && (
+          <>
+            <AuthField id={`${uid}-password`} label="密碼" hint="至少 10 個字元，需包含英文字母與數字">
               <PasswordInput
-                id={`${uid}-reg-password`}
-                placeholder="密碼（至少 8 字元）"
+                id={`${uid}-password`}
+                placeholder="設定密碼"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                aria-describedby={`${uid}-reg-password-hint`}
+                aria-describedby={`${uid}-password-hint`}
               />
             </AuthField>
-            <AuthField id={`${uid}-reg-confirm`} label="確認密碼">
+            <AuthField id={`${uid}-confirm`} label="確認密碼">
               <PasswordInput
-                id={`${uid}-reg-confirm`}
+                id={`${uid}-confirm`}
                 placeholder="再輸入一次"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -327,13 +551,10 @@ function LoginPage({ googleOAuthEnabled }) {
                 invalid={Boolean(confirmPassword) && confirmPassword !== password}
               />
             </AuthField>
-            {turnstile.enabled && (
-              <TurnstileWidget key="signup" ref={captchaRef} siteKey={turnstile.siteKey} action="signup" onToken={setCaptcha} />
-            )}
-            <SubmitButton loading={loading} loadingText="建立中…" disabled={captchaBlocking}>建立帳號</SubmitButton>
-          </form>
+          </>
         )}
-      </div>
+        <SubmitButton loading={loading} loadingText="儲存中…">完成設定</SubmitButton>
+      </form>
     </AuthShell>
   );
 }
@@ -426,7 +647,7 @@ function PasswordResetRequestPage() {
             寄出重設連結
           </SubmitButton>
           <p className="auth-notice">
-            Google 帳號的密碼請至 Google 帳號設定管理，本平台無法重設。
+            重設的是 Argus 的登入密碼，不會影響你的 Google 帳號密碼。
           </p>
         </form>
       )}
@@ -559,6 +780,7 @@ function PasswordResetConfirmPage() {
 }
 
 export {
+  AccountSetupPage,
   RequireAuth,
   LoginPage,
   PasswordResetRequestPage,

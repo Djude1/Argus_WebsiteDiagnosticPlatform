@@ -20,7 +20,7 @@ function SettingsPage() {
   const theme = useArgusStore((s) => s.theme);
   const toggleTheme = useArgusStore((s) => s.toggleTheme);
   const fetchMe = useArgusStore((s) => s.fetchMe);
-  const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
+  const { confirmDialog, dialogHost } = useConfirmDialogs();
 
   const avatarInputRef = useRef(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -38,6 +38,10 @@ function SettingsPage() {
   const [pwdBusy, setPwdBusy] = useState(false);
 
   const [meData, setMeData] = useState(null);
+  const [deletePwd, setDeletePwd] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
   // 訂閱摘要：undefined=載入中、null=無訂閱（載入失敗也寬容當作無訂閱，詳細狀態以 /billing 為準）
   const [subscription, setSubscription] = useState(undefined);
   useEffect(() => {
@@ -54,7 +58,7 @@ function SettingsPage() {
   const balance = wallet?.balance ?? 0;
   const purchased = wallet?.total_purchased_ntd ?? 0;
   const scansUsed = wallet?.total_scans_used ?? 0;
-  const isEmailAccount = meData?.auth_provider === "email";
+  const hasPassword = Boolean(meData?.has_password);
   const displayName = meData?.display_name?.trim() || meData?.email || meData?.username || "—";
 
   async function handleSaveProfile(e) {
@@ -113,11 +117,31 @@ function SettingsPage() {
     }
   }
 
+  // 刪除帳號：後端 /api/auth/me/delete/（accounts/deletion.py）。個資與內容全部刪除、帳務匿名保留，不可復原
+  async function handleDeleteAccount(e) {
+    e.preventDefault();
+    setDeleteError("");
+    if (!(await confirmDialog("確定要永久刪除帳號嗎？所有網站專案、掃描與報告都會刪除，無法復原。", { danger: true }))) {
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      await api.post("/auth/me/delete/", { password: deletePwd, confirm: deleteConfirm });
+      // 整頁重新載入：清掉所有前端狀態，也避免 RequireAuth 先把畫面導到 /login?next=…
+      setToken(null);
+      window.location.replace("/login?deleted=1");
+    } catch (err) {
+      const data = err.response?.data || {};
+      setDeleteError(data.password || data.confirm || data.detail || "刪除失敗，請稍後再試。");
+      setDeleteBusy(false);
+    }
+  }
+
   async function handleChangePassword(e) {
     e.preventDefault();
     setPwdError("");
     if (newPwd !== confirmPwd) { setPwdError("兩次密碼不一致"); return; }
-    if (newPwd.length < 8) { setPwdError("新密碼至少 8 個字元"); return; }
+    if (newPwd.length < 10) { setPwdError("新密碼至少 10 個字元"); return; }
     setPwdBusy(true);
     try {
       await api.post("/auth/change-password/", { old_password: oldPwd, new_password: newPwd });
@@ -147,11 +171,7 @@ function SettingsPage() {
             <div className="set-profile-id">
               <strong>{displayName}</strong>
               {meData?.email && meData.email !== displayName && <small>{meData.email}</small>}
-              {meData && (
-                <span className="set-provider-chip">
-                  {isEmailAccount ? "Email 帳號" : "Google 帳號"}
-                </span>
-              )}
+              {meData?.handle && <span className="set-provider-chip">@{meData.handle}</span>}
             </div>
             <div className="set-avatar-actions">
               <input
@@ -218,9 +238,13 @@ function SettingsPage() {
               <p>顯示在報告與收據上的名稱。</p>
             </header>
             <form className="set-form" onSubmit={handleSaveProfile}>
-              <div className="set-field set-field-full">
+              <div className="set-field">
                 <span className="set-label" id="set-email-label">Email</span>
-                <p className="set-readonly" aria-labelledby="set-email-label">{meData?.email || meData?.username || "—"}</p>
+                <p className="set-readonly" aria-labelledby="set-email-label">{meData?.email || "—"}</p>
+              </div>
+              <div className="set-field">
+                <span className="set-label" id="set-handle-label">用戶名</span>
+                <p className="set-readonly" aria-labelledby="set-handle-label">{meData?.handle || "—"}</p>
               </div>
               <div className="set-field">
                 <label className="set-label" htmlFor="set-first-name">名字</label>
@@ -272,9 +296,9 @@ function SettingsPage() {
           <section className="set-section" aria-labelledby="set-auth-title">
             <header className="set-section-head">
               <h2 id="set-auth-title">登入方式</h2>
-              <p>{isEmailAccount ? "Email 帳號" : "Google 帳號（透過 Google 管理密碼）"}</p>
+              <p>Email 或用戶名＋密碼，也可以用 Google 帳號登入。</p>
             </header>
-            {isEmailAccount && (
+            {hasPassword && (
               <form className="set-form" onSubmit={handleChangePassword} aria-label="更改密碼">
                 <h3 className="set-subtitle set-field-full">更改密碼</h3>
                 <div className="set-field set-field-full">
@@ -283,7 +307,7 @@ function SettingsPage() {
                 </div>
                 <div className="set-field">
                   <label className="set-label" htmlFor="set-new-pwd">新密碼</label>
-                  <PasswordInput id="set-new-pwd" placeholder="至少 8 字元" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
+                  <PasswordInput id="set-new-pwd" placeholder="至少 10 字元，含英文與數字" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
                 </div>
                 <div className="set-field">
                   <label className="set-label" htmlFor="set-confirm-pwd">確認新密碼</label>
@@ -302,20 +326,32 @@ function SettingsPage() {
 
           <section className="set-section set-danger" aria-labelledby="set-danger-title">
             <header className="set-section-head">
-              <h2 id="set-danger-title">危險操作</h2>
-              <p>刪除帳號將移除所有掃描紀錄與點數，此操作無法復原。</p>
+              <h2 id="set-danger-title">刪除帳號</h2>
+              <p>
+                永久刪除帳號與所有個人資料：網站專案、掃描、報告與截圖、Search Console 連線、網域驗證、MCP 憑證、評論與登入紀錄，
+                並立即登出所有裝置。剩餘點數會一併失效；點數交易與購點訂單依法只保留匿名的金額與時間。此操作無法復原。
+              </p>
             </header>
-            <button
-              className="set-danger-btn"
-              type="button"
-              onClick={async () => {
-                if (await confirmDialog("確定要刪除帳號嗎？此操作無法復原。", { danger: true })) {
-                  notifyDialog("請聯絡管理員協助刪除帳號。");
-                }
-              }}
-            >
-              刪除帳號
-            </button>
+            {meData?.is_staff ? (
+              <p className="set-hint">管理員帳號不能自行刪除，請聯絡其他管理員處理。</p>
+            ) : (
+              <form className="set-form" onSubmit={handleDeleteAccount} aria-label="刪除帳號">
+                <div className="set-field">
+                  <label className="set-label" htmlFor="set-delete-pwd">目前密碼</label>
+                  <PasswordInput id="set-delete-pwd" value={deletePwd} onChange={(e) => setDeletePwd(e.target.value)} autoComplete="current-password" required />
+                </div>
+                <div className="set-field">
+                  <label className="set-label" htmlFor="set-delete-confirm">請輸入「刪除帳號」確認</label>
+                  <input id="set-delete-confirm" className="input" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder="刪除帳號" required />
+                </div>
+                {deleteError && <p className="set-msg tone-bad set-field-full" role="alert">{deleteError}</p>}
+                <div className="set-form-actions">
+                  <button className="set-danger-btn" type="submit" disabled={deleteBusy || deleteConfirm.trim() !== "刪除帳號" || !deletePwd}>
+                    {deleteBusy ? "刪除中…" : "永久刪除帳號"}
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
         </div>
       </div>

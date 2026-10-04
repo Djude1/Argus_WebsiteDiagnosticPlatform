@@ -1,4 +1,7 @@
-"""Cloudflare Turnstile：設定端點、四個受保護的公開表單、siteverify 判定與部署檢查。"""
+"""Cloudflare Turnstile：設定端點、三個受保護的公開表單、siteverify 判定與部署檢查。
+
+註冊（2026-10-04 起）改由 Google 授權確認 Email，不再顯示 Turnstile。
+"""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -61,7 +64,6 @@ class TurnstileProtectedFormsTests(APITestCase):
     def surfaces(self):
         password = "StrongPass123!"
         return [
-            ("/api/auth/register/", {"email": "new@example.com", "password": password}, "signup"),
             ("/api/auth/email-login/", {"email": MEMBER, "password": password}, "login"),
             ("/api/auth/password-reset/request/", {"email": MEMBER}, "password_reset"),
             (
@@ -83,7 +85,7 @@ class TurnstileProtectedFormsTests(APITestCase):
                 post.assert_not_called()
 
     def test_valid_token_with_matching_action_and_hostname_passes(self):
-        expected_status = {"signup": 201, "login": 200, "password_reset": 200, "contact": 201}
+        expected_status = {"login": 200, "password_reset": 200, "contact": 201}
         for url, payload, action in self.surfaces():
             cache.clear()
             result = siteverify_result(success=True, action=action, hostname="www.xn--gst.tw")
@@ -151,13 +153,16 @@ class TurnstileProtectedFormsTests(APITestCase):
 class TurnstileDisabledTests(APITestCase):
     def test_forms_work_without_token_when_disabled(self):
         cache.clear()
+        get_user_model().objects.create_user(
+            username="plain@example.com", email="plain@example.com", password="StrongPass123!"
+        )
         with patch(SITEVERIFY) as post:
             response = self.client.post(
-                "/api/auth/register/",
+                "/api/auth/email-login/",
                 {"email": "plain@example.com", "password": "StrongPass123!"},
                 format="json",
             )
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 200)
         post.assert_not_called()
 
 

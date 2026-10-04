@@ -10,8 +10,22 @@ from django.utils import timezone
 
 
 class User(AbstractUser):
+    """username 內部固定存 Email（歷史相容：Google 登入、管理指令都以它比對）。
+
+    使用者自己設定、可用來登入的「用戶名」是 handle（小寫、唯一；規則見 accounts/signup.py）。
+    2026-10-04 起新帳號一律經 Google 授權註冊並設定 handle 與密碼；舊帳號缺任一項時
+    登入後必須先補設（MeView 的 needs_setup）。
+    """
+
     # 大頭貼：一律是 apps.accounts.avatars 重新編碼過的 256×256 PNG，檔名為隨機 32 位 hex
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
+    handle = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    # 使用者自行刪除帳號的時間；刪除後個資清空、帳號停用，只留匿名的帳務紀錄（accounts/deletion.py）
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def needs_setup(self) -> bool:
+        return not self.handle or not self.has_usable_password()
 
 
 class LoginEvent(models.Model):

@@ -27,6 +27,18 @@ export const useArgusStore = create((set, get) => ({
   walletLoading: false,
   // 目前登入者的 staff 旗標；用於決定是否顯示後台入口
   me: null,
+  // /api/auth/me/ 的個人資料（handle、has_password、needs_setup）；RequireAuth 依 needs_setup 導到補設頁
+  profile: null,
+  fetchProfile: async () => {
+    if (!get().accessToken) return null;
+    try {
+      const response = await api.get("/auth/me/");
+      set({ profile: response.data });
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
   // 首次進站動畫旗標（localStorage argus_intro_seen 持久化）；品牌 icon 可呼叫 replayIntro 重播
   introSeen: (() => {
     try { return window.localStorage.getItem("argus_intro_seen") === "1"; }
@@ -55,6 +67,7 @@ export const useArgusStore = create((set, get) => ({
       authReady: true,
       wallet: token ? get().wallet : null,
       me: token ? get().me : null,
+      profile: token ? get().profile : null,
       projects: token ? get().projects : null,
     });
   },
@@ -64,7 +77,7 @@ export const useArgusStore = create((set, get) => ({
       get().setToken(response.data.access);
     } catch {
       setAccessToken(null);
-      set({ accessToken: null, authReady: true, wallet: null, me: null, projects: null });
+      set({ accessToken: null, authReady: true, wallet: null, me: null, profile: null, projects: null });
     }
   },
   fetchWallet: async () => {

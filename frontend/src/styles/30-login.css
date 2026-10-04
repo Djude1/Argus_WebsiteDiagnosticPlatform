@@ -325,3 +325,32 @@
   color: var(--ag-bad);
   font-size: 0.8rem;
 }
+/* 註冊兩步驟（Google 授權 → 設定用戶名與密碼）與帳號補設頁 */
+.auth-step {
+  margin: 0;
+  color: var(--ag-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.auth-terms a {
+  color: var(--ag-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-restart {
+  justify-self: center;
+}
+.auth-notice-inline {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--ag-border);
+  border-radius: 10px;
+  background: var(--ag-surface-2);
+  color: var(--ag-text-2);
+  font-size: 0.85rem;
+}
+.auth-form > .auth-google {
+  display: flex;
+  justify-content: center;
+}
