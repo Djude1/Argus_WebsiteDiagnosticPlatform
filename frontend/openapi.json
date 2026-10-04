@@ -7403,7 +7403,7 @@
                     "method": {
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/MethodCbbEnum"
+                                "$ref": "#/components/schemas/MethodBe3Enum"
                             },
                             {
                                 "$ref": "#/components/schemas/BlankEnum"
@@ -7834,7 +7834,7 @@
                 "type": "object",
                 "properties": {
                     "method": {
-                        "$ref": "#/components/schemas/MethodCbbEnum"
+                        "$ref": "#/components/schemas/MethodBe3Enum"
                     }
                 },
                 "required": [
@@ -7845,7 +7845,7 @@
                 "type": "object",
                 "properties": {
                     "method": {
-                        "$ref": "#/components/schemas/MethodCbbEnum"
+                        "$ref": "#/components/schemas/MethodBe3Enum"
                     }
                 },
                 "required": [
@@ -8008,14 +8008,15 @@
                 "type": "string",
                 "description": "* `monthly_bonus` - 每月贈點\n* `purchase` - 購買\n* `scan_hold` - 掃描預扣\n* `scan_refund` - 掃描退款\n* `admin_adjust` - 管理員調整\n* `rebuild_hold` - 網頁複刻預扣\n* `rebuild_refund` - 網頁複刻退款\n* `fixgen_grant` - 修正產出額度贈與\n* `fixgen_charge` - 修正產出扣款\n* `fixgen_refund` - 修正產出退款\n* `subscription_grant` - 訂閱月贈點"
             },
-            "MethodCbbEnum": {
+            "MethodBe3Enum": {
                 "enum": [
                     "dns_txt",
                     "meta_tag",
-                    "html_file"
+                    "html_file",
+                    "search_console"
                 ],
                 "type": "string",
-                "description": "* `dns_txt` - DNS TXT 記錄\n* `meta_tag` - HTML meta 標籤\n* `html_file` - 驗證檔案"
+                "description": "* `dns_txt` - DNS TXT 記錄\n* `meta_tag` - HTML meta 標籤\n* `html_file` - 驗證檔案\n* `search_console` - Google Search Console"
             },
             "Page": {
                 "type": "object",
@@ -10121,7 +10122,7 @@
                     "method": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/MethodCbbEnum"
+                                "$ref": "#/components/schemas/MethodBe3Enum"
                             }
                         ],
                         "readOnly": true

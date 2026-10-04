@@ -14,7 +14,13 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.scans import tasks
-from apps.scans.models import Page, ScanJob, SearchConsoleConnection, SiteProject
+from apps.scans.models import (
+    Page,
+    ScanJob,
+    SearchConsoleConnection,
+    SiteProject,
+    VerifiedDomain,
+)
 from apps.scans.seo import gsc, link_check
 from apps.scans.seo.keywords import keyword_report, normalize_keywords
 from apps.scans.seo.page_audit import audit_page, content_size, display_width
@@ -354,7 +360,8 @@ class SearchConsoleTests(TestCase):
         state, nonce = self._connect()
         token_response = {"refresh_token": "1//refresh-secret", "access_token": "a",
                           "scope": gsc.SCOPE}
-        with mock.patch("apps.scans.seo.gsc._post_token", return_value=token_response):
+        with mock.patch("apps.scans.seo.gsc._post_token", return_value=token_response), \
+                mock.patch("apps.scans.seo.gsc.list_sites", return_value=[]):
             response = self._callback(state, nonce)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], f"/projects/{self.project.id}/seo?gsc=connected")
@@ -460,3 +467,101 @@ class SearchConsoleTests(TestCase):
         with override_settings(**GSC_ENABLED):
             SiteProject.objects.filter(id=self.project.id).update(is_demo=True)
             self.assertEqual(self.client.post(f"{self.base}/connect/").status_code, 400)
+
+
+@override_settings(**GSC_ENABLED)
+class SearchConsoleDomainVerificationTests(TestCase):
+    """2026-10-04：網域所有權驗證交給 Search Console（只有「擁有者」權限算數）。"""
+
+    def setUp(self):
+        cache.clear()
+        self.user = _user("gsc-domain")
+        self.project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _connection(self):
+        return SearchConsoleConnection.objects.create(
+            project=self.project, user=self.user, refresh_token_encrypted=gsc.encrypt_token("r"),
+        )
+
+    def _verify(self, domain, sites):
+        record = VerifiedDomain.objects.create(user=self.user, domain=domain, token="t" * 32)
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            response = self.client.post(
+                f"/api/domains/{record.id}/verify/", {"method": "search_console"}, format="json"
+            )
+        record.refresh_from_db()
+        return response, record
+
+    def test_property_coverage_rules(self):
+        covers = gsc.property_covers_domain
+        self.assertTrue(covers("sc-domain:example.tw", "example.tw"))
+        self.assertTrue(covers("sc-domain:example.tw", "shop.example.tw"))
+        self.assertFalse(covers("sc-domain:example.tw", "badexample.tw"))
+        self.assertTrue(covers("https://shop.example.tw/", "shop.example.tw"))
+        # 網址前置字元資源只證明那個主機，不能拿來驗證整個註冊網域
+        self.assertFalse(covers("https://shop.example.tw/", "example.tw"))
+
+    def test_owner_of_domain_property_verifies(self):
+        self._connection()
+        response, record = self._verify(
+            "example.tw", [{"site_url": "sc-domain:example.tw", "permission": "siteOwner"}]
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["verified"])
+        self.assertEqual(record.method, VerifiedDomain.Method.SEARCH_CONSOLE)
+        self.assertTrue(record.is_effectively_verified)
+
+    def test_full_user_is_not_enough(self):
+        self._connection()
+        _, record = self._verify(
+            "example.tw", [{"site_url": "sc-domain:example.tw", "permission": "siteFullUser"}]
+        )
+        self.assertEqual(record.status, VerifiedDomain.Status.PENDING)
+        self.assertIn("擁有者", record.last_error)
+
+    def test_without_connection_explains_how_to_connect(self):
+        _, record = self._verify("example.tw", [])
+        self.assertEqual(record.status, VerifiedDomain.Status.PENDING)
+        self.assertIn("尚未連接", record.last_error)
+
+    def test_connecting_search_console_auto_verifies_owned_site(self):
+        rejected = VerifiedDomain.objects.create(
+            user=self.user, domain="shop.example.tw", token="x" * 32,
+            status=VerifiedDomain.Status.REJECTED,
+        )
+        response = self.client.post(f"/api/projects/{self.project.id}/gsc/connect/")
+        state = parse_qs(urlsplit(response.data["authorization_url"]).query)["state"][0]
+        browser = APIClient()
+        browser.cookies[gsc.NONCE_COOKIE] = response.cookies[gsc.NONCE_COOKIE].value
+        sites = [
+            {"site_url": "sc-domain:example.tw", "permission": "siteOwner"},
+            {"site_url": "https://shop.example.tw/", "permission": "siteOwner"},
+            {"site_url": "sc-domain:other.tw", "permission": "siteOwner"},
+            {"site_url": "sc-domain:shared.example.tw", "permission": "siteFullUser"},
+        ]
+        with mock.patch("apps.scans.seo.gsc._post_token",
+                        return_value={"refresh_token": "r", "scope": gsc.SCOPE}), \
+                mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            callback = browser.get("/api/gsc/callback/", {"state": state, "code": "c"})
+        self.assertIn("verified=example.tw", callback["Location"])
+        record = VerifiedDomain.objects.get(user=self.user, domain="example.tw")
+        self.assertTrue(record.is_effectively_verified)
+        # 涵蓋其他網站的資源不自動加入；管理員否決的網域不翻動
+        self.assertFalse(VerifiedDomain.objects.filter(domain="other.tw").exists())
+        rejected.refresh_from_db()
+        self.assertEqual(rejected.status, VerifiedDomain.Status.REJECTED)
+
+    def test_google_error_during_auto_verify_does_not_break_connect(self):
+        response = self.client.post(f"/api/projects/{self.project.id}/gsc/connect/")
+        state = parse_qs(urlsplit(response.data["authorization_url"]).query)["state"][0]
+        browser = APIClient()
+        browser.cookies[gsc.NONCE_COOKIE] = response.cookies[gsc.NONCE_COOKIE].value
+        with mock.patch("apps.scans.seo.gsc._post_token",
+                        return_value={"refresh_token": "r", "scope": gsc.SCOPE}), \
+                mock.patch("apps.scans.seo.gsc.list_sites", side_effect=gsc.GscError("boom")):
+            callback = browser.get("/api/gsc/callback/", {"state": state, "code": "c"})
+        self.assertTrue(callback["Location"].endswith("seo?gsc=connected"))

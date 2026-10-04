@@ -19,6 +19,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.scans.domain_verification import sync_search_console_ownership
 from apps.scans.models import Page, ScanJob, SearchConsoleConnection, SiteProject
 from apps.scans.seo import gsc
 from apps.scans.seo.keywords import normalize_keywords
@@ -236,7 +237,7 @@ def gsc_callback(request):
         refresh = gsc.exchange_code(code, gsc.redirect_uri(request))
     except gsc.GscError as exc:
         return _back_to_seo(project.id, gsc="error", reason=str(exc))
-    SearchConsoleConnection.objects.update_or_create(
+    connection, _ = SearchConsoleConnection.objects.update_or_create(
         project=project,
         defaults={
             "user_id": data["u"],
@@ -245,4 +246,12 @@ def gsc_callback(request):
         },
     )
     logger.info("Search Console 已連接 project_id=%s", project.id)
+    # 順便用 Search Console 的擁有者身分完成網域驗證（主動式資安測試的閘門）；失敗不影響連接
+    verified: list[str] = []
+    try:
+        verified = sync_search_console_ownership(connection, project)
+    except Exception:  # noqa: BLE001 — Google API 暫時失敗不該讓連接失敗
+        logger.warning("Search Console 網域自動驗證失敗 project_id=%s", project.id)
+    if verified:
+        return _back_to_seo(project.id, gsc="connected", verified=",".join(verified))
     return _back_to_seo(project.id, gsc="connected")

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   createVerifiedDomain,
@@ -8,6 +8,7 @@ import {
   verifyVerifiedDomain,
 } from "../../api";
 import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
+import { useArgusStore } from "../../store";
 import { copyToClipboard } from "../../shared/clipboard";
 
 // ============================================================
@@ -24,18 +25,42 @@ const STATUS_LABELS = {
   expired: "已過期",
 };
 
-// 三種驗證方法（與後端 VerifiedDomain.Method 對齊）
+// 驗證方法（與後端 VerifiedDomain.Method 對齊）。2026-10-04 起以 Google Search Console 為主：
+// 使用者在 Search Console 是涵蓋此網域之資源的「擁有者」就通過；其他三種保留為備用。
 const METHOD_OPTIONS = [
+  { value: "search_console", label: "Search Console（建議）" },
   { value: "dns_txt", label: "DNS TXT" },
   { value: "meta_tag", label: "meta 標籤" },
   { value: "html_file", label: "驗證檔" },
 ];
 
+const DEFAULT_METHOD = "search_console";
+
 const METHOD_LABELS = {
+  search_console: "Google Search Console",
   dns_txt: "DNS TXT 記錄",
   meta_tag: "HTML meta 標籤",
   html_file: "驗證檔案",
 };
+
+// 這個網域對應的網站專案（Search Console 是在專案的 SEO 分析頁連接）
+function projectForDomain(projects, domain) {
+  return (projects || []).find((project) => {
+    let host = "";
+    try { host = new URL(project.origin).hostname; } catch { return false; }
+    return host === domain || host.endsWith(`.${domain}`);
+  }) || null;
+}
+
+function SearchConsoleHint({ project }) {
+  return project ? (
+    <Link className="domain-gsc-link" to={`/projects/${project.id}/seo?tab=keywords`}>
+      到「{project.name}」的 SEO 分析連接 Search Console →
+    </Link>
+  ) : (
+    <span className="domain-gsc-link is-muted">先新增這個網站的專案，再到專案的 SEO 分析連接 Search Console。</span>
+  );
+}
 
 function displayStatus(domain) {
   if (domain.is_effectively_verified) return "verified";
@@ -73,7 +98,7 @@ function CopyField({ label, value, copiedKey, onCopy }) {
 }
 
 // 後端 instructions 的三方法頁籤渲染
-function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onCopy }) {
+function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onCopy, project }) {
   const instructions = data.instructions || {};
   const token = data.token || "";
 
@@ -84,9 +109,10 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
           <p className="eyebrow">步驟 2 · 設定驗證資料</p>
           <h2 className="section-title">{data.domain}</h2>
           <p className="domain-ins-lead">
-            用以下任一種方法證明你控制這個網域（三選一即可），設定完成後回到下方清單按「驗證」。
+            建議用 Google Search Console 證明你擁有這個網域；沒有 Search Console 也可以改用 DNS、meta 標籤或驗證檔。
           </p>
         </div>
+        {methodTab !== "search_console" && (
         <div className="domain-token-box">
           <span className="domain-token-label">專屬驗證 Token</span>
           <code>{token}</code>
@@ -98,6 +124,7 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
             {copiedKey === token ? "已複製 ✓" : "複製"}
           </button>
         </div>
+        )}
       </div>
 
       <div className="domain-ins-tabs" role="tablist" aria-label="驗證方法">
@@ -114,6 +141,17 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
           </button>
         ))}
       </div>
+
+      {methodTab === "search_console" && (
+        <div className="domain-ins-panel" role="tabpanel">
+          <ol className="domain-gsc-steps">
+            <li>在 Google Search Console 新增並驗證這個網站（建議選「網域」資源，會涵蓋所有子網域）。你的 Google 帳號必須是該資源的<strong>擁有者</strong>，只有使用者權限不算。</li>
+            <li>在 Argus 這個網站專案的「SEO 分析 → 搜尋關鍵字」連接 Search Console，連接時會自動完成驗證。</li>
+            <li>已經連接過的話，直接在下方清單選「Search Console」按「驗證」。</li>
+          </ol>
+          <SearchConsoleHint project={project} />
+        </div>
+      )}
 
       {methodTab === "dns_txt" && instructions.dns_txt && (
         <div className="domain-ins-panel" role="tabpanel">
@@ -168,7 +206,9 @@ export function DomainVerifyPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [justAdded, setJustAdded] = useState(null); // { ...網域欄位, token, instructions }
-  const [methodTab, setMethodTab] = useState("dns_txt");
+  const [methodTab, setMethodTab] = useState(DEFAULT_METHOD);
+  const projects = useArgusStore((s) => s.projects);
+  const fetchProjects = useArgusStore((s) => s.fetchProjects);
   const [copiedKey, setCopiedKey] = useState("");
   const copiedTimer = useRef(null);
   const [verifyMethod, setVerifyMethod] = useState({}); // domainId -> 方法
@@ -190,6 +230,10 @@ export function DomainVerifyPage() {
   useEffect(() => {
     loadDomains();
   }, []);
+
+  useEffect(() => {
+    if (projects === null) fetchProjects();
+  }, [projects, fetchProjects]);
 
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
@@ -216,7 +260,7 @@ export function DomainVerifyPage() {
     try {
       const data = await createVerifiedDomain(value);
       setJustAdded(data);
-      setMethodTab("dns_txt");
+      setMethodTab(DEFAULT_METHOD);
       setNewDomain("");
       await loadDomains();
     } catch (err) {
@@ -229,7 +273,7 @@ export function DomainVerifyPage() {
 
   // 以目前選的方法執行驗證：成功綠色閃示、失敗顯示後端 last_error
   async function handleVerify(domain) {
-    const method = verifyMethod[domain.id] || "dns_txt";
+    const method = verifyMethod[domain.id] || DEFAULT_METHOD;
     setVerifyBusyId(domain.id);
     setVerifyFlash((flash) => ({ ...flash, [domain.id]: null }));
     try {
@@ -300,6 +344,7 @@ export function DomainVerifyPage() {
         <p className="domain-lead">
           主動式資安測試僅限已通過所有權驗證的網站。
           證明你擁有網域後，該網域與其子網域即可啟用主動測試模式。
+          最簡單的方式是用 Google Search Console：你是該網站的擁有者，連接後就會自動通過。
         </p>
         <ol className="domain-steps" aria-label="驗證流程">
           <li className="domain-step"><span aria-hidden="true">1</span>新增網域</li>
@@ -341,6 +386,7 @@ export function DomainVerifyPage() {
           onTabChange={setMethodTab}
           copiedKey={copiedKey}
           onCopy={handleCopy}
+          project={projectForDomain(projects, justAdded.domain)}
         />
       )}
 
@@ -431,7 +477,7 @@ export function DomainVerifyPage() {
                   <div className="domain-verify-controls">
                     <div className="domain-verify-methods" role="group" aria-label={`${domain.domain} 的驗證方法`}>
                       {METHOD_OPTIONS.map((option) => {
-                        const selected = (verifyMethod[domain.id] || "dns_txt") === option.value;
+                        const selected = (verifyMethod[domain.id] || DEFAULT_METHOD) === option.value;
                         return (
                           <button
                             key={option.value}
@@ -455,6 +501,9 @@ export function DomainVerifyPage() {
                     >
                       {busy ? "驗證中…" : "驗證"}
                     </button>
+                    {(verifyMethod[domain.id] || DEFAULT_METHOD) === "search_console" && (
+                      <SearchConsoleHint project={projectForDomain(projects, domain.domain)} />
+                    )}
                   </div>
                 )}
 

@@ -207,6 +207,30 @@
   font-size: 0.78rem;
   color: #b45309;
 }
+.domain-gsc-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #334155;
+}
+.domain-gsc-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0e7490;
+}
+.domain-gsc-link.is-muted {
+  font-weight: 400;
+  color: #64748b;
+}
+.domain-verify-controls .domain-gsc-link {
+  flex-basis: 100%;
+  margin-top: 0;
+}
 .domain-ins-code-wrap {
   margin-top: 0.75rem;
   display: flex;

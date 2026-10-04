@@ -134,6 +134,7 @@ function ProjectSeoPage() {
     const params = new URLSearchParams(searchParams);
     params.delete("gsc");
     params.delete("reason");
+    params.delete("verified");
     setSearchParams(params, { replace: true });
   }
 
@@ -167,7 +168,12 @@ function ProjectSeoPage() {
 
       {gscFlash && (
         <div className={`seo-flash ${gscFlash === "connected" ? "is-good" : "is-bad"}`} role="status">
-          <span>{gscFlash === "connected" ? "已連接 Google Search Console，請選擇要對應的資源。" : searchParams.get("reason") || "Search Console 連接失敗。"}</span>
+          <span>
+            {gscFlash === "connected" ? "已連接 Google Search Console，請選擇要對應的資源。" : searchParams.get("reason") || "Search Console 連接失敗。"}
+            {gscFlash === "connected" && searchParams.get("verified") && (
+              <> 你是 Search Console 的擁有者，已自動完成網域驗證（{searchParams.get("verified")}），可以使用主動式資安測試。</>
+            )}
+          </span>
           <button type="button" className="project-text-link" onClick={dismissFlash}>知道了</button>
         </div>
       )}
