@@ -4,6 +4,7 @@ from apps.billing.views import (
     PurchaseView,
     cancel_my_subscription,
     ecpay_callback,
+    ecpay_period_callback,
     list_plans,
     my_orders,
     my_subscription,
@@ -17,6 +18,9 @@ urlpatterns = [
     path("plans/", list_plans, name="billing-plans"),
     path("purchase/", PurchaseView.as_view(), name="billing-purchase"),
     path("ecpay/callback/", ecpay_callback, name="billing-ecpay-callback"),
+    path(
+        "ecpay/period-callback/", ecpay_period_callback, name="billing-ecpay-period-callback"
+    ),
     path("orders/", my_orders, name="billing-orders"),
     path("subscription/plans/", subscription_plans, name="billing-subscription-plans"),
     path("subscription/", my_subscription, name="billing-subscription"),

@@ -463,8 +463,8 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 - `CoinWallet`: balance / total_purchased_ntd / total_scans_used / last_bonus_year+month
 - `CoinTransaction`: 欄位 `kind`（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust / rebuild_hold / rebuild_refund / fixgen_grant / fixgen_charge / fixgen_refund / subscription_grant）、`amount`、`balance_after`、`scan_job`/`plan`/`admin_actor` FK（皆 nullable）、`note`（審計不可改）
 - `PurchaseOrder.status`: pending → paid / cancelled；含 price_ntd/coin_amount 快照、`invoice_type`(personal/company)、`carrier_type`(cloud/mobile_barcode/citizen_digital)、`carrier_id`
-- `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
-- `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file/google_search_console）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**；GSC 方法由 `google_site_verification.py` 的 OAuth 流程寫入，token 驗證引擎（`run_verification`）不認識它
+- `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test/ecpay）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
+- `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file/google_search_console/search_console）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**；可經單一網域 OAuth 或帳號層級 Search Console 同步寫入
 - `LoginEvent`: method（password/google/register）、ip_address、user_agent、created_at；寫入包 try/except 不影響登入
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled
 - `ScanJob.progress`（JSON）: `{pages_done, pages_total, phase, phase_started_at}`

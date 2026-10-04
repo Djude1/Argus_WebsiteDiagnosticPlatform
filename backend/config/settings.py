@@ -481,20 +481,40 @@ ARGUS_COIN_FIXGEN_GENERATION = int(os.getenv("ARGUS_COIN_FIXGEN_GENERATION", "30
 # 只在 ARGUS_AGENT_ENABLED 開啟時計收；hold 與 settle 對稱由 estimate_scan_cost 計算。
 ARGUS_COIN_AGENT_UX = int(os.getenv("ARGUS_COIN_AGENT_UX", "20"))
 
-# 專題只串綠界測試環境；預設關閉，避免缺少簽章驗證時直接入點。
+# 綠界金流（購點＋訂閱定期定額）。預設關閉，避免缺少簽章驗證時直接入點。
+# - disabled：購點／訂閱 API 回 503，不建立訂單
+# - ecpay_test：綠界測試環境 payment-stage（測試商店代號，不會真的扣款）
+# - ecpay：綠界正式環境 payment（正式商店代號，會實際扣款）
 ARGUS_PAYMENT_MODE = os.getenv("ARGUS_PAYMENT_MODE", "disabled").strip().lower()
-if ARGUS_PAYMENT_MODE not in {"disabled", "ecpay_test"}:
-    raise RuntimeError("ARGUS_PAYMENT_MODE 只允許 disabled 或 ecpay_test。")
+if ARGUS_PAYMENT_MODE not in {"disabled", "ecpay_test", "ecpay"}:
+    raise RuntimeError("ARGUS_PAYMENT_MODE 只允許 disabled、ecpay_test 或 ecpay。")
+ARGUS_PAYMENT_ENABLED = ARGUS_PAYMENT_MODE in {"ecpay_test", "ecpay"}
+ECPAY_BASE_URL = (
+    "https://payment.ecpay.com.tw"
+    if ARGUS_PAYMENT_MODE == "ecpay"
+    else "https://payment-stage.ecpay.com.tw"
+)
 ECPAY_MERCHANT_ID = os.getenv("ECPAY_MERCHANT_ID", "").strip()
 ECPAY_HASH_KEY = os.getenv("ECPAY_HASH_KEY", "").strip()
 ECPAY_HASH_IV = os.getenv("ECPAY_HASH_IV", "").strip()
-ECPAY_CHECKOUT_URL = os.getenv(
-    "ECPAY_CHECKOUT_URL",
-    "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
-).strip()
+# 結帳與定期定額操作網址由模式決定；ECPAY_CHECKOUT_URL 若有設定必須與模式一致
+# （防止正式模式誤送測試站）
+ECPAY_CHECKOUT_URL = f"{ECPAY_BASE_URL}/Cashier/AioCheckOut/V5"
+ECPAY_PERIOD_ACTION_URL = f"{ECPAY_BASE_URL}/Cashier/CreditCardPeriodAction"
+_ecpay_checkout_env = os.getenv("ECPAY_CHECKOUT_URL", "").strip()
 ECPAY_RETURN_URL = os.getenv("ECPAY_RETURN_URL", "").strip()
 ECPAY_CLIENT_BACK_URL = os.getenv("ECPAY_CLIENT_BACK_URL", "").strip()
-if ARGUS_PAYMENT_MODE == "ecpay_test":
+# 訂閱第 2 期起每次扣款結果的通知網址；未設定時用 ReturnURL 同網域的固定路徑
+ECPAY_PERIOD_RETURN_URL = os.getenv("ECPAY_PERIOD_RETURN_URL", "").strip()
+if not ECPAY_PERIOD_RETURN_URL and ECPAY_RETURN_URL:
+    _ecpay_return = urlparse(ECPAY_RETURN_URL)
+    ECPAY_PERIOD_RETURN_URL = (
+        f"{_ecpay_return.scheme}://{_ecpay_return.netloc}"
+        "/api/billing/ecpay/period-callback/"
+    )
+# 綠界公開的測試商店代號：正式模式用到代表 Secret 沒換成正式值
+ECPAY_PUBLIC_TEST_MERCHANT_IDS = {"2000132", "2000214", "3002599", "3002607"}
+if ARGUS_PAYMENT_ENABLED:
     required_ecpay_settings = {
         "ECPAY_MERCHANT_ID": ECPAY_MERCHANT_ID,
         "ECPAY_HASH_KEY": ECPAY_HASH_KEY,
@@ -507,13 +527,22 @@ if ARGUS_PAYMENT_MODE == "ecpay_test":
     ]
     if missing_ecpay_settings:
         raise RuntimeError(
-            "ecpay_test 缺少設定：" + ", ".join(missing_ecpay_settings)
+            f"{ARGUS_PAYMENT_MODE} 缺少設定：" + ", ".join(missing_ecpay_settings)
         )
-    if ECPAY_CHECKOUT_URL != "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5":
-        raise RuntimeError("ecpay_test 只能使用綠界 payment-stage 結帳網址。")
+    if _ecpay_checkout_env and _ecpay_checkout_env != ECPAY_CHECKOUT_URL:
+        raise RuntimeError(
+            f"{ARGUS_PAYMENT_MODE} 的 ECPAY_CHECKOUT_URL 必須是 {ECPAY_CHECKOUT_URL}"
+            "（可直接刪除這個設定，系統會依模式自動決定）。"
+        )
+    if ARGUS_PAYMENT_MODE == "ecpay" and ECPAY_MERCHANT_ID in ECPAY_PUBLIC_TEST_MERCHANT_IDS:
+        raise RuntimeError(
+            "ecpay（正式）模式不能使用綠界公開測試商店代號；"
+            "請換成正式商店的 MerchantID／HashKey／HashIV。"
+        )
     for ecpay_url_name, ecpay_url in {
         "ECPAY_RETURN_URL": ECPAY_RETURN_URL,
         "ECPAY_CLIENT_BACK_URL": ECPAY_CLIENT_BACK_URL,
+        "ECPAY_PERIOD_RETURN_URL": ECPAY_PERIOD_RETURN_URL,
     }.items():
         parsed_ecpay_url = urlparse(ecpay_url)
         ecpay_url_host = parsed_ecpay_url.hostname or ""
@@ -539,9 +568,10 @@ if ARGUS_PAYMENT_MODE == "ecpay_test":
             or parsed_ecpay_url.password is not None
             or parsed_ecpay_url.fragment
             or ecpay_url_host.lower().endswith(reserved_suffixes)
+            or len(ecpay_url) > 200
         ):
             raise RuntimeError(
-                f"{ecpay_url_name} 必須使用公開合法網域的 HTTPS 443 URL。"
+                f"{ecpay_url_name} 必須使用公開合法網域的 HTTPS 443 URL（200 字元內）。"
             )
 
 # Email 寄送（購買收據、未來通知）

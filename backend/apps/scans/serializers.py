@@ -583,10 +583,10 @@ class VerifiedDomainCreateSerializer(serializers.Serializer):
 
 
 class DomainVerifySerializer(serializers.Serializer):
-    """token 方法驗證；google_search_console 走獨立 OAuth 流程，不在此觸發。"""
+    """驗證請求；google_search_console 走獨立 OAuth，search_console 使用已連接帳號。"""
 
     method = serializers.ChoiceField(
-        choices=["dns_txt", "meta_tag", "html_file"]
+        choices=["dns_txt", "meta_tag", "html_file", "search_console"]
     )
 
 

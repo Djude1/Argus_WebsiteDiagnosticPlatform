@@ -859,6 +859,18 @@ class VerifiedDomainViewSet(viewsets.ModelViewSet):
             return _back("fail", verified_domain.domain, reason=str(exc))
         return _back("ok", verified_domain.domain)
 
+    def retrieve(self, request, *args, **kwargs):
+        verified_domain = self.get_object()
+        return Response(
+            {
+                **VerifiedDomainSerializer(verified_domain).data,
+                "token": verified_domain.token,
+                "instructions": build_verification_instructions(
+                    verified_domain.domain, verified_domain.token
+                ),
+            }
+        )
+
     def destroy(self, request, *args, **kwargs):
         verified_domain = self.get_object()
         verified_domain.delete()

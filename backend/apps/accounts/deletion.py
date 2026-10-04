@@ -84,13 +84,14 @@ def _revoke_search_console(user) -> None:
     from apps.scans.models import SearchConsoleConnection
     from apps.scans.seo import gsc
 
-    for connection in SearchConsoleConnection.objects.filter(project__user=user):
+    for connection in SearchConsoleConnection.objects.filter(user=user):
         gsc.revoke(connection)  # 失敗不影響刪除（使用者也可到 Google 帳號頁移除）
 
 
 def delete_account(user) -> None:
     from apps.accounts.models import LoginEvent, PasswordResetToken
-    from apps.billing.models import PurchaseOrder
+    from apps.billing.models import PurchaseOrder, SubscriptionOrder
+    from apps.billing.services import cancel_subscription_and_recurring
     from apps.mcp_access.models import McpApiKey, McpCallLog
     from apps.reviews.models import (
         PlatformReview,
@@ -108,6 +109,7 @@ def delete_account(user) -> None:
     ).exclude(pk=user.pk).exists():
         raise PermissionError("這是最後一位超級管理員，不能刪除；請先指定另一位超級管理員。")
 
+    cancel_subscription_and_recurring(user)
     _revoke_search_console(user)
     files = _collect_files(user)
     user_id = user.pk
@@ -129,6 +131,13 @@ def delete_account(user) -> None:
         PasswordResetToken.objects.filter(user=user).delete()
 
         PurchaseOrder.objects.filter(user=user).update(
+            buyer_name="已刪除用戶",
+            buyer_email=f"deleted-{user_id}@deleted.invalid",
+            company_name="",
+            tax_id="",
+            carrier_id="",
+        )
+        SubscriptionOrder.objects.filter(user=user).update(
             buyer_name="已刪除用戶",
             buyer_email=f"deleted-{user_id}@deleted.invalid",
             company_name="",

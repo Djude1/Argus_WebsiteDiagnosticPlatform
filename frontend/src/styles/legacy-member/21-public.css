@@ -17,7 +17,6 @@
     gap: 0.6rem;
     background: rgba(15, 23, 42, 0.95);
     border: 1px solid rgba(103, 232, 249, 0.4);
-    border-left: 3px solid rgba(34, 211, 238, 0.85);
     border-radius: 10px;
     padding: 0.7rem 0.85rem;
     box-shadow: 0 14px 32px -10px rgba(2, 8, 23, 0.7), 0 0 16px -8px rgba(34, 211, 238, 0.35);

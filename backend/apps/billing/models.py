@@ -185,6 +185,7 @@ class UserSubscription(models.Model):
     class Source(models.TextChoices):
         ADMIN_GRANT = "admin_grant", "管理員授予"
         ECPAY_TEST = "ecpay_test", "綠界測試付款"
+        ECPAY = "ecpay", "綠界定期定額"
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -220,6 +221,106 @@ class UserSubscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username} {self.plan.code} {self.status} 剩 {self.periods_remaining} 期"
+
+
+class SubscriptionOrder(models.Model):
+    """訂閱的綠界信用卡定期定額委託（一筆＝一次「訂閱並綁卡」，每月由綠界自動扣款）。
+
+    - pending：已建立、等待使用者在綠界完成首期授權
+    - active：首期授權成功，之後每月扣款（每次成功就 grant_subscription 一期）
+    - cancelled：已向綠界取消後續扣款（已付的期數照常發點）
+    - failed：首期授權失敗；ended：綠界扣款次數用完
+    發票資料比照購點訂單，由管理員依每筆 SubscriptionCharge 人工開立。
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "等待付款"
+        ACTIVE = "active", "自動續訂中"
+        CANCELLED = "cancelled", "已取消續訂"
+        FAILED = "failed", "首期付款失敗"
+        ENDED = "ended", "扣款次數已用完"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="subscription_orders",
+    )
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name="orders")
+    # 下單時的月費與每月點數快照（方案後續調整不影響已綁定的扣款金額）
+    price_ntd = models.PositiveIntegerField()
+    monthly_coins = models.PositiveIntegerField()
+    exec_times = models.PositiveSmallIntegerField()
+    buyer_name = models.CharField(max_length=64)
+    buyer_email = models.EmailField(max_length=255)
+    invoice_type = models.CharField(
+        max_length=16,
+        choices=PurchaseOrder.InvoiceType.choices,
+        default=PurchaseOrder.InvoiceType.PERSONAL,
+    )
+    company_name = models.CharField(max_length=128, blank=True)
+    tax_id = models.CharField(max_length=16, blank=True)
+    carrier_type = models.CharField(
+        max_length=24,
+        choices=PurchaseOrder.CarrierType.choices,
+        default=PurchaseOrder.CarrierType.CLOUD,
+        blank=True,
+    )
+    carrier_id = models.CharField(max_length=32, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    # 綠界回報的累計成功扣款次數（冪等：通知的 TotalSuccessTimes 不大於這個值就不再發點）
+    success_times = models.PositiveSmallIntegerField(default=0)
+    payment_mode = models.CharField(max_length=16)
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "status"])]
+
+    @property
+    def merchant_no(self) -> str:
+        """送給綠界的 MerchantTradeNo（ARGUSS＋14 位數字）。"""
+        from apps.billing.ecpay import subscription_trade_no
+
+        return subscription_trade_no(self.pk)
+
+    def __str__(self) -> str:
+        return f"SubscriptionOrder #{self.pk} {self.user_id} {self.plan_id} {self.status}"
+
+
+class SubscriptionCharge(models.Model):
+    """定期定額的每一次扣款結果（成功與失敗都記；管理員依成功的紀錄開立發票）。"""
+
+    order = models.ForeignKey(
+        SubscriptionOrder, on_delete=models.PROTECT, related_name="charges"
+    )
+    # 第幾次成功扣款（綠界 TotalSuccessTimes；首期為 1）；失敗紀錄填當時已成功的次數
+    sequence = models.PositiveSmallIntegerField()
+    succeeded = models.BooleanField()
+    amount = models.PositiveIntegerField()
+    rtn_code = models.CharField(max_length=10)
+    rtn_msg = models.CharField(max_length=200, blank=True)
+    # 首期為綠界 TradeNo，第 2 期起為授權交易單號 gwsr
+    provider_ref = models.CharField(max_length=40, blank=True)
+    processed_at = models.CharField(max_length=32, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order", "sequence"],
+                condition=models.Q(succeeded=True),
+                name="uniq_successful_subscription_charge",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Charge #{self.pk} order={self.order_id} seq={self.sequence} ok={self.succeeded}"
 
 
 class CoinTransaction(models.Model):
