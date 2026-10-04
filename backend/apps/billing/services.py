@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import calendar
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import ROUND_CEILING, Decimal
 
 from django.conf import settings
@@ -20,8 +20,6 @@ from apps.billing.models import (
     CoinWallet,
     PricingPlan,
     PurchaseOrder,
-    SubscriptionCharge,
-    SubscriptionOrder,
     SubscriptionPlan,
     UserSubscription,
 )
@@ -455,8 +453,7 @@ def complete_purchase_order(
     order.transaction = coin_transaction
     order.status = PurchaseOrder.Status.PAID
     order.paid_at = timezone.now()
-    label = "綠界交易" if settings.ARGUS_PAYMENT_MODE == "ecpay" else "綠界測試交易"
-    order.note = f"{label}：{provider_trade_no}"[:255]
+    order.note = f"綠界測試交易：{provider_trade_no}"[:255]
     order.save(update_fields=["transaction", "status", "paid_at", "note"])
     return order, True
 
@@ -753,9 +750,6 @@ def grant_subscription(
     return sub
 
 
-SUBSCRIPTION_RENEWAL_GRACE = timedelta(days=3)
-
-
 @transaction.atomic
 def settle_subscription(user) -> list[CoinTransaction]:
     """訂閱 lazy 結算：到期未發的期數逐月補發點數。
@@ -814,16 +808,10 @@ def settle_subscription(user) -> list[CoinTransaction]:
             "periods_remaining", "last_grant_period",
             "current_period_end", "updated_at",
         ])
-    # 綠界定期定額的下一期扣款可能比贈點邊界晚一點到：自動續訂中給寬限期再判定到期
-    expire_at = sub.current_period_end
-    if SubscriptionOrder.objects.filter(
-        user=user, status=SubscriptionOrder.Status.ACTIVE
-    ).exists():
-        expire_at += SUBSCRIPTION_RENEWAL_GRACE
     if (
         sub.status == UserSubscription.Status.ACTIVE
         and sub.periods_remaining == 0
-        and now >= expire_at
+        and now >= sub.current_period_end
     ):
         sub.status = UserSubscription.Status.EXPIRED
         sub.save(update_fields=["status", "updated_at"])
@@ -853,127 +841,3 @@ def settle_subscription_safe(user) -> None:
         settle_subscription(user)
     except Exception:  # noqa: BLE001 — 結算失敗不該擋登入或錢包查詢
         logger.exception("訂閱 lazy 結算失敗（user_pk=%s）", getattr(user, "pk", None))
-
-
-# ---------- 綠界信用卡定期定額（訂閱實際扣款） ----------
-
-
-def _subscription_source() -> str:
-    if settings.ARGUS_PAYMENT_MODE == "ecpay":
-        return UserSubscription.Source.ECPAY
-    return UserSubscription.Source.ECPAY_TEST
-
-
-def has_active_recurring(user) -> bool:
-    return SubscriptionOrder.objects.filter(
-        user=user, status=SubscriptionOrder.Status.ACTIVE
-    ).exists()
-
-
-@transaction.atomic
-def activate_subscription_order(
-    order_id: int, *, provider_trade_no: str, amount: int, rtn_msg: str = ""
-) -> tuple[SubscriptionOrder, bool]:
-    """首期授權成功（ReturnURL 已驗簽章、商店、金額）：開通訂閱並發首月點數。
-
-    冪等：同一筆委託的首期只處理一次（第二次通知回 False）。
-    """
-    order = (
-        SubscriptionOrder.objects.select_for_update()
-        .select_related("plan", "user")
-        .get(pk=order_id)
-    )
-    if order.success_times >= 1:
-        return order, False
-    if order.status not in {SubscriptionOrder.Status.PENDING, SubscriptionOrder.Status.FAILED}:
-        raise ValueError("只有等待付款的訂閱可以開通")
-    SubscriptionCharge.objects.create(
-        order=order, sequence=1, succeeded=True, amount=amount, rtn_code="1",
-        rtn_msg=rtn_msg[:200], provider_ref=provider_trade_no[:40],
-    )
-    order.status = SubscriptionOrder.Status.ACTIVE
-    order.success_times = 1
-    order.activated_at = timezone.now()
-    order.note = f"首期授權成功：{provider_trade_no}"[:255]
-    order.save(update_fields=["status", "success_times", "activated_at", "note"])
-    grant_subscription(order.user, order.plan, 1, source=_subscription_source())
-    settle_subscription(order.user)
-    return order, True
-
-
-@transaction.atomic
-def record_subscription_failure(order_id: int, *, rtn_code: str, rtn_msg: str, amount: int) -> None:
-    """首期或某一期扣款失敗：只留紀錄、不發點。首期失敗的委託標成 failed。"""
-    order = SubscriptionOrder.objects.select_for_update().get(pk=order_id)
-    SubscriptionCharge.objects.create(
-        order=order, sequence=order.success_times, succeeded=False, amount=amount,
-        rtn_code=str(rtn_code)[:10], rtn_msg=rtn_msg[:200],
-    )
-    if order.status == SubscriptionOrder.Status.PENDING:
-        order.status = SubscriptionOrder.Status.FAILED
-    order.note = f"扣款失敗：{rtn_code} {rtn_msg}"[:255]
-    order.save(update_fields=["status", "note"])
-
-
-@transaction.atomic
-def record_subscription_period_charge(
-    order_id: int,
-    *,
-    total_success_times: int,
-    amount: int,
-    gwsr: str,
-    process_date: str,
-    rtn_msg: str = "",
-) -> int:
-    """第 2 期起每次成功扣款（PeriodReturnURL 已驗簽章、商店、金額）：每成功一次加一期。
-
-    冪等：以綠界累計成功次數 TotalSuccessTimes 判斷，同一期重送不重複發點。回傳本次新增期數。
-    已取消續訂後若綠界仍扣款成功（取消前已排程），使用者有付錢，照樣發點。
-    """
-    order = (
-        SubscriptionOrder.objects.select_for_update()
-        .select_related("plan", "user")
-        .get(pk=order_id)
-    )
-    new_periods = total_success_times - order.success_times
-    if new_periods <= 0:
-        return 0
-    SubscriptionCharge.objects.create(
-        order=order, sequence=total_success_times, succeeded=True, amount=amount,
-        rtn_code="1", rtn_msg=rtn_msg[:200], provider_ref=str(gwsr)[:40],
-        processed_at=str(process_date)[:32],
-    )
-    order.success_times = total_success_times
-    update_fields = ["success_times"]
-    if order.status == SubscriptionOrder.Status.ACTIVE and total_success_times >= order.exec_times:
-        order.status = SubscriptionOrder.Status.ENDED
-        update_fields.append("status")
-    order.save(update_fields=update_fields)
-    grant_subscription(order.user, order.plan, new_periods, source=_subscription_source())
-    settle_subscription(order.user)
-    return new_periods
-
-
-def stop_recurring_charges(user) -> int:
-    """向綠界取消此使用者所有自動續訂中的委託；任一筆失敗丟 EcpayActionError（其餘維持原狀）。
-
-    網路呼叫不能包在資料庫交易裡；綠界確認取消後才把委託標成 cancelled。回傳取消筆數。
-    """
-    from apps.billing.ecpay import cancel_period_order
-
-    cancelled = 0
-    for order in SubscriptionOrder.objects.filter(
-        user=user, status=SubscriptionOrder.Status.ACTIVE
-    ):
-        cancel_period_order(order)
-        SubscriptionOrder.objects.filter(
-            pk=order.pk, status=SubscriptionOrder.Status.ACTIVE
-        ).update(status=SubscriptionOrder.Status.CANCELLED, cancelled_at=timezone.now())
-        cancelled += 1
-    return cancelled
-
-
-def cancel_subscription_and_recurring(user) -> UserSubscription | None:
-    """取消訂閱：先停止綠界自動扣款（失敗丟 EcpayActionError、訂閱維持不變），再取消本地訂閱。"""
-    stop_recurring_charges(user)
-    return cancel_subscription(user)

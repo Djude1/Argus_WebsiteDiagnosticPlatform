@@ -97,12 +97,10 @@ export async function fetchMySubscription() {
   return response.data;
 }
 
-// 訂閱方案：送出方案與買受人／發票資料，回傳 { order, payment }（綠界定期定額結帳表單）；
-// 首期付款成功的通知到達後才開通。付費關閉 503、已有自動扣款中的訂閱 409
-export async function subscribePlan(planCode: string, buyer: Record<string, unknown>) {
+// 訂閱方案（plan_code）；成功回傳 { subscription, payment_mode }，付費關閉時 503
+export async function subscribePlan(planCode: string) {
   const response = await api.post("/billing/subscription/subscribe/", {
     plan_code: planCode,
-    ...buyer,
   });
   return response.data;
 }
@@ -142,47 +140,16 @@ export async function createVerifiedDomain(domain: string) {
   return response.data;
 }
 
-// 以指定方法（search_console / dns_txt / meta_tag / html_file）驗證既有網域；回傳 { ...網域欄位, verified }
+// 以指定方法（dns_txt / meta_tag / html_file）驗證既有網域；回傳 { ...網域欄位, verified }
 export async function verifyVerifiedDomain(
   domainId: number,
-  method: "search_console" | "dns_txt" | "meta_tag" | "html_file",
+  method: "dns_txt" | "meta_tag" | "html_file",
 ) {
   const response = await api.post(`/domains/${domainId}/verify/`, { method });
   return response.data;
 }
 
 // 刪除網域（204 無內容）
-// 單一網域（自己的）：另附 token 與三種備用方法的設定說明
-export async function fetchVerifiedDomain(domainId: number) {
-  const response = await api.get(`/domains/${domainId}/`);
-  return response.data;
-}
-
-// 帳號層級 Search Console（/domains 一鍵連接，只用來驗證網域所有權）
-// 回傳 { enabled, connected, account_connection, needs_reconnect, error, connected_at }
-export async function fetchDomainSearchConsole() {
-  const response = await api.get("/domains/gsc/");
-  return response.data;
-}
-
-// 取得 Google 授權網址；完成後 Google 導回 /domains?gsc=connected&verified=<數量>
-export async function connectDomainSearchConsole(): Promise<{ authorization_url: string }> {
-  const response = await api.post("/domains/gsc/connect/");
-  return response.data;
-}
-
-// 重新讀取 Search Console：擁有的網站全部匯入為已驗證網域；回傳 { verified: string[], ...狀態 }
-export async function syncDomainSearchConsole() {
-  const response = await api.post("/domains/gsc/sync/");
-  return response.data;
-}
-
-// 中斷帳號層級連線並撤銷 Google 授權（已驗證的網域照常有效到期滿）
-export async function disconnectDomainSearchConsole() {
-  const response = await api.delete("/domains/gsc/");
-  return response.data;
-}
-
 export async function deleteVerifiedDomain(domainId: number) {
   await api.delete(`/domains/${domainId}/`);
 }

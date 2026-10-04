@@ -11,20 +11,14 @@ from rest_framework.decorators import (
 from rest_framework.response import Response
 
 from apps.billing.ecpay import (
-    SUBSCRIPTION_EXEC_TIMES as ECPAY_SUBSCRIPTION_EXEC_TIMES,
-)
-from apps.billing.ecpay import (
-    EcpayActionError,
     build_checkout_fields,
-    build_subscription_checkout_fields,
-    parse_trade_no,
+    merchant_trade_no,
     verify_check_mac_value,
 )
 from apps.billing.emails import send_purchase_receipt
 from apps.billing.models import (
     PricingPlan,
     PurchaseOrder,
-    SubscriptionOrder,
     SubscriptionPlan,
     UserSubscription,
 )
@@ -34,39 +28,17 @@ from apps.billing.serializers import (
     PurchaseOrderSerializer,
     PurchaseRequestSerializer,
     SubscribeRequestSerializer,
-    SubscriptionOrderSerializer,
     SubscriptionPlanSerializer,
     UserSubscriptionSerializer,
 )
 from apps.billing.services import (
-    activate_subscription_order,
-    cancel_subscription_and_recurring,
+    cancel_subscription,
     complete_purchase_order,
     get_or_create_wallet,
-    has_active_recurring,
-    record_subscription_failure,
-    record_subscription_period_charge,
+    grant_subscription,
+    settle_subscription,
     settle_subscription_safe,
 )
-
-_PAUSED_DETAIL = "線上付款目前未啟用；不會建立訂單或直接入點。"
-
-
-def _ecpay_reply(ok: bool = True, status_code: int = 200) -> HttpResponse:
-    """綠界通知的回覆必須是純文字 1|OK（失敗回 0|ERROR 讓綠界重送）。"""
-    if ok:
-        return HttpResponse("1|OK", content_type="text/plain")
-    return HttpResponse("0|ERROR", status=status_code, content_type="text/plain")
-
-
-def _verified_payload(request) -> dict[str, str] | None:
-    """付款已啟用、CheckMacValue 與 MerchantID 都正確才回傳通知內容。"""
-    payload = {str(key): str(value) for key, value in request.data.items()}
-    if not settings.ARGUS_PAYMENT_ENABLED or not verify_check_mac_value(payload):
-        return None
-    if payload.get("MerchantID") != settings.ECPAY_MERCHANT_ID:
-        return None
-    return payload
 
 
 @api_view(["GET"])
@@ -87,19 +59,22 @@ def list_plans(request):
     return Response({
         "plans": PricingPlanSerializer(plans, many=True).data,
         "payment_mode": settings.ARGUS_PAYMENT_MODE,
-        "purchase_enabled": settings.ARGUS_PAYMENT_ENABLED,
+        "purchase_enabled": settings.ARGUS_PAYMENT_MODE == "ecpay_test",
     })
 
 
 class PurchaseView(views.APIView):
-    """建立 pending 訂單並回傳綠界結帳的簽章表單（測試或正式環境依 ARGUS_PAYMENT_MODE）。"""
+    """建立 pending 訂單並回傳綠界測試環境的簽章表單。"""
 
     permission_classes = [permissions.IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
-        if not settings.ARGUS_PAYMENT_ENABLED:
-            return Response({"detail": _PAUSED_DETAIL}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if settings.ARGUS_PAYMENT_MODE != "ecpay_test":
+            return Response(
+                {"detail": "綠界測試付款目前未啟用；不會建立訂單或直接入點。"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         serializer = PurchaseRequestSerializer(data=request.data, context={})
         serializer.is_valid(raise_exception=True)
         plan: PricingPlan = serializer.context["plan"]
@@ -118,7 +93,7 @@ class PurchaseView(views.APIView):
             carrier_type=data.get("carrier_type", PurchaseOrder.CarrierType.CLOUD),
             carrier_id=data.get("carrier_id", ""),
             status=PurchaseOrder.Status.PENDING,
-            note="等待綠界付款通知",
+            note="等待綠界測試環境付款通知",
         )
         return Response(
             {
@@ -137,110 +112,42 @@ class PurchaseView(views.APIView):
 @authentication_classes([])
 @permission_classes([permissions.AllowAny])
 def ecpay_callback(request):
-    """綠界 ReturnURL：購點付款與訂閱首期授權的結果通知，驗證後冪等處理；回應必須是 1|OK。"""
-    payload = _verified_payload(request)
-    if payload is None:
-        return _ecpay_reply(False, 400)
-    parsed = parse_trade_no(payload.get("MerchantTradeNo", ""))
+    """驗證綠界付款通知並冪等入點；回應必須是純文字 1|OK。"""
+    payload = {str(key): str(value) for key, value in request.data.items()}
+    if settings.ARGUS_PAYMENT_MODE != "ecpay_test" or not verify_check_mac_value(payload):
+        return HttpResponse("0|ERROR", status=400, content_type="text/plain")
+    if payload.get("MerchantID") != settings.ECPAY_MERCHANT_ID:
+        return HttpResponse("0|ERROR", status=400, content_type="text/plain")
     try:
-        trade_amount = int(payload.get("TradeAmt", ""))
-    except ValueError:
-        return _ecpay_reply(False, 400)
-    if parsed is None:
-        return _ecpay_reply(False, 400)
-    kind, order_id = parsed
-    if kind == "subscription":
-        return _subscription_first_charge(payload, order_id, trade_amount)
-    try:
+        order_id = int(payload.get("CustomField1", ""))
         order = PurchaseOrder.objects.select_related("plan", "user").get(pk=order_id)
-    except PurchaseOrder.DoesNotExist:
-        return _ecpay_reply(False, 400)
-    if trade_amount != order.price_ntd:
-        return _ecpay_reply(False, 400)
+        trade_amount = int(payload.get("TradeAmt", ""))
+    except (TypeError, ValueError, PurchaseOrder.DoesNotExist):
+        return HttpResponse("0|ERROR", status=400, content_type="text/plain")
+    if (
+        payload.get("MerchantTradeNo") != merchant_trade_no(order.id)
+        or trade_amount != order.price_ntd
+    ):
+        return HttpResponse("0|ERROR", status=400, content_type="text/plain")
     # 綠界後台「模擬付款」只測 ReturnURL，不代表消費者完成付款，官方要求不可出貨/入點。
     if payload.get("SimulatePaid") == "1":
-        return _ecpay_reply()
+        return HttpResponse("1|OK", content_type="text/plain")
     if payload.get("RtnCode") != "1":
         if order.status == PurchaseOrder.Status.PENDING:
-            order.note = f"綠界付款未完成：{payload.get('RtnCode', '')}"[:255]
+            order.note = f"綠界測試付款未完成：{payload.get('RtnCode', '')}"[:255]
             order.save(update_fields=["note"])
-        return _ecpay_reply()
+        return HttpResponse("1|OK", content_type="text/plain")
     try:
         order, completed = complete_purchase_order(
             order.id,
             provider_trade_no=payload.get("TradeNo", ""),
         )
     except ValueError:
-        return _ecpay_reply(False, 409)
+        return HttpResponse("0|ERROR", status=409, content_type="text/plain")
     if completed:
         wallet = get_or_create_wallet(order.user)
         send_purchase_receipt(order, wallet.balance)
-    return _ecpay_reply()
-
-
-def _subscription_first_charge(payload: dict[str, str], order_id: int, amount: int) -> HttpResponse:
-    try:
-        order = SubscriptionOrder.objects.get(pk=order_id)
-    except SubscriptionOrder.DoesNotExist:
-        return _ecpay_reply(False, 400)
-    if amount != order.price_ntd:
-        return _ecpay_reply(False, 400)
-    if payload.get("SimulatePaid") == "1":
-        return _ecpay_reply()
-    if payload.get("RtnCode") != "1":
-        record_subscription_failure(
-            order.id, rtn_code=payload.get("RtnCode", ""),
-            rtn_msg=payload.get("RtnMsg", ""), amount=amount,
-        )
-        return _ecpay_reply()
-    try:
-        activate_subscription_order(
-            order.id, provider_trade_no=payload.get("TradeNo", ""), amount=amount,
-            rtn_msg=payload.get("RtnMsg", ""),
-        )
-    except ValueError:
-        return _ecpay_reply(False, 409)
-    return _ecpay_reply()
-
-
-@csrf_exempt
-@api_view(["POST"])
-@authentication_classes([])
-@permission_classes([permissions.AllowAny])
-def ecpay_period_callback(request):
-    """綠界 PeriodReturnURL：訂閱第 2 期起每月扣款結果；成功才加一期並發點。"""
-    payload = _verified_payload(request)
-    if payload is None:
-        return _ecpay_reply(False, 400)
-    parsed = parse_trade_no(payload.get("MerchantTradeNo", ""))
-    if parsed is None or parsed[0] != "subscription":
-        return _ecpay_reply(False, 400)
-    try:
-        order = SubscriptionOrder.objects.get(pk=parsed[1])
-        amount = int(payload.get("Amount", ""))
-        total_success_times = int(payload.get("TotalSuccessTimes", ""))
-    except (SubscriptionOrder.DoesNotExist, ValueError):
-        return _ecpay_reply(False, 400)
-    if amount != order.price_ntd:
-        return _ecpay_reply(False, 400)
-    if payload.get("SimulatePaid") == "1":
-        return _ecpay_reply()
-    if payload.get("RtnCode") != "1":
-        record_subscription_failure(
-            order.id, rtn_code=payload.get("RtnCode", ""),
-            rtn_msg=payload.get("RtnMsg", ""), amount=amount,
-        )
-        return _ecpay_reply()
-    record_subscription_period_charge(
-        order.id,
-        total_success_times=total_success_times,
-        amount=amount,
-        gwsr=payload.get("gwsr", ""),
-        process_date=payload.get("ProcessDate", ""),
-        rtn_msg=payload.get("RtnMsg", ""),
-    )
-    return _ecpay_reply()
-
+    return HttpResponse("1|OK", content_type="text/plain")
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
@@ -268,7 +175,7 @@ def subscription_plans(request):
     return Response({
         "plans": SubscriptionPlanSerializer(plans, many=True).data,
         "payment_mode": settings.ARGUS_PAYMENT_MODE,
-        "subscribe_enabled": settings.ARGUS_PAYMENT_ENABLED,
+        "subscribe_enabled": settings.ARGUS_PAYMENT_MODE == "ecpay_test",
     })
 
 
@@ -288,44 +195,32 @@ def my_subscription(request):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def subscribe(request):
-    """訂閱方案：建立綠界信用卡定期定額委託，回傳結帳表單（每月自動扣款）。
+    """訂閱方案（輕量版：ARGUS_PAYMENT_MODE=ecpay_test 時模擬首月一次付款）。
 
-    首期授權成功的通知（ReturnURL）才開通訂閱並發點；這裡不入點。
-    已有自動續訂中的訂閱時回 409（避免重複扣款），要換方案請先取消。
+    不接綠界定期定額：測試環境下視為已付款一個月，直接入訂閱並結算首月點數。
+    disabled 模式回 503，不建立訂閱、不入點。
     """
-    if not settings.ARGUS_PAYMENT_ENABLED:
-        return Response({"detail": _PAUSED_DETAIL}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    if settings.ARGUS_PAYMENT_MODE != "ecpay_test":
+        return Response(
+            {"detail": "訂閱付款目前未啟用；不會建立訂閱或直接入點。"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
     serializer = SubscribeRequestSerializer(data=request.data, context={})
     serializer.is_valid(raise_exception=True)
     plan = serializer.context["plan"]
-    data = serializer.validated_data
-    if has_active_recurring(request.user):
-        return Response(
-            {"detail": "你已有每月自動扣款中的訂閱；要換方案請先取消目前的訂閱。"},
-            status=status.HTTP_409_CONFLICT,
-        )
-    order = SubscriptionOrder.objects.create(
-        user=request.user,
-        plan=plan,
-        price_ntd=plan.monthly_price_ntd,
-        monthly_coins=plan.monthly_coins,
-        exec_times=ECPAY_SUBSCRIPTION_EXEC_TIMES,
-        buyer_name=data["buyer_name"],
-        buyer_email=data["buyer_email"],
-        invoice_type=data["invoice_type"],
-        company_name=data.get("company_name", ""),
-        tax_id=data.get("tax_id", ""),
-        carrier_type=data.get("carrier_type", PurchaseOrder.CarrierType.CLOUD),
-        carrier_id=data.get("carrier_id", ""),
-        payment_mode=settings.ARGUS_PAYMENT_MODE,
+    grant_subscription(
+        request.user,
+        plan,
+        periods=1,
+        source=UserSubscription.Source.ECPAY_TEST,
     )
+    # 首月視為已付款：立即結算入帳（kind=subscription_grant）
+    settle_subscription(request.user)
+    sub = UserSubscription.objects.select_related("plan").get(user=request.user)
     return Response(
         {
-            "order": SubscriptionOrderSerializer(order).data,
-            "payment": {
-                "action": settings.ECPAY_CHECKOUT_URL,
-                "fields": build_subscription_checkout_fields(order),
-            },
+            "subscription": UserSubscriptionSerializer(sub).data,
+            "payment_mode": settings.ARGUS_PAYMENT_MODE,
         },
         status=status.HTTP_201_CREATED,
     )
@@ -334,15 +229,9 @@ def subscribe(request):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def cancel_my_subscription(request):
-    """取消自己的訂閱：先請綠界停止每月扣款，成功後才取消（當期權益保留到期滿）。"""
+    """取消自己的訂閱（當前期權益保留到期滿；之後不再發點）。"""
     settle_subscription_safe(request.user)
-    try:
-        sub = cancel_subscription_and_recurring(request.user)
-    except EcpayActionError as exc:
-        return Response(
-            {"detail": f"無法取消每月扣款：{exc}"},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
+    sub = cancel_subscription(request.user)
     if sub is None:
         return Response(
             {"detail": "目前沒有可取消的訂閱。"},

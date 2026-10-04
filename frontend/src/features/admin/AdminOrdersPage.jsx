@@ -13,7 +13,6 @@ import {
 import { AdminSortableTh } from "../../components/admin/AdminSortableTh";
 import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
 import { useListQuery } from "../../shared/useListQuery";
-import { AdminSubscriptionCharges } from "./AdminSubscriptionCharges";
 
 // 訂單管理。
 //
@@ -111,7 +110,7 @@ export function AdminOrdersPage() {
       <header className="admin-page-head">
         <div>
           <h1>訂單</h1>
-          <p>購點訂單、訂閱每期扣款、發票資訊與付款狀態（電子發票依此人工開立）</p>
+          <p>購點訂單、發票資訊與付款狀態</p>
         </div>
       </header>
 
@@ -265,12 +264,6 @@ export function AdminOrdersPage() {
                   <dt>統一編號</dt><dd>{detail.tax_id || "—"}</dd>
                 </>
               )}
-              {detail.invoice_type === "personal" && (
-                <>
-                  <dt>載具</dt>
-                  <dd>{detail.carrier_id ? `${detail.carrier_type_label} ${detail.carrier_id}` : "不使用載具（寄 Email）"}</dd>
-                </>
-              )}
             </dl>
             <div className="admin-link-row">
               <NavLink className="admin-btn" to="/admin/transactions">
@@ -280,8 +273,6 @@ export function AdminOrdersPage() {
           </>
         )}
       </AdminModal>
-
-      <AdminSubscriptionCharges />
     </div>
   );
 }

@@ -1053,6 +1053,17 @@
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
+.review-next-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--review-next-cyan), rgba(73, 217, 236, 0));
+  opacity: 0.65;
+}
+
 .review-next-card:hover {
   border-color: rgba(73, 217, 236, 0.34);
   box-shadow: 0 28px 68px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(73, 217, 236, 0.05);

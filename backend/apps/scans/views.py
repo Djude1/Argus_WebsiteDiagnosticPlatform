@@ -778,19 +778,6 @@ class VerifiedDomainViewSet(viewsets.ModelViewSet):
             }
         )
 
-    def retrieve(self, request, *args, **kwargs):
-        """單一網域：另附自己的 token 與三種備用方法的設定說明（/domains「其他驗證方式」用）。"""
-        verified_domain = self.get_object()
-        return Response(
-            {
-                **VerifiedDomainSerializer(verified_domain).data,
-                "token": verified_domain.token,
-                "instructions": build_verification_instructions(
-                    verified_domain.domain, verified_domain.token
-                ),
-            }
-        )
-
     def destroy(self, request, *args, **kwargs):
         verified_domain = self.get_object()
         verified_domain.delete()
