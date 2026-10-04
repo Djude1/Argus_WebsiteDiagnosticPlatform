@@ -70,6 +70,13 @@ const FOOTER_GROUPS = [
       { to: "/partners", label: "商業合作" },
     ],
   },
+  {
+    title: "條款",
+    links: [
+      { to: "/privacy", label: "隱私權政策" },
+      { to: "/terms", label: "服務條款" },
+    ],
+  },
 ];
 
 function PublicFooter() {

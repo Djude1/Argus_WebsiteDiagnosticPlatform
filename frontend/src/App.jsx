@@ -15,6 +15,7 @@ const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPag
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
+const loadLegalPages = () => import("./features/public/LegalPages.jsx");
 const loadMcpAccessPage = () => import("./features/account/McpAccessPage.jsx");
 const loadProjectWorkspace = () => import("./features/projects/ProjectWorkspace.jsx");
 const loadProjectPages = () => import("./features/projects/ProjectPages.jsx");
@@ -68,6 +69,8 @@ const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
 const DownloadPage = lazyNamed(loadPublicPages, "DownloadPage");
 const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
 const PartnersPage = lazyNamed(loadPartnersPage, "PartnersPage");
+const PrivacyPolicyPage = lazyNamed(loadLegalPages, "PrivacyPolicyPage");
+const TermsOfServicePage = lazyNamed(loadLegalPages, "TermsOfServicePage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
 const AdminOverviewPage = lazyNamed(loadAdminOverview, "AdminOverviewPage");
@@ -144,6 +147,8 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/verify" element={<VerifyReportPage />} />
             <Route path="/verify/:reportNumber" element={<VerifyReportPage />} />
             <Route path="/partners" element={<PartnersPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsOfServicePage />} />
             {!accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           </Route>
           {accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
