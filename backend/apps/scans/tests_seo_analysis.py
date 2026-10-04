@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -325,6 +325,24 @@ class SeoStageTests(TestCase):
 
 GSC_ENABLED = {"GOOGLE_OAUTH_CLIENT_ID": "cid.apps.googleusercontent.com",
                "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret"}
+
+
+class SearchConsoleRedirectUriTests(SimpleTestCase):
+    @override_settings(DEBUG=False, ARGUS_GSC_REDIRECT_URI="", ALLOWED_HOSTS=["argus.example"])
+    def test_forces_https_in_production(self):
+        # 代理鏈傳來 X-Forwarded-Proto: http 時，回呼網址仍必須是 https（Google 只登記 https）
+        request = RequestFactory().get("/", HTTP_HOST="argus.example")
+        self.assertEqual(gsc.redirect_uri(request), "https://argus.example/api/gsc/callback/")
+
+    @override_settings(DEBUG=True, ARGUS_GSC_REDIRECT_URI="", ALLOWED_HOSTS=["127.0.0.1"])
+    def test_keeps_http_in_debug(self):
+        request = RequestFactory().get("/", HTTP_HOST="127.0.0.1:8000")
+        self.assertEqual(gsc.redirect_uri(request), "http://127.0.0.1:8000/api/gsc/callback/")
+
+    @override_settings(ARGUS_GSC_REDIRECT_URI="https://fixed.example/api/gsc/callback/")
+    def test_setting_wins(self):
+        request = RequestFactory().get("/", HTTP_HOST="other.example")
+        self.assertEqual(gsc.redirect_uri(request), "https://fixed.example/api/gsc/callback/")
 
 
 @override_settings(**GSC_ENABLED)

@@ -181,7 +181,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | 中斷連線時呼叫 Google revoke，失敗不影響本地刪除 | |
 | 示範專案不能連接 | 虛構網站 |
 
-設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
+設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`，`DEBUG=False` 時一律組成 `https://`——正式環境 cloudflared → Gateway 走 http，`X-Forwarded-Proto` 是 http，2026-10-04 曾因此 `redirect_uri_mismatch`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie，多網域時保持空值）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
 
 ## 報告內容契約（`reports.py`）
 

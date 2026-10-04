@@ -39,8 +39,7 @@ data:
   CSRF_TRUSTED_ORIGINS: "https://argus.clouda.dpdns.org,http://argus.clouda.dpdns.org,https://xn--gst.tw,https://www.xn--gst.tw,https://argus6.qzz.io,http://argus6.qzz.io"
   PLAYWRIGHT_BROWSERS_PATH: "/ms-playwright"
   # 前端公開值（瀏覽器可見，非機密）；填你的 Google OAuth Client ID
-  GOOGLE_OAUTH_CLIENT_ID: "225221762708-hg8ac88gi1v454t3gc45hs5dje2uvo4g.apps.googleusercontent.com"
-  ARGUS_GSC_REDIRECT_URI: "https://argus.clouda.dpdns.org/api/gsc/callback"
+  GOOGLE_OAUTH_CLIENT_ID: "856926123222-ci7ubqlvdi1shkjopgkicef71tf3ksr9.apps.googleusercontent.com"
   # Cloudflare Turnstile（註冊、Email 登入、忘記密碼、商業合作洽談的人機驗證）。
   # site key 是公開值；secret 放 argus-secret 的 TURNSTILE_SECRET，兩者都有值才啟用（只設這裡不會生效）。
   # HOSTNAMES 是 siteverify 回傳的前端網域允許清單（填純主機名；寫成 https:// 網址也會被正規化），正式環境不可含 localhost／127.0.0.1（accounts.E003）；
