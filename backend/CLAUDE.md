@@ -100,7 +100,7 @@ artifacts（JSON）：json_ld / og_meta / llms_txt / faq_schema，
 網域所有權驗證（主動測試的技術性閘門）
 user FK + domain（正規化小寫）UniqueConstraint(user, domain)
 status：pending / verified / rejected / expired
-method：search_console（主要，Search Console 擁有者）/ dns_txt / meta_tag / html_file（最後成功的方法；migration 0023）
+method：search_console（主要，Search Console 擁有者）/ dns_txt / meta_tag / html_file（最後成功的方法；migration 0025，會把舊的 google_search_console 值轉成 search_console）
 token（32 hex）、verified_at、expires_at（驗證成功=now+90 天，
   TTL 設定 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS）
 is_effectively_verified：admin_override 或（verified 且未過期）
@@ -173,6 +173,14 @@ status（published/hidden）、experience_at（完成掃描時間）
 ```
 
 ---
+
+## Migration 鐵律（2026-10-04 K8s migrate 事故）
+
+**已部署到正式環境的 migration 不可刪除、改名或改 `dependencies`。** 正式資料庫的 `django_migrations` 記著已套用的名稱；改寫歷史後，已套用的 migration 若依賴一個正式庫沒套用過的新檔，`migrate`（Argo PreSync Job）會在 `check_consistent_history` 直接失敗（`InconsistentMigrationHistory`），整個部署卡住。
+
+- 要修正已部署的 migration，一律**新增**後續 migration（例如 `scans/0025` 修正 `VerifiedDomain.method`），不要回頭改舊檔。
+- 合併分支時兩邊都有新 migration：保留雙方已部署的檔案，用 merge migration 或後續 migration 收斂，不要刪掉其中一邊。
+- 動到 migration 圖時，先在 PostgreSQL 以「正式環境已套用的舊鏈」建庫，再用新程式碼跑 `migrate` 驗證（2026-10-04 的驗證方式見 `log/2026-10-04_fix-migration-history.md`）。
 
 ## 三種管理介面
 

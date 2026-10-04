@@ -7,8 +7,12 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    # 只依賴 0022：正式資料庫套用過舊鏈（0019_alter_verifieddomain_method →
+    # 0023_merge_gsc_and_projects → 本檔），開發環境可能套用過已移除的
+    # 0023_verifieddomain_search_console；兩邊都已套用 0022，依賴它才不會出現
+    # InconsistentMigrationHistory（2026-10-04 K8s migrate 事故）。
     dependencies = [
-        ("scans", "0023_verifieddomain_search_console"),
+        ("scans", "0022_seo_analysis_and_search_console"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
