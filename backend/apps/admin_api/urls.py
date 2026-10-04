@@ -47,6 +47,11 @@ urlpatterns = [
     path("domains/", views.domains_list, name="admin-domains"),
     path("domains/<int:domain_id>/override/", views.domain_override, name="admin-domain-override"),
     path("orders/", views.orders_list, name="admin-orders"),
+    path(
+        "subscription-charges/",
+        views.subscription_charges_list,
+        name="admin-subscription-charges",
+    ),
     path("dashboard/", views.dashboard, name="admin-dashboard"),
     path("audit-log/", views.audit_log, name="admin-audit-log"),
     path("announcements/active/", views.active_announcements, name="admin-active-announcements"),

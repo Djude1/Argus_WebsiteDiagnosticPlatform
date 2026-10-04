@@ -327,8 +327,9 @@ Argus/
 | GET | `/api/billing/orders/` | auth | — | 我的訂單 |
 | GET | `/api/billing/subscription/plans/` | open | — | 訂閱方案清單（含 payment_mode/subscribe_enabled） |
 | GET | `/api/billing/subscription/` | auth | — | 我的訂閱（無則 `subscription: null`；進場觸發冪等月結算） |
-| POST | `/api/billing/subscription/subscribe/` | auth | body：`plan_code` | 訂閱（付費模式 disabled→503；ecpay_test 模擬首月） |
-| POST | `/api/billing/subscription/cancel/` | auth | — | 取消訂閱（當期權益保留到期滿） |
+| POST | `/api/billing/subscription/subscribe/` | auth | body：`plan_code`＋買受人／發票欄位（同 purchase） | 建立綠界信用卡定期定額委託並回傳結帳表單（disabled→503、已有自動扣款中的訂閱→409）；首期付款通知到達才開通 |
+| POST | `/api/billing/subscription/cancel/` | auth | — | 取消訂閱：先請綠界停止每月扣款（失敗回 502、訂閱不變），當期權益保留到期滿 |
+| POST | `/api/billing/ecpay/callback/`、`ecpay/period-callback/` | 綠界 | 綠界通知（驗 CheckMacValue） | 購點與訂閱首期／訂閱第 2 期起的扣款結果，冪等入點，回 `1|OK` |
 
 **`POST /api/billing/purchase/` body 參數（`PurchaseRequestSerializer`）：**
 
@@ -460,7 +461,7 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 - `CoinWallet`: balance / total_purchased_ntd / total_scans_used / last_bonus_year+month
 - `CoinTransaction`: 欄位 `kind`（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust / rebuild_hold / rebuild_refund / fixgen_grant / fixgen_charge / fixgen_refund / subscription_grant）、`amount`、`balance_after`、`scan_job`/`plan`/`admin_actor` FK（皆 nullable）、`note`（審計不可改）
 - `PurchaseOrder.status`: pending → paid / cancelled；含 price_ntd/coin_amount 快照、`invoice_type`(personal/company)、`carrier_type`(cloud/mobile_barcode/citizen_digital)、`carrier_id`
-- `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
+- `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test/ecpay）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
 - `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**
 - `LoginEvent`: method（password/google/register）、ip_address、user_agent、created_at；寫入包 try/except 不影響登入
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled

@@ -49,6 +49,7 @@ from apps.admin_api.serializers import (
     AdminReviewSerializer,
     AdminScanJobSerializer,
     AdminSubscriptionActionSerializer,
+    AdminSubscriptionChargeSerializer,
     AdminSubscriptionPlanSerializer,
     AdminUserDetailSerializer,
     AdminUserListSerializer,
@@ -59,16 +60,18 @@ from apps.admin_api.serializers import (
     SetStaffSerializer,
     SuspendUserSerializer,
 )
+from apps.billing.ecpay import EcpayActionError
 from apps.billing.models import (
     CoinTransaction,
     CoinWallet,
     PurchaseOrder,
+    SubscriptionCharge,
     SubscriptionPlan,
     UserSubscription,
 )
 from apps.billing.services import (
     admin_adjust,
-    cancel_subscription,
+    cancel_subscription_and_recurring,
     grant_subscription,
     refund_full_for_scan,
     settle_subscription,
@@ -346,6 +349,41 @@ def dashboard(request):
         "series": series,
         "provider_breakdown": provider_breakdown,
         "top_ai_users": top_ai_users,
+    })
+
+
+@list_schema(
+    name="AdminSubscriptionChargeListResponse",
+    key="charges",
+    child=AdminSubscriptionChargeSerializer,
+    filters=[
+        query_param("q", "模糊搜尋 buyer_email／姓名／公司／統編／使用者名稱"),
+        query_param("succeeded", "只看成功（true）或失敗（false）的扣款"),
+    ],
+)
+@api_view(["GET"])
+@permission_classes([permissions.IsAdminUser])
+def subscription_charges_list(request):
+    """訂閱每期扣款紀錄（最新在前）：成功的每一筆都要人工開立發票。"""
+    qs = SubscriptionCharge.objects.select_related("order__user", "order__plan")
+    search = (request.query_params.get("q") or "").strip()
+    if search:
+        qs = qs.filter(
+            Q(order__buyer_email__icontains=search)
+            | Q(order__buyer_name__icontains=search)
+            | Q(order__company_name__icontains=search)
+            | Q(order__tax_id__icontains=search)
+            | Q(order__user__username__icontains=search)
+        )
+    succeeded = request.query_params.get("succeeded")
+    if succeeded in {"true", "false"}:
+        qs = qs.filter(succeeded=succeeded == "true")
+    items, page, total_pages, total = _paginate(request, qs.order_by("-created_at"))
+    return Response({
+        "charges": AdminSubscriptionChargeSerializer(items, many=True).data,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
     })
 
 
@@ -691,7 +729,14 @@ def user_subscription(request, user_id: int):
         # 授予後立即結算，讓已到期期數馬上入點（稽核已在 services 內寫入）
         settle_subscription(target)
     else:
-        sub = cancel_subscription(target)
+        try:
+            # 有綠界每月自動扣款的話先停止扣款，成功後才取消（失敗時訂閱維持不變）
+            sub = cancel_subscription_and_recurring(target)
+        except EcpayActionError as exc:
+            return Response(
+                {"detail": f"無法取消綠界每月扣款：{exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         if sub is None:
             return Response(
                 {"detail": "該使用者目前沒有訂閱。"},

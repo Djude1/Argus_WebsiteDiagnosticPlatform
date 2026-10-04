@@ -728,9 +728,8 @@
 }
 
 .review-next-response {
-  border: 0;
-  border-left: 3px solid #4ca8b4;
-  border-radius: 0 10px 10px 0;
+  border: 1px solid rgba(76, 168, 180, 0.35);
+  border-radius: 10px;
   background: #edf7f8;
 }
 

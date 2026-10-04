@@ -4,7 +4,7 @@
 
 - 登入後購點流程位於 `frontend/src/features/account/AuthenticatedPages.jsx` 的 `BillingPage`；公開 `/purchase` 只負責方案介紹與導流。
 - 前端仍沿用既有 `/api/billing/plans/`、`/api/billing/purchase/`、訂單查詢與綠界 Stage 表單提交流程，未修改 API 或資料模型。
-- 目前後端只寄送購買收據，且付款模式只允許停用或 `ecpay_test`；尚未整合正式電子發票開立。因此 UI 不可宣稱會「自動歸戶」或開立正式發票。
+- 2026-10-04 起付款模式另有正式 `ecpay`；電子發票由管理員人工開立（沒有串接自動開立），UI 可以說「會開立並寄至 Email」，但不可宣稱「自動歸戶」或由系統自動開立。
 
 ## 設計決策
 
