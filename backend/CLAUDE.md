@@ -11,7 +11,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/auth/` | `accounts` | `google/`（OAuth 登入，未註冊回 409＋signup_token）、`register/google/`＋`register/`（Google 授權後設定用戶名與密碼）、`email-login/`（Email 或用戶名）、`me/setup/`（舊帳號補設）、`me/delete/`（自行刪除帳號）、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/`、`turnstile/`（公開，Turnstile 是否啟用與 site key） |
 | `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/pages/?scan=`、`<id>/seo/?scan=`（＋`seo/pages/<頁面 id>/`、`seo/keywords/`）、`<id>/gsc/`（＋`connect/`、`properties/`、`performance/`、`inspect/`；見 `apps/scans/CLAUDE.md`「SEO 分析與 Search Console」） |
 | `/api/gsc/callback/` | `scans` | Google Search Console OAuth 導回（`AllowAny`；身分由簽章 state＋HttpOnly nonce cookie 證明），完成後轉回 `/projects/<id>/seo?gsc=…` |
-| `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
+| `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（`search_console`／dns_txt／meta_tag／html_file）＋ `gsc/`、`gsc/connect/`、`gsc/sync/`（帳號層級 Search Console 一鍵連接與同步，2026-10-04）（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`）、`ecpay/callback/`（綠界 ReturnURL：購點＋訂閱首期）、`ecpay/period-callback/`（訂閱第 2 期起每月扣款） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
@@ -68,7 +68,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
   舊專案補抓 manage.py refresh_project_favicons）、
   default_scan_mode（passive/active）、description（選填說明）、is_demo（示範專案，唯讀；migration 0021，
   見 apps/scans/demo/README.md）、target_keywords（SEO 分析頁的目標關鍵字；migration 0022）
-SearchConsoleConnection：project OneToOne、user FK、refresh_token_encrypted（Fernet）、property_url、last_error
+SearchConsoleConnection：project OneToOne（可為空＝帳號層級連線，只用來驗證網域，每人最多一筆；migration 0024）、user FK、refresh_token_encrypted（Fernet）、property_url、last_error
   （migration 0022；refresh token 不回傳、不寫 log）
 UniqueConstraint(user, origin)；移除＝封存，不刪掃描
 ScanJob.project FK（SET_NULL）：ScanJob.save() 新建時未指定就依 origin 歸入

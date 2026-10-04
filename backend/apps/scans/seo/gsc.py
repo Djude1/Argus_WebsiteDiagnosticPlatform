@@ -81,11 +81,15 @@ def redirect_uri(request) -> str:
     return settings.ARGUS_GSC_REDIRECT_URI or request.build_absolute_uri(CALLBACK_PATH)
 
 
-def build_authorization(request, project) -> tuple[str, str]:
-    """回傳 (Google 授權網址, nonce)。nonce 由 view 寫進 HttpOnly cookie。"""
+def build_authorization(request, project=None) -> tuple[str, str]:
+    """回傳 (Google 授權網址, nonce)。nonce 由 view 寫進 HttpOnly cookie。
+
+    project 為 None＝帳號層級連線（/domains 一鍵連接，只用來驗證網域所有權）。
+    """
     nonce = secrets.token_urlsafe(16)
     state = signing.dumps(
-        {"p": project.id, "u": request.user.pk, "n": nonce}, salt=STATE_SALT
+        {"p": project.id if project else None, "u": request.user.pk, "n": nonce},
+        salt=STATE_SALT,
     )
     params = {
         "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,

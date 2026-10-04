@@ -137,7 +137,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/projects/:id/history` | `ProjectHistoryPage` | 歷史報告：分數趨勢、歷次掃描表格、問題分析與 PDF 報告下載 |
 | `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、專案說明、預設掃描設定（`ScanDefaultsFields`：範圍、維度、模式）、網域驗證狀態、封存；示範專案只顯示說明與封存 |
 | `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
-| `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入）：新增網域 → 設定說明（預設「Search Console（建議）」：到 Search Console 驗證網站並在對應網站專案的 SEO 分析連接，連接時自動通過，連結由 store 的 `projects` 比對網域找出；DNS TXT / meta / 驗證檔保留為備用，一鍵複製）→ 執行驗證；主動式資安測試的閘門。SEO 分析頁 OAuth 導回帶 `?verified=` 時顯示已自動完成網域驗證 |
+| `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入；主動式資安測試的閘門；2026-10-04 改版）：最上方「用 Google Search Console 一鍵驗證」卡（頁面唯一主要動作）——未連接時「連接 Google Search Console」直接走帳號層級 OAuth（`/api/domains/gsc/connect/`），導回 `?gsc=connected&verified=<數量>` 顯示結果；已連接時「重新同步網站」（`gsc/sync/`）與「中斷連線」。「我的網域」列出統計（已驗證／待驗證／即將到期，14 天內）並把待處理的排前面；待驗證列有「用 Search Console 驗證」，即將到期列有「用 Search Console 續期」；DNS TXT／meta／驗證檔收在每列的「其他驗證方式」（展開時 `GET /api/domains/<id>/` 取 token 與說明）；沒有 Search Console 的人用「手動新增網域」。SEO 分析頁 OAuth 導回帶 `?verified=` 時也會提示已自動完成網域驗證 |
 | `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站結構圖／修正產出三個分頁）：標題與分數 → 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖、選定單頁時的複刻工具）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站結構圖（ReactFlow） |
 | `/scans/:scanId/fixes` | `ScanFixOutputPage` | 修正產出（`FixOutputSection`；掃描完成才可產生，原本在報告最下方） |
@@ -217,7 +217,7 @@ npm run typecheck
 | `src/components/navigation/ProjectSwitcher.jsx` | 頂部工具列的網站專案切換器（目前專案、切換、設定入口、所有專案、新增專案；Esc／點外面關閉） |
 | `src/components/projects/OverviewWidgets.jsx` | 分數環 `ScoreRing` 與公告 toast（原 Dashboard 元件） |
 | `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
-| `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（清單／新增／三方法驗證操作） |
+| `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（Search Console 一鍵連接／同步、網域清單、備用三方法；樣式 `legacy-member/61-domain-verify.css`） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
 | `src/components/projects/ScanDefaultsFields.jsx` | 專案預設掃描設定欄位（範圍、維度、模式）；新增專案頁與專案設定共用，`DEFAULT_SCAN_SETTINGS` 為新專案預設 |
