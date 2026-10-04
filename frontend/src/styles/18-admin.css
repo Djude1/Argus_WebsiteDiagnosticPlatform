@@ -770,8 +770,11 @@
   .admin-balance-big span{ @apply ml-1 text-base font-medium; color: var(--admin-text-muted); }
   .admin-balance-big.tight{ margin-bottom: 0; }
 
-  /* --- 調整點數 --- */
+  /* --- 調整點數／管理權限 --- */
   .admin-adjust-form .admin-adjust-row{ @apply flex flex-wrap gap-2; }
+  .admin-role-row{ @apply flex flex-col items-start gap-3; }
+  .admin-role-row p{ @apply m-0; color: var(--admin-text-secondary); line-height: 1.6; }
+  .admin-role-row strong{ color: var(--admin-text); }
   .admin-quick-row{ @apply mt-2 flex flex-wrap gap-2; }
   .admin-quick-btn{
     @apply px-3 text-xs font-semibold;

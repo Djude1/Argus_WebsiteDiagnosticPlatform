@@ -692,6 +692,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users/{user_id}/staff/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 超級管理員把使用者設為一般管理員或取消（使用者決策：只有 superuser 能操作，
+         *     且只能切換 is_staff；superuser 身分仍只能用 seed_admin 設定）。
+         */
+        post: operations["admin_users_staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users/{user_id}/subscription/": {
         parameters: {
             query?: never;
@@ -761,7 +781,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 以 email + password 登入，回傳 JWT。 */
+        /** @description 以 Email 或用戶名＋密碼登入，回傳 JWT（欄位沿用 email，也接受 identifier）。 */
         post: operations["auth_email_login_create"];
         delete?: never;
         options?: never;
@@ -779,10 +799,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description 以 Google ID Token 完成登入或註冊（一般使用者登入方式之一，另有 email/密碼）。
+         * @description 以 Google ID Token 登入既有帳號。
          *
-         *     首次成功驗證的 Google 帳號會自動建立對應的 User（username=email）。
-         *     管理員亦以前台 email 登入後進 React /admin（django-admin 已移除）；
+         *     2026-10-04 起不再自動建立帳號：Google 帳號尚未註冊時回 409 `registration_required`
+         *     並附 signup_token，前端直接切到「設定用戶名與密碼」完成註冊。
          *     本端點不簽發 superuser/staff 權限（staff/superuser 僅由 seed_admin 設定）。
          */
         post: operations["auth_google_create"];
@@ -849,6 +869,40 @@ export interface paths {
          *     換圖或移除時一併刪掉舊檔。
          */
         delete: operations["auth_me_avatar_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 使用者自行刪除帳號（不可復原）：需要密碼與輸入確認文字，規則見 accounts/deletion.py。 */
+        post: operations["auth_me_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me/setup/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 舊帳號補設用戶名與（沒有密碼時）密碼；兩者都已設定時回 400。 */
+        post: operations["auth_me_setup_create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -922,8 +976,29 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 以 email + password 建立帳號。 */
+        /**
+         * @description 註冊第二步：帶 Google 簽發的 signup_token 設定用戶名與密碼，建立帳號並登入。
+         *
+         *     不再接受只填 Email＋密碼的註冊：Email 一律由 Google 驗證（新帳號必經 Google 授權）。
+         */
         post: operations["auth_register_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/register/google/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 註冊第一步：Google 授權確認 Email，回傳 signup_token（此時尚未建立帳號）。 */
+        post: operations["auth_register_google_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1587,6 +1662,99 @@ export interface paths {
         patch: operations["projects_partial_update"];
         trace?: never;
     };
+    "/api/projects/{id}/gsc/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。 */
+        get: operations["projects_gsc_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。 */
+        delete: operations["projects_gsc_destroy"];
+        options?: never;
+        head?: never;
+        /** @description GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。 */
+        patch: operations["projects_gsc_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/{id}/gsc/connect/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 回傳 Google 授權網址；nonce 寫進只在 callback 路徑送出的 HttpOnly cookie。 */
+        post: operations["projects_gsc_connect_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/gsc/inspect/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 網址檢查：查詢 Google 是否已收錄這個網址（只接受本專案網站的網址）。 */
+        post: operations["projects_gsc_inspect_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/gsc/performance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 搜尋成效（?days=7|28|90）。平均排名是期間內的統計值，不是即時名次。 */
+        get: operations["projects_gsc_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/gsc/properties/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_gsc_properties_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{id}/issues/": {
         parameters: {
             query?: never;
@@ -1667,6 +1835,57 @@ export interface paths {
          *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
          */
         post: operations["projects_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/seo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description SEO 分析：最新（或 ?scan= 指定）一次完成掃描的概覽、頁面、連結與關鍵字。 */
+        get: operations["projects_seo_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/seo/keywords/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 設定目標關鍵字（覆蓋整份清單；示範專案也可以設定，只影響這個分析頁）。 */
+        post: operations["projects_seo_keywords_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/seo/pages/{page_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 單頁證據：完整標題、圖片、連結與檢查結果。 */
+        get: operations["projects_seo_pages_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2360,6 +2579,9 @@ export interface components {
             status: string;
             /** @description 依產品決策重排不重複扣點，恆為 0 */
             charged: number;
+        };
+        AdminSetStaffResponse: {
+            is_staff: boolean;
         };
         /**
          * @description * `grant` - grant
@@ -3142,6 +3364,9 @@ export interface components {
          * @enum {string}
          */
         ScanModeEnum: "passive" | "active";
+        SetStaffRequest: {
+            is_staff: boolean;
+        };
         /**
          * @description * `critical` - 嚴重
          *     * `high` - 高
@@ -4880,6 +5105,33 @@ export interface operations {
             };
         };
     };
+    admin_users_staff_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStaffRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetStaffRequest"];
+                "multipart/form-data": components["schemas"]["SetStaffRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSetStaffResponse"];
+                };
+            };
+        };
+    };
     admin_users_subscription_retrieve: {
         parameters: {
             query?: never;
@@ -5098,6 +5350,42 @@ export interface operations {
             };
         };
     };
+    auth_me_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_me_setup_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auth_password_reset_confirm_create: {
         parameters: {
             query?: never;
@@ -5153,6 +5441,24 @@ export interface operations {
         };
     };
     auth_register_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_register_google_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -5993,6 +6299,195 @@ export interface operations {
             };
         };
     };
+    projects_gsc_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_gsc_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_gsc_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_gsc_connect_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_gsc_inspect_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_gsc_performance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_gsc_properties_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     projects_issues_retrieve: {
         parameters: {
             query?: never;
@@ -6083,6 +6578,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SiteProject"];
+                };
+            };
+        };
+    };
+    projects_seo_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_seo_keywords_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    projects_seo_pages_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

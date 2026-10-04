@@ -1501,3 +1501,63 @@ class CmsProtectedDeleteTests(APITestCase):
         free = PricingPlan.objects.create(code="free", name="f", price_ntd=0, coin_amount=10)
         response = self.client.delete(f"/api/admin/cms/plans/{free.pk}/")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class SetStaffTests(APITestCase):
+    """超級管理員在後台切換一般管理員身分（只有 superuser 可操作、只能切 is_staff）。"""
+
+    def setUp(self):
+        self.root = _make_user("root", staff=True, is_superuser=True)
+        self.alice = _make_user("alice")
+        self.url = reverse("admin-user-set-staff", args=[self.alice.id])
+
+    def test_superuser_grants_and_revokes_staff_with_audit_log(self):
+        self.client.force_authenticate(self.root)
+        response = self.client.post(self.url, {"is_staff": True}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.alice.refresh_from_db()
+        self.assertTrue(self.alice.is_staff)
+        self.assertFalse(self.alice.is_superuser)
+        self.client.force_authenticate(self.alice)
+        self.assertEqual(self.client.get(reverse("admin-users")).status_code, 200)
+
+        self.client.force_authenticate(self.root)
+        self.client.post(self.url, {"is_staff": False}, format="json")
+        self.alice.refresh_from_db()
+        self.assertFalse(self.alice.is_staff)
+        logs = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.USER_TOGGLE_STAFF, target_user=self.alice
+        ).order_by("created_at")
+        self.assertEqual([log.payload["after"] for log in logs], [True, False])
+        self.assertTrue(all(log.admin_actor == self.root for log in logs))
+
+    def test_staff_and_normal_users_cannot_change_roles(self):
+        staff = _make_user("staff", staff=True)
+        for actor, code in ((staff, 403), (self.alice, 403)):
+            self.client.force_authenticate(actor)
+            other = _make_user(f"target-{actor.username}")
+            response = self.client.post(
+                reverse("admin-user-set-staff", args=[other.id]), {"is_staff": True}, format="json"
+            )
+            self.assertEqual(response.status_code, code)
+            other.refresh_from_db()
+            self.assertFalse(other.is_staff)
+
+    def test_rejects_self_superuser_and_inactive_targets(self):
+        self.client.force_authenticate(self.root)
+        other_root = _make_user("root2", staff=True, is_superuser=True)
+        inactive = _make_user("gone", is_active=False)
+        cases = ((self.root, False), (other_root, False), (inactive, True))
+        for target, wanted in cases:
+            with self.subTest(target=target.username):
+                response = self.client.post(
+                    reverse("admin-user-set-staff", args=[target.id]),
+                    {"is_staff": wanted}, format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+        self.root.refresh_from_db()
+        other_root.refresh_from_db()
+        inactive.refresh_from_db()
+        self.assertTrue(self.root.is_staff and other_root.is_staff)
+        self.assertFalse(inactive.is_staff)
+        self.assertFalse(AdminAuditLog.objects.exists())

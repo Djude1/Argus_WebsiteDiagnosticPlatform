@@ -38,6 +38,7 @@ export type AdminScanCancelResponse = Schemas["AdminScanCancelResponse"];
 export type AdminScanRequeueResponse = Schemas["AdminScanRequeueResponse"];
 export type AdminUserDetailResponse = Schemas["AdminUserDetailResponse"];
 export type AdminAdjustCoinResponse = Schemas["AdminAdjustCoinResponse"];
+export type AdminSetStaffResponse = Schemas["AdminSetStaffResponse"];
 export type AdminLoginEventsResponse = Schemas["AdminLoginEventsResponse"];
 export type AdminUserSubscriptionResponse = Schemas["AdminUserSubscriptionResponse"];
 export type AdminSubscriptionPlansResponse = Schemas["AdminSubscriptionPlansResponse"];

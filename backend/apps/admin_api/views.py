@@ -53,6 +53,7 @@ from apps.admin_api.serializers import (
     AdminVerifiedDomainSerializer,
     AnnouncementSerializer,
     DomainOverrideSerializer,
+    SetStaffSerializer,
 )
 from apps.billing.models import (
     CoinTransaction,
@@ -489,6 +490,52 @@ def adjust_coin(request, user_id: int):
         "transaction": AdminCoinTransactionSerializer(tx).data,
         "wallet_balance": tx.balance_after,
     }, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    request=SetStaffSerializer,
+    responses={200: inline_serializer(
+        name="AdminSetStaffResponse",
+        fields={"is_staff": serializers.BooleanField()},
+    )},
+)
+@api_view(["POST"])
+@permission_classes([IsSuperuser])
+def set_staff(request, user_id: int):
+    """超級管理員把使用者設為一般管理員或取消（使用者決策：只有 superuser 能操作，
+    且只能切換 is_staff；superuser 身分仍只能用 seed_admin 設定）。"""
+    serializer = SetStaffSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    wanted = serializer.validated_data["is_staff"]
+    user_model = get_user_model()
+    with transaction.atomic():
+        target = get_object_or_404(user_model.objects.select_for_update(), pk=user_id)
+        if target.pk == request.user.pk:
+            return Response(
+                {"detail": "不能變更自己的管理員身分。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if target.is_superuser:
+            return Response(
+                {"detail": "超級管理員的權限不能在後台變更。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if wanted and (not target.is_active or target.deleted_at):
+            return Response(
+                {"detail": "停用或已刪除的帳號不能設為管理員。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        before = target.is_staff
+        if before != wanted:
+            target.is_staff = wanted
+            target.save(update_fields=["is_staff"])
+    # 稽核寫在 transaction 外：log_admin_action 吞例外，放在 atomic 內失敗會讓整筆交易不可用
+    if before != wanted:
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.USER_TOGGLE_STAFF,
+            target_user=target,
+            target_repr=target.email or target.username,
+            payload={"before": before, "after": wanted},
+        )
+    return Response({"is_staff": target.is_staff})
 
 
 @extend_schema(responses=inline_serializer(

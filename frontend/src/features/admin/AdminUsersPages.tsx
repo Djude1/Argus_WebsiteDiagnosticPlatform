@@ -4,6 +4,7 @@ import { NavLink, useNavigate, useParams } from "react-router-dom";
 
 import {
   adminAdjustCoin,
+  adminSetStaff,
   adminUserSubscriptionAction,
   fetchAdminSubscriptionPlans,
   fetchAdminUserDetail,
@@ -35,6 +36,7 @@ import type {
 } from "../../shared/apiContracts";
 import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters.js";
 import { useListQuery } from "../../shared/useListQuery";
+import { useArgusStore } from "../../store";
 import { errorDetail, statusLabel, toAllowed, toPositiveInt } from "./adminHelpers";
 
 // 後台使用者列表與使用者詳情。
@@ -193,6 +195,9 @@ export function AdminUserDetailPage() {
   const [subBusy, setSubBusy] = useState(false);
   const [subFeedback, setSubFeedback] = useState<Feedback | null>(null);
   const { confirmDialog, dialogHost } = useConfirmDialogs();
+  const me = useArgusStore((s) => s.me);
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [roleFeedback, setRoleFeedback] = useState<Feedback | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -270,6 +275,29 @@ export function AdminUserDetailPage() {
       setSubFeedback({ tone: "bad", message: errorDetail(err, "取消失敗。") });
     } finally {
       setSubBusy(false);
+    }
+  }
+
+  async function handleToggleStaff() {
+    if (!userId || !user) return;
+    const next = !user.is_staff;
+    const ok = await confirmDialog(
+      next
+        ? `確定把 ${user.email || user.username} 設為管理員？對方將可以進入管理後台、檢視所有使用者與調整點數。`
+        : `確定取消 ${user.email || user.username} 的管理員身分？對方將無法再進入管理後台。`,
+      { danger: next },
+    );
+    if (!ok) return;
+    setRoleBusy(true);
+    setRoleFeedback(null);
+    try {
+      await adminSetStaff(userId, next);
+      setRoleFeedback({ tone: "good", message: next ? "已設為管理員。" : "已取消管理員身分。" });
+      await load();
+    } catch (err) {
+      setRoleFeedback({ tone: "bad", message: errorDetail(err, "變更失敗。") });
+    } finally {
+      setRoleBusy(false);
     }
   }
 
@@ -354,6 +382,36 @@ export function AdminUserDetailPage() {
           ) : <p className="admin-empty">尚未建立錢包</p>}
         </section>
       </div>
+
+      {me?.is_superuser && (
+        <section className="admin-panel">
+          <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>管理權限</h3>
+          {user.is_superuser ? (
+            <p className="admin-empty">這是超級管理員帳號，權限不能在後台變更。</p>
+          ) : user.id === me.id ? (
+            <p className="admin-empty">不能變更自己的管理員身分。</p>
+          ) : (
+            <div className="admin-role-row">
+              <p>
+                目前身分：<strong>{user.is_staff ? "管理員" : "一般使用者"}</strong>。
+                管理員可以進入管理後台，檢視使用者、訂單與掃描，並調整點數；操作日誌與公告仍只有超級管理員能用。
+              </p>
+              <button
+                type="button"
+                className={`admin-btn ${user.is_staff ? "danger" : "primary"}`}
+                onClick={handleToggleStaff}
+                disabled={roleBusy || (!user.is_staff && !user.is_active)}
+              >
+                {roleBusy ? "處理中…" : user.is_staff ? "取消管理員" : "設為管理員"}
+              </button>
+              {!user.is_staff && !user.is_active && <p className="admin-empty">停用的帳號不能設為管理員。</p>}
+            </div>
+          )}
+          {roleFeedback && (
+            <div className={`admin-feedback tone-${roleFeedback.tone}`}>{roleFeedback.message}</div>
+          )}
+        </section>
+      )}
 
       <section className="admin-panel">
         <h3><span className="admin-panel-icon-chip"><AdminSettingsIcon /></span>調整點數</h3>

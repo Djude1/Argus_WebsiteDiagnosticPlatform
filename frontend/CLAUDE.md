@@ -147,7 +147,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理（`AdminUsersPages.tsx`）|
-| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
+| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 管理權限（只有超級管理員看得到：設為／取消一般管理員，確認對話框；自己與超級管理員帳號不顯示按鈕）、點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
 | `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄（`AdminTransactionsPage.tsx`；類型篩選涵蓋 `CoinTransaction.Kind` 全部 11 種）|
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開；`AdminReviewsPage.tsx`） |

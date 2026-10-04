@@ -110,7 +110,7 @@ uv run python backend/manage.py runserver 127.0.0.1:8000
 - 未登入 → 自動跳 `/project`（公開介紹頁）
 - 登入後 → `/dashboard`
 - staff 登入後右上角會看到「🛡️ 後台」chip → `/admin/overview`（superuser 多看操作紀錄/公告管理）
-- 管理員帳號以前台 email 登入即可進 `/admin`；授予 staff/superuser 用 `manage.py seed_admin`（django-admin 已移除）
+- 管理員帳號以前台 email 登入即可進 `/admin`；授予 superuser 用 `manage.py seed_admin`；staff 也可由超級管理員在後台使用者詳情設定（django-admin 已移除）
 
 ### 2.5 驗證一切正常
 ```powershell
@@ -254,7 +254,7 @@ Argus/
 
 ### 6.3 ~~Django Admin~~（已於 2026-06 整併移除）
 - 原 `/django-admin/` superuser 後門已移除；**唯一後台為 React `/admin/*`**。
-- 管理員改走前台 email 登入；授予 staff/superuser 用 `manage.py seed_admin`（或 Django shell）。
+- 管理員改走前台 email 登入；授予 superuser 用 `manage.py seed_admin`（或 Django shell）；staff 也可由超級管理員在後台使用者詳情設定。
 - `/django-admin/*` 現在落入 SPA fallback（回 `index.html`），不再是 Django Admin。
 
 ### 6.4 PWA 必要檔（Django runserver 用 re_path 明確 serve）

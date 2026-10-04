@@ -99,6 +99,10 @@ class AdminUserDetailSerializer(AdminUserListSerializer):
         return AdminCoinTransactionSerializer(qs, many=True).data
 
 
+class SetStaffSerializer(serializers.Serializer):
+    is_staff = serializers.BooleanField()
+
+
 class AdjustCoinSerializer(serializers.Serializer):
     delta = serializers.IntegerField()
     note = serializers.CharField(max_length=255, allow_blank=True, required=False)
