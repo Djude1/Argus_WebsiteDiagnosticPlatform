@@ -454,10 +454,6 @@ function LoginPage({ googleOAuthEnabled }) {
           />
         )}
       </div>
-
-      <p className="auth-notice">
-        管理員請用上方帳號密碼登入，登入後於右上角帳號選單進入 <code>/admin</code> 後台。
-      </p>
     </AuthShell>
   );
 }
