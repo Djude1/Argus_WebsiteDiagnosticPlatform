@@ -10,16 +10,16 @@ React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意
 
 | 層級 | 可用功能 | 權限類別 |
 |---|---|---|
-| 一般管理員（is_staff） | 總覽 / 儀表板 / 使用者（檢視＋調點＋掃描紀錄） / 交易 / 訂單 / 評論（回覆·審核） / 掃描（檢視＋終止＋重排） / 網域驗證 / **系統健康** / CMS（features·team·releases·plans） | `IsAdminUser` |
-| 超級管理員（is_superuser） | 上述全部 ＋ 操作日誌（audit-log） ＋ 公告管理（announcements） ＋ 設定／取消一般管理員（`users/<id>/staff`） | `IsSuperuser` |
+| 一般管理員（is_staff） | 總覽 / 儀表板 / 使用者（檢視＋調點＋掃描紀錄＋停用／恢復＋刪除一般使用者） / 交易 / 訂單 / 評論（回覆·審核） / 掃描（檢視＋終止＋重排） / 網域驗證 / **系統健康** / CMS（features·team·releases·plans） | `IsAdminUser` |
+| 超級管理員（is_superuser） | 上述全部 ＋ 操作日誌（audit-log） ＋ 公告管理（announcements） ＋ 設定／取消一般管理員（`users/<id>/staff`）＋ 停用／刪除一般管理員帳號 | `IsSuperuser` |
 
 前端 `AdminLayout` 依 `me.is_superuser` 顯示「操作日誌📜 / 公告管理📢」，與後端 `IsSuperuser` 一致。（django-admin 已移除，不再有第二後台。）
 
 ## 關鍵檔案 / 端點（`/api/admin/`）
-- `views.py`：`overview`（含 `triage` 待辦統計）、`users`、`users/<id>`（含該使用者的 `recent_scans`）、`users/<id>/adjust-coin`、`users/<id>/staff`（superuser 設定／取消一般管理員）、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、**`scans/<id>/cancel`（合作式終止＋退款）**、**`scans/<id>/requeue`（重排，不重複扣點）**、`domains`（網域所有權驗證清單）、`domains/<id>/override`（人工核准／否決網域驗證）、`orders`、`dashboard`、**`health`（掃描鏈路與系統資源即時探測）**、`audit-log`、`announcements/*`
+- `views.py`：`overview`（含 `triage` 待辦統計）、`users`、`users/<id>`（含該使用者的 `recent_scans`）、`users/<id>/adjust-coin`、`users/<id>/staff`（superuser 設定／取消一般管理員）、`users/<id>/suspend`（停用＝封號／恢復，`{suspended, reason}`，停用時撤銷 refresh token）、`users/<id>/delete`（`{confirm: "刪除帳號", reason}`，呼叫 `accounts.deletion.delete_account`，稽核只寫「使用者 #id」不留 Email；兩者共用 `_manage_target_error`：不能對自己、superuser、已刪除帳號，對象是 staff 時只有 superuser 可以）、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、**`scans/<id>/cancel`（合作式終止＋退款）**、**`scans/<id>/requeue`（重排，不重複扣點）**、`domains`（網域所有權驗證清單）、`domains/<id>/override`（人工核准／否決網域驗證）、`orders`、`dashboard`、**`health`（掃描鏈路與系統資源即時探測）**、`audit-log`、`announcements/*`
 - `system_metrics.py`：CPU／記憶體／磁碟／網路／運行時間。**純標準庫，未引入 psutil**——容器內 psutil 讀到的是宿主機數字，會讓 pod 的資源使用率嚴重失真；此模組優先讀 cgroup v2，並在每個指標標示 `scope`（`container`／`host`）
 - `cms_views.py`：`cms/(features|team|releases|plans)` 寫入端點（ModelViewSet）
-- `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_moderate` / `review_delete` / `user_toggle_staff` / `domain_override` / `scan_control` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
+- `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_moderate` / `review_delete` / `user_toggle_staff` / `user_suspend` / `user_delete` / `domain_override` / `scan_control` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
 - `serializers.py`：輸出欄位 **whitelist**
 - `schema.py`：OpenAPI 標註工具（`list_schema()` / `query_param()`），前端型別由它產生的 schema 生成
 

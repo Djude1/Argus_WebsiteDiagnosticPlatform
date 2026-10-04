@@ -110,6 +110,14 @@ def _registration_payload(profile: dict) -> dict:
     }
 
 
+def _suspended_response() -> Response:
+    """被管理員停用的帳號：明確告知，不當成帳密錯誤或未註冊。"""
+    return Response(
+        {"code": "account_suspended", "detail": "此帳號已被停用，如有疑問請聯絡我們。"},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class GoogleLoginView(views.APIView):
     """以 Google ID Token 登入既有帳號。
@@ -132,6 +140,8 @@ class GoogleLoginView(views.APIView):
             return Response({"credential": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         user = find_login_user(profile["email"])
         if user is None:
+            if find_login_user(profile["email"], suspended=True):
+                return _suspended_response()
             return Response(_registration_payload(profile), status=status.HTTP_409_CONFLICT)
         return _finish_login(request, user, LoginEvent.Method.GOOGLE)
 
@@ -151,6 +161,8 @@ class GoogleRegisterStartView(views.APIView):
             profile = verify_google_credential(request.data.get("credential"))
         except GoogleTokenError as exc:
             return Response({"credential": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if find_login_user(profile["email"], suspended=True):
+            return _suspended_response()
         if find_login_user(profile["email"]) is not None:
             return Response(
                 {"code": "already_registered", "detail": "這個 Google 帳號已經註冊，請直接登入。"},
@@ -251,6 +263,10 @@ class EmailLoginView(views.APIView):
             if candidate
             else None
         )
+        if not user and (suspended := find_login_user(identifier, suspended=True)):
+            # 停用帳號只有在密碼正確時才說明，避免被拿來探測帳號是否存在
+            if suspended.check_password(password):
+                return _suspended_response()
         if not user:
             # 認證失敗回 401 而非 400：400 與 DisallowedHost、CSRF 等設定層錯誤同碼，
             # 排查時無法從狀態碼分辨是「帳密錯」還是「環境壞了」。欄位缺漏才是 400。
@@ -401,11 +417,6 @@ class DeleteAccountView(views.APIView):
 
     def post(self, request):
         user = request.user
-        if user.is_staff or user.is_superuser:
-            return Response(
-                {"detail": "管理員帳號不能自行刪除，請聯絡其他管理員處理。"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         if (request.data.get("confirm") or "").strip() != self.CONFIRM_TEXT:
             return Response(
                 {"confirm": f"請輸入「{self.CONFIRM_TEXT}」確認。"},
@@ -413,7 +424,10 @@ class DeleteAccountView(views.APIView):
             )
         if not user.check_password(request.data.get("password") or ""):
             return Response({"password": "密碼錯誤。"}, status=status.HTTP_400_BAD_REQUEST)
-        delete_account(user)
+        try:
+            delete_account(user)
+        except PermissionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         response = Response(status=status.HTTP_204_NO_CONTENT)
         _clear_refresh_cookie(response)
         return response

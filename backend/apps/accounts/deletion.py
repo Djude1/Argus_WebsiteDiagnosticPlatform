@@ -9,7 +9,8 @@
   買受人姓名、Email、公司、統編、載具，保留金額與時間）、AdminAuditLog（禁止刪除）。
 - User 列保留但改成匿名且停用：username＝deleted-<id>-<亂數>、Email／姓名／handle 清空、
   密碼不可用、is_active=False。同一個 Google 帳號之後可以重新註冊。
-staff／superuser 不能自行刪除（避免後台失去管理者）。
+管理員也可以刪除自己的帳號（刪除後失去管理權限）；只有「最後一位啟用中的超級管理員」不能刪，
+避免沒有人能再管理後台。管理員從後台刪除使用者也走同一個函式（admin_api.views.user_delete）。
 """
 
 from __future__ import annotations
@@ -101,8 +102,11 @@ def delete_account(user) -> None:
     )
     from apps.scans.models import ScanJob, SiteProject, VerifiedDomain
 
-    if user.is_staff or user.is_superuser:
-        raise PermissionError("管理員帳號不能自行刪除。")
+    user_model = type(user)
+    if user.is_superuser and not user_model.objects.filter(
+        is_superuser=True, is_active=True
+    ).exclude(pk=user.pk).exists():
+        raise PermissionError("這是最後一位超級管理員，不能刪除；請先指定另一位超級管理員。")
 
     _revoke_search_console(user)
     files = _collect_files(user)
@@ -143,7 +147,9 @@ def delete_account(user) -> None:
         user.avatar = None
         user.set_unusable_password()
         user.is_active = False
+        user.is_staff = False
+        user.is_superuser = False
         user.deleted_at = timezone.now()
         user.save()
         transaction.on_commit(lambda: _remove_files(files))
-    logger.info("使用者已自行刪除帳號 user_id=%s", user_id)
+    logger.info("帳號已刪除 user_id=%s", user_id)

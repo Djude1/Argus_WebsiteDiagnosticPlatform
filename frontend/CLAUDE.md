@@ -124,7 +124,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/verify` | `VerifyReportPage` | 報告查驗（公開導覽列有入口） |
 | `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
 | `/privacy`、`/terms` | `PrivacyPolicyPage`、`TermsOfServicePage`（`features/public/LegalPages.jsx`） | 隱私權政策與服務條款（公開，頁尾「條款」分組；也是 Google OAuth 同意畫面要求的公開連結）。隱私權政策含 Google API 服務使用者資料政策／Limited Use 聲明與 Search Console 資料的使用、保存、撤銷說明；資料流程改變（新第三方、保存期限、登入方式）時要同步更新內容與 `EFFECTIVE_DATE`。樣式在 `73-public-refine.css` 的 `legal-*` |
-| `/settings` | `SettingsPage` | 帳號設定：個人資料（Email、用戶名唯讀）、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀、**刪除帳號**（目前密碼＋輸入「刪除帳號」＋確認對話框 → `/api/auth/me/delete/`，成功後整頁導到 `/login?deleted=1`；管理員顯示不能自行刪除） |
+| `/settings` | `SettingsPage` | 帳號設定：個人資料（Email、用戶名唯讀）、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀、**刪除帳號**（目前密碼＋輸入「刪除帳號」＋確認對話框 → `/api/auth/me/delete/`，成功後整頁導到 `/login?deleted=1`；管理員也可以刪，會提示將失去管理權限，最後一位超級管理員由後端擋下並顯示原因） |
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在右側頭像選單）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/projects` | `ProjectsListPage`（`features/projects/ProjectWorkspace.jsx`） | 所有網站專案（有專案時左側固定顯示目前專案的工作區側邊欄，選中項目是「所有專案」，與其他分頁一致）：一列跨網站數字（網站數、平均分數、低於 60 分、目前問題、進行中）＋網站登記表（圖示與名稱、分數與變化、走勢、各維度分數、目前問題依嚴重度、上次掃描；可依需要注意／最近掃描／名稱排序，超過 4 個網站可搜尋；窄螢幕每列改為區塊）；可展開已封存的專案並恢復（`?archived=true`） |
 | `/projects/new` | `ProjectCreatePage` | 新增網站專案（2026-10-03 改版）：三段表單——①網址（必填，`parseSiteUrl` 補 https 並取 origin）、名稱、說明；②預設掃描設定（`components/projects/ScanDefaultsFields.jsx`：範圍、五個維度含圖示與說明、被動／主動模式；選主動自動勾資安且不能取消，未驗證網域時提示）；③建立之後（前往建立第一次掃描／先到總覽）。右側固定預覽：網站、網域驗證狀態、預設設定摘要、以預設設定掃一次的點數上限、目前餘額（不足時提示）、同網站已有專案時提示並停用送出。同網站已有專案回 409 並引導過去，已封存的自動恢復 |
@@ -147,7 +147,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理（`AdminUsersPages.tsx`）|
-| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 管理權限（只有超級管理員看得到：設為／取消一般管理員，確認對話框；自己與超級管理員帳號不顯示按鈕）、點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
+| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 帳號狀態（停用／恢復、輸入「刪除帳號」後永久刪除，原因選填寫入操作日誌；對自己、超級管理員、已刪除帳號只顯示說明，對象是管理員時只有超級管理員能操作——與後端 `_manage_target_error` 相同）+ 管理權限（只有超級管理員看得到：設為／取消一般管理員，確認對話框；自己與超級管理員帳號不顯示按鈕）、點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
 | `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄（`AdminTransactionsPage.tsx`；類型篩選涵蓋 `CoinTransaction.Kind` 全部 11 種）|
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開；`AdminReviewsPage.tsx`） |
@@ -160,7 +160,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理（`AdminPlansPage.tsx`；成本／毛利試算見 `features/admin/planEconomics.ts`，每頁 coin 數取自後端）|
 | `/admin/settings` | `AdminSettingsPage` | 系統資訊（唯讀；敏感值只顯示「已設定／未設定」布林，不輸出實際值）|
 | `/admin/announcements` | `AdminAnnouncementsPage` | 公告管理（superuser 限定）（`AdminAnnouncementsPage.tsx`）|
-| `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁（`AdminAuditLogPage.tsx`；動作篩選涵蓋 `AdminAuditLog.Action` 全部 9 種）|
+| `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁（`AdminAuditLogPage.tsx`；動作篩選涵蓋 `AdminAuditLog.Action` 全部 11 種）|
 
 ## API 型別與測試
 

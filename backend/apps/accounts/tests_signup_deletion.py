@@ -213,11 +213,23 @@ class DeleteAccountTests(APITestCase):
         self.assertIn("password", self.delete(password="wrong").data)
         self.assertTrue(User.objects.get(pk=self.user.pk).is_active)
 
-    def test_staff_cannot_delete_themselves(self):
+    def test_staff_can_delete_themselves_and_lose_admin(self):
         User.objects.filter(pk=self.user.pk).update(is_staff=True)
         self.user.refresh_from_db()
         self.client.force_authenticate(self.user)
-        self.assertEqual(self.delete().status_code, 403)
+        self.assertEqual(self.delete().status_code, 204)
+        user = User.objects.get(pk=self.user.pk)
+        self.assertFalse(user.is_staff or user.is_superuser or user.is_active)
+
+    def test_last_superuser_cannot_delete_but_one_of_two_can(self):
+        User.objects.filter(pk=self.user.pk).update(is_staff=True, is_superuser=True)
+        self.user.refresh_from_db()
+        self.client.force_authenticate(self.user)
+        response = self.delete()
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("最後一位超級管理員", response.data["detail"])
+        User.objects.create_superuser("root2@example.com", "root2@example.com", PASSWORD)
+        self.assertEqual(self.delete().status_code, 204)
 
     def test_deletes_personal_data_and_keeps_anonymous_billing(self):
         scan, shot = self._populate()
@@ -270,3 +282,32 @@ class DeleteAccountTests(APITestCase):
             "signup_token": token, "handle": "deleteme", "password": PASSWORD,
         }, format="json")
         self.assertEqual(again.status_code, 201)
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
+class SuspendedAccountLoginTests(APITestCase):
+    """被管理員停用的帳號：密碼正確或 Google 驗證後回 403 account_suspended。"""
+
+    def setUp(self):
+        cache.clear()
+        User.objects.create_user(
+            username="ban@example.com", email="ban@example.com", password=PASSWORD,
+            handle="banned", is_active=False,
+        )
+
+    def test_password_login(self):
+        right = self.client.post(
+            "/api/auth/email-login/", {"email": "banned", "password": PASSWORD}, format="json"
+        )
+        self.assertEqual((right.status_code, right.data["code"]), (403, "account_suspended"))
+        cache.clear()
+        wrong = self.client.post(
+            "/api/auth/email-login/", {"email": "banned", "password": "nope"}, format="json"
+        )
+        self.assertEqual(wrong.status_code, 401)
+
+    def test_google_login_and_register_start(self):
+        for url in ("/api/auth/google/", "/api/auth/register/google/"):
+            with self.subTest(url=url), patch(GOOGLE, return_value=google_info("ban@example.com")):
+                response = self.client.post(url, {"credential": "c"}, format="json")
+                self.assertEqual(response.status_code, 403)
