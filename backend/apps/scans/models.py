@@ -414,13 +414,16 @@ class Finding(models.Model):
 class SearchConsoleConnection(models.Model):
     """Google Search Console 連線（OAuth，scope 只有 webmasters.readonly）。
 
-    project 為空時是帳號層級的網域所有權驗證連線；有值時則供網站專案 SEO 分析使用。
+    有 project：網站專案的 SEO 分析用（property_url 是選定的資源）。
+    project 為空：帳號層級連線（2026-10-04，從 /domains 一鍵連接），只用來以 Search Console
+    擁有者身分驗證網域；每個使用者最多一筆。
     refresh token 以 seo/gsc.py 的 Fernet 金鑰加密後保存，絕不回傳給前端或寫進 log；
     property_url 是使用者選定的資源（https://example.com/ 或 sc-domain:example.com）。
     """
 
     project = models.OneToOneField(
-        SiteProject, on_delete=models.CASCADE, related_name="search_console", null=True, blank=True
+        SiteProject, on_delete=models.CASCADE, related_name="search_console",
+        null=True, blank=True,
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="search_consoles"
@@ -589,7 +592,8 @@ class FixOutput(models.Model):
 class VerifiedDomain(models.Model):
     """網域所有權驗證（主動測試的技術性閘門）。
 
-    使用者以 DNS TXT / meta tag / HTML 檔三種方法，或 Google Search Console 已驗證資源證明控制權；
+    使用者以 Google Search Console（擁有者權限，2026-10-04 起為主要方法）或
+    DNS TXT / meta tag / HTML 檔（備用）證明自己控制該網域；
     驗證通過後 `expires_at` 前可用於主動掃描（`is_effectively_verified`）。
     admin_override=True 代表管理員人工核准（人工審核機制），同等生效。
     """
@@ -604,7 +608,6 @@ class VerifiedDomain(models.Model):
         DNS_TXT = "dns_txt", "DNS TXT 記錄"
         META_TAG = "meta_tag", "HTML meta 標籤"
         HTML_FILE = "html_file", "驗證檔案"
-        GOOGLE_SEARCH_CONSOLE = "google_search_console", "Google Search Console"
         SEARCH_CONSOLE = "search_console", "Google Search Console"
 
     user = models.ForeignKey(
@@ -620,9 +623,9 @@ class VerifiedDomain(models.Model):
         default=Status.PENDING,
         db_index=True,
     )
-    # 目前（最後一次成功）通過的驗證方法（google_search_console 22 字元 → 32）
+    # 目前（最後一次成功）通過的驗證方法
     method = models.CharField(
-        max_length=32,
+        max_length=16,
         choices=Method.choices,
         blank=True,
         default="",

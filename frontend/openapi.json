@@ -3778,42 +3778,6 @@
                 }
             }
         },
-        "/api/domains/{id}/google/start/": {
-            "post": {
-                "operationId": "domains_google_start_create",
-                "description": "產生 Google Search Console 驗證的授權 URL（前端拿到後整頁跳轉）。\n\n與三種 token 方法並存的可選路徑：使用者授權 Argus 讀取其 GSC\n已驗證資源清單，比對通過即視為擁有網域。未設定 client secret\n時回 503，前端按鈕引導設定，不影響原有方法。",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/VerifiedDomain"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/domains/{id}/verify/": {
             "post": {
                 "operationId": "domains_verify_create",
@@ -3862,128 +3826,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/DomainVerify"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/domains/google/callback/": {
-            "get": {
-                "operationId": "domains_google_callback_retrieve",
-                "description": "Google 授權後的回呼：驗 state → 換 token → 比對 GSC 已驗證資源。\n\n瀏覽器 302 回來時不會帶 JWT（access token 只活在 SPA 記憶體），\n身分綁在簽署過的 state 裡；端點開放但 state 600 秒單次有效。\n結果以 302 導回前端 /domains?gsc=...，讓 SPA 顯示成功／失敗訊息。",
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {}
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/VerifiedDomain"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/domains/gsc/": {
-            "get": {
-                "operationId": "domains_gsc_retrieve",
-                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {}
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "domains_gsc_destroy",
-                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No response body"
-                    }
-                }
-            }
-        },
-        "/api/domains/gsc/connect/": {
-            "post": {
-                "operationId": "domains_gsc_connect_create",
-                "description": "回傳 Google 授權網址（帳號層級）；完成後導回 /domains 並自動匯入擁有的網站。",
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {}
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/domains/gsc/sync/": {
-            "post": {
-                "operationId": "domains_gsc_sync_create",
-                "description": "重新讀取 Search Console：擁有的網站全部匯入為已驗證網域。",
-                "tags": [
-                    "domains"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {}
                                 }
                             }
                         },
@@ -7561,7 +7403,7 @@
                     "method": {
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/Method015Enum"
+                                "$ref": "#/components/schemas/MethodBe3Enum"
                             },
                             {
                                 "$ref": "#/components/schemas/BlankEnum"
@@ -7990,32 +7832,20 @@
             },
             "DomainVerify": {
                 "type": "object",
-                "description": "驗證請求；google_search_console 走獨立 OAuth，search_console 使用已連接帳號。",
                 "properties": {
                     "method": {
-                        "$ref": "#/components/schemas/DomainVerifyMethodEnum"
+                        "$ref": "#/components/schemas/MethodBe3Enum"
                     }
                 },
                 "required": [
                     "method"
                 ]
             },
-            "DomainVerifyMethodEnum": {
-                "enum": [
-                    "dns_txt",
-                    "meta_tag",
-                    "html_file",
-                    "search_console"
-                ],
-                "type": "string",
-                "description": "* `dns_txt` - dns_txt\n* `meta_tag` - meta_tag\n* `html_file` - html_file\n* `search_console` - search_console"
-            },
             "DomainVerifyRequest": {
                 "type": "object",
-                "description": "驗證請求；google_search_console 走獨立 OAuth，search_console 使用已連接帳號。",
                 "properties": {
                     "method": {
-                        "$ref": "#/components/schemas/DomainVerifyMethodEnum"
+                        "$ref": "#/components/schemas/MethodBe3Enum"
                     }
                 },
                 "required": [
@@ -8178,16 +8008,15 @@
                 "type": "string",
                 "description": "* `monthly_bonus` - 每月贈點\n* `purchase` - 購買\n* `scan_hold` - 掃描預扣\n* `scan_refund` - 掃描退款\n* `admin_adjust` - 管理員調整\n* `rebuild_hold` - 網頁複刻預扣\n* `rebuild_refund` - 網頁複刻退款\n* `fixgen_grant` - 修正產出額度贈與\n* `fixgen_charge` - 修正產出扣款\n* `fixgen_refund` - 修正產出退款\n* `subscription_grant` - 訂閱月贈點"
             },
-            "Method015Enum": {
+            "MethodBe3Enum": {
                 "enum": [
                     "dns_txt",
                     "meta_tag",
                     "html_file",
-                    "google_search_console",
                     "search_console"
                 ],
                 "type": "string",
-                "description": "* `dns_txt` - DNS TXT 記錄\n* `meta_tag` - HTML meta 標籤\n* `html_file` - 驗證檔案\n* `google_search_console` - Google Search Console\n* `search_console` - Google Search Console"
+                "description": "* `dns_txt` - DNS TXT 記錄\n* `meta_tag` - HTML meta 標籤\n* `html_file` - 驗證檔案\n* `search_console` - Google Search Console"
             },
             "Page": {
                 "type": "object",
@@ -10293,7 +10122,7 @@
                     "method": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/Method015Enum"
+                                "$ref": "#/components/schemas/MethodBe3Enum"
                             }
                         ],
                         "readOnly": true

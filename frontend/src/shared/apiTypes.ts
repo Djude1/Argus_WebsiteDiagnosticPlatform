@@ -1404,29 +1404,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/domains/{id}/google/start/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description 產生 Google Search Console 驗證的授權 URL（前端拿到後整頁跳轉）。
-         *
-         *     與三種 token 方法並存的可選路徑：使用者授權 Argus 讀取其 GSC
-         *     已驗證資源清單，比對通過即視為擁有網域。未設定 client secret
-         *     時回 503，前端按鈕引導設定，不影響原有方法。
-         */
-        post: operations["domains_google_start_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/domains/{id}/verify/": {
         parameters: {
             query?: never;
@@ -1438,87 +1415,6 @@ export interface paths {
         put?: never;
         /** @description 執行指定方法的驗證，回最新狀態與失敗原因（last_error）。 */
         post: operations["domains_verify_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/domains/google/callback/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description Google 授權後的回呼：驗 state → 換 token → 比對 GSC 已驗證資源。
-         *
-         *     瀏覽器 302 回來時不會帶 JWT（access token 只活在 SPA 記憶體），
-         *     身分綁在簽署過的 state 裡；端點開放但 state 600 秒單次有效。
-         *     結果以 302 導回前端 /domains?gsc=...，讓 SPA 顯示成功／失敗訊息。
-         */
-        get: operations["domains_google_callback_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/domains/gsc/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
-         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
-         */
-        get: operations["domains_gsc_retrieve"];
-        put?: never;
-        post?: never;
-        /**
-         * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
-         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
-         */
-        delete: operations["domains_gsc_destroy"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/domains/gsc/connect/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description 回傳 Google 授權網址（帳號層級）；完成後導回 /domains 並自動匯入擁有的網站。 */
-        post: operations["domains_gsc_connect_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/domains/gsc/sync/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description 重新讀取 Search Console：擁有的網站全部匯入為已驗證網域。 */
-        post: operations["domains_gsc_sync_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2936,7 +2832,7 @@ export interface components {
             domain: string;
             status: components["schemas"]["StatusA7fEnum"];
             readonly status_label: string;
-            method: components["schemas"]["Method015Enum"] | components["schemas"]["BlankEnum"];
+            method: components["schemas"]["MethodBe3Enum"] | components["schemas"]["BlankEnum"];
             readonly method_label: string;
             /** Format: date-time */
             verified_at: string | null;
@@ -3076,21 +2972,11 @@ export interface components {
             approve: boolean;
             note?: string;
         };
-        /** @description 驗證請求；google_search_console 走獨立 OAuth，search_console 使用已連接帳號。 */
         DomainVerify: {
-            method: components["schemas"]["DomainVerifyMethodEnum"];
+            method: components["schemas"]["MethodBe3Enum"];
         };
-        /**
-         * @description * `dns_txt` - dns_txt
-         *     * `meta_tag` - meta_tag
-         *     * `html_file` - html_file
-         *     * `search_console` - search_console
-         * @enum {string}
-         */
-        DomainVerifyMethodEnum: "dns_txt" | "meta_tag" | "html_file" | "search_console";
-        /** @description 驗證請求；google_search_console 走獨立 OAuth，search_console 使用已連接帳號。 */
         DomainVerifyRequest: {
-            method: components["schemas"]["DomainVerifyMethodEnum"];
+            method: components["schemas"]["MethodBe3Enum"];
         };
         /**
          * @description * `live` - 即時爬取
@@ -3154,11 +3040,10 @@ export interface components {
          * @description * `dns_txt` - DNS TXT 記錄
          *     * `meta_tag` - HTML meta 標籤
          *     * `html_file` - 驗證檔案
-         *     * `google_search_console` - Google Search Console
          *     * `search_console` - Google Search Console
          * @enum {string}
          */
-        Method015Enum: "dns_txt" | "meta_tag" | "html_file" | "google_search_console" | "search_console";
+        MethodBe3Enum: "dns_txt" | "meta_tag" | "html_file" | "search_console";
         Page: {
             readonly id: number;
             /** Format: uri */
@@ -3826,7 +3711,7 @@ export interface components {
             readonly id: number;
             readonly domain: string;
             readonly status: components["schemas"]["StatusA7fEnum"];
-            readonly method: components["schemas"]["Method015Enum"];
+            readonly method: components["schemas"]["MethodBe3Enum"];
             /** Format: date-time */
             readonly verified_at: string | null;
             /** Format: date-time */
@@ -6203,27 +6088,6 @@ export interface operations {
             };
         };
     };
-    domains_google_start_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifiedDomain"];
-                };
-            };
-        };
-    };
     domains_verify_create: {
         parameters: {
             query?: never;
@@ -6247,106 +6111,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DomainVerify"];
-                };
-            };
-        };
-    };
-    domains_google_callback_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifiedDomain"];
-                };
-            };
-        };
-    };
-    domains_gsc_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    domains_gsc_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    domains_gsc_connect_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    domains_gsc_sync_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
         };

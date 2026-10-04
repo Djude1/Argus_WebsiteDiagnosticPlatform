@@ -52,7 +52,7 @@ class LoginEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        ordering = ["-created_at", "-id"]
+        ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "-created_at"]),
         ]

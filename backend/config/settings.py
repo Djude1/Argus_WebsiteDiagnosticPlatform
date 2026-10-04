@@ -422,7 +422,7 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 # 用戶端，另需 client secret；兩者都有值才啟用。重新導向 URI 預設為目前網域的
 # /api/gsc/callback/，必須登記在 Google Cloud OAuth 用戶端。
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
-ARGUS_GSC_REDIRECT_URI = os.getenv("ARGUS_GSC_REDIRECT_URI", "").strip()
+ARGUS_GSC_REDIRECT_URI = os.getenv("ARGUS_GSC_REDIRECT_URI", "")
 # refresh token 加密金鑰（Fernet）；空值時由 SECRET_KEY 推導（輪替 SECRET_KEY 需重新連接）
 ARGUS_GSC_TOKEN_KEY = os.getenv("ARGUS_GSC_TOKEN_KEY", "")
 # SEO 連結檢查（掃描階段 seo_links）：最多檢查幾個不重複的連結、總時間上限（秒）

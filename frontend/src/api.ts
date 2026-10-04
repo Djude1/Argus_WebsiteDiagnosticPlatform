@@ -128,9 +128,7 @@ export async function deleteAvatar() {
   await api.delete("/auth/me/avatar/");
 }
 
-// ---- 網域驗證（api/domains）：主動式資安測試的技術性閘門 ----
-// 後端 scans router 將 VerifiedDomainViewSet 註冊在 `domains/`（掛載於 /api/ 之下），
-// 實際路徑是 /api/domains/；舊的 /api/scans/domains/ 會撞進 scan detail（pk="domains"）回 404
+// ---- 網域驗證（/api/domains/）：主動式資安測試的技術性閘門 ----
 
 // 自己的網域驗證清單；回傳 DRF 分頁 { count, next, previous, results }
 export async function fetchVerifiedDomains() {
@@ -151,13 +149,6 @@ export async function verifyVerifiedDomain(
 ) {
   const response = await api.post(`/domains/${domainId}/verify/`, { method });
   return response.data;
-}
-
-// 啟動 Google Search Console 驗證（可選路徑）：回傳 { authorization_url }，整頁跳轉 Google 授權，
-// 結果由後端 302 回 /domains?gsc=ok|fail|denied|expired|missing；未設定 client secret 時回 503
-export async function startGoogleSiteVerification(domainId: number) {
-  const response = await api.post(`/domains/${domainId}/google/start/`);
-  return response.data as { authorization_url: string };
 }
 
 // 刪除網域（204 無內容）

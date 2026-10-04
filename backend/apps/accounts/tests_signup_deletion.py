@@ -222,8 +222,6 @@ class DeleteAccountTests(APITestCase):
         self.assertFalse(user.is_staff or user.is_superuser or user.is_active)
 
     def test_last_superuser_cannot_delete_but_one_of_two_can(self):
-        other_superusers = User.objects.exclude(pk=self.user.pk).filter(is_superuser=True)
-        other_superusers.update(is_superuser=False, is_staff=False)
         User.objects.filter(pk=self.user.pk).update(is_staff=True, is_superuser=True)
         self.user.refresh_from_db()
         self.client.force_authenticate(self.user)

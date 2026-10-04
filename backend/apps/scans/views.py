@@ -4,7 +4,6 @@ import threading
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from urllib.parse import urlencode
 
 from config.throttling import UserRateThrottle
 from django.conf import settings
@@ -12,14 +11,13 @@ from django.db import close_old_connections, connections
 from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404, HttpResponse
-from django.shortcuts import redirect
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.billing.services import (
@@ -30,14 +28,6 @@ from apps.billing.services import (
 from apps.scans.domain_verification import generate_token, run_verification
 from apps.scans.favicon import refresh_project_favicon_from_url
 from apps.scans.fixgen.services import FixgenDisabledError, trigger_fix_output
-from apps.scans.google_site_verification import (
-    GoogleSiteVerificationError,
-    build_authorization_url,
-    consume_state,
-    is_gsc_verification_enabled,
-    resolve_redirect_uri,
-    run_google_verification,
-)
 from apps.scans.models import (
     AuthorizationConsent,
     Finding,
@@ -788,78 +778,8 @@ class VerifiedDomainViewSet(viewsets.ModelViewSet):
             }
         )
 
-    @action(detail=True, methods=["post"], url_path="google/start")
-    def google_start(self, request, pk=None):
-        """產生 Google Search Console 驗證的授權 URL（前端拿到後整頁跳轉）。
-
-        與三種 token 方法並存的可選路徑：使用者授權 Argus 讀取其 GSC
-        已驗證資源清單，比對通過即視為擁有網域。未設定 client secret
-        時回 503，前端按鈕引導設定，不影響原有方法。
-        """
-        verified_domain = self.get_object()
-        if not is_gsc_verification_enabled():
-            return Response(
-                {
-                    "detail": "Google Search Console 驗證未啟用："
-                    "請在 .env 設定 GOOGLE_OAUTH_CLIENT_ID 與 GOOGLE_OAUTH_CLIENT_SECRET。"
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        redirect_uri = resolve_redirect_uri(request)
-        authorization_url = build_authorization_url(
-            request.user.id, verified_domain.id, redirect_uri
-        )
-        return Response({"authorization_url": authorization_url})
-
-    @action(
-        detail=False,
-        methods=["get"],
-        url_path="google/callback",
-        permission_classes=[AllowAny],
-        authentication_classes=[],
-    )
-    def google_callback(self, request):
-        """Google 授權後的回呼：驗 state → 換 token → 比對 GSC 已驗證資源。
-
-        瀏覽器 302 回來時不會帶 JWT（access token 只活在 SPA 記憶體），
-        身分綁在簽署過的 state 裡；端點開放但 state 600 秒單次有效。
-        結果以 302 導回前端 /domains?gsc=...，讓 SPA 顯示成功／失敗訊息。
-        """
-        error = request.query_params.get("error", "")
-        code = request.query_params.get("code", "")
-        state = request.query_params.get("state", "")
-
-        def _back(outcome: str, domain: str = "", reason: str = ""):
-            params = {"gsc": outcome}
-            if domain:
-                params["domain"] = domain
-            if reason:
-                params["reason"] = reason[:200]
-            return redirect(f"/domains?{urlencode(params)}")
-
-        if error:
-            return _back("denied")
-        try:
-            payload = consume_state(state)
-        except GoogleSiteVerificationError as exc:
-            return _back("expired", reason=str(exc))
-        verified_domain = (
-            VerifiedDomain.objects.select_related("user")
-            .filter(id=payload["did"], user_id=payload["uid"])
-            .first()
-        )
-        if verified_domain is None:
-            return _back("missing")
-        try:
-            run_google_verification(verified_domain, code, resolve_redirect_uri(request))
-        except GoogleSiteVerificationError as exc:
-            verified_domain.last_error = str(exc)[:255]
-            verified_domain.last_checked_at = timezone.now()
-            verified_domain.save(update_fields=["last_error", "last_checked_at"])
-            return _back("fail", verified_domain.domain, reason=str(exc))
-        return _back("ok", verified_domain.domain)
-
     def retrieve(self, request, *args, **kwargs):
+        """單一網域：另附自己的 token 與三種備用方法的設定說明（/domains「其他驗證方式」用）。"""
         verified_domain = self.get_object()
         return Response(
             {

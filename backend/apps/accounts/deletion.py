@@ -91,7 +91,6 @@ def _revoke_search_console(user) -> None:
 def delete_account(user) -> None:
     from apps.accounts.models import LoginEvent, PasswordResetToken
     from apps.billing.models import PurchaseOrder, SubscriptionOrder
-    from apps.billing.services import cancel_subscription_and_recurring
     from apps.mcp_access.models import McpApiKey, McpCallLog
     from apps.reviews.models import (
         PlatformReview,
@@ -101,7 +100,7 @@ def delete_account(user) -> None:
         ReviewReport,
         ReviewResponseHelpful,
     )
-    from apps.scans.models import ScanJob, SiteProject, VerifiedDomain
+    from apps.scans.models import ScanJob, SearchConsoleConnection, SiteProject, VerifiedDomain
 
     user_model = type(user)
     if user.is_superuser and not user_model.objects.filter(
@@ -109,7 +108,15 @@ def delete_account(user) -> None:
     ).exclude(pk=user.pk).exists():
         raise PermissionError("這是最後一位超級管理員，不能刪除；請先指定另一位超級管理員。")
 
-    cancel_subscription_and_recurring(user)
+    # 先停止綠界每月自動扣款，避免刪除後仍持續扣款；綠界取消失敗就不刪除（請使用者稍後再試）
+    from apps.billing.ecpay import EcpayActionError
+    from apps.billing.services import stop_recurring_charges
+
+    try:
+        stop_recurring_charges(user)
+    except EcpayActionError as exc:
+        raise PermissionError(f"無法取消訂閱的每月扣款，帳號尚未刪除：{exc}") from exc
+
     _revoke_search_console(user)
     files = _collect_files(user)
     user_id = user.pk
@@ -125,19 +132,20 @@ def delete_account(user) -> None:
         McpApiKey.objects.filter(user=user).delete()
         # 掃描連帶刪除頁面、問題、報告防偽紀錄、授權紀錄、複刻；點數交易的 scan_job 依設計 SET_NULL
         ScanJob.objects.filter(user=user).delete()
-        SiteProject.objects.filter(user=user).delete()  # Search Console 連線一併刪除
+        SiteProject.objects.filter(user=user).delete()  # 專案的 Search Console 連線一併刪除
+        SearchConsoleConnection.objects.filter(user=user).delete()  # 帳號層級連線
         VerifiedDomain.objects.filter(user=user).delete()
         LoginEvent.objects.filter(user=user).delete()
         PasswordResetToken.objects.filter(user=user).delete()
 
-        PurchaseOrder.objects.filter(user=user).update(
+        SubscriptionOrder.objects.filter(user=user).update(
             buyer_name="已刪除用戶",
             buyer_email=f"deleted-{user_id}@deleted.invalid",
             company_name="",
             tax_id="",
             carrier_id="",
         )
-        SubscriptionOrder.objects.filter(user=user).update(
+        PurchaseOrder.objects.filter(user=user).update(
             buyer_name="已刪除用戶",
             buyer_email=f"deleted-{user_id}@deleted.invalid",
             company_name="",

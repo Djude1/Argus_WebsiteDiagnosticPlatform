@@ -35,7 +35,6 @@ from apps.accounts.signup import (
     verify_google_credential,
 )
 from apps.accounts.turnstile import turnstile_enabled, turnstile_rejection
-from apps.billing.ecpay import EcpayActionError
 from apps.billing.services import grant_monthly_bonus_if_needed, settle_subscription_safe
 from apps.scans.demo.seed import create_demo_project_safely
 
@@ -427,7 +426,7 @@ class DeleteAccountView(views.APIView):
             return Response({"password": "密碼錯誤。"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             delete_account(user)
-        except (PermissionError, EcpayActionError) as exc:
+        except PermissionError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         response = Response(status=status.HTTP_204_NO_CONTENT)
         _clear_refresh_cookie(response)

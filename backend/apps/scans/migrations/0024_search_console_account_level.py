@@ -8,27 +8,11 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("scans", "0023_merge_gsc_and_projects"),
+        ("scans", "0023_verifieddomain_search_console"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name="verifieddomain",
-            name="method",
-            field=models.CharField(
-                blank=True,
-                choices=[
-                    ("dns_txt", "DNS TXT 記錄"),
-                    ("meta_tag", "HTML meta 標籤"),
-                    ("html_file", "驗證檔案"),
-                    ("google_search_console", "Google Search Console"),
-                    ("search_console", "Google Search Console"),
-                ],
-                default="",
-                max_length=32,
-            ),
-        ),
         migrations.AlterField(
             model_name="searchconsoleconnection",
             name="project",
