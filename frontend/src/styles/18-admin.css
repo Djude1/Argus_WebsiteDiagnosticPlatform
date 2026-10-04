@@ -615,6 +615,13 @@
   }
   .admin-staff-chip{ background: var(--admin-accent-soft-bg-2); color: var(--admin-accent-strong); }
   .admin-super-chip{ background: var(--admin-highlight-soft); color: var(--admin-tone-warn-text); }
+  .admin-suspended-chip,
+  .admin-deleted-chip{
+    @apply ml-1 inline-block px-1.5 py-0 text-[10px] font-bold;
+    border-radius: var(--ag-r-pill);
+  }
+  .admin-suspended-chip{ background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
+  .admin-deleted-chip{ background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
 
   .admin-status{
     @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold;
@@ -770,8 +777,13 @@
   .admin-balance-big span{ @apply ml-1 text-base font-medium; color: var(--admin-text-muted); }
   .admin-balance-big.tight{ margin-bottom: 0; }
 
-  /* --- 調整點數 --- */
+  /* --- 調整點數／管理權限 --- */
   .admin-adjust-form .admin-adjust-row{ @apply flex flex-wrap gap-2; }
+  .admin-role-row{ @apply flex flex-col items-start gap-3; }
+  .admin-role-row p{ @apply m-0; color: var(--admin-text-secondary); line-height: 1.6; }
+  .admin-role-row strong{ color: var(--admin-text); }
+  .admin-role-actions{ @apply flex flex-wrap items-center gap-2; }
+  .admin-role-actions .admin-input{ min-width: min(100%, 18rem); }
   .admin-quick-row{ @apply mt-2 flex flex-wrap gap-2; }
   .admin-quick-btn{
     @apply px-3 text-xs font-semibold;

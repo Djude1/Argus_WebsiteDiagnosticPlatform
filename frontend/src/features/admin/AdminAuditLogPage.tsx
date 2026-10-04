@@ -23,6 +23,8 @@ const ACTION_LABELS: Record<AdminAuditAction, string> = {
   review_moderate: "審核評論",
   review_delete: "刪除評論",
   user_toggle_staff: "切換管理員身份",
+  user_suspend: "停用／恢復帳號",
+  user_delete: "刪除帳號",
   domain_override: "網域驗證人工審核",
   scan_control: "掃描任務控制",
   other: "其他",

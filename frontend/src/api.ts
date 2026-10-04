@@ -3,6 +3,8 @@ import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 import type {
   AdminAdjustCoinResponse,
+  AdminSetStaffResponse,
+  AdminSuspendUserResponse,
   AdminAuditLogListParams,
   AdminAuditLogListResponse,
   AdminDomainListParams,
@@ -259,6 +261,27 @@ export async function adminAdjustCoin(
 ): Promise<AdminAdjustCoinResponse> {
   const response = await api.post(`/admin/users/${userId}/adjust-coin/`, { delta, note });
   return response.data;
+}
+
+// 設為／取消一般管理員（後端只允許超級管理員；不能動自己與超級管理員）
+export async function adminSetStaff(userId: number, isStaff: boolean): Promise<AdminSetStaffResponse> {
+  const response = await api.post(`/admin/users/${userId}/staff/`, { is_staff: isStaff });
+  return response.data;
+}
+
+// 停用（封號）或恢復使用者；管理員對象只有超級管理員能處理（後端 _manage_target_error）
+export async function adminSuspendUser(
+  userId: number,
+  suspended: boolean,
+  reason = "",
+): Promise<AdminSuspendUserResponse> {
+  const response = await api.post(`/admin/users/${userId}/suspend/`, { suspended, reason });
+  return response.data;
+}
+
+// 刪除使用者帳號（與使用者自行刪除相同：個資全刪、帳務匿名保留）；confirm 必須是「刪除帳號」
+export async function adminDeleteUser(userId: number, confirm: string, reason = ""): Promise<void> {
+  await api.post(`/admin/users/${userId}/delete/`, { confirm, reason });
 }
 
 export async function fetchAdminTransactions(

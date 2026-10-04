@@ -24,6 +24,8 @@ class AdminUserListSerializer(serializers.Serializer):
     date_joined = serializers.DateTimeField()
     last_login = serializers.DateTimeField(allow_null=True)
     is_staff = serializers.BooleanField()
+    is_active = serializers.BooleanField()
+    deleted_at = serializers.DateTimeField(allow_null=True)
     balance = serializers.SerializerMethodField()
     total_purchased_ntd = serializers.SerializerMethodField()
     total_scans_used = serializers.SerializerMethodField()
@@ -80,7 +82,6 @@ class AdminUserDetailSerializer(AdminUserListSerializer):
 
     wallet = serializers.SerializerMethodField()
     recent_transactions = serializers.SerializerMethodField()
-    is_active = serializers.BooleanField()
     is_superuser = serializers.BooleanField()
 
     @extend_schema_field(AdminWalletSummarySerializer(allow_null=True))
@@ -97,6 +98,20 @@ class AdminUserDetailSerializer(AdminUserListSerializer):
             return []
         qs = w.transactions.all()[:30]
         return AdminCoinTransactionSerializer(qs, many=True).data
+
+
+class SetStaffSerializer(serializers.Serializer):
+    is_staff = serializers.BooleanField()
+
+
+class SuspendUserSerializer(serializers.Serializer):
+    suspended = serializers.BooleanField()
+    reason = serializers.CharField(max_length=200, allow_blank=True, required=False)
+
+
+class AdminDeleteUserSerializer(serializers.Serializer):
+    confirm = serializers.CharField()
+    reason = serializers.CharField(max_length=200, allow_blank=True, required=False)
 
 
 class AdjustCoinSerializer(serializers.Serializer):

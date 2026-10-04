@@ -12,6 +12,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import LoginEvent, PasswordResetToken
 
 
+def signup_token(email: str) -> str:
+    """註冊第二步需要的 Google 簽發 token（測試直接產生，略過 Google 驗證）。"""
+    from apps.accounts.signup import make_signup_token
+
+    return make_signup_token({"email": email, "first_name": "", "last_name": ""})
+
+
 @override_settings(GOOGLE_OAUTH_CLIENT_ID="fake-client-id")
 class GoogleLoginTests(APITestCase):
     def setUp(self):
@@ -22,8 +29,9 @@ class GoogleLoginTests(APITestCase):
         cache.clear()
         self.url = reverse("google-login")
 
-    @patch("apps.accounts.views.id_token.verify_oauth2_token")
-    def test_google_login_creates_new_user(self, mock_verify):
+    @patch("apps.accounts.signup.id_token.verify_oauth2_token")
+    def test_google_login_does_not_create_unregistered_user(self, mock_verify):
+        """Google 登入不再自動建帳號：回 409 與 signup_token，前端接著設定用戶名與密碼。"""
         mock_verify.return_value = {
             "email": "new@example.com",
             "email_verified": True,
@@ -33,16 +41,15 @@ class GoogleLoginTests(APITestCase):
 
         response = self.client.post(self.url, {"credential": "fake-token"}, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
-        self.assertNotIn("refresh", response.data)
-        self.assertTrue(response.cookies["argus_refresh_token"]["httponly"])
-        user = get_user_model().objects.get(username="new@example.com")
-        self.assertEqual(user.email, "new@example.com")
-        self.assertFalse(user.is_superuser)
-        self.assertFalse(user.is_staff)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "registration_required")
+        self.assertEqual(response.data["email"], "new@example.com")
+        self.assertTrue(response.data["signup_token"])
+        self.assertEqual(response.data["suggested_handle"], "new")
+        self.assertNotIn("argus_refresh_token", response.cookies)
+        self.assertFalse(get_user_model().objects.filter(username="new@example.com").exists())
 
-    @patch("apps.accounts.views.id_token.verify_oauth2_token")
+    @patch("apps.accounts.signup.id_token.verify_oauth2_token")
     def test_google_login_reuses_existing_user(self, mock_verify):
         get_user_model().objects.create_user(
             username="existing@example.com",
@@ -61,7 +68,7 @@ class GoogleLoginTests(APITestCase):
             1,
         )
 
-    @patch("apps.accounts.views.id_token.verify_oauth2_token")
+    @patch("apps.accounts.signup.id_token.verify_oauth2_token")
     def test_google_login_rejects_unverified_email(self, mock_verify):
         mock_verify.return_value = {
             "email": "unverified@example.com",
@@ -75,7 +82,7 @@ class GoogleLoginTests(APITestCase):
             get_user_model().objects.filter(username="unverified@example.com").exists()
         )
 
-    @patch("apps.accounts.views.id_token.verify_oauth2_token")
+    @patch("apps.accounts.signup.id_token.verify_oauth2_token")
     def test_google_login_rejects_invalid_token(self, mock_verify):
         mock_verify.side_effect = ValueError("Token expired")
 
@@ -180,13 +187,25 @@ class EmailAuthTests(TestCase):
     def test_register_creates_user(self):
         resp = self.client.post(
             "/api/auth/register/",
-            {"email": "newuser@example.com", "password": "StrongPass123!"},
+            {"signup_token": signup_token("newuser@example.com"), "handle": "newuser",
+             "password": "StrongPass123!"},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 201)
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        self.assertTrue(User.objects.filter(username="newuser@example.com").exists())
+        user = User.objects.get(username="newuser@example.com")
+        self.assertEqual(user.handle, "newuser")
+        self.assertFalse(user.needs_setup)
+
+    def test_register_without_google_token_fails(self):
+        resp = self.client.post(
+            "/api/auth/register/",
+            {"email": "plain@example.com", "handle": "plain", "password": "StrongPass123!"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("signup_token", resp.json())
 
     def test_register_duplicate_email_fails(self):
         from django.contrib.auth import get_user_model
@@ -194,10 +213,11 @@ class EmailAuthTests(TestCase):
         User.objects.create_user(username="dup@example.com", email="dup@example.com", password="pw")
         resp = self.client.post(
             "/api/auth/register/",
-            {"email": "dup@example.com", "password": "AnotherPass123!"},
+            {"signup_token": signup_token("dup@example.com"), "handle": "dupper",
+             "password": "AnotherPass123!"},
             content_type="application/json",
         )
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 409)
 
     def test_email_login_returns_token(self):
         User = get_user_model()
@@ -366,7 +386,8 @@ class LoginEventTests(APITestCase):
     def test_register_records_event(self):
         response = self.client.post(
             "/api/auth/register/",
-            {"email": "brand-new@example.com", "password": "FakePass456!"},
+            {"signup_token": signup_token("brand-new@example.com"), "handle": "brandnew",
+             "password": "FakePass456!"},
             content_type="application/json",
             HTTP_USER_AGENT="ArgusTestAgent/1.0",
         )
@@ -377,8 +398,11 @@ class LoginEventTests(APITestCase):
         self.assertEqual(event.method, LoginEvent.Method.REGISTER)
         self.assertIsNotNone(event.ip_address)
 
-    @patch("apps.accounts.views.id_token.verify_oauth2_token")
+    @patch("apps.accounts.signup.id_token.verify_oauth2_token")
     def test_google_login_records_event(self, mock_verify):
+        get_user_model().objects.create_user(
+            username="google-user@example.com", email="google-user@example.com"
+        )
         mock_verify.return_value = {
             "email": "google-user@example.com",
             "email_verified": True,

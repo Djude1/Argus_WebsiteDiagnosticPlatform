@@ -176,14 +176,18 @@ class DemoReadOnlyTests(APITestCase):
         self.assertEqual(listing["scans"], [])
 
 
-@override_settings(TURNSTILE_SITE_KEY="", TURNSTILE_SECRET="")
 class DemoOnRegistrationTests(APITestCase):
     def setUp(self):
         cache.clear()
 
     def register(self, email):
+        from apps.accounts.signup import make_signup_token
+
+        token = make_signup_token({"email": email, "first_name": "", "last_name": ""})
         return self.client.post(
-            "/api/auth/register/", {"email": email, "password": "StrongPass123!"}, format="json"
+            "/api/auth/register/",
+            {"signup_token": token, "handle": email.split("@")[0], "password": "StrongPass123!"},
+            format="json",
         )
 
     def test_register_creates_demo_project(self):

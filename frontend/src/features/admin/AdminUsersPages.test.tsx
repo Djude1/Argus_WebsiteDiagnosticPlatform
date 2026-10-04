@@ -9,6 +9,7 @@ import type {
   AdminUserDetailResponse,
   AdminUserSubscription,
 } from "../../shared/apiContracts";
+import { useArgusStore } from "../../store";
 import { AdminUserDetailPage, AdminUsersPage } from "./AdminUsersPages";
 
 // fixture 以產生的型別宣告：後端改欄位時，這裡會先編譯失敗，而不是測試照過。
@@ -17,6 +18,9 @@ vi.mock("../../api", () => ({
   fetchAdminUsers: vi.fn(),
   fetchAdminUserDetail: vi.fn(),
   adminAdjustCoin: vi.fn(),
+  adminSetStaff: vi.fn(),
+  adminSuspendUser: vi.fn(),
+  adminDeleteUser: vi.fn(),
   fetchUserLoginEvents: vi.fn(),
   fetchUserSubscription: vi.fn(),
   fetchAdminSubscriptionPlans: vi.fn(),
@@ -33,6 +37,8 @@ function listUser(overrides: Partial<AdminUser> = {}): AdminUser {
     date_joined: "2026-01-01T00:00:00Z",
     last_login: null,
     is_staff: false,
+    is_active: true,
+    deleted_at: null,
     balance: 1200,
     total_purchased_ntd: 0,
     total_scans_used: 3,
@@ -43,7 +49,6 @@ function listUser(overrides: Partial<AdminUser> = {}): AdminUser {
 function detail(overrides: Partial<AdminUserDetailResponse> = {}): AdminUserDetailResponse {
   return {
     ...listUser(),
-    is_active: true,
     is_superuser: false,
     wallet: {
       balance: 1200,
@@ -108,6 +113,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: false } });
   api.fetchAdminUsers.mockResolvedValue({ users: [listUser()], page: 1, total_pages: 1, total: 1 });
   api.fetchAdminUserDetail.mockResolvedValue(detail());
   api.fetchUserLoginEvents.mockResolvedValue({ events: [] });
@@ -236,5 +242,75 @@ describe("AdminUserDetailPage", () => {
     renderAt("/admin/users/7");
     expect(await screen.findByText("尚無登入紀錄")).toBeInTheDocument();
     expect(screen.getByText("Alice Chen")).toBeInTheDocument();
+  });
+});
+
+describe("AdminUserDetailPage 管理權限", () => {
+  it("一般管理員看不到管理權限區塊", async () => {
+    renderAt("/admin/users/7");
+    await screen.findByText("Alice Chen");
+    expect(screen.queryByRole("heading", { name: "管理權限" })).not.toBeInTheDocument();
+  });
+
+  it("超級管理員確認後把使用者設為管理員並重新載入", async () => {
+    const user = userEvent.setup();
+    useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: true } });
+    api.adminSetStaff.mockResolvedValue({ is_staff: true });
+    renderAt("/admin/users/7");
+    await user.click(await screen.findByRole("button", { name: "設為管理員" }));
+    await user.click(await screen.findByRole("button", { name: "確定" }));
+    expect(api.adminSetStaff).toHaveBeenCalledWith(7, true);
+    expect(await screen.findByText("已設為管理員。")).toBeInTheDocument();
+    expect(api.fetchAdminUserDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it("超級管理員帳號與自己都沒有切換按鈕", async () => {
+    useArgusStore.setState({ me: { id: 7, is_staff: true, is_superuser: true } });
+    const { unmount } = renderAt("/admin/users/7");
+    expect(await screen.findByText("不能變更自己的管理員身分。")).toBeInTheDocument();
+    unmount();
+    useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: true } });
+    api.fetchAdminUserDetail.mockResolvedValue(detail({ is_superuser: true, is_staff: true }));
+    renderAt("/admin/users/7");
+    expect(await screen.findByText("這是超級管理員帳號，權限不能在後台變更。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /管理員$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("AdminUserDetailPage 帳號狀態", () => {
+  it("一般管理員停用一般使用者時帶原因送出並重新載入", async () => {
+    const user = userEvent.setup();
+    api.adminSuspendUser.mockResolvedValue({ is_active: false });
+    renderAt("/admin/users/7");
+    await user.type(await screen.findByRole("textbox", { name: "停用或刪除原因" }), "濫用");
+    await user.click(screen.getByRole("button", { name: "停用帳號" }));
+    await user.click(await screen.findByRole("button", { name: "確定" }));
+    expect(api.adminSuspendUser).toHaveBeenCalledWith(7, true, "濫用");
+    expect(await screen.findByText("已停用帳號。")).toBeInTheDocument();
+  });
+
+  it("刪除要先輸入「刪除帳號」才能送出", async () => {
+    const user = userEvent.setup();
+    api.adminDeleteUser.mockResolvedValue(undefined);
+    renderAt("/admin/users/7");
+    const button = await screen.findByRole("button", { name: "永久刪除帳號" });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "輸入「刪除帳號」確認" }), "刪除帳號");
+    await user.click(button);
+    await user.click(await screen.findByRole("button", { name: "確定" }));
+    expect(api.adminDeleteUser).toHaveBeenCalledWith(7, "刪除帳號", "");
+  });
+
+  it("一般管理員不能處理其他管理員；已刪除帳號只顯示說明", async () => {
+    api.fetchAdminUserDetail.mockResolvedValue(detail({ is_staff: true }));
+    const { unmount } = renderAt("/admin/users/7");
+    expect(await screen.findByText("管理員帳號只有超級管理員可以停用或刪除。")).toBeInTheDocument();
+    unmount();
+    api.fetchAdminUserDetail.mockResolvedValue(
+      detail({ is_active: false, deleted_at: "2026-10-04T00:00:00Z" }),
+    );
+    renderAt("/admin/users/7");
+    expect(await screen.findByText(/此帳號已於 .* 刪除/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停用帳號" })).not.toBeInTheDocument();
   });
 });

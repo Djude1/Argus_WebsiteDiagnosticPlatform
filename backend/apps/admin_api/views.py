@@ -25,8 +25,10 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from apps.accounts.avatars import avatar_url
+from apps.accounts.deletion import delete_account
 from apps.admin_api import system_metrics
 from apps.admin_api.models import AdminAuditLog, Announcement, log_admin_action
 from apps.admin_api.permissions import IsSuperuser
@@ -39,6 +41,7 @@ from apps.admin_api.serializers import (
     AdjustCoinSerializer,
     AdminAuditLogSerializer,
     AdminCoinTransactionSerializer,
+    AdminDeleteUserSerializer,
     AdminLoginEventSerializer,
     AdminModerateReviewSerializer,
     AdminPurchaseOrderSerializer,
@@ -53,6 +56,8 @@ from apps.admin_api.serializers import (
     AdminVerifiedDomainSerializer,
     AnnouncementSerializer,
     DomainOverrideSerializer,
+    SetStaffSerializer,
+    SuspendUserSerializer,
 )
 from apps.billing.models import (
     CoinTransaction,
@@ -489,6 +494,137 @@ def adjust_coin(request, user_id: int):
         "transaction": AdminCoinTransactionSerializer(tx).data,
         "wallet_balance": tx.balance_after,
     }, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    request=SetStaffSerializer,
+    responses={200: inline_serializer(
+        name="AdminSetStaffResponse",
+        fields={"is_staff": serializers.BooleanField()},
+    )},
+)
+@api_view(["POST"])
+@permission_classes([IsSuperuser])
+def set_staff(request, user_id: int):
+    """超級管理員把使用者設為一般管理員或取消（使用者決策：只有 superuser 能操作，
+    且只能切換 is_staff；superuser 身分仍只能用 seed_admin 設定）。"""
+    serializer = SetStaffSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    wanted = serializer.validated_data["is_staff"]
+    user_model = get_user_model()
+    with transaction.atomic():
+        target = get_object_or_404(user_model.objects.select_for_update(), pk=user_id)
+        if target.pk == request.user.pk:
+            return Response(
+                {"detail": "不能變更自己的管理員身分。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if target.is_superuser:
+            return Response(
+                {"detail": "超級管理員的權限不能在後台變更。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if wanted and (not target.is_active or target.deleted_at):
+            return Response(
+                {"detail": "停用或已刪除的帳號不能設為管理員。"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        before = target.is_staff
+        if before != wanted:
+            target.is_staff = wanted
+            target.save(update_fields=["is_staff"])
+    # 稽核寫在 transaction 外：log_admin_action 吞例外，放在 atomic 內失敗會讓整筆交易不可用
+    if before != wanted:
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.USER_TOGGLE_STAFF,
+            target_user=target,
+            target_repr=target.email or target.username,
+            payload={"before": before, "after": wanted},
+        )
+    return Response({"is_staff": target.is_staff})
+
+
+def _manage_target_error(request, target) -> str:
+    """停用／刪除使用者的對象限制；回傳錯誤訊息（空字串＝可以操作）。
+
+    不能對自己、超級管理員、已刪除帳號操作；對象是管理員時只有超級管理員可以處理。
+    """
+    if target.pk == request.user.pk:
+        return "不能對自己的帳號操作；要刪除自己的帳號請到帳號設定。"
+    if target.is_superuser:
+        return "超級管理員帳號不能在後台停用或刪除。"
+    if target.deleted_at:
+        return "這個帳號已經刪除。"
+    if target.is_staff and not request.user.is_superuser:
+        return "管理員帳號只有超級管理員可以停用或刪除。"
+    return ""
+
+
+@extend_schema(
+    request=SuspendUserSerializer,
+    responses={200: inline_serializer(
+        name="AdminSuspendUserResponse",
+        fields={"is_active": serializers.BooleanField()},
+    )},
+)
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def user_suspend(request, user_id: int):
+    """停用（封號）或恢復使用者。停用時撤銷所有 refresh token；access token 由
+    JWTAuthentication 每次檢查 is_active，立即失效。資料全部保留，恢復後照常使用。"""
+    serializer = SuspendUserSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    suspended = serializer.validated_data["suspended"]
+    user_model = get_user_model()
+    with transaction.atomic():
+        target = get_object_or_404(user_model.objects.select_for_update(), pk=user_id)
+        if error := _manage_target_error(request, target):
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        before = not target.is_active
+        if before != suspended:
+            target.is_active = not suspended
+            target.save(update_fields=["is_active"])
+            if suspended:
+                for token in OutstandingToken.objects.filter(user=target):
+                    BlacklistedToken.objects.get_or_create(token=token)
+    # 稽核寫在 transaction 外：log_admin_action 吞例外，放在 atomic 內失敗會讓整筆交易不可用
+    if before != suspended:
+        log_admin_action(
+            admin_actor=request.user,
+            action=AdminAuditLog.Action.USER_SUSPEND,
+            target_user=target,
+            target_repr=target.email or target.username,
+            payload={
+                "suspended": suspended,
+                "reason": serializer.validated_data.get("reason", ""),
+            },
+        )
+    return Response({"is_active": target.is_active})
+
+
+@extend_schema(request=AdminDeleteUserSerializer, responses={204: None})
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def user_delete(request, user_id: int):
+    """管理員刪除使用者帳號：與使用者自行刪除相同（accounts.deletion.delete_account），
+    個資與內容全刪、帳務匿名保留。稽核紀錄只寫使用者編號，不留下被刪除者的 Email。"""
+    serializer = AdminDeleteUserSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    if serializer.validated_data["confirm"].strip() != "刪除帳號":
+        return Response({"confirm": "請輸入「刪除帳號」確認。"}, status=status.HTTP_400_BAD_REQUEST)
+    target = get_object_or_404(get_user_model(), pk=user_id)
+    if error := _manage_target_error(request, target):
+        return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        delete_account(target)
+    except PermissionError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    log_admin_action(
+        admin_actor=request.user,
+        action=AdminAuditLog.Action.USER_DELETE,
+        target_user=target,
+        target_repr=f"使用者 #{target.pk}",
+        payload={"reason": serializer.validated_data.get("reason", "")},
+    )
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(responses=inline_serializer(

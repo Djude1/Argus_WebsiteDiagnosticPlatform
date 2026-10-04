@@ -115,14 +115,16 @@ D:\nodejs\npm.cmd install 套件名
 
 | 路由 | 元件 / 頁面 | 說明 |
 |---|---|---|
-| `/login` | `LoginPage` | Email 登入/註冊；有 Google Client ID 時才顯示 Google OAuth；後端啟用 Turnstile 時 Email 登入（`login`）與註冊（`signup`）表單顯示驗證元件，通過前不能送出 |
+| `/login` | `LoginPage` | 兩個分頁「登入／註冊」（`?tab=register` 直接開註冊）。登入：Google 登入（未註冊的 Google 帳號回 409 → 直接切到註冊第二步）＋「Email 或用戶名」＋密碼，後端啟用 Turnstile 時顯示驗證元件（`login`）。註冊（2026-10-04）：一律先 Google 授權（`/auth/register/google/`）→ 第二步 `RegisterDetailsForm` 設定用戶名（預填 `suggested_handle`）與密碼並同意條款（`/auth/register/`）；沒有 Google Client ID 時註冊分頁顯示無法註冊。`?deleted=1` 顯示「帳號已刪除」 |
+| `/account/setup` | `AccountSetupPage`（`AuthPages.jsx`） | 舊帳號缺用戶名或密碼時的補設頁；`RequireAuth` 讀 store 的 `profile`（`fetchProfile` → `/api/auth/me/`），`needs_setup` 時其他會員頁一律導到這裡（帶 `next`） |
 | `/project` | `ProjectPage` | 公開行銷頁：hero、產品預覽、檢測面向與方法、掃描流程、交付物與證據、核心功能、安全邊界、技術棧、FAQ（團隊頁、平台規模與開發歷程已於 2026-09-28 移除） |
 | `/free-tools` | `FreeToolsPage` | 公開免費分析（測速 / URL 風險 / 郵件風險），呼叫 `/api/insights/*` |
 | `/purchase` | `PurchasePage` | 購買點數（3 步驟結帳 wizard） |
 | `/download` | `DownloadPage` | 下載報告 |
 | `/verify` | `VerifyReportPage` | 報告查驗（公開導覽列有入口） |
 | `/partners` | `PartnersPage`（`features/public/PartnersPage.jsx`） | 商業合作：合作方式、客戶會拿到什麼、流程、FAQ 與洽談表單（`POST /api/content/partner-inquiries/`；後台 `/admin/partner-inquiries` 檢視） |
-| `/settings` | `SettingsPage` | 帳號設定：個人資料、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀 |
+| `/privacy`、`/terms` | `PrivacyPolicyPage`、`TermsOfServicePage`（`features/public/LegalPages.jsx`） | 隱私權政策與服務條款（公開，頁尾「條款」分組；也是 Google OAuth 同意畫面要求的公開連結）。隱私權政策含 Google API 服務使用者資料政策／Limited Use 聲明與 Search Console 資料的使用、保存、撤銷說明；資料流程改變（新第三方、保存期限、登入方式）時要同步更新內容與 `EFFECTIVE_DATE`。樣式在 `73-public-refine.css` 的 `legal-*` |
+| `/settings` | `SettingsPage` | 帳號設定：個人資料（Email、用戶名唯讀）、大頭貼上傳／移除（`/api/auth/me/avatar/`）、密碼、外觀、**刪除帳號**（目前密碼＋輸入「刪除帳號」＋確認對話框 → `/api/auth/me/delete/`，成功後整頁導到 `/login?deleted=1`；管理員也可以刪，會提示將失去管理權限，最後一位超級管理員由後端擋下並顯示原因） |
 | `/mcp` | `McpAccessPage`（`features/account/McpAccessPage.jsx`） | MCP 接入中心（入口在右側頭像選單）：訂閱狀態、本月用量、端點；三步驟「選擇工具 → 複製設定 → 驗證連線」（Claude Code／Codex／Cursor／VS Code／Claude Desktop／curl）；憑證建立（明文只顯示一次）與撤銷、最近呼叫、可用工具。API 為 `/api/mcp-access/*`，樣式 `63-mcp-access.css` |
 | `/projects` | `ProjectsListPage`（`features/projects/ProjectWorkspace.jsx`） | 所有網站專案（有專案時左側固定顯示目前專案的工作區側邊欄，選中項目是「所有專案」，與其他分頁一致）：一列跨網站數字（網站數、平均分數、低於 60 分、目前問題、進行中）＋網站登記表（圖示與名稱、分數與變化、走勢、各維度分數、目前問題依嚴重度、上次掃描；可依需要注意／最近掃描／名稱排序，超過 4 個網站可搜尋；窄螢幕每列改為區塊）；可展開已封存的專案並恢復（`?archived=true`） |
 | `/projects/new` | `ProjectCreatePage` | 新增網站專案（2026-10-03 改版）：三段表單——①網址（必填，`parseSiteUrl` 補 https 並取 origin）、名稱、說明；②預設掃描設定（`components/projects/ScanDefaultsFields.jsx`：範圍、五個維度含圖示與說明、被動／主動模式；選主動自動勾資安且不能取消，未驗證網域時提示）；③建立之後（前往建立第一次掃描／先到總覽）。右側固定預覽：網站、網域驗證狀態、預設設定摘要、以預設設定掃一次的點數上限、目前餘額（不足時提示）、同網站已有專案時提示並停用送出。同網站已有專案回 409 並引導過去，已封存的自動恢復 |
@@ -145,7 +147,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin` | → redirect `/admin/overview` | staff 進入點 |
 | `/admin/overview` | `AdminOverviewPage` | 概覽：今日脈搏、14 天趨勢、總量統計與成本明細 |
 | `/admin/users` | `AdminUsersPage` | 使用者管理（`AdminUsersPages.tsx`）|
-| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
+| `/admin/users/:userId` | `AdminUserDetailPage` | 使用者詳情 + 帳號狀態（停用／恢復、輸入「刪除帳號」後永久刪除，原因選填寫入操作日誌；對自己、超級管理員、已刪除帳號只顯示說明，對象是管理員時只有超級管理員能操作——與後端 `_manage_target_error` 相同）+ 管理權限（只有超級管理員看得到：設為／取消一般管理員，確認對話框；自己與超級管理員帳號不顯示按鈕）、點數調整、訂閱、登入記錄（`AdminUsersPages.tsx`）|
 | `/admin/orders` | `AdminOrdersPage` | 訂單管理（狀態分段切換、搜尋 email／姓名／公司／統編、發票類型篩選、明細 modal）|
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄（`AdminTransactionsPage.tsx`；類型篩選涵蓋 `CoinTransaction.Kind` 全部 11 種）|
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開；`AdminReviewsPage.tsx`） |
@@ -158,7 +160,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/plans` | `AdminPlansPage` | 定價方案管理（`AdminPlansPage.tsx`；成本／毛利試算見 `features/admin/planEconomics.ts`，每頁 coin 數取自後端）|
 | `/admin/settings` | `AdminSettingsPage` | 系統資訊（唯讀；敏感值只顯示「已設定／未設定」布林，不輸出實際值）|
 | `/admin/announcements` | `AdminAnnouncementsPage` | 公告管理（superuser 限定）（`AdminAnnouncementsPage.tsx`）|
-| `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁（`AdminAuditLogPage.tsx`；動作篩選涵蓋 `AdminAuditLog.Action` 全部 9 種）|
+| `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁（`AdminAuditLogPage.tsx`；動作篩選涵蓋 `AdminAuditLog.Action` 全部 11 種）|
 
 ## API 型別與測試
 
@@ -204,7 +206,7 @@ npm run typecheck
 | 檔案 | 職責 |
 |---|---|
 | `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
-| `src/features/auth/AuthPages.jsx` | 登入、註冊與密碼重設頁 |
+| `src/features/auth/AuthPages.jsx` | 登入、Google 授權註冊（兩步驟）、舊帳號補設（`AccountSetupPage`）、`RequireAuth` 與密碼重設頁 |
 | `src/features/projects/ProjectWorkspace.jsx` | 網站專案工作區外框（側邊欄、`useProject`）、`ProjectScanShell`、`ProjectHomeRedirect`、所有專案與新增專案頁 |
 | `src/features/projects/ProjectPages.jsx` | 專案的總覽、掃描、問題分析、頁面、AEO 問答、歷史報告、專案設定七個分頁（另匯出 `FilterChips`、`ScanTimeCard`、`useProjectScans` 給 SEO 分析頁） |
 | `src/features/projects/ProjectSeoPage.jsx` | SEO 分析分頁（概覽、頁面與內容、連結、搜尋關鍵字、單頁證據抽屜、Search Console） |
@@ -248,14 +250,14 @@ npm run typecheck
 | `src/shared/useListQuery.ts` | 列表頁的搜尋／篩選／排序／分頁狀態與網址同步（泛型綁定 `defaults`，未宣告的鍵無法存取）|
 | `src/shared/AppShared.jsx` | 跨 feature 共用圖表、dialog hook、狀態標籤與錯誤格式化 |
 | `src/components/brand/IntroSequence.jsx` | 首次進站品牌動畫 |
-| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（所有專案／網域驗證／MCP 接入中心／帳號設定／購點與訂閱／評論／產品介紹／管理後台）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
-| `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、註冊、忘記密碼、商業合作洽談 |
+| `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（網域驗證／MCP 接入中心／帳號設定／購點與訂閱／管理後台／登出）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
+| `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、忘記密碼、商業合作洽談（註冊改由 Google 授權，不用 Turnstile） |
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |
 | `src/shared/apiTypes.ts` | **自動產生，禁止手改**：OpenAPI → TS 型別 |
 | `src/shared/apiContracts.ts` | 從 `apiTypes.ts` 取好名字的後台型別出入口 |
-| `src/store.js` | Zustand 全域狀態（user、wallet、網站專案清單 `projects` 與目前專案 `currentProjectId` 等） |
+| `src/store.js` | Zustand 全域狀態（user、`profile`（`/api/auth/me/`，含 `needs_setup`）、wallet、網站專案清單 `projects` 與目前專案 `currentProjectId` 等） |
 | `src/main.jsx` | React entry point，Provider 掛載 |
 | `src/styles.css` | 樣式入口：依序 `@import` `src/styles/*.css`（順序即覆寫優先序）|
 | `src/styles/legacy-member/index.css` | 會員區舊版樣式入口（只作用在 `.member-legacy` 內；網站專案工作區在 `93-projects.css`）|

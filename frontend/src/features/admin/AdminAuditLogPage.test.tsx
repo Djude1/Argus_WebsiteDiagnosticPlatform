@@ -46,12 +46,12 @@ describe("AdminAuditLogPage", () => {
     expect(api.fetchAdminAuditLog).not.toHaveBeenCalled();
   });
 
-  it("動作篩選涵蓋後端全部 9 種，含原本漏掉的掃描控制／網域審核／調整訂閱", async () => {
+  it("動作篩選涵蓋後端全部 11 種，含原本漏掉的掃描控制／網域審核／調整訂閱", async () => {
     renderAt("/admin/audit-log");
     const select = await screen.findByRole("combobox", { name: "稽核動作" });
     const values = within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value).filter(Boolean);
-    expect(values).toHaveLength(9);
-    expect(values).toEqual(expect.arrayContaining(["scan_control", "domain_override", "subscription_adjust"]));
+    expect(values).toHaveLength(11);
+    expect(values).toEqual(expect.arrayContaining(["scan_control", "domain_override", "subscription_adjust", "user_suspend", "user_delete"]));
   });
 
   it("?action= 從網址還原並送出；不認得的值不送", async () => {

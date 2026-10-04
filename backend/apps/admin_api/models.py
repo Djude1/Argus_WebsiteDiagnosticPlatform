@@ -17,6 +17,8 @@ class AdminAuditLog(models.Model):
         REVIEW_MODERATE = "review_moderate", "審核評論"
         REVIEW_DELETE = "review_delete", "刪除評論"
         USER_TOGGLE_STAFF = "user_toggle_staff", "切換管理員身份"
+        USER_SUSPEND = "user_suspend", "停用／恢復帳號"
+        USER_DELETE = "user_delete", "刪除帳號"
         DOMAIN_OVERRIDE = "domain_override", "網域驗證人工審核"
         SCAN_CONTROL = "scan_control", "掃描任務控制"
         OTHER = "other", "其他"
