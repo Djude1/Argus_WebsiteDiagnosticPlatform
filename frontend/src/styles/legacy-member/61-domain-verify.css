@@ -280,8 +280,6 @@
   margin-top: 1rem;
 }
 .domain-row {
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -289,28 +287,6 @@
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: #fff;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
-}
-.domain-row::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-}
-.domain-row.status-verified::before { background: linear-gradient(180deg, #10b981, #34d399); }
-.domain-row.status-pending::before { background: linear-gradient(180deg, #f59e0b, #fbbf24); }
-.domain-row.status-rejected::before { background: linear-gradient(180deg, #ef4444, #fb7185); }
-.domain-row.status-expired::before { background: linear-gradient(180deg, #94a3b8, #cbd5e1); }
-.domain-row:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 22px -10px rgba(8, 47, 73, 0.25);
-  border-color: #cbd5e1;
-}
-.domain-row.status-verified {
-  background: linear-gradient(135deg, #f0fdf9 0%, #ffffff 55%);
-  border-color: #a7f3d0;
 }
 .domain-row-title {
   display: flex;

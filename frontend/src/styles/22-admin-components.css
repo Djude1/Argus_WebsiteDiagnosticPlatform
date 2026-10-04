@@ -194,7 +194,6 @@
     border-radius: var(--admin-radius);
     background: var(--admin-tone-bad-bg);
     border: 1px solid var(--admin-tone-bad-border);
-    border-left-width: 3px;
   }
   .admin-error-state.is-compact { @apply p-3; }
   .admin-error-state-title { @apply text-sm font-semibold; margin: 0; color: var(--admin-tone-bad-text); }
@@ -414,12 +413,11 @@
     border-radius: var(--admin-radius);
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
-    border-left-width: 3px;
     box-shadow: var(--admin-shadow-card);
   }
-  .admin-health-summary.tone-ok { border-left-color: var(--admin-tone-good); background: linear-gradient(90deg, var(--admin-tone-good-bg), var(--admin-surface) 40%); }
-  .admin-health-summary.tone-warn { border-left-color: var(--admin-tone-warn); background: linear-gradient(90deg, var(--admin-tone-warn-bg), var(--admin-surface) 40%); }
-  .admin-health-summary.tone-bad { border-left-color: var(--admin-tone-bad); background: linear-gradient(90deg, var(--admin-tone-bad-bg), var(--admin-surface) 40%); }
+  .admin-health-summary.tone-ok { border-color: var(--admin-tone-good); background: linear-gradient(90deg, var(--admin-tone-good-bg), var(--admin-surface) 40%); }
+  .admin-health-summary.tone-warn { border-color: var(--admin-tone-warn); background: linear-gradient(90deg, var(--admin-tone-warn-bg), var(--admin-surface) 40%); }
+  .admin-health-summary.tone-bad { border-color: var(--admin-tone-bad); background: linear-gradient(90deg, var(--admin-tone-bad-bg), var(--admin-surface) 40%); }
   .admin-health-summary-icon {
     @apply inline-flex items-center justify-center;
     width: 28px;
