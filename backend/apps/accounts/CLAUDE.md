@@ -3,7 +3,7 @@
 Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.md` 之後自動載入；**ZCode／Codex 不會自動載入本檔**，動手前必須先讀（見根 `AGENTS.md` 模組規則必讀閘門）。
 
 ## 職責
-自訂 `User`（繼承 `AbstractUser`，`username = email`）、登入 / 註冊、JWT 簽發、個人資料維護。**所有登入唯一入口**（含管理員）；本 app **不簽發 staff / superuser**（管理員亦以前台 email 登入後進 React `/admin`；staff/superuser 僅由 `manage.py seed_admin` 或 Django shell 設定。django-admin 已移除）。
+自訂 `User`（繼承 `AbstractUser`，`username = email`）、登入 / 註冊、JWT 簽發、個人資料維護。**所有登入唯一入口**（含管理員）；本 app **不簽發 staff / superuser**（管理員亦以前台 email 登入後進 React `/admin`；superuser 僅由 `manage.py seed_admin` 或 Django shell 設定；staff 另可由 superuser 在後台設定（`admin_api` 的 `users/<id>/staff/`）。django-admin 已移除）。
 
 ## 關鍵端點（`/api/auth/`）
 | 端點 | View | 說明 |
@@ -41,6 +41,6 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 | 禁止 | 原因 | 正確做法 |
 |---|---|---|
 | 在 `MeView` 直接 dump user 全部欄位 | 個資外洩（含 password hash 等） | 維持手動 whitelist 欄位 |
-| 在 auth 端點賦予 `is_staff` / `is_superuser` | 權限提升漏洞 | staff/superuser 僅能用 `manage.py seed_admin` 或 Django shell 設定 |
+| 在 auth 端點賦予 `is_staff` / `is_superuser` | 權限提升漏洞 | superuser 僅能用 `manage.py seed_admin` 或 Django shell 設定；staff 只能由 superuser 在後台設定（`admin_api`，寫稽核） |
 | 改用 session 認證、自寫 token 或把 refresh 放 response body/localStorage | 破壞統一 JWT 與 cookie 安全邊界 | 沿用 `_auth_response` 與 HttpOnly cookie 流程 |
 | 硬編碼 `GOOGLE_OAUTH_CLIENT_ID` | 機密外洩 | 放 `.env`，由 settings 讀取 |

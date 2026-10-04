@@ -3,6 +3,7 @@ import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 import type {
   AdminAdjustCoinResponse,
+  AdminSetStaffResponse,
   AdminAuditLogListParams,
   AdminAuditLogListResponse,
   AdminDomainListParams,
@@ -258,6 +259,12 @@ export async function adminAdjustCoin(
   note: string,
 ): Promise<AdminAdjustCoinResponse> {
   const response = await api.post(`/admin/users/${userId}/adjust-coin/`, { delta, note });
+  return response.data;
+}
+
+// 設為／取消一般管理員（後端只允許超級管理員；不能動自己與超級管理員）
+export async function adminSetStaff(userId: number, isStaff: boolean): Promise<AdminSetStaffResponse> {
+  const response = await api.post(`/admin/users/${userId}/staff/`, { is_staff: isStaff });
   return response.data;
 }
 

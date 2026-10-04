@@ -9,6 +9,7 @@ import type {
   AdminUserDetailResponse,
   AdminUserSubscription,
 } from "../../shared/apiContracts";
+import { useArgusStore } from "../../store";
 import { AdminUserDetailPage, AdminUsersPage } from "./AdminUsersPages";
 
 // fixture 以產生的型別宣告：後端改欄位時，這裡會先編譯失敗，而不是測試照過。
@@ -17,6 +18,7 @@ vi.mock("../../api", () => ({
   fetchAdminUsers: vi.fn(),
   fetchAdminUserDetail: vi.fn(),
   adminAdjustCoin: vi.fn(),
+  adminSetStaff: vi.fn(),
   fetchUserLoginEvents: vi.fn(),
   fetchUserSubscription: vi.fn(),
   fetchAdminSubscriptionPlans: vi.fn(),
@@ -108,6 +110,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: false } });
   api.fetchAdminUsers.mockResolvedValue({ users: [listUser()], page: 1, total_pages: 1, total: 1 });
   api.fetchAdminUserDetail.mockResolvedValue(detail());
   api.fetchUserLoginEvents.mockResolvedValue({ events: [] });
@@ -236,5 +239,37 @@ describe("AdminUserDetailPage", () => {
     renderAt("/admin/users/7");
     expect(await screen.findByText("尚無登入紀錄")).toBeInTheDocument();
     expect(screen.getByText("Alice Chen")).toBeInTheDocument();
+  });
+});
+
+describe("AdminUserDetailPage 管理權限", () => {
+  it("一般管理員看不到管理權限區塊", async () => {
+    renderAt("/admin/users/7");
+    await screen.findByText("Alice Chen");
+    expect(screen.queryByRole("heading", { name: "管理權限" })).not.toBeInTheDocument();
+  });
+
+  it("超級管理員確認後把使用者設為管理員並重新載入", async () => {
+    const user = userEvent.setup();
+    useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: true } });
+    api.adminSetStaff.mockResolvedValue({ is_staff: true });
+    renderAt("/admin/users/7");
+    await user.click(await screen.findByRole("button", { name: "設為管理員" }));
+    await user.click(await screen.findByRole("button", { name: "確定" }));
+    expect(api.adminSetStaff).toHaveBeenCalledWith(7, true);
+    expect(await screen.findByText("已設為管理員。")).toBeInTheDocument();
+    expect(api.fetchAdminUserDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it("超級管理員帳號與自己都沒有切換按鈕", async () => {
+    useArgusStore.setState({ me: { id: 7, is_staff: true, is_superuser: true } });
+    const { unmount } = renderAt("/admin/users/7");
+    expect(await screen.findByText("不能變更自己的管理員身分。")).toBeInTheDocument();
+    unmount();
+    useArgusStore.setState({ me: { id: 1, is_staff: true, is_superuser: true } });
+    api.fetchAdminUserDetail.mockResolvedValue(detail({ is_superuser: true, is_staff: true }));
+    renderAt("/admin/users/7");
+    expect(await screen.findByText("這是超級管理員帳號，權限不能在後台變更。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /管理員$/ })).not.toBeInTheDocument();
   });
 });

@@ -6,17 +6,17 @@ Claude Code 進 `backend/apps/admin_api/` 工作時，本檔在專案層 `CLAUDE
 React `/admin/*` 後台用的 REST API + `AdminAuditLog` 稽核。端點**刻意扁平、隱藏內部 model**（AgentSession / Page / Finding 等不外露）。
 
 ## 權限（超管 / 一般管理員分權）
-登入唯一入口為前台 email / Google（`accounts`）；`is_staff` 才能進 React `/admin`，`is_superuser` 為超級管理員。授予 staff / superuser 只能用 `manage.py seed_admin`（或 shell），**auth 端點一律不簽發**（防權限提升）。
+登入唯一入口為前台 email / Google（`accounts`）；`is_staff` 才能進 React `/admin`，`is_superuser` 為超級管理員。superuser 只能用 `manage.py seed_admin`（或 shell）授予；一般管理員（staff）可由超級管理員在後台使用者詳情的「管理權限」設定或取消（`POST /api/admin/users/<id>/staff/`，2026-10-04）：只有 superuser 能呼叫（`IsSuperuser`）、只切 `is_staff`、不能動自己與其他 superuser、停用／已刪除帳號不能設為管理員，寫一筆 `user_toggle_staff`（payload `before`／`after`，在 transaction 外寫，因為 `log_admin_action` 吞例外）。**auth 端點一律不簽發**（防權限提升）。
 
 | 層級 | 可用功能 | 權限類別 |
 |---|---|---|
 | 一般管理員（is_staff） | 總覽 / 儀表板 / 使用者（檢視＋調點＋掃描紀錄） / 交易 / 訂單 / 評論（回覆·審核） / 掃描（檢視＋終止＋重排） / 網域驗證 / **系統健康** / CMS（features·team·releases·plans） | `IsAdminUser` |
-| 超級管理員（is_superuser） | 上述全部 ＋ 操作日誌（audit-log） ＋ 公告管理（announcements） | `IsSuperuser` |
+| 超級管理員（is_superuser） | 上述全部 ＋ 操作日誌（audit-log） ＋ 公告管理（announcements） ＋ 設定／取消一般管理員（`users/<id>/staff`） | `IsSuperuser` |
 
 前端 `AdminLayout` 依 `me.is_superuser` 顯示「操作日誌📜 / 公告管理📢」，與後端 `IsSuperuser` 一致。（django-admin 已移除，不再有第二後台。）
 
 ## 關鍵檔案 / 端點（`/api/admin/`）
-- `views.py`：`overview`（含 `triage` 待辦統計）、`users`、`users/<id>`（含該使用者的 `recent_scans`）、`users/<id>/adjust-coin`、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、**`scans/<id>/cancel`（合作式終止＋退款）**、**`scans/<id>/requeue`（重排，不重複扣點）**、`domains`（網域所有權驗證清單）、`domains/<id>/override`（人工核准／否決網域驗證）、`orders`、`dashboard`、**`health`（掃描鏈路與系統資源即時探測）**、`audit-log`、`announcements/*`
+- `views.py`：`overview`（含 `triage` 待辦統計）、`users`、`users/<id>`（含該使用者的 `recent_scans`）、`users/<id>/adjust-coin`、`users/<id>/staff`（superuser 設定／取消一般管理員）、`users/<id>/login-events`（最近 50 筆登入事件）、`users/<id>/subscription`（grant/cancel 訂閱）、`subscriptions/plans`（訂閱方案唯讀）、`transactions`、`reviews`、`reviews/<id>/reply`、`scans`、`scans/<id>`、**`scans/<id>/cancel`（合作式終止＋退款）**、**`scans/<id>/requeue`（重排，不重複扣點）**、`domains`（網域所有權驗證清單）、`domains/<id>/override`（人工核准／否決網域驗證）、`orders`、`dashboard`、**`health`（掃描鏈路與系統資源即時探測）**、`audit-log`、`announcements/*`
 - `system_metrics.py`：CPU／記憶體／磁碟／網路／運行時間。**純標準庫，未引入 psutil**——容器內 psutil 讀到的是宿主機數字，會讓 pod 的資源使用率嚴重失真；此模組優先讀 cgroup v2，並在每個指標標示 `scope`（`container`／`host`）
 - `cms_views.py`：`cms/(features|team|releases|plans)` 寫入端點（ModelViewSet）
 - `models.py`：`AdminAuditLog`（action：`coin_adjust` / `subscription_adjust` / `review_reply` / `review_moderate` / `review_delete` / `user_toggle_staff` / `domain_override` / `scan_control` / `other`；`log_admin_action()` 集中寫入、**失敗不擋業務**）、`Announcement`（常駐/臨時公告）
