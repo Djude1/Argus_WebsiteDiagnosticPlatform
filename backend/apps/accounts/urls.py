@@ -1,11 +1,14 @@
 from django.urls import path
 
 from apps.accounts.views import (
+    AccountSetupView,
     ChangePasswordView,
     CookieTokenRefreshView,
+    DeleteAccountView,
     EmailLoginView,
     EmailRegisterView,
     GoogleLoginView,
+    GoogleRegisterStartView,
     LogoutView,
     MeAvatarView,
     MeView,
@@ -17,12 +20,15 @@ from apps.accounts.views import (
 urlpatterns = [
     path("turnstile/", TurnstileConfigView.as_view(), name="turnstile-config"),
     path("google/", GoogleLoginView.as_view(), name="google-login"),
+    path("register/google/", GoogleRegisterStartView.as_view(), name="google-register"),
     path("register/", EmailRegisterView.as_view(), name="email-register"),
     path("email-login/", EmailLoginView.as_view(), name="email-login"),
     path("refresh/", CookieTokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),
     path("me/avatar/", MeAvatarView.as_view(), name="me-avatar"),
+    path("me/setup/", AccountSetupView.as_view(), name="me-setup"),
+    path("me/delete/", DeleteAccountView.as_view(), name="me-delete"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     path(
         "password-reset/request/",

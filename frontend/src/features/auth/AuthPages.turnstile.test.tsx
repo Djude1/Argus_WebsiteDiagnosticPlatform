@@ -44,7 +44,7 @@ describe("LoginPage 人機驗證", () => {
         <LoginPage googleOAuthEnabled={false} />
       </MemoryRouter>,
     );
-    await user.type(screen.getByLabelText("Email"), "member@example.com");
+    await user.type(screen.getByLabelText("Email 或用戶名"), "member@example.com");
     await user.type(screen.getByPlaceholderText("輸入密碼"), "StrongPass123!");
     const submit = screen.getByRole("button", { name: "登入" });
     expect(submit).toBeDisabled();
@@ -64,7 +64,7 @@ describe("LoginPage 人機驗證", () => {
     expect(submit).toBeDisabled();
   });
 
-  it("切到新帳號分頁時改用 signup 動作", async () => {
+  it("註冊分頁改由 Google 授權確認 Email，不顯示人機驗證", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/login"]}>
@@ -72,9 +72,10 @@ describe("LoginPage 人機驗證", () => {
       </MemoryRouter>,
     );
     await screen.findByRole("button", { name: "登入" });
-    await user.click(screen.getByRole("tab", { name: "新帳號" }));
-    expect(turnstile.last?.action).toBe("signup");
-    expect(screen.getByRole("button", { name: "建立帳號" })).toBeDisabled();
+    turnstile.render.mockClear();
+    await user.click(screen.getByRole("tab", { name: "註冊" }));
+    expect(turnstile.render).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("暫時無法註冊");
   });
 });
 

@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 // （Search Console 串接）要求填寫的公開連結。內容只寫系統實際收集與處理的資料；改了資料流程
 // （新增第三方、改保存期限、改登入方式）要同步更新這裡與 EFFECTIVE_DATE。
 
-const EFFECTIVE_DATE = "2026 年 10 月 3 日";
+const EFFECTIVE_DATE = "2026 年 10 月 4 日";
 
 function LegalLayout({ eyebrow, title, intro, children }) {
   return (
@@ -33,8 +33,8 @@ function PrivacyPolicyPage() {
         <h2>1. 我們收集的資料</h2>
         <h3>帳號資料</h3>
         <ul>
-          <li>以 Email 註冊：Email、你設定的姓名，以及經雜湊處理的密碼（我們不保存密碼原文）。</li>
-          <li>以 Google 帳號登入：Google 提供的 Email 與姓名；我們只驗證 Google 簽發的身分憑證，不會取得你的 Google 密碼。</li>
+          <li>註冊一律透過 Google 帳號授權：Google 提供的 Email 與姓名；我們只驗證 Google 簽發的身分憑證，不會取得你的 Google 密碼。</li>
+          <li>你設定的用戶名，以及經雜湊處理的 Argus 登入密碼（我們不保存密碼原文）。</li>
           <li>你自行上傳的大頭貼（會重新壓縮並移除照片中的拍攝資訊）。</li>
         </ul>
         <h3>使用紀錄</h3>
@@ -105,7 +105,7 @@ function PrivacyPolicyPage() {
       <section>
         <h2>5. 保存期限</h2>
         <ul>
-          <li>帳號資料：保存至帳號刪除為止。</li>
+          <li>帳號資料：保存至你刪除帳號為止；刪除後立即清除。</li>
           <li>掃描截圖：約 90 天後自動刪除；PDF 報告檔：約 180 天後刪除（報告編號的查驗紀錄會保留，讓已交付的報告仍可查驗）。</li>
           <li>付款、點數與稽核紀錄：依會計與法令要求保存。</li>
           <li>Search Console 授權憑證：保存至你中斷連線或刪除專案為止。</li>
@@ -124,7 +124,9 @@ function PrivacyPolicyPage() {
         <h2>7. 你的權利</h2>
         <p>
           依個人資料保護法，你可以請求查詢、閱覽、複製、補充或更正、停止處理或刪除你的個人資料。
-          帳號設定頁可以直接修改姓名、大頭貼與密碼；其他請求（包括刪除帳號）請透過
+          帳號設定頁可以直接修改姓名、大頭貼與密碼，也可以<strong>自行永久刪除帳號</strong>：網站專案、掃描、報告與截圖、
+          Search Console 連線（同時向 Google 撤銷授權）、網域驗證、MCP 憑證、評論與登入紀錄會立即刪除，並登出所有裝置；
+          點數交易與購點訂單依會計法令只保留不含個人資料的金額與時間。其他請求請透過
           <NavLink to="/partners">聯絡我們</NavLink>
           頁面提出，我們會在確認身分後處理。
         </p>
@@ -165,7 +167,8 @@ function TermsOfServicePage() {
       <section>
         <h2>3. 帳號</h2>
         <ul>
-          <li>請提供正確資料並妥善保管登入資訊與 API 憑證；以你的帳號進行的操作視為你本人所為。</li>
+          <li>註冊須透過 Google 帳號授權確認 Email，並設定用戶名與密碼；請妥善保管登入資訊與 API 憑證，以你的帳號進行的操作視為你本人所為。</li>
+          <li>你可以隨時在帳號設定頁自行刪除帳號；刪除後無法復原，剩餘點數一併失效。</li>
           <li>發現帳號遭冒用時請立即變更密碼並通知我們。</li>
         </ul>
       </section>
@@ -199,7 +202,7 @@ function TermsOfServicePage() {
       <section>
         <h2>7. 服務變更與終止</h2>
         <p>
-          我們可能因維護、升級或不可抗力暫停部分服務，並會盡量事先公告。你可以隨時停止使用本服務並申請刪除帳號；
+          我們可能因維護、升級或不可抗力暫停部分服務，並會盡量事先公告。你可以隨時停止使用本服務並自行刪除帳號；
           你違反本條款時，我們得暫停或終止你的帳號。
         </p>
       </section>

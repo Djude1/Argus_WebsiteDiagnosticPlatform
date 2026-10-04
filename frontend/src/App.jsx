@@ -35,6 +35,7 @@ const loadAdminPlans = () => import("./features/admin/AdminPlansPage");
 
 const RequireAuth = lazyNamed(loadAuthPages, "RequireAuth");
 const LoginPage = lazyNamed(loadAuthPages, "LoginPage");
+const AccountSetupPage = lazyNamed(loadAuthPages, "AccountSetupPage");
 const PasswordResetRequestPage = lazyNamed(loadAuthPages, "PasswordResetRequestPage");
 const PasswordResetConfirmPage = lazyNamed(loadAuthPages, "PasswordResetConfirmPage");
 const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
@@ -231,6 +232,14 @@ function AppShell({ googleOAuthEnabled }) {
                 <MemberLegacy>
                   <BillingPage />
                 </MemberLegacy>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/account/setup"
+            element={
+              <RequireAuth>
+                <AccountSetupPage />
               </RequireAuth>
             }
           />
