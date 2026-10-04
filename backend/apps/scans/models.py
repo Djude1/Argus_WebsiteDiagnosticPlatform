@@ -412,14 +412,18 @@ class Finding(models.Model):
 
 
 class SearchConsoleConnection(models.Model):
-    """網站專案與 Google Search Console 的連線（OAuth，scope 只有 webmasters.readonly）。
+    """Google Search Console 連線（OAuth，scope 只有 webmasters.readonly）。
 
+    有 project：網站專案的 SEO 分析用（property_url 是選定的資源）。
+    project 為空：帳號層級連線（2026-10-04，從 /domains 一鍵連接），只用來以 Search Console
+    擁有者身分驗證網域；每個使用者最多一筆。
     refresh token 以 seo/gsc.py 的 Fernet 金鑰加密後保存，絕不回傳給前端或寫進 log；
     property_url 是使用者選定的資源（https://example.com/ 或 sc-domain:example.com）。
     """
 
     project = models.OneToOneField(
-        SiteProject, on_delete=models.CASCADE, related_name="search_console"
+        SiteProject, on_delete=models.CASCADE, related_name="search_console",
+        null=True, blank=True,
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="search_consoles"
@@ -430,8 +434,17 @@ class SearchConsoleConnection(models.Model):
     connected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(project__isnull=True),
+                name="uniq_account_level_search_console",
+            )
+        ]
+
     def __str__(self) -> str:
-        return f"GSC {self.project_id} {self.property_url or '(未選資源)'}"
+        return f"GSC {self.project_id or 'account'} {self.property_url or '(未選資源)'}"
 
 
 class ReportVerification(models.Model):
@@ -579,7 +592,8 @@ class FixOutput(models.Model):
 class VerifiedDomain(models.Model):
     """網域所有權驗證（主動測試的技術性閘門）。
 
-    使用者以 DNS TXT / meta tag / HTML 檔三種方法證明自己控制該網域；
+    使用者以 Google Search Console（擁有者權限，2026-10-04 起為主要方法）或
+    DNS TXT / meta tag / HTML 檔（備用）證明自己控制該網域；
     驗證通過後 `expires_at` 前可用於主動掃描（`is_effectively_verified`）。
     admin_override=True 代表管理員人工核准（人工審核機制），同等生效。
     """
@@ -594,6 +608,7 @@ class VerifiedDomain(models.Model):
         DNS_TXT = "dns_txt", "DNS TXT 記錄"
         META_TAG = "meta_tag", "HTML meta 標籤"
         HTML_FILE = "html_file", "驗證檔案"
+        SEARCH_CONSOLE = "search_console", "Google Search Console"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

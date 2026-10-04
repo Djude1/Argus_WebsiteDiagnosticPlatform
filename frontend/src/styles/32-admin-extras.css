@@ -147,7 +147,6 @@
   padding: .6rem .85rem;
   border-radius: var(--ag-r-sm);
   background: var(--admin-accent-soft-bg);
-  border-left: 3px solid var(--admin-accent);
   font-size: .85rem;
   color: var(--admin-text-secondary);
 }
