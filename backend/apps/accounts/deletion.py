@@ -84,7 +84,7 @@ def _revoke_search_console(user) -> None:
     from apps.scans.models import SearchConsoleConnection
     from apps.scans.seo import gsc
 
-    for connection in SearchConsoleConnection.objects.filter(project__user=user):
+    for connection in SearchConsoleConnection.objects.filter(user=user):
         gsc.revoke(connection)  # 失敗不影響刪除（使用者也可到 Google 帳號頁移除）
 
 
@@ -100,7 +100,7 @@ def delete_account(user) -> None:
         ReviewReport,
         ReviewResponseHelpful,
     )
-    from apps.scans.models import ScanJob, SiteProject, VerifiedDomain
+    from apps.scans.models import ScanJob, SearchConsoleConnection, SiteProject, VerifiedDomain
 
     user_model = type(user)
     if user.is_superuser and not user_model.objects.filter(
@@ -132,7 +132,8 @@ def delete_account(user) -> None:
         McpApiKey.objects.filter(user=user).delete()
         # 掃描連帶刪除頁面、問題、報告防偽紀錄、授權紀錄、複刻；點數交易的 scan_job 依設計 SET_NULL
         ScanJob.objects.filter(user=user).delete()
-        SiteProject.objects.filter(user=user).delete()  # Search Console 連線一併刪除
+        SiteProject.objects.filter(user=user).delete()  # 專案的 Search Console 連線一併刪除
+        SearchConsoleConnection.objects.filter(user=user).delete()  # 帳號層級連線
         VerifiedDomain.objects.filter(user=user).delete()
         LoginEvent.objects.filter(user=user).delete()
         PasswordResetToken.objects.filter(user=user).delete()

@@ -152,6 +152,37 @@ export async function verifyVerifiedDomain(
 }
 
 // 刪除網域（204 無內容）
+// 單一網域（自己的）：另附 token 與三種備用方法的設定說明
+export async function fetchVerifiedDomain(domainId: number) {
+  const response = await api.get(`/domains/${domainId}/`);
+  return response.data;
+}
+
+// 帳號層級 Search Console（/domains 一鍵連接，只用來驗證網域所有權）
+// 回傳 { enabled, connected, account_connection, needs_reconnect, error, connected_at }
+export async function fetchDomainSearchConsole() {
+  const response = await api.get("/domains/gsc/");
+  return response.data;
+}
+
+// 取得 Google 授權網址；完成後 Google 導回 /domains?gsc=connected&verified=<數量>
+export async function connectDomainSearchConsole(): Promise<{ authorization_url: string }> {
+  const response = await api.post("/domains/gsc/connect/");
+  return response.data;
+}
+
+// 重新讀取 Search Console：擁有的網站全部匯入為已驗證網域；回傳 { verified: string[], ...狀態 }
+export async function syncDomainSearchConsole() {
+  const response = await api.post("/domains/gsc/sync/");
+  return response.data;
+}
+
+// 中斷帳號層級連線並撤銷 Google 授權（已驗證的網域照常有效到期滿）
+export async function disconnectDomainSearchConsole() {
+  const response = await api.delete("/domains/gsc/");
+  return response.data;
+}
+
 export async function deleteVerifiedDomain(domainId: number) {
   await api.delete(`/domains/${domainId}/`);
 }

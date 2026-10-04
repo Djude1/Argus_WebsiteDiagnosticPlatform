@@ -15,11 +15,11 @@ from django.http import Http404, HttpResponseRedirect
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.scans.domain_verification import sync_search_console_ownership
+from apps.scans.domain_verification import sync_owned_domains, sync_search_console_ownership
 from apps.scans.models import Page, ScanJob, SearchConsoleConnection, SiteProject
 from apps.scans.seo import gsc
 from apps.scans.seo.keywords import normalize_keywords
@@ -215,6 +215,114 @@ def _back_to_seo(project_id, **params) -> HttpResponseRedirect:
     return response
 
 
+# ------------------------------------------------ 帳號層級連線（/domains 一鍵連接，2026-10-04）
+
+
+def _account_status(user) -> dict:
+    account = SearchConsoleConnection.objects.filter(user=user, project__isnull=True).first()
+    return {
+        "enabled": gsc.is_enabled(),
+        # 任一連線（帳號層級或任一專案）都能用來驗證網域
+        "connected": SearchConsoleConnection.objects.filter(user=user).exists(),
+        "account_connection": account is not None,
+        "needs_reconnect": bool(account and account.last_error),
+        "error": account.last_error if account else "",
+        "connected_at": account.connected_at.isoformat() if account else None,
+    }
+
+
+def _sync_all(user) -> tuple[list[str], str]:
+    """用使用者所有連線同步擁有的網站；回傳 (通過的網域, 全部失敗時的錯誤訊息)。"""
+    verified: set[str] = set()
+    error, ok_any = "", False
+    for connection in SearchConsoleConnection.objects.filter(user=user):
+        try:
+            verified.update(sync_owned_domains(connection))
+            ok_any = True
+        except gsc.GscError as exc:
+            error = str(exc)
+            if exc.reconnect:
+                connection.last_error = str(exc)[:255]
+                connection.save(update_fields=["last_error", "updated_at"])
+    return sorted(verified), "" if ok_any else error
+
+
+@extend_schema(request=None, responses=OpenApiTypes.OBJECT)
+@api_view(["GET", "DELETE"])
+@permission_classes([IsAuthenticated])
+def domains_gsc(request):
+    """GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
+    （專案的連線不動；已驗證的網域照常有效到期滿）。"""
+    if request.method == "DELETE":
+        account = SearchConsoleConnection.objects.filter(
+            user=request.user, project__isnull=True
+        ).first()
+        if account is not None:
+            gsc.revoke(account)
+            account.delete()
+    return Response(_account_status(request.user))
+
+
+@extend_schema(request=None, responses=OpenApiTypes.OBJECT)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([GscThrottle])
+def domains_gsc_connect(request):
+    """回傳 Google 授權網址（帳號層級）；完成後導回 /domains 並自動匯入擁有的網站。"""
+    if not gsc.is_enabled():
+        return Response({"detail": "管理員尚未設定 Google Search Console 串接。"}, status=400)
+    url, nonce = gsc.build_authorization(request)
+    response = Response({"authorization_url": url})
+    response.set_cookie(
+        gsc.NONCE_COOKIE, nonce, max_age=gsc.STATE_MAX_AGE, httponly=True,
+        secure=settings.AUTH_REFRESH_COOKIE_SECURE, samesite="Lax", path=gsc.CALLBACK_PATH,
+    )
+    return response
+
+
+@extend_schema(request=None, responses=OpenApiTypes.OBJECT)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([GscThrottle])
+def domains_gsc_sync(request):
+    """重新讀取 Search Console：擁有的網站全部匯入為已驗證網域。"""
+    if not SearchConsoleConnection.objects.filter(user=request.user).exists():
+        return Response({"detail": "尚未連接 Google Search Console。"}, status=400)
+    verified, error = _sync_all(request.user)
+    if error:
+        return Response({"detail": error, **_account_status(request.user)}, status=400)
+    return Response({"verified": verified, **_account_status(request.user)})
+
+
+def _back_to_domains(**params) -> HttpResponseRedirect:
+    response = HttpResponseRedirect("/domains?" + urlencode(params))
+    response.delete_cookie(gsc.NONCE_COOKIE, path=gsc.CALLBACK_PATH)
+    return response
+
+
+def _account_callback(request, data: dict) -> HttpResponseRedirect:
+    if request.query_params.get("error"):
+        return _back_to_domains(gsc="error", reason="已取消 Google 授權。")
+    code = request.query_params.get("code", "")
+    if not code:
+        return _back_to_domains(gsc="error", reason="Google 沒有回傳授權碼。")
+    try:
+        refresh = gsc.exchange_code(code, gsc.redirect_uri(request))
+    except gsc.GscError as exc:
+        return _back_to_domains(gsc="error", reason=str(exc))
+    connection, _ = SearchConsoleConnection.objects.update_or_create(
+        user_id=data["u"], project=None,
+        defaults={"refresh_token_encrypted": gsc.encrypt_token(refresh), "last_error": ""},
+    )
+    logger.info("Search Console 帳號層級已連接 user_id=%s", data["u"])
+    try:
+        verified = sync_owned_domains(connection)
+    except Exception:  # noqa: BLE001 — Google API 暫時失敗不該讓連接失敗
+        logger.warning("Search Console 網域匯入失敗 user_id=%s", data["u"])
+        return _back_to_domains(gsc="connected", synced="0")
+    return _back_to_domains(gsc="connected", verified=str(len(verified)))
+
+
 @extend_schema(exclude=True)
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -225,6 +333,8 @@ def gsc_callback(request):
         data = gsc.read_state(state, request.COOKIES.get(gsc.NONCE_COOKIE, ""))
     except gsc.GscError as exc:
         return _back_to_seo(None, gsc="error", reason=str(exc))
+    if data.get("p") is None:
+        return _account_callback(request, data)
     project = SiteProject.objects.filter(id=data["p"], user_id=data["u"]).first()
     if project is None:
         return _back_to_seo(None, gsc="error", reason="找不到這個專案。")

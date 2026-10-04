@@ -202,7 +202,7 @@ def verify_search_console(user, domain: str) -> tuple[bool, str]:
     connections = list(SearchConsoleConnection.objects.filter(user=user))
     if not connections:
         return False, (
-            "尚未連接 Google Search Console：請到這個網站專案的「SEO 分析 → 搜尋關鍵字」連接。"
+            "尚未連接 Google Search Console：請在網域驗證頁按「連接 Google Search Console」。"
         )
     not_owner, errors = "", ""
     for connection in connections:
@@ -307,4 +307,38 @@ def sync_search_console_ownership(connection, project) -> list[str]:
             f"Search Console 確認你是 {site['site_url']} 的擁有者。", timezone.now(),
         )
         verified.append(domain)
+    return verified
+
+
+def sync_owned_domains(connection) -> list[str]:
+    """帳號層級同步：Search Console 裡使用者是「擁有者」的資源全部匯入為已驗證網域，
+    並順便驗證清單中被這些資源涵蓋、尚未生效的網域。管理員否決的網域不動。回傳通過的網域。
+    """
+    from apps.scans.models import VerifiedDomain
+    from apps.scans.seo import gsc
+
+    owned = [s["site_url"] for s in gsc.list_sites(connection) if s["permission"] == "siteOwner"]
+    now = timezone.now()
+    verified: list[str] = []
+    for site_url in owned:
+        try:
+            domain = normalize_domain(gsc.property_domain(site_url))
+        except DomainValidationError:
+            continue
+        VerifiedDomain.objects.get_or_create(
+            user=connection.user, domain=domain, defaults={"token": generate_token()}
+        )
+    for record in VerifiedDomain.objects.filter(user=connection.user).exclude(
+        status=VerifiedDomain.Status.REJECTED
+    ):
+        covering = next(
+            (url for url in owned if gsc.property_covers_domain(url, record.domain)), None
+        )
+        if covering is None:
+            continue
+        _apply_result(
+            record, VerifiedDomain.Method.SEARCH_CONSOLE, True,
+            f"Search Console 確認你是 {covering} 的擁有者。", now,
+        )
+        verified.append(record.domain)
     return verified

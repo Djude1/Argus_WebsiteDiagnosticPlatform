@@ -53,7 +53,7 @@ function PrivacyPolicyPage() {
         </ul>
         <h3>Google Search Console 資料（僅在你主動連接時）</h3>
         <ul>
-          <li>你在 SEO 分析頁連接 Search Console 時，我們透過 Google OAuth 申請唯讀權限（<code>webmasters.readonly</code>），讀取你可存取的網站資源清單與權限等級（用來確認網域所有權），以及你所選擇的網站資源之搜尋成效（搜尋字詞、曝光、點擊、點閱率、平均排名與對應頁面）及網址檢查結果（是否已被 Google 收錄）。</li>
+          <li>你在 SEO 分析頁或網域驗證頁連接 Search Console 時，我們透過 Google OAuth 申請唯讀權限（<code>webmasters.readonly</code>），讀取你可存取的網站資源清單與權限等級（用來確認網域所有權），以及你所選擇的網站資源之搜尋成效（搜尋字詞、曝光、點擊、點閱率、平均排名與對應頁面）及網址檢查結果（是否已被 Google 收錄）。</li>
           <li>我們只保存加密後的長期授權憑證（refresh token）與你選擇的資源網址；搜尋成效資料只在你查看時向 Google 讀取，短暫快取（最長 1 小時）以減少重複請求，不另行永久保存。</li>
         </ul>
         <h3>Cookie 與瀏覽器儲存</h3>
@@ -108,7 +108,7 @@ function PrivacyPolicyPage() {
           <li>帳號資料：保存至你刪除帳號為止；刪除後立即清除。</li>
           <li>掃描截圖：約 90 天後自動刪除；PDF 報告檔：約 180 天後刪除（報告編號的查驗紀錄會保留，讓已交付的報告仍可查驗）。</li>
           <li>付款、點數與稽核紀錄：依會計與法令要求保存。</li>
-          <li>Search Console 授權憑證：保存至你中斷連線或刪除專案為止。</li>
+          <li>Search Console 授權憑證：保存至你中斷連線（SEO 分析頁或網域驗證頁）、刪除專案或刪除帳號為止。</li>
         </ul>
       </section>
 
