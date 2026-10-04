@@ -332,26 +332,25 @@ function SettingsPage() {
                 並立即登出所有裝置。剩餘點數會一併失效；點數交易與購點訂單依法只保留匿名的金額與時間。此操作無法復原。
               </p>
             </header>
-            {meData?.is_staff ? (
-              <p className="set-hint">管理員帳號不能自行刪除，請聯絡其他管理員處理。</p>
-            ) : (
-              <form className="set-form" onSubmit={handleDeleteAccount} aria-label="刪除帳號">
-                <div className="set-field">
-                  <label className="set-label" htmlFor="set-delete-pwd">目前密碼</label>
-                  <PasswordInput id="set-delete-pwd" value={deletePwd} onChange={(e) => setDeletePwd(e.target.value)} autoComplete="current-password" required />
-                </div>
-                <div className="set-field">
-                  <label className="set-label" htmlFor="set-delete-confirm">請輸入「刪除帳號」確認</label>
-                  <input id="set-delete-confirm" className="input" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder="刪除帳號" required />
-                </div>
-                {deleteError && <p className="set-msg tone-bad set-field-full" role="alert">{deleteError}</p>}
-                <div className="set-form-actions">
-                  <button className="set-danger-btn" type="submit" disabled={deleteBusy || deleteConfirm.trim() !== "刪除帳號" || !deletePwd}>
-                    {deleteBusy ? "刪除中…" : "永久刪除帳號"}
-                  </button>
-                </div>
-              </form>
+            {meData?.is_staff && (
+              <p className="set-hint">你目前是管理員，刪除後會一併失去管理權限。若你是唯一的超級管理員，需先指定另一位超級管理員才能刪除。</p>
             )}
+            <form className="set-form" onSubmit={handleDeleteAccount} aria-label="刪除帳號">
+              <div className="set-field">
+                <label className="set-label" htmlFor="set-delete-pwd">目前密碼</label>
+                <PasswordInput id="set-delete-pwd" value={deletePwd} onChange={(e) => setDeletePwd(e.target.value)} autoComplete="current-password" required />
+              </div>
+              <div className="set-field">
+                <label className="set-label" htmlFor="set-delete-confirm">請輸入「刪除帳號」確認</label>
+                <input id="set-delete-confirm" className="input" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder="刪除帳號" required />
+              </div>
+              {deleteError && <p className="set-msg tone-bad set-field-full" role="alert">{deleteError}</p>}
+              <div className="set-form-actions">
+                <button className="set-danger-btn" type="submit" disabled={deleteBusy || deleteConfirm.trim() !== "刪除帳號" || !deletePwd}>
+                  {deleteBusy ? "刪除中…" : "永久刪除帳號"}
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       </div>

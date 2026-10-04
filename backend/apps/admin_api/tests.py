@@ -1561,3 +1561,77 @@ class SetStaffTests(APITestCase):
         self.assertTrue(self.root.is_staff and other_root.is_staff)
         self.assertFalse(inactive.is_staff)
         self.assertFalse(AdminAuditLog.objects.exists())
+
+
+class SuspendAndDeleteUserTests(APITestCase):
+    """後台停用（封號）／恢復與刪除使用者。"""
+
+    def setUp(self):
+        self.staff = _make_user("staff", staff=True)
+        self.root = _make_user("root", staff=True, is_superuser=True)
+        self.alice = _make_user("alice")
+
+    def post(self, actor, name, target, data):
+        self.client.force_authenticate(actor)
+        return self.client.post(reverse(name, args=[target.id]), data, format="json")
+
+    def test_staff_suspends_and_restores_user(self):
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = RefreshToken.for_user(self.alice)
+        response = self.post(
+            self.staff, "admin-user-suspend", self.alice, {"suspended": True, "reason": "濫用"}
+        )
+        self.assertEqual((response.status_code, response.data["is_active"]), (200, False))
+        self.alice.refresh_from_db()
+        self.assertFalse(self.alice.is_active)
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
+        # 停用的帳號用舊的 access token 也進不來
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 401)
+        self.client.credentials()
+
+        self.post(self.staff, "admin-user-suspend", self.alice, {"suspended": False})
+        self.alice.refresh_from_db()
+        self.assertTrue(self.alice.is_active)
+        logs = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.Action.USER_SUSPEND, target_user=self.alice
+        ).order_by("created_at")
+        self.assertEqual([log.payload["suspended"] for log in logs], [True, False])
+        self.assertEqual(logs[0].payload["reason"], "濫用")
+
+    def test_target_rules(self):
+        other_staff = _make_user("staff2", staff=True)
+        cases = (
+            (self.staff, self.staff, 400),  # 自己
+            (self.staff, self.root, 400),  # 超級管理員
+            (self.staff, other_staff, 400),  # 管理員只有超級管理員能處理
+            (self.alice, self.staff, 403),  # 一般使用者沒有後台權限
+        )
+        for actor, target, code in cases:
+            for name, data in (
+                ("admin-user-suspend", {"suspended": True}),
+                ("admin-user-delete", {"confirm": "刪除帳號"}),
+            ):
+                with self.subTest(actor=actor.username, target=target.username, name=name):
+                    self.assertEqual(self.post(actor, name, target, data).status_code, code)
+        response = self.post(self.root, "admin-user-suspend", other_staff, {"suspended": True})
+        self.assertEqual(response.status_code, 200)
+
+    def test_delete_user_anonymizes_and_logs_without_email(self):
+        _make_scan(self.alice)
+        missing = self.post(self.staff, "admin-user-delete", self.alice, {"confirm": "刪除"})
+        self.assertEqual(missing.status_code, 400)
+        response = self.post(self.staff, "admin-user-delete", self.alice, {"confirm": "刪除帳號"})
+        self.assertEqual(response.status_code, 204)
+        self.alice.refresh_from_db()
+        self.assertTrue(self.alice.deleted_at)
+        self.assertEqual(self.alice.email, "")
+        self.assertFalse(ScanJob.objects.filter(user=self.alice).exists())
+        log = AdminAuditLog.objects.get(action=AdminAuditLog.Action.USER_DELETE)
+        self.assertEqual(log.target_object_repr, f"使用者 #{self.alice.pk}")
+        self.assertNotIn("alice@example.com", str(log.payload))
+        again = self.post(self.staff, "admin-user-delete", self.alice, {"confirm": "刪除帳號"})
+        self.assertEqual(again.status_code, 400)

@@ -237,6 +237,8 @@
                                 "review_reply",
                                 "scan_control",
                                 "subscription_adjust",
+                                "user_delete",
+                                "user_suspend",
                                 "user_toggle_staff"
                             ]
                         },
@@ -2648,6 +2650,55 @@
                 }
             }
         },
+        "/api/admin/users/{user_id}/delete/": {
+            "post": {
+                "operationId": "admin_users_delete_create",
+                "description": "管理員刪除使用者帳號：與使用者自行刪除相同（accounts.deletion.delete_account），\n個資與內容全刪、帳務匿名保留。稽核紀錄只寫使用者編號，不留下被刪除者的 Email。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminDeleteUserRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminDeleteUserRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminDeleteUserRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/admin/users/{user_id}/login-events/": {
             "get": {
                 "operationId": "admin_users_login_events_retrieve",
@@ -2832,6 +2883,62 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/AdminUserSubscriptionResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{user_id}/suspend/": {
+            "post": {
+                "operationId": "admin_users_suspend_create",
+                "description": "停用（封號）或恢復使用者。停用時撤銷所有 refresh token；access token 由\nJWTAuthentication 每次檢查 is_active，立即失效。資料全部保留，恢復後照常使用。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SuspendUserRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SuspendUserRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SuspendUserRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminSuspendUserResponse"
                                 }
                             }
                         },
@@ -5923,12 +6030,14 @@
                     "review_moderate",
                     "review_delete",
                     "user_toggle_staff",
+                    "user_suspend",
+                    "user_delete",
                     "domain_override",
                     "scan_control",
                     "other"
                 ],
                 "type": "string",
-                "description": "* `coin_adjust` - 調整點數\n* `subscription_adjust` - 調整訂閱\n* `review_reply` - 回覆評論\n* `review_moderate` - 審核評論\n* `review_delete` - 刪除評論\n* `user_toggle_staff` - 切換管理員身份\n* `domain_override` - 網域驗證人工審核\n* `scan_control` - 掃描任務控制\n* `other` - 其他"
+                "description": "* `coin_adjust` - 調整點數\n* `subscription_adjust` - 調整訂閱\n* `review_reply` - 回覆評論\n* `review_moderate` - 審核評論\n* `review_delete` - 刪除評論\n* `user_toggle_staff` - 切換管理員身份\n* `user_suspend` - 停用／恢復帳號\n* `user_delete` - 刪除帳號\n* `domain_override` - 網域驗證人工審核\n* `scan_control` - 掃描任務控制\n* `other` - 其他"
             },
             "AdminAuditLogListResponse": {
                 "type": "object",
@@ -6028,6 +6137,22 @@
                     "plan_name",
                     "scan_job",
                     "scan_origin"
+                ]
+            },
+            "AdminDeleteUserRequest": {
+                "type": "object",
+                "properties": {
+                    "confirm": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "confirm"
                 ]
             },
             "AdminDomainListResponse": {
@@ -6694,6 +6819,17 @@
                     "plans"
                 ]
             },
+            "AdminSuspendUserResponse": {
+                "type": "object",
+                "properties": {
+                    "is_active": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "is_active"
+                ]
+            },
             "AdminTransactionListResponse": {
                 "type": "object",
                 "properties": {
@@ -6749,6 +6885,14 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
                     "balance": {
                         "type": "integer",
                         "readOnly": true
@@ -6777,9 +6921,6 @@
                         },
                         "readOnly": true
                     },
-                    "is_active": {
-                        "type": "boolean"
-                    },
                     "is_superuser": {
                         "type": "boolean"
                     },
@@ -6801,6 +6942,7 @@
                     "ai_usage",
                     "balance",
                     "date_joined",
+                    "deleted_at",
                     "email",
                     "full_name",
                     "id",
@@ -6846,6 +6988,14 @@
                     "is_staff": {
                         "type": "boolean"
                     },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
                     "balance": {
                         "type": "integer",
                         "readOnly": true
@@ -6862,9 +7012,11 @@
                 "required": [
                     "balance",
                     "date_joined",
+                    "deleted_at",
                     "email",
                     "full_name",
                     "id",
+                    "is_active",
                     "is_staff",
                     "last_login",
                     "total_purchased_ntd",
@@ -9453,6 +9605,21 @@
                 ],
                 "type": "string",
                 "description": "* `pending` - 等待中\n* `snapshotting` - 複刻中\n* `optimizing` - 優化中\n* `asking` - 回答中\n* `succeeded` - 完成\n* `failed` - 失敗"
+            },
+            "SuspendUserRequest": {
+                "type": "object",
+                "properties": {
+                    "suspended": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "maxLength": 200
+                    }
+                },
+                "required": [
+                    "suspended"
+                ]
             },
             "TeamMemberListResponse": {
                 "type": "object",

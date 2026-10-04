@@ -79,12 +79,18 @@ def handle_error(handle: str, *, exclude_pk=None) -> str:
     return ""
 
 
-def find_login_user(identifier: str):
-    """登入識別：含 @ 視為 Email，否則視為用戶名；回傳啟用中的 User 或 None。"""
+def find_login_user(identifier: str, *, suspended: bool = False):
+    """登入識別：含 @ 視為 Email，否則視為用戶名；回傳啟用中的 User 或 None。
+
+    suspended=True 改找被管理員停用（is_active=False 且未刪除）的帳號，讓登入能回明確的
+    「帳號已停用」而不是「帳密錯誤」或被當成未註冊。已刪除的帳號 Email／handle 已清空，找不到。
+    """
     identifier = (identifier or "").strip().lower()
     if not identifier:
         return None
-    users = get_user_model().objects.filter(is_active=True)
+    users = get_user_model().objects.filter(is_active=not suspended)
+    if suspended:
+        users = users.filter(deleted_at__isnull=True)
     if "@" in identifier:
         return users.filter(username=identifier).first() or users.filter(
             email__iexact=identifier

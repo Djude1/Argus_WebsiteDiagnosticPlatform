@@ -23,6 +23,8 @@ urlpatterns = [
     path("users/<int:user_id>/", views.user_detail, name="admin-user-detail"),
     path("users/<int:user_id>/adjust-coin/", views.adjust_coin, name="admin-adjust-coin"),
     path("users/<int:user_id>/staff/", views.set_staff, name="admin-user-set-staff"),
+    path("users/<int:user_id>/suspend/", views.user_suspend, name="admin-user-suspend"),
+    path("users/<int:user_id>/delete/", views.user_delete, name="admin-user-delete"),
     path(
         "users/<int:user_id>/login-events/",
         views.user_login_events,

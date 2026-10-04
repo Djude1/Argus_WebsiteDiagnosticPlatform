@@ -675,6 +675,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users/{user_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 管理員刪除使用者帳號：與使用者自行刪除相同（accounts.deletion.delete_account），
+         *     個資與內容全刪、帳務匿名保留。稽核紀錄只寫使用者編號，不留下被刪除者的 Email。
+         */
+        post: operations["admin_users_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users/{user_id}/login-events/": {
         parameters: {
             query?: never;
@@ -732,6 +752,26 @@ export interface paths {
          *     點數異動一律走 billing.services（grant/cancel/settle），不直接動錢包。
          */
         post: operations["admin_users_subscription_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{user_id}/suspend/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 停用（封號）或恢復使用者。停用時撤銷所有 refresh token；access token 由
+         *     JWTAuthentication 每次檢查 is_active，立即失效。資料全部保留，恢復後照常使用。
+         */
+        post: operations["admin_users_suspend_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2404,12 +2444,14 @@ export interface components {
          *     * `review_moderate` - 審核評論
          *     * `review_delete` - 刪除評論
          *     * `user_toggle_staff` - 切換管理員身份
+         *     * `user_suspend` - 停用／恢復帳號
+         *     * `user_delete` - 刪除帳號
          *     * `domain_override` - 網域驗證人工審核
          *     * `scan_control` - 掃描任務控制
          *     * `other` - 其他
          * @enum {string}
          */
-        AdminAuditLogActionEnum: "coin_adjust" | "subscription_adjust" | "review_reply" | "review_moderate" | "review_delete" | "user_toggle_staff" | "domain_override" | "scan_control" | "other";
+        AdminAuditLogActionEnum: "coin_adjust" | "subscription_adjust" | "review_reply" | "review_moderate" | "review_delete" | "user_toggle_staff" | "user_suspend" | "user_delete" | "domain_override" | "scan_control" | "other";
         AdminAuditLogListResponse: {
             logs: components["schemas"]["AdminAuditLog"][];
             page: number;
@@ -2432,6 +2474,10 @@ export interface components {
             note: string;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        AdminDeleteUserRequest: {
+            confirm: string;
+            reason?: string;
         };
         AdminDomainListResponse: {
             domains: components["schemas"]["AdminVerifiedDomain"][];
@@ -2618,6 +2664,9 @@ export interface components {
         AdminSubscriptionPlansResponse: {
             plans: components["schemas"]["AdminSubscriptionPlan"][];
         };
+        AdminSuspendUserResponse: {
+            is_active: boolean;
+        };
         AdminTransactionListResponse: {
             transactions: components["schemas"]["AdminCoinTransaction"][];
             page: number;
@@ -2635,12 +2684,14 @@ export interface components {
             /** Format: date-time */
             last_login: string | null;
             is_staff: boolean;
+            is_active: boolean;
+            /** Format: date-time */
+            deleted_at: string | null;
             readonly balance: number;
             readonly total_purchased_ntd: number;
             readonly total_scans_used: number;
             readonly wallet: components["schemas"]["AdminWalletSummary"] | null;
             readonly recent_transactions: components["schemas"]["AdminCoinTransaction"][];
-            is_active: boolean;
             is_superuser: boolean;
             ai_usage: components["schemas"]["AdminAiUsage"];
             /** @description 最近 10 筆 */
@@ -2658,6 +2709,9 @@ export interface components {
             /** Format: date-time */
             last_login: string | null;
             is_staff: boolean;
+            is_active: boolean;
+            /** Format: date-time */
+            deleted_at: string | null;
             readonly balance: number;
             readonly total_purchased_ntd: number;
             readonly total_scans_used: number;
@@ -3509,6 +3563,10 @@ export interface components {
          * @enum {string}
          */
         StatusD8eEnum: "pending" | "snapshotting" | "optimizing" | "asking" | "succeeded" | "failed";
+        SuspendUserRequest: {
+            suspended: boolean;
+            reason?: string;
+        };
         TeamMemberListResponse: {
             items: components["schemas"]["TeamMemberWrite"][];
         };
@@ -3740,7 +3798,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description 稽核動作（AdminAuditLog.action） */
-                action?: "coin_adjust" | "domain_override" | "other" | "review_delete" | "review_moderate" | "review_reply" | "scan_control" | "subscription_adjust" | "user_toggle_staff";
+                action?: "coin_adjust" | "domain_override" | "other" | "review_delete" | "review_moderate" | "review_reply" | "scan_control" | "subscription_adjust" | "user_delete" | "user_suspend" | "user_toggle_staff";
                 /** @description 只看單一管理員的操作 */
                 actor_id?: number;
                 /** @description 頁碼，從 1 起算；超過總頁數時取最後一頁。 */
@@ -5084,6 +5142,32 @@ export interface operations {
             };
         };
     };
+    admin_users_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminDeleteUserRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AdminDeleteUserRequest"];
+                "multipart/form-data": components["schemas"]["AdminDeleteUserRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     admin_users_login_events_retrieve: {
         parameters: {
             query?: never;
@@ -5184,6 +5268,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserSubscriptionResponse"];
+                };
+            };
+        };
+    };
+    admin_users_suspend_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuspendUserRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SuspendUserRequest"];
+                "multipart/form-data": components["schemas"]["SuspendUserRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSuspendUserResponse"];
                 };
             };
         };

@@ -4,7 +4,9 @@ import { NavLink, useNavigate, useParams } from "react-router-dom";
 
 import {
   adminAdjustCoin,
+  adminDeleteUser,
   adminSetStaff,
+  adminSuspendUser,
   adminUserSubscriptionAction,
   fetchAdminSubscriptionPlans,
   fetchAdminUserDetail,
@@ -149,7 +151,10 @@ export function AdminUsersPage() {
                 >
                   <td>
                     <div className="admin-cell-primary">{u.full_name}</div>
-                    <div className="admin-cell-secondary">@{u.username} {u.is_staff && <span className="admin-staff-chip">staff</span>}</div>
+                    <div className="admin-cell-secondary">
+                      @{u.username} {u.is_staff && <span className="admin-staff-chip">staff</span>}
+                      {u.deleted_at ? <span className="admin-deleted-chip">已刪除</span> : !u.is_active && <span className="admin-suspended-chip">已停用</span>}
+                    </div>
                   </td>
                   <td>{u.email}</td>
                   <td className="num"><span className="admin-coin">{formatNumber(u.balance)}</span></td>
@@ -198,6 +203,10 @@ export function AdminUserDetailPage() {
   const me = useArgusStore((s) => s.me);
   const [roleBusy, setRoleBusy] = useState(false);
   const [roleFeedback, setRoleFeedback] = useState<Feedback | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState<Feedback | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -301,6 +310,53 @@ export function AdminUserDetailPage() {
     }
   }
 
+  async function handleToggleSuspend() {
+    if (!userId || !user) return;
+    const suspend = user.is_active;
+    const ok = await confirmDialog(
+      suspend
+        ? `確定停用 ${user.email || user.username}？對方會立即被登出且無法再登入，資料全部保留，之後可以恢復。`
+        : `確定恢復 ${user.email || user.username} 的帳號？`,
+      { danger: suspend },
+    );
+    if (!ok) return;
+    setStatusBusy(true);
+    setStatusFeedback(null);
+    try {
+      await adminSuspendUser(userId, suspend, statusReason.trim());
+      setStatusFeedback({ tone: "good", message: suspend ? "已停用帳號。" : "已恢復帳號。" });
+      setStatusReason("");
+      await load();
+    } catch (err) {
+      setStatusFeedback({ tone: "bad", message: errorDetail(err, "變更失敗。") });
+    } finally {
+      setStatusBusy(false);
+    }
+  }
+
+  async function handleDeleteUser(e: FormEvent) {
+    e.preventDefault();
+    if (!userId || !user) return;
+    const ok = await confirmDialog(
+      `確定永久刪除 ${user.email || user.username} 的帳號？網站專案、掃描、報告與個人資料會全部刪除，無法復原。`,
+      { danger: true },
+    );
+    if (!ok) return;
+    setStatusBusy(true);
+    setStatusFeedback(null);
+    try {
+      await adminDeleteUser(userId, deleteConfirm.trim(), statusReason.trim());
+      setStatusFeedback({ tone: "good", message: "帳號已刪除，個人資料已清除。" });
+      setDeleteConfirm("");
+      setStatusReason("");
+      await load();
+    } catch (err) {
+      setStatusFeedback({ tone: "bad", message: errorDetail(err, "刪除失敗。") });
+    } finally {
+      setStatusBusy(false);
+    }
+  }
+
   async function handleAdjust(e: FormEvent) {
     e.preventDefault();
     if (!userId) return;
@@ -342,6 +398,14 @@ export function AdminUserDetailPage() {
     );
   }
   const w = user.wallet;
+  // 與後端 admin_api.views._manage_target_error 相同的限制（後端才是防線，這裡只決定要不要顯示按鈕）
+  const statusBlocked = user.id === me?.id
+    ? "不能對自己的帳號操作；要刪除自己的帳號請到帳號設定。"
+    : user.is_superuser
+      ? "超級管理員帳號不能在後台停用或刪除。"
+      : user.is_staff && !me?.is_superuser
+        ? "管理員帳號只有超級管理員可以停用或刪除。"
+        : "";
 
   return (
     <div className="admin-page">
@@ -360,7 +424,7 @@ export function AdminUserDetailPage() {
         <section className="admin-panel">
           <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>基本資料</h3>
           <dl className="admin-dl">
-            <dt>狀態</dt><dd>{user.is_active ? "啟用" : "停用"} {user.is_staff && <span className="admin-staff-chip">staff</span>} {user.is_superuser && <span className="admin-super-chip">superuser</span>}</dd>
+            <dt>狀態</dt><dd>{user.deleted_at ? <span className="admin-deleted-chip">已刪除</span> : user.is_active ? "啟用" : <span className="admin-suspended-chip">已停用</span>} {user.is_staff && <span className="admin-staff-chip">staff</span>} {user.is_superuser && <span className="admin-super-chip">superuser</span>}</dd>
             <dt>註冊時間</dt><dd>{formatDateTime(user.date_joined)}</dd>
             <dt>最後登入</dt><dd>{user.last_login ? formatDateTime(user.last_login) : "從未"}</dd>
           </dl>
@@ -383,7 +447,58 @@ export function AdminUserDetailPage() {
         </section>
       </div>
 
-      {me?.is_superuser && (
+      <section className="admin-panel">
+        <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>帳號狀態</h3>
+        {user.deleted_at ? (
+          <p className="admin-empty">此帳號已於 {formatDateTime(user.deleted_at)} 刪除，個人資料已清除；點數交易與訂單只保留匿名紀錄。</p>
+        ) : statusBlocked ? (
+          <p className="admin-empty">{statusBlocked}</p>
+        ) : (
+          <div className="admin-role-row">
+            <p>
+              目前狀態：<strong>{user.is_active ? "啟用" : "已停用"}</strong>。
+              停用（封號）會立即登出對方並禁止登入，資料全部保留，可以再恢復；刪除則永久清除對方的個人資料與網站專案，無法復原。
+            </p>
+            <input
+              className="admin-input wide"
+              placeholder="原因（選填，寫入操作日誌）"
+              aria-label="停用或刪除原因"
+              maxLength={200}
+              value={statusReason}
+              onChange={(e) => setStatusReason(e.target.value)}
+            />
+            <button
+              type="button"
+              className={`admin-btn ${user.is_active ? "danger" : "primary"}`}
+              onClick={handleToggleSuspend}
+              disabled={statusBusy}
+            >
+              {user.is_active ? "停用帳號" : "恢復帳號"}
+            </button>
+            <form className="admin-role-actions" onSubmit={handleDeleteUser} aria-label="刪除帳號">
+              <input
+                className="admin-input"
+                placeholder="輸入「刪除帳號」確認"
+                aria-label="輸入「刪除帳號」確認"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="admin-btn danger"
+                disabled={statusBusy || deleteConfirm.trim() !== "刪除帳號"}
+              >
+                永久刪除帳號
+              </button>
+            </form>
+          </div>
+        )}
+        {statusFeedback && (
+          <div className={`admin-feedback tone-${statusFeedback.tone}`}>{statusFeedback.message}</div>
+        )}
+      </section>
+
+      {me?.is_superuser && !user.deleted_at && (
         <section className="admin-panel">
           <h3><span className="admin-panel-icon-chip"><AdminUsersIcon /></span>管理權限</h3>
           {user.is_superuser ? (
