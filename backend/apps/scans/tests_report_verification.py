@@ -151,7 +151,10 @@ class ReportCacheTests(TestCase):
 
     def test_missing_file_is_rebuilt_even_if_a_verification_row_exists(self):
         """磁碟上的報告被清掉（保留期限、換機器）時仍要能重新產生。"""
-        self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        download = self.client.get(f"/api/scans/{self.scan_job.id}/report/")
+        self.assertEqual(download.status_code, 200)
+        # 關閉串流回應後才模擬檔案失蹤，避免 Windows 還持有下載檔案。
+        download.close()
         path = report_output_path(self.scan_job)
         path.unlink()
 

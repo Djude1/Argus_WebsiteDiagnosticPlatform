@@ -583,7 +583,11 @@ class VerifiedDomainCreateSerializer(serializers.Serializer):
 
 
 class DomainVerifySerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=VerifiedDomain.Method.choices)
+    """token 方法驗證；google_search_console 走獨立 OAuth 流程，不在此觸發。"""
+
+    method = serializers.ChoiceField(
+        choices=["dns_txt", "meta_tag", "html_file"]
+    )
 
 
 def build_verification_instructions(domain: str, token: str) -> dict:

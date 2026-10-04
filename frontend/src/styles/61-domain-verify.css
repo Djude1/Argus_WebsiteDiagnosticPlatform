@@ -465,6 +465,23 @@
 }
 .domain-verify-btn:hover:not(:disabled) { background: var(--ag-primary-hover); transform: translateY(-1px); }
 .domain-verify-btn:disabled { opacity: 0.55; cursor: wait; }
+/* Google Search Console 驗證（可選路徑）：與主驗證鈕區隔的次強調按鈕 */
+.domain-google-btn {
+  min-height: 40px;
+  padding: 0 1.1rem;
+  border-radius: var(--ag-r-md);
+  background: var(--ag-bg-raised);
+  border: 1px solid var(--ag-border-accent);
+  color: var(--ag-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: background var(--ag-dur-2), border-color var(--ag-dur-2), transform var(--ag-dur-1);
+}
+.domain-google-btn:hover:not(:disabled) {
+  background: var(--ag-primary-soft-2);
+  transform: translateY(-1px);
+}
+.domain-google-btn:disabled { opacity: 0.55; cursor: wait; }
 .domain-row-actions { display: flex; justify-content: flex-end; }
 .domain-delete-btn {
   min-height: 32px;
@@ -491,6 +508,7 @@
   .domain-verify-methods { display: flex; }
   .domain-method-btn { flex: 1; padding: 0 0.4rem; white-space: nowrap; }
   .domain-verify-btn { width: 100%; }
+  .domain-google-btn { width: 100%; }
   .domain-step + .domain-step::before { display: none; }
 }
 
@@ -505,6 +523,9 @@
     animation: none;
   }
   .domain-verify-btn:hover:not(:disabled) {
+    transform: none;
+  }
+  .domain-google-btn:hover:not(:disabled) {
     transform: none;
   }
 }

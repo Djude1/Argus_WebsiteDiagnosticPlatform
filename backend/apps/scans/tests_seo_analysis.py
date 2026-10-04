@@ -321,6 +321,17 @@ GSC_ENABLED = {"GOOGLE_OAUTH_CLIENT_ID": "cid.apps.googleusercontent.com",
                "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret"}
 
 
+class SearchConsolePropertyTests(SimpleTestCase):
+    def test_unicode_url_prefix_matches_punycode_origin(self):
+        self.assertTrue(gsc.property_matches("https://巧.tw/", "https://xn--gst.tw"))
+        self.assertFalse(gsc.property_matches("http://巧.tw/", "https://xn--gst.tw"))
+
+    def test_unicode_domain_matches_punycode_origin_and_subdomain(self):
+        self.assertTrue(gsc.property_matches("sc-domain:巧.tw", "https://xn--gst.tw"))
+        self.assertTrue(gsc.property_matches("sc-domain:巧.tw", "https://www.xn--gst.tw"))
+        self.assertFalse(gsc.property_matches("sc-domain:巧.tw", "https://example.test"))
+
+
 @override_settings(**GSC_ENABLED)
 class SearchConsoleTests(TestCase):
     def setUp(self):

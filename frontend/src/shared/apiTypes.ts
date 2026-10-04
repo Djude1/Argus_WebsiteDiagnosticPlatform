@@ -1370,6 +1370,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/domains/{id}/google/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 產生 Google Search Console 驗證的授權 URL（前端拿到後整頁跳轉）。
+         *
+         *     與三種 token 方法並存的可選路徑：使用者授權 Argus 讀取其 GSC
+         *     已驗證資源清單，比對通過即視為擁有網域。未設定 client secret
+         *     時回 503，前端按鈕引導設定，不影響原有方法。
+         */
+        post: operations["domains_google_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/domains/{id}/verify/": {
         parameters: {
             query?: never;
@@ -1381,6 +1404,29 @@ export interface paths {
         put?: never;
         /** @description 執行指定方法的驗證，回最新狀態與失敗原因（last_error）。 */
         post: operations["domains_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/google/callback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Google 授權後的回呼：驗 state → 換 token → 比對 GSC 已驗證資源。
+         *
+         *     瀏覽器 302 回來時不會帶 JWT（access token 只活在 SPA 記憶體），
+         *     身分綁在簽署過的 state 裡；端點開放但 state 600 秒單次有效。
+         *     結果以 302 導回前端 /domains?gsc=...，讓 SPA 顯示成功／失敗訊息。
+         */
+        get: operations["domains_google_callback_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2761,7 +2807,7 @@ export interface components {
             domain: string;
             status: components["schemas"]["StatusA7fEnum"];
             readonly status_label: string;
-            method: components["schemas"]["MethodCbbEnum"] | components["schemas"]["BlankEnum"];
+            method: components["schemas"]["MethodD9aEnum"] | components["schemas"]["BlankEnum"];
             readonly method_label: string;
             /** Format: date-time */
             verified_at: string | null;
@@ -2894,11 +2940,20 @@ export interface components {
             approve: boolean;
             note?: string;
         };
+        /** @description token 方法驗證；google_search_console 走獨立 OAuth 流程，不在此觸發。 */
         DomainVerify: {
-            method: components["schemas"]["MethodCbbEnum"];
+            method: components["schemas"]["DomainVerifyMethodEnum"];
         };
+        /**
+         * @description * `dns_txt` - dns_txt
+         *     * `meta_tag` - meta_tag
+         *     * `html_file` - html_file
+         * @enum {string}
+         */
+        DomainVerifyMethodEnum: "dns_txt" | "meta_tag" | "html_file";
+        /** @description token 方法驗證；google_search_console 走獨立 OAuth 流程，不在此觸發。 */
         DomainVerifyRequest: {
-            method: components["schemas"]["MethodCbbEnum"];
+            method: components["schemas"]["DomainVerifyMethodEnum"];
         };
         /**
          * @description * `live` - 即時爬取
@@ -2962,9 +3017,10 @@ export interface components {
          * @description * `dns_txt` - DNS TXT 記錄
          *     * `meta_tag` - HTML meta 標籤
          *     * `html_file` - 驗證檔案
+         *     * `google_search_console` - Google Search Console
          * @enum {string}
          */
-        MethodCbbEnum: "dns_txt" | "meta_tag" | "html_file";
+        MethodD9aEnum: "dns_txt" | "meta_tag" | "html_file" | "google_search_console";
         Page: {
             readonly id: number;
             /** Format: uri */
@@ -3632,7 +3688,7 @@ export interface components {
             readonly id: number;
             readonly domain: string;
             readonly status: components["schemas"]["StatusA7fEnum"];
-            readonly method: components["schemas"]["MethodCbbEnum"];
+            readonly method: components["schemas"]["MethodD9aEnum"];
             /** Format: date-time */
             readonly verified_at: string | null;
             /** Format: date-time */
@@ -5965,6 +6021,27 @@ export interface operations {
             };
         };
     };
+    domains_google_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifiedDomain"];
+                };
+            };
+        };
+    };
     domains_verify_create: {
         parameters: {
             query?: never;
@@ -5988,6 +6065,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DomainVerify"];
+                };
+            };
+        };
+    };
+    domains_google_callback_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifiedDomain"];
                 };
             };
         };

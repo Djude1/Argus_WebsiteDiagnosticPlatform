@@ -11,7 +11,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/auth/` | `accounts` | `google/`（OAuth 登入，未註冊回 409＋signup_token）、`register/google/`＋`register/`（Google 授權後設定用戶名與密碼）、`email-login/`（Email 或用戶名）、`me/setup/`（舊帳號補設）、`me/delete/`（自行刪除帳號）、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/`、`turnstile/`（公開，Turnstile 是否啟用與 site key） |
 | `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/pages/?scan=`、`<id>/seo/?scan=`（＋`seo/pages/<頁面 id>/`、`seo/keywords/`）、`<id>/gsc/`（＋`connect/`、`properties/`、`performance/`、`inspect/`；見 `apps/scans/CLAUDE.md`「SEO 分析與 Search Console」） |
 | `/api/gsc/callback/` | `scans` | Google Search Console OAuth 導回（`AllowAny`；身分由簽章 state＋HttpOnly nonce cookie 證明），完成後轉回 `/projects/<id>/seo?gsc=…` |
-| `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
+| `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`、`<id>/google/start/`、`google/callback/`（GSC 控制權驗證）（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
@@ -100,7 +100,7 @@ artifacts（JSON）：json_ld / og_meta / llms_txt / faq_schema，
 網域所有權驗證（主動測試的技術性閘門）
 user FK + domain（正規化小寫）UniqueConstraint(user, domain)
 status：pending / verified / rejected / expired
-method：dns_txt / meta_tag / html_file（最後成功的方法）
+method：dns_txt / meta_tag / html_file / google_search_console（最後成功的方法）
 token（32 hex）、verified_at、expires_at（驗證成功=now+90 天，
   TTL 設定 ARGUS_DOMAIN_VERIFICATION_TTL_DAYS）
 is_effectively_verified：admin_override 或（verified 且未過期）

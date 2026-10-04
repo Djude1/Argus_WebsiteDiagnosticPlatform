@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   createVerifiedDomain,
   deleteVerifiedDomain,
   fetchVerifiedDomains,
+  startGoogleSiteVerification,
   verifyVerifiedDomain,
 } from "../../api";
 import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
@@ -35,6 +36,18 @@ const METHOD_LABELS = {
   dns_txt: "DNS TXT 記錄",
   meta_tag: "HTML meta 標籤",
   html_file: "驗證檔案",
+  google_search_console: "Google Search Console",
+};
+
+// Google OAuth 回呼結果（/domains?gsc=...&domain=...&reason=...）的顯示文案
+const GSC_RESULT_MESSAGES = {
+  ok: (domain) => `Google Search Console 驗證成功：${domain}（含子網域）已可使用主動式資安測試。`,
+  denied: () => "你在 Google 授權頁取消了授權，驗證未完成；仍可使用 DNS TXT / meta 標籤 / 驗證檔方法。",
+  expired: (domain, reason) =>
+    reason || "Google 驗證連結已過期或已使用過，請重新點「使用 Google 驗證」。",
+  missing: () => "找不到對應的網域紀錄（可能已被刪除），請重新加入網域後再驗證。",
+  fail: (domain, reason) =>
+    reason || "Google Search Console 驗證未通過，詳見下方清單的失敗原因。",
 };
 
 function displayStatus(domain) {
@@ -161,6 +174,7 @@ function VerificationInstructions({ data, methodTab, onTabChange, copiedKey, onC
 
 export function DomainVerifyPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
   const [domains, setDomains] = useState(null); // null = 載入中
   const [listError, setListError] = useState("");
@@ -175,6 +189,8 @@ export function DomainVerifyPage() {
   const [verifyBusyId, setVerifyBusyId] = useState(null);
   const [verifyFlash, setVerifyFlash] = useState({}); // domainId -> { ok, message }
   const [deletingId, setDeletingId] = useState(null);
+  const [googleBusyId, setGoogleBusyId] = useState(null); // GSC 驗證跳轉中
+  const [gscFlash, setGscFlash] = useState(null); // { ok, message }：Google 回呼結果
 
   async function loadDomains() {
     setListError("");
@@ -190,6 +206,21 @@ export function DomainVerifyPage() {
   useEffect(() => {
     loadDomains();
   }, []);
+
+  // Google OAuth 回呼：/domains?gsc=ok|fail|denied|expired|missing → 顯示結果並清掉 query
+  useEffect(() => {
+    const outcome = searchParams.get("gsc");
+    if (!outcome) return;
+    const messageFor = GSC_RESULT_MESSAGES[outcome];
+    if (messageFor) {
+      setGscFlash({
+        ok: outcome === "ok",
+        message: messageFor(searchParams.get("domain") || "", searchParams.get("reason") || ""),
+      });
+    }
+    navigate("/domains", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
@@ -258,6 +289,19 @@ export function DomainVerifyPage() {
       notifyDialog(apiErrorMessage(err, "驗證執行失敗，請稍後再試。"));
     } finally {
       setVerifyBusyId(null);
+    }
+  }
+
+  // 可選的第四種方法：跳轉 Google 授權，以 Search Console 的已驗證資源證明網域控制權。
+  // 不想用就別點——三種 token 方法完全不受影響（專題展示用，可跳過）。
+  async function handleGoogleVerify(domain) {
+    setGoogleBusyId(domain.id);
+    try {
+      const { authorization_url: authorizationUrl } = await startGoogleSiteVerification(domain.id);
+      window.location.assign(authorizationUrl);
+    } catch (err) {
+      setGoogleBusyId(null);
+      notifyDialog(apiErrorMessage(err, "無法啟動 Google 驗證，請稍後再試。"));
     }
   }
 
@@ -353,7 +397,7 @@ export function DomainVerifyPage() {
               {domains === null
                 ? "載入中…"
                 : pendingCount > 0
-                  ? `有 ${pendingCount} 個網域待驗證：完成設定後選擇方法按「驗證」。`
+                  ? `有 ${pendingCount} 個網域待驗證：完成設定後選擇方法按「驗證」，或直接用 Google Search Console 驗證（可跳過）。`
                   : "目前沒有待驗證的網域。"}
             </p>
           </div>
@@ -363,6 +407,12 @@ export function DomainVerifyPage() {
         </div>
 
         {listError && <p className="error-text">{listError}</p>}
+
+        {gscFlash && (
+          <p className={`domain-flash ${gscFlash.ok ? "is-ok" : "is-fail"}`} role="status">
+            {gscFlash.ok ? "✓ " : "✕ "}{gscFlash.message}
+          </p>
+        )}
 
         {domains !== null && domains.length === 0 && !listError && (
           <p className="domain-empty">還沒有任何網域。從上方「新增網域」開始！</p>
@@ -454,6 +504,15 @@ export function DomainVerifyPage() {
                       disabled={busy}
                     >
                       {busy ? "驗證中…" : "驗證"}
+                    </button>
+                    <button
+                      className="domain-google-btn"
+                      type="button"
+                      onClick={() => handleGoogleVerify(domain)}
+                      disabled={googleBusyId === domain.id}
+                      title="跳轉 Google 授權，以 Search Console 的已驗證網站證明所有權（可略過，改用左側方法）"
+                    >
+                      {googleBusyId === domain.id ? "前往 Google…" : "使用 Google 驗證"}
                     </button>
                   </div>
                 )}

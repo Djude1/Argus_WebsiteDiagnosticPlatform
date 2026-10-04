@@ -75,9 +75,10 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 - 閘門位置：`ScanJobCreateSerializer.validate`（API 層）與 `ScanJob.clean()`（model 層）都檢查；判定函式為 `services.user_owns_domain(user, hostname)`
 - 有效判定：`VerifiedDomain.is_effectively_verified`＝`admin_override=True`（管理員人工核准）**或**（`status=verified` 且 `expires_at > now`，TTL 預設 90 天，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）
 - 子網域涵蓋：對 `example.com` 驗證通過，`www.example.com` 等子網域也可主動掃描；不做 eTLD+1 萃取，以完整 hostname／父網域比對
-- 三種驗證方法共用一支 token（`argus-site-verification=<token>`）：DNS TXT（`_argus-verification.<domain>`，重試 3 次×timeout 5 秒）／首頁 meta 標籤（HTML 前 64KB 需同時出現標籤名與 token）／驗證檔（`/.well-known/argus-verification.txt` 內容等於 token）
+- 三種 token 驗證方法共用一支 token（`argus-site-verification=<token>`）：DNS TXT（`_argus-verification.<domain>`，重試 3 次×timeout 5 秒）／首頁 meta 標籤（HTML 前 64KB 需同時出現標籤名與 token）／驗證檔（`/.well-known/argus-verification.txt` 內容等於 token）
 - HTTP 驗證抓取先過 `assert_public_http_url` SSRF 檢查、串流讀取上限 5MB；DNS 查詢走 dnspython
-- 使用者 API：`/api/scans/domains/`（list／create＋instructions／`<id>/verify/`／delete；重複建立回 409 帶現況）
+- **第四種方法：Google Search Console（2026-09-30，`google_site_verification.py`）**——OAuth 授權碼流程（scope `webmasters.readonly`），僅採信具有 `siteOwner` 權限的 `sc-domain:` 網域資源，涵蓋該網域與子網域；完整／受限使用者與所有 URL 字首資源均不採信為整個網域的控制權；`access_type=online` 不存 refresh token，access token 即用即棄；state 以 signing（獨立 salt）綁 user+VerifiedDomain+隨機 nonce、600 秒單次有效，以 `cache.add` 原子取得使用權；多程序正式環境使用共用 cache，callback `GET /api/domains/google/callback/` 因此可 AllowAny；`GOOGLE_OAUTH_CLIENT_ID`＋`GOOGLE_OAUTH_CLIENT_SECRET` 同時設定才啟用（與 Google 登入同一用戶端），未設定時 start 回 503、**不影響三種 token 方法與 Google 登入**（專題展示：可完全跳過）；成功後 `method=google_search_console`、TTL 同 90 天；`DomainVerifySerializer` 的 choices 刻意排除 gsc——token 引擎（`run_verification`）不認識它，GSC 只能走 `google/start` → callback 流程
+- 使用者 API：`/api/domains/`（list／create＋instructions／`<id>/verify/`／`<id>/google/start/`／`GET google/callback/`／delete；重複建立回 409 帶現況）——**前端 `api.ts` 一律打 `/api/domains/`**；舊 `/api/scans/domains/` 會撞進 scan detail（`pk="domains"`）回 404（2026-09-30 修正的前端路徑 bug）
 - 管理端人工審核：`/api/admin/domains/` 與 `/api/admin/domains/<id>/override/`（approve=人工核准、reject=rejected；寫 `AdminAuditLog` action=`domain_override`）
 - **管理員測試旁路（2026-09-26）**：`user_owns_domain` 對 `is_staff`／`is_superuser` 一律放行——能力等同 admin_override 人工核准，省去「先建網域紀錄、再到後台核准」兩步，供管理員直接對受控測試目標（Juice Shop 等）主動掃描；不建立任何 VerifiedDomain 紀錄，掃描與授權紀錄仍歸屬管理員帳號，宣告式授權勾選（`active_testing_authorized`）與其他 SSRF／範圍閘門不受影響；前端對 staff 以「管理員測試模式」徽章取代未驗證警告
 - passive 掃描不受此閘門限制
@@ -179,7 +180,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | 中斷連線時呼叫 Google revoke，失敗不影響本地刪除 | |
 | 示範專案不能連接 | 虛構網站 |
 
-設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
+設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。若也啟用網域控制權驗證，需同時登記 `/api/domains/google/callback/`，並讓 `ARGUS_GSC_REDIRECT_URI` 留空，兩條流程各自產生正確端點。
 
 ## 報告內容契約（`reports.py`）
 

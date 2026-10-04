@@ -184,14 +184,19 @@ def list_sites(connection) -> list[dict]:
 def property_matches(property_url: str, origin: str) -> bool:
     """資源是否涵蓋這個網站：網域資源比對可註冊網域，網址前置字元資源比對協定＋主機。"""
     host = (urlsplit(origin).hostname or "").lower()
-    if property_url.startswith("sc-domain:"):
-        domain = property_url.split(":", 1)[1].lower()
-        return host == domain or host.endswith(f".{domain}") or (
-            registrable_domain(host) == domain
-        )
-    prefix = urlsplit(property_url)
+    try:
+        host = host.encode("idna").decode("ascii")
+        if property_url.startswith("sc-domain:"):
+            domain = property_url.split(":", 1)[1].lower().encode("idna").decode("ascii")
+            return host == domain or host.endswith(f".{domain}") or (
+                registrable_domain(host) == domain
+            )
+        prefix = urlsplit(property_url)
+        prefix_host = (prefix.hostname or "").lower().encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
     target = urlsplit(origin)
-    return (prefix.scheme, (prefix.hostname or "").lower()) == (target.scheme, host)
+    return (prefix.scheme, prefix_host) == (target.scheme, host)
 
 
 def period(days: int, today: date | None = None) -> tuple[date, date]:

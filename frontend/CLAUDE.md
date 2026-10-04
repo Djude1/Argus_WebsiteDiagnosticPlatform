@@ -17,6 +17,8 @@ Claude Code 進 `frontend/` 工作時，本檔會在專案層 `CLAUDE.md` 之後
 
 ## Build 規則
 
+**網站所有權驗證檔須持續保留**：`public/google*.html` 等已發布的網站驗證資產不是一次性暫存檔。Google 驗證成功後仍會重新確認檔案；不得以「任務／驗證已完成」為由刪除，或從後續 image／build 產物排除。只有網站管理者明確要求撤銷該驗證方式時才處理移除。[Google 官方驗證檔要求](https://support.google.com/webmasters/answer/9008080?hl=zh-Hant)
+
 **必須使用 `build-node22.ps1`，禁止直接執行 `npm run build`。**
 
 原因：系統 Node v24.x + Rollup 4.x 在 Windows 有已知 bug（`STATUS_STACK_BUFFER_OVERRUN`，exit code `-1073740791`），build 會無聲 crash。`build-node22.ps1` 會自動偵測 portable Node 22 位置（候選路徑與安裝方式見 [`docs/node22-guide.md`](../docs/node22-guide.md)）。
@@ -161,6 +163,10 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/settings` | `AdminSettingsPage` | 系統資訊（唯讀；敏感值只顯示「已設定／未設定」布林，不輸出實際值）|
 | `/admin/announcements` | `AdminAnnouncementsPage` | 公告管理（superuser 限定）（`AdminAnnouncementsPage.tsx`）|
 | `/admin/audit-log` | `AdminAuditLogPage` | 管理員操作稽核軌跡（superuser 限定）；交易與掃描已各自獨立成頁，不再內嵌分頁（`AdminAuditLogPage.tsx`；動作篩選涵蓋 `AdminAuditLog.Action` 全部 11 種）|
+
+## GSC 未掃描專案的連接流程
+
+啟用 GSC 串接後，尚未完成 SEO 掃描的專案也可先連接、選擇資源並查看搜尋成效；未掃描提示與建立掃描入口仍保留。Google 回呼成功／錯誤提示須在未掃描狀態顯示，不能被空狀態遮住。連接 GSC 是此狀態的主要操作，建立掃描為次要操作。
 
 ## API 型別與測試
 

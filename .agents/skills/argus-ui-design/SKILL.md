@@ -54,7 +54,9 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 > 樣式一律寫進 `styles/` 底下對應的區塊檔（入口 `styles.css` 依序匯入，**順序即覆寫優先序、不可重排**）、用 CSS 變數、BEM-like 命名（`.頁面-元素`），**禁止 inline style**（動態計算值除外）。詳見 `frontend/CLAUDE.md`。
 
-> 會員區 Dashboard／掃描／網域驗證／歷史／購點目前是 `462848b`（改版前）的版本，樣式在 `styles/legacy-member/`，只作用在 `App.jsx` 的 `MemberLegacy`（`.member-legacy`）範圍內，深色主題由建置外掛依明度自動產生（手動調整在 `91-dark.css`）；改這五頁的外觀要改那裡，機制見 `frontend/CLAUDE.md`「會員區五頁例外」。頂部導覽列公開頁與登入後共用 `SiteNav`。
+> 會員區以網站專案為單位（頂部切換器＋工作區側邊欄，見 `docs/adr/0003-site-project-workspace.md`）；網站專案工作區（含掃描）、網域驗證、購點目前是 `462848b`（改版前）的版本，樣式在 `styles/legacy-member/`，只作用在 `App.jsx` 的 `MemberLegacy`（`.member-legacy`）範圍內，深色主題由建置外掛依明度自動產生（手動調整在 `91-dark.css`）；改這些頁面的外觀要改那裡，機制見 `frontend/CLAUDE.md`「會員區五頁例外」。頂部導覽列公開頁與登入後共用 `SiteNav`。
+
+> **會員工作區**（2026-10-03 定案）：沿用舊版的卡片、淡灰底與彩色徽章（使用者試過白底細線＋色點徽章的「報告式」，回饋太素），但**選中狀態不用彩色左邊條**（用淺藍底）、不用 emoji。新版面規則在 `styles/legacy-member/94-report-style.css`。2026-10-03 依使用者提供的參考設計（深淺皆可的儀表板）再調整：頂部是工具列（切換器、⌘K 搜尋、日夜、通知鈴、點數、頭像，沒有文字連結）；側邊欄每項有線條圖示、底部有目前方案卡；各分頁共用 `ProjectHeader` 頁首（大網站圖示、驗證勾勾、說明、右側動作）；分數色調 ≥80 藍／60–79 琥珀／<60 紅且一定附數值與等級文字；嚴重度用保留色並附圖例；問題分析為表格（嚴重度｜標題＋說明｜分類｜影響頁數｜建議重點｜查看詳情）。樣式在 `legacy-member/93-projects.css` 末段。
 
 ---
 
@@ -104,7 +106,7 @@ description: Argus 前端 UI/UX 設計與實作準則（科技風 / 前台動效
 
 | 功能 | 前台（使用者） | 後台（staff `/admin/*`） |
 |---|---|---|
-| 掃描 | `/scans`、`/scans/:id`、`/scans/:id/topology` | `/admin/scans`、`/admin/scans/:id` |
+| 掃描 | `/projects/:id/scans`、`/scans/:id`、`/scans/:id/topology` | `/admin/scans`、`/admin/scans/:id` |
 | 評論 | `/reviews` | `/admin/reviews` |
 | 內容 / CMS | `/project`、`/download`（公開呈現） | `/admin/content` |
 | 方案 / 購買 | `/purchase` | `/admin/plans` |

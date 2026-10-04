@@ -68,6 +68,7 @@ JWT_SECRET_KEY=請填 64-byte random
 PASSWORD_RESET_TOKEN_PEPPER=請填另一組獨立的 64-byte random
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 GOOGLE_OAUTH_CLIENT_ID=（選填；未設定時 UI 自動隱藏 Google 登入）
+GOOGLE_OAUTH_CLIENT_SECRET=（選填；與 CLIENT_ID 同一用戶端，同時啟用網域控制權驗證與網站專案 GSC 報表。Google Console 本機回呼需登記 http://127.0.0.1:8000/api/domains/google/callback/ 及 http://127.0.0.1:8000/api/gsc/callback/；兩條流程同時使用時 ARGUS_GSC_REDIRECT_URI 留空）
 ARGUS_BOOTSTRAP_SUPERUSER_USERNAME=（選填）
 ARGUS_BOOTSTRAP_SUPERUSER_PASSWORD=（選填）
 ARGUS_AGENT_ENABLED=false
@@ -209,7 +210,7 @@ Argus/
 | app | 是什麼 | 關鍵檔 |
 |---|---|---|
 | `accounts` | User 模型；Email 登入/註冊、可選 Google OAuth、記憶體 access + HttpOnly refresh cookie、密碼重設；refresh 原子輪替，登出/變更密碼/重設會撤銷 token；`LoginEvent` 記錄每次登入（方法/IP/UA，admin 可查時間軸） | `views.py` `models.py` |
-| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`/`VerifiedDomain`；Playwright BFS 爬蟲、四維 scanner、PDF 報告、SEO 分析與 Search Console、主動式資安 probe（**需先通過網域所有權驗證：DNS TXT/meta tag/HTML 檔三選一，90 天效期**）、WAF 阻擋偵測、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` `domain_verification.py` |
+| `scans` | 核心：`ScanJob`/`Page`/`Finding`/`AgentSession`/`AgentStep`/`AuthorizationConsent`/`VerifiedDomain`；Playwright BFS 爬蟲、四維 scanner、PDF 報告、SEO 分析與 Search Console、主動式資安 probe（**需先通過網域所有權驗證：DNS TXT/meta tag/HTML 檔三選一或 Google Search Console OAuth（可選可跳過），90 天效期**）、WAF 阻擋偵測、合作式 cancel；worker `tasks.run_scan_job` 串接 billing 預扣/退款 | `models.py` `tasks.py` `crawler.py` `scanners.py` `views.py` `domain_verification.py` `google_site_verification.py` |
 | `agent` | Hermes-Agent：MiniMax-M3/GLM/Gemini provider chain + 26 工具（觀察/主動/知識庫檢索/UI 送出）+ 8 specialist 角色目錄 + observe-think-act loop + token 安全閘；架構與已知限制見 `docs/hermes-agent-architecture.md`；預設 `ARGUS_AGENT_ENABLED=false` | `providers.py` `tools.py` `loop.py` `runner.py` `knowledge/*.md` |
 | `billing` | 點數系統；`services.py` 是 wallet 唯一寫入入口。購點預設停用，可明確啟用綠界 `payment-stage`，簽章/訂單/金額驗證後才冪等入點；輕量訂閱（`SubscriptionPlan`/`UserSubscription`，月費→每月贈點，惰性冪等結算，admin 可開通/取消） | `ecpay.py` `models.py` `services.py` `views.py` |
 | `reviews` | 已驗證平台評論：完成掃描才可發表、`PlatformReview` OneToOne、本人可編修/刪除；`ReviewResponse` 單一官方回覆、`ReviewRevision` 修訂稽核、`ReviewReport` 檢舉治理 | `models.py` `views.py` |
@@ -235,7 +236,7 @@ Argus/
 | `/dashboard` | `DashboardPage` | 個人總覽 |
 | `/scans` `/scans/:id` `/scans/:id/topology` | `ScanLayout` | 掃描列表/詳情/拓撲圖 |
 | `/history` | `HistoryPage` | 同網址歷次分數 |
-| `/domains` | `DomainVerifyPage` | 網域所有權驗證精靈（DNS TXT/meta/驗證檔三方法＋即時驗證；主動掃描閘門） |
+| `/domains` | `DomainVerifyPage` | 網域所有權驗證精靈（DNS TXT/meta/驗證檔三方法＋即時驗證＋可選「使用 Google 驗證」GSC OAuth 路徑，可跳過；主動掃描閘門） |
 | `/billing` | `BillingPage` | 月訂閱方案面板＋3 步驟結帳 wizard |
 | `/settings` | `SettingsPage` | 錢包概覽 |
 
@@ -300,10 +301,12 @@ Argus/
 | GET | `/api/history/` | auth | — | 同網址歷次 |
 | GET | `/api/audit/` | auth | — | （保留，目前前台未用） |
 | GET | `/api/findings-by-category/` | auth | — | 跨掃描分類聚合（DashboardPage 用） |
-| GET | `/api/scans/domains/` | auth | — | 我的網域驗證清單（狀態/效期/is_effectively_verified） |
-| POST | `/api/scans/domains/` | auth | body：`domain` | 新增網域→發 token＋三方法 instructions（重複 409 帶現況） |
-| POST | `/api/scans/domains/{id}/verify/` | auth | body：`method`=`dns_txt`\|`meta_tag`\|`html_file` | 執行驗證（成功→verified 90 天；失敗回 last_error） |
-| DELETE | `/api/scans/domains/{id}/` | auth | — | 刪除自己的網域（他人 404） |
+| GET | `/api/domains/` | auth | — | 我的網域驗證清單（狀態/效期/is_effectively_verified） |
+| POST | `/api/domains/` | auth | body：`domain` | 新增網域→發 token＋三方法 instructions（重複 409 帶現況） |
+| POST | `/api/domains/{id}/verify/` | auth | body：`method`=`dns_txt`\|`meta_tag`\|`html_file` | 執行 token 驗證（成功→verified 90 天；失敗回 last_error；**不含 `google_search_console`**——GSC 走下方 OAuth 流程） |
+| POST | `/api/domains/{id}/google/start/` | auth | — | 產生 GSC 授權 URL（`webmasters.readonly`）；未設 `GOOGLE_OAUTH_CLIENT_SECRET` 回 503 |
+| GET | `/api/domains/google/callback/` | **公開**（state 簽署綁 user+domain+nonce，600 秒單次、cache.add 原子消耗） | query：`code`/`state`/`error`（Google 回呼） | 換 token→只比對具有 siteOwner 權限的 sc-domain 網域資源（不採信 URL 字首及一般使用者）→成功更新 VerifiedDomain，一律 302 回 `/domains?gsc=ok\|fail\|denied\|expired\|missing` |
+| DELETE | `/api/domains/{id}/` | auth | — | 刪除自己的網域（他人 404） |
 
 **`POST /api/scans/` body 參數（`ScanJobCreateSerializer`）：**
 
@@ -311,7 +314,7 @@ Argus/
 |---|---|---|---|---|
 | `url` | string（≤2048） | ✅ | — | 目標網址 |
 | `authorization_confirmed` | bool | ✅ | — | 必須為 `true`，否則 400（確認擁有網站或已取得書面授權） |
-| `scan_mode` | enum `passive`/`active` | — | `passive` | 掃描模式；**`active` 另需目標網域通過所有權驗證（見 `/api/scans/domains/`）** |
+| `scan_mode` | enum `passive`/`active` | — | `passive` | 掃描模式；**`active` 另需目標網域通過所有權驗證（見 `/api/domains/`）** |
 | `active_testing_authorized` | bool | — | `false` | `scan_mode=active` 時必須為 `true` |
 | `third_party_reconfirmed` | bool | — | `false` | 網域疑似第三方/敏感產業時必須為 `true` |
 | `max_depth` | int（≥1） | — | `ARGUS_DEFAULT_MAX_DEPTH`（3） | 爬蟲深度 |
@@ -461,7 +464,7 @@ ReviewMessage / ReviewMessageHelpful（只為舊資料與 migration 相容保留
 - `CoinTransaction`: 欄位 `kind`（monthly_bonus / purchase / scan_hold / scan_refund / admin_adjust / rebuild_hold / rebuild_refund / fixgen_grant / fixgen_charge / fixgen_refund / subscription_grant）、`amount`、`balance_after`、`scan_job`/`plan`/`admin_actor` FK（皆 nullable）、`note`（審計不可改）
 - `PurchaseOrder.status`: pending → paid / cancelled；含 price_ntd/coin_amount 快照、`invoice_type`(personal/company)、`carrier_type`(cloud/mobile_barcode/citizen_digital)、`carrier_id`
 - `UserSubscription`: user OneToOne、status（active/cancelled/expired）、periods_remaining、current_period_end、last_grant_period（"YYYY-MM" 冪等）、source（admin_grant/ecpay_test）；結算走 `billing.services.settle_subscription`（惰性觸發：登入/查錢包/查訂閱）
-- `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**
+- `VerifiedDomain`: status（pending/verified/rejected/expired）、method（dns_txt/meta_tag/html_file/google_search_console）、token、expires_at（90 天 TTL，`ARGUS_DOMAIN_VERIFICATION_TTL_DAYS`）、admin_override；`is_effectively_verified`＝override 或 verified 未過期；**active 掃描閘門以此判定（子網域涵蓋）**；GSC 方法由 `google_site_verification.py` 的 OAuth 流程寫入，token 驗證引擎（`run_verification`）不認識它
 - `LoginEvent`: method（password/google/register）、ip_address、user_agent、created_at；寫入包 try/except 不影響登入
 - `ScanJob.status`: queued / crawling / scanning / agent_testing / completed / failed / cancelled
 - `ScanJob.progress`（JSON）: `{pages_done, pages_total, phase, phase_started_at}`
