@@ -6,4 +6,6 @@
 
 `LoginEvent.Meta.ordering` 改成 `-created_at`、`-id`，讓相同時間的事件按建立次序降冪。新增 `accounts.0007_loginevent_stable_ordering`（僅 model options，不更動欄位或既有紀錄），以及固定相同時間的 API 回歸測試。回歸先失敗再通過，與既有登入事件 API 案例共四項通過；輸出 whitelist 不變。
 
+與帳號生命週期分支整合時，新增 `accounts.0008_merge_gsc_ordering_and_account_lifecycle` 空合併節點，同時依賴兩個 `0007`；保留已套用的 migration 名稱，避免已部署環境失去歷史對應。
+
 事實來源：`backend/apps/accounts/models.py`、`backend/apps/admin_api/tests_login_event_ordering.py`。適用權限及登入記錄寫入方式見 [accounts 模組規則](../backend/apps/accounts/CLAUDE.md)。
