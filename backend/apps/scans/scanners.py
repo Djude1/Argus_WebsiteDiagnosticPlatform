@@ -237,6 +237,15 @@ class PageAnalysisInput:
     js_errors: list | None = None
 
 
+def _is_large_image(attributes: dict[str, str]) -> bool:
+    """width／height 屬性都 ≥ 120px 才算內容大小的圖；沒標尺寸的不猜。"""
+    try:
+        width, height = int(attributes.get("width", "0")), int(attributes.get("height", "0"))
+    except ValueError:
+        return False
+    return width >= 120 and height >= 120
+
+
 class HtmlSignalParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -247,6 +256,8 @@ class HtmlSignalParser(HTMLParser):
         self.heading_levels: list[int] = []
         self.image_count = 0
         self.image_without_alt = 0
+        # alt="" 是裝飾圖的正確寫法；只有「較大的圖片」alt 為空才值得提醒（可能是內容圖）
+        self.image_empty_alt_large = 0
         self.form_count = 0
         self.form_without_csrf = 0
         self.json_ld_blocks: list[str] = []
@@ -281,8 +292,10 @@ class HtmlSignalParser(HTMLParser):
             self.heading_levels.append(int(normalized_tag[1]))
         elif normalized_tag == "img":
             self.image_count += 1
-            if not attributes.get("alt", "").strip():
+            if "alt" not in attributes:
                 self.image_without_alt += 1
+            elif not attributes["alt"].strip() and _is_large_image(attributes):
+                self.image_empty_alt_large += 1
         elif normalized_tag == "form":
             self.form_count += 1
             self.in_form = True
@@ -519,6 +532,24 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
+def _mobile_annotations(offenders: list[dict], label) -> dict | None:
+    """行動版截圖上的逐元素標註（爬蟲量到的文件座標）；沒有座標的舊資料回 None。
+
+    觸控目標等問題是在 375px 寬量的，要框在行動版截圖上、而且框住元素本身，
+    不能退回整個 Header 或區塊（2026-10-06 使用者要求）。
+    """
+    boxes = []
+    for offender in offenders:
+        box = offender.get("box") or {}
+        if box.get("width") and box.get("height"):
+            boxes.append({
+                "x": box.get("x", 0), "y": box.get("y", 0),
+                "width": box["width"], "height": box["height"],
+                "label": label(offender),
+            })
+    return {"viewport": "mobile", "boxes": boxes} if boxes else None
+
+
 def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
     """行動版水平溢出（破版）。`layout_metrics` 為空代表沒量到，不能當成通過。"""
     metrics = page_input.layout_metrics or {}
@@ -565,6 +596,9 @@ def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
                 "scroll_width": metrics.get("scroll_width"),
                 "overflow_px": overflow,
                 "offenders": offenders[:5],
+                "annotations": _mobile_annotations(
+                    offenders[:3], lambda o: f"超出 {o.get('overflow_px')}px"
+                ),
             },
         )
     ]
@@ -604,7 +638,12 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
             impact_area="mobile_usability",
             priority_score=48 if severity == Finding.Severity.MEDIUM else 38,
             evidence_type="ux_signals",
-            evidence_json={"small_tap_targets": offenders[:8]},
+            evidence_json={
+                "small_tap_targets": offenders[:8],
+                "annotations": _mobile_annotations(
+                    offenders[:8], lambda o: f"{o.get('width_px')}×{o.get('height_px')}px"
+                ),
+            },
         )
     ]
 
@@ -639,7 +678,12 @@ def _ux_unlabeled_fields(page_input: PageAnalysisInput) -> list[dict]:
             impact_area="accessibility",
             priority_score=46,
             evidence_type="ux_signals",
-            evidence_json={"unlabeled_fields": offenders[:8]},
+            evidence_json={
+                "unlabeled_fields": offenders[:8],
+                "annotations": _mobile_annotations(
+                    offenders[:8], lambda o: o.get("name") or o.get("type") or "欄位"
+                ),
+            },
         )
     ]
 
@@ -741,18 +785,31 @@ def _seo_h1_count(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> di
 
 
 def _seo_image_alt(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
-    """有圖片缺少 alt 屬性。"""
-    if not parser.image_without_alt:
+    """有圖片缺少 alt 屬性；或較大的圖片 alt 為空（可能是內容圖，僅提醒）。"""
+    if parser.image_without_alt:
+        title = "圖片缺少 alt 屬性"
+        severity = Finding.Severity.LOW
+        description = "圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。"
+    elif parser.image_empty_alt_large >= 3:
+        # alt="" 合法（裝飾圖），但大量大尺寸圖片都留空，多半是內容圖漏寫描述（2026-10-06 實測）
+        title = "多張大圖的 alt 為空"
+        severity = Finding.Severity.INFO
+        description = (
+            "alt=\"\" 代表裝飾圖、螢幕報讀器會略過。這些圖片尺寸較大，若是照片、課程或成員等"
+            "內容圖片，應寫出描述。"
+        )
+    else:
         return None
     return make_finding(
         category=Finding.Category.SEO,
-        severity=Finding.Severity.LOW,
-        title="圖片缺少 alt 屬性",
-        description="圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。",
+        severity=severity,
+        title=title,
+        description=description,
         remediation="為有語意的圖片補上精準 alt，裝飾性圖片可使用空 alt。",
         evidence=(
             f"image_count={parser.image_count}, "
-            f"image_without_alt={parser.image_without_alt}"
+            f"image_without_alt={parser.image_without_alt}, "
+            f"large_image_empty_alt={parser.image_empty_alt_large}"
         ),
         selector="img:not([alt])",
         bounding_box=page_input.element_boxes.get("img:not([alt])"),
@@ -1038,6 +1095,8 @@ def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     safe_html = _HTML_SVG_STRIP.sub(" ", raw_html)
     safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
     safe_html = _HTML_PATH_ATTR.sub(" ", safe_html)
+    # 輸入框 placeholder 是填寫範例（例：e.g.0911-222-333），不是任何人的資料（2026-10-06 實測）
+    safe_html = _HTML_PLACEHOLDER_ATTR.sub(" ", safe_html)
     pii_main = detect_pii_in_text(safe_html)
 
     # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
@@ -1076,6 +1135,7 @@ def _classify_pii(
     # 資料 → 中風險；網站自己網域的 Email 或 mailto/tel 連結 → 多半是刻意公開的聯絡資訊，
     # 只列為資訊提示請網站主確認，不當成外洩。
     site_domain = _registrable_domain(urlparse(page_url).hostname or "")
+    site_label = site_domain.split(".", 1)[0] if site_domain else ""
     mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
     tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
     comment_values = {v for vals in pii_comments.values() for v in (vals or [])}
@@ -1090,7 +1150,12 @@ def _classify_pii(
     for email in pii["email"]:
         domain = _registrable_domain(email.rsplit("@", 1)[-1].lower())
         in_comment = email in comment_values
-        if not in_comment and (email.lower() in mailto or (site_domain and domain == site_domain)):
+        local = email.rsplit("@", 1)[0].lower()
+        # 組織信箱：信箱名稱就是網站名稱（ntubimdbirc@ntub.edu.tw 之於 ntubimdbirc.tw）或角色信箱
+        organizational = (len(site_label) >= 4 and site_label in local) or local in _ROLE_MAILBOXES
+        if not in_comment and (
+            email.lower() in mailto or (site_domain and domain == site_domain) or organizational
+        ):
             public_emails.append(email)
         else:
             personal_emails.append(email)
@@ -1222,6 +1287,13 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
+_HTML_PLACEHOLDER_ATTR = re.compile(r"""\bplaceholder\s*=\s*(?:"[^"]*"|'[^']*')""", re.IGNORECASE)
+# 角色信箱：對外服務窗口，不屬於特定個人
+_ROLE_MAILBOXES = {
+    "info", "service", "services", "contact", "admin", "support", "help", "office", "hr",
+    "sales", "marketing", "webmaster", "privacy", "dpo", "noreply", "no-reply", "news",
+    "press", "pr", "media", "secretary", "center", "job", "jobs", "career", "careers",
+}
 _MAILTO_PATTERN = re.compile(r"mailto:([^\"'?>\s]+)", re.IGNORECASE)
 _TEL_PATTERN = re.compile(r"tel:([+\d][\d\s()-]{6,})", re.IGNORECASE)
 _SECOND_LEVEL_LABELS = {

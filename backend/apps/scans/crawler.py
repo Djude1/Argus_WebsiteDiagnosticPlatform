@@ -355,6 +355,13 @@ async def collect_mobile_layout(page) -> dict:
                         offenders: [],
                     };
                     if (!overflow || !document.body) return result;
+                    // 文件座標（含捲動位移），對得上行動版整頁截圖，可直接框出元素
+                    const boxOf = (rect) => ({
+                        x: Math.round(rect.left + window.scrollX),
+                        y: Math.round(rect.top + window.scrollY),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                    });
 
                     const describe = (el) => {
                         const id = el.id ? `#${el.id}` : "";
@@ -377,6 +384,7 @@ async def collect_mobile_layout(page) -> dict:
                             selector,
                             overflow_px: Math.round(right - viewport),
                             width_px: Math.round(rect.width),
+                            box: boxOf(rect),
                         });
                     }
                     found.sort((a, b) => b.overflow_px - a.overflow_px);
@@ -412,6 +420,13 @@ async def collect_ux_signals(page) -> dict:
                 ({ minTap, maxOffenders }) => {
                     const result = { small_tap_targets: [], unlabeled_fields: [] };
                     if (!document.body) return result;
+                    // 文件座標（含捲動位移），對得上行動版整頁截圖，可直接框出元素
+                    const boxOf = (rect) => ({
+                        x: Math.round(rect.left + window.scrollX),
+                        y: Math.round(rect.top + window.scrollY),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                    });
 
                     const describe = (el) => {
                         const id = el.id ? `#${el.id}` : "";
@@ -422,6 +437,9 @@ async def collect_ux_signals(page) -> dict:
                     };
                     const isVisible = (el, rect) => {
                         if (!rect.width || !rect.height) return false;
+                        // 收在畫面左右兩側外的抽屜選單（transform 移出視窗）使用者看不到也點不到，
+                        // 不是觸控目標問題（2026-10-06 實測：x=395 的「首頁」在 375px 視窗外）
+                        if (rect.right <= 0 || rect.left >= window.innerWidth) return false;
                         const style = getComputedStyle(el);
                         return style.visibility !== "hidden" && style.display !== "none";
                     };
@@ -446,6 +464,7 @@ async def collect_ux_signals(page) -> dict:
                             label,
                             width_px: Math.round(rect.width),
                             height_px: Math.round(rect.height),
+                            box: boxOf(rect),
                         });
                         if (result.small_tap_targets.length >= maxOffenders) break;
                     }
@@ -475,6 +494,7 @@ async def collect_ux_signals(page) -> dict:
                             selector,
                             type: (el.getAttribute("type") || el.tagName.toLowerCase()),
                             name: (el.getAttribute("name") || "").slice(0, 60),
+                            box: boxOf(rect),
                         });
                         if (result.unlabeled_fields.length >= maxOffenders) break;
                     }
@@ -732,6 +752,7 @@ def _empty_capture(js_errors: list[str]) -> dict:
         "layout_metrics": {},
         "ux_signals": {},
         "screenshot_path": None,
+        "mobile_screenshot_path": None,
     }
 
 
@@ -834,7 +855,25 @@ async def _capture_content(
     # 仍在行動版視窗時量互動可用性訊號（觸控目標、表單標籤）
     stage.name = "ux_signals"
     capture["ux_signals"] = await collect_ux_signals(page)
+    # 有行動版 UX 問題時另拍一張行動版截圖，問題標註才能框住真正的元素
+    # （觸控目標是在 375px 寬量的，桌面版截圖上的位置與大小都對不上）
+    capture["mobile_screenshot_path"] = None
+    if screenshot_target is not None and _has_mobile_offenders(capture):
+        stage.name = "mobile_screenshot"
+        capture["mobile_screenshot_path"] = await _capture_screenshot(
+            page, screenshot_target.with_name(f"{screenshot_target.stem}-mobile.png"), url, warnings
+        )
     return capture, blocked_reason
+
+
+def _has_mobile_offenders(capture: dict) -> bool:
+    signals = capture.get("ux_signals") or {}
+    layout = capture.get("layout_metrics") or {}
+    return bool(
+        signals.get("small_tap_targets")
+        or signals.get("unlabeled_fields")
+        or layout.get("offenders")
+    )
 
 
 async def _capture_same_origin_page(page, response, **kwargs) -> tuple[dict, str]:
@@ -863,9 +902,9 @@ async def _capture_same_origin_page(page, response, **kwargs) -> tuple[dict, str
         page.remove_listener("framenavigated", _on_frame_navigated)
 
     if navigated_off_origin["flag"] and not blocked_reason:
-        screenshot_path = capture.get("screenshot_path")
-        if screenshot_path is not None:
-            screenshot_path.unlink(missing_ok=True)
+        for key in ("screenshot_path", "mobile_screenshot_path"):
+            if capture.get(key) is not None:
+                capture[key].unlink(missing_ok=True)
         return _empty_capture(kwargs["js_errors"]), _CROSS_ORIGIN_REASON
     return capture, blocked_reason
 
@@ -885,6 +924,11 @@ def _page_record(
 ) -> dict:
     """crawl_site 回傳的單頁資料（tasks.py 落地成 Page，並交給各 scanner 分析）。"""
     screenshot_path = capture["screenshot_path"]
+    layout_metrics = dict(capture["layout_metrics"] or {})
+    if capture.get("mobile_screenshot_path") is not None:
+        layout_metrics["mobile_screenshot"] = str(
+            capture["mobile_screenshot_path"].relative_to(settings.BASE_DIR)
+        )
     return {
         "url": url,
         "final_url": final_url,
@@ -905,7 +949,7 @@ def _page_record(
         "outgoing_links": capture["links"],
         "headers": headers,
         "element_boxes": capture["element_boxes"],
-        "layout_metrics": capture["layout_metrics"],
+        "layout_metrics": layout_metrics,
         "ux_signals": capture["ux_signals"],
         "js_errors": list(js_errors),
     }

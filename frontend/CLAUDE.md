@@ -139,7 +139,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、專案說明、預設掃描設定（`ScanDefaultsFields`：範圍、維度、模式）、網域驗證狀態、封存；示範專案只顯示說明與封存 |
 | `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入；入口在頂部導覽列「網域驗證」；主動式資安測試的閘門；2026-10-04 改版）：最上方「用 Google Search Console 一鍵驗證」卡（頁面唯一主要動作）——未連接時「連接 Google Search Console」直接走帳號層級 OAuth（`/api/domains/gsc/connect/`），導回 `?gsc=connected&verified=<數量>` 顯示結果；已連接時「重新同步網站」（`gsc/sync/`）與「中斷連線」。「我的網域」列出統計（已驗證／待驗證／即將到期，14 天內）並把待處理的排前面；待驗證列有「用 Search Console 驗證」，即將到期列有「用 Search Console 續期」；DNS TXT／meta／驗證檔收在每列的「其他驗證方式」（展開時 `GET /api/domains/<id>/` 取 token 與說明）；沒有 Search Console 的人用「手動新增網域」。SEO 分析頁 OAuth 導回帶 `?verified=` 時也會提示已自動完成網域驗證 |
-| `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站結構圖／修正產出三個分頁）：標題與分數 → 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖、選定單頁時的複刻工具）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
+| `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站結構圖／修正產出三個分頁）：標題與分數 → 網站概況（`components/scans/SiteProfilePanel.jsx`：網站架構——網域、實際掃描到 CDN 邊緣或主機、IP 與反解、DNS 代管、CDN 提醒；做得好的地方；2026-10-06）→ 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖（行動版問題——觸控目標、缺標籤欄位、破版——改看行動版截圖 `?variant=mobile`，依 `evidence_json.annotations.boxes` 逐一框住實際元素並標尺寸，2026-10-06）、選定單頁時的複刻工具）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
 | `/scans/:scanId/topology` | `TopologyPage` | 網站結構圖（ReactFlow） |
 | `/scans/:scanId/fixes` | `ScanFixOutputPage` | 修正產出（`FixOutputSection`；掃描完成才可產生，原本在報告最下方） |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
@@ -221,6 +221,7 @@ npm run typecheck
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（Search Console 一鍵連接／同步、網域清單、備用三方法；樣式 `legacy-member/61-domain-verify.css`） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
 | `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
+| `src/components/scans/SiteProfilePanel.jsx` | 掃描詳情的網站概況：網站架構（CDN／反向代理提醒、IP 與反解）與做得好的地方；資料 `scan.site_profile`，舊掃描沒有就不顯示（樣式 `legacy-member/94-report-style.css` 的 `.site-profile*`） |
 | `src/components/projects/ScanDefaultsFields.jsx` | 專案預設掃描設定欄位（範圍、維度、模式）；新增專案頁與專案設定共用，`DEFAULT_SCAN_SETTINGS` 為新專案預設 |
 | `src/components/projects/SiteFavicon.jsx` | 網站圖示（`project.favicon` 或名稱首字）；切換器、側邊欄、總覽、所有專案共用 |
 | `src/components/scans/AeoAnswerPanel.jsx` | 專案「AEO 問答」分頁的逐題結果（`withFilter` 時可依判定篩選、不重複顯示標題與計數）：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |

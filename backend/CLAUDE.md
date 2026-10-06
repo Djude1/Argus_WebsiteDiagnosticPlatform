@@ -57,6 +57,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          aeo_report（JSON，AEO 問答檢測逐題結果與「未充分評估」原因，
          見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）、
          seo_report（JSON，SEO 連結狀態與站台網址檢查，勾 SEO 時由 seo_links 階段寫入；migration 0022）、
+         site_profile（JSON，網站概況：網域／IP／反解／CDN 邊緣與做得好的地方，site_profile 階段寫入；migration 0026）、
          project（所屬網站專案，見下 SiteProject）
 ```
 

@@ -50,15 +50,18 @@ class TestFindingOwaspFields(TestCase):
 
 
 class TestSslScanner(TestCase):
-    def test_cert_expiry_high_when_within_30_days(self):
-        import ssl as _ssl
+    def test_cert_expiry_severity_follows_auto_renewal_window(self):
+        # 自動續期憑證剩 30 天內才續期：15–30 天只提醒，14 天內仍未續期才升級
         import time
-        not_after = _ssl.cert_time_to_seconds  # noqa: F841 — 確認 API 存在
-        future = time.strftime("%b %d %H:%M:%S %Y GMT", time.gmtime(time.time() + 20 * 86400))
-        findings = ssl_scanner._eval_cert_expiry(future)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0]["severity"], "high")
-        self.assertEqual(findings[0]["rule_id"], "ssl-cert-expiring")
+
+        def at(days):
+            return time.strftime("%b %d %H:%M:%S %Y GMT", time.gmtime(time.time() + days * 86400))
+
+        for days, severity in ((20, "info"), (10, "medium"), (5, "high")):
+            findings = ssl_scanner._eval_cert_expiry(at(days))
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["severity"], severity, days)
+            self.assertEqual(findings[0]["rule_id"], "ssl-cert-expiring")
 
     def test_cert_expiry_critical_when_expired(self):
         import time
@@ -175,6 +178,18 @@ class TestHeaderScanner(TestCase):
             "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'",
         }))
         self.assertIn("header-csp-unsafe", {f["rule_id"] for f in findings})
+
+    def test_hsts_preload_without_one_year_max_age_is_info(self):
+        # 2026-10-06 實測：max-age=15552000（180 天）＋preload，不會被預載清單收錄
+        findings = header_scanner.analyze_headers(self._page({
+            "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        }))
+        rules = {f["rule_id"]: f for f in findings}
+        self.assertEqual(rules["header-hsts-preload-ineligible"]["severity"], "info")
+        eligible = header_scanner.analyze_headers(self._page({
+            "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        }))
+        self.assertEqual(eligible, [])
 
     def test_clean_headers_no_findings(self):
         findings = header_scanner.analyze_headers(self._page({"server": "cloudflare"}))

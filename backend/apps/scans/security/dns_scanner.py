@@ -126,6 +126,25 @@ def _eval_dnssec(has_dnskey: bool | None, domain: str) -> list[dict]:
     return []
 
 
+def email_dns_posture(host: str) -> dict:
+    """給「做得好的地方」用：{spf, dmarc, dmarc_policy, dnssec}；查不到的欄位為 None。"""
+    try:
+        if not host:
+            return {}
+        org = _org_domain(host)
+        candidates = [host] if org == host else [host, org]
+        spf = next((r for d in candidates if (r := _find_spf(d))), None)
+        dmarc = next((r for d in candidates if (r := _find_dmarc(d))), None)
+        return {
+            "spf": spf,
+            "dmarc": dmarc,
+            "dmarc_policy": _dmarc_policy(dmarc) if dmarc else None,
+            "dnssec": _has_dnskey(org),
+        }
+    except Exception:
+        return {}
+
+
 def analyze_dns(host: str) -> list[dict]:
     """查 SPF/DMARC（host 查不到退父網域一層）與 DNSSEC（查 org domain）。"""
     try:

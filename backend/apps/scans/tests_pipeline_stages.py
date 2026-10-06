@@ -42,7 +42,7 @@ class PipelineShapeTests(TestCase):
             [
                 "target_validation", "crawl", "enter_scanning", "page_analysis",
                 "aeo_answers", "site_security", "active_probe", "deep_security", "exposure",
-                "geo_site", "seo_links", "favicon", "agent", "kali", "scoring",
+                "geo_site", "seo_links", "favicon", "agent", "kali", "site_profile", "scoring",
             ],
         )
         # 每個階段都是可單獨呼叫的函式
@@ -76,6 +76,9 @@ class PipelineFailureLabelTests(TransactionTestCase):
         for target, kwargs in [
             ("assert_public_http_url", {"return_value": "https://example.com/"}),
             ("crawl_site", {"new": mock.AsyncMock(return_value=([], {}, {}, []))}),
+            # 本類別測的是失敗標示，不測「0 頁即失敗」的保護
+            ("_ensure_usable_pages", {}),
+            ("build_site_profile", {"return_value": {}}),
             ("analyze_ssl", {"return_value": []}),
             ("build_link_report", {"return_value": {}}),
             ("analyze_cookies", {"return_value": []}),
@@ -101,3 +104,50 @@ class PipelineFailureLabelTests(TransactionTestCase):
         messages = [entry["msg"] for entry in self.scan_job.scan_log]
         self.assertIn("掃描執行失敗 [deep_security:RuntimeError]", messages)
         self.refund.assert_called_once()
+
+
+class NoUsablePagesTests(TransactionTestCase):
+    """爬不到任何可分析的頁面時不能標「完成」並給分數（2026-10-06 實測 0 頁仍得 73 分）。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="no-pages", password="safe-test-password")
+        self.scan_job = _scan(self.user)
+        mock.patch(
+            "apps.scans.tasks.assert_public_http_url", return_value="https://example.com/"
+        ).start()
+        self.refund = mock.patch("apps.scans.tasks.refund_full_for_scan").start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+
+    def _run_with_crawl(self, pages, warnings=None):
+        with mock.patch(
+            "apps.scans.tasks.crawl_site",
+            new=mock.AsyncMock(return_value=(pages, warnings or {}, {}, [])),
+        ):
+            result = tasks.run_scan_job.run(self.scan_job.id)
+        self.scan_job.refresh_from_db()
+        return result
+
+    def test_zero_pages_fails_with_reason_and_refunds(self):
+        result = self._run_with_crawl([], {"failed_urls": ["https://example.com/"]})
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.scan_job.status, ScanJob.Status.FAILED)
+        self.assertIsNone(self.scan_job.overall_score)
+        self.assertIn("無法連線到網站", self.scan_job.error_message)
+        self.assertIn("不收費", self.scan_job.error_message)
+        self.refund.assert_called_once()
+
+    def test_only_blocked_or_error_pages_fails(self):
+        blocked = {
+            "url": "https://example.com/", "status_code": 403, "blocked_reason": "cf_challenge",
+        }
+        error = {"url": "https://example.com/a", "status_code": 500, "blocked_reason": ""}
+        self._run_with_crawl([blocked, error])
+        self.assertEqual(self.scan_job.status, ScanJob.Status.FAILED)
+        self.assertIn("沒有取得任何可分析的頁面", self.scan_job.error_message)
+        self.refund.assert_called_once()
+
+    def test_one_usable_page_passes_the_guard(self):
+        ok = {"url": "https://example.com/", "status_code": 200, "blocked_reason": ""}
+        tasks._ensure_usable_pages([ok], {})  # 不拋例外

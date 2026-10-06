@@ -24,7 +24,7 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 |---|---|---|
 | `ssl_scanner.py` | SSL/TLS 深度分析：憑證到期、弱 cipher、過期協議（TLS 1.0/1.1）| 已建 |
 | `cookie_scanner.py` | Cookie 安全旗標：Secure、HttpOnly、SameSite | 已建 |
-| `header_scanner.py` | 資訊洩露標頭（X-Powered-By 技術棧）、CORS 設定、CSP 品質分析；Server 版本→CVE 已移交 service_cve_scanner | 已建 |
+| `header_scanner.py` | 資訊洩露標頭（X-Powered-By 技術棧）、CORS 設定、CSP 品質分析、HSTS 標示 preload 卻不符預載條件（info）；Server 版本→CVE 已移交 service_cve_scanner | 已建 |
 | `owasp_mapper.py` | Finding 對映 OWASP Top 10（A01~A10）與 CWE 編號（`tag()` + `backfill()`） | 已建 |
 | `secret_scanner.py` | 硬編碼/外洩秘鑰偵測（AWS/Google/GitHub/Stripe/連線字串/私鑰/明文密碼）+ 遮罩 `redact_secrets_in_text` | 已建 |
 | `redaction.py` | 共用 finding/log 遮罩：URL query、PII、任意短 secret；持久化前使用 | 已建 |
@@ -34,7 +34,8 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 | `kali_policy.py` | 原子授權 + Redis 三目標預算 + 900s deadline + SHA-256 去重：`reserve_sqlmap_targets()` | 已建（Task 2） |
 | `kali_kubernetes.py` | K8s Job executor：`KubernetesSqlmapExecutor`、Redis 單一 owner global lock、Job-first/Secret-second lifecycle、cancellation-aware watch | 已建（Task 4） |
 | `sri_scanner.py` | SRI 缺失偵測：外部跨來源 `<script>/<link>` 缺 `integrity` | 已建 |
-| `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM） | 已建 |
+| `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM）；`email_dns_posture()` 給「做得好的地方」用 | 已建 |
+| `infra_scanner.py` | 網站基礎架構：A／AAAA／CNAME／NS、IP 反解、Cloudflare 公告網段、標頭與 CNAME 指紋 → 判斷掃到的是 CDN／WAF／反向代理邊緣還是主機，產生報告提醒文字（只查目標自身網域、不發 HTTP） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
 | `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |
 | `nvd_db.py` | NVD CVE→backend_services.json 純函式轉換（CPE 過濾 + 版本區間），供 refresh 命令與單元測試 | 已建 |
@@ -59,7 +60,7 @@ def analyze_ssl(hostname: str, port: int = 443, scan_job_id: int = 0) -> list[di
 ```
 
 - 使用 Python 內建 `ssl` 模組，不依賴外部 binary
-- 憑證到期 ≤ 30 天 → HIGH；≤ 7 天 → CRITICAL
+- 憑證已過期 → CRITICAL；≤ 7 天 → HIGH；≤ 14 天 → MEDIUM；15–30 天 → INFO（Let's Encrypt、Cloudflare 等自動續期憑證剩約 30 天才續期，屬正常週期；2026-10-06 調整，舊版 30 天內一律 HIGH）
 - 協議版本低於 TLS 1.2 → HIGH
 - 弱 cipher（RC4、DES、3DES）→ HIGH
 

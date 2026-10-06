@@ -150,12 +150,12 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 
 ## SEO 分析與 Search Console（2026-10-03，`seo/`）
 
-會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層。**不產生 Finding、不影響計分**——SEO 分數仍由 `scanners.analyze_seo` 決定，這裡是給網站主逐頁查證與修正的工作清單。
+會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層，是給網站主逐頁查證與修正的工作清單。**例外（2026-10-06）**：`seo/site_findings.py` 把站台層級的結論轉成 Finding（計入 SEO 分數、出現在問題清單與報告）——站內失效連結 `seo-broken-internal-links`（中）、www／非 www 都直接回應 `seo-www-duplicate`（低）、og:url／canonical／robots Sitemap 宣告的主機與實際不同 `seo-declared-host-mismatch`（低）、多頁同一個 title `seo-duplicate-titles`（中，≥3 頁且過半）；ntubimdbirc.tw 實測這些只出現在 SEO 頁明細、報告完全沒有。其餘逐頁明細仍不產生 Finding。
 
 | 模組 | 職責 |
 |---|---|
 | `seo/page_audit.py` | 逐頁解析已保存的 HTML（`rendered_dom` 優先）：Title、Description、H1–H6 清單與跳號、正文（沿用 `aeo/content.extract_page_content`）、canonical、robots meta＋`X-Robots-Tag`、圖片 alt、連結（錨文字含圖片 alt）、OG、hreflang、載入時間。**只讀 DB，不連線** |
-| `seo/link_check.py` | 連結狀態：每一跳都過 `assert_public_http_url`、手動跟隨轉址最多 5 跳並記錄跳轉鏈；HEAD 不支援時改 GET（不讀內容）。站台檢查：robots.txt（`User-agent: *` 的 Disallow）、sitemap、HTTP→HTTPS、www／非 www、隨機路徑 404、`/index.html`、結尾斜線 |
+| `seo/link_check.py` | 連結狀態：每一跳都過 `assert_public_http_url`、手動跟隨轉址最多 5 跳並記錄跳轉鏈；HEAD 回 4xx／5xx 或連線層錯誤（`RemoteProtocolError` 等，2026-10-06 domjudge 子網域實測）時改 GET（不讀內容）。站台檢查：robots.txt（`User-agent: *` 的 Disallow）、sitemap、HTTP→HTTPS、www／非 www、隨機路徑 404、`/index.html`、結尾斜線 |
 | `seo/collect.py` | `stage_seo_links` 主體：收集所有頁面的不重複連結（爬蟲已直接造訪且沒轉址的頁面不重查），依站內→子網域→站外排序，前 `ARGUS_SEO_LINK_CHECK_LIMIT`（150）個、總時間 `ARGUS_SEO_LINK_CHECK_SECONDS`（120） |
 | `seo/report.py` | API 資料：概覽（掃描頁數、受影響頁數、重大／警告／提示、可索引頁數、失效連結、優先修復事項）、頁面、問題（每處附網址、檢測時間、證據）、連結（依目標合併、來源頁與錨文字）、站台檢查、關鍵字報告；以「掃描 id＋連結檢查時間」快取 1 小時 |
 | `seo/keywords.py` | 目標關鍵字（`SiteProject.target_keywords`，最多 20 個、每個 60 字）字面比對 Title／H1／Description／H2–H6／網址／正文 |
@@ -214,7 +214,7 @@ report_render.generate_report(payload, path)     # 排版層：版面、配色�
 | 嚴重度一律走 `_render_severity()` | `report_render` 會拿它查色塊與排序，**值不在 theme.SEVERITY 表裡就 KeyError、整份報告產不出來**。未知等級退回「資訊提示」 |
 | finding 先依嚴重度排序才編號 | `report_render` 依嚴重度分組顯示，不先排好編號就不連續 |
 | 未評估分類送 `null` 而非 `0` | 送 0 會被畫成一條紅色滿分條，把「沒測」說成「很糟」 |
-| **不要改 `report_render/` 的程式碼** | 它是 vendored 第三方 module，已在 ruff `extend-exclude`。唯一的在地修改是 `theme.py` 的字型解析，有註解說明 |
+| `report_render/` 由 Argus 自行維護（2026-10-06 依使用者要求重新設計版面） | 原本是 vendored module、已在 ruff `extend-exclude`；改版面時同步改 `schema.json`、`RENDERER_VERSION` 與版面測試 |
 
 **字型是硬需求**：圖表由 matplotlib 繪製，缺 CJK 字型時 `theme.py` 直接 `RuntimeError`（刻意大聲失敗——退回預設字型的話中文會變成一整排 □，報告照樣寄給客戶）。Dockerfile 已裝 `fonts-noto-cjk`，另可用 `ARGUS_REPORT_FONT_REGULAR` / `_BOLD` 覆寫。
 
@@ -223,6 +223,18 @@ report_render.generate_report(payload, path)     # 排版層：版面、配色�
 schema 沒有的東西（掃描頁面清單、已解決項目清單）不要硬塞：頁面清單已移除（與範本一致，掃描範圍表仍有頁數）；已解決數量收進 `summary.headline`。
 
 ---
+
+### 報告版面（2026-10-06 重新設計）
+
+| 規則 | 為什麼 |
+|---|---|
+| 字級層級固定在 `theme.TYPE`：章節 20、小節 13.5、問題名稱 12、內文 10.5、標籤 9、中繼資料與證據 8.5（pt） | 使用者回饋舊版標題、章節、問題名稱、說明字重太接近，讀不出層次 |
+| **不用任何彩色左邊條**（卡片標題、怎麼修、檢測依據、嚴重度分組、h2 都拿掉）；層次靠字級、字重、留白與細底線 | 全站規則（frontend/CLAUDE.md），報告也一樣 |
+| 中風險以上用完整卡片；低風險與資訊提示是精簡條目（標題＋一句問題＋一句建議，不列逐頁證據與追溯資訊） | 讀者注意力要放在該處理的項目；舊版 25 頁中低風險卡片佔一半 |
+| 第一章摘要先列「做得好的地方」與「網站架構」（`payload.site_profile`：事實表＋CDN／反向代理提醒），之後才是分數圖 | 報告不能只有負面問題；網站在 Cloudflare 等邊緣之後時，必須提醒 Port／主機層級資訊反映的是邊緣節點 |
+| 附錄「修補後如何驗證」只逐項列中風險以上，其餘一行帶過（payload 仍保留全部 `verify_items`） | 舊版這張表單獨佔 5 頁 |
+
+ntubimdbirc.tw（26 項）由 25 頁降到 19 頁。
 
 ### 報告要短：樣板只講一次（scan 38 事後修正）
 
@@ -242,7 +254,7 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 ### 證據品質（2026-09-28 報告審查）
 
-- **PII 分級**（`scanners.analyze_data_exposure`）：高風險 `SECURITY_PII_8B24BB8B28` 只給身分證號／信用卡號；手機、非本站網域 Email、藏在 HTML 註解的資料、開發殘留 → 中風險 `security-pii-personal-contact`；本站網域（同 registrable domain）或 `mailto:`／`tel:` 的聯絡方式 → info `security-pii-public-contact`（多半是刻意公開）。舊版一看到任何 Email 就判高風險。
+- **PII 分級**（`scanners.analyze_data_exposure`）：高風險 `SECURITY_PII_8B24BB8B28` 只給身分證號／信用卡號；手機、非本站網域 Email、藏在 HTML 註解的資料、開發殘留 → 中風險 `security-pii-personal-contact`；本站網域（同 registrable domain）或 `mailto:`／`tel:` 的聯絡方式 → info `security-pii-public-contact`（多半是刻意公開）。舊版一看到任何 Email 就判高風險。信箱名稱含網站名稱（`ntubimdbirc@ntub.edu.tw` 之於 ntubimdbirc.tw）或角色信箱（info、service、contact…）也視為組織窗口；`placeholder` 屬性的填寫範例（`e.g.0911-222-333`）不掃描（2026-10-06 實測誤報）。
 - **判定依據**：高風險、PII 與 AI 觀察項目在 `evidence_json.assessment`（或 `reports._assessment_for` 的預設）寫「成立條件／實際觀察／尚缺證據／驗證方法」，報告卡片逐項印出。
 - **AI 觀察封頂中風險**（`reports._report_severity`，對 `agent-` 規則；舊資料亦同）並標示來源；每張卡片一行追溯資訊：規則、觀測時間、來源（規則引擎／工具／AI Agent）。
 - **合併多頁保留逐頁證據**（`locations`），Cookie 值遮蔽（`cookie_scanner.mask_cookie_line`，頭 4 尾 2）。
@@ -303,6 +315,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
   可點元素在手機寬或高 < `_MIN_TAP_TARGET_PX`（40px）列為 tap-target 問題（≥5 個升
   MEDIUM）；`<input>`/`<select>`/`<textarea>` 無 label/aria/title/placeholder 列為
   accessibility 問題（MEDIUM）。每類上限 `_MAX_UX_OFFENDERS`（8）。
+- **精準標註（2026-10-06）**：觸控目標、缺標籤欄位、破版元素都記錄行動版文件座標 `box`（`rect + scroll`）；只要有這類問題，爬蟲另拍一張行動版整頁截圖（`page-N-mobile.png`，路徑存 `layout_metrics["mobile_screenshot"]`，API `pages/<id>/screenshot/?variant=mobile`、`PageSerializer.has_mobile_screenshot`）。Finding 的 `evidence_json.annotations = {"viewport": "mobile", "boxes": [...]}`，前端在行動版截圖上逐一框住實際元素，不再框整個區塊。移出視窗左右兩側的抽屜選單不算觸控目標（`isVisible` 排除 `rect.right <= 0 || rect.left >= innerWidth`）。
 - **未捕捉的 JS 例外**（`pageerror` 監聽 → `page["js_errors"]`）：頁面 console 未攔截的
   例外列為 MEDIUM，證據上限 `_MAX_JS_ERROR_EVIDENCE_CHARS`（800）。
 
@@ -335,7 +348,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -390,7 +403,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | 階段名（失敗 log 會寫 `[階段名:例外類別]`） | 函式 | 做什麼 |
 |---|---|---|
 | `target_validation` | `stage_validate_target` | 再次確認目標是公開 HTTP(S) |
-| `crawl` | `stage_crawl` | Playwright BFS；每頁回報進度並當取消檢查點 |
+| `crawl` | `stage_crawl` | Playwright BFS；每頁回報進度並當取消檢查點。**沒有任何可分析的頁面（2xx／3xx 且未被阻擋）就丟 `ScanTargetUnreachable`**，由 `finish_unreachable` 標失敗、寫可讀原因並全額退款（2026-10-06：0 頁曾標完成並給 73 分） |
 | `enter_scanning` | `stage_enter_scanning` | 記錄警告、狀態推進到 scanning、落地 `Page` |
 | `page_analysis` | `stage_analyze_pages`（單頁單維度：`_analyze_one_page`） | 逐維度、逐頁規則分析＋inline 秘鑰偵測 |
 | `aeo_answers` | `stage_aeo_answerability`（`_aeo_site_pages`） | AEO 問答檢測（見下「AEO 問答檢測」），結果寫 `ScanJob.aeo_report` |
@@ -399,10 +412,11 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |
-| `seo_links` | `stage_seo_links` | 勾 SEO 才跑：連結狀態與跳轉鏈、robots.txt／sitemap／HTTPS／www／404／結尾斜線檢查，寫 `ScanJob.seo_report`；失敗只記 log（`seo/collect.py`） |
+| `seo_links` | `stage_seo_links` | 勾 SEO 才跑：連結狀態與跳轉鏈、robots.txt／sitemap／HTTPS／www／404／結尾斜線檢查，寫 `ScanJob.seo_report`，並由 `seo/site_findings.py` 轉出站台層級 SEO Finding；失敗只記 log（`seo/collect.py`） |
 | `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
+| `site_profile` | `stage_site_profile` | 網站概況寫 `ScanJob.site_profile`（`site_profile.py`）：基礎架構（`security/infra_scanner.py`：A／AAAA／CNAME／NS、IP 反解、Cloudflare 網段、標頭／CNAME 指紋 → 掃到的是 CDN 邊緣還是主機）與「做得好的地方」（HTTPS、HSTS、nosniff、CSP、DNSSEC、SPF -all、DMARC、robots＋sitemap、正確 404、行動版無破版、載入快；只列本次有勾的維度，且不可與同次問題矛盾）；失敗只記 log |
 | `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |
 
 階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。
