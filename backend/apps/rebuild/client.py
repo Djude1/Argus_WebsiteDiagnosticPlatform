@@ -150,6 +150,7 @@ class OpenCodeClient:
         total_cost = 0.0
         text = ""
         model_id = ""
+        finish = ""
         for row in rows:
             info = row.get("info") or {}
             if info.get("role") != "assistant":
@@ -158,6 +159,8 @@ class OpenCodeClient:
                 raise OpenCodeError(_public_error(info["error"]))
             total_cost += info.get("cost") or 0
             model_id = info.get("modelID") or model_id
+            # 最後一個 step 的結束原因；"length" 代表撞到輸出上限（診斷「沒有修改」用）
+            finish = info.get("finish") or finish
             texts = [
                 p.get("text", "")
                 for p in row.get("parts") or []
@@ -168,7 +171,7 @@ class OpenCodeClient:
                 text = "\n".join(texts)
         if not model_id:
             raise OpenCodeError("agent 沒有回覆")
-        return {"text": text, "cost": total_cost, "model_id": model_id}
+        return {"text": text, "cost": total_cost, "model_id": model_id, "finish": finish}
 
     def prompt(self, session_id: str, text: str, agent: str, model: str = "") -> dict:
         """送出 prompt 並阻塞到 agent 回完，回傳 {text, cost, model_id}。"""
