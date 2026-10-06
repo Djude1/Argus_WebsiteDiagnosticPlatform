@@ -16,20 +16,16 @@
     grid-template-columns: 232px minmax(0, 1fr);
   }
   /* 側邊欄完全固定、不捲動（使用者要求，2026-10-06）：
-     - 停靠位置必須等於自然位置，否則一捲動就跳一下（實測原本 99.4px → 92px）。
-     - 高度剛好填滿導覽列以下到視窗底部 1rem：再高一點，捲到頁底時 sticky 會被外框
-       底部往上推（實測又跳 8px）。
+     - 停靠位置＝原本的位置（導覽列 76px＋.argus-main.with-nav 的 pt-6＝1.5rem），
+       否則一捲動就跳一下（實測原本 99.4px → 92px）。
+     - 高度剛好填滿導覽列以下到 .argus-main 底部內距（md:p-8＝2rem）之間：
+       再高一點，捲到頁底時 sticky 會被外框底部往上推（實測又跳 8px）。
      - 內容依螢幕高度收合（檔尾的 max-height 媒體查詢），常見筆電高度也放得下，
        不出現內部捲軸；功能項目以 space-around 均勻攤開填滿中間，方案卡與頁尾連結在底部。 */
-  /* 往上移、與頂部列只留 0.75rem（使用者要求，騰出高度給方案卡）：負的 margin-top 讓
-     自然位置＝停靠位置（76px＋0.75rem），捲動時才不會跳；負的 margin-bottom 讓側邊欄
-     可以伸進 .argus-main 底部內距，捲到頁底時不會被外框往上推。 */
   .project-sidebar {
     position: sticky;
-    top: calc(76px + 0.75rem);
-    margin-top: -0.75rem;
-    margin-bottom: -1rem;
-    height: calc(100vh - 76px - 0.75rem - 1rem);
+    top: calc(76px + 1.5rem);
+    height: calc(100vh - 76px - 1.5rem - 2rem);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1634,22 +1630,43 @@
 .project-scan-card-select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 
 /* ── 側邊欄依螢幕高度調整（2026-10-06）：必須放在檔尾，才蓋得過上面的基本規則 ──
-   每一項一律保留原本的樣子（圖示、名稱、小字說明），方案卡（方案名稱、點數進度條、
-   下次贈點、購點連結）也一律完整顯示——使用者明確要求兩者都是固定要有的。
-   螢幕不夠高時只收緊間距與行高。 */
+   每一項一律保留原本的樣子（圖示、名稱、小字說明）——使用者明確要求維持原樣。
+   螢幕不夠高時依序讓出：方案卡精簡 → 方案卡隱藏（點數在頂部列也看得到）→ 項目上下內距縮小。 */
 @media (min-width: 1024px) {
   /* 功能項目均勻攤開填滿側邊欄（使用者要求：不要下方留一片空白）。
      項目維持原本高度，剩餘空間平均分到項目之間（space-around），
      選中項目的淺藍底不會被拉長；空間不夠時 gap 為 0、照原本排列。 */
   .project-sidebar-nav {
     display: flex;
-    /* 不可縮到比內容矮：縮了項目會被下方蓋住（1536×730 實測） */
+    /* 不可縮到比內容矮：縮了項目會被頁尾連結蓋住（1536×730 實測） */
     flex: 1 0 auto;
     flex-direction: column;
     justify-content: space-around;
   }
-  /* 高度不足 900px：項目上下內距縮小 */
+  /* 只有極矮的視窗（所有項目最精簡仍放不下）才退回內部捲動，避免功能被截掉 */
+  @media (max-height: 609px) {
+    .project-sidebar {
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+  }
+  /* 高度不足 900px：方案卡只留方案名稱、點數與連結 */
   @media (max-height: 899px) {
+    .project-plan-card {
+      gap: 0.25rem;
+      padding: 0.6rem 0.75rem;
+    }
+    .project-plan-label,
+    .project-plan-bar,
+    .project-plan-hint {
+      display: none;
+    }
+  }
+  /* 高度不足 800px：隱藏方案卡，項目上下內距縮小（說明文字照常顯示） */
+  @media (max-height: 799px) {
+    .project-plan-card {
+      display: none;
+    }
     .project-sidebar-link {
       padding-top: 0.3rem;
       padding-bottom: 0.3rem;
@@ -1657,66 +1674,22 @@
     .project-sidebar-link.is-all-projects {
       padding-bottom: 0.5rem;
     }
-    .project-plan-card {
-      margin-top: 0.75rem;
-    }
   }
-  /* 高度不足 840px：再收緊內距、行高與方案卡間距（內容不變） */
-  @media (max-height: 839px) {
-    .project-sidebar {
-      padding-top: 0.5rem;
+  /* 高度不足 700px：再收緊內距與行高 */
+  @media (max-height: 699px) {
+    .project-sidebar-head {
       padding-bottom: 0.5rem;
     }
-    .project-sidebar-head {
-      padding-bottom: 0.4rem;
-    }
     .project-sidebar-nav {
-      margin-top: 0.4rem;
+      margin-top: 0.5rem;
     }
     .project-sidebar-link {
-      padding-top: 0.1rem;
-      padding-bottom: 0.1rem;
+      padding-top: 0.15rem;
+      padding-bottom: 0.15rem;
     }
     .project-sidebar-link-label,
     .project-sidebar-link-hint {
       line-height: 1.25;
-    }
-    .project-plan-card {
-      gap: 0.2rem;
-      margin-top: 0.5rem;
-      padding: 0.55rem 0.75rem;
-    }
-    .project-plan-cta {
-      margin-top: 0.15rem;
-      padding-top: 0.25rem;
-      padding-bottom: 0.25rem;
-    }
-    .project-sidebar-footer {
-      margin-top: 0.4rem;
-    }
-  }
-  /* 高度不足 690px：收起頁尾的「產品介紹／聯絡我們／使用者評論」三個次要連結（使用者指定必留的是功能項目與方案卡），
-     把空間留給功能項目與方案卡 */
-  @media (max-height: 689px) {
-    .project-sidebar-footer {
-      display: none;
-    }
-    .project-sidebar-head {
-      padding-bottom: 0.25rem;
-    }
-    .project-sidebar-nav {
-      margin-top: 0.25rem;
-    }
-    .project-plan-card {
-      gap: 0.15rem;
-      padding: 0.45rem 0.75rem;
-    }
-  }
-  /* 所有內容最精簡仍放不下時（極矮視窗）才退回內部捲動，避免功能被截掉 */
-  @media (max-height: 651px) {
-    .project-sidebar {
-      overflow-y: auto;
-      scrollbar-width: thin;
     }
   }
 }
