@@ -36,11 +36,19 @@ _JSON_FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE
 _ANY_FENCE = re.compile(r"```.*?```", re.DOTALL)
 
 
+# 沒有收尾的圍欄：串流進行中、或輸出被截斷時，JSON 還沒結束
+_OPEN_FENCE = re.compile(r"```.*\Z", re.DOTALL)
+
+
 def _human_reply(text: str) -> str:
     """把 agent 回覆裡的程式碼區塊剝掉，只留給人看的說明。"""
-    return _ANY_FENCE.sub("", text or "").strip()
-# 模型忘記加圍欄時的退路
-_BARE_EDITS = re.compile(r"\{\s*\"edits\"\s*:.*\}", re.DOTALL)
+    return _OPEN_FENCE.sub("", _ANY_FENCE.sub("", text or "")).strip()
+
+
+# 模型忘記加圍欄、或圍欄沒收尾（輸出被截斷）時的退路：從 {"summary" 或 {"edits" 開始解析。
+# 2026-10-06 前只認 {"edits"，但新格式第一個鍵是 summary，退路形同失效。
+_BARE_PAYLOAD = re.compile(r"\{\s*\"(?:summary|edits)\"\s*:")
+_JSON = json.JSONDecoder(strict=False)
 
 def rebuild_media_dir(rebuild: SiteRebuild) -> str:
     return f"rebuilds/scan-{rebuild.scan_job_id}/page-{rebuild.page_id}"
@@ -295,26 +303,68 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
     return rebuild
 
 
-def _extract_payload(reply: str) -> dict:
-    """從 agent 的回覆裡取出第一個含 edits 的 JSON 物件（找不到回空 dict）。
+def _salvage_payload(text: str) -> dict:
+    """整段 JSON 解析失敗時，逐筆救回完整的修改。
 
-    優先找 ```json 圍欄；模型偶爾會忘記加圍欄，所以退而求其次掃第一個看起來
-    像 {"edits": ...} 的物件。
+    實際會遇到兩種：輸出被截斷（最後一筆寫到一半）、或某一筆的字串沒跳脫好。
+    兩種都只壞一筆，但整段 json.loads 會失敗——2026-10-06 使用者等了 5 分鐘、
+    最後拿到「沒有提出任何修改」。逐筆解析就能保住其他完好的修改。
     """
-    candidates = [m.group(1) for m in _JSON_FENCE.finditer(reply or "")]
-    match = _BARE_EDITS.search(reply or "")
-    if match:
-        candidates.append(match.group(0))
+    start = text.find('"edits"')
+    if start < 0:
+        return {}
+    edits = []
+    position = text.find("{", start)
+    while position >= 0:
+        try:
+            item, end = _JSON.raw_decode(text, position)
+        except ValueError:
+            position = text.find("{", position + 1)
+            continue
+        if isinstance(item, dict) and (item.get("css") or _pick(item, _FIND_KEYS)):
+            edits.append(item)
+        position = text.find("{", end)
+    if not edits:
+        return {}
+    summary = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    payload = {"edits": edits}
+    if summary:
+        try:
+            payload["summary"] = json.loads(f'"{summary.group(1)}"')
+        except ValueError:
+            pass
+    return payload
+
+
+def _extract_payload(reply: str) -> dict:
+    """從 agent 的回覆裡取出含 edits 的 JSON 物件（找不到回空 dict）。
+
+    依序：```json 圍欄 → 沒有圍欄或圍欄沒收尾時從 {"summary"／{"edits" 開始解析 →
+    逐筆救回。字串裡的換行等控制字元一律容許（strict=False），模型常直接換行寫 CSS。
+    """
+    text = reply or ""
+    candidates = [m.group(1) for m in _JSON_FENCE.finditer(text)]
     for blob in candidates:
         try:
-            data = json.loads(blob)
+            data = _JSON.decode(blob.strip())
         except ValueError:
             continue
         if isinstance(data, list):
             data = {"edits": data}
         if isinstance(data, dict) and isinstance(data.get("edits"), list):
             return data
-    return {}
+    match = _BARE_PAYLOAD.search(text)
+    if match:
+        try:
+            data, _ = _JSON.raw_decode(text, match.start())
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("edits"), list):
+            return data
+    salvaged = _salvage_payload(text)
+    if salvaged:
+        logger.warning("修改清單 JSON 不完整，逐筆救回 %d 筆", len(salvaged["edits"]))
+    return salvaged
 
 
 def _extract_edits(reply: str) -> list[dict]:
@@ -375,17 +425,28 @@ def _pick(item: dict, keys: tuple[str, ...]) -> str:
 
 
 def _normalize_edit(item: dict) -> dict | None:
-    find = _pick(item, _FIND_KEYS)
-    if not find:
-        return None
     category = str(item.get("category") or "").lower()
     category = category if category in _CATEGORIES else ""
-    layer = str(item.get("layer") or "").lower()
+    css = item.get("css") if isinstance(item.get("css"), str) else ""
+    find = _pick(item, _FIND_KEYS)
+    replace = _pick(item, _REPLACE_KEYS)
+    if css.strip() and not find:
+        # 視覺改善只給 CSS，由系統包成 <style> 加在 </head> 前（2026-10-06）。
+        # 要模型自己在 JSON 字串裡寫 <style data-argus=\"…\"> 太容易漏跳脫，一筆壞掉整段就解析不了。
+        # category 只能是白名單值，不會把屬性值撐破。
+        find = "</head>"
+        replace = f'<style data-argus="{category or "visual"}">\n{css.strip()}\n</style></head>'
+        layer = "visual"
+    else:
+        layer = str(item.get("layer") or "").lower()
+    if not find:
+        return None
     if layer not in _LAYERS:
         layer = "visual" if category in _VISUAL_CATEGORIES else "technical"
     return {
         "find": find,
-        "replace": _pick(item, _REPLACE_KEYS),
+        "replace": replace,
+        "css": css,
         "why": _pick(item, _WHY_KEYS),
         "layer": layer,
         "category": category,
@@ -433,12 +494,32 @@ def apply_edits(html: str, edits: list[dict]) -> tuple[str, list[dict]]:
             entry["rejected"] = "不接受新增 script、事件屬性、外部嵌入或改變頁面去向的修改"
             report.append(entry)
             continue
+        if "<" in (item.get("css") or ""):
+            # 樣式內容出現 < 就可能用 </style> 跳出去塞 HTML
+            entry["rejected"] = "樣式內容不得包含 HTML 標籤"
+            report.append(entry)
+            continue
         count = html.count(find)
         if count:
             html = html.replace(find, replacement)
         entry["applied"] = count
         report.append(entry)
     return html, report
+
+
+def _no_edits_reason(result: dict) -> str:
+    """沒有可用修改時，說清楚是哪一種失敗（使用者與維運都要能據此判斷下一步）。"""
+    text = (result.get("text") or "").strip()
+    logger.warning(
+        "agent 沒有可用的修改清單：回覆 %d 字、finish=%s", len(text), result.get("finish") or "?"
+    )
+    if result.get("finish") == "length":
+        return "agent 的輸出超過長度上限（思考或輸出過長），修改清單沒有寫完"
+    if not text:
+        return "agent 只有思考、沒有輸出結果（可能思考過久用完了輸出長度）"
+    if "```" in text or "{" in text:
+        return "agent 的修改清單格式有誤，無法解析"
+    return "agent 沒有提出任何修改"
 
 
 def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
@@ -486,7 +567,7 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
         result = _run_streaming(client, rebuild, session_id, prompt, workspace)
         edits = _extract_edits(result["text"])
         if not edits:
-            raise OpenCodeError("agent 沒有提出任何修改")
+            raise OpenCodeError(_no_edits_reason(result))
         optimized, report = apply_edits(snapshot, edits)
         applied = sum(1 for r in report if r["applied"])
         if not applied:

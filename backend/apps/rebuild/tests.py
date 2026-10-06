@@ -33,7 +33,9 @@ from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
 from apps.rebuild.services import (
     _extract_edits,
+    _extract_payload,
     _human_reply,
+    _no_edits_reason,
     apply_edits,
     ask_followup,
     run_rebuild,
@@ -246,6 +248,17 @@ class RunRebuildTests(TestCase):
     def test_no_edits_is_a_failure(self):
         rebuild = self._run(_FakeClient(reply="我不知道"))
         self.assertEqual(rebuild.status, SiteRebuild.Status.FAILED)
+
+    def test_truncated_reply_still_delivers_the_complete_edits(self):
+        """輸出被截斷時，已經寫完的修改照樣交付（使用者等了好幾分鐘，不能全丟）。"""
+        reply = (
+            '```json\n{"summary": "補標題", "edits": [{"find": "<title>t</title>",'
+            ' "replace": "<title>示範頁｜完整標題</title>", "why": "短"},'
+            ' {"layer": "visual", "css": "h1{fo'
+        )
+        rebuild = self._run(_FakeClient(reply=reply))
+        self.assertEqual(rebuild.status, SiteRebuild.Status.SUCCEEDED)
+        self.assertEqual(len(rebuild.edit_report), 1)
 
     def test_edits_that_match_nothing_are_a_failure(self):
         """全部對不上代表這一輪沒有任何價值，不能收錢。"""
@@ -956,6 +969,71 @@ class EditSchemaToleranceTests(TestCase):
         self.assertEqual(edits[0]["find"], "x")
 
 
+class PayloadRobustnessTests(TestCase):
+    """2026-10-06 使用者回報：agent 思考 5 分鐘，最後「agent 沒有提出任何修改」。
+
+    整段 JSON 只要有一點問題（被截斷、某筆字串沒跳脫、沒加圍欄、圍欄沒收尾）就整批
+    丟掉。現在逐層退：圍欄 → 沒圍欄／沒收尾 → 逐筆救回。
+    """
+
+    GOOD = '{"find": "<title>t</title>", "replace": "<title>完整</title>", "why": "短"}'
+
+    def test_visual_css_is_wrapped_into_a_style_block_by_the_system(self):
+        edits = _extract_edits(
+            '```json\n{"edits": [{"layer": "visual", "category": "hierarchy",'
+            ' "css": "h1{font-size:2rem}", "why": "標題太小"}]}\n```'
+        )
+        self.assertEqual(edits[0]["find"], "</head>")
+        self.assertIn('<style data-argus="hierarchy">', edits[0]["replace"])
+        self.assertIn("h1{font-size:2rem}", edits[0]["replace"])
+        self.assertEqual(edits[0]["layer"], "visual")
+
+    def test_unknown_category_cannot_break_out_of_the_attribute(self):
+        edits = _extract_edits(
+            '```json\n{"edits": [{"category": "x\\" onload=\\"a", "css": "p{margin:0}"}]}\n```'
+        )
+        self.assertIn('<style data-argus="visual">', edits[0]["replace"])
+
+    def test_css_containing_markup_is_rejected(self):
+        edits = _extract_edits(
+            '```json\n{"edits": [{"css": "p{}</style><img src=x>", "category": "layout"}]}\n```'
+        )
+        html, report = apply_edits("<html><head></head></html>", edits)
+        self.assertEqual(report[0]["applied"], 0)
+        self.assertIn("HTML", report[0]["rejected"])
+        self.assertNotIn("<img", html)
+
+    def test_summary_first_without_fence(self):
+        text = '完成了 {"summary": "s", "edits": [' + self.GOOD + ']} 以上'
+        self.assertEqual(_extract_payload(text)["summary"], "s")
+        self.assertEqual(len(_extract_edits(text)), 1)
+
+    def test_truncated_output_keeps_the_complete_edits(self):
+        text = (
+            '```json\n{"summary": "補標題", "edits": [' + self.GOOD
+            + ', {"layer": "visual", "css": "h1{font-si'
+        )
+        payload = _extract_payload(text)
+        self.assertEqual(len(payload["edits"]), 1)
+        self.assertEqual(payload["summary"], "補標題")
+
+    def test_one_broken_entry_does_not_drop_the_others(self):
+        broken = '{"find": "<p>", "replace": "<p class="x">", "why": "沒跳脫"}'
+        text = '```json\n{"edits": [' + broken + ", " + self.GOOD + ']}\n```'
+        edits = _extract_edits(text)
+        self.assertEqual([e["find"] for e in edits], ["<title>t</title>"])
+
+    def test_raw_newlines_inside_strings_are_accepted(self):
+        text = '```json\n{"edits": [{"css": "h1{\n  margin:0\n}", "category": "spacing"}]}\n```'
+        self.assertEqual(len(_extract_edits(text)), 1)
+
+    def test_failure_reason_tells_what_happened(self):
+        self.assertIn("長度上限", _no_edits_reason({"text": "x", "finish": "length"}))
+        self.assertIn("只有思考", _no_edits_reason({"text": "", "finish": "stop"}))
+        self.assertIn("格式", _no_edits_reason({"text": '```json\n{"edits": [', "finish": "stop"}))
+        self.assertEqual(_no_edits_reason({"text": "我不知道"}), "agent 沒有提出任何修改")
+
+
 class HumanReplyTests(TestCase):
     """交給使用者看的回覆不能是一坨 JSON。
 
@@ -972,6 +1050,10 @@ class HumanReplyTests(TestCase):
 
     def test_prose_without_fences_is_untouched(self):
         self.assertEqual(_human_reply("只有說明沒有區塊"), "只有說明沒有區塊")
+
+    def test_unterminated_fence_is_stripped(self):
+        """JSON 在前、串流進行中或輸出被截斷時，圍欄還沒收尾。"""
+        self.assertEqual(_human_reply('```json\n{"edits": [{"find"'), "")
 
     def test_reply_that_is_only_json_becomes_empty(self):
         """只有 JSON 沒有說明時回空字串——前端會顯示「這一輪沒有文字回覆」，

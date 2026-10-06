@@ -77,40 +77,45 @@ HTML／CSS 看出的**具體問題**，並能說出改善了什麼。可以處�
   區塊的先後順序，不新增圖片。
 
 **實作方式：**
-- 每一項視覺改善都是**一筆獨立的修改**：`find` 用 `</head>`，`replace` 用
-  `<style data-argus="類別">…CSS…</style></head>`。這樣每一項都能單獨列出、單獨審查。
-- 選擇器優先使用頁面上**已存在**的 id、class 與標籤；必要時可以在既有元素上**加**一個
-  class（例如 `<section class="hero">` → `<section class="hero argus-hero">`）。
+- 每一項視覺改善是**一筆獨立的修改，只寫 `css` 欄位**——不要寫 find／replace，也不要
+  自己寫 `<style>` 標籤；系統會把它包成 `<style data-argus="類別">` 加進 `<head>`。
+  （在 JSON 字串裡手寫 HTML 屬性很容易漏跳脫引號，一筆寫壞就可能整段解析失敗。）
+- 選擇器使用頁面上**已存在**的 id、class 與標籤。
 - 行動版改善寫在 `@media (max-width: 768px)` 內。
-- CSS 不得載入任何外部資源（不用 `@import`、不用 `url(http…)`）。
+- CSS 裡的字串一律用單引號；不得出現 `<` 字元；不得載入任何外部資源（不用 `@import`、
+  不用 `url(http…)`）。每項 CSS 精簡，600 字元以內。
 - 如果頁面結構太混亂、靠 CSS 做不出有意義的改善，就少做，不要硬湊；在說明裡講清楚。
 
-目標數量：技術修正盡量涵蓋所有可在 HTML 層解決的診斷；視覺改善**至少 3 項、通常 4 到
-8 項**，優先處理首屏與主要行動區，每一項都要讓並排比較時看得出差別。
+目標數量：技術修正盡量涵蓋所有可在 HTML 層解決的診斷；視覺改善 **3 到 6 項**，優先處理
+首屏與主要行動區，每一項都要讓並排比較時看得出差別。
 
-## 回覆格式（兩段，順序不能顛倒）
+**時間與長度有限：** 思考保持精簡——判斷要改哪些地方就好，不要在思考中先寫出完整的
+CSS 或 JSON 草稿（那會用掉輸出長度，最後寫不完修改清單）。整份回覆控制在 6000 字元
+左右；寧可少幾項，也要把 JSON 完整寫完。
 
-**第一段：給人看的說明**，繁體中文、平常的話，三小段，每段開頭固定用以下標籤：
+## 回覆格式（JSON 在前、說明在後，順序不能顛倒）
 
-- `已修改：` 技術修正與視覺改善各做了什麼、最明顯的差別在哪裡（三到五句）
-- `未處理：` 診斷清單裡沒有處理的項目與原因、該由誰處理（伺服器設定／內容與事實資料／
-  設計決策）。全部都處理了才寫「無」。
-- `請人工確認：` 建議設計師或工程師確認的地方；沒有就寫「無」。
+JSON 放在最前面：萬一輸出被截斷，損失的是說明文字，而不是修改清單。
 
-不要在第一段貼 HTML、CSS 或 JSON。
-
-**第二段：一個 ```json 區塊**，格式如下：
+**第一段：一個 ```json 區塊**，格式如下：
 
 ```json
 {
   "summary": "一句話說明這次優化最主要的成果（30 字內）",
   "edits": [
     {
+      "layer": "technical",
+      "category": "seo|meta|accessibility|semantic|performance|links|forms",
       "find": "原文中逐字元存在的片段",
       "replace": "取代後的內容",
-      "layer": "technical 或 visual",
-      "category": "seo|meta|accessibility|semantic|performance|links|forms|layout|hierarchy|typography|spacing|navigation|cta|responsive|interaction|consistency",
-      "why": "看到了什麼問題（對應哪一條診斷，或你從頁面觀察到的具體問題）",
+      "why": "看到了什麼問題（對應哪一條診斷）",
+      "impact": "改了之後使用者會感受到什麼（一句話）"
+    },
+    {
+      "layer": "visual",
+      "category": "layout|hierarchy|typography|spacing|navigation|cta|responsive|interaction|consistency",
+      "css": "選擇器{屬性:值}",
+      "why": "你從頁面觀察到的具體問題",
       "impact": "改了之後使用者會感受到什麼（一句話）"
     }
   ],
@@ -120,11 +125,20 @@ HTML／CSS 看出的**具體問題**，並能說出改善了什麼。可以處�
 }
 ```
 
-- `find` 必須是 `<page-html>` 中**逐字元存在**的字串，直接複製，不要憑印象重打；
-  對不上的那筆會被略過並回報給使用者。
+- technical 的 `find` 必須是 `<page-html>` 中**逐字元存在**的字串，直接複製，不要憑印象
+  重打；對不上的那筆會被略過並回報給使用者。
 - `find` 要夠長、夠獨特才能定位；同一字串出現多次時**全部**會被取代——想一次改掉整批
   （例如所有 `alt="."`）就利用這個特性，不想全改就把 `find` 加長。
 - `why` 與 `impact` 寫給設計師與工程師看，具體、不空泛（不要寫「提升使用者體驗」）。
+
+**第二段：給人看的說明**，繁體中文、平常的話，三小段，每段一到三句，開頭固定用以下標籤：
+
+- `已修改：` 技術修正與視覺改善各做了什麼、最明顯的差別在哪裡
+- `未處理：` 診斷清單裡沒有處理的項目與該由誰處理（伺服器設定／內容與事實資料／
+  設計決策）。全部都處理了才寫「無」。
+- `請人工確認：` 建議設計師或工程師確認的地方；沒有就寫「無」。
+
+不要在第二段貼 HTML、CSS 或 JSON。
 
 範例（只示意格式）：
 
@@ -132,13 +146,12 @@ HTML／CSS 看出的**具體問題**，並能說出改善了什麼。可以處�
 {
   "summary": "補齊搜尋與無障礙標記，首屏標題與主要按鈕更突出",
   "edits": [
-    {"find": "<title>首頁</title>", "replace": "<title>首頁｜商業智慧研究中心</title>",
-     "layer": "technical", "category": "seo",
+    {"layer": "technical", "category": "seo",
+     "find": "<title>首頁</title>", "replace": "<title>首頁｜商業智慧研究中心</title>",
      "why": "title 只有 2 個字，搜尋結果看不出網站主題",
      "impact": "搜尋結果與分頁標籤直接顯示中心名稱"},
-    {"find": "</head>",
-     "replace": "<style data-argus=\"hierarchy\">.banner h1{font-size:clamp(1.8rem,4vw,2.6rem);line-height:1.25;margin-bottom:.75rem}.banner p{max-width:40em;line-height:1.75}</style></head>",
-     "layer": "visual", "category": "hierarchy",
+    {"layer": "visual", "category": "hierarchy",
+     "css": ".banner h1{font-size:clamp(1.8rem,4vw,2.6rem);line-height:1.25;margin-bottom:.75rem}.banner p{max-width:40em;line-height:1.75}",
      "why": "首屏主標題與說明文字字級相近、說明文字一行太長",
      "impact": "一進頁面就先看到中心名稱，說明文字更好讀"}
   ],
@@ -147,6 +160,12 @@ HTML／CSS 看出的**具體問題**，並能說出改善了什麼。可以處�
   ]
 }
 ```
+
+已修改：title 補上中心名稱；首屏主標題放大、說明文字行寬縮短，一進頁面就看得到重點。
+
+未處理：CSP 是伺服器回應標頭，需要在 nginx 或應用層設定。
+
+請人工確認：無。
 
 ## 不可違反的規則
 
@@ -157,7 +176,7 @@ HTML／CSS 看出的**具體問題**，並能說出改善了什麼。可以處�
    只是假裝修好，列入 `not_handled`（owner = server）。
 3. **安全底線（系統會直接拒絕違反者）：** 不新增 `<script>`、`<iframe>`、`<object>`、
    `<embed>`、`<form>`、`<base>`；不新增 `onclick` 等事件屬性、`javascript:` 網址或
-   `meta refresh`；CSS 不用 `@import`、`url(http…)`、`expression()`；不更改既有連結的
+   `meta refresh`；CSS 不用 `@import`、`url(http…)`、`expression()`，也不出現 `<`；不更改既有連結的
    目的地、表單的送出位置與任何外部資源網址。原本就有的 script 保持原樣即可。
 4. **保留原本的 `<base>` 標籤**，外部資源仍要指向原站。
 5. HTML 被截斷時，只針對看得到的部分提出修改，不要為沒看到的內容編造 `find`。

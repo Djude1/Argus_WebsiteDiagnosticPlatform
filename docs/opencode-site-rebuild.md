@@ -20,8 +20,8 @@ worker (k8s, argus ns)                    agent 主機 172.16.2.126（叢集外�
 **agent 不寫檔、也不輸出整份 HTML**：它只回傳 `{find, replace}` 的修改清單，
 由 Argus 套用到原稿上。
 
-2026-10-06 起修改分兩層：`technical`（SEO／無障礙／效能等）與 `visual`（以
-`<style data-argus="類別">` 加在 `</head>` 前的版面與介面改善），每筆附
+2026-10-06 起修改分兩層：`technical`（SEO／無障礙／效能等）與 `visual`（只給 `css`，
+由 Argus 包成 `<style data-argus="類別">` 加在 `</head>` 前），JSON 放在回覆最前面，每筆附
 `why`／`impact`，另回 `summary` 與 `not_handled`。agent 定義檔與
 `prompts.py` 的回覆格式必須一致；**更新 Argus 後要同時更新 agent 主機上的定義檔並
 重啟 opencode**，否則舊定義只會回技術修正（畫面看不出差別），新格式欄位也會缺。

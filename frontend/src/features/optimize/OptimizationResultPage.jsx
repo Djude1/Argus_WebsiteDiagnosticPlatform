@@ -63,8 +63,11 @@ function TurnTrace({ rebuildId, index }) {
   );
 }
 
-/** AI 的說明、過程與追問（審查用，預設收合；成果本身在上方報告）。 */
-function AgentThread({ rebuild, running, onAsk }) {
+/**
+ * AI 的說明、過程與追問（審查用，預設收合；成果本身在上方報告）。
+ * 失敗時也顯示（不能追問）：使用者等了幾分鐘，至少要看得到 agent 想了什麼、卡在哪裡。
+ */
+function AgentThread({ rebuild, running, canAsk = true, onAsk }) {
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState("");
@@ -89,7 +92,7 @@ function AgentThread({ rebuild, running, onAsk }) {
 
   return (
     <details className="opt-agent" open={running || undefined}>
-      <summary>AI 說明、過程與追問</summary>
+      <summary>{canAsk ? "AI 說明、過程與追問" : "AI 的說明與思考過程"}</summary>
       <div className="opt-agent-body">
         {thread.length ? (
           thread.map((turn, index) =>
@@ -105,12 +108,13 @@ function AgentThread({ rebuild, running, onAsk }) {
         ) : (
           <p className="opt-turn is-agent"><span>Argus</span>{rebuild.reply || (running ? "…" : "（沒有文字說明）")}</p>
         )}
-        {running && (rebuild.trace || []).length > 0 && (
-          <details className="opt-trace" open>
-            <summary>目前的思考過程</summary>
+        {(running || !canAsk) && (rebuild.trace || []).length > 0 && (
+          <details className="opt-trace" open={running || undefined}>
+            <summary>{running ? "目前的思考過程" : "思考過程"}</summary>
             <div className="opt-trace-body"><TraceEntries entries={rebuild.trace} /></div>
           </details>
         )}
+        {canAsk && (<>
         <form className="opt-ask" onSubmit={submit}>
           <textarea
             className="input"
@@ -126,6 +130,7 @@ function AgentThread({ rebuild, running, onAsk }) {
         </form>
         {error && <p className="error-text" role="alert">{error}</p>}
         <p className="opt-muted">追問會延續同一段對話（Argus 記得這一頁的內容與診斷），依實際用量計費。</p>
+        </>)}
       </div>
     </details>
   );
@@ -277,10 +282,11 @@ function OptimizationResultPage() {
         />
       )}
 
-      {(done || running) && (
+      {(done || running || rebuild.status === "failed") && (
         <AgentThread
           rebuild={rebuild}
           running={IN_PROGRESS.has(rebuild.status)}
+          canAsk={rebuild.status !== "failed"}
           onAsk={() => {
             waitingStartRef.current = true;
             setPollNonce((n) => n + 1);

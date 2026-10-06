@@ -15,17 +15,23 @@
   .project-shell {
     grid-template-columns: 232px minmax(0, 1fr);
   }
-  /* 頂部導覽列是 sticky 且桌面版固定 76px（64-project-switcher.css）；側邊欄的停靠位置
-     必須等於它原本的位置（導覽列 76px＋.argus-main.with-nav 的 pt-6＝1.5rem），
-     否則一捲動就跳一下（2026-10-06 實測原本 99.4px → 92px）。
-     螢幕不夠高時側邊欄自己捲動，不跟著內容一起被截掉。 */
+  /* 側邊欄完全固定、不捲動（使用者要求，2026-10-06）：
+     - 停靠位置＝原本的位置（導覽列 76px＋.argus-main.with-nav 的 pt-6＝1.5rem），
+       否則一捲動就跳一下（實測原本 99.4px → 92px）。
+     - 高度剛好填滿導覽列以下到 .argus-main 底部內距（md:p-8＝2rem）之間：
+       再高一點，捲到頁底時 sticky 會被外框底部往上推（實測又跳 8px）。
+     - 內容依螢幕高度收合（檔尾的 max-height 媒體查詢），常見筆電高度也放得下，
+       不出現內部捲軸；方案卡與頁尾連結貼齊底部，用掉上下的空間。 */
   .project-sidebar {
     position: sticky;
     top: calc(76px + 1.5rem);
-    max-height: calc(100vh - 76px - 3rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
+    height: calc(100vh - 76px - 1.5rem - 2rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .project-sidebar .project-plan-card {
+    margin-top: auto;
   }
 }
 .project-main {
@@ -1622,3 +1628,58 @@
 .project-scan-card { max-width: 100%; min-width: 0; }
 .project-scan-card-body { min-width: 0; }
 .project-scan-card-select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+
+/* ── 側邊欄依螢幕高度收合（2026-10-06）：必須放在檔尾，才蓋得過上面的基本規則 ── */
+@media (min-width: 1024px) {
+  /* 只有極矮的視窗（<520px）才退回內部捲動，避免功能被截掉 */
+  @media (max-height: 519px) {
+    .project-sidebar {
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+  }
+  /* 高度不足 900px：拿掉每項的小字說明（圖示＋名稱仍清楚），項目間距收緊 */
+  @media (max-height: 899px) {
+    .project-sidebar-link-hint {
+      display: none;
+    }
+    .project-sidebar-link {
+      padding-top: 0.45rem;
+      padding-bottom: 0.45rem;
+    }
+    .project-sidebar-link.is-all-projects {
+      padding-bottom: 0.6rem;
+    }
+  }
+  /* 高度不足 780px：方案卡只留方案名稱、點數與連結 */
+  @media (max-height: 779px) {
+    .project-sidebar-head {
+      padding-bottom: 0.5rem;
+    }
+    .project-sidebar-nav {
+      margin-top: 0.5rem;
+    }
+    .project-sidebar-link {
+      padding-top: 0.35rem;
+      padding-bottom: 0.35rem;
+    }
+    .project-plan-card {
+      gap: 0.25rem;
+      padding: 0.6rem 0.75rem;
+    }
+    .project-plan-label,
+    .project-plan-bar,
+    .project-plan-hint {
+      display: none;
+    }
+  }
+  /* 高度不足 680px：方案與點數在頂部導覽列也看得到，側邊欄只留功能 */
+  @media (max-height: 679px) {
+    .project-plan-card {
+      display: none;
+    }
+    .project-sidebar-footer {
+      margin-top: auto;
+    }
+  }
+}
