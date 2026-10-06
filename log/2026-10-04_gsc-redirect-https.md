@@ -1,6 +1,6 @@
 # 修復：連接 Search Console 出現 redirect_uri_mismatch
 
-**日期**：2026-10-04  
+**日期**：2026-10-04
 **操作者**：Claude
 
 ## 症狀
