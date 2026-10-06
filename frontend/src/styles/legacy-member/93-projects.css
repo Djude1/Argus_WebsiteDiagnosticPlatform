@@ -21,7 +21,7 @@
      - 高度剛好填滿導覽列以下到 .argus-main 底部內距（md:p-8＝2rem）之間：
        再高一點，捲到頁底時 sticky 會被外框底部往上推（實測又跳 8px）。
      - 內容依螢幕高度收合（檔尾的 max-height 媒體查詢），常見筆電高度也放得下，
-       不出現內部捲軸；方案卡與頁尾連結貼齊底部，用掉上下的空間。 */
+       不出現內部捲軸；功能項目以 space-around 均勻攤開填滿中間，方案卡與頁尾連結在底部。 */
   .project-sidebar {
     position: sticky;
     top: calc(76px + 1.5rem);
@@ -1631,6 +1631,16 @@
 
 /* ── 側邊欄依螢幕高度收合（2026-10-06）：必須放在檔尾，才蓋得過上面的基本規則 ── */
 @media (min-width: 1024px) {
+  /* 功能項目均勻攤開填滿側邊欄（使用者要求：不要下方留一片空白）。
+     項目維持原本高度，剩餘空間平均分到項目之間（space-around），
+     選中項目的淺藍底不會被拉長；空間不夠時 gap 為 0、照原本排列。 */
+  .project-sidebar-nav {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: space-around;
+    min-height: 0;
+  }
   /* 只有極矮的視窗（<520px）才退回內部捲動，避免功能被截掉 */
   @media (max-height: 519px) {
     .project-sidebar {
@@ -1677,9 +1687,6 @@
   @media (max-height: 679px) {
     .project-plan-card {
       display: none;
-    }
-    .project-sidebar-footer {
-      margin-top: auto;
     }
   }
 }
