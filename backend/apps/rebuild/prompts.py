@@ -46,7 +46,8 @@ CSS 或 JSON 草稿。整份回覆控制在 6000 字元左右；寧可少幾項�
 {"summary": "一句話說明最主要的成果（30 字內）",
  "edits": [
    {"layer": "technical", "category": "seo|meta|accessibility|semantic|performance|links|forms",
-    "find": "原文片段", "replace": "取代內容", "why": "看到了什麼問題", "impact": "使用者會感受到什麼"},
+    "find": "原文片段", "replace": "取代內容",
+    "why": "看到了什麼問題", "impact": "使用者會感受到什麼"},
    {"layer": "visual", "category": "layout|hierarchy|typography|spacing|navigation|cta|
 responsive|interaction|consistency",
     "css": "選擇器{屬性:值}", "why": "看到了什麼問題", "impact": "使用者會感受到什麼"}
