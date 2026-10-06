@@ -15,10 +15,17 @@
   .project-shell {
     grid-template-columns: 232px minmax(0, 1fr);
   }
-  /* 頂部導覽列是 sticky（桌面版高約 76px），側邊欄要停在它下方，不能滑進導覽列底下 */
+  /* 頂部導覽列是 sticky 且桌面版固定 76px（64-project-switcher.css）；側邊欄的停靠位置
+     必須等於它原本的位置（導覽列 76px＋.argus-main.with-nav 的 pt-6＝1.5rem），
+     否則一捲動就跳一下（2026-10-06 實測原本 99.4px → 92px）。
+     螢幕不夠高時側邊欄自己捲動，不跟著內容一起被截掉。 */
   .project-sidebar {
     position: sticky;
-    top: calc(76px + 1rem);
+    top: calc(76px + 1.5rem);
+    max-height: calc(100vh - 76px - 3rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
 }
 .project-main {

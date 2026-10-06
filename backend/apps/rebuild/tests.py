@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -979,11 +980,28 @@ class HumanReplyTests(TestCase):
 
 
 class RebuildShareTests(TestCase):
-    """分享連結（2026-10-06）：給 UI/UX 工程師看的唯讀檢視。
+    """分享（2026-10-06，參考 Notion／Figma）：唯讀、穩定連結、可選擇是否需要登入、隨時關閉。
 
     內容是第三方 HTML，分享不能變成「在 Argus 網域託管任意網頁」：
-    HTML 只能被分享頁內嵌、不執行 script、不能送表單，而且連結有期限、可撤銷。
+    HTML 不執行 script、不能送表單、不能直接整頁開啟。
     """
+
+    TWO_LAYER_REPLY = (
+        "說明\n```json\n" + json.dumps({
+            "summary": "補上標題並重整首屏層次",
+            "edits": [
+                {"find": "<title>t</title>", "replace": "<title>示範頁｜完整標題</title>",
+                 "why": "title 過短", "layer": "technical", "category": "seo",
+                 "impact": "搜尋結果顯示完整主題"},
+                {"find": "</head>", "replace": "<style>h1{font-size:2rem}</style></head>",
+                 "why": "主標題不夠突出", "layer": "visual", "category": "hierarchy",
+                 "impact": "一眼看到頁面主題"},
+            ],
+            "not_handled": [
+                {"item": "缺少 CSP", "reason": "回應標頭需在伺服器設定", "owner": "server"},
+            ],
+        }, ensure_ascii=False) + "\n```"
+    )
 
     def setUp(self):
         self.user = User.objects.create_user(username="share", password="safe-test-password")
@@ -991,57 +1009,81 @@ class RebuildShareTests(TestCase):
         self.scan_job = _make_scan(self.user)
         self.page = _make_page(self.scan_job)
         self.rebuild = SiteRebuild.objects.create(scan_job=self.scan_job, page=self.page)
-        with patch("apps.rebuild.services.OpenCodeClient", return_value=_FakeClient()), \
+        client = _FakeClient(reply=self.TWO_LAYER_REPLY)
+        with patch("apps.rebuild.services.OpenCodeClient", return_value=client), \
                 override_settings(ARGUS_OPENCODE_ENABLED=True, ARGUS_OPENCODE_BASE_URL="http://oc"):
             run_rebuild(self.rebuild)
         self.rebuild.refresh_from_db()
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    def _share(self):
-        response = self.client.post(f"/api/rebuilds/{self.rebuild.id}/share/")
+    def _share(self, access="link"):
+        response = self.client.post(
+            f"/api/rebuilds/{self.rebuild.id}/share/", {"access": access}, format="json"
+        )
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["share_path"].startswith("/optimized/"))
         return response.data["share_path"].rsplit("/", 1)[-1]
 
-    def test_shared_view_has_edits_but_no_account_data(self):
+    def test_two_layer_result_is_recorded(self):
+        layers = {e["layer"] for e in self.rebuild.edit_report}
+        self.assertEqual(layers, {"technical", "visual"})
+        self.assertEqual(self.rebuild.outcome["summary"], "補上標題並重整首屏層次")
+        self.assertEqual(self.rebuild.outcome["not_handled"][0]["owner"], "server")
+        keys = {m["key"] for m in self.rebuild.outcome["metrics"]}
+        self.assertIn("title_length", keys)
+        self.assertIn("css_rules", keys)
+
+    def test_shared_view_is_read_only_and_has_no_account_data(self):
         token = self._share()
-        public = APIClient()
-        data = public.get(f"/api/share/rebuilds/{token}/").data
+        data = APIClient().get(f"/api/share/rebuilds/{token}/").data
         self.assertEqual(data["page_url"], "https://example.com/")
-        self.assertTrue(data["has_original"])
-        for field in ("user", "scan_job", "coins_charged", "cost_usd", "opencode_session_id"):
+        self.assertEqual(len(data["edits"]), 2)
+        self.assertNotIn("find", data["edits"][0])
+        self.assertIn("metrics", data["outcome"])
+        for field in ("user", "scan_job", "coins_charged", "cost_usd", "opencode_session_id",
+                      "conversation", "trace"):
             self.assertNotIn(field, data)
 
-    def test_shared_html_is_sandboxed_and_iframe_only(self):
+    def test_shared_html_is_sandboxed_and_cannot_be_opened_directly(self):
         token = self._share()
         public = APIClient()
-        url = f"/api/share/rebuilds/{token}/html/?variant=original"
-        framed = public.get(url, HTTP_SEC_FETCH_DEST="iframe")
-        self.assertEqual(framed.status_code, 200)
-        csp = framed["Content-Security-Policy"]
+        url = f"/api/share/rebuilds/{token}/html/?variant=optimized"
+        fetched = public.get(url, HTTP_SEC_FETCH_DEST="empty")
+        self.assertEqual(fetched.status_code, 200)
+        csp = fetched["Content-Security-Policy"]
         self.assertIn("sandbox", csp)
         self.assertIn("script-src 'none'", csp)
         self.assertIn("form-action 'none'", csp)
-        self.assertEqual(framed["X-Frame-Options"], "SAMEORIGIN")
-        self.assertEqual(framed["X-Content-Type-Options"], "nosniff")
-        # 直接以整頁開啟：拒絕，第三方內容不以 Argus 網址單獨呈現
-        direct = public.get(url, HTTP_SEC_FETCH_DEST="document")
-        self.assertEqual(direct.status_code, 403)
+        self.assertEqual(fetched["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(public.get(url, HTTP_SEC_FETCH_DEST="document").status_code, 403)
 
-    def test_stop_sharing_and_expiry_and_ownership(self):
+    def test_link_is_stable_across_closing_and_reopening(self):
         token = self._share()
         self.client.delete(f"/api/rebuilds/{self.rebuild.id}/share/")
         self.assertEqual(APIClient().get(f"/api/share/rebuilds/{token}/").status_code, 404)
+        self.assertEqual(self._share(), token)
+        self.rebuild.refresh_from_db()
+        self.assertIsNone(self.rebuild.share_expires_at)
 
+    def test_login_required_share(self):
+        token = self._share("login")
+        self.assertEqual(APIClient().get(f"/api/share/rebuilds/{token}/").status_code, 401)
+        viewer = APIClient()
+        viewer.force_authenticate(user=self.other)  # 任何已登入的 Argus 使用者
+        self.assertEqual(viewer.get(f"/api/share/rebuilds/{token}/").status_code, 200)
+
+    def test_only_owner_can_change_sharing(self):
+        self.client.force_authenticate(user=self.other)
+        response = self.client.post(f"/api/rebuilds/{self.rebuild.id}/share/", {"access": "link"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_old_expiring_links_still_expire(self):
         token = self._share()
         SiteRebuild.objects.filter(pk=self.rebuild.pk).update(
             share_expires_at=timezone.now() - timedelta(minutes=1)
         )
         self.assertEqual(APIClient().get(f"/api/share/rebuilds/{token}/").status_code, 404)
-
-        self.client.force_authenticate(user=self.other)
-        response = self.client.post(f"/api/rebuilds/{self.rebuild.id}/share/")
-        self.assertEqual(response.status_code, 404)
 
     def test_unknown_or_short_token_is_404(self):
         self.assertEqual(APIClient().get("/api/share/rebuilds/abc/").status_code, 404)
@@ -1072,6 +1114,19 @@ class UnsafeEditTests(TestCase):
         self.assertNotIn("javascript:", out)
         self.assertIn("<title>A｜說明</title>", out)
         self.assertEqual([bool(r.get("rejected")) for r in report], [True, True, True, False])
+
+    def test_css_cannot_load_external_resources(self):
+        html = "<head><title>a</title></head>"
+        _, report = apply_edits(
+            html,
+            [
+                {"find": "</head>", "replace": "<style>@import 'x.css';</style></head>"},
+                {"find": "</head>",
+                 "replace": "<style>body{background:url(https://evil.example/a.png)}</style></head>"},
+                {"find": "</head>", "replace": "<style>h1{font-size:2rem}</style></head>"},
+            ],
+        )
+        self.assertEqual([bool(r.get("rejected")) for r in report], [True, True, False])
 
     def test_existing_script_kept_in_place_is_allowed(self):
         html = '<head><script src="/app.js"></script><title>a</title></head>'

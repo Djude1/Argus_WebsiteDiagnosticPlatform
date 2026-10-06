@@ -298,7 +298,7 @@ function ProjectWorkspace() {
  * /scans/:scanId（含拓樸、複刻）的外框：網址維持不變（MCP、報告與舊連結都指向這裡），
  * 依掃描所屬專案顯示同一個側邊欄，「掃描」為目前分頁。
  */
-function ProjectScanShell() {
+function ProjectScanShell({ section = "scans" }) {
   const { scanId } = useParams();
   const [projectId, setProjectId] = useState(null);
   const [scanError, setScanError] = useState("");
@@ -327,7 +327,7 @@ function ProjectScanShell() {
   if (projectId === "none" || error) return <Outlet context={{ project: null }} />;
   if (!project) return <section className="panel"><p className="hint-text">載入掃描資料中…</p></section>;
   return (
-    <ProjectFrame project={project} activeSection="scans" setProject={setProject}>
+    <ProjectFrame project={project} activeSection={section} setProject={setProject}>
       <Outlet context={{ project }} />
     </ProjectFrame>
   );

@@ -21,6 +21,7 @@ from apps.billing.services import (
     refund_rebuild,
     settle_rebuild_actual,
 )
+from apps.rebuild import metrics
 from apps.rebuild.client import OpenCodeClient, OpenCodeError
 from apps.rebuild.models import SiteRebuild
 from apps.rebuild.prompts import build_optimization_prompt
@@ -294,11 +295,11 @@ def ask_followup(rebuild: SiteRebuild, question: str) -> SiteRebuild:
     return rebuild
 
 
-def _extract_edits(reply: str) -> list[dict]:
-    """從 agent 的回覆裡取出修改清單。
+def _extract_payload(reply: str) -> dict:
+    """從 agent 的回覆裡取出第一個含 edits 的 JSON 物件（找不到回空 dict）。
 
     優先找 ```json 圍欄；模型偶爾會忘記加圍欄，所以退而求其次掃第一個看起來
-    像 {"edits": ...} 的物件。兩者都失敗就回空清單，由呼叫端判定失敗。
+    像 {"edits": ...} 的物件。
     """
     candidates = [m.group(1) for m in _JSON_FENCE.finditer(reply or "")]
     match = _BARE_EDITS.search(reply or "")
@@ -309,13 +310,42 @@ def _extract_edits(reply: str) -> list[dict]:
             data = json.loads(blob)
         except ValueError:
             continue
-        edits = data.get("edits") if isinstance(data, dict) else data
-        if isinstance(edits, list):
-            normalized = [_normalize_edit(e) for e in edits if isinstance(e, dict)]
-            found = [e for e in normalized if e]
-            if found:
-                return found
-    return []
+        if isinstance(data, list):
+            data = {"edits": data}
+        if isinstance(data, dict) and isinstance(data.get("edits"), list):
+            return data
+    return {}
+
+
+def _extract_edits(reply: str) -> list[dict]:
+    """修改清單；兩種都失敗就回空清單，由呼叫端判定失敗。"""
+    edits = _extract_payload(reply).get("edits") or []
+    normalized = [_normalize_edit(e) for e in edits if isinstance(e, dict)]
+    return [e for e in normalized if e]
+
+
+_OWNERS = {"server", "content", "design"}
+
+
+def _extract_outcome(reply: str) -> dict:
+    """agent 的一句話摘要與「沒有處理的項目」，結果頁用來說明哪些需要人接手。"""
+    payload = _extract_payload(reply)
+    not_handled = []
+    for item in payload.get("not_handled") or []:
+        if not isinstance(item, dict) or not item.get("item"):
+            continue
+        owner = str(item.get("owner") or "").lower()
+        not_handled.append(
+            {
+                "item": str(item["item"])[:120],
+                "reason": str(item.get("reason") or "")[:240],
+                "owner": owner if owner in _OWNERS else "",
+            }
+        )
+    return {
+        "summary": str(payload.get("summary") or "")[:300],
+        "not_handled": not_handled[:20],
+    }
 
 
 # 模型不一定照 prompt 的欄位名走。實測看過它自己改用 old/new——那種整批
@@ -323,6 +353,17 @@ def _extract_edits(reply: str) -> list[dict]:
 _FIND_KEYS = ("find", "old", "search", "from")
 _REPLACE_KEYS = ("replace", "new", "to")
 _WHY_KEYS = ("why", "issue", "reason")
+# 兩個層次（2026-10-06）：technical＝修掃描發現的技術問題；visual＝看得出差別的 UI/UX 改善
+_LAYERS = {"technical", "visual"}
+_CATEGORIES = {
+    "seo", "accessibility", "semantic", "performance", "links", "meta", "forms",
+    "layout", "hierarchy", "typography", "spacing", "navigation", "cta", "responsive",
+    "interaction", "consistency",
+}
+_VISUAL_CATEGORIES = {
+    "layout", "hierarchy", "typography", "spacing", "navigation", "cta", "responsive",
+    "interaction", "consistency",
+}
 
 
 def _pick(item: dict, keys: tuple[str, ...]) -> str:
@@ -337,10 +378,18 @@ def _normalize_edit(item: dict) -> dict | None:
     find = _pick(item, _FIND_KEYS)
     if not find:
         return None
+    category = str(item.get("category") or "").lower()
+    category = category if category in _CATEGORIES else ""
+    layer = str(item.get("layer") or "").lower()
+    if layer not in _LAYERS:
+        layer = "visual" if category in _VISUAL_CATEGORIES else "technical"
     return {
         "find": find,
         "replace": _pick(item, _REPLACE_KEYS),
         "why": _pick(item, _WHY_KEYS),
+        "layer": layer,
+        "category": category,
+        "impact": str(item.get("impact") or "")[:200],
     }
 
 
@@ -349,7 +398,10 @@ def _normalize_edit(item: dict) -> dict | None:
 # 只看 replace 比 find 多出來的部分——原本就有的 script 被原樣保留不算新增。
 _UNSAFE_MARKUP = re.compile(
     r"<\s*(?:script|iframe|object|embed|form|base)\b|\son[a-z]+\s*=|javascript\s*:"
-    r"|http-equiv\s*=\s*[\"']?refresh",
+    r"|http-equiv\s*=\s*[\"']?refresh"
+    # 視覺改善會加 <style>：不得藉 CSS 載入外部資源或執行程式
+    r"|@import|expression\s*\(|-moz-binding|behavior\s*:"
+    r"|url\(\s*[\"']?\s*(?:https?:)?//",
     re.IGNORECASE,
 )
 
@@ -369,7 +421,14 @@ def apply_edits(html: str, edits: list[dict]) -> tuple[str, list[dict]]:
     for item in edits:
         find = item.get("find") or ""
         replacement = item.get("replace") or ""
-        entry = {"why": str(item.get("why") or "")[:200], "applied": 0, "find": find[:120]}
+        entry = {
+            "why": str(item.get("why") or "")[:200],
+            "applied": 0,
+            "find": find[:120],
+            "layer": item.get("layer") or "technical",
+            "category": item.get("category") or "",
+            "impact": item.get("impact") or "",
+        }
         if _introduces_unsafe_markup(find, replacement):
             entry["rejected"] = "不接受新增 script、事件屬性、外部嵌入或改變頁面去向的修改"
             report.append(entry)
@@ -398,12 +457,12 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
     if not settings.ARGUS_OPENCODE_ENABLED:
         # 複刻已經落地，仍可下載；只有優化這一段沒做。
         return _fail(
-            rebuild, "網頁優化未啟用（ARGUS_OPENCODE_ENABLED=false），僅產出原樣複刻"
+            rebuild, "網頁優化未啟用（ARGUS_OPENCODE_ENABLED=false），尚未產生優化版"
         )
 
     client = OpenCodeClient()
     if not client.is_configured:
-        return _fail(rebuild, "未設定 ARGUS_OPENCODE_BASE_URL，僅產出原樣複刻")
+        return _fail(rebuild, "未設定 ARGUS_OPENCODE_BASE_URL，尚未產生優化版")
 
     # --- 第二段：優化（呼叫外部 agent，會花錢） ---
     _set_status(rebuild, SiteRebuild.Status.OPTIMIZING)
@@ -435,6 +494,10 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
                 f"agent 提出的 {len(report)} 筆修改都對不上原始 HTML"
             )
         rebuild.edit_report = report
+        rebuild.outcome = {
+            **_extract_outcome(result["text"]),
+            "metrics": metrics.compare(snapshot, optimized),
+        }
         if applied < len(report):
             logger.warning(
                 "rebuild=%s：%d/%d 筆修改對不上原文",
@@ -460,6 +523,7 @@ def run_rebuild(rebuild: SiteRebuild) -> SiteRebuild:
         model_id=result["model_id"][:128],
         cost_usd=Decimal(str(result["cost"] or 0)),
         edit_report=rebuild.edit_report,
+        outcome=rebuild.outcome,
     )
     # 依實際用量結算：cost_usd 要先落地，settle 才讀得到
     settle_rebuild_actual(rebuild.scan_job.user, rebuild)

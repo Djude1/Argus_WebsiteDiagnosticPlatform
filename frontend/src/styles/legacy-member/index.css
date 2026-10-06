@@ -16,7 +16,6 @@
 @import "./10-components-core.css";
 @import "./11-account-pages.css";
 @import "./12-viz.css";
-@import "./13-page-rebuild.css";
 @import "./14-scans-ui.css";
 @import "./15-topology.css";
 @import "./16-crawling-animation.css";
@@ -38,3 +37,4 @@
 @import "./93-projects.css";
 @import "./94-report-style.css";
 @import "./95-seo.css";
+@import "./96-optimize.css";
