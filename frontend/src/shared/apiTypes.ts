@@ -2109,15 +2109,19 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         * @description POST {access: link|login} 開啟分享或切換權限；DELETE 關閉分享（改回僅限本人）。
          *
-         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         *     參考 Notion／Figma：連結第一次分享時產生、之後固定不變，關閉再打開仍是同一個網址；
+         *     不過期（舊版 7 天連結的期限在重新設定權限時清除）。分享頁唯讀，不含帳號、點數或
+         *     其他頁面。
          */
         post: operations["rebuilds_share_create"];
         /**
-         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         * @description POST {access: link|login} 開啟分享或切換權限；DELETE 關閉分享（改回僅限本人）。
          *
-         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         *     參考 Notion／Figma：連結第一次分享時產生、之後固定不變，關閉再打開仍是同一個網址；
+         *     不過期（舊版 7 天連結的期限在重新設定權限時清除）。分享頁唯讀，不含帳號、點數或
+         *     其他頁面。
          */
         delete: operations["rebuilds_share_destroy"];
         options?: never;
@@ -3592,6 +3596,13 @@ export interface components {
          */
         SeverityEnum: "critical" | "high" | "medium" | "low" | "info";
         /**
+         * @description * `private` - 僅限本人
+         *     * `link` - 知道連結的任何人
+         *     * `login` - 知道連結且已登入 Argus 的人
+         * @enum {string}
+         */
+        ShareAccessEnum: "private" | "link" | "login";
+        /**
          * @description 網站專案（清單、切換器、各分頁共用）。
          *
          *     summary 由 view 以 projects.project_summaries 批次算好放進 context。
@@ -3652,10 +3663,20 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
-            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            /**
+             * @description 穩定的分享網址（只回給擁有者；queryset 已限定本人）。
+             *
+             *     第一次分享後就固定不變，關閉分享時仍回同一個路徑，前端據 share_active 顯示狀態。
+             */
             readonly share_path: string;
+            readonly share_access: components["schemas"]["ShareAccessEnum"];
+            readonly share_active: boolean;
             /** Format: date-time */
             readonly share_expires_at: string | null;
+            /** @description 「頁面」分頁每列的成果摘要：一句話＋視覺／技術修改數＋可量測改善數。 */
+            readonly result_summary: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3682,10 +3703,20 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
-            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            /**
+             * @description 穩定的分享網址（只回給擁有者；queryset 已限定本人）。
+             *
+             *     第一次分享後就固定不變，關閉分享時仍回同一個路徑，前端據 share_active 顯示狀態。
+             */
             readonly share_path: string;
+            readonly share_access: components["schemas"]["ShareAccessEnum"];
+            readonly share_active: boolean;
             /** Format: date-time */
             readonly share_expires_at: string | null;
+            /** @description 「頁面」分頁每列的成果摘要：一句話＋視覺／技術修改數＋可量測改善數。 */
+            readonly result_summary: {
+                [key: string]: unknown;
+            };
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3694,6 +3725,10 @@ export interface components {
             readonly edit_report: unknown;
             readonly reply: string;
             readonly conversation: {
+                [key: string]: unknown;
+            }[];
+            readonly outcome: unknown;
+            readonly findings: {
                 [key: string]: unknown;
             }[];
         };

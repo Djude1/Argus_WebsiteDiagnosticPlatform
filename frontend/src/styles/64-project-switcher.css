@@ -261,6 +261,19 @@
   max-width: none;
   padding-inline: clamp(1rem, 2.2vw, 2rem);
 }
+/* 桌面版工具列固定高度（2026-10-06）：原本由內容撐高（約 75.4px），網站專案側邊欄的
+   sticky 位置對不齊，一開始捲動就往上跳約 7px。高度改成固定 75px＋1px 底線＝76px，
+   側邊欄停靠位置寫在 legacy-member/93-projects.css，兩處要同步。 */
+@media (min-width: 921px) {
+  .public-nav.is-member .public-nav-inner {
+    height: 75px;
+    padding-block: 0;
+  }
+}
+/* 頁面長短切換時捲軸出現／消失會讓整個版面左右位移；永遠保留捲軸空間 */
+:root:has(.public-nav.is-member) {
+  scrollbar-gutter: stable;
+}
 /* 「AI 網站健檢平台」與頭像在會員工具列放大一級 */
 .public-nav.is-member .public-brand-sub {
   font-size: 1.12rem !important;

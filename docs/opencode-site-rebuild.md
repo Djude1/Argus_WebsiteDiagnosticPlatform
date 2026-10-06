@@ -20,6 +20,12 @@ worker (k8s, argus ns)                    agent 主機 172.16.2.126（叢集外�
 **agent 不寫檔、也不輸出整份 HTML**：它只回傳 `{find, replace}` 的修改清單，
 由 Argus 套用到原稿上。
 
+2026-10-06 起修改分兩層：`technical`（SEO／無障礙／效能等）與 `visual`（以
+`<style data-argus="類別">` 加在 `</head>` 前的版面與介面改善），每筆附
+`why`／`impact`，另回 `summary` 與 `not_handled`。agent 定義檔與
+`prompts.py` 的回覆格式必須一致；**更新 Argus 後要同時更新 agent 主機上的定義檔並
+重啟 opencode**，否則舊定義只會回技術修正（畫面看不出差別），新格式欄位也會缺。
+
 為什麼：真實網頁動輒數萬字，要模型整份重寫會撞到單次輸出上限。實測一個 84KB
 的頁面，模型輸出到 15,022 token 就被截斷（`finish='length'`），連 `write` 工具
 呼叫的 `filePath` 參數都沒吐完，結果什麼都沒交付。改成只描述差異之後，同一份
@@ -188,8 +194,8 @@ model: MiniMax-M3   cost: 0.00178578 USD
 
 ## 產出的保留與清理
 
-產出寫在 media PVC 的 `rebuilds/scan-<id>/page-<id>/`，每次複刻兩個檔
-（`original.html` / `optimized.html`）。`cleanup-rebuilds` CronJob 每天
+產出寫在 media PVC 的 `rebuilds/scan-<id>/page-<id>/`，每次優化兩個檔
+（`original.html` 原始對照 / `optimized.html`）。`cleanup-rebuilds` CronJob 每天
 21:00 UTC（＝台北 05:00）刪掉 30 天沒更新的產出；`SiteRebuild` 紀錄保留，
 下載會回 404，使用者可重新產生。
 

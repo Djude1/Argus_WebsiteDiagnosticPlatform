@@ -1,6 +1,38 @@
+from django.db.models import Q
 from rest_framework import serializers
 
 from apps.rebuild.models import SiteRebuild
+from apps.scans.models import Finding
+
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+_EDIT_FIELDS = ("why", "applied", "rejected", "layer", "category", "impact")
+
+
+def page_findings(rebuild: SiteRebuild, limit: int = 40) -> list[dict]:
+    """這一頁（含站台層級）在掃描中發現的問題：結果頁「發現的問題」一欄。
+
+    只給標題、嚴重度、分類，不帶證據——分享頁是公開的，證據可能含個資。
+    """
+    rows = (
+        Finding.objects.filter(scan_job_id=rebuild.scan_job_id)
+        .filter(Q(page_id=rebuild.page_id) | Q(page__isnull=True))
+        .values("title", "severity", "category")
+    )
+    seen, out = set(), []
+    for row in sorted(rows, key=lambda r: _SEVERITY_ORDER.get(r["severity"], 9)):
+        key = (row["title"], row["category"])
+        if key not in seen:
+            seen.add(key)
+            out.append(row)
+    return out[:limit]
+
+
+def public_edits(rebuild: SiteRebuild) -> list[dict]:
+    """修改清單的公開欄位；不含 find 原文（那是頁面原始碼片段）。"""
+    return [
+        {field: item.get(field, "" if field != "applied" else 0) for field in _EDIT_FIELDS}
+        for item in rebuild.edit_report or []
+    ]
 
 
 class SiteRebuildSerializer(serializers.ModelSerializer):
@@ -8,6 +40,8 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
     has_snapshot = serializers.SerializerMethodField()
     has_optimized = serializers.SerializerMethodField()
     share_path = serializers.SerializerMethodField()
+    share_active = serializers.SerializerMethodField()
+    result_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteRebuild
@@ -23,7 +57,10 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
             "coins_charged",
             "error",
             "share_path",
+            "share_access",
+            "share_active",
             "share_expires_at",
+            "result_summary",
             "created_at",
             "updated_at",
         ]
@@ -36,8 +73,26 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
         return bool(obj.optimized_path)
 
     def get_share_path(self, obj) -> str:
-        """前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。"""
-        return f"/share/rebuilds/{obj.share_token}" if obj.share_is_active else ""
+        """穩定的分享網址（只回給擁有者；queryset 已限定本人）。
+
+        第一次分享後就固定不變，關閉分享時仍回同一個路徑，前端據 share_active 顯示狀態。
+        """
+        return f"/optimized/{obj.share_token}" if obj.share_token else ""
+
+    def get_share_active(self, obj) -> bool:
+        return obj.share_is_active
+
+    def get_result_summary(self, obj) -> dict:
+        """「頁面」分頁每列的成果摘要：一句話＋視覺／技術修改數＋可量測改善數。"""
+        applied = [e for e in obj.edit_report or [] if e.get("applied")]
+        visual = sum(1 for e in applied if e.get("layer") == "visual")
+        outcome = obj.outcome or {}
+        return {
+            "summary": outcome.get("summary", ""),
+            "visual": visual,
+            "technical": len(applied) - visual,
+            "improved": sum(1 for m in outcome.get("metrics") or [] if m.get("improved")),
+        }
 
 
 class SiteRebuildDetailSerializer(SiteRebuildSerializer):
@@ -53,6 +108,7 @@ class SiteRebuildDetailSerializer(SiteRebuildSerializer):
     """
 
     conversation = serializers.SerializerMethodField()
+    findings = serializers.SerializerMethodField()
 
     class Meta(SiteRebuildSerializer.Meta):
         fields = [
@@ -61,8 +117,13 @@ class SiteRebuildDetailSerializer(SiteRebuildSerializer):
             "edit_report",
             "reply",
             "conversation",
+            "outcome",
+            "findings",
         ]
         read_only_fields = fields
+
+    def get_findings(self, obj) -> list[dict]:
+        return page_findings(obj)
 
     def get_conversation(self, obj) -> list[dict]:
         return [

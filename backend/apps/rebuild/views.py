@@ -1,13 +1,12 @@
 import secrets
-from datetime import timedelta
 
 from config.throttling import AnonRateThrottle
 from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponse
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import NotAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -23,11 +22,12 @@ from apps.rebuild.serializers import (
     SiteRebuildCreateSerializer,
     SiteRebuildDetailSerializer,
     SiteRebuildSerializer,
+    page_findings,
+    public_edits,
 )
 from apps.rebuild.tasks import ask_rebuild_agent, run_site_rebuild
 from apps.scans.models import Page
 
-SHARE_DAYS = 7
 # 分享檢視的 HTML 一律在「無 script、無表單、不能導覽上層」的 sandbox 裡顯示：
 # 內容來自第三方網站，不能讓它在 Argus 網域上執行程式或收集輸入（防 XSS 與釣魚）。
 # 快照本來就是瀏覽器渲染後的 DOM，不執行 script 也能看到版面。
@@ -191,24 +191,30 @@ class SiteRebuildViewSet(
 
     @action(detail=True, methods=["post", "delete"])
     def share(self, request, pk=None):
-        """POST 建立（或延長）分享連結；DELETE 立即停止分享。
+        """POST {access: link|login} 開啟分享或切換權限；DELETE 關閉分享（改回僅限本人）。
 
-        分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+        參考 Notion／Figma：連結第一次分享時產生、之後固定不變，關閉再打開仍是同一個網址；
+        不過期（舊版 7 天連結的期限在重新設定權限時清除）。分享頁唯讀，不含帳號、點數或
+        其他頁面。
         """
         rebuild = self.get_object()
+        fields = ["share_access", "share_token", "share_expires_at", "updated_at"]
         if request.method == "DELETE":
-            rebuild.share_token = ""
-            rebuild.share_expires_at = None
-            rebuild.save(update_fields=["share_token", "share_expires_at", "updated_at"])
+            rebuild.share_access = SiteRebuild.ShareAccess.PRIVATE
+            rebuild.save(update_fields=fields)
             return Response(SiteRebuildSerializer(rebuild).data)
-        if not (rebuild.snapshot_path or rebuild.optimized_path):
+        access = str(request.data.get("access") or SiteRebuild.ShareAccess.LINK)
+        if access not in {SiteRebuild.ShareAccess.LINK, SiteRebuild.ShareAccess.LOGIN}:
+            return Response({"access": ["只能是 link 或 login。"]}, status=400)
+        if not rebuild.optimized_path:
             return Response(
-                {"detail": "這次複刻還沒有產出，無法分享。"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "這次優化還沒有產出，無法分享。"}, status=status.HTTP_400_BAD_REQUEST
             )
-        if not rebuild.share_is_active:
+        if not rebuild.share_token:
             rebuild.share_token = secrets.token_urlsafe(32)
-        rebuild.share_expires_at = timezone.now() + timedelta(days=SHARE_DAYS)
-        rebuild.save(update_fields=["share_token", "share_expires_at", "updated_at"])
+        rebuild.share_access = access
+        rebuild.share_expires_at = None
+        rebuild.save(update_fields=fields)
         return Response(SiteRebuildSerializer(rebuild).data)
 
     @action(detail=True, methods=["get"])
@@ -248,14 +254,20 @@ class SiteRebuildViewSet(
 # ------------------------------------------------------------------ 公開分享檢視
 
 
-def _shared_rebuild(token: str) -> SiteRebuild:
+def _shared_rebuild(request, token: str) -> SiteRebuild:
     if not token or len(token) < 32:
         raise Http404
     rebuild = (
         SiteRebuild.objects.filter(share_token=token).select_related("page").first()
     )
     if rebuild is None or not rebuild.share_is_active:
-        raise Http404("分享連結不存在或已過期。")
+        raise Http404("分享連結不存在或已關閉。")
+    if (
+        rebuild.share_access == SiteRebuild.ShareAccess.LOGIN
+        and not request.user.is_authenticated
+    ):
+        # 前端據此顯示「登入後檢視」；不透露是誰分享的
+        raise NotAuthenticated("這個分享需要登入 Argus 才能檢視。")
     return rebuild
 
 
@@ -264,24 +276,23 @@ def _shared_rebuild(token: str) -> SiteRebuild:
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def shared_rebuild(request, token: str):
-    """分享頁的資料：受測網址、修改清單與說明。不回傳帳號、點數、掃描 ID 等任何個人資訊。"""
-    rebuild = _shared_rebuild(token)
+    """分享頁的資料（唯讀）：受測網址、發現的問題、修改清單、成果摘要與前後指標。
+
+    不回傳帳號、點數、掃描 ID、修改原文等任何個人或內部資訊。
+    """
+    rebuild = _shared_rebuild(request, token)
     return Response(
         {
             "page_url": rebuild.page.final_url,
             "created_at": rebuild.created_at,
             "expires_at": rebuild.share_expires_at,
+            "access": rebuild.share_access,
             "has_original": bool(rebuild.snapshot_path),
             "has_optimized": bool(rebuild.optimized_path),
             "reply": rebuild.reply,
-            "edits": [
-                {
-                    "why": item.get("why", ""),
-                    "applied": item.get("applied", 0),
-                    "rejected": item.get("rejected", ""),
-                }
-                for item in rebuild.edit_report or []
-            ],
+            "outcome": rebuild.outcome or {},
+            "findings": page_findings(rebuild),
+            "edits": public_edits(rebuild),
         }
     )
 
@@ -291,11 +302,12 @@ def shared_rebuild(request, token: str):
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def shared_rebuild_html(request, token: str):
-    """分享頁 iframe 載入的 HTML。只能被 Argus 自己的分享頁內嵌，直接開網址會被拒絕。"""
-    rebuild = _shared_rebuild(token)
-    # 瀏覽器會標明這次請求是要放進 iframe 還是整頁開啟；整頁開啟一律拒絕，
-    # 讓第三方內容不會以 Argus 網址單獨呈現（舊瀏覽器沒有這個標頭時仍有 sandbox 保護）
-    if request.headers.get("Sec-Fetch-Dest", "iframe") not in {"iframe", "frame"}:
+    """分享頁比較畫面用的 HTML。分享頁以 XHR 取回後放進 sandbox iframe 的 srcdoc；
+    直接在瀏覽器開這個網址會被拒絕。"""
+    rebuild = _shared_rebuild(request, token)
+    # 瀏覽器會標明這次請求的用途；整頁開啟（document）一律拒絕，讓第三方內容
+    # 不會以 Argus 網址單獨呈現（舊瀏覽器沒有這個標頭時仍有 CSP sandbox 保護）
+    if request.headers.get("Sec-Fetch-Dest", "empty") not in {"empty", "iframe", "frame"}:
         return HttpResponse("請從分享頁檢視。", status=403, content_type="text/plain")
     variant = request.query_params.get("variant", "optimized")
     relative = rebuild.snapshot_path if variant == "original" else rebuild.optimized_path
