@@ -146,7 +146,11 @@ function ProjectSeoPage() {
   const gscNotice = gscFlash && (
     <div className={`seo-flash ${gscFlash === "connected" ? "is-good" : "is-bad"}`} role="status">
       <span>
-        {gscFlash === "connected" ? "已連接 Google Search Console，請選擇要對應的資源。" : searchParams.get("reason") || "Search Console 連接失敗。"}
+        {gscFlash === "connected"
+          ? gsc?.property
+            ? `已連接 Google Search Console，並自動選擇資源 ${gsc.property}。`
+            : "已連接 Google Search Console，請選擇要對應的資源。"
+          : searchParams.get("reason") || "Search Console 連接失敗。"}
         {gscFlash === "connected" && searchParams.get("verified") && (
           <> 你是 Search Console 的擁有者，已自動完成網域驗證（{searchParams.get("verified")}），可以使用主動式資安測試。</>
         )}

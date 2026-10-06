@@ -742,6 +742,43 @@ class AccountLevelSearchConsoleTests(TestCase):
         self.assertTrue(status["property_matches"])
         self.assertEqual(SearchConsoleConnection.objects.filter(user=self.user).count(), 2)
 
+    def test_connecting_on_domains_page_links_existing_projects(self):
+        """網域驗證頁按一次連接，既有網站專案的 SEO 分析就已連好、資源已選好。"""
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        self._connect()  # 期間 list_sites 回 SITES
+        connection = SearchConsoleConnection.objects.get(project=project)
+        self.assertEqual(connection.property_url, "sc-domain:example.tw")
+        # SEO 分析頁讀的是 /seo/ 的 gsc 狀態，不需再呼叫 Google
+        with mock.patch("apps.scans.seo.gsc.list_sites") as list_sites:
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        list_sites.assert_not_called()
+        self.assertTrue(gsc_status["connected"])
+        self.assertEqual(gsc_status["property"], "sc-domain:example.tw")
+
+    def test_seo_page_auto_selects_property_for_connected_project(self):
+        """2026-10-06 使用者回報：已連接卻還要在清單裡按「選擇」。網域資源優先。"""
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        SearchConsoleConnection.objects.create(
+            project=project, user=self.user, refresh_token_encrypted=gsc.encrypt_token("p"),
+        )
+        sites = [
+            {"site_url": f"{ORIGIN}/", "permission": "siteOwner"},
+            {"site_url": "sc-domain:example.tw", "permission": "siteOwner"},
+        ]
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        self.assertEqual(gsc_status["property"], "sc-domain:example.tw")
+
+        # 使用者按「更換資源」後要自己挑，不能又被自動選回去
+        self.client.patch(f"/api/projects/{project.id}/gsc/", {"property": ""}, format="json")
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        self.assertEqual(gsc_status["property"], "")
+
     def test_disconnecting_project_keeps_shared_google_grant(self):
         self._connect()
         project = SiteProject.objects.create(
