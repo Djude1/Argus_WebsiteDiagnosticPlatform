@@ -2,253 +2,154 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../../api";
-import { copyToClipboard } from "../../shared/clipboard";
-import { formatDateTime } from "../../shared/formatters";
+import ShareDialog from "../optimize/ShareDialog";
+import { ACCESS_OPTIONS } from "../optimize/optimizeLabels";
 
 const POLL_INTERVAL_MS = 5000;
-
-// 後端 SiteRebuild.Status 的對應。進行中的三個狀態要繼續 polling。
-const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing"]);
-const STATUS_LABEL = {
-  pending: "排隊中",
-  snapshotting: "複刻中",
-  optimizing: "優化中",
-  succeeded: "完成",
-  failed: "未完成",
-};
+const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing", "asking"]);
 
 /**
- * 單一頁面的「網頁複刻與優化」。
+ * 「頁面」分頁每一列的「優化此頁」。
  *
- * 複刻與優化是兩段成本完全不同的產出，UI 上必須分開呈現：優化失敗時複刻
- * 通常仍在，使用者還是拿得到原樣快照。把兩者併成一個「下載」按鈕會讓人
- * 以為整件事都失敗了。
+ * 只放決策需要的資訊：會得到什麼、要花多少、進度、成果摘要；完整的前後比較、
+ * 修改清單與分享都在成果頁（/scans/:scanId/rebuild/:rebuildId）。
+ * 2026-10-06 移除「原樣複刻／下載原樣複刻」：原樣頁面使用者本來就有，沒有實際價值。
  */
 function PageRebuildPanel({ scan, page }) {
   const [rebuild, setRebuild] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [pricing, setPricing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  // 換頁籤時舊的 polling 要停掉，否則會把前一頁的結果寫進當前狀態
+  const [shareOpen, setShareOpen] = useState(false);
   const cancelledRef = useRef(false);
 
   const fetchLatest = useCallback(async () => {
     const { data } = await api.get(`/rebuilds/?scan_id=${scan.id}`);
     const rows = Array.isArray(data) ? data : data.results || [];
-    // 後端已依 -created_at 排序，同一頁取最新那筆
     return rows.find((row) => String(row.page) === String(page.id)) || null;
   }, [scan.id, page.id]);
 
-  useEffect(() => {
-    cancelledRef.current = false;
-    let timer = null;
-
-    async function poll() {
-      try {
-        const latest = await fetchLatest();
-        if (cancelledRef.current) return;
-        setRebuild(latest);
-        if (latest && IN_PROGRESS.has(latest.status)) {
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
-        }
-      } catch {
-        // 暫時失敗不清空畫面，下一次使用者操作會再拉
-      }
+  const poll = useCallback(async () => {
+    try {
+      const latest = await fetchLatest();
+      if (cancelledRef.current) return;
+      setRebuild(latest);
+      setLoaded(true);
+      if (latest && IN_PROGRESS.has(latest.status)) setTimeout(poll, POLL_INTERVAL_MS);
+    } catch {
+      if (!cancelledRef.current) setLoaded(true);
     }
-    poll();
-
-    // 價格與餘額：按鈕要先說清楚代價，不能讓使用者按下去才吃 402
-    api
-      .get("/rebuilds/cost/")
-      .then(({ data }) => {
-        if (!cancelledRef.current) setPricing(data);
-      })
-      .catch(() => {
-        // 拿不到就不顯示價格，功能本身不受影響
-      });
-
-    return () => {
-      cancelledRef.current = true;
-      if (timer) clearTimeout(timer);
-    };
   }, [fetchLatest]);
 
-  async function handleGenerate() {
+  useEffect(() => {
+    cancelledRef.current = false;
+    poll();
+    api
+      .get("/rebuilds/cost/")
+      .then(({ data }) => !cancelledRef.current && setPricing(data))
+      .catch(() => {});
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [poll]);
+
+  async function start() {
     setBusy(true);
     setError("");
     try {
       const { data } = await api.post("/rebuilds/", { page: page.id });
       setRebuild(data);
-      // 立刻進入 polling：任務是非同步的，POST 回來時還沒開始跑
-      const tick = async () => {
-        if (cancelledRef.current) return;
-        const latest = await fetchLatest();
-        if (cancelledRef.current) return;
-        setRebuild(latest);
-        if (latest && IN_PROGRESS.has(latest.status)) {
-          setTimeout(tick, POLL_INTERVAL_MS);
-        }
-      };
-      setTimeout(tick, POLL_INTERVAL_MS);
+      setTimeout(poll, POLL_INTERVAL_MS);
     } catch (err) {
-      setError(err?.response?.data?.detail || "無法建立複刻任務。");
+      setError(err?.response?.data?.detail || "無法開始優化。");
     } finally {
       setBusy(false);
     }
   }
 
-  async function download(variant) {
-    setError("");
-    try {
-      const response = await api.get(
-        `/rebuilds/${rebuild.id}/download/?variant=${variant}`,
-        { responseType: "blob" },
-      );
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `argus-scan-${scan.id}-page-${page.id}-${variant}.html`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setError("下載失敗，檔案可能已被清理。");
-    }
-  }
-
-  // 分享連結：唯讀檢視（原樣與優化後並排、修改清單），7 天有效、可隨時停止
-  async function toggleShare(stop) {
-    setError("");
-    setCopied(false);
-    try {
-      const { data } = stop
-        ? await api.delete(`/rebuilds/${rebuild.id}/share/`)
-        : await api.post(`/rebuilds/${rebuild.id}/share/`);
-      setRebuild(data);
-    } catch (err) {
-      setError(err?.response?.data?.detail || "無法更新分享設定。");
-    }
-  }
-
-  async function copyShareLink() {
-    setCopied(await copyToClipboard(`${window.location.origin}${rebuild.share_path}`));
-  }
-
+  const resultPath = rebuild ? `/scans/${scan.id}/rebuild/${rebuild.id}` : "";
   const running = rebuild && IN_PROGRESS.has(rebuild.status);
-  const shareable = rebuild && !running && (rebuild.has_snapshot || rebuild.has_optimized);
+  const done = rebuild && (rebuild.status === "succeeded" || rebuild.status === "asking");
+  const result = rebuild?.result_summary || {};
+  const costText = pricing ? `預扣 ${pricing.hold} 點，完成後依實際用量結算並退回差額（餘額 ${pricing.balance} 點）` : "";
+
+  if (!loaded) return <p className="opt-muted">載入中…</p>;
 
   return (
-    <div className="rebuild-box">
-      <p className="rebuild-title">複刻並優化這一頁</p>
-      <p className="rebuild-desc">
-        複刻這一頁的原始樣貌，並依本頁的診斷結果產生優化版本。
-        {pricing &&
-          `先預扣 ${pricing.hold} 點，完成後依實際用量結算、退回差額（餘額 ${pricing.balance} 點）。`}
-      </p>
-
+    <div className="opt-row-panel">
       {!rebuild && (
-        <button
-          className="secondary-button rebuild-action"
-          type="button"
-          disabled={busy}
-          onClick={handleGenerate}
-        >
-          {busy
-            ? "建立中…"
-            : pricing
-              ? `產生複刻與優化版（預扣 ${pricing.hold} 點）`
-              : "產生複刻與優化版"}
-        </button>
-      )}
-
-      {rebuild && (
         <>
-          <p className="rebuild-status">
-            <span className={`rebuild-dot status-${rebuild.status}`} />
-            {STATUS_LABEL[rebuild.status] || rebuild.status}
-            {running && "…"}
-          </p>
-
-          {rebuild.status === "succeeded" && rebuild.coins_charged > 0 && (
-            <p className="rebuild-note">
-              本次實際扣 {rebuild.coins_charged} 點，未使用的預扣已退回。
-            </p>
-          )}
-
-          {/* 思考流與並排比對放在專屬頁面：側欄只有 360px，那是需要閱讀的內容 */}
-          <Link
-            className="rebuild-open-workspace"
-            to={`/scans/${scan.id}/rebuild/${rebuild.id}`}
-          >
-            {running ? "查看即時進度 →" : "查看過程與產出比對 →"}
-          </Link>
-
-          {rebuild.error && <p className="rebuild-note">{rebuild.error}</p>}
-
-          {rebuild.has_snapshot && (
-            <button
-              className="secondary-button rebuild-action"
-              type="button"
-              onClick={() => download("original")}
-            >
-              下載原樣複刻
+          <div className="opt-row-intro">
+            <p className="opt-row-title">讓 Argus 優化這一頁</p>
+            <ul className="opt-row-gains">
+              <li>修好這一頁能在 HTML 解決的 SEO、無障礙與效能問題</li>
+              <li>改善版面層次、間距、按鈕與行動版，前後差異一眼看得出來</li>
+              <li>產生前後對照與修改說明，可以直接分享給設計師或工程師</li>
+            </ul>
+          </div>
+          <div className="opt-row-actions">
+            <button type="button" className="primary-button" disabled={busy} onClick={start}>
+              {busy ? "建立中…" : "開始優化"}
             </button>
-          )}
-          {rebuild.has_optimized && (
-            <button
-              className="secondary-button rebuild-action"
-              type="button"
-              onClick={() => download("optimized")}
-            >
-              下載優化版
-            </button>
-          )}
-          {shareable && (
-            <div className="rebuild-share">
-              <p className="rebuild-share-title">分享給設計或工程師</p>
-              {rebuild.share_path ? (
-                <>
-                  <p className="rebuild-share-url">
-                    <code>{`${window.location.origin}${rebuild.share_path}`}</code>
-                  </p>
-                  <div className="rebuild-share-actions">
-                    <button className="secondary-button" type="button" onClick={copyShareLink}>
-                      {copied ? "已複製" : "複製連結"}
-                    </button>
-                    <button className="rebuild-retry" type="button" onClick={() => toggleShare(true)}>
-                      停止分享
-                    </button>
-                  </div>
-                  <p className="rebuild-note">
-                    拿到連結的人不用登入就能看原樣與優化後的頁面與修改清單；
-                    {formatDateTime(rebuild.share_expires_at)} 到期。
-                  </p>
-                </>
-              ) : (
-                <button className="secondary-button" type="button" onClick={() => toggleShare(false)}>
-                  建立分享連結（7 天有效）
-                </button>
-              )}
-            </div>
-          )}
-
-          {!running && (
-            <button
-              className="rebuild-retry"
-              type="button"
-              disabled={busy}
-              onClick={handleGenerate}
-            >
-              重新產生
-            </button>
-          )}
+            {costText && <p className="opt-muted">{costText}</p>}
+          </div>
         </>
       )}
 
-      {error && <p className="rebuild-note error">{error}</p>}
-      <p className="rebuild-note">
-        下載的是 HTML 檔，內容來自受測網站，開啟前請自行確認來源。
-      </p>
+      {running && (
+        <>
+          <div className="opt-row-intro">
+            <p className="opt-row-title"><span className="opt-progress-dot" aria-hidden="true" />Argus 正在優化這一頁</p>
+            <p className="opt-muted">通常需要 1～3 分鐘，可以先離開，完成後這裡會顯示結果。</p>
+          </div>
+          <div className="opt-row-actions">
+            <Link className="secondary-button" to={resultPath}>查看即時進度</Link>
+          </div>
+        </>
+      )}
+
+      {done && (
+        <>
+          <div className="opt-row-intro">
+            <p className="opt-row-title">{result.summary || "優化完成"}</p>
+            <p className="opt-row-stats">
+              <span>視覺改善 <strong>{result.visual || 0}</strong></span>
+              <span>技術修正 <strong>{result.technical || 0}</strong></span>
+              <span>可量測改善 <strong>{result.improved || 0}</strong></span>
+              {rebuild.share_active && (
+                <span className="opt-shared">
+                  已分享：{ACCESS_OPTIONS.find((o) => o.value === rebuild.share_access)?.label}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="opt-row-actions">
+            <Link className="primary-button" to={resultPath}>查看前後對照</Link>
+            <button type="button" className="secondary-button" onClick={() => setShareOpen(true)}>分享</button>
+            <button type="button" className="opt-text-button" disabled={busy} onClick={start}>重新優化</button>
+          </div>
+        </>
+      )}
+
+      {rebuild?.status === "failed" && (
+        <>
+          <div className="opt-row-intro">
+            <p className="opt-row-title">上次優化沒有完成</p>
+            <p className="opt-muted">{rebuild.error || "發生未預期的錯誤。"} 預扣的點數已退回。</p>
+          </div>
+          <div className="opt-row-actions">
+            <button type="button" className="primary-button" disabled={busy} onClick={start}>
+              {busy ? "建立中…" : "再試一次"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {error && <p className="error-text" role="alert">{error}</p>}
+      {shareOpen && rebuild && (
+        <ShareDialog rebuild={rebuild} onChange={setRebuild} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   );
 }

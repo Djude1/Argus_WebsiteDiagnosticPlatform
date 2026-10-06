@@ -9,13 +9,19 @@ function ScanSubpathRedirect({ to }) {
   return <Navigate to={`/scans/${scanId}${to ? `/${to}` : ""}`} replace />;
 }
 
+// 2026-10-06 前的分享網址
+function ShareRedirect() {
+  const { token } = useParams();
+  return <Navigate to={`/optimized/${token}`} replace />;
+}
+
 function lazyNamed(loader, exportName) {
   return lazy(() => loader().then((module) => ({ default: module[exportName] })));
 }
 
 const loadAuthPages = () => import("./features/auth/AuthPages.jsx");
 const loadScanExperience = () => import("./features/scans/ScanExperience.jsx");
-const loadRebuildWorkspace = () => import("./features/scans/RebuildWorkspace.jsx");
+const loadOptimizationResult = () => import("./features/optimize/OptimizationResultPage.jsx");
 const loadDomainPages = () => import("./features/domains/DomainVerifyPage.jsx");
 const loadAuthenticatedPages = () => import("./features/account/AuthenticatedPages.jsx");
 const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
@@ -48,7 +54,7 @@ const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const ScanStrengthsPage = lazyNamed(loadScanExperience, "ScanStrengthsPage");
 const ScanArchitecturePage = lazyNamed(loadScanExperience, "ScanArchitecturePage");
-const RebuildWorkspace = lazyNamed(loadRebuildWorkspace, "RebuildWorkspace");
+const OptimizationResultPage = lazyNamed(loadOptimizationResult, "OptimizationResultPage");
 const DomainVerifyPage = lazyNamed(loadDomainPages, "DomainVerifyPage");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
 const BillingPage = lazyNamed(loadAuthenticatedPages, "BillingPage");
@@ -69,7 +75,7 @@ const ProjectSeoPage = lazyNamed(loadProjectSeoPage, "ProjectSeoPage");
 const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
 const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
-const SharedRebuildPage = lazy(() => import("./features/public/SharedRebuildPage.jsx"));
+const SharedOptimizationPage = lazy(() => import("./features/optimize/SharedOptimizationPage.jsx"));
 const ProjectPage = lazyNamed(loadPublicPages, "ProjectPage");
 const PurchasePage = lazyNamed(loadPublicPages, "PurchasePage");
 const FreeToolsPage = lazyNamed(loadPublicPages, "FreeToolsPage");
@@ -113,7 +119,7 @@ function AppShell({ googleOAuthEnabled }) {
   const isAdmin = location.pathname.startsWith("/admin");
   // 評論頁：登入後留在會員區（會員導覽列）；未登入才走公開頁版型
   const isPublic = [
-    "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners", "/share",
+    "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners", "/share", "/optimized",
     ...(accessToken ? [] : ["/reviews"]),
   ].some((p) =>
     // 以路徑段比對：/projects（會員的網站專案）不能被當成公開頁 /project
@@ -146,6 +152,9 @@ function AppShell({ googleOAuthEnabled }) {
           <Route path="/password-reset" element={<PasswordResetRequestPage />} />
           <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
           <Route path="/reviews-next" element={<Navigate to="/reviews" replace />} />
+          {/* 頁面優化的分享頁：精簡頁首、唯讀，不套公開頁或會員區的導覽 */}
+          <Route path="/optimized/:token" element={<SharedOptimizationPage />} />
+          <Route path="/share/rebuilds/:token" element={<ShareRedirect />} />
           <Route element={<PublicLayout />}>
             <Route path="/project" element={<ProjectPage />} />
             <Route path="/free-tools" element={<FreeToolsPage />} />
@@ -156,7 +165,6 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/partners" element={<PartnersPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsOfServicePage />} />
-            <Route path="/share/rebuilds/:token" element={<SharedRebuildPage />} />
             {!accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           </Route>
           {accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
@@ -220,11 +228,19 @@ function AppShell({ googleOAuthEnabled }) {
               {/* 舊網址：網站結構圖併入網站架構、修正產出已移除（2026-10-06） */}
               <Route path="/scans/:scanId/topology" element={<ScanSubpathRedirect to="architecture" />} />
               <Route path="/scans/:scanId/fixes" element={<ScanSubpathRedirect to="" />} />
-              <Route
-                path="/scans/:scanId/rebuild/:rebuildId"
-                element={<RebuildWorkspace />}
-              />
             </Route>
+          </Route>
+          {/* 頁面優化成果頁：屬於「頁面」分頁，不顯示掃描報告的子分頁 */}
+          <Route
+            element={
+              <RequireAuth>
+                <MemberLegacy>
+                  <ProjectScanShell section="pages" />
+                </MemberLegacy>
+              </RequireAuth>
+            }
+          >
+            <Route path="/scans/:scanId/rebuild/:rebuildId" element={<OptimizationResultPage />} />
           </Route>
           <Route
             path="/domains"

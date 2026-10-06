@@ -59,10 +59,22 @@ class SiteRebuild(models.Model):
     coins_charged = models.PositiveIntegerField(default=0)
     # 只放可以直接顯示給使用者的訊息；provider 原始錯誤不落地（可能含 key）。
     error = models.CharField(max_length=255, blank=True)
-    # 分享連結（2026-10-06）：讓網站主把優化結果直接傳給 UI/UX 工程師看。
-    # token 不可猜、有期限、可隨時撤銷；空字串＝未分享。檢視方式見 views.SharedRebuildView。
+    class ShareAccess(models.TextChoices):
+        PRIVATE = "private", "僅限本人"
+        LINK = "link", "知道連結的任何人"
+        LOGIN = "login", "知道連結且已登入 Argus 的人"
+
+    # 分享（2026-10-06，參考 Notion／Figma）：token 第一次分享時產生、之後固定不變，
+    # 關閉分享只把 share_access 改回 private，再打開仍是同一個連結。
+    # share_expires_at 為空＝不過期（舊版 7 天連結保留原期限）。檢視方式見 views.shared_rebuild。
     share_token = models.CharField(max_length=64, blank=True, db_index=True)
+    share_access = models.CharField(
+        max_length=16, choices=ShareAccess.choices, default=ShareAccess.PRIVATE
+    )
     share_expires_at = models.DateTimeField(null=True, blank=True)
+    # 優化成果摘要（agent 的 summary、未處理項目與原因、前後可量測指標），
+    # 結果頁與分享頁用來說明「Argus 到底改了什麼」。
+    outcome = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -74,9 +86,9 @@ class SiteRebuild(models.Model):
     def share_is_active(self) -> bool:
         from django.utils import timezone
 
-        return bool(
-            self.share_token and self.share_expires_at and self.share_expires_at > timezone.now()
-        )
+        if not self.share_token or self.share_access == self.ShareAccess.PRIVATE:
+            return False
+        return self.share_expires_at is None or self.share_expires_at > timezone.now()
 
     def __str__(self) -> str:
         return f"SiteRebuild<{self.pk}> {self.page_id} {self.status}"
