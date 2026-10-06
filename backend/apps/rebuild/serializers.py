@@ -7,6 +7,7 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
     page_url = serializers.CharField(source="page.final_url", read_only=True)
     has_snapshot = serializers.SerializerMethodField()
     has_optimized = serializers.SerializerMethodField()
+    share_path = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteRebuild
@@ -21,6 +22,8 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
             "has_optimized",
             "coins_charged",
             "error",
+            "share_path",
+            "share_expires_at",
             "created_at",
             "updated_at",
         ]
@@ -31,6 +34,10 @@ class SiteRebuildSerializer(serializers.ModelSerializer):
 
     def get_has_optimized(self, obj) -> bool:
         return bool(obj.optimized_path)
+
+    def get_share_path(self, obj) -> str:
+        """前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。"""
+        return f"/share/rebuilds/{obj.share_token}" if obj.share_is_active else ""
 
 
 class SiteRebuildDetailSerializer(SiteRebuildSerializer):

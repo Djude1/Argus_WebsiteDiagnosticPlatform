@@ -127,7 +127,7 @@ def _eval_dnssec(has_dnskey: bool | None, domain: str) -> list[dict]:
 
 
 def email_dns_posture(host: str) -> dict:
-    """給「做得好的地方」用：{spf, dmarc, dmarc_policy, dnssec}；查不到的欄位為 None。"""
+    """給「網站優勢」用：{spf, dmarc, dmarc_policy, dnssec}；查不到的欄位為 None。"""
     try:
         if not host:
             return {}

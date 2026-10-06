@@ -380,16 +380,91 @@
   font-size: 1.1rem;
 }
 
-/* 網站概況：網站架構（CDN／反向代理）與做得好的地方（2026-10-06）；提示框用整圈邊框，不用左邊條 */
-.site-profile {
+/* 網站概況（2026-10-06）：掃描頁上方導覽的「網站優勢」「網站架構」分頁，報告分頁只留 CDN 提醒；
+   提示框用整圈邊框，不用左邊條 */
+.scan-architecture {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
-@media (min-width: 1000px) {
-  .site-profile {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
+.site-profile-count {
+  margin-left: 0.25rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.site-profile-lead {
+  margin: 0 0 0.85rem;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.site-strength-likely {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.72rem;
+}
+.site-strength-evidence {
+  flex-basis: 100%;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.site-tech {
+  margin-top: 0.5rem;
+}
+.site-tech-title {
+  margin: 0 0 0.5rem;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.site-tech-groups {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+.site-tech-groups > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+.site-tech-groups dt {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+.site-tech-groups dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+}
+.site-tech-chip {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.8rem;
+}
+.site-profile-details {
+  margin-top: 0.85rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.6rem;
+}
+.site-profile-details summary {
+  cursor: pointer;
+  color: #0369a1;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.site-profile-details .site-profile-facts {
+  margin-top: 0.6rem;
 }
 .site-profile-block {
   min-width: 0;
@@ -490,7 +565,8 @@
   line-height: 1.55;
 }
 @media (max-width: 560px) {
-  .site-profile-facts > div {
+  .site-profile-facts > div,
+  .site-tech-groups > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.15rem;
   }

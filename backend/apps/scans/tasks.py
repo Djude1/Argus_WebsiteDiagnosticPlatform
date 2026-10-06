@@ -837,7 +837,11 @@ _WAF_KEYWORDS = {"cloudflare", "fastly", "akamai", "aws waf", "imperva", "sucuri
 
 
 def _waf_blocked_nuclei_note(ctx: ScanRunContext) -> list[dict]:
-    """Nuclei 無發現且 Katana 偵測到已知 WAF／CDN 時，補一筆 info 說明探針可能被攔截。"""
+    """Nuclei 無發現且 Katana 偵測到已知 WAF／CDN 時，補一筆 info 說明結果可能不完整。
+
+    0 項發現只代表「沒有產生 finding」，不能推論成 WAF 擋下了攻擊（2026-10-06 審查）；
+    真的被攔截要看 403／challenge 等證據，由 waf_scanner.detect_waf_block 判定。
+    """
     if ctx.nuclei_findings or not ctx.katana_tech:
         return []
     detected_wafs = [
@@ -849,22 +853,21 @@ def _waf_blocked_nuclei_note(ctx: ScanRunContext) -> list[dict]:
     scanned_count = len(ctx.page_urls) + 1  # entry URL + crawled
     append_log(
         ctx.scan_job_id,
-        f"偵測到 WAF 保護（{waf_names}），Nuclei 探針可能被攔截，已新增說明 finding",
+        f"目標位於 {waf_names} 之後且 Nuclei 0 項發現，已新增「結果可能不完整」說明",
     )
     return [{
         "category": "security",
         "severity": "info",
-        "title": f"Nuclei 資安掃描受 WAF / CDN 保護攔截（{waf_names}）",
+        "title": f"主動弱點掃描 0 項發現，但目標位於 {waf_names} 之後",
         "description": (
-            f"偵測到 {waf_names} 等 WAF / CDN 保護機制，"
-            f"Nuclei 對 {scanned_count} 個頁面發出的主動探針請求可能被攔截，"
-            "導致掃描回傳 0 項發現。"
-            "這表示您的網站已部署有效的入侵防護，屬正向安全指標。"
+            f"Nuclei 對 {scanned_count} 個網址發出的主動探測沒有產生任何發現。"
+            f"由於流量先經過 {waf_names}，部分探測可能在邊緣節點就被過濾，"
+            "因此「0 項發現」不代表網站沒有弱點，也不能證明防火牆擋下了攻擊。"
         ),
         "remediation": (
-            "此為資訊性提示，無需修復。"
-            "如需完整弱點掃描，建議在 WAF 規則中加入可信掃描來源 IP 的例外，"
-            "或在 staging 環境（無 WAF）執行深度資安稽核。"
+            "此為資訊性提示，不需要修復。"
+            "如需完整弱點掃描，可在 WAF 規則中暫時放行授權的掃描來源，"
+            "或在沒有 WAF 的測試環境執行深度資安稽核。"
         ),
         "evidence": (
             f"偵測技術棧：{', '.join(ctx.katana_tech)}；"
@@ -873,11 +876,11 @@ def _waf_blocked_nuclei_note(ctx: ScanRunContext) -> list[dict]:
         "selector": "",
         "bounding_box": None,
         "impact_area": "vulnerability",
-        "confidence": 0.9,
+        "confidence": 0.5,
         "priority_score": 10.0,
         "ai_handoff_prompt": (
-            f"網站部署了 {waf_names} WAF / CDN 保護，Nuclei 資安探針被攔截。"
-            "這是良好的安全措施。建議定期在授權環境下進行深度內部安全掃描。"
+            f"網站位於 {waf_names} 之後，Nuclei 主動掃描 0 項發現，結果可能被邊緣節點過濾。"
+            "請建議如何在授權環境下完成更完整的弱點掃描。"
         ),
     }]
 
@@ -1216,7 +1219,7 @@ def base_scores_for(ctx: ScanRunContext) -> dict[str, int]:
 
 
 def stage_site_profile(ctx: ScanRunContext) -> None:
-    """網站概況：基礎架構（DNS／IP／反解／CDN 邊緣）與做得好的地方，寫 ScanJob.site_profile。
+    """網站概況：基礎架構（DNS／IP／反解／CDN 邊緣）與網站優勢，寫 ScanJob.site_profile。
 
     只查目標自身網域的 DNS 並讀已取得的回應標頭；失敗只記 log，不影響掃描。
     """
@@ -1229,6 +1232,7 @@ def stage_site_profile(ctx: ScanRunContext) -> None:
             seo_report=scan_job.seo_report or {},
             findings=ctx.all_findings,
             categories=set(scan_job.effective_categories),
+            extra_tech=ctx.katana_tech,
         )
     except Exception:  # noqa: BLE001 - 輔助資訊
         logger.warning("網站概況失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
@@ -1239,7 +1243,7 @@ def stage_site_profile(ctx: ScanRunContext) -> None:
     append_log(
         ctx.scan_job_id,
         f"網站概況：{'位於 ' + edge['provider'] + ' 之後' if edge else '未偵測到 CDN／反向代理'}；"
-        f"做得好的地方 {len(profile.get('strengths') or [])} 項",
+        f"網站優勢 {len(profile.get('strengths') or [])} 項",
     )
 
 

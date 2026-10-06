@@ -111,7 +111,13 @@ class StrengthTests(SimpleTestCase):
     def _strengths(self, **kw):
         base = dict(
             pages=self._pages(),
-            infrastructure={"edge": {"provider": "Cloudflare", "waf_capable": True}},
+            infrastructure={
+                "edge": {
+                    "provider": "Cloudflare",
+                    "waf_capable": True,
+                    "evidence": ["回應標頭：cf-ray"],
+                }
+            },
             dns={
                 "spf": "v=spf1 a:ntubimdbirc.tw -all",
                 "dmarc": None,
@@ -152,6 +158,18 @@ class StrengthTests(SimpleTestCase):
         )
         self.assertIn("WAF", strengths["edge"]["detail"])
         self.assertIn("180 天", strengths["hsts"]["detail"])
+        # 每一項都附可核對的依據；單次實驗室量測的速度只算推論
+        self.assertTrue(all(item["evidence"] for item in strengths.values()))
+        self.assertEqual(strengths["speed"]["confidence"], "likely")
+        self.assertEqual(strengths["hsts"]["confidence"], "confirmed")
+
+    def test_cdn_does_not_imply_waf_is_blocking(self):
+        """2026-10-06 審查：偵測到 Cloudflare 不等於「已部署有效的入侵防護」。"""
+        detail = self._strengths()["edge"]["detail"]
+        self.assertIn("無法從外部確認", detail)
+        self.assertNotIn("阻擋", detail)
+        blocked = self._strengths(finding_rules={"waf_block_detected"})["edge"]["detail"]
+        self.assertIn("確認防護規則已生效", blocked)
 
     def test_strengths_never_contradict_findings_or_unchecked_categories(self):
         headers = {**CF_HEADERS, "content-security-policy": "default-src 'self' 'unsafe-inline'"}
@@ -179,7 +197,7 @@ class StrengthTests(SimpleTestCase):
                 findings=[],
                 categories={"security"},
             )
-        self.assertEqual(profile["version"], 1)
+        self.assertEqual(profile["version"], 2)
         self.assertIn("https", {s["key"] for s in profile["strengths"]})
 
 
@@ -242,7 +260,7 @@ class ReportSiteProfileTests(TestCase):
             render_report_docx(self.scan, path)
             document = Document(str(path))
         text = "\n".join(p.text for p in document.paragraphs)
-        self.assertIn("做得好的地方", text)
+        self.assertIn("網站優勢", text)
         self.assertIn("已啟用 HSTS", text)
         self.assertIn("目前掃描目標位於 Cloudflare Edge，而非直接掃描 Origin Server", text)
 
@@ -250,3 +268,28 @@ class ReportSiteProfileTests(TestCase):
         self.scan.site_profile = {}
         self.scan.save(update_fields=["site_profile"])
         self.assertNotIn("site_profile", build_report_payload(self.scan))
+
+
+class TechStackTests(SimpleTestCase):
+    """網站使用的技術：只用已取得的 HTML 與標頭被動辨識，每項附依據。"""
+
+    def test_next_js_site_behind_cloudflare(self):
+        from apps.scans.tech_stack import detect_technologies
+
+        html = (
+            '<html><head><script src="/_next/static/chunks/main.js"></script>'
+            '<script src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>'
+            '<link href="https://fonts.googleapis.com/css2?family=Noto"></head></html>'
+        )
+        techs = {t["name"]: t for t in detect_technologies(html, {"Server": "cloudflare"})}
+        self.assertEqual(
+            set(techs), {"Next.js", "Google Analytics", "Google Fonts", "Cloudflare"}
+        )
+        self.assertEqual(techs["Next.js"]["category"], "網站框架")
+        self.assertTrue(all(t["evidence"] for t in techs.values()))
+
+    def test_plain_words_are_not_fingerprints(self):
+        from apps.scans.tech_stack import detect_technologies
+
+        html = "<p>我們使用 WordPress 與 jQuery 的經驗分享</p>"
+        self.assertEqual(detect_technologies(html, {}), [])

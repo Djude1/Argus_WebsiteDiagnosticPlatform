@@ -92,11 +92,12 @@ class ProjectSeoActions:
     def gsc_connection(self, request, pk=None):
         """GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。"""
         project = self.get_object()
+        if request.method == "GET":
+            _adopt_account_connection(project)
         connection = SearchConsoleConnection.objects.filter(project=project).first()
         if request.method == "DELETE":
             if connection is not None:
-                gsc.revoke(connection)
-                connection.delete()
+                _disconnect(connection)
             return Response(status=status.HTTP_204_NO_CONTENT)
         if request.method == "PATCH":
             if connection is None:
@@ -183,6 +184,62 @@ class ProjectSeoActions:
             return _gsc_error(exc, connection)
 
 
+def _disconnect(connection: SearchConsoleConnection) -> None:
+    """刪除連線；同一個 Google 授權還被其他連線共用時只刪本地，不撤銷 Google 端授權
+    （否則中斷專案連線會連帶讓網域驗證頁的帳號層級連線失效）。"""
+    try:
+        token = gsc.decrypt_token(connection.refresh_token_encrypted)
+    except gsc.GscError:
+        token = ""
+    shared = False
+    if token:
+        for other in SearchConsoleConnection.objects.filter(user=connection.user).exclude(
+            pk=connection.pk
+        ):
+            try:
+                if gsc.decrypt_token(other.refresh_token_encrypted) == token:
+                    shared = True
+                    break
+            except gsc.GscError:
+                continue
+    if not shared:
+        gsc.revoke(connection)
+    connection.delete()
+
+
+def _adopt_account_connection(project: SiteProject) -> None:
+    """網域驗證頁已連接 Search Console 時，專案的 SEO 分析直接沿用同一個 Google 授權，
+    不必再授權一次（2026-10-06 使用者回報：同一個 Google 帳號要連兩次）。
+
+    只在專案還沒有自己的連線時建立；唯一一個與網站相符的資源會自動選好。
+    """
+    if project.is_demo or SearchConsoleConnection.objects.filter(project=project).exists():
+        return
+    account = SearchConsoleConnection.objects.filter(
+        user=project.user, project__isnull=True, last_error=""
+    ).first()
+    if account is None:
+        return
+    connection, created = SearchConsoleConnection.objects.get_or_create(
+        project=project,
+        defaults={"user": project.user, "refresh_token_encrypted": account.refresh_token_encrypted},
+    )
+    if not created:
+        return
+    logger.info("Search Console 沿用帳號層級授權 project_id=%s", project.id)
+    try:
+        matches = [
+            site["site_url"]
+            for site in gsc.list_sites(connection)
+            if gsc.property_matches(site["site_url"], project.origin)
+        ]
+    except gsc.GscError:
+        return  # 列不到資源不影響連線；使用者可在 SEO 頁自行選擇
+    if len(matches) == 1:
+        connection.property_url = matches[0]
+        connection.save(update_fields=["property_url", "updated_at"])
+
+
 def _connection_or_404(project: SiteProject) -> SearchConsoleConnection:
     connection = SearchConsoleConnection.objects.filter(project=project).first()
     if connection is None:
@@ -258,8 +315,7 @@ def domains_gsc(request):
             user=request.user, project__isnull=True
         ).first()
         if account is not None:
-            gsc.revoke(account)
-            account.delete()
+            _disconnect(account)
     return Response(_account_status(request.user))
 
 

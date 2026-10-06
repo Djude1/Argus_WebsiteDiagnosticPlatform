@@ -88,6 +88,10 @@ _HIDDEN_STYLE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden", re.IGN
 _WS = re.compile(r"\s+")
 
 MIN_PASSAGE_CHARS = 6
+# 有些網站把整段內文包在 h2/h3 裡（例如隱私權政策逐條用 h3）。超過這個長度、
+# 或含句號等句子標點的「標題」實際上是內文，當段落處理才找得到裡面的答案。
+MAX_HEADING_CHARS = 80
+_SENTENCE_END = re.compile(r"[。；！]|\.\s")
 # 標題很短也有意義（「價格」「購買須知」），門檻另計
 MIN_HEADING_CHARS = 2
 
@@ -120,6 +124,11 @@ class PageContent:
         return "\n".join(p.text for p in self.passages if p.region == "main")
 
 
+def _is_body_text(text: str) -> bool:
+    """標題標籤裡其實是一段內文（長句或含句號），不能當標題、也不能從檢索中略過。"""
+    return len(text) > MAX_HEADING_CHARS or bool(_SENTENCE_END.search(text.rstrip("。！!？? ")))
+
+
 class _MainTextParser(HTMLParser):
     """把 HTML 切成正文段落；略過非正文子樹、hidden／aria-hidden／display:none 元素。"""
 
@@ -143,6 +152,9 @@ class _MainTextParser(HTMLParser):
         if not text:
             return
         region = "footer" if self.footer_depth else "main"
+        if self.current_is_heading and _is_body_text(text):
+            self.blocks.append((text, self.heading if region == "main" else "", False, region))
+            return
         if self.current_is_heading:
             if region == "main":
                 self.heading = text[:120]

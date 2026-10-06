@@ -225,13 +225,16 @@ class SeoSiteFindingsTests(SimpleTestCase):
         found = seo_site_findings(self._report(), self._pages(), f"{ORIGIN}/")
         findings = {f["rule_id"]: f for f in found}
         self.assertEqual(set(findings), {
-            "seo-broken-internal-links", "seo-www-duplicate",
-            "seo-declared-host-mismatch", "seo-duplicate-titles",
+            "seo-broken-internal-links", "seo-primary-url-inconsistent", "seo-duplicate-titles",
         })
         broken = findings["seo-broken-internal-links"]
         self.assertEqual(broken["severity"], "medium")
         self.assertEqual(broken["evidence_json"]["broken_links"][0]["found_on"], [f"{ORIGIN}/"])
-        self.assertIn("og:url", findings["seo-declared-host-mismatch"]["description"])
+        # www 未統一與 og:url／sitemap 指向另一主機是同一個根本原因，合併成一項（2026-10-06）
+        primary = findings["seo-primary-url-inconsistent"]
+        self.assertIn("og:url", primary["description"])
+        self.assertIn("www 與非 www", primary["description"])
+        self.assertIn("robots.txt Sitemap", primary["description"])
 
     def test_clean_site_has_no_findings(self):
         pages = [
@@ -724,6 +727,37 @@ class AccountLevelSearchConsoleTests(TestCase):
 
     def test_sync_without_connection_is_400(self):
         self.assertEqual(self.client.post("/api/domains/gsc/sync/").status_code, 400)
+
+    def test_seo_page_reuses_account_connection_without_second_oauth(self):
+        """2026-10-06：網域驗證已連接 Google，SEO 分析的搜尋關鍵字不必再授權一次。"""
+        self._connect()
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=self.SITES):
+            status = self.client.get(f"/api/projects/{project.id}/gsc/").data
+        self.assertTrue(status["connected"])
+        # 唯一與網站相符的資源自動選好
+        self.assertEqual(status["property"], "sc-domain:example.tw")
+        self.assertTrue(status["property_matches"])
+        self.assertEqual(SearchConsoleConnection.objects.filter(user=self.user).count(), 2)
+
+    def test_disconnecting_project_keeps_shared_google_grant(self):
+        self._connect()
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=self.SITES):
+            self.client.get(f"/api/projects/{project.id}/gsc/")
+        with mock.patch("apps.scans.seo.gsc.revoke") as revoke:
+            response = self.client.delete(f"/api/projects/{project.id}/gsc/")
+        self.assertEqual(response.status_code, 204)
+        revoke.assert_not_called()  # 同一個授權還在網域驗證頁使用
+        self.assertTrue(self.client.get("/api/domains/gsc/").data["account_connection"])
+        # 再中斷帳號層級：已無其他連線共用，才真的撤銷 Google 授權
+        with mock.patch("apps.scans.seo.gsc.revoke") as revoke:
+            self.client.delete("/api/domains/gsc/")
+        revoke.assert_called_once()
 
 
 class DomainDetailInstructionsTests(TestCase):

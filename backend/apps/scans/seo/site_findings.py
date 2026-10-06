@@ -64,28 +64,16 @@ def broken_internal_links(report: dict, audits: list[dict], site_host: str) -> d
     )
 
 
-def www_duplicate(report: dict) -> dict | None:
+def _www_symptom(report: dict) -> str:
     """www 與非 www 都直接回應內容（沒有轉址），同一頁有兩個網址。"""
     check = next((c for c in report.get("site_checks") or [] if c.get("key") == "www"), None)
     if not check or check.get("level") != "warning":
-        return None
-    return make_finding(
-        category=Finding.Category.SEO,
-        severity=Finding.Severity.LOW,
-        rule_id="seo-www-duplicate",
-        title="www 與非 www 都能開啟，沒有統一網址",
-        description=(
-            "同一個網站有兩個網址都直接回應內容，搜尋引擎可能把它們當成兩個網站，"
-            "分散排名並出現重複內容。"
-        ),
-        remediation=check.get("advice") or "選定一個主網址，另一個 301 轉址過去。",
-        evidence=f"{(check.get('evidence') or {}).get('requested', '')} → {check.get('value', '')}",
-        impact_area="url_structure",
-        priority_score=40,
-    )
+        return ""
+    requested = (check.get("evidence") or {}).get("requested", "")
+    return f"www 與非 www 都直接回應內容，沒有轉址（{requested} → HTTP {check.get('value', '')}）"
 
 
-def declared_host_mismatch(report: dict, audits: list[dict], served_host: str) -> dict | None:
+def _declared_mismatch(report: dict, audits: list[dict], served_host: str) -> list[tuple]:
     """og:url、canonical、robots.txt 宣告的 sitemap 指向的主機，與網站實際使用的主機不同。"""
     declared: list[tuple[str, str]] = []
     for audit in audits:
@@ -96,35 +84,60 @@ def declared_host_mismatch(report: dict, audits: list[dict], served_host: str) -
             declared.append(("canonical", audit["canonical"]))
     for sitemap in (report.get("robots") or {}).get("sitemaps") or []:
         declared.append(("robots.txt Sitemap", sitemap))
-    mismatched = [
+    return [
         (source, url)
         for source, url in declared
         if _host(url) and _host(url) != served_host and _bare(_host(url)) == _bare(served_host)
     ]
-    if not mismatched:
+
+
+def primary_url_inconsistent(report: dict, audits: list[dict], served_host: str) -> dict | None:
+    """主網址設定不一致：同一個根本原因的症狀合併成一項。
+
+    2026-10-06 審查：www／非 www 未統一、og:url／canonical／sitemap 指向另一個主機，
+    原本拆成兩三項問題，其實都是「沒有選定一個主網址」——修一次就全部解決。
+    """
+    www = _www_symptom(report)
+    mismatched = _declared_mismatch(report, audits, served_host)
+    if not www and not mismatched:
         return None
-    sources = sorted({source for source, _ in mismatched})
-    sample = dict(mismatched)
+    symptoms = [www] if www else []
+    by_source: dict[str, list[str]] = defaultdict(list)
+    for source, url in mismatched:
+        if url not in by_source[source]:
+            by_source[source].append(url)
+    symptoms += [
+        f"{source} 指向 {_host(urls[0])}（{len(urls)} 處）" for source, urls in by_source.items()
+    ]
+    pages_ok = [a for a in audits if a.get("status_code") == 200]
+    no_canonical = sum(1 for a in pages_ok if not a.get("canonical"))
+    if no_canonical and symptoms:
+        symptoms.append(f"{no_canonical} 頁沒有 canonical")
+    other = _host(mismatched[0][1]) if mismatched else ""
     return make_finding(
         category=Finding.Category.SEO,
         severity=Finding.Severity.LOW,
-        rule_id="seo-declared-host-mismatch",
-        title="宣告的主網址與實際網址不一致",
+        rule_id="seo-primary-url-inconsistent",
+        title="主網址設定不一致",
         description=(
-            f"網站實際以 {served_host} 提供內容，但 {'、'.join(sources)} 指向 "
-            f"{_host(mismatched[0][1])}。搜尋引擎會收到互相矛盾的「正式網址」訊號。"
+            f"網站實際以 {served_host} 提供內容"
+            + (f"，但部分設定指向 {other}" if other else "")
+            + "。搜尋引擎會收到互相矛盾的「正式網址」訊號，可能把同一頁當成兩頁、分散排名。"
+            + "症狀：" + "；".join(symptoms) + "。"
         ),
         remediation=(
-            "統一使用同一個主網址：讓另一個網址 301 轉址過來，"
-            "並把 og:url、canonical、sitemap 改成一致。"
+            "選定一個主網址（例如有或沒有 www），讓另一個 301 轉址過來，"
+            "再把 og:url、canonical、sitemap 全部改成同一個主網址。"
         ),
-        evidence="；".join(f"{source}：{url}" for source, url in list(sample.items())[:4]),
+        evidence="；".join(f"{source}：{urls[0]}" for source, urls in list(by_source.items())[:4])
+        or www,
         evidence_json={
             "served_host": served_host,
+            "symptoms": symptoms,
             "declared": [{"source": source, "url": url} for source, url in mismatched[:20]],
         },
         impact_area="url_structure",
-        priority_score=35,
+        priority_score=40,
     )
 
 
@@ -159,8 +172,7 @@ def seo_site_findings(report: dict, pages: list, start_url: str) -> list[dict]:
     )
     candidates = [
         broken_internal_links(report, audits, _host(start_url)),
-        www_duplicate(report),
-        declared_host_mismatch(report, audits, served_host),
+        primary_url_inconsistent(report, audits, served_host),
         duplicate_titles(audits),
     ]
     return [finding for finding in candidates if finding]

@@ -69,6 +69,8 @@ agent 仍然走得出去。另外 .126 的 hostname 是 `k8s`——如果那是�
 
 ### 專用 agent（建議做法：不動你其他用途）
 
+> **完整的 agent 定義（含系統提示詞）以 [`docs/opencode-agents/argus-rebuild.md`](opencode-agents/argus-rebuild.md) 為準**（2026-10-06），複製到 agent 主機的 `~/.config/opencode/agent/argus-rebuild.md` 後重啟 opencode。下面的 JSON 是較早的權限寫法，僅供對照。
+
 不要去改全域 `permission`——那會連帶限制你自己在那台機器上的 opencode 使用。
 改成只定義一個受限的專用 agent，Argus 只用它：
 

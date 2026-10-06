@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../../api";
+import { copyToClipboard } from "../../shared/clipboard";
+import { formatDateTime } from "../../shared/formatters";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -27,6 +29,7 @@ function PageRebuildPanel({ scan, page }) {
   const [pricing, setPricing] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
   // 換頁籤時舊的 polling 要停掉，否則會把前一頁的結果寫進當前狀態
   const cancelledRef = useRef(false);
 
@@ -113,7 +116,26 @@ function PageRebuildPanel({ scan, page }) {
     }
   }
 
+  // 分享連結：唯讀檢視（原樣與優化後並排、修改清單），7 天有效、可隨時停止
+  async function toggleShare(stop) {
+    setError("");
+    setCopied(false);
+    try {
+      const { data } = stop
+        ? await api.delete(`/rebuilds/${rebuild.id}/share/`)
+        : await api.post(`/rebuilds/${rebuild.id}/share/`);
+      setRebuild(data);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "無法更新分享設定。");
+    }
+  }
+
+  async function copyShareLink() {
+    setCopied(await copyToClipboard(`${window.location.origin}${rebuild.share_path}`));
+  }
+
   const running = rebuild && IN_PROGRESS.has(rebuild.status);
+  const shareable = rebuild && !running && (rebuild.has_snapshot || rebuild.has_optimized);
 
   return (
     <div className="rebuild-box">
@@ -181,6 +203,35 @@ function PageRebuildPanel({ scan, page }) {
               下載優化版
             </button>
           )}
+          {shareable && (
+            <div className="rebuild-share">
+              <p className="rebuild-share-title">分享給設計或工程師</p>
+              {rebuild.share_path ? (
+                <>
+                  <p className="rebuild-share-url">
+                    <code>{`${window.location.origin}${rebuild.share_path}`}</code>
+                  </p>
+                  <div className="rebuild-share-actions">
+                    <button className="secondary-button" type="button" onClick={copyShareLink}>
+                      {copied ? "已複製" : "複製連結"}
+                    </button>
+                    <button className="rebuild-retry" type="button" onClick={() => toggleShare(true)}>
+                      停止分享
+                    </button>
+                  </div>
+                  <p className="rebuild-note">
+                    拿到連結的人不用登入就能看原樣與優化後的頁面與修改清單；
+                    {formatDateTime(rebuild.share_expires_at)} 到期。
+                  </p>
+                </>
+              ) : (
+                <button className="secondary-button" type="button" onClick={() => toggleShare(false)}>
+                  建立分享連結（7 天有效）
+                </button>
+              )}
+            </div>
+          )}
+
           {!running && (
             <button
               className="rebuild-retry"

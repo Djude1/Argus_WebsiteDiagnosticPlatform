@@ -5291,6 +5291,69 @@
                 }
             }
         },
+        "/api/rebuilds/{id}/share/": {
+            "post": {
+                "operationId": "rebuilds_share_create",
+                "description": "POST 建立（或延長）分享連結；DELETE 立即停止分享。\n\n分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "rebuilds"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteRebuild"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "rebuilds_share_destroy",
+                "description": "POST 建立（或延長）分享連結；DELETE 立即停止分享。\n\n分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "rebuilds"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/rebuilds/{id}/turn-trace/": {
             "get": {
                 "operationId": "rebuilds_turn_trace_retrieve",
@@ -9802,6 +9865,17 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "share_path": {
+                        "type": "string",
+                        "description": "前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。",
+                        "readOnly": true
+                    },
+                    "share_expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9823,6 +9897,8 @@
                     "page",
                     "page_url",
                     "scan_job",
+                    "share_expires_at",
+                    "share_path",
                     "status",
                     "updated_at"
                 ]
@@ -9871,6 +9947,17 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "share_path": {
+                        "type": "string",
+                        "description": "前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。",
+                        "readOnly": true
+                    },
+                    "share_expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9913,6 +10000,8 @@
                     "page_url",
                     "reply",
                     "scan_job",
+                    "share_expires_at",
+                    "share_path",
                     "status",
                     "trace",
                     "updated_at"

@@ -87,6 +87,8 @@ def h1(doc, num, title, page_break=True):
         p.paragraph_format.page_break_before = True
     p.paragraph_format.space_before = Pt(0 if page_break else 18)
     p.paragraph_format.space_after = Pt(10)
+    # 不換頁的章節標題（短章節接在前一章後面，減少半頁留白）要跟著下一段，不能孤懸頁尾
+    p.paragraph_format.keep_with_next = True
     add_run(p, f"{num}　", size=T.TYPE["h1"], color=T.LIGHTGREY, bold=True)
     add_run(p, title, size=T.TYPE["h1"], color=T.NAVY, bold=True)
     X.set_para_borders(p, {"bottom": (8, T.BORD, "6")})
@@ -416,6 +418,17 @@ def _summary(doc, data, ch):
     if s.get("headline"):
         add_para(doc, [{"text": s["headline"], "size": T.TYPE["body"], "color": T.SLATE}],
                  after=8, line=1.5)
+    # 摘要頁要能直接回答「先做什麼」（2026-10-06 審查）：優先清單前三項提到最前面
+    top = (data.get("priorities") or [])[:3]
+    if top:
+        h2(doc, f"建議先處理這 {len(top)} 件事")
+        for i, pr in enumerate(top, 1):
+            p = add_para(doc, after=3, line=1.4)
+            add_run(p, f"{i}.  ", size=T.TYPE["body"], color=T.SLATE, bold=True)
+            chip_run(p, pr["severity"])
+            add_run(p, f"  {pr['problem']}", size=T.TYPE["body"], color=T.SLATE, bold=True)
+            if pr.get("ref"):
+                add_run(p, f"　詳見 {pr['ref']}", size=T.TYPE["meta"], color=T.GREY)
     _site_profile(doc, data.get("site_profile") or {})
     scores_heading = h2(doc, "各分類分數")
     if data.get("site_profile"):
@@ -496,16 +509,25 @@ def _summary(doc, data, ch):
 
 
 def _site_profile(doc, sp):
-    """網站架構（是否位於 CDN／反向代理之後）與做得好的地方：報告不只列負面問題。"""
+    """網站架構（是否位於 CDN／反向代理之後）與網站優勢：報告不只列負面問題。
+
+    每項優勢附上量到的依據；由間接訊號推論的（例如單次實驗室量測的速度）標「推論」，
+    不和直接量到的設定用同樣確定的語氣（2026-10-06 審查）。
+    """
     strengths = sp.get("strengths") or []
     if strengths:
-        h2(doc, "做得好的地方")
+        h2(doc, "網站優勢")
         for item in strengths:
-            add_para(doc, [
+            title = item["title"] + ("（推論）" if item.get("confidence") == "likely" else "")
+            runs = [
                 {"text": "✓  ", "size": T.TYPE["body"], "color": "15803D", "bold": True},
-                {"text": item["title"], "size": T.TYPE["body"], "color": T.SLATE, "bold": True},
+                {"text": title, "size": T.TYPE["body"], "color": T.SLATE, "bold": True},
                 {"text": f"　{item['detail']}", "size": T.TYPE["small"], "color": T.GREY},
-            ], after=3, line=1.4)
+            ]
+            if item.get("evidence"):
+                runs.append({"text": f"　依據：{item['evidence']}", "size": T.TYPE["meta"],
+                             "color": T.GREY})
+            add_para(doc, runs, after=3, line=1.4)
     facts = sp.get("facts") or []
     if facts or sp.get("notice"):
         h2(doc, "網站架構")
@@ -584,7 +606,7 @@ def _why_matters(doc, data):
     items = data.get("why_matters", [])
     if not items:
         return
-    h1(doc, "3", "這些分類為什麼重要")
+    h1(doc, "3", "這些分類為什麼重要", page_break=False)
     add_para(doc, [{"text": "在逐項細節之前，先說明本次最弱的面向若不處理會有什麼實際後果，幫助你判斷投入的優先次序。",
                     "size": 10, "color": T.SLATE}], after=8, line=1.44)
     rows = [[it["category"], it["consequence"]] for it in items]
@@ -624,7 +646,7 @@ def _findings(doc, data):
 
 def _scan_info(doc, data, ch):
     si = data.get("scan_info", {})
-    h1(doc, "5", "掃描資訊與範圍")
+    h1(doc, "5", "掃描資訊與範圍", page_break=False)
     add_para(doc, [{"text": "本節說明這份報告涵蓋與未涵蓋的範圍，以及掃描當下擷取的網站畫面，供你確認判讀基礎。",
                     "size": 10, "color": T.SLATE}], after=8, line=1.44)
     h2(doc, "掃描範圍")

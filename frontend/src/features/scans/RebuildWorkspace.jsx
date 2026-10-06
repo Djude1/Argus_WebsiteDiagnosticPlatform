@@ -428,9 +428,10 @@ function RebuildWorkspace() {
                   key={`edit-${index}`}
                 >
                   <span className="rebuild-ws-edit-count">
-                    {item.applied ? `×${item.applied}` : "未套用"}
+                    {item.applied ? `×${item.applied}` : item.rejected ? "已拒絕" : "未套用"}
                   </span>
                   {item.why || item.find}
+                  {item.rejected && `（${item.rejected}）`}
                 </p>
               ))}
             </div>

@@ -400,8 +400,9 @@ async def collect_mobile_layout(page) -> dict:
         return {}
 
 
-# 觸控目標的最小建議尺寸。WCAG 2.1 AA（2.5.5 Target Size）建議 44×44 CSS px；
-# 這裡取略寬的 40px 當門檻，避免把邊界值一律當缺陷洗版。
+# 觸控目標的最小建議尺寸（Argus 易用性建議，非 WCAG 合規門檻）。
+# WCAG 2.2 的 2.5.5（AAA）建議 44×44 CSS px、2.5.8（AA）最低 24×24 且有間距例外；
+# 這裡取 40px 當門檻，避免把邊界值一律當缺陷洗版。
 _MIN_TAP_TARGET_PX = 40
 _MAX_UX_OFFENDERS = 8
 

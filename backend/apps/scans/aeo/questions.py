@@ -42,6 +42,9 @@ class Intent:
     weight: float = 1.0
     # 補充說明：答案應包含什麼（寫進報告的「成立條件」）
     expect: str = ""
+    # 答案蘊含：段落（或其小標題）必須出現其中一個主題詞，答案值才算回答了這題。
+    # 例如「必須」出現在學員心得裡，不代表那段在講申請資格。空＝不額外要求。
+    anchors: tuple[str, ...] = ()
 
 
 INTENTS: tuple[Intent, ...] = (
@@ -163,6 +166,7 @@ INTENTS: tuple[Intent, ...] = (
         triggers=("申請", "報名", "招生", "入學", "徵件", "活動", "admission", "deadline"),
         weight=1.0,
         expect="有具體日期，且標明適用年度或梯次",
+        anchors=("截止", "期限", "報名", "申請", "開課", "梯次", "deadline", "due"),
     ),
     Intent(
         "eligibility",
@@ -172,6 +176,7 @@ INTENTS: tuple[Intent, ...] = (
         triggers=("資格", "條件", "適用對象", "申請", "招生", "徵才", "eligib"),
         weight=0.7,
         expect="列出具體的資格條件（學歷、年齡、身分、年資等）",
+        anchors=("資格", "條件", "對象", "招收", "年滿", "具備", "requirement", "eligib"),
     ),
     Intent(
         "refund",
@@ -181,6 +186,7 @@ INTENTS: tuple[Intent, ...] = (
         triggers=("購買", "訂單", "付款", "商品", "購物車", "訂閱", "結帳", "checkout", "order"),
         weight=0.8,
         expect="寫明可否退款／退貨、期限與方式",
+        anchors=("退款", "退貨", "退費", "鑑賞期", "refund", "return"),
     ),
     Intent(
         "shipping",
@@ -190,6 +196,7 @@ INTENTS: tuple[Intent, ...] = (
         triggers=("配送", "出貨", "運費", "宅配", "購物車", "shipping", "delivery"),
         weight=0.6,
         expect="有具體天數或時間範圍",
+        anchors=("配送", "出貨", "運送", "寄送", "到貨", "shipping", "delivery"),
     ),
 )
 
@@ -214,6 +221,7 @@ class Question:
     origin_url: str = ""
     origin_heading: str = ""
     trigger_hits: int = 0
+    anchors: tuple[str, ...] = ()
     extra: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -266,6 +274,7 @@ def build_question_set(pages) -> list[Question]:
                 source="intent",
                 expect=intent.expect,
                 trigger_hits=hits,
+                anchors=intent.anchors,
             )
         )
 
