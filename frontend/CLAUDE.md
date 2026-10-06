@@ -133,15 +133,17 @@ D:\nodejs\npm.cmd install 套件名
 | `/projects/:id/scans` | `ProjectScansPage` | 建立掃描（`ScanJobForm project=…`：預設專案起始網址、送出帶 `project`）＋此網站全部掃描（`ScanList`） |
 | `/projects/:id/issues` | `ProjectIssuesPage` | 問題分析（2026-10-03 依參考設計）：頁首右側掃描時間卡選擇掃描；摘要卡（問題總數、嚴重度數量按鈕、維度籤）；工具列（顯示模式：列表／`?group=severity` 依嚴重度分組、維度、嚴重度、匯出 CSV `issuesToCsv` 含 BOM）；表格欄位 嚴重度｜問題標題＋說明｜分類｜影響頁數｜建議重點｜查看詳情（展開說明、修法、全部受影響頁面與「查看證據與截圖位置」連到 `/scans/:id?finding=`）；篩選與 `?q=`（頂部搜尋帶入）都寫在網址、`replace`；≤900px 表格每列改成區塊；本次未出現另列 |
 | `/projects/:id/aeo` | `ProjectAeoPage` | AEO 問答檢測：選擇掃描、AEO 分數／題數／可回答比例／附原文比例，逐題結果可依判定篩選（`AeoAnswerPanel withFilter`）；原本在掃描詳情最下方 |
-| `/projects/:id/pages` | `ProjectPagesPage` | 頁面：選擇掃描，每頁狀態碼、載入時間、問題數與最高嚴重度、各維度問題數；篩選（有問題／錯誤或被阻擋／載入 > 3 秒）、搜尋、表頭排序、截圖預覽、連到該頁問題 |
+| `/projects/:id/pages` | `ProjectPagesPage` | 頁面：選擇掃描，每頁狀態碼、載入時間、問題數與最高嚴重度、各維度問題數；篩選（有問題／錯誤或被阻擋／載入 > 3 秒）、搜尋、表頭排序、截圖預覽、連到該頁問題；「優化此頁」展開 `PageRebuildPanel`（網頁複刻與優化，2026-10-06 從掃描詳情移來；示範專案與被阻擋的頁面不顯示） |
 | `/projects/:id/seo` | `ProjectSeoPage`（`features/projects/ProjectSeoPage.jsx`，獨立 lazy chunk；樣式 `legacy-member/95-seo.css`） | SEO 分析（2026-10-03）：頁首掃描時間卡切換掃描、網址篩選（`?q=`）、四個分頁（`?tab=`）。概覽：數字卡（掃描頁數、受影響頁數、重大問題、可索引（Argus 判斷）、Google 已收錄（GSC 期間內有曝光）、失效連結）、優先修復事項、全部問題（展開列出受影響網址＋證據／跳轉鏈＋檢測時間）、網址與站台檢查。頁面與內容：逐頁 HTTP、可索引、Google 收錄（有曝光，或按「網址檢查」呼叫 `gsc/inspect/`）、Title／Description／H1 判定、標題結構、正文、圖片 alt、載入；點頁面開右側「單頁證據」抽屜（`seo/pages/<id>/`：搜尋結果預覽示意、全部檢查與修法、索引與標記、H1–H6 大綱、圖片、連結與狀態，連到 `/scans/:id?page=`）。連結：依類型（站內／子網域／站外）與狀態篩選，顯示跳轉鏈（`302 → 200 OK`）與來源頁、錨文字；難以理解的連結文字。搜尋關鍵字：Search Console（未設定／連接／選擇資源／搜尋詞表，點擊與曝光各一張趨勢圖，不用雙軸；平均排名標示「期間統計」）＋目標關鍵字編輯與比對。`?gsc=connected|error&reason=` 是 OAuth 導回的結果提示 |
 | `/projects/:id/history` | `ProjectHistoryPage` | 歷史報告：分數趨勢、歷次掃描表格、問題分析與 PDF 報告下載 |
 | `/projects/:id/settings` | `ProjectSettingsPage` | 名稱、起始網址（須同網站）、專案說明、預設掃描設定（`ScanDefaultsFields`：範圍、維度、模式）、網域驗證狀態、封存；示範專案只顯示說明與封存 |
 | `/dashboard`、`/scans`、`/history` | `ProjectHomeRedirect` | 舊入口：轉到目前專案的總覽／掃描／歷史報告 |
 | `/domains` | `DomainVerifyPage` | 網域所有權驗證（需登入；入口在頂部導覽列「網域驗證」；主動式資安測試的閘門；2026-10-04 改版）：最上方「用 Google Search Console 一鍵驗證」卡（頁面唯一主要動作）——未連接時「連接 Google Search Console」直接走帳號層級 OAuth（`/api/domains/gsc/connect/`），導回 `?gsc=connected&verified=<數量>` 顯示結果；已連接時「重新同步網站」（`gsc/sync/`）與「中斷連線」。「我的網域」列出統計（已驗證／待驗證／即將到期，14 天內）並把待處理的排前面；待驗證列有「用 Search Console 驗證」，即將到期列有「用 Search Console 續期」；DNS TXT／meta／驗證檔收在每列的「其他驗證方式」（展開時 `GET /api/domains/<id>/` 取 token 與說明）；沒有 Search Console 的人用「手動新增網域」。SEO 分析頁 OAuth 導回帶 `?verified=` 時也會提示已自動完成網域驗證 |
-| `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站結構圖／修正產出三個分頁）：標題與分數 → 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖、選定單頁時的複刻工具）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
-| `/scans/:scanId/topology` | `TopologyPage` | 網站結構圖（ReactFlow） |
-| `/scans/:scanId/fixes` | `ScanFixOutputPage` | 修正產出（`FixOutputSection`；掃描完成才可產生，原本在報告最下方） |
+| `/scans/:scanId` | `ProjectScanShell` ＞ `ScanLayout` ＞ `ScanDetailPage` | 掃描報告（外框是所屬專案的側邊欄；`ScanLayout` 是「← 所有掃描」＋報告／網站優勢／網站架構三個分頁，2026-10-06）：標題與分數 → 位於 CDN／反向代理之後時一行提醒（`EdgeNotice`）→ 摘要（嚴重度、各維度、優先處理）→ 檢視器（左：頁面下拉＋維度／嚴重度篩選＋問題清單；右：選中問題的說明與證據、固定高度可捲動並自動捲到元素的截圖（行動版問題——觸控目標、缺標籤欄位、破版——改看行動版截圖 `?variant=mobile`，依 `evidence_json.annotations.boxes` 逐一框住實際元素並標尺寸，2026-10-06）、到「頁面」分頁優化該頁的連結）→ 收合的執行紀錄；進行中顯示細分階段進度（`progress.steps`／`step`，對照表 `SCAN_STEP_META`，含 `aeo_answers`「AEO 問答檢測」、`seo_links`「連結檢查」）；整體百分比＝(已完成階段數＋本階段 `step_done/step_total`)／階段數，每個階段各有自己的小進度條，進度條與階段同步推進 |
+| `/scans/:scanId/strengths` | `ScanStrengthsPage` | 網站優勢（`SiteStrengths`）：本次量到、已設定正確的項目，每項附依據，間接推論的標「推論」 |
+| `/scans/:scanId/architecture` | `ScanArchitecturePage` | 網站架構（`SiteArchitecture`：一句話說明流量是否經過 CDN／反向代理、使用的技術依類別列出、IP／反解／DNS 收在「詳細資料」）＋網站結構圖（`TopologyPage`，ReactFlow） |
+| `/scans/:scanId/topology`、`/scans/:scanId/fixes` | `ScanSubpathRedirect` | 舊網址：轉到網站架構／報告。修正產出分頁 2026-10-06 移除（片段與頁面優化重疊；後端 `fix-output/*` API 保留） |
+| `/share/rebuilds/:token` | `SharedRebuildPage`（`features/public/SharedRebuildPage.jsx`，公開版型；樣式 `73-public-refine.css` 的 `share-*`） | 網頁優化分享頁（不需登入）：受測網址、到期時間、並排比較／優化後／原樣（iframe `sandbox=""`，不執行 script）、修改清單與未處理說明 |
 | `/scans/:scanId/rebuild/:rebuildId` | `RebuildWorkspace` | 單次網頁複刻的工作區：左側 AI 思考過程（1 秒 polling）、右側產出預覽與原稿／優化版比對 |
 | `/reviews` | `ReviewsPage`（未登入：`PublicLayout`；登入後：會員區，會員導覽列、無公開頁尾，網址相同；會員入口在側邊欄底部「使用者評論」） | 日／夜主題同步的科技評論頁（樣式為改版前版本：`50`／`51`／`52-reviews*`）；沿用公開 top bar／footer，提供星等篩選、匿名／遮罩 Email 選項、本人評論管理與評論／官方回覆的逐則按讚、檢舉流程 |
 | `/reviews-next` | → redirect `/reviews` | 比較階段舊網址的相容轉址，不再維護第二套頁面 |
@@ -220,11 +222,11 @@ npm run typecheck
 | `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（Search Console 一鍵連接／同步、網域清單、備用三方法；樣式 `legacy-member/61-domain-verify.css`） |
 | `src/features/scans/RebuildWorkspace.jsx` | 網頁複刻工作區（思考流＋產出比對）|
-| `src/components/scans/PageRebuildPanel.jsx` | 掃描詳情側欄的複刻觸發與狀態 |
+| `src/components/scans/PageRebuildPanel.jsx` | 「頁面」分頁每列的網頁優化：觸發、狀態、下載、分享連結（建立／複製／停止，7 天有效） |
+| `src/components/scans/SiteProfilePanel.jsx` | 掃描詳情的網站概況：`EdgeNotice`（報告分頁的一行 CDN 提醒）、`SiteStrengths`（網站優勢分頁）、`SiteArchitecture`（網站架構分頁：流量路徑、使用的技術、IP 細節）；資料 `scan.site_profile`，舊掃描顯示「重新掃描後會顯示」（樣式 `legacy-member/94-report-style.css` 的 `.site-*`） |
 | `src/components/projects/ScanDefaultsFields.jsx` | 專案預設掃描設定欄位（範圍、維度、模式）；新增專案頁與專案設定共用，`DEFAULT_SCAN_SETTINGS` 為新專案預設 |
 | `src/components/projects/SiteFavicon.jsx` | 網站圖示（`project.favicon` 或名稱首字）；切換器、側邊欄、總覽、所有專案共用 |
 | `src/components/scans/AeoAnswerPanel.jsx` | 專案「AEO 問答」分頁的逐題結果（`withFilter` 時可依判定篩選、不重複顯示標題與計數）：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
-| `src/components/scans/FixOutputSection.jsx` | 掃描的「修正產出」分頁（`/scans/:id/fixes`）：四分頁（JSON-LD／OG＋meta／llms.txt／FAQ Schema）、一鍵複製、llms.txt 下載、輪詢產生狀態、逐欄位來源標註（placeholder＝請人工確認） |
 | `src/components/billing/BuyerInvoiceFields.jsx` | 購點與訂閱共用：買受人／發票欄位、`validateBuyer`、`buyerPayload`、`submitEcpayForm`（只允許綠界測試／正式兩個結帳網址）。`live`（`payment_mode === "ecpay"`）切換正式與測試文案 |
 | `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |

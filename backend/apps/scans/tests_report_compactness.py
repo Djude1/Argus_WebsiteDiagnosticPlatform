@@ -105,7 +105,8 @@ class ReportCompactnessTests(TestCase):
         ]
         for page in pages:
             Finding.objects.create(
-                scan_job=self.scan_job, page=page, severity="low",
+                # 中風險才印逐頁證據；低風險與資訊提示是精簡條目、不列頁面（2026-10-06）
+                scan_job=self.scan_job, page=page, severity="medium",
                 category=Finding.Category.SEO, title="標題過長",
                 description="d", remediation="r", rule_id="seo-title",
                 ai_handoff_prompt="p", priority_score=25.0,

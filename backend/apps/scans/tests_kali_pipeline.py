@@ -55,6 +55,9 @@ class KaliPipelineOrderingTests(TransactionTestCase):
                 "apps.scans.tasks.crawl_site",
                 new=mock.AsyncMock(return_value=([], {}, {}, [])),
             ),
+            # 本檔測的是 agent／Kali／scoring 的順序，不測「0 頁即失敗」的保護
+            mock.patch("apps.scans.tasks._ensure_usable_pages"),
+            mock.patch("apps.scans.tasks.build_site_profile", return_value={}),
             mock.patch("apps.scans.tasks.run_katana", return_value=([], [])),
             mock.patch("apps.scans.tasks.run_nuclei", return_value=[]),
             mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),

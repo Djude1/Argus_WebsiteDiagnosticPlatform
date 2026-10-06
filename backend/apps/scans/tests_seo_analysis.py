@@ -25,6 +25,7 @@ from apps.scans.seo import gsc, link_check
 from apps.scans.seo.keywords import keyword_report, normalize_keywords
 from apps.scans.seo.page_audit import audit_page, content_size, display_width
 from apps.scans.seo.report import project_seo
+from apps.scans.seo.site_findings import seo_site_findings
 
 User = get_user_model()
 ORIGIN = "https://shop.example.tw"
@@ -158,6 +159,20 @@ class LinkCheckTests(SimpleTestCase):
         self.assertEqual(link_check.check_url("https://a.tw/p", client)["verdict"], "ok")
         self.assertEqual([c[0] for c in calls], ["HEAD", "GET"])
 
+    def test_head_protocol_error_falls_back_to_get(self, _assert):
+        # 對 HEAD 直接斷線、GET 正常的站不能判成「無法連線」（2026-10-06 domjudge 子網域）
+        def handler(request):
+            if request.method == "HEAD":
+                raise httpx.RemoteProtocolError("Server disconnected", request=request)
+            if str(request.url) == "https://a.tw/":
+                return httpx.Response(302, headers={"location": "/login"})
+            return httpx.Response(200)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False)
+        result = link_check.check_url("https://a.tw/", client)
+        self.assertEqual(result["verdict"], "redirect")
+        self.assertEqual([hop["status"] for hop in result["chain"]], [302, 200])
+
     def test_redirect_loop_stops(self, _assert):
         client, _ = _mock_client({("HEAD", "https://a.tw/loop"): (301, "/loop")})
         result = link_check.check_url("https://a.tw/loop", client)
@@ -179,6 +194,55 @@ class LinkCheckTests(SimpleTestCase):
         self.assertEqual(link_check.robots_blocks("/admin/x", ["/admin"]), "/admin")
         self.assertEqual(link_check.robots_blocks("/a.pdf", ["/*.pdf$"]), "/*.pdf$")
         self.assertEqual(link_check.robots_blocks("/public", ["/admin"]), "")
+
+
+class SeoSiteFindingsTests(SimpleTestCase):
+    """SEO 分析頁才看得到的站台問題要轉成 Finding（2026-10-06 ntubimdbirc.tw 實測漏報）。"""
+
+    def _pages(self):
+        home = _html(title="NTUB BIRC", head="<meta property='og:url' content='https://www.shop.example.tw/'>",
+                     body="<a href='https://www.shop.example.tw/service/0'>服務</a>")
+        return [
+            FakePage(home, url=f"{ORIGIN}/", pid=1),
+            FakePage(_html(title="NTUB BIRC"), url=f"{ORIGIN}/about", pid=2),
+            FakePage(_html(title="NTUB BIRC"), url=f"{ORIGIN}/course", pid=3),
+        ]
+
+    def _report(self):
+        return {
+            "links": {"https://www.shop.example.tw/service/0": {
+                "url": "https://www.shop.example.tw/service/0", "status": 404, "verdict": "broken",
+            }},
+            "robots": {"sitemaps": ["https://www.shop.example.tw/sitemap.xml"]},
+            "site_checks": [{
+                "key": "www", "level": "warning", "value": "200",
+                "advice": "www 與非 www 都直接回應內容，請擇一並 301 轉址。",
+                "evidence": {"requested": "https://www.shop.example.tw/"},
+            }],
+        }
+
+    def test_site_issues_become_findings(self):
+        found = seo_site_findings(self._report(), self._pages(), f"{ORIGIN}/")
+        findings = {f["rule_id"]: f for f in found}
+        self.assertEqual(set(findings), {
+            "seo-broken-internal-links", "seo-primary-url-inconsistent", "seo-duplicate-titles",
+        })
+        broken = findings["seo-broken-internal-links"]
+        self.assertEqual(broken["severity"], "medium")
+        self.assertEqual(broken["evidence_json"]["broken_links"][0]["found_on"], [f"{ORIGIN}/"])
+        # www 未統一與 og:url／sitemap 指向另一主機是同一個根本原因，合併成一項（2026-10-06）
+        primary = findings["seo-primary-url-inconsistent"]
+        self.assertIn("og:url", primary["description"])
+        self.assertIn("www 與非 www", primary["description"])
+        self.assertIn("robots.txt Sitemap", primary["description"])
+
+    def test_clean_site_has_no_findings(self):
+        pages = [
+            FakePage(_html(title=f"第 {i} 頁｜晨光咖啡"), url=f"{ORIGIN}/p{i}", pid=i)
+            for i in range(3)
+        ]
+        report = {"links": {}, "robots": {"sitemaps": [f"{ORIGIN}/sitemap.xml"]}, "site_checks": []}
+        self.assertEqual(seo_site_findings(report, pages, f"{ORIGIN}/"), [])
 
 
 def _user(name="seo-owner"):
@@ -663,6 +727,74 @@ class AccountLevelSearchConsoleTests(TestCase):
 
     def test_sync_without_connection_is_400(self):
         self.assertEqual(self.client.post("/api/domains/gsc/sync/").status_code, 400)
+
+    def test_seo_page_reuses_account_connection_without_second_oauth(self):
+        """2026-10-06：網域驗證已連接 Google，SEO 分析的搜尋關鍵字不必再授權一次。"""
+        self._connect()
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=self.SITES):
+            status = self.client.get(f"/api/projects/{project.id}/gsc/").data
+        self.assertTrue(status["connected"])
+        # 唯一與網站相符的資源自動選好
+        self.assertEqual(status["property"], "sc-domain:example.tw")
+        self.assertTrue(status["property_matches"])
+        self.assertEqual(SearchConsoleConnection.objects.filter(user=self.user).count(), 2)
+
+    def test_connecting_on_domains_page_links_existing_projects(self):
+        """網域驗證頁按一次連接，既有網站專案的 SEO 分析就已連好、資源已選好。"""
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        self._connect()  # 期間 list_sites 回 SITES
+        connection = SearchConsoleConnection.objects.get(project=project)
+        self.assertEqual(connection.property_url, "sc-domain:example.tw")
+        # SEO 分析頁讀的是 /seo/ 的 gsc 狀態，不需再呼叫 Google
+        with mock.patch("apps.scans.seo.gsc.list_sites") as list_sites:
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        list_sites.assert_not_called()
+        self.assertTrue(gsc_status["connected"])
+        self.assertEqual(gsc_status["property"], "sc-domain:example.tw")
+
+    def test_seo_page_auto_selects_property_for_connected_project(self):
+        """2026-10-06 使用者回報：已連接卻還要在清單裡按「選擇」。網域資源優先。"""
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        SearchConsoleConnection.objects.create(
+            project=project, user=self.user, refresh_token_encrypted=gsc.encrypt_token("p"),
+        )
+        sites = [
+            {"site_url": f"{ORIGIN}/", "permission": "siteOwner"},
+            {"site_url": "sc-domain:example.tw", "permission": "siteOwner"},
+        ]
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        self.assertEqual(gsc_status["property"], "sc-domain:example.tw")
+
+        # 使用者按「更換資源」後要自己挑，不能又被自動選回去
+        self.client.patch(f"/api/projects/{project.id}/gsc/", {"property": ""}, format="json")
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=sites):
+            gsc_status = self.client.get(f"/api/projects/{project.id}/seo/").data["gsc"]
+        self.assertEqual(gsc_status["property"], "")
+
+    def test_disconnecting_project_keeps_shared_google_grant(self):
+        self._connect()
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        with mock.patch("apps.scans.seo.gsc.list_sites", return_value=self.SITES):
+            self.client.get(f"/api/projects/{project.id}/gsc/")
+        with mock.patch("apps.scans.seo.gsc.revoke") as revoke:
+            response = self.client.delete(f"/api/projects/{project.id}/gsc/")
+        self.assertEqual(response.status_code, 204)
+        revoke.assert_not_called()  # 同一個授權還在網域驗證頁使用
+        self.assertTrue(self.client.get("/api/domains/gsc/").data["account_connection"])
+        # 再中斷帳號層級：已無其他連線共用，才真的撤銷 Google 授權
+        with mock.patch("apps.scans.seo.gsc.revoke") as revoke:
+            self.client.delete("/api/domains/gsc/")
+        revoke.assert_called_once()
 
 
 class DomainDetailInstructionsTests(TestCase):

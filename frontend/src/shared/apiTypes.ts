@@ -1385,11 +1385,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description 網域所有權驗證：列出／建立／刪除自己的網域，並觸發驗證。
-         *
-         *     物件級權限：queryset 一律以 request.user 過濾，別人的網域直接 404。
-         */
+        /** @description 單一網域：另附自己的 token 與三種備用方法的設定說明（/domains「其他驗證方式」用）。 */
         get: operations["domains_retrieve"];
         put?: never;
         post?: never;
@@ -1415,6 +1411,64 @@ export interface paths {
         put?: never;
         /** @description 執行指定方法的驗證，回最新狀態與失敗原因（last_error）。 */
         post: operations["domains_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/gsc/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
+         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
+         */
+        get: operations["domains_gsc_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
+         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
+         */
+        delete: operations["domains_gsc_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/gsc/connect/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 回傳 Google 授權網址（帳號層級）；完成後導回 /domains 並自動匯入擁有的網站。 */
+        post: operations["domains_gsc_connect_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/domains/gsc/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 重新讀取 Search Console：擁有的網站全部匯入為已驗證網域。 */
+        post: operations["domains_gsc_sync_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2040,6 +2094,32 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rebuilds/{id}/share/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         *
+         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         */
+        post: operations["rebuilds_share_create"];
+        /**
+         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         *
+         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         */
+        delete: operations["rebuilds_share_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3054,6 +3134,7 @@ export interface components {
             status_code: number | null;
             title: string;
             screenshot_path: string;
+            readonly has_mobile_screenshot: boolean;
             /** Format: int64 */
             load_time_ms: number | null;
             /** Format: int64 */
@@ -3405,6 +3486,7 @@ export interface components {
             readonly top_actions: unknown;
             readonly warning_summary: unknown;
             readonly aeo_report: unknown;
+            readonly site_profile: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;
@@ -3570,6 +3652,10 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
+            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            readonly share_path: string;
+            /** Format: date-time */
+            readonly share_expires_at: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3596,6 +3682,10 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
+            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            readonly share_path: string;
+            /** Format: date-time */
+            readonly share_expires_at: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -6115,6 +6205,87 @@ export interface operations {
             };
         };
     };
+    domains_gsc_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    domains_gsc_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    domains_gsc_connect_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    domains_gsc_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     estimate_create: {
         parameters: {
             query?: never;
@@ -7004,6 +7175,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SiteRebuild"];
                 };
+            };
+        };
+    };
+    rebuilds_share_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteRebuild"];
+                };
+            };
+        };
+    };
+    rebuilds_share_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

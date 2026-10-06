@@ -344,6 +344,20 @@ def _normalize_edit(item: dict) -> dict | None:
     }
 
 
+# 修改不得「新增」可執行內容或改變頁面去向（2026-10-06）：送進 agent 的 HTML 來自第三方，
+# 提示注入可能誘使模型插入惡意 script；產出會被分享、下載，甚至直接部署到網站上。
+# 只看 replace 比 find 多出來的部分——原本就有的 script 被原樣保留不算新增。
+_UNSAFE_MARKUP = re.compile(
+    r"<\s*(?:script|iframe|object|embed|form|base)\b|\son[a-z]+\s*=|javascript\s*:"
+    r"|http-equiv\s*=\s*[\"']?refresh",
+    re.IGNORECASE,
+)
+
+
+def _introduces_unsafe_markup(find: str, replacement: str) -> bool:
+    return len(_UNSAFE_MARKUP.findall(replacement)) > len(_UNSAFE_MARKUP.findall(find))
+
+
 def apply_edits(html: str, edits: list[dict]) -> tuple[str, list[dict]]:
     """把修改清單套用到原始 HTML，回傳 (結果, 每筆的套用狀況)。
 
@@ -355,16 +369,16 @@ def apply_edits(html: str, edits: list[dict]) -> tuple[str, list[dict]]:
     for item in edits:
         find = item.get("find") or ""
         replacement = item.get("replace") or ""
+        entry = {"why": str(item.get("why") or "")[:200], "applied": 0, "find": find[:120]}
+        if _introduces_unsafe_markup(find, replacement):
+            entry["rejected"] = "不接受新增 script、事件屬性、外部嵌入或改變頁面去向的修改"
+            report.append(entry)
+            continue
         count = html.count(find)
         if count:
             html = html.replace(find, replacement)
-        report.append(
-            {
-                "why": str(item.get("why") or "")[:200],
-                "applied": count,
-                "find": find[:120],
-            }
-        )
+        entry["applied"] = count
+        report.append(entry)
     return html, report
 
 

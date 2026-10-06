@@ -72,8 +72,15 @@ ADMIN_PATH_PREFIXES = (
     "/wp-login",
     "/dashboard",
     "/manage",
+    "/management",
     "/api/",
 )
+# 登入、註冊等帳號功能頁：不是給搜尋引擎收錄的內容頁，同樣跳過 SEO/AEO/GEO
+# （2026-10-06 審查：/management/login、/management/register 被要求補 H1）
+_AUTH_PATH_SEGMENTS = {
+    "login", "signin", "sign-in", "logout", "signout", "sign-out",
+    "register", "signup", "sign-up", "forgot-password", "reset-password", "password-reset",
+}
 
 # 非 HTML 頁面的二進位/媒體檔案副檔名。這類資源沒有頁面內容，做 SEO/AEO/GEO
 # 分析會產生無意義的 finding（例如「APK 連結缺 meta description」）。
@@ -185,6 +192,8 @@ def is_admin_path(url: str) -> bool:
     CSRF 防護與安全頭部反而更重要。
     """
     path = (urlparse(url).path or "").lower()
+    if any(segment in _AUTH_PATH_SEGMENTS for segment in path.split("/")):
+        return True
     return any(path == prefix or path.startswith(prefix + "/") or path.startswith(prefix + ".")
                for prefix in ADMIN_PATH_PREFIXES)
 
@@ -237,6 +246,15 @@ class PageAnalysisInput:
     js_errors: list | None = None
 
 
+def _is_large_image(attributes: dict[str, str]) -> bool:
+    """width／height 屬性都 ≥ 120px 才算內容大小的圖；沒標尺寸的不猜。"""
+    try:
+        width, height = int(attributes.get("width", "0")), int(attributes.get("height", "0"))
+    except ValueError:
+        return False
+    return width >= 120 and height >= 120
+
+
 class HtmlSignalParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -247,6 +265,8 @@ class HtmlSignalParser(HTMLParser):
         self.heading_levels: list[int] = []
         self.image_count = 0
         self.image_without_alt = 0
+        # alt="" 是裝飾圖的正確寫法；只有「較大的圖片」alt 為空才值得提醒（可能是內容圖）
+        self.image_empty_alt_large = 0
         self.form_count = 0
         self.form_without_csrf = 0
         self.json_ld_blocks: list[str] = []
@@ -281,8 +301,10 @@ class HtmlSignalParser(HTMLParser):
             self.heading_levels.append(int(normalized_tag[1]))
         elif normalized_tag == "img":
             self.image_count += 1
-            if not attributes.get("alt", "").strip():
+            if "alt" not in attributes:
                 self.image_without_alt += 1
+            elif not attributes["alt"].strip() and _is_large_image(attributes):
+                self.image_empty_alt_large += 1
         elif normalized_tag == "form":
             self.form_count += 1
             self.in_form = True
@@ -519,6 +541,24 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
+def _mobile_annotations(offenders: list[dict], label) -> dict | None:
+    """行動版截圖上的逐元素標註（爬蟲量到的文件座標）；沒有座標的舊資料回 None。
+
+    觸控目標等問題是在 375px 寬量的，要框在行動版截圖上、而且框住元素本身，
+    不能退回整個 Header 或區塊（2026-10-06 使用者要求）。
+    """
+    boxes = []
+    for offender in offenders:
+        box = offender.get("box") or {}
+        if box.get("width") and box.get("height"):
+            boxes.append({
+                "x": box.get("x", 0), "y": box.get("y", 0),
+                "width": box["width"], "height": box["height"],
+                "label": label(offender),
+            })
+    return {"viewport": "mobile", "boxes": boxes} if boxes else None
+
+
 def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
     """行動版水平溢出（破版）。`layout_metrics` 為空代表沒量到，不能當成通過。"""
     metrics = page_input.layout_metrics or {}
@@ -565,6 +605,9 @@ def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
                 "scroll_width": metrics.get("scroll_width"),
                 "overflow_px": overflow,
                 "offenders": offenders[:5],
+                "annotations": _mobile_annotations(
+                    offenders[:3], lambda o: f"超出 {o.get('overflow_px')}px"
+                ),
             },
         )
     ]
@@ -585,6 +628,18 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
     )
     # 目標數量多代表整頁互動密度都偏小，比零星一兩個更值得處理。
     severity = Finding.Severity.MEDIUM if len(offenders) >= 5 else Finding.Severity.LOW
+    # 標準引用要精確（2026-10-06 審查）：40px 是 Argus 的易用性建議；WCAG 2.2 的 AA 門檻
+    # 是 2.5.8 的 24×24（相鄰間距足夠可豁免），44×44 是 AAA 的 2.5.5。
+    under_aa = sum(
+        1 for o in offenders
+        if min(o.get("width_px") or 0, o.get("height_px") or 0) < 24
+    )
+    wcag_note = (
+        f"其中 {under_aa} 個小於 24×24px，可能不符合 WCAG 2.2 AA（2.5.8），"
+        "若與相鄰目標間距足夠則可豁免，需人工確認。"
+        if under_aa
+        else "都在 WCAG 2.2 AA（2.5.8）24×24px 的最低要求以上，屬於易用性建議，不是合規問題。"
+    )
     return [
         make_finding(
             category=Finding.Category.UX,
@@ -592,8 +647,9 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
             title="觸控目標過小",
             description=(
                 f"頁面有 {len(offenders)} 個可點元素（連結、按鈕或表單控制項）在 "
-                "行動版視窗下的寬或高小於 40px。手指觸控目標建議至少 44×44px"
-                "（WCAG 2.1 目標尺寸），過小會讓使用者誤點或點不到。"
+                "行動版視窗下的寬或高小於 40px（Argus 易用性建議），過小會讓使用者誤點或點不到。"
+                f"{wcag_note}"
+                "WCAG 2.2 AAA（2.5.5）的建議是 44×44px。"
             ),
             remediation=(
                 "把可點元素的可點區域放大到至少 44×44px，可用 padding、min-width／"
@@ -604,7 +660,12 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
             impact_area="mobile_usability",
             priority_score=48 if severity == Finding.Severity.MEDIUM else 38,
             evidence_type="ux_signals",
-            evidence_json={"small_tap_targets": offenders[:8]},
+            evidence_json={
+                "small_tap_targets": offenders[:8],
+                "annotations": _mobile_annotations(
+                    offenders[:8], lambda o: f"{o.get('width_px')}×{o.get('height_px')}px"
+                ),
+            },
         )
     ]
 
@@ -639,7 +700,12 @@ def _ux_unlabeled_fields(page_input: PageAnalysisInput) -> list[dict]:
             impact_area="accessibility",
             priority_score=46,
             evidence_type="ux_signals",
-            evidence_json={"unlabeled_fields": offenders[:8]},
+            evidence_json={
+                "unlabeled_fields": offenders[:8],
+                "annotations": _mobile_annotations(
+                    offenders[:8], lambda o: o.get("name") or o.get("type") or "欄位"
+                ),
+            },
         )
     ]
 
@@ -723,36 +789,59 @@ def _seo_meta_description(page_input: PageAnalysisInput, parser: HtmlSignalParse
 
 
 def _seo_h1_count(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
-    """H1 不是恰好一個。"""
+    """H1 不是恰好一個。
+
+    HTML 與 Google 都不要求「只能有一個 H1」：沒有 H1 是低風險（頁面主題不明確），
+    多個 H1 只是建議（2026-10-06 審查：原本判中風險，高估了影響）。
+    """
     if parser.h1_count == 1:
         return None
+    missing = parser.h1_count == 0
     return make_finding(
         category=Finding.Category.SEO,
-        severity=Finding.Severity.MEDIUM if parser.h1_count == 0 else Finding.Severity.LOW,
+        severity=Finding.Severity.LOW if missing else Finding.Severity.INFO,
         title="H1 標題數量不正確",
-        description="每頁應有唯一且明確的 H1，協助搜尋引擎與使用者理解頁面主題。",
+        description=(
+            "頁面沒有 H1，搜尋引擎與使用者較難一眼看出頁面主題。"
+            if missing
+            else f"頁面有 {parser.h1_count} 個 H1。這不違反 HTML 規範，Google 也能處理，"
+            "但一個明確的主標題通常更容易理解。"
+        ),
         remediation="保留一個代表頁面主題的 H1，其他段落標題改用 H2-H6。",
         evidence=f"h1_count={parser.h1_count}",
         selector="h1",
         bounding_box=page_input.element_boxes.get("h1"),
         impact_area="heading",
-        priority_score=55 if parser.h1_count == 0 else 42,
+        priority_score=42 if missing else 20,
     )
 
 
 def _seo_image_alt(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
-    """有圖片缺少 alt 屬性。"""
-    if not parser.image_without_alt:
+    """有圖片缺少 alt 屬性；或較大的圖片 alt 為空（可能是內容圖，僅提醒）。"""
+    if parser.image_without_alt:
+        title = "圖片缺少 alt 屬性"
+        severity = Finding.Severity.LOW
+        description = "圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。"
+    elif parser.image_empty_alt_large >= 3:
+        # alt="" 合法（裝飾圖），但大量大尺寸圖片都留空，多半是內容圖漏寫描述（2026-10-06 實測）
+        title = "多張大圖的 alt 為空"
+        severity = Finding.Severity.INFO
+        description = (
+            "alt=\"\" 代表裝飾圖、螢幕報讀器會略過。這些圖片尺寸較大，若是照片、課程或成員等"
+            "內容圖片，應寫出描述。"
+        )
+    else:
         return None
     return make_finding(
         category=Finding.Category.SEO,
-        severity=Finding.Severity.LOW,
-        title="圖片缺少 alt 屬性",
-        description="圖片缺少替代文字會降低無障礙體驗，也讓搜尋引擎難以理解圖片內容。",
+        severity=severity,
+        title=title,
+        description=description,
         remediation="為有語意的圖片補上精準 alt，裝飾性圖片可使用空 alt。",
         evidence=(
             f"image_count={parser.image_count}, "
-            f"image_without_alt={parser.image_without_alt}"
+            f"image_without_alt={parser.image_without_alt}, "
+            f"large_image_empty_alt={parser.image_empty_alt_large}"
         ),
         selector="img:not([alt])",
         bounding_box=page_input.element_boxes.get("img:not([alt])"),
@@ -1008,18 +1097,30 @@ def analyze_security_site_level(pages: list[dict]) -> list[dict]:
         )
     required_headers = {
         "strict-transport-security": (Finding.Severity.MEDIUM, "缺少 HSTS"),
-        "content-security-policy": (Finding.Severity.MEDIUM, "缺少 CSP"),
+        # CSP 是縱深防禦：缺少它不代表已有可利用的漏洞，與其他縱深防禦標頭同列低風險
+        # （2026-10-06 審查：中風險且排進優先清單第二，高估了實際風險）
+        "content-security-policy": (Finding.Severity.LOW, "缺少 CSP"),
         "x-frame-options": (Finding.Severity.LOW, "缺少 X-Frame-Options"),
         "x-content-type-options": (Finding.Severity.INFO, "缺少 X-Content-Type-Options"),
     }
+    # 防點擊劫持看的是「有沒有防護」：CSP frame-ancestors 與 X-Frame-Options 擇一即可
+    has_frame_ancestors = "frame-ancestors" in headers.get("content-security-policy", "").lower()
     for header_name, (severity, title) in required_headers.items():
+        if header_name == "x-frame-options" and has_frame_ancestors:
+            continue
         if header_name not in headers:
+            description = f"Response header 缺少 {header_name}，可能降低瀏覽器防護能力。"
+            if header_name == "x-frame-options":
+                description = (
+                    "沒有 X-Frame-Options，CSP 也沒有 frame-ancestors，"
+                    "頁面可以被其他網站嵌入，有點擊劫持（clickjacking）的風險。"
+                )
             findings.append(
                 make_finding(
                     category=Finding.Category.SECURITY,
                     severity=severity,
                     title=title,
-                    description=f"Response header 缺少 {header_name}，可能降低瀏覽器防護能力。",
+                    description=description,
                     remediation=f"依網站需求設定合適的 {header_name} header。",
                     evidence=f"missing_header={header_name}",
                     impact_area="security_headers",
@@ -1038,6 +1139,8 @@ def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     safe_html = _HTML_SVG_STRIP.sub(" ", raw_html)
     safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
     safe_html = _HTML_PATH_ATTR.sub(" ", safe_html)
+    # 輸入框 placeholder 是填寫範例（例：e.g.0911-222-333），不是任何人的資料（2026-10-06 實測）
+    safe_html = _HTML_PLACEHOLDER_ATTR.sub(" ", safe_html)
     pii_main = detect_pii_in_text(safe_html)
 
     # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
@@ -1076,6 +1179,7 @@ def _classify_pii(
     # 資料 → 中風險；網站自己網域的 Email 或 mailto/tel 連結 → 多半是刻意公開的聯絡資訊，
     # 只列為資訊提示請網站主確認，不當成外洩。
     site_domain = _registrable_domain(urlparse(page_url).hostname or "")
+    site_label = site_domain.split(".", 1)[0] if site_domain else ""
     mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
     tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
     comment_values = {v for vals in pii_comments.values() for v in (vals or [])}
@@ -1090,7 +1194,12 @@ def _classify_pii(
     for email in pii["email"]:
         domain = _registrable_domain(email.rsplit("@", 1)[-1].lower())
         in_comment = email in comment_values
-        if not in_comment and (email.lower() in mailto or (site_domain and domain == site_domain)):
+        local = email.rsplit("@", 1)[0].lower()
+        # 組織信箱：信箱名稱就是網站名稱（ntubimdbirc@ntub.edu.tw 之於 ntubimdbirc.tw）或角色信箱
+        organizational = (len(site_label) >= 4 and site_label in local) or local in _ROLE_MAILBOXES
+        if not in_comment and (
+            email.lower() in mailto or (site_domain and domain == site_domain) or organizational
+        ):
             public_emails.append(email)
         else:
             personal_emails.append(email)
@@ -1222,6 +1331,13 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
+_HTML_PLACEHOLDER_ATTR = re.compile(r"""\bplaceholder\s*=\s*(?:"[^"]*"|'[^']*')""", re.IGNORECASE)
+# 角色信箱：對外服務窗口，不屬於特定個人
+_ROLE_MAILBOXES = {
+    "info", "service", "services", "contact", "admin", "support", "help", "office", "hr",
+    "sales", "marketing", "webmaster", "privacy", "dpo", "noreply", "no-reply", "news",
+    "press", "pr", "media", "secretary", "center", "job", "jobs", "career", "careers",
+}
 _MAILTO_PATTERN = re.compile(r"mailto:([^\"'?>\s]+)", re.IGNORECASE)
 _TEL_PATTERN = re.compile(r"tel:([+\d][\d\s()-]{6,})", re.IGNORECASE)
 _SECOND_LEVEL_LABELS = {
@@ -1366,6 +1482,8 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
                 description=(
                     "llms.txt 可主動告知 AI 系統網站定位與重要頁面；"
                     "缺少時 AI 需自行推斷網站重點。"
+                    "這是新興做法、尚未成為正式標準，主要搜尋與 AI 服務是否採用仍不確定，"
+                    "列為選擇性建議。"
                 ),
                 remediation="在網站根目錄建立 llms.txt，列出網站簡介與重要頁面連結。",
                 evidence="llms_txt_found=false",

@@ -3718,7 +3718,7 @@
         "/api/domains/{id}/": {
             "get": {
                 "operationId": "domains_retrieve",
-                "description": "網域所有權驗證：列出／建立／刪除自己的網域，並觸發驗證。\n\n物件級權限：queryset 一律以 request.user 過濾，別人的網域直接 404。",
+                "description": "單一網域：另附自己的 token 與三種備用方法的設定說明（/domains「其他驗證方式」用）。",
                 "parameters": [
                     {
                         "in": "path",
@@ -3826,6 +3826,104 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/DomainVerify"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/domains/gsc/": {
+            "get": {
+                "operationId": "domains_gsc_retrieve",
+                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
+                "tags": [
+                    "domains"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "domains_gsc_destroy",
+                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
+                "tags": [
+                    "domains"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/domains/gsc/connect/": {
+            "post": {
+                "operationId": "domains_gsc_connect_create",
+                "description": "回傳 Google 授權網址（帳號層級）；完成後導回 /domains 並自動匯入擁有的網站。",
+                "tags": [
+                    "domains"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/domains/gsc/sync/": {
+            "post": {
+                "operationId": "domains_gsc_sync_create",
+                "description": "重新讀取 Search Console：擁有的網站全部匯入為已驗證網域。",
+                "tags": [
+                    "domains"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
                                 }
                             }
                         },
@@ -5189,6 +5287,69 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/rebuilds/{id}/share/": {
+            "post": {
+                "operationId": "rebuilds_share_create",
+                "description": "POST 建立（或延長）分享連結；DELETE 立即停止分享。\n\n分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "rebuilds"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SiteRebuild"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "rebuilds_share_destroy",
+                "description": "POST 建立（或延長）分享連結；DELETE 立即停止分享。\n\n分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "rebuilds"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -8050,6 +8211,10 @@
                         "type": "string",
                         "maxLength": 1024
                     },
+                    "has_mobile_screenshot": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "load_time_ms": {
                         "type": "integer",
                         "maximum": 9223372036854775807,
@@ -8082,6 +8247,7 @@
                     "depth",
                     "fetch_mode",
                     "final_url",
+                    "has_mobile_screenshot",
                     "id",
                     "load_time_ms",
                     "screenshot_path",
@@ -9161,6 +9327,9 @@
                     "aeo_report": {
                         "readOnly": true
                     },
+                    "site_profile": {
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -9228,6 +9397,7 @@
                     "respect_robots",
                     "scan_log",
                     "scan_mode",
+                    "site_profile",
                     "started_at",
                     "status",
                     "top_actions",
@@ -9695,6 +9865,17 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "share_path": {
+                        "type": "string",
+                        "description": "前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。",
+                        "readOnly": true
+                    },
+                    "share_expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9716,6 +9897,8 @@
                     "page",
                     "page_url",
                     "scan_job",
+                    "share_expires_at",
+                    "share_path",
                     "status",
                     "updated_at"
                 ]
@@ -9764,6 +9947,17 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "share_path": {
+                        "type": "string",
+                        "description": "前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。",
+                        "readOnly": true
+                    },
+                    "share_expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9806,6 +10000,8 @@
                     "page_url",
                     "reply",
                     "scan_job",
+                    "share_expires_at",
+                    "share_path",
                     "status",
                     "trace",
                     "updated_at"

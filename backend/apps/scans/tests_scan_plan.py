@@ -124,6 +124,9 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
                 "apps.scans.tasks.crawl_site",
                 new=mock.AsyncMock(return_value=([], {}, {}, [])),
             ),
+            # 本檔測的是外部工具派工，不測「0 頁即失敗」的保護
+            "usable_pages": mock.patch("apps.scans.tasks._ensure_usable_pages"),
+            "site_profile": mock.patch("apps.scans.tasks.build_site_profile", return_value={}),
             "katana": mock.patch(
                 "apps.scans.tasks.run_katana",
                 return_value=([], []),

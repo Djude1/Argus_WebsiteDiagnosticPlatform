@@ -112,7 +112,7 @@ def add_page_number_field(paragraph):
     run._r.addprevious(fldSimple)
 
 
-def add_watermark_to_header(header, text="ARGUS", color="0C4A6E", opacity=".06"):
+def add_watermark_to_header(header, text="ARGUS", color="0C4A6E", opacity=".04"):
     """Inject a diagonal VML WordArt watermark that repeats on every page."""
     p = header.add_paragraph()
     r = p.add_run()
@@ -129,7 +129,7 @@ def add_watermark_to_header(header, text="ARGUS", color="0C4A6E", opacity=".06")
           o:connectlocs="@9,0;@10,10800;@11,21600;@12,10800" o:connectangles="270,180,90,0"/>
         <v:textpath on="t" fitshape="t"/></v:shapetype>
       <v:shape id="ArgusWM" o:spid="_x0000_s2049" type="#_x0000_t136"
-        style="position:absolute;margin-left:0;margin-top:0;width:520pt;height:170pt;rotation:315;
+        style="position:absolute;margin-left:0;margin-top:0;width:300pt;height:98pt;rotation:315;
         z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;
         mso-position-vertical:center;mso-position-vertical-relative:margin"
         o:allowincell="f" fillcolor="#{color}" stroked="f">

@@ -11,6 +11,7 @@ from urllib.parse import urlencode, urlsplit
 
 from config.throttling import UserRateThrottle
 from django.conf import settings
+from django.core.cache import cache
 from django.http import Http404, HttpResponseRedirect
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
@@ -58,6 +59,7 @@ class ProjectSeoActions:
         """SEO 分析：最新（或 ?scan= 指定）一次完成掃描的概覽、頁面、連結與關鍵字。"""
         project = self.get_object()
         data = project_seo(project, self._seo_scan(project))
+        _ensure_project_connection(project)
         data["gsc"] = _gsc_status(project)
         return Response(data)
 
@@ -92,11 +94,12 @@ class ProjectSeoActions:
     def gsc_connection(self, request, pk=None):
         """GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。"""
         project = self.get_object()
+        if request.method == "GET":
+            _ensure_project_connection(project)
         connection = SearchConsoleConnection.objects.filter(project=project).first()
         if request.method == "DELETE":
             if connection is not None:
-                gsc.revoke(connection)
-                connection.delete()
+                _disconnect(connection)
             return Response(status=status.HTTP_204_NO_CONTENT)
         if request.method == "PATCH":
             if connection is None:
@@ -105,6 +108,8 @@ class ProjectSeoActions:
             if not chosen:  # 更換資源：先清除，前端再列出可選資源
                 connection.property_url = ""
                 connection.save(update_fields=["property_url", "updated_at"])
+                # 使用者要自己挑：這段期間不要又被自動選回去
+                cache.set(f"gsc-auto-property:{connection.pk}", True, _MANUAL_CHOICE_SECONDS)
                 return Response(_gsc_status(project))
             try:
                 sites = {site["site_url"] for site in gsc.list_sites(connection)}
@@ -183,6 +188,99 @@ class ProjectSeoActions:
             return _gsc_error(exc, connection)
 
 
+def _disconnect(connection: SearchConsoleConnection) -> None:
+    """刪除連線；同一個 Google 授權還被其他連線共用時只刪本地，不撤銷 Google 端授權
+    （否則中斷專案連線會連帶讓網域驗證頁的帳號層級連線失效）。"""
+    try:
+        token = gsc.decrypt_token(connection.refresh_token_encrypted)
+    except gsc.GscError:
+        token = ""
+    shared = False
+    if token:
+        for other in SearchConsoleConnection.objects.filter(user=connection.user).exclude(
+            pk=connection.pk
+        ):
+            try:
+                if gsc.decrypt_token(other.refresh_token_encrypted) == token:
+                    shared = True
+                    break
+            except gsc.GscError:
+                continue
+    if not shared:
+        gsc.revoke(connection)
+    connection.delete()
+
+
+# 自動挑選資源失敗（Google 暫時錯誤、沒有相符資源）後多久再試；SEO 頁每次載入都會呼叫，
+# 不能每次都打 Google API
+_AUTO_PROPERTY_RETRY_SECONDS = 600
+_MANUAL_CHOICE_SECONDS = 86400
+
+
+def pick_property(sites: list[dict], origin: str) -> str:
+    """從使用者的 Search Console 資源中選出最適合這個網站的一個；沒有相符的回空字串。
+
+    網域資源（sc-domain:）涵蓋 http／https 與所有子網域，資料最完整，優先；
+    多個網域資源時取最具體（最長）的；沒有網域資源才用協定＋主機相同的網址前置字元資源。
+    """
+    matches = [site["site_url"] for site in sites if gsc.property_matches(site["site_url"], origin)]
+    domains = sorted((m for m in matches if m.startswith("sc-domain:")), key=len, reverse=True)
+    return (domains or matches or [""])[0]
+
+
+def _ensure_project_connection(project: SiteProject) -> None:
+    """讓 SEO 分析頁不必再連一次 Search Console，也不必手動選資源（2026-10-06 使用者回報）。
+
+    1. 專案還沒有自己的連線，但使用者在網域驗證頁（帳號層級）或其他專案連過 Google →
+       沿用同一個授權建立專案連線。
+    2. 專案連線還沒選資源 → 自動選好與網站相符的資源（`pick_property`）。
+    失敗只記在快取裡稍後再試，不影響頁面。
+    """
+    if project.is_demo or not gsc.is_enabled():
+        return
+    connection = SearchConsoleConnection.objects.filter(project=project).first()
+    if connection is None:
+        usable = SearchConsoleConnection.objects.filter(user=project.user, last_error="")
+        # 帳號層級（網域驗證頁）優先；沒有才沿用其他專案的授權
+        source = (
+            usable.filter(project__isnull=True).first()
+            or usable.order_by("-updated_at").first()
+        )
+        if source is None:
+            return
+        connection, _ = SearchConsoleConnection.objects.get_or_create(
+            project=project,
+            defaults={
+                "user": project.user,
+                "refresh_token_encrypted": source.refresh_token_encrypted,
+            },
+        )
+        logger.info("Search Console 沿用既有授權 project_id=%s", project.id)
+    if connection.property_url or connection.last_error:
+        return
+    retry_key = f"gsc-auto-property:{connection.pk}"
+    if cache.get(retry_key):
+        return
+    try:
+        chosen = pick_property(gsc.list_sites(connection), project.origin)
+    except gsc.GscError:
+        chosen = ""
+    if not chosen:
+        cache.set(retry_key, True, _AUTO_PROPERTY_RETRY_SECONDS)
+        return
+    connection.property_url = chosen
+    connection.save(update_fields=["property_url", "updated_at"])
+
+
+def link_user_projects(user) -> None:
+    """帳號層級剛連接 Search Console：使用者所有網站專案一併沿用授權並選好資源。"""
+    for project in SiteProject.objects.filter(user=user, archived_at__isnull=True, is_demo=False):
+        try:
+            _ensure_project_connection(project)
+        except Exception:  # noqa: BLE001 — 個別專案失敗不影響連接
+            logger.warning("Search Console 專案沿用失敗 project_id=%s", project.id)
+
+
 def _connection_or_404(project: SiteProject) -> SearchConsoleConnection:
     connection = SearchConsoleConnection.objects.filter(project=project).first()
     if connection is None:
@@ -258,8 +356,7 @@ def domains_gsc(request):
             user=request.user, project__isnull=True
         ).first()
         if account is not None:
-            gsc.revoke(account)
-            account.delete()
+            _disconnect(account)
     return Response(_account_status(request.user))
 
 
@@ -315,6 +412,11 @@ def _account_callback(request, data: dict) -> HttpResponseRedirect:
         defaults={"refresh_token_encrypted": gsc.encrypt_token(refresh), "last_error": ""},
     )
     logger.info("Search Console 帳號層級已連接 user_id=%s", data["u"])
+    # 重新授權時，授權已失效的專案連線一併換成新授權，不必再到各專案重連
+    SearchConsoleConnection.objects.filter(user_id=data["u"], project__isnull=False).exclude(
+        last_error=""
+    ).update(refresh_token_encrypted=connection.refresh_token_encrypted, last_error="")
+    link_user_projects(connection.user)
     try:
         verified = sync_owned_domains(connection)
     except Exception:  # noqa: BLE001 — Google API 暫時失敗不該讓連接失敗
@@ -356,6 +458,7 @@ def gsc_callback(request):
         },
     )
     logger.info("Search Console 已連接 project_id=%s", project.id)
+    _ensure_project_connection(project)
     # 順便用 Search Console 的擁有者身分完成網域驗證（主動式資安測試的閘門）；失敗不影響連接
     verified: list[str] = []
     try:

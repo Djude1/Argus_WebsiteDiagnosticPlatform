@@ -18,6 +18,7 @@ import { ScoreRing } from "../../components/projects/OverviewWidgets.jsx";
 import ProjectHeader from "../../components/projects/ProjectHeader.jsx";
 import ScanDefaultsFields from "../../components/projects/ScanDefaultsFields.jsx";
 import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
+import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
   CATEGORY_LABELS,
@@ -993,9 +994,20 @@ function ProjectPagesPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState({ key: "issues", desc: true });
   const [openId, setOpenId] = useState(null);
+  // 展開的是截圖還是頁面優化（同一列一次只展開一種）
+  const [openKind, setOpenKind] = useState("screenshot");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const { scans } = useProjectScans(project.id);
+
+  function toggleRow(pageId, kind) {
+    if (openId === pageId && openKind === kind) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(pageId);
+    setOpenKind(kind);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1057,7 +1069,7 @@ function ProjectPagesPage() {
       <ProjectHeader
         project={project}
         section="頁面"
-        description={`這次掃描實際檢查的 ${pages.length} 個頁面，平均載入 ${avgLoad == null ? "—" : `${(avgLoad / 1000).toFixed(1)} 秒`}${data.site_level_findings ? `；另有 ${data.site_level_findings} 個站台層級的發現（不屬於特定頁面，見問題分析）` : ""}。`}
+        description={`這次掃描實際檢查的 ${pages.length} 個頁面，平均載入 ${avgLoad == null ? "—" : `${(avgLoad / 1000).toFixed(1)} 秒`}${data.site_level_findings ? `；另有 ${data.site_level_findings} 個站台層級的發現（不屬於特定頁面，見問題分析）` : ""}。按「優化此頁」可依診斷產生優化版，並分享連結給設計或工程師。`}
         aside={<ScanTimeCard completed={completed} current={data.scan} value={scanParam} onChange={(value) => setParam("scan", value)} />}
       />
 
@@ -1142,10 +1154,21 @@ function ProjectPagesPage() {
                               <button
                                 type="button"
                                 className="project-text-link"
-                                aria-expanded={open}
-                                onClick={() => setOpenId(open ? null : page.id)}
+                                aria-expanded={open && openKind === "screenshot"}
+                                onClick={() => toggleRow(page.id, "screenshot")}
                               >
-                                {open ? "收合截圖" : "截圖"}
+                                {open && openKind === "screenshot" ? "收合截圖" : "截圖"}
+                              </button>
+                            )}
+                            {/* 示範專案是虛構網站，複刻連不到目標 */}
+                            {!project.is_demo && !page.blocked_reason && (
+                              <button
+                                type="button"
+                                className="project-text-link"
+                                aria-expanded={open && openKind === "optimize"}
+                                onClick={() => toggleRow(page.id, "optimize")}
+                              >
+                                {open && openKind === "optimize" ? "收合優化" : "優化此頁"}
                               </button>
                             )}
                           </div>
@@ -1154,7 +1177,11 @@ function ProjectPagesPage() {
                       {open && (
                         <tr className="project-page-preview">
                           <td colSpan={5}>
-                            <PageScreenshot scanId={data.scan.id} pageId={page.id} />
+                            {openKind === "optimize" ? (
+                              <PageRebuildPanel key={page.id} scan={data.scan} page={page} />
+                            ) : (
+                              <PageScreenshot scanId={data.scan.id} pageId={page.id} />
+                            )}
                           </td>
                         </tr>
                       )}

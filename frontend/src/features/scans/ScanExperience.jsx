@@ -22,9 +22,8 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
-import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
+import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
-import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
 import { useArgusStore } from "../../store";
 import {
   CATEGORY_COLOR,
@@ -1133,6 +1132,15 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
   // 截圖放在固定高度的捲動視窗裡（整頁截圖動輒上萬像素高，不該把版面撐開）；
   // 選到有位置的發現時，把視窗捲到那個元素
   const viewportRef = useRef(null);
+  // 行動版問題（觸控目標、表單標籤、破版）是在手機寬度量的：改看行動版截圖，
+  // 並把每個實際有問題的元素逐一框出來，而不是框整個區塊
+  const mobileBoxes =
+    targetPage?.has_mobile_screenshot &&
+    selectedFinding?.page === targetPage.id &&
+    selectedFinding?.evidence_json?.annotations?.viewport === "mobile"
+      ? selectedFinding.evidence_json.annotations.boxes || []
+      : [];
+  const variant = mobileBoxes.length ? "mobile" : "desktop";
 
   useEffect(() => {
     let objectUrl = "";
@@ -1145,7 +1153,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
       try {
         const response = await api.get(
           `/scans/${scan.id}/pages/${targetPage.id}/screenshot/`,
-          { responseType: "blob" },
+          { responseType: "blob", params: variant === "mobile" ? { variant } : undefined },
         );
         objectUrl = URL.createObjectURL(response.data);
         setImageUrl(objectUrl);
@@ -1162,7 +1170,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     // scan 只認 id：ScanDetailPage 每 2 秒 polling 會產生全新的 scan 物件參考，
     // 若把整個 scan 物件放進依賴陣列，即使內容沒變也會每次重新清空/重抓截圖，畫面閃爍。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan?.id, targetPage]);
+  }, [scan?.id, targetPage, variant]);
 
   function syncScale() {
     const image = imageRef.current;
@@ -1176,8 +1184,9 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     return () => window.removeEventListener("resize", syncScale);
   }, []);
 
-  const focusBox =
-    selectedFinding?.bounding_box && selectedFinding.page === targetPage?.id
+  const focusBox = mobileBoxes.length
+    ? mobileBoxes[0]
+    : selectedFinding?.bounding_box && selectedFinding.page === targetPage?.id
       ? selectedFinding.bounding_box
       : null;
   useEffect(() => {
@@ -1188,18 +1197,19 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
   }, [focusBox, scale, imageUrl]);
 
   // 高光框：選中的 finding 在當前頁面且有座標時，畫紅色高光框
-  const overlayFindings = findings.filter(
-    (finding) => finding.bounding_box && finding.page === targetPage?.id,
-  );
+  const overlayFindings = mobileBoxes.length
+    ? []
+    : findings.filter((finding) => finding.bounding_box && finding.page === targetPage?.id);
 
   // 站台層級或無 bounding_box 的 finding → 在截圖頂部畫紅色 banner（讓使用者知道「有反應，但不是元素級」）
   const showSiteBanner =
-    selectedFinding && !selectedFinding.bounding_box;
+    selectedFinding && !selectedFinding.bounding_box && !mobileBoxes.length;
 
   // 確保「按了一定有反應」：沒 bounding_box 時退化為整頁紅色 pulse 外框；
   // 或選的是別頁的 finding（page 對不上 targetPage）也畫整頁外框提示。
   const showWholePageHighlight =
     selectedFinding &&
+    !mobileBoxes.length &&
     (!selectedFinding.bounding_box ||
       (selectedFinding.page && selectedFinding.page !== targetPage?.id));
 
@@ -1220,6 +1230,11 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
             開啟原網頁 ↗
           </a>
         </div>
+      )}
+      {mobileBoxes.length > 0 && (
+        <p className="screenshot-variant-note">
+          行動版截圖（手機寬度）：已框出 {mobileBoxes.length} 個實際有問題的元素
+        </p>
       )}
       {!imageUrl && (
         isInProgress(scan?.status) ? (
@@ -1262,6 +1277,21 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
             <div className="whole-page-highlight pointer-events-none" aria-hidden="true" />
           )}
           <div className="pointer-events-none absolute inset-0">
+            {mobileBoxes.map((box, index) => (
+              <div
+                className="element-box"
+                key={`${box.x}-${box.y}-${index}`}
+                title={box.label}
+                style={{
+                  left: `${box.x * scale}px`,
+                  top: `${box.y * scale}px`,
+                  width: `${box.width * scale}px`,
+                  height: `${box.height * scale}px`,
+                }}
+              >
+                <span className="element-box-label">{box.label}</span>
+              </div>
+            ))}
             {overlayFindings.map((finding) => {
               const box = finding.bounding_box;
               const active = selectedFinding?.id === finding.id;
@@ -1554,6 +1584,9 @@ function FindingsWorkspace({ scan }) {
         <p className="scan-report-alert">掃描已終止。已收集到的頁面與發現仍保留在下方。</p>
       )}
 
+      {/* 網站位於 CDN／反向代理之後時提醒一次；網站優勢與架構細節在上方導覽的獨立分頁 */}
+      <EdgeNotice profile={scan.site_profile} />
+
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (
         <div className="scan-summary">
@@ -1687,17 +1720,13 @@ function FindingsWorkspace({ scan }) {
             selectedFinding={selectedFinding}
             onSelectFinding={selectFinding}
           />
-          {/* 複刻是「針對某一頁」的產出，只在選定單一頁面時出現；key 讓切頁時重新掛載，
-              避免前一頁還在跑的 polling 把舊結果寫進新頁面的狀態 */}
-          {/* 示範專案是虛構網站，複刻連不到目標，不提供 */}
-          {scan.is_demo ? null : selectedPage ? (
-            <PageRebuildPanel key={selectedPage.id} scan={scan} page={selectedPage} />
-          ) : (
-            pages.length > 0 && (
-              <p className="scan-inspector-hint">
-                想複刻並優化某一頁？先在左上「頁面」選擇那一頁。
-              </p>
-            )
+          {/* 頁面優化（複刻＋依診斷優化）2026-10-06 移到專案側邊欄的「頁面」分頁 */}
+          {!scan.is_demo && scan.project && pages.length > 0 && (
+            <p className="scan-inspector-hint">
+              想依這些問題產生優化版頁面？到{" "}
+              <Link to={`/projects/${scan.project}/pages?scan=${scan.id}`}>「頁面」分頁</Link>
+              選擇要優化的頁面。
+            </p>
           )}
         </div>
       </div>
@@ -1731,12 +1760,13 @@ function FindingsWorkspace({ scan }) {
 // 路由保護與版面
 // ============================================================
 
-// 掃描詳情（含拓樸、複刻）的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，
-// 這裡只放返回與「詳情／拓樸」切換。建立掃描與掃描列表在專案的「掃描」分頁。
+// 掃描詳情的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，這裡只放返回與分頁。
+// 2026-10-06：「網站優勢」「網站架構」（含網站結構圖）獨立成分頁；修正產出移除——
+// 它產生的 JSON-LD／OG／FAQ 片段與「頁面」分頁的頁面優化重疊，而頁面優化直接給整頁成品。
 const SCAN_TABS = [
   { path: "", label: "報告" },
-  { path: "topology", label: "網站結構圖" },
-  { path: "fixes", label: "修正產出" },
+  { path: "strengths", label: "網站優勢" },
+  { path: "architecture", label: "網站架構" },
 ];
 
 function ScanLayout() {
@@ -1770,12 +1800,7 @@ function ScanLayout() {
   );
 }
 
-/**
- * /scans/:scanId/fixes：修正產出（JSON-LD、OG／meta、llms.txt、FAQ Schema）。
- * 原本放在互動報告最下方；它是要另外產生、另外計點的交付物，獨立成分頁比較清楚。
- */
-function ScanFixOutputPage() {
-  const { scanId } = useParams();
+function useScanDetail(scanId) {
   const [scan, setScan] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -1788,18 +1813,30 @@ function ScanFixOutputPage() {
       cancelled = true;
     };
   }, [scanId]);
+  return { scan, error };
+}
+
+/** /scans/:scanId/strengths：網站優勢（本次量到、已經設定正確的項目，附依據）。 */
+function ScanStrengthsPage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
-  if (scan.status !== "completed") {
-    return (
-      <section className="panel">
-        <p className="hint-text">
-          修正產出以完整爬取的內容為事實基礎，掃描完成後才能產生。
-        </p>
-      </section>
-    );
-  }
-  return <FixOutputSection scan={scan} />;
+  return <SiteStrengths profile={scan.site_profile} />;
+}
+
+/** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
+function ScanArchitecturePage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return (
+    <div className="scan-architecture">
+      <SiteArchitecture profile={scan.site_profile} />
+      <TopologyPage />
+    </div>
+  );
 }
 
 function shortenUrl(url) {
@@ -2176,7 +2213,8 @@ export {
   ScanLayout,
   ScanList,
   ScanDetailPage,
-  ScanFixOutputPage,
+  ScanStrengthsPage,
+  ScanArchitecturePage,
   TopologyPage,
   isInProgress,
 };

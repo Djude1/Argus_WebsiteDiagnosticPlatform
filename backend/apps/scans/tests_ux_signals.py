@@ -60,6 +60,30 @@ class TapTargetTests(TestCase):
         self.assertEqual(tap["severity"], Finding.Severity.MEDIUM)
 
 
+class PreciseAnnotationTests(TestCase):
+    """標註要框住實際過小的元素本身（行動版文件座標），而不是整個區塊（2026-10-06）。"""
+
+    def test_each_small_target_gets_its_own_mobile_box(self):
+        findings = analyze_ux(_input(ux_signals={"small_tap_targets": [
+            {"selector": "button.slick-prev", "label": "", "width_px": 20, "height_px": 20,
+             "box": {"x": 12, "y": 640, "width": 20, "height": 20}},
+            {"selector": "a.more", "label": "See All", "width_px": 122, "height_px": 30,
+             "box": {"x": 200, "y": 900, "width": 122, "height": 30}},
+        ]}))
+        annotations = findings[0]["evidence_json"]["annotations"]
+        self.assertEqual(annotations["viewport"], "mobile")
+        self.assertEqual(
+            [(b["x"], b["y"], b["width"], b["height"], b["label"]) for b in annotations["boxes"]],
+            [(12, 640, 20, 20, "20×20px"), (200, 900, 122, 30, "122×30px")],
+        )
+
+    def test_old_data_without_boxes_has_no_annotations(self):
+        findings = analyze_ux(_input(ux_signals={"small_tap_targets": [
+            {"selector": "a", "label": "x", "width_px": 20, "height_px": 20},
+        ]}))
+        self.assertIsNone(findings[0]["evidence_json"]["annotations"])
+
+
 class UnlabeledFieldTests(TestCase):
     def test_empty_is_not_a_finding(self):
         self.assertEqual(analyze_ux(_input(ux_signals={"unlabeled_fields": []})), [])

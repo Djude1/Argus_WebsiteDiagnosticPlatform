@@ -252,6 +252,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "top_actions",
             "warning_summary",
             "aeo_report",
+            "site_profile",
             "progress",
             "scan_log",
             "error_message",
@@ -287,6 +288,9 @@ class ScanJobStatusSerializer(serializers.ModelSerializer):
 
 
 class PageSerializer(serializers.ModelSerializer):
+    # 有行動版 UX 問題的頁面另有行動版截圖（觸控目標等標註畫在這張上）
+    has_mobile_screenshot = serializers.SerializerMethodField()
+
     class Meta:
         model = Page
         fields = [
@@ -296,12 +300,16 @@ class PageSerializer(serializers.ModelSerializer):
             "status_code",
             "title",
             "screenshot_path",
+            "has_mobile_screenshot",
             "load_time_ms",
             "depth",
             "fetch_mode",
             "blocked_reason",
             "created_at",
         ]
+
+    def get_has_mobile_screenshot(self, obj) -> bool:
+        return bool((obj.layout_metrics or {}).get("mobile_screenshot"))
 
 
 class FindingSerializer(serializers.ModelSerializer):

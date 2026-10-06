@@ -93,6 +93,11 @@ _VAGUE = re.compile(
     re.IGNORECASE,
 )
 _DEADLINE_WORDS = re.compile(r"截止|期限|截至|止|deadline|due", re.IGNORECASE)
+# 心得、見證、評價：描述個人經驗，不是站方對事實的陳述，不能拿來回答題庫問題
+_TESTIMONIAL_HEADING = re.compile(
+    r"見證|心得|感想|評價|好評|學員分享|顧客分享|testimonial|review", re.IGNORECASE
+)
+_FIRST_PERSON = re.compile(r"我(?!們)")
 
 _VALUE_FINDERS = {
     q.PHONE: _PHONE,
@@ -197,6 +202,24 @@ def _evidence(passage: Passage, value: str = "") -> Evidence:
     return Evidence(passage.page_url, passage.location(), _quote(passage.text, value), value)
 
 
+# ---------- 答案蘊含（段落是否真的在回答這一題） ----------
+
+
+def is_testimonial(passage: Passage) -> bool:
+    if _TESTIMONIAL_HEADING.search(passage.heading or ""):
+        return True
+    # 第一人稱單數敘事（「我」而非「我們」）出現兩次以上，視為個人經驗分享
+    return len(_FIRST_PERSON.findall(passage.text)) >= 2
+
+
+def entails(question: q.Question, passage: Passage) -> bool:
+    """段落是否在講這個主題，而不只是碰巧含有答案型態的字（例如心得裡的「必須」）。"""
+    if not question.anchors:
+        return True
+    haystack = f"{passage.heading or ''} {passage.text}".lower()
+    return any(anchor.lower() in haystack for anchor in question.anchors)
+
+
 # ---------- 判定 ----------
 
 
@@ -248,6 +271,8 @@ def _steps_from_list(candidates: list[Passage]) -> str:
 def judge(
     question: q.Question, candidates: list[Passage], all_passages: list[Passage]
 ) -> QuestionResult:
+    if question.source == "intent":
+        candidates = [p for p in candidates if not is_testimonial(p)]
     if not candidates:
         return QuestionResult(
             question,
@@ -255,6 +280,16 @@ def judge(
             f"已掃描的頁面中找不到提到這個主題的段落（檢索詞：{'、'.join(question.keywords[:6])}）。",
         )
 
+    on_topic = [p for p in candidates if entails(question, p)]
+    if not on_topic:
+        # 只碰到「必須」「限」這類泛用字，沒有任何段落真的在講這個主題
+        return QuestionResult(
+            question,
+            MISSING,
+            f"已掃描的頁面中沒有段落在談這個主題（主題詞：{'、'.join(question.anchors[:6])}）。",
+            candidates_checked=len(candidates),
+        )
+    candidates = on_topic
     with_value = [(p, _find_value(question.answer_type, p)) for p in candidates]
     with_value = [(p, v) for p, v in with_value if v]
 

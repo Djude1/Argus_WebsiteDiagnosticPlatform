@@ -312,9 +312,14 @@ class ScanJobViewSet(viewsets.ModelViewSet):
     def screenshot(self, request, pk=None, page_id=None):
         scan_job = self.get_object()
         page = Page.objects.filter(scan_job=scan_job, id=page_id).first()
-        if not page or not page.screenshot_path:
+        # ?variant=mobile：行動版截圖（有行動版 UX 問題的頁面才有），標註觸控目標等元素用
+        if request.query_params.get("variant") == "mobile":
+            relative = (page.layout_metrics or {}).get("mobile_screenshot", "") if page else ""
+        else:
+            relative = page.screenshot_path if page else ""
+        if not relative:
             raise Http404("找不到頁面截圖。")
-        screenshot_path = Path(settings.BASE_DIR) / page.screenshot_path
+        screenshot_path = Path(settings.BASE_DIR) / relative
         if not screenshot_path.exists():
             raise Http404("截圖檔案不存在。")
         return FileResponse(screenshot_path.open("rb"), content_type="image/png")

@@ -379,3 +379,221 @@
 .fixoutput-title {
   font-size: 1.1rem;
 }
+
+/* 網站概況（2026-10-06）：掃描頁上方導覽的「網站優勢」「網站架構」分頁，報告分頁只留 CDN 提醒；
+   提示框用整圈邊框，不用左邊條 */
+.scan-architecture {
+  display: grid;
+  gap: 1rem;
+}
+.site-profile-count {
+  margin-left: 0.25rem;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.site-profile-lead {
+  margin: 0 0 0.85rem;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.site-strength-likely {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.72rem;
+}
+.site-strength-evidence {
+  flex-basis: 100%;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.site-tech {
+  margin-top: 0.5rem;
+}
+.site-tech-title {
+  margin: 0 0 0.5rem;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.site-tech-groups {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+.site-tech-groups > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+.site-tech-groups dt {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+.site-tech-groups dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+}
+.site-tech-chip {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.8rem;
+}
+.site-profile-details {
+  margin-top: 0.85rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.6rem;
+}
+.site-profile-details summary {
+  cursor: pointer;
+  color: #0369a1;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.site-profile-details .site-profile-facts {
+  margin-top: 0.6rem;
+}
+.site-profile-block {
+  min-width: 0;
+}
+.site-profile-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.site-profile-title svg {
+  width: 18px;
+  height: 18px;
+  color: #0e7490;
+}
+.site-profile-notice {
+  margin: 0 0 0.85rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #075985;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.site-profile-facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+.site-profile-facts > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+.site-profile-facts dt {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+.site-profile-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.site-profile-ips {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-profile-ips code {
+  font-size: 0.82rem;
+}
+.site-profile-sub {
+  display: block;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.site-profile-evidence {
+  margin: 0.75rem 0 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.site-strengths {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-strengths li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+}
+.site-strength-name {
+  color: #14532d;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.site-strength-detail {
+  flex-basis: 100%;
+  margin: 0;
+  color: #475569;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+@media (max-width: 560px) {
+  .site-profile-facts > div,
+  .site-tech-groups > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+}
+
+/* 行動版逐元素標註：只框住實際有問題的元素，旁邊標尺寸或欄位名稱 */
+.screenshot-variant-note {
+  margin: 0 0 0.5rem;
+  color: #0e7490;
+  font-size: 0.8rem;
+}
+.element-box {
+  position: absolute;
+  border: 2px solid #dc2626;
+  border-radius: 3px;
+  background: rgba(220, 38, 38, 0.12);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+.element-box-label {
+  position: absolute;
+  top: -1.35rem;
+  left: -2px;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}

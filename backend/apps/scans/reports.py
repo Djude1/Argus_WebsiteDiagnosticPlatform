@@ -70,6 +70,8 @@ SCORE_NOTE = (
     "AEO 例外：以「可回答性」為起始分（每題可回答 1、資訊不足 0.5、內容衝突 0.25、無答案 0，"
     "聯絡、價格、期限等核心題權重較高），再依索引限制、標記錯誤等其他 AEO 問題扣分；"
     "網站內容不足以出題時 AEO 不評分，顯示為未充分評估。"
+    "這是 Argus 自訂的健康分數模型，用來追蹤同一個網站的改善趨勢，不是產業標準評分，"
+    "請搭配各分類分數與具體問題一起解讀。"
 )
 
 SCORE_BANDS = [
@@ -117,7 +119,7 @@ CATEGORY_IMPACT = {
           "直接反映在跳出率與轉換率上。",
 }
 
-# info 有兩種：正向指標（「探針被 WAF 擋下，代表防護有效」）與可改的小問題
+# info 有兩種：純提醒（「主動掃描 0 項發現，但目標位於 WAF 之後」）與可改的小問題
 # （缺 X-Content-Type-Options、缺 canonical）。scan 28 的 5 個 info 裡只有 1 個
 # 是正向。所以這段文字兩者都要成立——既不能套 CATEGORY_IMPACT 那套「會被攻擊者
 # 利用」（對正向指標完全相反），也不能宣告「不需要任何修補動作」（對另外 4 個
@@ -1104,9 +1106,57 @@ def build_report_payload(scan_job: ScanJob) -> dict:
     why_matters = _report_why_matters(grouped)
     if why_matters:
         payload["why_matters"] = why_matters
+    site_profile = _report_site_profile(scan_job)
+    if site_profile:
+        payload["site_profile"] = site_profile
     payload["scan_info"] = _report_scan_info(scan_job)
     payload["appendix"] = _report_appendix(scan_job, grouped, findings_payload)
     return payload
+
+
+def _report_site_profile(scan_job: ScanJob) -> dict:
+    """網站概況（site_profile.py）轉成報告用的事實表與優點清單；舊掃描沒有就回空 dict。"""
+    profile = scan_job.site_profile or {}
+    infra = profile.get("infrastructure") or {}
+    strengths = [
+        {
+            "title": s["title"],
+            "detail": s["detail"],
+            "category": s.get("category", ""),
+            "evidence": s.get("evidence", ""),
+            "confidence": s.get("confidence", "confirmed"),
+        }
+        for s in profile.get("strengths") or []
+    ]
+    facts = []
+    if infra.get("hostname"):
+        edge = infra.get("edge")
+        facts.append({"label": "網域", "value": infra["hostname"]})
+        if edge:
+            target = f"{edge['provider']} 邊緣節點（CDN／反向代理）"
+        elif infra.get("scan_target") == "origin":
+            target = "網站主機（未偵測到 CDN／反向代理）"
+        else:
+            target = "無法判斷"
+        facts.append({"label": "實際掃描到", "value": target})
+        addresses = infra.get("addresses") or []
+        if addresses:
+            facts.append({"label": "IP 與反解", "value": "；".join(
+                a["ip"] + "（" + "・".join(
+                    x for x in (f"{a['network']} 網段" if a.get("network") else "",
+                                a.get("rdns") or "無反解") if x
+                ) + "）"
+                for a in addresses
+            )})
+        if infra.get("cname"):
+            facts.append({"label": "CNAME", "value": "、".join(infra["cname"])})
+        if infra.get("nameservers"):
+            facts.append({"label": "DNS 代管", "value": "、".join(infra["nameservers"])})
+        if edge and edge.get("evidence"):
+            facts.append({"label": "判斷依據", "value": "；".join(edge["evidence"][:3])})
+    if not facts and not strengths:
+        return {}
+    return {"notice": infra.get("notice", ""), "facts": facts, "strengths": strengths}
 
 
 def report_output_path(scan_job: ScanJob) -> Path:
