@@ -1629,50 +1629,29 @@
 .project-scan-card-body { min-width: 0; }
 .project-scan-card-select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 
-/* ── 側邊欄依螢幕高度收合（2026-10-06）：必須放在檔尾，才蓋得過上面的基本規則 ── */
+/* ── 側邊欄依螢幕高度調整（2026-10-06）：必須放在檔尾，才蓋得過上面的基本規則 ──
+   每一項一律保留原本的樣子（圖示、名稱、小字說明）——使用者明確要求維持原樣。
+   螢幕不夠高時依序讓出：方案卡精簡 → 方案卡隱藏（點數在頂部列也看得到）→ 項目上下內距縮小。 */
 @media (min-width: 1024px) {
   /* 功能項目均勻攤開填滿側邊欄（使用者要求：不要下方留一片空白）。
      項目維持原本高度，剩餘空間平均分到項目之間（space-around），
      選中項目的淺藍底不會被拉長；空間不夠時 gap 為 0、照原本排列。 */
   .project-sidebar-nav {
     display: flex;
-    flex: 1 1 auto;
+    /* 不可縮到比內容矮：縮了項目會被頁尾連結蓋住（1536×730 實測） */
+    flex: 1 0 auto;
     flex-direction: column;
     justify-content: space-around;
-    min-height: 0;
   }
-  /* 只有極矮的視窗（<520px）才退回內部捲動，避免功能被截掉 */
-  @media (max-height: 519px) {
+  /* 只有極矮的視窗（所有項目最精簡仍放不下）才退回內部捲動，避免功能被截掉 */
+  @media (max-height: 609px) {
     .project-sidebar {
       overflow-y: auto;
       scrollbar-width: thin;
     }
   }
-  /* 高度不足 900px：拿掉每項的小字說明（圖示＋名稱仍清楚），項目間距收緊 */
+  /* 高度不足 900px：方案卡只留方案名稱、點數與連結 */
   @media (max-height: 899px) {
-    .project-sidebar-link-hint {
-      display: none;
-    }
-    .project-sidebar-link {
-      padding-top: 0.45rem;
-      padding-bottom: 0.45rem;
-    }
-    .project-sidebar-link.is-all-projects {
-      padding-bottom: 0.6rem;
-    }
-  }
-  /* 高度不足 780px：方案卡只留方案名稱、點數與連結 */
-  @media (max-height: 779px) {
-    .project-sidebar-head {
-      padding-bottom: 0.5rem;
-    }
-    .project-sidebar-nav {
-      margin-top: 0.5rem;
-    }
-    .project-sidebar-link {
-      padding-top: 0.35rem;
-      padding-bottom: 0.35rem;
-    }
     .project-plan-card {
       gap: 0.25rem;
       padding: 0.6rem 0.75rem;
@@ -1683,10 +1662,34 @@
       display: none;
     }
   }
-  /* 高度不足 680px：方案與點數在頂部導覽列也看得到，側邊欄只留功能 */
-  @media (max-height: 679px) {
+  /* 高度不足 800px：隱藏方案卡，項目上下內距縮小（說明文字照常顯示） */
+  @media (max-height: 799px) {
     .project-plan-card {
       display: none;
+    }
+    .project-sidebar-link {
+      padding-top: 0.3rem;
+      padding-bottom: 0.3rem;
+    }
+    .project-sidebar-link.is-all-projects {
+      padding-bottom: 0.5rem;
+    }
+  }
+  /* 高度不足 700px：再收緊內距與行高 */
+  @media (max-height: 699px) {
+    .project-sidebar-head {
+      padding-bottom: 0.5rem;
+    }
+    .project-sidebar-nav {
+      margin-top: 0.5rem;
+    }
+    .project-sidebar-link {
+      padding-top: 0.15rem;
+      padding-bottom: 0.15rem;
+    }
+    .project-sidebar-link-label,
+    .project-sidebar-link-hint {
+      line-height: 1.25;
     }
   }
 }
