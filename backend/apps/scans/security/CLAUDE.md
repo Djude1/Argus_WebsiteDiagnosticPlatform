@@ -34,7 +34,7 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 | `kali_policy.py` | 原子授權 + Redis 三目標預算 + 900s deadline + SHA-256 去重：`reserve_sqlmap_targets()` | 已建（Task 2） |
 | `kali_kubernetes.py` | K8s Job executor：`KubernetesSqlmapExecutor`、Redis 單一 owner global lock、Job-first/Secret-second lifecycle、cancellation-aware watch | 已建（Task 4） |
 | `sri_scanner.py` | SRI 缺失偵測：外部跨來源 `<script>/<link>` 缺 `integrity` | 已建 |
-| `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM）；`email_dns_posture()` 給「做得好的地方」用 | 已建 |
+| `dns_scanner.py` | DNS/郵件安全：SPF / DMARC / DNSSEC（不做 DKIM）；`email_dns_posture()` 給「網站優勢」用 | 已建 |
 | `infra_scanner.py` | 網站基礎架構：A／AAAA／CNAME／NS、IP 反解、Cloudflare 公告網段、標頭與 CNAME 指紋 → 判斷掃到的是 CDN／WAF／反向代理邊緣還是主機，產生報告提醒文字（只查目標自身網域、不發 HTTP） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
 | `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |

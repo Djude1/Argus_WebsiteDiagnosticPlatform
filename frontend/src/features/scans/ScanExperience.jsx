@@ -22,10 +22,8 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
-import { SiteProfilePanel } from "../../components/scans/SiteProfilePanel";
-import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
+import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
-import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
 import { useArgusStore } from "../../store";
 import {
   CATEGORY_COLOR,
@@ -1586,8 +1584,8 @@ function FindingsWorkspace({ scan }) {
         <p className="scan-report-alert">掃描已終止。已收集到的頁面與發現仍保留在下方。</p>
       )}
 
-      {/* 網站概況：架構（是否位於 CDN／反向代理之後）與做得好的地方——報告不只有負面問題 */}
-      <SiteProfilePanel profile={scan.site_profile} />
+      {/* 網站位於 CDN／反向代理之後時提醒一次；網站優勢與架構細節在上方導覽的獨立分頁 */}
+      <EdgeNotice profile={scan.site_profile} />
 
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (
@@ -1722,17 +1720,13 @@ function FindingsWorkspace({ scan }) {
             selectedFinding={selectedFinding}
             onSelectFinding={selectFinding}
           />
-          {/* 複刻是「針對某一頁」的產出，只在選定單一頁面時出現；key 讓切頁時重新掛載，
-              避免前一頁還在跑的 polling 把舊結果寫進新頁面的狀態 */}
-          {/* 示範專案是虛構網站，複刻連不到目標，不提供 */}
-          {scan.is_demo ? null : selectedPage ? (
-            <PageRebuildPanel key={selectedPage.id} scan={scan} page={selectedPage} />
-          ) : (
-            pages.length > 0 && (
-              <p className="scan-inspector-hint">
-                想複刻並優化某一頁？先在左上「頁面」選擇那一頁。
-              </p>
-            )
+          {/* 頁面優化（複刻＋依診斷優化）2026-10-06 移到專案側邊欄的「頁面」分頁 */}
+          {!scan.is_demo && scan.project && pages.length > 0 && (
+            <p className="scan-inspector-hint">
+              想依這些問題產生優化版頁面？到{" "}
+              <Link to={`/projects/${scan.project}/pages?scan=${scan.id}`}>「頁面」分頁</Link>
+              選擇要優化的頁面。
+            </p>
           )}
         </div>
       </div>
@@ -1766,12 +1760,13 @@ function FindingsWorkspace({ scan }) {
 // 路由保護與版面
 // ============================================================
 
-// 掃描詳情（含拓樸、複刻）的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，
-// 這裡只放返回與「詳情／拓樸」切換。建立掃描與掃描列表在專案的「掃描」分頁。
+// 掃描詳情的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，這裡只放返回與分頁。
+// 2026-10-06：「網站優勢」「網站架構」（含網站結構圖）獨立成分頁；修正產出移除——
+// 它產生的 JSON-LD／OG／FAQ 片段與「頁面」分頁的頁面優化重疊，而頁面優化直接給整頁成品。
 const SCAN_TABS = [
   { path: "", label: "報告" },
-  { path: "topology", label: "網站結構圖" },
-  { path: "fixes", label: "修正產出" },
+  { path: "strengths", label: "網站優勢" },
+  { path: "architecture", label: "網站架構" },
 ];
 
 function ScanLayout() {
@@ -1805,12 +1800,7 @@ function ScanLayout() {
   );
 }
 
-/**
- * /scans/:scanId/fixes：修正產出（JSON-LD、OG／meta、llms.txt、FAQ Schema）。
- * 原本放在互動報告最下方；它是要另外產生、另外計點的交付物，獨立成分頁比較清楚。
- */
-function ScanFixOutputPage() {
-  const { scanId } = useParams();
+function useScanDetail(scanId) {
   const [scan, setScan] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -1823,18 +1813,30 @@ function ScanFixOutputPage() {
       cancelled = true;
     };
   }, [scanId]);
+  return { scan, error };
+}
+
+/** /scans/:scanId/strengths：網站優勢（本次量到、已經設定正確的項目，附依據）。 */
+function ScanStrengthsPage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
-  if (scan.status !== "completed") {
-    return (
-      <section className="panel">
-        <p className="hint-text">
-          修正產出以完整爬取的內容為事實基礎，掃描完成後才能產生。
-        </p>
-      </section>
-    );
-  }
-  return <FixOutputSection scan={scan} />;
+  return <SiteStrengths profile={scan.site_profile} />;
+}
+
+/** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
+function ScanArchitecturePage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return (
+    <div className="scan-architecture">
+      <SiteArchitecture profile={scan.site_profile} />
+      <TopologyPage />
+    </div>
+  );
 }
 
 function shortenUrl(url) {
@@ -2211,7 +2213,8 @@ export {
   ScanLayout,
   ScanList,
   ScanDetailPage,
-  ScanFixOutputPage,
+  ScanStrengthsPage,
+  ScanArchitecturePage,
   TopologyPage,
   isInProgress,
 };

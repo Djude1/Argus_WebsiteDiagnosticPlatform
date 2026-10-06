@@ -21,7 +21,7 @@ Claude Code 進 `backend/apps/rebuild/` 工作時，本檔在專案層 `CLAUDE.m
 | `prompts.py` | `build_optimization_prompt`——要求**修改清單**而非整份 HTML；含提示注入邊界宣告 |
 | `services.py` | `run_rebuild` 流程編排；`agent_workspace()` / `output_relpath()` |
 | `tasks.py` | `run_site_rebuild`（Celery，**不重試**） |
-| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格；`ask` 追問 |
+| `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格；`ask` 追問；`share` 建立／停止分享連結；公開的 `shared_rebuild`／`shared_rebuild_html`（見下「分享連結」） |
 | `management/commands/cleanup_rebuilds.py` | 清理逾期產出（CronJob 每天跑） |
 
 ## 硬規則
@@ -36,6 +36,7 @@ Claude Code 進 `backend/apps/rebuild/` 工作時，本檔在專案層 `CLAUDE.m
 - **`download` 不得改成 inline 顯示**。產出是第三方 HTML，內容不受我們控制；
   在 Argus 自己的網域上渲染它 = 儲存型 XSS 與釣魚頁載體。必須維持
   `as_attachment=True` + `Content-Security-Policy: default-src 'none'; sandbox` + `nosniff`。
+- **`apply_edits` 拒絕新增可執行內容**（2026-10-06）：`replace` 比 `find` 多出 `<script>`、`<iframe>`、`<object>`、`<embed>`、`<form>`、`<base>`、`on*=` 事件屬性、`javascript:`、`meta refresh` 的修改一律不套用，`edit_report` 該筆帶 `rejected` 原因。送進 agent 的 HTML 來自第三方，提示注入可能誘使模型插入惡意 script，而產出會被分享、下載、甚至直接部署。原本就有的 script 原樣保留不算新增。
 - **`scan_job` 只能從 `page` 反查**，不得接受呼叫端傳入——否則可以把別人的
   page 掛到自己的 scan 底下。
 - **task 不得加自動重試**。優化會花錢，自動重試等於在使用者沒同意下重複計費。
@@ -101,3 +102,21 @@ Claude Code 進 `backend/apps/rebuild/` 工作時，本檔在專案層 `CLAUDE.m
 | 把 agent 回應直接當 HTML 存檔而不驗證來源 | 回應可能是解釋文字不是 HTML | 先讀 `output_relpath()` 的檔案，讀不到才退回 ```html 圍欄 |
 | 在 `prompts.py` 拿掉 `<untrusted-data>` 邊界宣告 | 被掃描站可對有 shell 的 agent 下指令 | 保留；真正的防線在 agent server 端權限收斂 |
 | 硬編碼 OpenCode 的位址或密碼 | 機密外洩 | `ARGUS_OPENCODE_*` 走 ConfigMap / Secret |
+
+## 分享連結（2026-10-06）
+
+網站主可以把優化結果分享給 UI/UX 工程師（不需登入）。這是 `download` 一律附件規則之外**唯一**在 Argus 網域顯示第三方 HTML 的地方，所以限制全部是硬規則：
+
+| 規則 | 為什麼 |
+|---|---|
+| token 用 `secrets.token_urlsafe(32)`，7 天到期（`SHARE_DAYS`），擁有者可隨時 `DELETE /api/rebuilds/<id>/share/` 停止；過期或停止一律 404 | 連結會被轉寄，必須不可猜、會失效、可撤銷 |
+| `GET /api/share/rebuilds/<token>/` 只回受測網址、時間、修改清單（`why`／`applied`／`rejected`）與 `reply`；不回帳號、點數、掃描 ID、`find` 原文 | 公開端點，不能洩漏使用者資訊 |
+| `html/` 回應帶 `Content-Security-Policy: sandbox; script-src 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'self'`、`X-Frame-Options: SAMEORIGIN`、`nosniff`、`no-referrer`、`noindex`、`no-store` | 第三方內容在 Argus 網域上**不執行任何 script、不能送表單**（防 XSS 與收集帳密的釣魚頁）；只有本站分享頁能內嵌 |
+| `Sec-Fetch-Dest` 是 `document`（直接整頁開啟）時回 403 | 第三方內容不以 Argus 網址單獨呈現；舊瀏覽器沒有這個標頭時仍有 sandbox 保護 |
+| 前端 iframe 一律 `sandbox=""`（不給任何權限） | 第二道防線；快照本來就是瀏覽器渲染後的 DOM，不執行 script 也看得到版面 |
+
+測試：`tests.py` 的 `RebuildShareTests`、`UnsafeEditTests`。
+
+## agent 定義
+
+`argus-rebuild` agent 的定義檔（放在 agent 主機的 `~/.config/opencode/agent/argus-rebuild.md`）以 [`docs/opencode-agents/argus-rebuild.md`](../../../docs/opencode-agents/argus-rebuild.md) 為準；每次請求的指令在 `prompts.py`，兩邊的回覆格式（`已修改：`／`未處理：`／`請人工確認：` ＋ ```json edits）與安全底線必須一致。改完定義檔要 `sudo systemctl restart opencode` 才會生效。

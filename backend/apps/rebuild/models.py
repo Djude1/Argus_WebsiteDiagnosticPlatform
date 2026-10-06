@@ -59,12 +59,24 @@ class SiteRebuild(models.Model):
     coins_charged = models.PositiveIntegerField(default=0)
     # 只放可以直接顯示給使用者的訊息；provider 原始錯誤不落地（可能含 key）。
     error = models.CharField(max_length=255, blank=True)
+    # 分享連結（2026-10-06）：讓網站主把優化結果直接傳給 UI/UX 工程師看。
+    # token 不可猜、有期限、可隨時撤銷；空字串＝未分享。檢視方式見 views.SharedRebuildView。
+    share_token = models.CharField(max_length=64, blank=True, db_index=True)
+    share_expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["scan_job", "status"])]
+
+    @property
+    def share_is_active(self) -> bool:
+        from django.utils import timezone
+
+        return bool(
+            self.share_token and self.share_expires_at and self.share_expires_at > timezone.now()
+        )
 
     def __str__(self) -> str:
         return f"SiteRebuild<{self.pk}> {self.page_id} {self.status}"

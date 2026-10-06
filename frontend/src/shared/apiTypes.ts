@@ -2099,6 +2099,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rebuilds/{id}/share/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         *
+         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         */
+        post: operations["rebuilds_share_create"];
+        /**
+         * @description POST 建立（或延長）分享連結；DELETE 立即停止分享。
+         *
+         *     分享的是唯讀檢視：原樣與優化後並排、修改清單。不含掃描帳號、點數或其他頁面。
+         */
+        delete: operations["rebuilds_share_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rebuilds/{id}/turn-trace/": {
         parameters: {
             query?: never;
@@ -3626,6 +3652,10 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
+            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            readonly share_path: string;
+            /** Format: date-time */
+            readonly share_expires_at: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3652,6 +3682,10 @@ export interface components {
             readonly has_optimized: boolean;
             readonly coins_charged: number;
             readonly error: string;
+            /** @description 前端分享頁的路徑；只回給擁有者（queryset 已限定本人），過期或未分享回空字串。 */
+            readonly share_path: string;
+            /** Format: date-time */
+            readonly share_expires_at: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -7141,6 +7175,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SiteRebuild"];
                 };
+            };
+        };
+    };
+    rebuilds_share_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteRebuild"];
+                };
+            };
+        };
+    };
+    rebuilds_share_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

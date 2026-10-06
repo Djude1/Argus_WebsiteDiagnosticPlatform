@@ -50,6 +50,31 @@
     @apply mt-1.5 w-full text-[11px] font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-700;
   }
 
+  /* 分享連結（2026-10-06）：建立、複製、停止分享 */
+  .rebuild-share {
+    @apply mt-3 rounded-xl border border-slate-200 bg-white p-3;
+  }
+
+  .rebuild-share-title {
+    @apply mb-1.5 text-xs font-bold text-slate-700;
+  }
+
+  .rebuild-share-url {
+    @apply mb-1.5 break-all text-[11px] text-slate-600;
+  }
+
+  .rebuild-share-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .rebuild-share-actions .rebuild-retry {
+    @apply mt-0 w-auto;
+  }
+
+  .project-page-preview .rebuild-box {
+    @apply max-w-xl;
+  }
+
   .rebuild-open-workspace {
     @apply mt-2 block text-center text-[11px] font-semibold text-sky-700 underline underline-offset-2 hover:text-sky-900;
   }

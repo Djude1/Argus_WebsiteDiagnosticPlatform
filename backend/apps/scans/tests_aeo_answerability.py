@@ -51,6 +51,18 @@ FAQ_SITE = """<html><body><main><h1>常見問題</h1>
 <dt>課程可以看多久？</dt><dd>詳情請洽客服。</dd></dl>
 <p>客服信箱 help@learn.example</p></main></body></html>"""
 
+# 2026-10-06 ntubimdbirc.tw 實測：學員心得裡的「必須」被當成申請資格；
+# 隱私權政策整段內文包在 h3 裡，裡面的 Email 被當成標題略過
+TRAINING = """<html><body><main><h1>課程介紹</h1>
+<p>本中心開設 Excel 資料分析與互動式前端課程，由系上教師授課，適合在職人士進修。</p>
+<p>課程招生中，歡迎報名參加各類進修課程與企業內訓，招生訊息會在官網公告。</p>
+<h2>學員見證：這門課如何改變他們的職涯！</h2>
+<p>由於工作上必須經常把大量資料整理為數據報告，回到母校上課讓我能更有效率地學習，
+希望未來能在工作之餘，再參加同類型的進修課程。</p></main></body></html>"""
+PRIVACY_H3 = """<html><body><main><h1>隱私權政策</h1><h2>八、聯繫管道</h2>
+<h3>對於本站之隱私權政策有任何疑問，請聯絡我們。 或者 Email 至： center@school.example</h3>
+</main></body></html>"""
+
 # (網站, 頁面清單, {題目 key: 人工標註的判定})
 GOLD_SITES = [
     (
@@ -97,6 +109,14 @@ GOLD_SITES = [
             "site:可以線上付款嗎？": "answered",
             "site:課程可以看多久？": "insufficient",
         },
+    ),
+    (
+        "推廣教育：心得不能當成資格答案、h3 內文裡的 Email 要找得到",
+        [
+            SitePage("https://center.example/course", TRAINING),
+            SitePage("https://center.example/privacy", PRIVACY_H3),
+        ],
+        {"contact_email": "answered", "eligibility": "missing"},
     ),
 ]
 

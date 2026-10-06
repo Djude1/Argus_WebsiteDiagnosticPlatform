@@ -72,8 +72,15 @@ ADMIN_PATH_PREFIXES = (
     "/wp-login",
     "/dashboard",
     "/manage",
+    "/management",
     "/api/",
 )
+# 登入、註冊等帳號功能頁：不是給搜尋引擎收錄的內容頁，同樣跳過 SEO/AEO/GEO
+# （2026-10-06 審查：/management/login、/management/register 被要求補 H1）
+_AUTH_PATH_SEGMENTS = {
+    "login", "signin", "sign-in", "logout", "signout", "sign-out",
+    "register", "signup", "sign-up", "forgot-password", "reset-password", "password-reset",
+}
 
 # 非 HTML 頁面的二進位/媒體檔案副檔名。這類資源沒有頁面內容，做 SEO/AEO/GEO
 # 分析會產生無意義的 finding（例如「APK 連結缺 meta description」）。
@@ -185,6 +192,8 @@ def is_admin_path(url: str) -> bool:
     CSRF 防護與安全頭部反而更重要。
     """
     path = (urlparse(url).path or "").lower()
+    if any(segment in _AUTH_PATH_SEGMENTS for segment in path.split("/")):
+        return True
     return any(path == prefix or path.startswith(prefix + "/") or path.startswith(prefix + ".")
                for prefix in ADMIN_PATH_PREFIXES)
 
@@ -619,6 +628,18 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
     )
     # 目標數量多代表整頁互動密度都偏小，比零星一兩個更值得處理。
     severity = Finding.Severity.MEDIUM if len(offenders) >= 5 else Finding.Severity.LOW
+    # 標準引用要精確（2026-10-06 審查）：40px 是 Argus 的易用性建議；WCAG 2.2 的 AA 門檻
+    # 是 2.5.8 的 24×24（相鄰間距足夠可豁免），44×44 是 AAA 的 2.5.5。
+    under_aa = sum(
+        1 for o in offenders
+        if min(o.get("width_px") or 0, o.get("height_px") or 0) < 24
+    )
+    wcag_note = (
+        f"其中 {under_aa} 個小於 24×24px，可能不符合 WCAG 2.2 AA（2.5.8），"
+        "若與相鄰目標間距足夠則可豁免，需人工確認。"
+        if under_aa
+        else "都在 WCAG 2.2 AA（2.5.8）24×24px 的最低要求以上，屬於易用性建議，不是合規問題。"
+    )
     return [
         make_finding(
             category=Finding.Category.UX,
@@ -626,8 +647,9 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
             title="觸控目標過小",
             description=(
                 f"頁面有 {len(offenders)} 個可點元素（連結、按鈕或表單控制項）在 "
-                "行動版視窗下的寬或高小於 40px。手指觸控目標建議至少 44×44px"
-                "（WCAG 2.1 目標尺寸），過小會讓使用者誤點或點不到。"
+                "行動版視窗下的寬或高小於 40px（Argus 易用性建議），過小會讓使用者誤點或點不到。"
+                f"{wcag_note}"
+                "WCAG 2.2 AAA（2.5.5）的建議是 44×44px。"
             ),
             remediation=(
                 "把可點元素的可點區域放大到至少 44×44px，可用 padding、min-width／"
@@ -767,20 +789,30 @@ def _seo_meta_description(page_input: PageAnalysisInput, parser: HtmlSignalParse
 
 
 def _seo_h1_count(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
-    """H1 不是恰好一個。"""
+    """H1 不是恰好一個。
+
+    HTML 與 Google 都不要求「只能有一個 H1」：沒有 H1 是低風險（頁面主題不明確），
+    多個 H1 只是建議（2026-10-06 審查：原本判中風險，高估了影響）。
+    """
     if parser.h1_count == 1:
         return None
+    missing = parser.h1_count == 0
     return make_finding(
         category=Finding.Category.SEO,
-        severity=Finding.Severity.MEDIUM if parser.h1_count == 0 else Finding.Severity.LOW,
+        severity=Finding.Severity.LOW if missing else Finding.Severity.INFO,
         title="H1 標題數量不正確",
-        description="每頁應有唯一且明確的 H1，協助搜尋引擎與使用者理解頁面主題。",
+        description=(
+            "頁面沒有 H1，搜尋引擎與使用者較難一眼看出頁面主題。"
+            if missing
+            else f"頁面有 {parser.h1_count} 個 H1。這不違反 HTML 規範，Google 也能處理，"
+            "但一個明確的主標題通常更容易理解。"
+        ),
         remediation="保留一個代表頁面主題的 H1，其他段落標題改用 H2-H6。",
         evidence=f"h1_count={parser.h1_count}",
         selector="h1",
         bounding_box=page_input.element_boxes.get("h1"),
         impact_area="heading",
-        priority_score=55 if parser.h1_count == 0 else 42,
+        priority_score=42 if missing else 20,
     )
 
 
@@ -1065,18 +1097,30 @@ def analyze_security_site_level(pages: list[dict]) -> list[dict]:
         )
     required_headers = {
         "strict-transport-security": (Finding.Severity.MEDIUM, "缺少 HSTS"),
-        "content-security-policy": (Finding.Severity.MEDIUM, "缺少 CSP"),
+        # CSP 是縱深防禦：缺少它不代表已有可利用的漏洞，與其他縱深防禦標頭同列低風險
+        # （2026-10-06 審查：中風險且排進優先清單第二，高估了實際風險）
+        "content-security-policy": (Finding.Severity.LOW, "缺少 CSP"),
         "x-frame-options": (Finding.Severity.LOW, "缺少 X-Frame-Options"),
         "x-content-type-options": (Finding.Severity.INFO, "缺少 X-Content-Type-Options"),
     }
+    # 防點擊劫持看的是「有沒有防護」：CSP frame-ancestors 與 X-Frame-Options 擇一即可
+    has_frame_ancestors = "frame-ancestors" in headers.get("content-security-policy", "").lower()
     for header_name, (severity, title) in required_headers.items():
+        if header_name == "x-frame-options" and has_frame_ancestors:
+            continue
         if header_name not in headers:
+            description = f"Response header 缺少 {header_name}，可能降低瀏覽器防護能力。"
+            if header_name == "x-frame-options":
+                description = (
+                    "沒有 X-Frame-Options，CSP 也沒有 frame-ancestors，"
+                    "頁面可以被其他網站嵌入，有點擊劫持（clickjacking）的風險。"
+                )
             findings.append(
                 make_finding(
                     category=Finding.Category.SECURITY,
                     severity=severity,
                     title=title,
-                    description=f"Response header 缺少 {header_name}，可能降低瀏覽器防護能力。",
+                    description=description,
                     remediation=f"依網站需求設定合適的 {header_name} header。",
                     evidence=f"missing_header={header_name}",
                     impact_area="security_headers",
@@ -1438,6 +1482,8 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
                 description=(
                     "llms.txt 可主動告知 AI 系統網站定位與重要頁面；"
                     "缺少時 AI 需自行推斷網站重點。"
+                    "這是新興做法、尚未成為正式標準，主要搜尋與 AI 服務是否採用仍不確定，"
+                    "列為選擇性建議。"
                 ),
                 remediation="在網站根目錄建立 llms.txt，列出網站簡介與重要頁面連結。",
                 evidence="llms_txt_found=false",

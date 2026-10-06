@@ -47,7 +47,7 @@
     },
     "site_profile": {
       "type": "object",
-      "description": "網站概況（Argus 在地擴充）：架構事實表、CDN／反向代理提醒與做得好的地方",
+      "description": "網站概況（Argus 在地擴充）：架構事實表、CDN／反向代理提醒與網站優勢（附依據與可信度）",
       "properties": {
         "notice": {"type": "string"},
         "facts": {
@@ -66,7 +66,9 @@
             "properties": {
               "title": {"type": "string"},
               "detail": {"type": "string"},
-              "category": {"type": "string"}
+              "category": {"type": "string"},
+              "evidence": {"type": "string"},
+              "confidence": {"type": "string", "enum": ["confirmed", "likely"]}
             }
           }
         }

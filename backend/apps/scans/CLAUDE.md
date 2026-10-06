@@ -102,7 +102,7 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 2026-08-30 依 [`docs/scan-report-quality-audit-2026-08-30.md`](../../../docs/scan-report-quality-audit-2026-08-30.md) 修正，四條規則都有測試鎖定（`tests_scoring_and_report_grouping.py`）：
 
 1. **同一分類內同一 `rule_id` 只扣一次分**。一個問題出現在幾頁是「廣度」不是「嚴重度」；報告本來就把它們合併成一筆顯示，計分不跟著去重會讓使用者看到一項卻被扣了 N 次。
-2. **`info` 不扣分**。info 多半是純資訊甚至正向指標（例如「Nuclei 探針被 WAF 攔截，代表防護有效」）。**同理 `info` 不進 `top_actions`**——它對應的建議修補是「無需修復」，列進「優先改善建議」會被當成待辦。
+2. **`info` 不扣分**。info 多半是純資訊或提醒（例如「主動弱點掃描 0 項發現，但目標位於 WAF／CDN 之後」——0 項發現不能當成防護有效的證據，2026-10-06 起措辭改為「結果可能不完整」）。**同理 `info` 不進 `top_actions`**——它對應的建議修補是「無需修復」，列進「優先改善建議」會被當成待辦。
 3. **指數衰減 `100 * exp(-penalty / SCORE_DECAY_CONSTANT)`**，不是 `max(0, 100 - penalty)`。舊公式累積 100 分懲罰後永遠是 0，無法分辨「4 個高風險」與「40 個高風險」。`SCORE_DECAY_CONSTANT` 是可調的產品參數，不是演算法細節。
 4. **未評估的分類不寫進 `category_scores`，缺鍵即代表未評估**。`category_scores` **不保證含全部 5 個分類，取值一律用 `.get()`**。這同時保證「報告列出的分數」與「`overall_score` 平均的分母」是同一組，使用者算得出總分。
 5. **有基準分的分類（`base_scores`，目前只有 AEO）**：`calculate_scores(findings, tested, base_scores={"aeo": N})` 以 N 取代 100 當起點，`BASE_SCORED_RULE_PREFIXES`（`aeo-answer-`）的逐題 finding 不再扣分（已反映在基準分裡），其餘 AEO finding（noindex、標記不一致…）照常衰減扣分。`rerun_scan` 與 `finding_normalization._rescore` 都從 `aeo_report["score"]` 取回基準分（第 5 條由 `tests_aeo_answerability.py` 鎖定）。
@@ -127,6 +127,10 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 
 - 結果存在 `ScanJob.aeo_report`（migration 0018）：`status`、`reason`、`questions_total`、`counts`、`answered_ratio`（有答案的問題比例）、`evidence_ratio`（答案附有原文的比例）、`score`、`questions[]`（逐題判定、理由、證據），`method` 目前是 `rules-v1`。
 - 呈現：網站專案的「AEO 問答」分頁（`/projects/:id/aeo`，`AeoAnswerPanel`；2026-10-02 前在掃描詳情最下方）、PDF 報告範圍表「AEO 問答檢測」列與附錄 6.6 逐題表（`appendix.aeo_items`，`RENDERER_VERSION` 3）、MCP `get_scan` 的 `aeo` 欄位（證據遮罩）、`ScanJobSerializer.aeo_report`。
+- **答案蘊含（2026-10-06，ntubimdbirc.tw 第二輪審查）**：
+  - 題庫意圖可設 `anchors`（主題詞）。段落或其小標題沒有主題詞時，答案值不算數；沒有任何段落在談這個主題就判 `missing`，不再拿無關段落當「資訊不足」的證據。實例：學員心得裡的「必須」被當成申請資格。
+  - 心得／見證段落（小標題含「見證、心得、評價…」，或第一人稱單數「我」出現兩次以上）不能回答題庫問題（`answers.is_testimonial`）。
+  - 超過 `MAX_HEADING_CHARS`（80）或含句中句號的 h1–h6 視為內文段落（`content._is_body_text`）。實例：隱私權政策整段寫在 h3 裡，裡面的 Email 被當成標題略過，造成資安判「公開 Email」、AEO 卻判「找不到 Email」的矛盾。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
 
@@ -150,7 +154,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 
 ## SEO 分析與 Search Console（2026-10-03，`seo/`）
 
-會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層，是給網站主逐頁查證與修正的工作清單。**例外（2026-10-06）**：`seo/site_findings.py` 把站台層級的結論轉成 Finding（計入 SEO 分數、出現在問題清單與報告）——站內失效連結 `seo-broken-internal-links`（中）、www／非 www 都直接回應 `seo-www-duplicate`（低）、og:url／canonical／robots Sitemap 宣告的主機與實際不同 `seo-declared-host-mismatch`（低）、多頁同一個 title `seo-duplicate-titles`（中，≥3 頁且過半）；ntubimdbirc.tw 實測這些只出現在 SEO 頁明細、報告完全沒有。其餘逐頁明細仍不產生 Finding。
+會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層，是給網站主逐頁查證與修正的工作清單。**例外（2026-10-06）**：`seo/site_findings.py` 把站台層級的結論轉成 Finding（計入 SEO 分數、出現在問題清單與報告）——站內失效連結 `seo-broken-internal-links`（中）、主網址設定不一致 `seo-primary-url-inconsistent`（低；同一個根本原因的症狀合併成一項：www／非 www 都直接回應、og:url／canonical／robots Sitemap 指向另一個主機、沒有 canonical 的頁數，列在 `evidence_json.symptoms`；2026-10-06 前拆成 `seo-www-duplicate`／`seo-declared-host-mismatch` 兩項）、多頁同一個 title `seo-duplicate-titles`（中，≥3 頁且過半）；ntubimdbirc.tw 實測這些只出現在 SEO 頁明細、報告完全沒有。其餘逐頁明細仍不產生 Finding。
 
 | 模組 | 職責 |
 |---|---|
@@ -178,7 +182,8 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | refresh token 以 Fernet 加密存 `SearchConsoleConnection.refresh_token_encrypted`（金鑰 `ARGUS_GSC_TOKEN_KEY`，空值由 `SECRET_KEY` 推導）；不保存 access token、不回傳、不寫 log | 機密外洩面最小化；輪替 `SECRET_KEY` 的代價是使用者要重新連接 |
 | 選擇資源時以 Google 回傳的清單驗證；`property_matches` 只用來提示，不擋 | 使用者可能用網域資源涵蓋多個子網域 |
 | 授權失效（`invalid_grant`／401）寫 `last_error`，前端顯示重新連接 | 使用者可能在 Google 帳號頁撤銷授權 |
-| 中斷連線時呼叫 Google revoke，失敗不影響本地刪除 | |
+| 中斷連線時呼叫 Google revoke，失敗不影響本地刪除；**同一個授權還被其他連線共用時只刪本地**（`seo_views._disconnect`） | 專案沿用帳號層級授權後兩筆連線是同一個 refresh token，撤銷會讓另一邊一起失效 |
+| 網域驗證頁（帳號層級）已連接時，SEO 分析頁 `GET gsc/` 自動沿用同一個授權建立專案連線，唯一相符的資源自動選好（`_adopt_account_connection`，2026-10-06） | 使用者回報同一個 Google 帳號要連兩次 |
 | 示範專案不能連接 | 虛構網站 |
 
 設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`，`DEBUG=False` 時一律組成 `https://`——正式環境 cloudflared → Gateway 走 http，`X-Forwarded-Proto` 是 http，2026-10-04 曾因此 `redirect_uri_mismatch`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie，多網域時保持空值）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
@@ -231,10 +236,10 @@ schema 沒有的東西（掃描頁面清單、已解決項目清單）不要硬�
 | 字級層級固定在 `theme.TYPE`：章節 20、小節 13.5、問題名稱 12、內文 10.5、標籤 9、中繼資料與證據 8.5（pt） | 使用者回饋舊版標題、章節、問題名稱、說明字重太接近，讀不出層次 |
 | **不用任何彩色左邊條**（卡片標題、怎麼修、檢測依據、嚴重度分組、h2 都拿掉）；層次靠字級、字重、留白與細底線 | 全站規則（frontend/CLAUDE.md），報告也一樣 |
 | 中風險以上用完整卡片；低風險與資訊提示是精簡條目（標題＋一句問題＋一句建議，不列逐頁證據與追溯資訊） | 讀者注意力要放在該處理的項目；舊版 25 頁中低風險卡片佔一半 |
-| 第一章摘要先列「做得好的地方」與「網站架構」（`payload.site_profile`：事實表＋CDN／反向代理提醒），之後才是分數圖 | 報告不能只有負面問題；網站在 Cloudflare 等邊緣之後時，必須提醒 Port／主機層級資訊反映的是邊緣節點 |
+| 第一章摘要先列「建議先處理這 3 件事」（優先清單前三項）、「網站優勢」（每項附依據；由間接訊號推論的標「推論」，例如單次實驗室量測的載入時間）與「網站架構」（`payload.site_profile`：事實表＋CDN／反向代理提醒），之後才是分數圖 | 報告不能只有負面問題；網站在 Cloudflare 等邊緣之後時，必須提醒 Port／主機層級資訊反映的是邊緣節點 |
 | 附錄「修補後如何驗證」只逐項列中風險以上，其餘一行帶過（payload 仍保留全部 `verify_items`） | 舊版這張表單獨佔 5 頁 |
 
-ntubimdbirc.tw（26 項）由 25 頁降到 19 頁。
+ntubimdbirc.tw（26 項）由 25 頁降到 19 頁。2026-10-06 第二輪：第 3 章「這些分類為什麼重要」與第 5 章「掃描資訊與範圍」不再強制換頁（章節標題 `keep_with_next`），浮水印縮小、透明度降低；分數說明註明是 Argus 自訂模型、不是產業標準（`SCORE_NOTE`）。
 
 ### 報告要短：樣板只講一次（scan 38 事後修正）
 
@@ -254,6 +259,7 @@ scan 38 是 34 頁，使用者回饋「結構跟之前差不多、優化不明�
 
 ### 證據品質（2026-09-28 報告審查）
 
+- **嚴重度反映實際風險（2026-10-06 第二輪審查，`tests_accuracy_review.py`）**：缺少 CSP 是縱深防禦，列低風險（原中風險）；CSP 有 `frame-ancestors` 就不報缺少 X-Frame-Options（看的是有沒有防點擊劫持）；沒有 H1 是低風險、多個 H1 只是 info；登入／註冊／忘記密碼等帳號功能頁（路徑段 `login`、`register`、`signup`… 與 `/management`）比照後台跳過 SEO／AEO／GEO（`is_admin_path`）；觸控目標的描述區分 Argus 易用性建議（40px）與 WCAG 2.2（AA 2.5.8＝24×24 且間距足夠可豁免、AAA 2.5.5＝44×44）；llms.txt 標明是新興做法。
 - **PII 分級**（`scanners.analyze_data_exposure`）：高風險 `SECURITY_PII_8B24BB8B28` 只給身分證號／信用卡號；手機、非本站網域 Email、藏在 HTML 註解的資料、開發殘留 → 中風險 `security-pii-personal-contact`；本站網域（同 registrable domain）或 `mailto:`／`tel:` 的聯絡方式 → info `security-pii-public-contact`（多半是刻意公開）。舊版一看到任何 Email 就判高風險。信箱名稱含網站名稱（`ntubimdbirc@ntub.edu.tw` 之於 ntubimdbirc.tw）或角色信箱（info、service、contact…）也視為組織窗口；`placeholder` 屬性的填寫範例（`e.g.0911-222-333`）不掃描（2026-10-06 實測誤報）。
 - **判定依據**：高風險、PII 與 AI 觀察項目在 `evidence_json.assessment`（或 `reports._assessment_for` 的預設）寫「成立條件／實際觀察／尚缺證據／驗證方法」，報告卡片逐項印出。
 - **AI 觀察封頂中風險**（`reports._report_severity`，對 `agent-` 規則；舊資料亦同）並標示來源；每張卡片一行追溯資訊：規則、觀測時間、來源（規則引擎／工具／AI Agent）。
@@ -348,7 +354,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -416,7 +422,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
-| `site_profile` | `stage_site_profile` | 網站概況寫 `ScanJob.site_profile`（`site_profile.py`）：基礎架構（`security/infra_scanner.py`：A／AAAA／CNAME／NS、IP 反解、Cloudflare 網段、標頭／CNAME 指紋 → 掃到的是 CDN 邊緣還是主機）與「做得好的地方」（HTTPS、HSTS、nosniff、CSP、DNSSEC、SPF -all、DMARC、robots＋sitemap、正確 404、行動版無破版、載入快；只列本次有勾的維度，且不可與同次問題矛盾）；失敗只記 log |
+| `site_profile` | `stage_site_profile` | 網站概況寫 `ScanJob.site_profile`（`site_profile.py`，version 2）：基礎架構（`security/infra_scanner.py`：A／AAAA／CNAME／NS、IP 反解、Cloudflare 網段、標頭／CNAME 指紋 → 掃到的是 CDN 邊緣還是主機）、「網站優勢」`strengths`（HTTPS、HSTS、nosniff、CSP、DNSSEC、SPF -all、DMARC、robots＋sitemap、正確 404、行動版無破版、載入時間；只列本次有勾的維度、不可與同次問題矛盾；每項附 `evidence` 與 `confidence`＝confirmed／likely。**偵測到 CDN 不等於 WAF 有在擋**：只有本次掃描出現 `waf_block_detected`（403／challenge）才寫「確認防護規則已生效」，否則寫「無法從外部確認」）與「使用的技術」`technologies`（`tech_stack.py`：只看首頁 HTML 與回應標頭的特有路徑／屬性，加上 Katana 已辨識的技術，每項附依據；不回報版本號）；失敗只記 log |
 | `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |
 
 階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。
