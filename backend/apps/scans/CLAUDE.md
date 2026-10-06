@@ -183,7 +183,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | 選擇資源時以 Google 回傳的清單驗證；`property_matches` 只用來提示，不擋 | 使用者可能用網域資源涵蓋多個子網域 |
 | 授權失效（`invalid_grant`／401）寫 `last_error`，前端顯示重新連接 | 使用者可能在 Google 帳號頁撤銷授權 |
 | 中斷連線時呼叫 Google revoke，失敗不影響本地刪除；**同一個授權還被其他連線共用時只刪本地**（`seo_views._disconnect`） | 專案沿用帳號層級授權後兩筆連線是同一個 refresh token，撤銷會讓另一邊一起失效 |
-| 網域驗證頁（帳號層級）已連接時，SEO 分析頁 `GET gsc/` 自動沿用同一個授權建立專案連線，唯一相符的資源自動選好（`_adopt_account_connection`，2026-10-06） | 使用者回報同一個 Google 帳號要連兩次 |
+| **只連一次、不必選資源**（`seo_views._ensure_project_connection`，2026-10-06）：網域驗證頁連接 Google 後，callback 立刻讓使用者所有網站專案沿用同一個授權（`link_user_projects`），重新授權也會修復授權已失效的專案連線；SEO 分析頁（`GET seo/` 與 `GET gsc/`）若專案仍沒有連線或沒選資源，當場沿用並自動選資源（`pick_property`：網域資源 `sc-domain:` 優先、多個取最具體，否則用協定＋主機相同的網址前置字元資源）。選不到時 10 分鐘內不重試；使用者按「更換資源」後 24 小時內不自動選回 | 使用者回報同一個 Google 帳號要連兩次、連好後還要在清單裡再按「選擇」；**SEO 頁讀的是 `GET seo/` 的 `gsc` 狀態**，只掛在 `GET gsc/` 不會生效 |
 | 示範專案不能連接 | 虛構網站 |
 
 設定：`GOOGLE_OAUTH_CLIENT_ID`（與登入共用）＋`GOOGLE_OAUTH_CLIENT_SECRET` 都有值才啟用；`ARGUS_GSC_REDIRECT_URI` 選填（空值＝目前網域的 `/api/gsc/callback/`，`DEBUG=False` 時一律組成 `https://`——正式環境 cloudflared → Gateway 走 http，`X-Forwarded-Proto` 是 http，2026-10-04 曾因此 `redirect_uri_mismatch`；nonce cookie 綁網域，固定成別的網域會讓 callback 讀不到 cookie，多網域時保持空值）。Google Cloud 端：啟用 Search Console API、同意畫面加 scope、OAuth 用戶端登記每個對外網域的 callback。
