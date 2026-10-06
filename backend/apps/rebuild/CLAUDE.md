@@ -13,7 +13,8 @@ Claude Code 進 `backend/apps/rebuild/` 工作時，本檔在專案層 `CLAUDE.m
 **兩個層次（2026-10-06）**：使用者回報「修好了但畫面看起來一模一樣」。agent 的修改分
 `technical`（SEO／Meta／無障礙／語意／效能／連結／表單）與 `visual`（版面、層次、字體、間距、
 導覽、主要按鈕、行動版、互動回饋——以獨立的 `<style data-argus="類別">` 加在 `</head>` 前），
-每筆帶 `layer`／`category`／`why`／`impact`；另回 `summary` 與 `not_handled`
+每筆帶 `layer`／`category`／`why`／`impact`（visual 只給 `css`，由系統包成 `<style>`，
+模型不必在 JSON 字串裡手寫 HTML 屬性）；另回 `summary` 與 `not_handled`
 （`owner`＝server／content／design）。結果存 `edit_report`（逐筆）與 `outcome`
 （`summary`、`not_handled`、`metrics`）。`metrics.compare()` 以同一套規則量測原始與優化後
 HTML（title 長度、meta、canonical、OG、lang、H1、缺 alt、沒標籤的欄位、語意地標、viewport、
@@ -35,6 +36,15 @@ lazy 圖片、頁內樣式規則數），只列有變化的指標，**不呼叫�
 | `views.py` | `SiteRebuildViewSet`；`download` 一律 as_attachment + CSP sandbox；`cost` 讓前端先知道價格；`ask` 追問；`share` 建立／停止分享連結；公開的 `shared_rebuild`／`shared_rebuild_html`（見下「分享」） |
 | `management/commands/cleanup_rebuilds.py` | 清理逾期產出（CronJob 每天跑） |
 
+**回覆解析要能容錯（2026-10-06 事故）**：使用者對 ntubimdbirc.tw 首頁優化，agent 思考約
+5 分鐘後回「沒有提出任何修改」。當時的解析只要整段 JSON 有一點問題就整批丟掉：圍欄沒收尾
+（輸出被截斷）找不到候選、退路只認 `{"edits"` 開頭（新格式以 `summary` 開頭）、某一筆
+字串沒跳脫好。現在：JSON 放在回覆最前面（截斷只損失說明）→ `strict=False` 容許字串內換行 →
+無圍欄／未收尾時從 `{"summary"`／`{"edits"` 解析 → 仍失敗就逐筆救回完整的修改
+（`_salvage_payload`）。真的沒有修改時，`_no_edits_reason` 依 `finish`（OpenCode 訊息的
+結束原因，`length`＝撞到輸出上限）與回覆內容說明是哪一種失敗；失敗頁會顯示 agent 的說明與
+思考過程。prompt 也要求思考精簡、不在思考中先寫 CSS／JSON 草稿、整份回覆約 6000 字元。
+
 ## 硬規則
 - **複刻不得改用 LLM**。爬蟲已經存了 DOM，用模型「推理出一樣的頁面」既貴又不可能逐字一致。
 - **優化不得改回「要模型輸出整份 HTML」**。真實網頁動輒數萬字，會撞到單次輸出
@@ -47,7 +57,7 @@ lazy 圖片、頁內樣式規則數），只列有變化的指標，**不呼叫�
 - **`download` 不得改成 inline 顯示**。產出是第三方 HTML，內容不受我們控制；
   在 Argus 自己的網域上渲染它 = 儲存型 XSS 與釣魚頁載體。必須維持
   `as_attachment=True` + `Content-Security-Policy: default-src 'none'; sandbox` + `nosniff`。
-- **`apply_edits` 拒絕新增可執行內容**（2026-10-06）：`replace` 比 `find` 多出 `<script>`、`<iframe>`、`<object>`、`<embed>`、`<form>`、`<base>`、`on*=` 事件屬性、`javascript:`、`meta refresh`，或 CSS 的 `@import`、`url(http…)`／`url(//…)`、`expression()`、`-moz-binding`、`behavior:` 的修改一律不套用，`edit_report` 該筆帶 `rejected` 原因。送進 agent 的 HTML 來自第三方，提示注入可能誘使模型插入惡意 script，而產出會被分享、下載、甚至直接部署。原本就有的 script 原樣保留不算新增。
+- **`apply_edits` 拒絕新增可執行內容**（2026-10-06）：`replace` 比 `find` 多出 `<script>`、`<iframe>`、`<object>`、`<embed>`、`<form>`、`<base>`、`on*=` 事件屬性、`javascript:`、`meta refresh`，`css` 欄位含 `<`，或 CSS 的 `@import`、`url(http…)`／`url(//…)`、`expression()`、`-moz-binding`、`behavior:` 的修改一律不套用，`edit_report` 該筆帶 `rejected` 原因。送進 agent 的 HTML 來自第三方，提示注入可能誘使模型插入惡意 script，而產出會被分享、下載、甚至直接部署。原本就有的 script 原樣保留不算新增。
 - **`scan_job` 只能從 `page` 反查**，不得接受呼叫端傳入——否則可以把別人的
   page 掛到自己的 scan 底下。
 - **task 不得加自動重試**。優化會花錢，自動重試等於在使用者沒同意下重複計費。
@@ -134,4 +144,4 @@ lazy 圖片、頁內樣式規則數），只列有變化的指標，**不呼叫�
 
 ## agent 定義
 
-`argus-rebuild` agent 的定義檔（放在 agent 主機的 `~/.config/opencode/agent/argus-rebuild.md`）以 [`docs/opencode-agents/argus-rebuild.md`](../../../docs/opencode-agents/argus-rebuild.md) 為準；每次請求的指令在 `prompts.py`，兩邊的兩個層次、回覆格式（`已修改：`／`未處理：`／`請人工確認：` ＋ ```json `{summary, edits[layer, category, why, impact], not_handled}`）與安全底線必須一致。改完定義檔要 `sudo systemctl restart opencode` 才會生效。
+`argus-rebuild` agent 的定義檔（放在 agent 主機的 `~/.config/opencode/agent/argus-rebuild.md`）以 [`docs/opencode-agents/argus-rebuild.md`](../../../docs/opencode-agents/argus-rebuild.md) 為準；每次請求的指令在 `prompts.py`，兩邊的兩個層次、回覆格式（先 ```json `{summary, edits[layer, category, find/replace 或 css, why, impact], not_handled}`，再 `已修改：`／`未處理：`／`請人工確認：`）與安全底線必須一致。改完定義檔要 `sudo systemctl restart opencode` 才會生效。

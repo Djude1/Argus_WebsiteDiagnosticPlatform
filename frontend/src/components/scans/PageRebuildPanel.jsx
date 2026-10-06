@@ -142,6 +142,7 @@ function PageRebuildPanel({ scan, page }) {
             <button type="button" className="primary-button" disabled={busy} onClick={start}>
               {busy ? "建立中…" : "再試一次"}
             </button>
+            <Link className="opt-text-button" to={resultPath}>查看過程</Link>
           </div>
         </>
       )}
