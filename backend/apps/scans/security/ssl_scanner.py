@@ -31,19 +31,32 @@ def _eval_cert_expiry(not_after: str) -> list[dict]:
     except Exception:
         return []
     days = (expires - time.time()) / 86400
-    if days <= 7:
-        sev, rule = "critical", "ssl-cert-expiring"
-    elif days <= 30:
+    # Let's Encrypt、Cloudflare 等自動續期憑證效期 90 天、剩約 30 天時才續期，
+    # 15–30 天屬正常週期，只提醒；剩 14 天以內仍未續期才代表續期可能失敗（2026-10-06）。
+    if days <= 0:
+        sev, rule = "critical", "ssl-cert-expired"
+    elif days <= 7:
         sev, rule = "high", "ssl-cert-expiring"
+    elif days <= 14:
+        sev, rule = "medium", "ssl-cert-expiring"
+    elif days <= 30:
+        sev, rule = "info", "ssl-cert-expiring"
     else:
         return []
-    if days <= 0:
-        rule = "ssl-cert-expired"
+    if sev == "info":
+        description = (
+            f"憑證約 {int(days)} 天後到期（notAfter={not_after}）。若使用自動續期"
+            "（Let's Encrypt、Cloudflare 等），這段期間會自動更新，屬正常狀態。"
+        )
+        remediation = "確認憑證有自動續期；若是手動申請的憑證，請排定更新。"
+    else:
+        description = f"憑證距到期約 {int(days)} 天（notAfter={not_after}）。"
+        remediation = "儘速更新 SSL 憑證，並檢查自動續期是否失敗，避免使用者連線出現警告或中斷。"
     return [make_finding(
         category="security", severity=sev, rule_id=rule,
-        title="SSL 憑證即將到期或已過期",
-        description=f"憑證距到期約 {int(days)} 天（notAfter={not_after}）。",
-        remediation="儘速更新 SSL 憑證，避免使用者連線出現警告或中斷。",
+        title="SSL 憑證已過期" if days <= 0 else "SSL 憑證即將到期",
+        description=description,
+        remediation=remediation,
         evidence=f"notAfter={not_after}", impact_area="vulnerability",
     )]
 

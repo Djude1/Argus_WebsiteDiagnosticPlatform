@@ -1081,6 +1081,19 @@ class PiiDetectionTests(APITestCase):
         self.assertEqual(findings[0]["severity"], "medium")
         self.assertEqual(findings[0]["rule_id"], "security-pii-personal-contact")
 
+    def test_placeholder_sample_number_is_not_pii(self):
+        # 註冊表單的填寫範例不是任何人的資料（2026-10-06 ntubimdbirc.tw 註冊頁）
+        page = self._page_input('<input type="text" placeholder="e.g.0911-222-333">')
+        self.assertEqual(analyze_data_exposure(page), [])
+
+    def test_organizational_email_is_only_info(self):
+        # 信箱名稱就是網站名稱（上層機構網域）或角色信箱，屬對外窗口而非個人資料
+        page = self._page_input(
+            "<p>聯絡 example@school.edu.tw 或 service@partner.org</p>"
+        )
+        findings = analyze_data_exposure(page)
+        self.assertEqual([f["severity"] for f in findings], ["info"])
+
     def test_site_domain_or_mailto_email_is_only_info(self):
         page = self._page_input(
             '<p>承辦人 staff@example.com</p><a href="mailto:help@other.org">help@other.org</a>'

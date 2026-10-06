@@ -11,6 +11,20 @@ LINE      = "E2E8F0"   # inner grid lines
 BORD      = "CBD5E1"   # table outer border
 FIXBLUE   = "F0F9FF"   # "怎麼修" action-zone fill
 
+# 字級層級（pt）：章節 > 小節 > 問題名稱 > 內文 > 標籤／中繼資料 > 證據。
+# 2026-10-06 使用者回饋：標題、章節、問題名稱、說明與補充資訊的字重太接近，讀不出層次。
+TYPE = {
+    "h1": 20,
+    "h2": 13.5,
+    "finding": 12,
+    "finding_compact": 10.5,
+    "body": 10.5,
+    "small": 9.5,
+    "label": 9,
+    "meta": 8.5,
+    "evidence": 8.5,
+}
+
 # Fonts
 FONT_CJK  = "Microsoft JhengHei"
 FONT_MONO = "Consolas"

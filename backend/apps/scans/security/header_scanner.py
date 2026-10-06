@@ -52,6 +52,7 @@ def _eval_headers(headers: dict, url: str) -> list[dict]:
                 remediation="改為明確白名單來源，避免使用 *。",
                 evidence="ACAO: *", impact_area="vulnerability",
             ))
+    out.extend(_eval_hsts(headers.get("strict-transport-security", "")))
     csp = headers.get("content-security-policy", "")
     if csp and ("unsafe-inline" in csp or "unsafe-eval" in csp):
         out.append(make_finding(
@@ -62,6 +63,47 @@ def _eval_headers(headers: dict, url: str) -> list[dict]:
             evidence=csp[:500], impact_area="vulnerability",
         ))
     return out
+
+
+_HSTS_PRELOAD_MIN_AGE = 31536000  # hstspreload.org 要求至少一年
+
+
+def _hsts_max_age(value: str) -> int | None:
+    for part in value.split(";"):
+        key, _, raw = part.strip().partition("=")
+        if key.lower() == "max-age":
+            try:
+                return int(raw.strip().strip('"'))
+            except ValueError:
+                return None
+    return None
+
+
+def _eval_hsts(value: str) -> list[dict]:
+    """HSTS 有標 preload 卻不符合預載清單條件（2026-10-06 實測：max-age 180 天＋preload）。"""
+    if not value or "preload" not in value.lower():
+        return []
+    max_age = _hsts_max_age(value)
+    problems = []
+    if max_age is None or max_age < _HSTS_PRELOAD_MIN_AGE:
+        problems.append(f"max-age 至少要 {_HSTS_PRELOAD_MIN_AGE}（一年），目前是 {max_age}")
+    if "includesubdomains" not in value.lower():
+        problems.append("缺少 includeSubDomains")
+    if not problems:
+        return []
+    return [make_finding(
+        category="security", severity="info", rule_id="header-hsts-preload-ineligible",
+        title="HSTS 標示 preload，但不符合瀏覽器預載清單條件",
+        description=(
+            "網站已啟用 HSTS（很好），也標示希望加入瀏覽器的 HSTS 預載清單，"
+            "但目前設定不符合 hstspreload.org 的條件，不會被收錄：" + "；".join(problems) + "。"
+        ),
+        remediation=(
+            "確認所有子網域都支援 HTTPS 後，把 max-age 調到 31536000 以上並保留 includeSubDomains、"
+            "preload，再到 hstspreload.org 申請；不打算申請就移除 preload。"
+        ),
+        evidence=f"Strict-Transport-Security: {value}", impact_area="security_headers",
+    )]
 
 
 def analyze_headers(pages: list[dict]) -> list[dict]:

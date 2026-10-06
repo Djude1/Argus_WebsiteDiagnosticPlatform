@@ -54,7 +54,9 @@ from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.security.waf_scanner import detect_waf_block
 from apps.scans.seo.collect import build_link_report
+from apps.scans.seo.site_findings import seo_site_findings
 from apps.scans.services import assert_public_http_url
+from apps.scans.site_profile import build_site_profile
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +322,38 @@ def _fail_and_refund_stale_scan(scan_job_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
+class ScanTargetUnreachable(Exception):
+    """爬取結束卻沒有任何可分析的頁面：不能標成「完成」並給出看似正常的分數。
+
+    訊息會直接顯示給使用者（不含內部細節）。
+    """
+
+
+def _ensure_usable_pages(crawled_pages: list[dict], warnings: dict) -> None:
+    """至少要有一頁正常回應（2xx／3xx 且未被阻擋），否則整次掃描視為失敗並全額退款。
+
+    2026-10-06 實測：瀏覽器無法連線時爬到 0 頁，掃描仍標「完成」並給 73 分（只剩 DNS／SSL
+    等站台層級檢查），使用者會誤以為網站很健康。
+    """
+    usable = [
+        page for page in crawled_pages
+        if page.get("status_code") and page["status_code"] < 400 and not page.get("blocked_reason")
+    ]
+    if usable:
+        return
+    if crawled_pages:
+        raise ScanTargetUnreachable(
+            "沒有取得任何可分析的頁面：網站回應錯誤或擋下了掃描（可能是 WAF、CDN 防護或登入限制）。"
+            "本次不收費，請確認網址可公開瀏覽後再試。"
+        )
+    failed = len((warnings or {}).get("failed_urls") or [])
+    raise ScanTargetUnreachable(
+        "無法連線到網站，沒有取得任何頁面"
+        + (f"（{failed} 個網址連線失敗）" if failed else "")
+        + "。本次不收費，請確認網址可公開瀏覽後再試。"
+    )
+
+
 @dataclass
 class ScanRunContext:
     """一次掃描執行期間，各階段共用的狀態與中間產物。"""
@@ -475,6 +509,7 @@ def stage_crawl(ctx: ScanRunContext) -> None:
             f"sitemap 提供 {site_signals['sitemap_seeded']} 個頁面網址，已加入爬取佇列",
         )
     append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
+    _ensure_usable_pages(crawled_pages, warnings)
     if discovered_endpoints:
         append_log(
             scan_job_id,
@@ -986,7 +1021,8 @@ def stage_geo_site(ctx: ScanRunContext) -> None:
 def stage_seo_links(ctx: ScanRunContext) -> None:
     """SEO 連結狀態與站台層級網址檢查（勾 SEO 才跑），結果寫 ScanJob.seo_report。
 
-    只是 SEO 分析頁的輔助資料：失敗只記 log、不產生 finding、不影響計分與掃描完成。
+    失效站內連結、www 重複、主網址不一致、重複 title 另轉成 Finding（`seo/site_findings.py`），
+    問題清單與報告才看得到；連結檢查本身失敗只記 log、不影響掃描完成。
     """
     scan_job = ctx.scan_job
     if "seo" not in scan_job.effective_categories or not ctx.pages:
@@ -1007,6 +1043,12 @@ def stage_seo_links(ctx: ScanRunContext) -> None:
         return
     scan_job.seo_report = report
     scan_job.save(update_fields=["seo_report", "updated_at"])
+    try:
+        site_findings = seo_site_findings(report, [page for page, _data in ctx.pages], start_url)
+    except Exception:  # noqa: BLE001 - 轉換失敗不影響掃描
+        logger.warning("SEO 站台問題轉換失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
+        site_findings = []
+    ctx.record(site_findings)
     links = report.get("links") or {}
     broken = sum(1 for r in links.values() if r["verdict"] == "broken")
     append_log(
@@ -1173,6 +1215,34 @@ def base_scores_for(ctx: ScanRunContext) -> dict[str, int]:
     return {}
 
 
+def stage_site_profile(ctx: ScanRunContext) -> None:
+    """網站概況：基礎架構（DNS／IP／反解／CDN 邊緣）與做得好的地方，寫 ScanJob.site_profile。
+
+    只查目標自身網域的 DNS 並讀已取得的回應標頭；失敗只記 log，不影響掃描。
+    """
+    scan_job = ctx.scan_job
+    hostname = urlparse(scan_job.normalized_url or scan_job.original_url).hostname or ""
+    try:
+        profile = build_site_profile(
+            hostname=hostname,
+            pages=ctx.crawled_pages,
+            seo_report=scan_job.seo_report or {},
+            findings=ctx.all_findings,
+            categories=set(scan_job.effective_categories),
+        )
+    except Exception:  # noqa: BLE001 - 輔助資訊
+        logger.warning("網站概況失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
+        return
+    scan_job.site_profile = profile
+    scan_job.save(update_fields=["site_profile", "updated_at"])
+    edge = (profile.get("infrastructure") or {}).get("edge")
+    append_log(
+        ctx.scan_job_id,
+        f"網站概況：{'位於 ' + edge['provider'] + ' 之後' if edge else '未偵測到 CDN／反向代理'}；"
+        f"做得好的地方 {len(profile.get('strengths') or [])} 項",
+    )
+
+
 def stage_scoring(ctx: ScanRunContext) -> None:
     """計分並把掃描推進到 completed（CAS；已被取消則轉走取消分支）。"""
     scan_job = ctx.scan_job
@@ -1297,6 +1367,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("favicon", stage_favicon),
     ("agent", stage_agent),
     ("kali", stage_kali),
+    ("site_profile", stage_site_profile),
     ("scoring", stage_scoring),
 )
 
@@ -1359,6 +1430,24 @@ def finish_failed(scan_job: ScanJob, runtime_stage: str, exc: Exception) -> dict
     raise RuntimeError("掃描執行失敗。") from None
 
 
+def finish_unreachable(scan_job: ScanJob, message: str) -> dict:
+    """沒有可分析的頁面：標失敗、顯示原因並全額退款（不是程式錯誤，不 raise）。"""
+    if is_cancelled(scan_job.id):
+        append_log(scan_job.id, "掃描已被使用者終止", level="warn")
+        _refund_or_raise(scan_job, reason="取消", label="取消")
+        return {"status": "cancelled"}
+    append_log(scan_job.id, message, level="error")
+    scan_job.status = ScanJob.Status.FAILED
+    scan_job.error_message = message
+    scan_job.completed_at = timezone.now()
+    scan_job.progress = {}
+    scan_job.save(
+        update_fields=["status", "error_message", "completed_at", "progress", "updated_at"]
+    )
+    _refund_or_raise(scan_job, reason="失敗", label="失敗")
+    return {"status": "failed", "reason": "no_usable_pages"}
+
+
 @shared_task(bind=True)
 def run_scan_job(self, scan_job_id: int) -> dict:
     ctx = start_scan_run(scan_job_id)
@@ -1373,5 +1462,7 @@ def run_scan_job(self, scan_job_id: int) -> dict:
         return finish_cancelled(ctx.scan_job)
     except SoftTimeLimitExceeded:
         return finish_timeout(ctx.scan_job)
+    except ScanTargetUnreachable as exc:
+        return finish_unreachable(ctx.scan_job, str(exc))
     except Exception as exc:
         return finish_failed(ctx.scan_job, ctx.runtime_stage, exc)

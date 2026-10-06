@@ -1104,9 +1104,51 @@ def build_report_payload(scan_job: ScanJob) -> dict:
     why_matters = _report_why_matters(grouped)
     if why_matters:
         payload["why_matters"] = why_matters
+    site_profile = _report_site_profile(scan_job)
+    if site_profile:
+        payload["site_profile"] = site_profile
     payload["scan_info"] = _report_scan_info(scan_job)
     payload["appendix"] = _report_appendix(scan_job, grouped, findings_payload)
     return payload
+
+
+def _report_site_profile(scan_job: ScanJob) -> dict:
+    """網站概況（site_profile.py）轉成報告用的事實表與優點清單；舊掃描沒有就回空 dict。"""
+    profile = scan_job.site_profile or {}
+    infra = profile.get("infrastructure") or {}
+    strengths = [
+        {"title": s["title"], "detail": s["detail"], "category": s.get("category", "")}
+        for s in profile.get("strengths") or []
+    ]
+    facts = []
+    if infra.get("hostname"):
+        edge = infra.get("edge")
+        facts.append({"label": "網域", "value": infra["hostname"]})
+        if edge:
+            target = f"{edge['provider']} 邊緣節點（CDN／反向代理）"
+        elif infra.get("scan_target") == "origin":
+            target = "網站主機（未偵測到 CDN／反向代理）"
+        else:
+            target = "無法判斷"
+        facts.append({"label": "實際掃描到", "value": target})
+        addresses = infra.get("addresses") or []
+        if addresses:
+            facts.append({"label": "IP 與反解", "value": "；".join(
+                a["ip"] + "（" + "・".join(
+                    x for x in (f"{a['network']} 網段" if a.get("network") else "",
+                                a.get("rdns") or "無反解") if x
+                ) + "）"
+                for a in addresses
+            )})
+        if infra.get("cname"):
+            facts.append({"label": "CNAME", "value": "、".join(infra["cname"])})
+        if infra.get("nameservers"):
+            facts.append({"label": "DNS 代管", "value": "、".join(infra["nameservers"])})
+        if edge and edge.get("evidence"):
+            facts.append({"label": "判斷依據", "value": "；".join(edge["evidence"][:3])})
+    if not facts and not strengths:
+        return {}
+    return {"notice": infra.get("notice", ""), "facts": facts, "strengths": strengths}
 
 
 def report_output_path(scan_job: ScanJob) -> Path:

@@ -86,21 +86,19 @@ def h1(doc, num, title, page_break=True):
     if page_break:
         p.paragraph_format.page_break_before = True
     p.paragraph_format.space_before = Pt(0 if page_break else 18)
-    p.paragraph_format.space_after = Pt(8)
-    add_run(p, f"{num}　", size=15, color=T.NAVY, bold=True)
-    add_run(p, title, size=15, color=T.NAVY, bold=True)
-    X.set_para_borders(p, {"bottom": (18, T.NAVY, "6")})
+    p.paragraph_format.space_after = Pt(10)
+    add_run(p, f"{num}　", size=T.TYPE["h1"], color=T.LIGHTGREY, bold=True)
+    add_run(p, title, size=T.TYPE["h1"], color=T.NAVY, bold=True)
+    X.set_para_borders(p, {"bottom": (8, T.BORD, "6")})
     return p
 
 
 def h2(doc, title):
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(10)
-    p.paragraph_format.space_after = Pt(4)
+    p.paragraph_format.space_before = Pt(14)
+    p.paragraph_format.space_after = Pt(5)
     p.paragraph_format.keep_with_next = True
-    add_run(p, title, size=12, color=T.NAVY, bold=True)
-    X.set_para_borders(p, {"left": (24, T.NAVY, "8")})
-    X.set_para_indent(p, left=170)
+    add_run(p, title, size=T.TYPE["h2"], color=T.NAVY, bold=True)
     return p
 
 
@@ -198,99 +196,115 @@ def add_image(doc_or_cell, path, width_in):
 
 
 # ---------- finding card ----------
+# 版面規則（2026-10-06 重新設計）：
+# - 不用任何彩色左邊條（全站規則），層次靠字級、字重與留白。
+# - 中風險以上用完整卡片；低風險與資訊提示用精簡條目（不印逐頁證據），
+#   讓讀者把注意力放在真正要處理的項目。
+_FULL_CARD_SEVERITIES = {"嚴重風險", "高風險", "中風險"}
+
+
 def finding_card(doc, f):
-    # header band
+    if f["severity"] not in _FULL_CARD_SEVERITIES:
+        return compact_card(doc, f)
+    # 標題列：編號（淺灰）＋問題名稱（深藍、最大字級），下方一條細線
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(10)
-    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.space_before = Pt(14)
+    p.paragraph_format.space_after = Pt(2)
     p.paragraph_format.keep_with_next = True
-    add_run(p, f'{f["id"]}　', size=11, color=T.NAVY, bold=True)
-    add_run(p, f["title"], size=11, color=T.NAVY, bold=True)
-    X.set_para_shading(p, T.BGBLUE)
-    X.set_para_borders(p, {"top": (4, T.NAVY, "0"), "left": (24, T.NAVY, "8"),
-                           "bottom": (4, T.NAVY, "0"), "right": (4, T.NAVY, "0")})
-    X.set_para_indent(p, left=100, right=80)
-    # meta line
+    add_run(p, f'{f["id"]}　', size=T.TYPE["finding"], color=T.LIGHTGREY, bold=True)
+    add_run(p, f["title"], size=T.TYPE["finding"], color=T.NAVY, bold=True)
+    X.set_para_borders(p, {"bottom": (4, T.LINE, "3")})
+    # 中繼資料：嚴重度標籤、分類、範圍
     mp = doc.add_paragraph()
     mp.paragraph_format.space_before = Pt(3)
-    mp.paragraph_format.space_after = Pt(3)
+    mp.paragraph_format.space_after = Pt(4)
     mp.paragraph_format.keep_with_next = True
     chip_run(mp, f["severity"])
-    add_run(mp, f'　·　{f["category"]}　·　{f["scope"]}', size=9, color=T.GREY)
-    # 可重新核對的中繼資料：規則、觀測時間、來源（規則／工具／AI）
-    if f.get("trace"):
-        tp = doc.add_paragraph()
-        tp.paragraph_format.space_after = Pt(3)
-        tp.paragraph_format.keep_with_next = True
-        add_run(tp, f["trace"], size=8, color=T.GREY)
-    # affected urls（舊版 payload；新版改在「逐頁證據」逐一列出網址與證據）
+    add_run(mp, f'　{f["category"]}　·　{f["scope"]}', size=T.TYPE["meta"], color=T.GREY)
     if f.get("urls") and not f.get("locations"):
         up = doc.add_paragraph()
         up.paragraph_format.space_after = Pt(4)
-        add_run(up, f["urls"], size=8, color=T.LIGHTGREY)
-    # problem
-    _card_label(doc, "▍問題是什麼", T.SLATE)
-    add_para(doc, [{"text": f["problem"], "size": 10, "color": T.SLATE}],
-             after=4, line=1.4)
-    # fix (action zone)
-    _card_label(doc, "▍怎麼修", T.NAVY)
-    fp = add_para(doc, [{"text": f["fix"], "size": 10, "color": T.SLATE}],
-                  after=4, line=1.4)
+        add_run(up, f["urls"], size=T.TYPE["meta"], color=T.LIGHTGREY)
+    _card_label(doc, "問題是什麼")
+    add_para(doc, [{"text": f["problem"], "size": T.TYPE["body"], "color": T.SLATE}],
+             after=5, line=1.45)
+    _card_label(doc, "怎麼修")
+    fp = add_para(doc, [{"text": f["fix"], "size": T.TYPE["body"], "color": T.SLATE}],
+                  after=5, line=1.45)
     X.set_para_shading(fp, T.FIXBLUE)
-    X.set_para_indent(fp, left=130, right=130)
-    X.set_para_borders(fp, {"left": (18, "0369A1", "4")})
-    # evidence：多頁合併時逐頁列出網址與該頁自己的證據
-    _card_label(doc, "▍檢測依據" + ("（逐頁證據）" if f.get("locations") else ""), T.GREY)
-    if f.get("locations"):
-        for loc in f["locations"]:
+    X.set_para_indent(fp, left=120, right=120)
+    # 檢測依據：逐頁證據（資料層已限制最多 5 頁，其餘收成「…另 N 處」）
+    _card_label(doc, "檢測依據")
+    locations = f.get("locations") or []
+    if locations:
+        for loc in locations:
             ep = add_para(doc, [
-                {"text": loc["url"], "size": 8, "color": T.GREY},
-                {"text": "\n" + (loc.get("evidence") or "（無）"), "size": 8.5, "color": T.SLATE, "mono": True},
-            ], before=1, after=1, line=1.3)
+                {"text": loc["url"], "size": T.TYPE["meta"], "color": T.GREY},
+                {"text": "\n" + (loc.get("evidence") or "（無）"), "size": T.TYPE["evidence"],
+                 "color": T.SLATE, "mono": True},
+            ], before=1, after=2, line=1.3)
             X.set_para_shading(ep, T.BG)
-            X.set_para_indent(ep, left=130, right=130)
-            X.set_para_borders(ep, {"left": (18, T.LIGHTGREY, "4")})
+            X.set_para_indent(ep, left=120, right=120)
         if f.get("locations_more"):
-            add_para(doc, [{"text": f["locations_more"], "size": 8, "color": T.LIGHTGREY}],
-                     before=1, after=3)
+            add_para(doc, [{"text": f["locations_more"], "size": T.TYPE["meta"],
+                            "color": T.LIGHTGREY}], before=1, after=3)
     else:
-        ep = add_para(doc, [{"text": f["evidence"], "size": 9, "color": T.SLATE, "mono": True}],
-                      before=2, after=3, line=1.35)
+        ep = add_para(doc, [{"text": f["evidence"], "size": T.TYPE["evidence"], "color": T.SLATE,
+                             "mono": True}], before=2, after=3, line=1.35)
         X.set_para_shading(ep, T.BG)
-        X.set_para_indent(ep, left=130, right=130)
-        X.set_para_borders(ep, {"left": (18, T.LIGHTGREY, "4")})
+        X.set_para_indent(ep, left=120, right=120)
     # 判定依據：高風險與 AI 觀察項目交代成立條件、實際觀察、尚缺證據、驗證方法
     if f.get("assessment"):
-        _card_label(doc, "▍判定依據", T.NAVY)
+        _card_label(doc, "判定依據")
         a = f["assessment"]
         for label, key in (("成立條件", "condition"), ("實際觀察", "observed"),
                            ("尚缺證據", "missing"), ("驗證方法", "verify")):
             if a.get(key):
-                add_para(doc, [{"text": f"{label}：", "size": 9, "color": T.NAVY, "bold": True},
-                               {"text": a[key], "size": 9, "color": T.SLATE}],
+                add_para(doc, [{"text": f"{label}：", "size": T.TYPE["small"], "color": T.NAVY,
+                                "bold": True},
+                               {"text": a[key], "size": T.TYPE["small"], "color": T.SLATE}],
                          after=1, line=1.35)
-    # 內容類建議的規則依據與適用限制
     if f.get("basis"):
-        add_para(doc, [{"text": f["basis"], "size": 8.5, "color": T.GREY}],
-                 before=3, after=3, line=1.35)
+        add_para(doc, [{"text": f["basis"], "size": T.TYPE["meta"], "color": T.GREY}],
+                 before=3, after=2, line=1.35)
+    # 追溯資訊（規則、時間、來源）放最後、最小字：給工程師核對用，不干擾一般讀者
+    if f.get("trace"):
+        add_para(doc, [{"text": f["trace"], "size": 7.5, "color": T.LIGHTGREY}],
+                 before=2, after=4)
 
 
-def _card_label(doc, text, color):
+def compact_card(doc, f):
+    """低風險／資訊提示：一行標題＋一句問題＋一句建議，不列逐頁證據。"""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_before = Pt(8)
     p.paragraph_format.space_after = Pt(1)
     p.paragraph_format.keep_with_next = True
-    add_run(p, text, size=9, color=color, bold=True)
+    add_run(p, f'{f["id"]}　', size=T.TYPE["finding_compact"], color=T.LIGHTGREY, bold=True)
+    add_run(p, f["title"], size=T.TYPE["finding_compact"], color=T.NAVY, bold=True)
+    add_run(p, f'　{f["category"]}　·　{f["scope"]}', size=T.TYPE["meta"], color=T.GREY)
+    add_para(doc, [{"text": "問題　", "size": T.TYPE["label"], "color": T.GREY, "bold": True},
+                   {"text": f["problem"], "size": T.TYPE["small"], "color": T.SLATE}],
+             after=1, line=1.4)
+    add_para(doc, [{"text": "建議　", "size": T.TYPE["label"], "color": T.GREY, "bold": True},
+                   {"text": f["fix"], "size": T.TYPE["small"], "color": T.SLATE}],
+             after=2, line=1.4)
+
+
+def _card_label(doc, text, color=None):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(5)
+    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.keep_with_next = True
+    add_run(p, text, size=T.TYPE["label"], color=color or T.GREY, bold=True)
 
 
 def severity_group_header(doc, severity, count):
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(13)
-    p.paragraph_format.space_after = Pt(5)
+    p.paragraph_format.space_before = Pt(16)
+    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.keep_with_next = True
     chip_run(p, severity)
-    add_run(p, f"  {severity}項目（{count} 項）", size=11, color=T.NAVY, bold=True)
-    X.set_para_borders(p, {"left": (24, T.SEVERITY[severity]["fill"], "8")})
-    X.set_para_indent(p, left=170)
+    add_run(p, f"  {severity}項目（{count} 項）", size=11.5, color=T.NAVY, bold=True)
 
 
 # ---------- section/header/footer ----------
@@ -400,9 +414,13 @@ def _summary(doc, data, ch):
     s = data["summary"]
     h1(doc, "1", "一頁摘要")
     if s.get("headline"):
-        add_para(doc, [{"text": s["headline"], "size": 10, "color": T.SLATE}],
-                 after=8, line=1.44)
-    h2(doc, "各分類分數")
+        add_para(doc, [{"text": s["headline"], "size": T.TYPE["body"], "color": T.SLATE}],
+                 after=8, line=1.5)
+    _site_profile(doc, data.get("site_profile") or {})
+    scores_heading = h2(doc, "各分類分數")
+    if data.get("site_profile"):
+        # 網站概況已佔滿第一頁：分數圖從新頁開始，避免標題孤零零留在頁尾
+        scores_heading.paragraph_format.page_break_before = True
     add_image(doc, ch["categories"], 5.5)
     add_para(doc, [{"text": "虛線為 60 / 80 分門檻。分數為各「已評估」分類的平均；標示「未評估」者不納入計算。",
                     "size": 8, "color": T.LIGHTGREY}], after=8)
@@ -475,6 +493,30 @@ def _summary(doc, data, ch):
         ["40–59", "建議儘快處理", "累積的問題已可能影響流量或安全，建議近期處理。"],
         ["0–39", "需優先處理", "存在較高風險的項目，建議優先安排修補。"],
     ], [1600, 2100, 4400])
+
+
+def _site_profile(doc, sp):
+    """網站架構（是否位於 CDN／反向代理之後）與做得好的地方：報告不只列負面問題。"""
+    strengths = sp.get("strengths") or []
+    if strengths:
+        h2(doc, "做得好的地方")
+        for item in strengths:
+            add_para(doc, [
+                {"text": "✓  ", "size": T.TYPE["body"], "color": "15803D", "bold": True},
+                {"text": item["title"], "size": T.TYPE["body"], "color": T.SLATE, "bold": True},
+                {"text": f"　{item['detail']}", "size": T.TYPE["small"], "color": T.GREY},
+            ], after=3, line=1.4)
+    facts = sp.get("facts") or []
+    if facts or sp.get("notice"):
+        h2(doc, "網站架構")
+        if sp.get("notice"):
+            np_ = add_para(doc, [{"text": sp["notice"], "size": T.TYPE["small"], "color": "075985"}],
+                           after=6, line=1.45)
+            X.set_para_shading(np_, T.FIXBLUE)
+            X.set_para_indent(np_, left=120, right=120)
+        if facts:
+            data_table(doc, ["項目", "內容"], [[f["label"], f["value"]] for f in facts],
+                       [2200, 5900])
 
 
 def _trend_block(doc, s, ch):
@@ -623,9 +665,17 @@ def _appendix(doc, data):
     add_para(doc, [{"text": ap.get("verify_note",
                     "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；下一份報告的摘要會列出這次解決了哪些項目。"),
                     "size": 10, "color": T.SLATE}], after=8, line=1.44)
-    if ap.get("verify_items"):
-        rows = [[v["ref"], v["title"], v["how"]] for v in ap["verify_items"]]
+    # 只逐項列中風險以上；低風險與資訊提示重新掃描即可確認（舊版全列，佔掉 5 頁）
+    severity_by_ref = {f["id"]: f["severity"] for f in data.get("findings", [])}
+    items = [v for v in ap.get("verify_items") or []
+             if severity_by_ref.get(v["ref"]) in _FULL_CARD_SEVERITIES]
+    if items:
+        rows = [[v["ref"], v["title"], v["how"]] for v in items]
         data_table(doc, ["項次", "項目", "如何確認已修好"], rows, [900, 2500, 4700])
+    hidden = len(ap.get("verify_items") or []) - len(items)
+    if hidden > 0:
+        add_para(doc, [{"text": f"其餘 {hidden} 項低風險與資訊提示：修正後重新掃描，確認該項不再出現即可。",
+                        "size": T.TYPE["label"], "color": T.GREY}], before=4, after=6)
     # authorization
     if ap.get("authorization"):
         h2(doc, "6.4　掃描授權聲明")

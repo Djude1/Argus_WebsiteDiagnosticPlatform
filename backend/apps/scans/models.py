@@ -191,6 +191,9 @@ class ScanJob(models.Model):
     # SEO 連結狀態與站台層級網址檢查（apps/scans/seo/link_check.py，勾 SEO 時執行）。
     # 空 dict＝本次沒跑。逐頁的 Title／H1 等由保存的 HTML 即時分析，不存這裡。
     seo_report = models.JSONField(default=dict, blank=True)
+    # 網站概況（apps/scans/site_profile.py）：基礎架構（網域／IP／反解／CDN 邊緣）與做得好的地方。
+    # 空 dict＝舊掃描或本次沒算到。
+    site_profile = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

@@ -4,7 +4,7 @@
   記錄完整跳轉鏈。
 - 302 → 200 這類「轉址後正常」不算失效連結；401／403／429 代表對方拒絕自動檢查，
   標成「無法確認」而不是失效。
-- 先送 HEAD；HEAD 回 4xx／5xx 時一律改用 GET 再確認（只讀標頭、不下載內容）。
+- 先送 HEAD；HEAD 回 4xx／5xx 或連線層錯誤時一律改用 GET 再確認（只讀標頭、不下載內容）。
 - 有總數與總時間上限：外部網站很多時只檢查前 N 個，其餘標「未檢查」。
 """
 
@@ -65,8 +65,13 @@ def _client() -> httpx.Client:
 
 def _request(client: httpx.Client, url: str) -> tuple[int, str]:
     """回傳 (狀態碼, Location)。"""
-    response = client.head(url)
-    if response.status_code >= 400:
+    try:
+        response = client.head(url)
+    except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadError):
+        # 有些站對 HEAD 直接斷線或回壞掉的回應，GET 卻正常（2026-10-06 實測
+        # domjudge.ntubimdbirc.tw：HEAD 協定錯誤、GET 302），改用 GET 再確認一次
+        response = None
+    if response is None or response.status_code >= 400:
         # 不少伺服器不支援或拒絕 HEAD（405／501，或經 Cloudflare 回 520），錯誤一律以 GET 再確認，
         # 只讀標頭不下載內容。2026-10-03 實測 ntubimdbirc.tw：HEAD 520、GET 才是真正的 404／200
         with client.stream("GET", url) as streamed:

@@ -332,6 +332,7 @@ class AeoPipelineTests(TransactionTestCase):
             ("analyze_dns", {"return_value": []}),
             ("analyze_js_libraries", {"return_value": []}),
             ("analyze_services", {"return_value": []}),
+            ("build_site_profile", {"return_value": {}}),
             ("owasp_mapper.backfill", {}),
             ("settle_scan_actual", {}),
             ("grant_fixgen_entitlement", {}),

@@ -22,6 +22,7 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
+import { SiteProfilePanel } from "../../components/scans/SiteProfilePanel";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import FixOutputSection from "../../components/scans/FixOutputSection.jsx";
@@ -1133,6 +1134,15 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
   // 截圖放在固定高度的捲動視窗裡（整頁截圖動輒上萬像素高，不該把版面撐開）；
   // 選到有位置的發現時，把視窗捲到那個元素
   const viewportRef = useRef(null);
+  // 行動版問題（觸控目標、表單標籤、破版）是在手機寬度量的：改看行動版截圖，
+  // 並把每個實際有問題的元素逐一框出來，而不是框整個區塊
+  const mobileBoxes =
+    targetPage?.has_mobile_screenshot &&
+    selectedFinding?.page === targetPage.id &&
+    selectedFinding?.evidence_json?.annotations?.viewport === "mobile"
+      ? selectedFinding.evidence_json.annotations.boxes || []
+      : [];
+  const variant = mobileBoxes.length ? "mobile" : "desktop";
 
   useEffect(() => {
     let objectUrl = "";
@@ -1145,7 +1155,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
       try {
         const response = await api.get(
           `/scans/${scan.id}/pages/${targetPage.id}/screenshot/`,
-          { responseType: "blob" },
+          { responseType: "blob", params: variant === "mobile" ? { variant } : undefined },
         );
         objectUrl = URL.createObjectURL(response.data);
         setImageUrl(objectUrl);
@@ -1162,7 +1172,7 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     // scan 只認 id：ScanDetailPage 每 2 秒 polling 會產生全新的 scan 物件參考，
     // 若把整個 scan 物件放進依賴陣列，即使內容沒變也會每次重新清空/重抓截圖，畫面閃爍。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan?.id, targetPage]);
+  }, [scan?.id, targetPage, variant]);
 
   function syncScale() {
     const image = imageRef.current;
@@ -1176,8 +1186,9 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
     return () => window.removeEventListener("resize", syncScale);
   }, []);
 
-  const focusBox =
-    selectedFinding?.bounding_box && selectedFinding.page === targetPage?.id
+  const focusBox = mobileBoxes.length
+    ? mobileBoxes[0]
+    : selectedFinding?.bounding_box && selectedFinding.page === targetPage?.id
       ? selectedFinding.bounding_box
       : null;
   useEffect(() => {
@@ -1188,18 +1199,19 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
   }, [focusBox, scale, imageUrl]);
 
   // 高光框：選中的 finding 在當前頁面且有座標時，畫紅色高光框
-  const overlayFindings = findings.filter(
-    (finding) => finding.bounding_box && finding.page === targetPage?.id,
-  );
+  const overlayFindings = mobileBoxes.length
+    ? []
+    : findings.filter((finding) => finding.bounding_box && finding.page === targetPage?.id);
 
   // 站台層級或無 bounding_box 的 finding → 在截圖頂部畫紅色 banner（讓使用者知道「有反應，但不是元素級」）
   const showSiteBanner =
-    selectedFinding && !selectedFinding.bounding_box;
+    selectedFinding && !selectedFinding.bounding_box && !mobileBoxes.length;
 
   // 確保「按了一定有反應」：沒 bounding_box 時退化為整頁紅色 pulse 外框；
   // 或選的是別頁的 finding（page 對不上 targetPage）也畫整頁外框提示。
   const showWholePageHighlight =
     selectedFinding &&
+    !mobileBoxes.length &&
     (!selectedFinding.bounding_box ||
       (selectedFinding.page && selectedFinding.page !== targetPage?.id));
 
@@ -1220,6 +1232,11 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
             開啟原網頁 ↗
           </a>
         </div>
+      )}
+      {mobileBoxes.length > 0 && (
+        <p className="screenshot-variant-note">
+          行動版截圖（手機寬度）：已框出 {mobileBoxes.length} 個實際有問題的元素
+        </p>
       )}
       {!imageUrl && (
         isInProgress(scan?.status) ? (
@@ -1262,6 +1279,21 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
             <div className="whole-page-highlight pointer-events-none" aria-hidden="true" />
           )}
           <div className="pointer-events-none absolute inset-0">
+            {mobileBoxes.map((box, index) => (
+              <div
+                className="element-box"
+                key={`${box.x}-${box.y}-${index}`}
+                title={box.label}
+                style={{
+                  left: `${box.x * scale}px`,
+                  top: `${box.y * scale}px`,
+                  width: `${box.width * scale}px`,
+                  height: `${box.height * scale}px`,
+                }}
+              >
+                <span className="element-box-label">{box.label}</span>
+              </div>
+            ))}
             {overlayFindings.map((finding) => {
               const box = finding.bounding_box;
               const active = selectedFinding?.id === finding.id;
@@ -1553,6 +1585,9 @@ function FindingsWorkspace({ scan }) {
       {scan.status === "cancelled" && (
         <p className="scan-report-alert">掃描已終止。已收集到的頁面與發現仍保留在下方。</p>
       )}
+
+      {/* 網站概況：架構（是否位於 CDN／反向代理之後）與做得好的地方——報告不只有負面問題 */}
+      <SiteProfilePanel profile={scan.site_profile} />
 
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (

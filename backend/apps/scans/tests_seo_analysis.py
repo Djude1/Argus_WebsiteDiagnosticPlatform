@@ -25,6 +25,7 @@ from apps.scans.seo import gsc, link_check
 from apps.scans.seo.keywords import keyword_report, normalize_keywords
 from apps.scans.seo.page_audit import audit_page, content_size, display_width
 from apps.scans.seo.report import project_seo
+from apps.scans.seo.site_findings import seo_site_findings
 
 User = get_user_model()
 ORIGIN = "https://shop.example.tw"
@@ -158,6 +159,20 @@ class LinkCheckTests(SimpleTestCase):
         self.assertEqual(link_check.check_url("https://a.tw/p", client)["verdict"], "ok")
         self.assertEqual([c[0] for c in calls], ["HEAD", "GET"])
 
+    def test_head_protocol_error_falls_back_to_get(self, _assert):
+        # 對 HEAD 直接斷線、GET 正常的站不能判成「無法連線」（2026-10-06 domjudge 子網域）
+        def handler(request):
+            if request.method == "HEAD":
+                raise httpx.RemoteProtocolError("Server disconnected", request=request)
+            if str(request.url) == "https://a.tw/":
+                return httpx.Response(302, headers={"location": "/login"})
+            return httpx.Response(200)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False)
+        result = link_check.check_url("https://a.tw/", client)
+        self.assertEqual(result["verdict"], "redirect")
+        self.assertEqual([hop["status"] for hop in result["chain"]], [302, 200])
+
     def test_redirect_loop_stops(self, _assert):
         client, _ = _mock_client({("HEAD", "https://a.tw/loop"): (301, "/loop")})
         result = link_check.check_url("https://a.tw/loop", client)
@@ -179,6 +194,52 @@ class LinkCheckTests(SimpleTestCase):
         self.assertEqual(link_check.robots_blocks("/admin/x", ["/admin"]), "/admin")
         self.assertEqual(link_check.robots_blocks("/a.pdf", ["/*.pdf$"]), "/*.pdf$")
         self.assertEqual(link_check.robots_blocks("/public", ["/admin"]), "")
+
+
+class SeoSiteFindingsTests(SimpleTestCase):
+    """SEO 分析頁才看得到的站台問題要轉成 Finding（2026-10-06 ntubimdbirc.tw 實測漏報）。"""
+
+    def _pages(self):
+        home = _html(title="NTUB BIRC", head="<meta property='og:url' content='https://www.shop.example.tw/'>",
+                     body="<a href='https://www.shop.example.tw/service/0'>服務</a>")
+        return [
+            FakePage(home, url=f"{ORIGIN}/", pid=1),
+            FakePage(_html(title="NTUB BIRC"), url=f"{ORIGIN}/about", pid=2),
+            FakePage(_html(title="NTUB BIRC"), url=f"{ORIGIN}/course", pid=3),
+        ]
+
+    def _report(self):
+        return {
+            "links": {"https://www.shop.example.tw/service/0": {
+                "url": "https://www.shop.example.tw/service/0", "status": 404, "verdict": "broken",
+            }},
+            "robots": {"sitemaps": ["https://www.shop.example.tw/sitemap.xml"]},
+            "site_checks": [{
+                "key": "www", "level": "warning", "value": "200",
+                "advice": "www 與非 www 都直接回應內容，請擇一並 301 轉址。",
+                "evidence": {"requested": "https://www.shop.example.tw/"},
+            }],
+        }
+
+    def test_site_issues_become_findings(self):
+        found = seo_site_findings(self._report(), self._pages(), f"{ORIGIN}/")
+        findings = {f["rule_id"]: f for f in found}
+        self.assertEqual(set(findings), {
+            "seo-broken-internal-links", "seo-www-duplicate",
+            "seo-declared-host-mismatch", "seo-duplicate-titles",
+        })
+        broken = findings["seo-broken-internal-links"]
+        self.assertEqual(broken["severity"], "medium")
+        self.assertEqual(broken["evidence_json"]["broken_links"][0]["found_on"], [f"{ORIGIN}/"])
+        self.assertIn("og:url", findings["seo-declared-host-mismatch"]["description"])
+
+    def test_clean_site_has_no_findings(self):
+        pages = [
+            FakePage(_html(title=f"第 {i} 頁｜晨光咖啡"), url=f"{ORIGIN}/p{i}", pid=i)
+            for i in range(3)
+        ]
+        report = {"links": {}, "robots": {"sitemaps": [f"{ORIGIN}/sitemap.xml"]}, "site_checks": []}
+        self.assertEqual(seo_site_findings(report, pages, f"{ORIGIN}/"), [])
 
 
 def _user(name="seo-owner"):
