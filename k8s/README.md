@@ -31,6 +31,7 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 | `07-network-policies.yaml` | web/data ingress 白名單與 frontend/migrate/application/data egress 邊界（含 IPv4+IPv6 公網 allow / 私網 deny、worker 對 API server 的精確 /32 egress、`argus-kali` namespace 預設全拒 + runner 專屬 DNS+公網 80/443 邊界） |
 | `09-ngf-client-settings.yaml` | NGF `ClientSettingsPolicy`：對齊 frontend nginx 的 `client_max_body_size 6m`，避免 NGF 資料平面回 413 |
 | `10-kali-runtime.yaml` | `argus-kali` 受限 runtime namespace（PSA restricted:v1.35）、worker orchestrator SA + tokenless runner SA、least-privilege Role/RoleBinding、單 runner ResourceQuota + LimitRange |
+| `optional/zap-passive.yaml` | **選用、未列入 kustomization**：OWASP ZAP 被動分析 daemon（`argus-zap` namespace、digest 固定、只收 worker 8090、egress 全擋）。啟用與回滾見 [`../docs/zap-passive.md`](../docs/zap-passive.md) |
 | `11-kali-admission.yaml` | cluster-scoped `ValidatingAdmissionPolicy`（CEL，`failurePolicy: Fail`）：13 條契約比對 Job 形狀、image、securityContext、resources、volumes；namespaceSelector 綁 `argus.io/kali-runner=true` |
 
 ## 前置（已就緒）

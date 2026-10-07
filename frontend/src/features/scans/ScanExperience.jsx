@@ -88,6 +88,7 @@ const SCAN_STEP_META = {
   analyze_security: { label: "資安", title: "分析資安", hint: "檢查表單 CSRF，以及頁面中外洩的金鑰與個資", Icon: StatusScanGlyph },
   active_probe: { label: "主動探測", title: "主動探測", hint: "以 Nuclei／Katana 對授權目標執行受控探測", Icon: StatusScanGlyph },
   deep_security: { label: "深度資安", title: "深度資安檢查", hint: "檢查 HTTPS 與安全標頭、TLS 憑證、Cookie、SRI、DNS 與前端套件版本", Icon: StatusScanGlyph },
+  zap_passive: { label: "ZAP", title: "OWASP ZAP 被動分析", hint: "把已爬到的流量交給 OWASP ZAP 檢查，不對網站發出新的請求", Icon: StatusScanGlyph },
   exposure_probe: { label: "敏感檔案", title: "敏感檔案探測", hint: "探測常見的敏感檔案路徑是否外洩", Icon: StatusScanGlyph },
   geo_site: { label: "AI 爬蟲", title: "檢查 AI 爬蟲訊號", hint: "檢查 llms.txt 與 robots.txt 對 AI 爬蟲的設定", Icon: StatusScanGlyph },
   seo_links: { label: "連結檢查", title: "檢查連結與網址", hint: "檢查站內外連結的狀態與轉址，以及 robots.txt、HTTPS、www 與 404 頁設定", Icon: StatusScanGlyph },

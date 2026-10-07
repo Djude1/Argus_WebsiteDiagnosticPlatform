@@ -344,6 +344,17 @@ ARGUS_PAGESPEED_ENABLED = env_bool(
     "ARGUS_PAGESPEED_ENABLED", default=bool(ARGUS_PAGESPEED_API_KEY)
 )
 ARGUS_PAGESPEED_TIMEOUT_SECONDS = float(os.getenv("ARGUS_PAGESPEED_TIMEOUT_SECONDS", "90"))
+# OWASP ZAP 被動分析（apps/scans/security/zap_passive.py，勾資安才跑）：爬蟲把同網站的流量錄成 HAR，
+# 交給獨立的 ZAP daemon 只跑被動規則，對目標網站零新增請求。
+# 預設關閉；要先部署 ZAP（見 docs/zap-passive.md）。
+# API 金鑰放 .env／Secret，不寫 log。
+ARGUS_ZAP_ENABLED = env_bool("ARGUS_ZAP_ENABLED", default=False)
+ARGUS_ZAP_API_URL = os.getenv("ARGUS_ZAP_API_URL", "")
+ARGUS_ZAP_API_KEY = os.getenv("ARGUS_ZAP_API_KEY", "")
+# 等 ZAP 被動規則跑完的上限（秒）、送進 ZAP 的請求筆數上限與單一回應內容上限（字元）
+ARGUS_ZAP_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_TIMEOUT_SECONDS", "120"))
+ARGUS_ZAP_MAX_ENTRIES = int(os.getenv("ARGUS_ZAP_MAX_ENTRIES", "2000"))
+ARGUS_ZAP_MAX_BODY_CHARS = int(os.getenv("ARGUS_ZAP_MAX_BODY_CHARS", "500000"))
 ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"

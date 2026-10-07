@@ -420,6 +420,8 @@ def _source_label(finding) -> str:
         return "外部工具（Katana 探索）"
     if rule.startswith("axe-"):
         return "外部工具（axe-core 無障礙自動化檢查）"
+    if rule.startswith("zap-"):
+        return "外部工具（OWASP ZAP 被動分析：只檢查已取得的回應，未另行驗證）"
     if source == "exposure_probe":
         return "主動探測（實際請求常見敏感路徑）"
     if rule.split("-")[0] in {"ssl", "dns", "cookie", "sri", "header", "js", "service", "exposure"}:

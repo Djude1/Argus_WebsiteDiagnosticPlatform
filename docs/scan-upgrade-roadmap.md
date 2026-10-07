@@ -100,6 +100,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   4. **取消契約**：使用者取消或 scan 中止時，必須停止 ZAP spider / active scanner / subprocess 或 container，並確認不再產生新的網路流量；coverage 記為 CANCELLED/PARTIAL。
   5. Authenticated Context：後續支援測試帳號 / session context 時再開啟，不把登入失敗當成「已測」。
   6. ZAP alert 先正規化進 Shared Evidence Store，再由 Argus 做 confidence、severity、去重與 Root Cause；**不要直接照搬 ZAP risk 等級到最終報告**。
+  - 進度（2026-10-07）：第 1 項 Passive Analysis 已實作（HAR 匯入，見 [`zap-passive.md`](zap-passive.md)）；第 2–5 項尚未開始。
 - 工具定位：
   - Nuclei = template / known-pattern detection
   - SQLMap = SQL Injection 專項驗證
@@ -218,7 +219,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 7. **P1 Smart Scan Phase 1（只記錄 signal/fingerprint）** — 先修正 stage dependency 與 strategy/testing matrix，再做真實站準確率 benchmark。（**已實作 2026-10-07**：`apps/scans/fingerprint.py`＋`stage_fingerprint`（緊接 `enter_scanning`，只吃爬取當下已有的訊號，沒有反向依賴後續 stage）、`ScanJob.fingerprint`（migration 0031）；資料集 28 站（含誤判誘餌與保留集）precision／recall 1.0、0 次連線。strategy／testing 二維語義已在 ADR-0004 定案，`scan_strategy` 欄位留待階段 2。尚未做：以真實掃描結果人工核對的準確率評估）
 
-8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。
+8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。（**Passive Analysis 已實作 2026-10-07**：爬蟲錄同網站 HAR → 獨立 ZAP daemon 只跑被動規則，對目標零新增請求；告警正規化後才成為 Finding，與既有檢查重複者不列、ZAP risk 不直接照搬；預設關閉，compose profile `zap`／`k8s/optional/zap-passive.yaml`（未列入 kustomization），見 [`zap-passive.md`](zap-passive.md)。尚未做：正式叢集部署與資源量測、Spider／AJAX Spider、Active Scan）
 
 9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。
 

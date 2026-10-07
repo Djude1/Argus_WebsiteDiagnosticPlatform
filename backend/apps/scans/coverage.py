@@ -57,6 +57,7 @@ CHECK_CATEGORIES: dict[str, str | None] = {
     "kali": "security",
     # 外部指標不併入 Argus 分數，也不影響維度的覆蓋狀態；失敗時仍列在「未完整完成的檢查」
     "pagespeed": None,
+    "zap_passive": "security",
 }
 
 CHECK_LABELS: dict[str, str] = {
@@ -79,6 +80,7 @@ CHECK_LABELS: dict[str, str] = {
     "agent_ux": "AI 擬真使用者測試",
     "axe": "axe-core 無障礙檢查",
     "pagespeed": "PageSpeed Insights（Lighthouse／CrUX）",
+    "zap_passive": "OWASP ZAP 被動分析",
     "kali": "Kali 主動驗證",
 }
 

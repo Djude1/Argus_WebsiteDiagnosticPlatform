@@ -38,6 +38,7 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 | `infra_scanner.py` | 網站基礎架構：A／AAAA／CNAME／NS、IP 反解、Cloudflare 公告網段、標頭與 CNAME 指紋 → 判斷掃到的是 CDN／WAF／反向代理邊緣還是主機，產生報告提醒文字（只查目標自身網域、不發 HTTP） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
 | `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |
+| `zap_passive.py` | OWASP ZAP 被動分析：整理爬蟲錄的 HAR（同 origin、去 Cookie／Authorization、遮蔽 Set-Cookie 值）、ZapClient（上傳→匯入→等被動規則→讀告警→**一律清理**）、告警轉 finding（與既有檢查重複的不列、雜訊略過、信心低降一級）；同 origin 以 cache 鎖。啟用與部署見 [`docs/zap-passive.md`](../../../../docs/zap-passive.md) | 已建（預設關閉） |
 | `nvd_db.py` | NVD CVE→backend_services.json 純函式轉換（CPE 過濾 + 版本區間），供 refresh 命令與單元測試 | 已建 |
 
 ---
