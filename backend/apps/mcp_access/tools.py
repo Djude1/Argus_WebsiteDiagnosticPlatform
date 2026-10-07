@@ -20,7 +20,12 @@ from django.conf import settings
 from django.core import signing
 from django.urls import reverse
 
-from apps.billing.services import agent_ux_fee, estimate_scan_cost, get_or_create_wallet
+from apps.billing.services import (
+    agent_ux_fee,
+    estimate_scan_cost,
+    get_or_create_wallet,
+    scan_hold_amount,
+)
 from apps.scans.models import ALL_CATEGORIES, Finding, ScanJob, VerifiedDomain
 from apps.scans.reports import build_report_number, mask_pii_evidence
 from apps.scans.serializers import ScanJobCreateSerializer
@@ -218,7 +223,10 @@ def estimate_scan(ctx: ToolContext, args: dict) -> dict:
     max_pages = _int_arg(args, "max_pages", settings.ARGUS_DEFAULT_MAX_PAGES, 1,
                          settings.ARGUS_DEFAULT_MAX_PAGES)
     categories = _categories_arg(args)
-    cost = estimate_scan_cost(max_pages, categories)
+    # 主動模式含深度資安附加費（只在 agent 實際執行時收，未執行結算退回）
+    cost = estimate_scan_cost(
+        max_pages, categories, deep_agent=args.get("scan_mode") == ScanJob.ScanMode.ACTIVE
+    )
     balance = get_or_create_wallet(ctx.user).balance
     result = {
         "max_pages": max_pages,
@@ -272,7 +280,8 @@ def create_scan(ctx: ToolContext, args: dict) -> dict:
     scan.refresh_from_db()
     return {
         **_scan_brief(scan),
-        "held_coins": estimate_scan_cost(scan.max_pages, scan.effective_categories),
+        # 實際預扣（首次免費完整掃描為 0；含深度資安附加費）
+        "held_coins": scan_hold_amount(scan),
         "next": "用 get_scan 追蹤進度；完成後用 get_scan_findings 與 get_scan_report 取得結果。",
     }
 

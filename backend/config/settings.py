@@ -357,6 +357,9 @@ ARGUS_NUCLEI_DEEP_TIMEOUT = int(os.getenv("ARGUS_NUCLEI_DEEP_TIMEOUT", "300"))
 
 # Phase 2 Hermes-Agent 上限（避免 token 失控與無限循環）
 ARGUS_AGENT_MAX_STEPS = int(os.getenv("ARGUS_AGENT_MAX_STEPS", "20"))
+# 深度資安 deep_mode：指揮官最多可派出幾次專家（2026-10-07）。每位專家各有 token 上限，
+# 不設派工上限時單次掃描最壞約 1.3M token；6 次可覆蓋典型需求並讓成本有上界。
+ARGUS_AGENT_MAX_SPECIALIST_DISPATCH = int(os.getenv("ARGUS_AGENT_MAX_SPECIALIST_DISPATCH", "6"))
 ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 ARGUS_AGENT_STEP_TIMEOUT = int(os.getenv("ARGUS_AGENT_STEP_TIMEOUT", "30"))
 ARGUS_AGENT_ENABLED = env_bool("ARGUS_AGENT_ENABLED", default=False)
@@ -436,6 +439,11 @@ ARGUS_REPORT_PDF_TIMEOUT_SECONDS = int(os.getenv("ARGUS_REPORT_PDF_TIMEOUT_SECON
 # - 掃描按「維度」計費：費用＝頁數 × 勾選維度數 × 此值，建立時預扣、
 #   完成後依實際頁數退差（五維全選＝每頁 10 coin，與舊每頁定價相同）
 ARGUS_MONTHLY_BONUS_COINS = int(os.getenv("ARGUS_MONTHLY_BONUS_COINS", "200"))
+# 從未購點、從未訂閱的帳號，月贈點只補到這個餘額為止（限制長期閒置帳號累積的點數負債）；
+# 購點或訂閱過的帳號不受限。0 表示不設上限。
+ARGUS_FREE_BONUS_BALANCE_CAP = int(os.getenv("ARGUS_FREE_BONUS_BALANCE_CAP", "600"))
+# 首次免費完整掃描：被動＋整站＋五面向的第一次掃描不扣點（docs/business-model-plan.md）
+ARGUS_FREE_TRIAL_SCAN_ENABLED = env_bool("ARGUS_FREE_TRIAL_SCAN_ENABLED", default=True)
 ARGUS_COIN_PER_CATEGORY = int(os.getenv("ARGUS_COIN_PER_CATEGORY", "2"))
 
 # MCP 接入（會員以 Claude Code／Codex 等本地 AI 工具透過 MCP 使用 Argus）
@@ -465,7 +473,7 @@ ARGUS_MCP_PUBLIC_BASE_URL = os.getenv("ARGUS_MCP_PUBLIC_BASE_URL", "").strip().r
 #
 # 預扣的存在理由是「餘額不足的人不能先把 agent 的錢花掉」，不是最終價格；
 # 實際只收 min(上限, max(下限, 實際 USD × ARGUS_COIN_PER_USD))。
-ARGUS_COIN_REBUILD_HOLD = int(os.getenv("ARGUS_COIN_REBUILD_HOLD", "30"))
+ARGUS_COIN_REBUILD_HOLD = int(os.getenv("ARGUS_COIN_REBUILD_HOLD", "50"))
 # USD → coin 換算。依購點方案推算：1 coin ≈ NT$0.845（四個方案平均），
 # USD/NTD 以 32 計，純成本轉換約 38 coin/USD。預設 100 約為純成本的 2.6 倍，
 # 用來涵蓋 worker 運算與儲存。**這是營運參數，該由定價決定而不是照抄。**
@@ -480,6 +488,9 @@ ARGUS_COIN_FIXGEN_GENERATION = int(os.getenv("ARGUS_COIN_FIXGEN_GENERATION", "30
 # 另收一筆固定點數（agent 會實際開瀏覽器操作、呼叫 LLM，成本與逐頁分析不同）。
 # 只在 ARGUS_AGENT_ENABLED 開啟時計收；hold 與 settle 對稱由 estimate_scan_cost 計算。
 ARGUS_COIN_AGENT_UX = int(os.getenv("ARGUS_COIN_AGENT_UX", "20"))
+# 深度資安 Hermes-Agent（主動＋已授權＋整站）的固定附加費：預扣時先算進去，
+# 結算時只有 agent 真的以深度模式執行才收，沒執行就退回（2026-10-07）。
+ARGUS_COIN_AGENT_DEEP = int(os.getenv("ARGUS_COIN_AGENT_DEEP", "50"))
 
 # 綠界金流（購點＋訂閱定期定額）。預設關閉，避免缺少簽章驗證時直接入點。
 # - disabled：購點／訂閱 API 回 503，不建立訂單

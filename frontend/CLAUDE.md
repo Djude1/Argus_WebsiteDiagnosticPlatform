@@ -220,7 +220,7 @@ npm run typecheck
 | `src/components/navigation/NotificationBell.jsx` | 頂部工具列通知鈴：站方公告、未讀紅點、全部標為已讀 |
 | `src/components/navigation/ProjectSwitcher.jsx` | 頂部工具列的網站專案切換器（目前專案、切換、設定入口、所有專案、新增專案；Esc／點外面關閉） |
 | `src/components/projects/OverviewWidgets.jsx` | 分數環 `ScoreRing` 與公告 toast（原 Dashboard 元件） |
-| `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費），維度說明列會顯示這筆 |
+| `src/features/scans/ScanExperience.jsx` | 掃描建立表單（`ScanJobForm`，可帶 `project`）、此網站的掃描列表（`ScanList`）、詳情與拓樸頁（462848b 舊版）；估價＝`有效頁數 × 已選維度數 × coin_per_category` ＋（全網站且勾 UX 時）`wallet.agent_ux_fee`（AI Agent 擬真使用者 UX 測試附加費）＋（全網站＋主動＋已授權時）`wallet.agent_deep_fee`（深度資安附加費），維度說明列會顯示這些費用。`wallet.free_trial_available` 且為被動全網站五維全選時估價顯示 0（首次免費完整掃描）；餘額不足時提供「改為部分掃描：最多 N 頁」次要按鈕，使用者確認後才以 N 頁送出（2026-10-07） |
 | `src/features/domains/DomainVerifyPage.jsx` | 網域所有權驗證頁（Search Console 一鍵連接／同步、網域清單、備用三方法；樣式 `legacy-member/61-domain-verify.css`） |
 | `src/features/optimize/OptimizationResultPage.jsx` | 頁面優化成果頁（擁有者）：進度、報告、分享、下載優化版、重新優化、AI 說明與追問 |
 | `src/features/optimize/SharedOptimizationPage.jsx` | `/optimized/:token` 唯讀分享頁 |

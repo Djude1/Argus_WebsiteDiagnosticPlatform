@@ -494,9 +494,10 @@ Agent 端同能力＝`get_network_requests` 工具（見架構文件 §3）。
 ## Coin 扣點流程（與 billing 整合）
 
 ```
-建立掃描 → hold_for_scan(max_pages × 勾選維度數 × 每維單價 ＋ agent_ux_fee)
+建立掃描 → hold_for_scan(max_pages × 勾選維度數 × 每維單價 ＋ agent_ux_fee ＋ agent_deep_fee；is_trial＝0)
   ↓ worker 完成
-settle_scan_actual(actual_pages × 同組維度數 × 每維單價 ＋ agent_ux_fee)  ← 退差額
+settle_scan_actual(actual_pages × 同組維度數 × 每維單價 ＋ agent_ux_fee
+                   ＋ agent_deep_fee（只在 deep_agent_ran）)  ← 退差額
   ↓ 若失敗/取消
 refund_full_for_scan(scan)  ← 全退（冪等）
 ```
@@ -508,6 +509,15 @@ refund_full_for_scan(scan)  ← 全退（冪等）
 不新增 `CoinTransaction.kind`、不需 migration。收費條件與 `run_agent_ux` 對齊：
 `ARGUS_AGENT_ENABLED` 開、`max_pages > 1`（全網站）、且勾了 `ux` 才收；否則回 0。
 若實際只爬到 1 頁，settle 以 `actual_pages=1` 重算 → 這筆費用自動退回（fee 也回 0）。
+
+**深度資安附加費與首次免費掃描（2026-10-07）**：主動＋已授權＋全網站預扣
+`ARGUS_COIN_AGENT_DEEP`（50）；`stage_settlement` 以
+`deep_agent_ran = execution_plan.run_agent and agent_result is not None` 傳給
+`settle_scan_actual`——agent 有跑就收（與實際頁數無關，只爬到 1 頁 agent 一樣花了 token），
+沒跑就退。`ScanJob.is_trial`（migration 0027）由 `ScanJobCreateSerializer` 依
+`free_trial_available` 設定，試用掃描預扣與結算都是 0。餘額不足時 serializer 回
+`affordable_pages`，由前端讓使用者確認 Partial Scan，**不得自動縮小範圍**。詳見
+`apps/billing/CLAUDE.md`「2026-10-07 定價調整」。
 
 `settle_scan_actual` 在 `ScanJob` 已寫成 `completed` 之後才執行，因此它的例外
 **不得往上拋**：拋出去會落到 `run_scan_job` 的通用 `except`，把已完成的掃描改成

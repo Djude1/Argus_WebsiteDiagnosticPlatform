@@ -362,6 +362,8 @@ function ScanJobForm({ onCreated, project = null }) {
   const [submitting, setSubmitting] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null); // { estimated_pages, estimated_cost, confidence }
+  // Partial Scan：點數不夠掃滿 50 頁時，使用者確認後改掃 N 頁（null＝未選，照常掃滿）
+  const [partialPages, setPartialPages] = useState(null);
   const [verifiedDomains, setVerifiedDomains] = useState([]); // 已通過驗證的網域（URL 徽章提示用）
   const navigate = useNavigate();
   const wallet = useArgusStore((s) => s.wallet);
@@ -412,16 +414,44 @@ function ScanJobForm({ onCreated, project = null }) {
 
   const coinPerCategory = wallet?.coin_per_category ?? 2;
   const coinPerPage = coinPerCategory * categories.length;
-  const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
+  const sitePageLimit = partialPages || MAX_SITE_SCAN_PAGES;
+  const effectivePages = scope === "single" ? 1 : sitePageLimit;
   // AI Agent 擬真使用者 UX 測試附加費：僅全網站掃描且勾 UX 時計收（後端 agent 關閉時回 0）。
   const agentUxFee =
     scope !== "single" && categories.includes("ux")
       ? (wallet?.agent_ux_fee ?? 0)
       : 0;
-  const estimatedCost = effectivePages * coinPerPage + agentUxFee;
+  // 深度資安 Agent 附加費：主動＋已授權＋整站時預扣；agent 沒實際執行，結算會退回。
+  const agentDeepFee =
+    scope !== "single" && activeMode && activeAuthorized
+      ? (wallet?.agent_deep_fee ?? 0)
+      : 0;
+  // 首次免費完整掃描：被動＋整站＋五面向全選、帳號還沒用過（後端同一規則再判一次）
+  const freeTrial =
+    Boolean(wallet?.free_trial_available) &&
+    scope !== "single" &&
+    !activeMode &&
+    categories.length === SCAN_CATEGORY_OPTIONS.length;
+  const listCost = effectivePages * coinPerPage + agentUxFee + agentDeepFee;
+  const estimatedCost = freeTrial ? 0 : listCost;
   const balance = wallet?.balance ?? 0;
   const insufficient = balance < estimatedCost;
+  // 點數不夠掃滿時，同一組設定最多付得起幾頁（至少 2 頁才有意義）
+  const affordablePages = useMemo(() => {
+    if (scope === "single" || !insufficient || partialPages) return 0;
+    let best = 0;
+    for (let pages = 2; pages < MAX_SITE_SCAN_PAGES; pages += 1) {
+      if (pages * coinPerPage + agentUxFee + agentDeepFee <= balance) best = pages;
+      else break;
+    }
+    return best;
+  }, [scope, insufficient, partialPages, coinPerPage, agentUxFee, agentDeepFee, balance]);
   const securitySelected = categories.includes("security");
+
+  // 範圍或主動測試設定一變，已確認的部分掃描頁數就不準了，改回完整掃描讓使用者重新確認
+  useEffect(() => {
+    setPartialPages(null);
+  }, [scope, activeMode, activeAuthorized]);
 
   function toggleCategory(value) {
     const next = categories.includes(value)
@@ -430,6 +460,7 @@ function ScanJobForm({ onCreated, project = null }) {
     if (next.length === 0) return; // 至少保留一個維度
     setCategories(next);
     setEstimate(null);
+    setPartialPages(null);
     // 主動測試屬資安維度：取消資安時連動關閉主動模式與其授權勾選
     if (!next.includes("security")) {
       setActiveMode(false);
@@ -473,7 +504,7 @@ function ScanJobForm({ onCreated, project = null }) {
         scan_mode: activeMode ? "active" : "passive",
         active_testing_authorized: activeMode && activeAuthorized,
         categories,
-        max_pages: scope === "single" ? 1 : MAX_SITE_SCAN_PAGES,
+        max_pages: scope === "single" ? 1 : sitePageLimit,
         max_depth: scope === "single" ? 1 : SITE_SCAN_DEPTH,
         ...(project ? { project: project.id } : {}),
       };
@@ -486,6 +517,7 @@ function ScanJobForm({ onCreated, project = null }) {
       setCategories(defaults.categories || DEFAULT_SCAN_CATEGORIES);
       setEstimate(null);
       setScope(defaults.scope || "site");
+      setPartialPages(null);
       clearScanDraft(draftKey);
       fetchWallet();
       onCreated(response.data);
@@ -572,6 +604,9 @@ function ScanJobForm({ onCreated, project = null }) {
           費用＝每頁每維度 {coinPerCategory} coin。已選 {categories.length} 維 →
           每頁 {coinPerPage} coin{categories.length === 5 ? "（全選價）" : "，少勾維度即省費用"}。
           {agentUxFee > 0 && <> 全網站掃描含 UX 另加 AI Agent UX 測試 {agentUxFee} coin。</>}
+          {agentDeepFee > 0 && (
+            <> 主動式深度資安 AI Agent 另加 {agentDeepFee} coin（Agent 實際執行才收，沒執行會退回）。</>
+          )}
         </p>
         <div className="category-grid">
           {SCAN_CATEGORY_OPTIONS.map(({ value, label, desc }) => {
@@ -642,6 +677,19 @@ function ScanJobForm({ onCreated, project = null }) {
       </div>
 
       <div className={`coin-estimate ${insufficient ? "is-insufficient" : ""}`}>
+        {freeTrial && (
+          <p className="coin-estimate-free" role="status">
+            首次完整掃描免費：這次被動式整站五面向掃描不扣點（原價最多 {listCost.toLocaleString()} coin）。
+          </p>
+        )}
+        {partialPages && (
+          <p className="coin-estimate-partial" role="status">
+            部分掃描：最多 {partialPages} 頁，結果可能沒有涵蓋網站全部頁面。
+            <button type="button" className="coin-estimate-link" onClick={() => setPartialPages(null)}>
+              改回完整掃描
+            </button>
+          </p>
+        )}
         <div className="coin-estimate-row">
           <span>本次掃描預扣</span>
           <strong>{estimatedCost.toLocaleString()} coin</strong>
@@ -650,6 +698,16 @@ function ScanJobForm({ onCreated, project = null }) {
           <span>目前餘額</span>
           <span>{balance.toLocaleString()} coin</span>
         </div>
+        {insufficient && affordablePages > 0 && (
+          <button
+            className="coin-estimate-cta is-secondary"
+            type="button"
+            onClick={() => setPartialPages(affordablePages)}
+          >
+            改為部分掃描：最多 {affordablePages} 頁（預扣{" "}
+            {(affordablePages * coinPerPage + agentUxFee + agentDeepFee).toLocaleString()} coin）
+          </button>
+        )}
         {insufficient && (
           <button
             className="coin-estimate-cta"
@@ -1586,6 +1644,14 @@ function FindingsWorkspace({ scan }) {
 
       {/* 網站位於 CDN／反向代理之後時提醒一次；網站優勢與架構細節在上方導覽的獨立分頁 */}
       <EdgeNotice profile={scan.site_profile} />
+      {scan.max_pages > 1 && scan.max_pages < MAX_SITE_SCAN_PAGES && (
+        <p className="scan-report-alert">
+          本次為部分掃描：頁數上限 {scan.max_pages} 頁，結果可能沒有涵蓋網站全部頁面。
+        </p>
+      )}
+      {scan.is_trial && (
+        <p className="scan-report-alert">這是你的首次免費完整掃描，沒有扣點。</p>
+      )}
 
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (

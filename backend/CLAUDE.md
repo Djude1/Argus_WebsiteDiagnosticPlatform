@@ -34,7 +34,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 |---|---|---|
 | `accounts` | User model（`handle` 用戶名、`deleted_at`）、Google 授權註冊、Email／用戶名登入、自行刪除帳號（`deletion.py`）、記憶體 access + HttpOnly refresh、密碼重設、LoginEvent 登入事件 | `views.py` `models.py` |
 | `scans` | **核心**：ScanJob 狀態機、Playwright 爬蟲、四維 scanner、PDF 報告（.docx 排版＋LibreOffice 轉檔）、SEO 分析與 Search Console、合作式 cancel | `tasks.py` `crawler.py` `scanners.py` |
-| `agent` | Hermes-Agent 滲透測試：recon→orchestrator(subagent 派工)→6 specialist、20 工具、MiniMax-M3 鏈（預設 `ARGUS_AGENT_ENABLED=false`）——完整架構見 `docs/hermes-agent-architecture.md` | `runner.py` `loop.py` `tools.py` `providers.py` `findings.py` |
+| `agent` | Hermes-Agent 滲透測試：recon→orchestrator(subagent 派工，每次最多 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`＝6 位)→specialist、20 工具、MiniMax-M3 鏈（預設 `ARGUS_AGENT_ENABLED=false`）——完整架構見 `docs/hermes-agent-architecture.md` | `runner.py` `loop.py` `tools.py` `providers.py` `findings.py` |
 | `billing` | 點數錢包＋綠界金流（購點一次付清、訂閱信用卡定期定額；`ARGUS_PAYMENT_MODE` disabled／ecpay_test／ecpay）；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
 | `reviews` | 已驗證平台評論（一人一則 + 本人編修/刪除 + 官方單一回覆 + 評論／回覆各自按讚與檢舉） | `models.py` `views.py` |
 | `admin_api` | React `/admin/*` 用的 REST API + AdminAuditLog | `views.py` `permissions.py` |
@@ -60,7 +60,8 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）、
          seo_report（JSON，SEO 連結狀態與站台網址檢查，勾 SEO 時由 seo_links 階段寫入；migration 0022）、
          site_profile（JSON，網站概況：網域／IP／反解／CDN 邊緣、網站優勢（附依據與可信度）、使用的技術，site_profile 階段寫入；migration 0026）、
-         project（所屬網站專案，見下 SiteProject）
+         project（所屬網站專案，見下 SiteProject）、
+         is_trial（首次免費完整掃描，預扣／結算皆 0；migration 0027，見 apps/billing/CLAUDE.md）
 ```
 
 **SiteProject**（`apps/scans/models.py`，2026-10-02）

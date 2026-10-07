@@ -7,9 +7,12 @@ from rest_framework import serializers
 
 from apps.billing.services import (
     InsufficientCoinError,
+    affordable_site_pages,
     estimate_scan_cost,
+    free_trial_available,
     get_or_create_wallet,
     hold_for_scan,
+    qualifies_for_free_trial,
 )
 from apps.scans.domain_verification import DomainValidationError, normalize_domain
 from apps.scans.models import (
@@ -110,16 +113,38 @@ class ScanJobCreateSerializer(serializers.Serializer):
         request = self.context["request"]
         wallet = get_or_create_wallet(request.user)
         attrs["categories"] = [c for c in ALL_CATEGORIES if c in set(attrs["categories"])]
-        estimated = estimate_scan_cost(attrs["max_pages"], attrs["categories"])
+        # 首次免費完整掃描：被動＋整站＋五面向、且帳號還沒用過（失敗／取消不算用過）
+        attrs["is_trial"] = qualifies_for_free_trial(
+            attrs["max_pages"], attrs["categories"], attrs["scan_mode"]
+        ) and free_trial_available(request.user)
+        deep_agent = (
+            attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and attrs["active_testing_authorized"]
+        )
+        estimated = 0 if attrs["is_trial"] else estimate_scan_cost(
+            attrs["max_pages"], attrs["categories"], deep_agent=deep_agent
+        )
         if wallet.balance < estimated:
+            # Partial Scan：回傳同一組設定下付得起的頁數，由使用者確認後再送一次（不自動縮小範圍）
+            affordable = (
+                affordable_site_pages(
+                    wallet.balance,
+                    attrs["categories"],
+                    deep_agent=deep_agent,
+                    max_pages=attrs["max_pages"],
+                )
+                if attrs["max_pages"] > 1
+                else 0
+            )
             raise serializers.ValidationError(
                 {
                     "coin": (
                         f"coin 不足：此次掃描需 {estimated} coin"
                         f"（{attrs['max_pages']} 頁 × {len(attrs['categories'])} 維度 × "
-                        f"{settings.ARGUS_COIN_PER_CATEGORY}），目前餘額 {wallet.balance}。"
+                        f"{settings.ARGUS_COIN_PER_CATEGORY}，含附加費），"
+                        f"目前餘額 {wallet.balance}。"
                         f"請前往購點頁面儲值。"
-                    )
+                    ),
+                    "affordable_pages": [str(affordable)],
                 }
             )
 
@@ -202,6 +227,7 @@ class ScanJobCreateSerializer(serializers.Serializer):
             max_pages=validated_data["max_pages"],
             respect_robots=validated_data["respect_robots"],
             active_testing_authorized=validated_data["active_testing_authorized"],
+            is_trial=validated_data.get("is_trial", False),
             test_auth_email_encrypted=encrypt_test_auth(
                 validated_data.get("test_auth_email", "")
             ),
@@ -246,6 +272,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "categories",
             "max_depth",
             "max_pages",
+            "is_trial",
             "respect_robots",
             "overall_score",
             "category_scores",

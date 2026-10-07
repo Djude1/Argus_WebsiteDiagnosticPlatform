@@ -56,6 +56,16 @@ def grant_monthly_bonus_if_needed(user) -> CoinTransaction | None:
     now = timezone.now()
     if wallet.last_bonus_year == now.year and wallet.last_bonus_month == now.month:
         return None
+    cap = settings.ARGUS_FREE_BONUS_BALANCE_CAP
+    if cap > 0 and not has_paid_history(user):
+        # 從未購點、從未訂閱：月贈點只補到上限，避免閒置帳號無限累積點數負債（2026-10-07）
+        bonus = min(bonus, max(0, cap - wallet.balance))
+    if bonus <= 0:
+        # 已達上限：仍標記本月已處理，避免每次登入重算
+        wallet.last_bonus_year = now.year
+        wallet.last_bonus_month = now.month
+        wallet.save(update_fields=["last_bonus_year", "last_bonus_month", "updated_at"])
+        return None
     new_balance = wallet.balance + bonus
     wallet.balance = new_balance
     wallet.last_bonus_year = now.year
@@ -92,18 +102,104 @@ def agent_ux_fee(max_pages: int, categories=None) -> int:
     return settings.ARGUS_COIN_AGENT_UX
 
 
-def estimate_scan_cost(max_pages: int, categories=None) -> int:
-    """掃描預估點數：max_pages × 勾選維度數 × 每維單價，另加 Agent UX 附加費。
+def agent_deep_fee(max_pages: int, *, active_authorized: bool) -> int:
+    """深度資安 Hermes-Agent 的固定附加費（0 表示這次不收）。
+
+    條件與 scan_plan.run_agent 一致：agent 功能開啟＋主動模式且已授權＋全網站。
+    預扣時依條件先算進去；結算時只有 agent 真的以深度模式執行才收（見 settle_scan_actual）。
+    """
+    if not settings.ARGUS_AGENT_ENABLED or not active_authorized or int(max_pages) <= 1:
+        return 0
+    return settings.ARGUS_COIN_AGENT_DEEP
+
+
+def estimate_scan_cost(max_pages: int, categories=None, *, deep_agent: bool = False) -> int:
+    """掃描預估點數：max_pages × 勾選維度數 × 每維單價，另加 Agent 附加費。
 
     categories 為 None（內部舊呼叫）或空集合時視同五維全選，
     與導入維度計費前的「max_pages × ARGUS_COIN_PER_PAGE」等價。
+    deep_agent=True 時另加深度資安附加費（呼叫端負責判斷是否符合條件）。
     """
     # 延遲 import：ALL_CATEGORIES 的事實來源在 scans.models，頂層 import 會循環
     from apps.scans.models import ALL_CATEGORIES
 
     selected = {c for c in (categories or []) if c in ALL_CATEGORIES} or set(ALL_CATEGORIES)
     page_cost = int(max_pages) * len(selected) * settings.ARGUS_COIN_PER_CATEGORY
-    return page_cost + agent_ux_fee(max_pages, categories)
+    deep_fee = agent_deep_fee(max_pages, active_authorized=True) if deep_agent else 0
+    return page_cost + agent_ux_fee(max_pages, categories) + deep_fee
+
+
+def _scan_is_deep(scan_job) -> bool:
+    """這筆掃描符合深度資安 Agent 的執行條件（主動＋已授權）。"""
+    from apps.scans.models import ScanJob
+
+    return (
+        scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+        and bool(scan_job.active_testing_authorized)
+    )
+
+
+def scan_hold_amount(scan_job) -> int:
+    """建立掃描時實際要預扣的點數（免費首掃為 0）。網頁與 MCP 共用。"""
+    if scan_job.is_trial:
+        return 0
+    return estimate_scan_cost(
+        scan_job.max_pages,
+        scan_job.effective_categories,
+        deep_agent=_scan_is_deep(scan_job),
+    )
+
+
+def qualifies_for_free_trial(max_pages: int, categories, scan_mode: str) -> bool:
+    """是否為 Standard Full Scan：被動＋整站＋五面向全選。"""
+    from apps.scans.models import ALL_CATEGORIES, ScanJob
+
+    return (
+        settings.ARGUS_FREE_TRIAL_SCAN_ENABLED
+        and int(max_pages) > 1
+        and scan_mode == ScanJob.ScanMode.PASSIVE
+        and set(categories or []) >= set(ALL_CATEGORIES)
+    )
+
+
+def free_trial_available(user, *, exclude_scan_id: int | None = None) -> bool:
+    """這個帳號還能不能使用首次免費完整掃描。
+
+    已用掉＝有一筆免費掃描不是失敗或取消（進行中與已完成都算）；失敗或取消的免費掃描
+    不算用掉，讓使用者可以再試一次。
+    """
+    if not settings.ARGUS_FREE_TRIAL_SCAN_ENABLED or not user or not user.pk:
+        return False
+    from apps.scans.models import ScanJob
+
+    used = ScanJob.objects.filter(user=user, is_trial=True).exclude(
+        status__in=[ScanJob.Status.FAILED, ScanJob.Status.CANCELLED]
+    )
+    if exclude_scan_id is not None:
+        used = used.exclude(id=exclude_scan_id)
+    return not used.exists()
+
+
+def affordable_site_pages(balance: int, categories, *, deep_agent: bool, max_pages: int) -> int:
+    """餘額不足時，同一組設定下最多付得起幾頁的整站掃描（至少 2 頁才有意義，否則回 0）。
+
+    Partial Scan 用：前端讓使用者確認「掃 N 頁」，不自動縮小範圍。
+    """
+    best = 0
+    for pages in range(2, int(max_pages)):
+        if estimate_scan_cost(pages, categories, deep_agent=deep_agent) <= balance:
+            best = pages
+        else:
+            break
+    return best
+
+
+def has_paid_history(user) -> bool:
+    """是否購點或訂閱過（月贈點上限只套用在從未付費的帳號）。"""
+    wallet = CoinWallet.objects.filter(user=user).first()
+    if wallet is not None and (wallet.total_purchased_ntd or 0) > 0:
+        return True
+    return UserSubscription.objects.filter(user=user).exists()
 
 
 @transaction.atomic
@@ -113,8 +209,21 @@ def hold_for_scan(user, scan_job) -> CoinTransaction:
     呼叫者已驗證餘額足夠（serializer.validate），這裡再加一層 row-level lock
     確保並發建立時不會超扣。若不足會 raise InsufficientCoinError。
     """
-    cost = estimate_scan_cost(scan_job.max_pages, scan_job.effective_categories)
     wallet = CoinWallet.objects.select_for_update().get(user=user)
+    if scan_job.is_trial and not free_trial_available(user, exclude_scan_id=scan_job.id):
+        # 同時送出兩筆免費掃描：錢包鎖住後再確認一次，第二筆改為一般付費掃描
+        type(scan_job).objects.filter(id=scan_job.id).update(is_trial=False)
+        scan_job.is_trial = False
+    cost = scan_hold_amount(scan_job)
+    if scan_job.is_trial:
+        return CoinTransaction.objects.create(
+            wallet=wallet,
+            amount=0,
+            kind=CoinTransaction.Kind.SCAN_HOLD,
+            balance_after=wallet.balance,
+            scan_job=scan_job,
+            note="首次免費完整掃描（不扣點）",
+        )
     if wallet.balance < cost:
         raise InsufficientCoinError(required=cost, balance=wallet.balance)
     new_balance = wallet.balance - cost
@@ -346,8 +455,13 @@ def refund_rebuild(user, site_rebuild, *, reason: str) -> CoinTransaction | None
 
 
 @transaction.atomic
-def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | None:
+def settle_scan_actual(
+    user, scan_job, actual_pages: int, *, deep_agent_ran: bool = False
+) -> CoinTransaction | None:
     """掃描完成：依實際頁數 × 勾選維度數退還差額。
+
+    deep_agent_ran：深度資安 Agent 是否真的執行過；沒執行就不收深度附加費（預扣的退回）。
+    免費首掃（is_trial）應收為 0。
 
     同時將 wallet.total_scans_used 累計 +1。
     冪等：若已存在此 scan 的 SCAN_REFUND 交易（本函式的差額退款、無退款標記、
@@ -363,7 +477,16 @@ def settle_scan_actual(user, scan_job, actual_pages: int) -> CoinTransaction | N
     ).exists():
         return None
 
-    actual_cost = estimate_scan_cost(max(0, int(actual_pages)), scan_job.effective_categories)
+    if scan_job.is_trial:
+        actual_cost = 0
+    else:
+        actual_cost = estimate_scan_cost(max(0, int(actual_pages)), scan_job.effective_categories)
+        if deep_agent_ran and _scan_is_deep(scan_job):
+            # 深度附加費只看 agent 是否真的跑了，與實際爬到幾頁無關
+            # （只爬到 1 頁的網站，agent 照樣花了 token）
+            actual_cost += agent_deep_fee(
+                scan_job.max_pages, active_authorized=True
+            )
     outstanding = _sum_holds(wallet, scan_job.id)
     refund_amount = max(0, outstanding - actual_cost)
 
