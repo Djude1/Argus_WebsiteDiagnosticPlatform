@@ -1,0 +1,1124 @@
+[
+  {
+    "title": "第1章　前言",
+    "bookmark": "v10b1001",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "1-1　背景介紹",
+    "bookmark": "v10b1002",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "1-2　動機",
+    "bookmark": "v10b1003",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 1-2-1　各平台功能特性比較表",
+    "bookmark": "v10b1004",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "1-3　系統目的與目標",
+    "bookmark": "v10b1005",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "1-4　預期成果",
+    "bookmark": "v10b1006",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "第2章　營運計畫",
+    "bookmark": "v10b1007",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "2-1　可行性分析",
+    "bookmark": "v10b1008",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 2-1-1　技術可行性評估表",
+    "bookmark": "v10b1009",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "2-2　商業模式（Business Model）",
+    "bookmark": "v10b1010",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 2-2-1　商業模式Business Model",
+    "bookmark": "v10b1011",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "2-3　市場分析（STP）",
+    "bookmark": "v10b1012",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "2-4　競爭力分析（SWOT-TOWS）",
+    "bookmark": "v10b1013",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 2-4-1　競爭力分析 SWOT-TOWS 矩陣",
+    "bookmark": "v10b1014",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "第3章 系統規格",
+    "bookmark": "v10b1015",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "3-1 系統架構",
+    "bookmark": "v10b1016",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖3-1-1 Argus 服務架構與資料流",
+    "bookmark": "v10b1017",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "3-2 系統軟硬體需求與技術平台",
+    "bookmark": "v10b1018",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表3-2-1 軟體平台與相依條件",
+    "bookmark": "v10b1019",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "3-3 使用標準與工具",
+    "bookmark": "v10b1020",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表3-3-1 標準與工具的使用範圍",
+    "bookmark": "v10b1021",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "  第4章　專案時程與組織分工",
+    "bookmark": "v10b1022",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "4-1　專案時程",
+    "bookmark": "v10b1023",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 4-1-1　專案甘特圖（114/12 – 115/11）",
+    "bookmark": "v10b1024",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "4-2　專案組織與分工",
+    "bookmark": "v10b1025",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表 4-2-1　專案組織分工表（● 主要負責，○ 次要協助）",
+    "bookmark": "v10b1026",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表 4-2-2　專題成果工作內容與貢獻度表",
+    "bookmark": "v10b1027",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "4-3　上傳 GitHub 紀錄",
+    "bookmark": "v10b1028",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖 4-3-1　GitHub 提交紀錄截圖",
+    "bookmark": "v10b1029",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "第5章 需求模型",
+    "bookmark": "v10b1030",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "5-1 使用者需求",
+    "bookmark": "v10b1031",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表5-1-1 帳號與網站專案功能需求",
+    "bookmark": "v10b1032",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表5-1-2 掃描與分析功能需求",
+    "bookmark": "v10b1033",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表5-1-3 帳務與平台功能需求",
+    "bookmark": "v10b1034",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表5-1-4 管理功能需求",
+    "bookmark": "v10b1035",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表5-1-5 安全與資料非功能需求",
+    "bookmark": "v10b1036",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表5-1-6 執行與維護非功能需求",
+    "bookmark": "v10b1037",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "5-2 使用個案圖",
+    "bookmark": "v10b1038",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖5-2-1 訪客會員與訂閱會員使用個案",
+    "bookmark": "v10b1039",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖5-2-2 管理員與超級管理員使用個案",
+    "bookmark": "v10b1040",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "5-3 使用個案描述",
+    "bookmark": "v10b1041",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖5-3-1 建立掃描活動圖",
+    "bookmark": "v10b1042",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖5-3-2 網域驗證與主動測試活動圖",
+    "bookmark": "v10b1043",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖5-3-3 購點與定期定額活動圖",
+    "bookmark": "v10b1044",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "5-4 分析類別圖",
+    "bookmark": "v10b1045",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖5-4-1 網站專案與掃描分析類別圖",
+    "bookmark": "v10b1046",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "第6章 設計模型",
+    "bookmark": "v10b1047",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "6-1 循序圖",
+    "bookmark": "v10b1048",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖6-1-1 掃描建立執行與結算循序圖",
+    "bookmark": "v10b1049",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖6-1-2 Search Console 授權與查詢循序圖",
+    "bookmark": "v10b1050",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖6-1-3 付款通知與冪等入帳循序圖",
+    "bookmark": "v10b1051",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖6-1-4 PDF 產生下載與查驗循序圖",
+    "bookmark": "v10b1052",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "6-2 設計類別圖",
+    "bookmark": "v10b1053",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖6-2-1 主要實作類別與服務依賴",
+    "bookmark": "v10b1054",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "第7章 實作模型",
+    "bookmark": "v10b1055",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "7-1 部署圖",
+    "bookmark": "v10b1056",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖7-1-1 本機 Docker Compose 部署圖",
+    "bookmark": "v10b1057",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖7-1-2 公網 Kubernetes 與 GitOps 部署圖",
+    "bookmark": "v10b1058",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "7-2 套件圖",
+    "bookmark": "v10b1059",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖7-2-1 前後端套件與模組依賴",
+    "bookmark": "v10b1060",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "7-3 元件圖",
+    "bookmark": "v10b1061",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖7-3-1 診斷與交付元件圖",
+    "bookmark": "v10b1062",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "7-4 狀態機",
+    "bookmark": "v10b1063",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖7-4-1 ScanJob 狀態機",
+    "bookmark": "v10b1064",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "表7-4-1 其他業務狀態",
+    "bookmark": "v10b1065",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "第8章 資料庫設計",
+    "bookmark": "v10b1066",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "8-1 資料庫關聯表",
+    "bookmark": "v10b1067",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表8-1-1 業務資料模型總覽",
+    "bookmark": "v10b1068",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "圖8-1-1 專案掃描與證據資料關聯",
+    "bookmark": "v10b1069",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖8-1-2 點數訂單與訂閱資料關聯",
+    "bookmark": "v10b1070",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖8-1-3 評論與 MCP 資料關聯",
+    "bookmark": "v10b1071",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "8-2 表格及其 Meta data",
+    "bookmark": "v10b1072",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表8-2-1 User 資料字典　使用者帳號與框架權限欄位（accounts_user）",
+    "bookmark": "v10b1073",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-2 LoginEvent 資料字典　登入成功事件（accounts_loginevent）",
+    "bookmark": "v10b1074",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-3 PasswordResetToken 資料字典　密碼重設的一次性雜湊紀錄（accounts_passwordresettoken）",
+    "bookmark": "v10b1075",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-4 SiteProject 資料字典　網站專案與預設掃描設定（scans_siteproject）",
+    "bookmark": "v10b1076",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-5 ScanJob 資料字典　掃描範圍、狀態、進度與結果彙總（scans_scanjob）",
+    "bookmark": "v10b1077",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-6 AuthorizationConsent 資料字典　建立任務時的授權聲明（scans_authorizationconsent）",
+    "bookmark": "v10b1078",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-7 Page 資料字典　當次擷取的頁面與證據（scans_page）",
+    "bookmark": "v10b1079",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-8 Finding 資料字典　檢測發現、證據與改善方向（scans_finding）",
+    "bookmark": "v10b1080",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-9 SearchConsoleConnection 資料字典　Search Console 唯讀連線（scans_searchconsoleconnection）",
+    "bookmark": "v10b1081",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-10 ReportVerification 資料字典　報告編號、版本與檔案指紋（scans_reportverification）",
+    "bookmark": "v10b1082",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-11 AgentSession 資料字典　代理執行工作階段（scans_agentsession）",
+    "bookmark": "v10b1083",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-12 AgentStep 資料字典　代理工具步驟與結果（scans_agentstep）",
+    "bookmark": "v10b1084",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-13 FixOutput 資料字典　修正產物與產生狀態（scans_fixoutput）",
+    "bookmark": "v10b1085",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-14 VerifiedDomain 資料字典　網域所有權驗證與有效期（scans_verifieddomain）",
+    "bookmark": "v10b1086",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-15 SiteRebuild 資料字典　網頁快照、優化及互動產物（rebuild_siterebuild）",
+    "bookmark": "v10b1087",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-16 CoinWallet 資料字典　使用者點數餘額及累計資料（billing_coinwallet）",
+    "bookmark": "v10b1088",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-17 PricingPlan 資料字典　一次性點數方案（billing_pricingplan）",
+    "bookmark": "v10b1089",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-18 PurchaseOrder 資料字典　購點訂單與下單快照（billing_purchaseorder）",
+    "bookmark": "v10b1090",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-19 SubscriptionPlan 資料字典　輕量訂閱方案（billing_subscriptionplan）",
+    "bookmark": "v10b1091",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-20 UserSubscription 資料字典　當期訂閱權益與相容期別（billing_usersubscription）",
+    "bookmark": "v10b1092",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-21 SubscriptionOrder 資料字典　綠界定期定額訂單（billing_subscriptionorder）",
+    "bookmark": "v10b1093",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-22 SubscriptionCharge 資料字典　各次定期定額扣款結果（billing_subscriptioncharge）",
+    "bookmark": "v10b1094",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-23 CoinTransaction 資料字典　點數異動帳本（billing_cointransaction）",
+    "bookmark": "v10b1095",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-24 PlatformReview 資料字典　每位會員的一則主評論（reviews_platformreview）",
+    "bookmark": "v10b1096",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-25 ReviewHelpful 資料字典　主評論有幫助標記（reviews_reviewhelpful）",
+    "bookmark": "v10b1097",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-26 ReviewResponse 資料字典　單一官方回覆（reviews_reviewresponse）",
+    "bookmark": "v10b1098",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-27 ReviewResponseHelpful 資料字典　官方回覆有幫助標記（reviews_reviewresponsehelpful）",
+    "bookmark": "v10b1099",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-28 ReviewRevision 資料字典　主評論編修歷程（reviews_reviewrevision）",
+    "bookmark": "v10b1100",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-29 ReviewReport 資料字典　主評論檢舉紀錄（reviews_reviewreport）",
+    "bookmark": "v10b1101",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-30 ReviewMessageHelpful 資料字典　討論訊息有幫助標記（reviews_reviewmessagehelpful）",
+    "bookmark": "v10b1102",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-31 ReviewMessage 資料字典　討論串訊息（reviews_reviewmessage）",
+    "bookmark": "v10b1103",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-32 AdminAuditLog 資料字典　重要管理操作紀錄（admin_api_adminauditlog）",
+    "bookmark": "v10b1104",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-33 Announcement 資料字典　平台公告（admin_api_announcement）",
+    "bookmark": "v10b1105",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-34 ProjectFeature 資料字典　公開功能介紹（content_projectfeature）",
+    "bookmark": "v10b1106",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-35 TeamMember 資料字典　公開團隊資料（content_teammember）",
+    "bookmark": "v10b1107",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-36 ProjectMilestone 資料字典　專案裡程碑（content_projectmilestone）",
+    "bookmark": "v10b1108",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-37 AppRelease 資料字典　版本發布資訊（content_apprelease）",
+    "bookmark": "v10b1109",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-38 PartnerInquiry 資料字典　合作洽談與處理狀態（content_partnerinquiry）",
+    "bookmark": "v10b1110",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-39 McpApiKey 資料字典　MCP 憑證雜湊與撤銷紀錄（mcp_access_mcpapikey）",
+    "bookmark": "v10b1111",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表8-2-40 McpCallLog 資料字典　MCP 呼叫與額度紀錄（mcp_access_mcpcalllog）",
+    "bookmark": "v10b1112",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "第9章 程式",
+    "bookmark": "v10b1113",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "9-1 元件清單及其規格描述",
+    "bookmark": "v10b1114",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表9-1-1 後端應用模組",
+    "bookmark": "v10b1115",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表9-1-2 前端主要頁面與責任",
+    "bookmark": "v10b1116",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "9-2 其他附屬之各種元件",
+    "bookmark": "v10b1117",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表9-2-1 主要 API 與用途",
+    "bookmark": "v10b1118",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表9-2-2 工具執行的主要條件",
+    "bookmark": "v10b1119",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "第10章 測試模型",
+    "bookmark": "v10b1120",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "10-1 測試計畫",
+    "bookmark": "v10b1121",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表10-1-1 測試範圍與證據",
+    "bookmark": "v10b1122",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "10-2 測試個案與測試結果資料",
+    "bookmark": "v10b1123",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表10-2-1 代表性自動化測試群組",
+    "bookmark": "v10b1124",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表10-2-2 本次測試與建置結果",
+    "bookmark": "v10b1125",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表10-2-3 未通過與略過案例",
+    "bookmark": "v10b1126",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表10-2-4 公網操作查核",
+    "bookmark": "v10b1127",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "10-3 測試結論與後續驗證",
+    "bookmark": "v10b1128",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "第11章 操作手冊",
+    "bookmark": "v10b1129",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "11-1 本地與公網的差異",
+    "bookmark": "v10b1130",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表11-1-1 執行模式比較",
+    "bookmark": "v10b1131",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "11-2 安裝與部署",
+    "bookmark": "v10b1132",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表11-2-1 外部服務設定重點",
+    "bookmark": "v10b1133",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "11-3 系統管理與異常處理",
+    "bookmark": "v10b1134",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖11-3-1 公網系統健康的掃描鏈路",
+    "bookmark": "v10b1135",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "表11-3-1 任務異常處理順序",
+    "bookmark": "v10b1136",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "第12章 使用手冊",
+    "bookmark": "v10b1137",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "12-1 畫面導覽與操作轉移",
+    "bookmark": "v10b1138",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-1-1 新版主要畫面轉移圖",
+    "bookmark": "v10b1139",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "表12-1-1 依任務選擇入口",
+    "bookmark": "v10b1140",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "12-2 登入註冊與帳號設定",
+    "bookmark": "v10b1141",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-2-1 日間登入表單",
+    "bookmark": "v10b1142",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-3 免費快速檢查",
+    "bookmark": "v10b1143",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-3-1 單頁快速檢查的完整表單",
+    "bookmark": "v10b1144",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-4 新增與管理網站專案",
+    "bookmark": "v10b1145",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-4-1 新增網站的網址名稱與說明",
+    "bookmark": "v10b1146",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-4-2 網站專案總覽",
+    "bookmark": "v10b1147",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-5 建立掃描與查看進度",
+    "bookmark": "v10b1148",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-5-1 範圍與五維掃描設定",
+    "bookmark": "v10b1149",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-5-2 授權確認與建立掃描",
+    "bookmark": "v10b1150",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-6 閱讀問題與頁面證據",
+    "bookmark": "v10b1151",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-6-1 問題分類與持續追蹤",
+    "bookmark": "v10b1152",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-6-2 單次報告摘要與分類統計",
+    "bookmark": "v10b1153",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-6-3 CSP 問題的判定證據與修正方向",
+    "bookmark": "v10b1154",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-7 SEO 分析與 AEO 問答",
+    "bookmark": "v10b1155",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-7-1 SEO 逐頁內容與索引狀態",
+    "bookmark": "v10b1156",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-7-2 AEO 問答與判定篩選",
+    "bookmark": "v10b1157",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-8 歷史報告與改善產物",
+    "bookmark": "v10b1158",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-8-1 歷史分數與報告下載",
+    "bookmark": "v10b1159",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-8-2 公開報告編號與檔案指紋查驗",
+    "bookmark": "v10b1160",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "表12-8-1 產物來源標記",
+    "bookmark": "v10b1161",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "12-9 網域所有權驗證",
+    "bookmark": "v10b1162",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-9-1 Search Console 網域驗證入口",
+    "bookmark": "v10b1163",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "表12-9-1 驗證方式與條件",
+    "bookmark": "v10b1164",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "12-10 點數與訂閱",
+    "bookmark": "v10b1165",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-10-1 公網 Stage 購點流程及方案",
+    "bookmark": "v10b1166",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-11 MCP 接入",
+    "bookmark": "v10b1167",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-11-1 MCP 工具選擇與憑證入口",
+    "bookmark": "v10b1168",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-12 評論與公開資訊",
+    "bookmark": "v10b1169",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "12-13 管理後台",
+    "bookmark": "v10b1170",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-13-1 管理後台功能導覽",
+    "bookmark": "v10b1171",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "12-14 手機操作",
+    "bookmark": "v10b1172",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "圖12-14-1 手機日間專案總覽",
+    "bookmark": "v10b1173",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "圖12-14-2 手機日間單頁與全網站範圍設定",
+    "bookmark": "v10b1174",
+    "kind": "figure",
+    "level": 1
+  },
+  {
+    "title": "第13章 感想",
+    "bookmark": "v10b1175",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "13-1 系統設計與開發的檢討",
+    "bookmark": "v10b1176",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "13-2 品質與文件維護",
+    "bookmark": "v10b1177",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "13-3 後續改善建議",
+    "bookmark": "v10b1178",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "第14章 參考資料",
+    "bookmark": "v10b1179",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "14-1 技術與文件來源",
+    "bookmark": "v10b1180",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "附錄一 人工智慧使用說明表",
+    "bookmark": "v10b1181",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "表A-1 人工智慧使用說明表",
+    "bookmark": "v10b1182",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "附錄二 初評問題回覆",
+    "bookmark": "v10b1183",
+    "kind": "heading",
+    "level": 1
+  },
+  {
+    "title": "B-1 初評意見與修正情形",
+    "bookmark": "v10b1184",
+    "kind": "heading",
+    "level": 2
+  },
+  {
+    "title": "表B-1-1 委員1建議與修正情形",
+    "bookmark": "v10b1185",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表B-1-2 委員2建議與修正情形",
+    "bookmark": "v10b1186",
+    "kind": "table",
+    "level": 1
+  },
+  {
+    "title": "表B-1-3 委員3建議與修正情形",
+    "bookmark": "v10b1187",
+    "kind": "table",
+    "level": 1
+  }
+]

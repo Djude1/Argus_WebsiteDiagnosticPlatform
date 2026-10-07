@@ -1,0 +1,5228 @@
+[
+  {
+    "app": "accounts",
+    "model": "User",
+    "table": "accounts_user",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "password",
+        "column": "password",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_login",
+        "column": "last_login",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "is_superuser",
+        "column": "is_superuser",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "username",
+        "column": "username",
+        "type": "CharField",
+        "max_length": 150,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "first_name",
+        "column": "first_name",
+        "type": "CharField",
+        "max_length": 150,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_name",
+        "column": "last_name",
+        "type": "CharField",
+        "max_length": 150,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "email",
+        "column": "email",
+        "type": "CharField",
+        "max_length": 254,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "is_staff",
+        "column": "is_staff",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "date_joined",
+        "column": "date_joined",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "now"
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "accounts",
+    "model": "LoginEvent",
+    "table": "accounts_loginevent",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "method",
+        "column": "method",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "password",
+            "帳號密碼"
+          ],
+          [
+            "google",
+            "Google 登入"
+          ],
+          [
+            "register",
+            "Email 註冊"
+          ]
+        ]
+      },
+      {
+        "name": "ip_address",
+        "column": "ip_address",
+        "type": "GenericIPAddressField",
+        "max_length": 39,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user_agent",
+        "column": "user_agent",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "user",
+        "-created_at"
+      ]
+    ]
+  },
+  {
+    "app": "accounts",
+    "model": "PasswordResetToken",
+    "table": "accounts_passwordresettoken",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "token_digest",
+        "column": "token_digest",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "expires_at",
+        "column": "expires_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "used_at",
+        "column": "used_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "request_ip",
+        "column": "request_ip",
+        "type": "GenericIPAddressField",
+        "max_length": 39,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "user",
+        "-created_at"
+      ]
+    ]
+  },
+  {
+    "app": "scans",
+    "model": "ScanJob",
+    "table": "scans_scanjob",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "original_url",
+        "column": "original_url",
+        "type": "CharField",
+        "max_length": 2048,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "normalized_url",
+        "column": "normalized_url",
+        "type": "CharField",
+        "max_length": 2048,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "origin",
+        "column": "origin",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "queued",
+            "等待中"
+          ],
+          [
+            "crawling",
+            "爬取中"
+          ],
+          [
+            "scanning",
+            "掃描中"
+          ],
+          [
+            "agent_testing",
+            "Agent 測試中"
+          ],
+          [
+            "completed",
+            "已完成"
+          ],
+          [
+            "failed",
+            "失敗"
+          ],
+          [
+            "cancelled",
+            "已終止"
+          ]
+        ],
+        "default": "queued"
+      },
+      {
+        "name": "scan_mode",
+        "column": "scan_mode",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "passive",
+            "被動偵測"
+          ],
+          [
+            "active",
+            "主動測試"
+          ]
+        ],
+        "default": "passive"
+      },
+      {
+        "name": "max_depth",
+        "column": "max_depth",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "3"
+      },
+      {
+        "name": "max_pages",
+        "column": "max_pages",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "50"
+      },
+      {
+        "name": "respect_robots",
+        "column": "respect_robots",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "active_testing_authorized",
+        "column": "active_testing_authorized",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "overall_score",
+        "column": "overall_score",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "category_scores",
+        "column": "category_scores",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "top_actions",
+        "column": "top_actions",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "crawl_checkpoint",
+        "column": "crawl_checkpoint",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "warning_summary",
+        "column": "warning_summary",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "progress",
+        "column": "progress",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "scan_log",
+        "column": "scan_log",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "error_message",
+        "column": "error_message",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "started_at",
+        "column": "started_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "completed_at",
+        "column": "completed_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "user",
+        "status"
+      ],
+      [
+        "origin",
+        "created_at"
+      ]
+    ]
+  },
+  {
+    "app": "scans",
+    "model": "AuthorizationConsent",
+    "table": "scans_authorizationconsent",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "ip_address",
+        "column": "ip_address",
+        "type": "GenericIPAddressField",
+        "max_length": 39,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user_agent",
+        "column": "user_agent",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "authorized_domain",
+        "column": "authorized_domain",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "statement",
+        "column": "statement",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "active_testing_authorized",
+        "column": "active_testing_authorized",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "scans",
+    "model": "Page",
+    "table": "scans_page",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "url",
+        "column": "url",
+        "type": "CharField",
+        "max_length": 2048,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "final_url",
+        "column": "final_url",
+        "type": "CharField",
+        "max_length": 2048,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "origin",
+        "column": "origin",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "status_code",
+        "column": "status_code",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 512,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "html",
+        "column": "html",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "rendered_dom",
+        "column": "rendered_dom",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "html_only_text",
+        "column": "html_only_text",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "screenshot_path",
+        "column": "screenshot_path",
+        "type": "CharField",
+        "max_length": 1024,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "load_time_ms",
+        "column": "load_time_ms",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "depth",
+        "column": "depth",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "fetch_mode",
+        "column": "fetch_mode",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "live",
+            "即時爬取"
+          ],
+          [
+            "cache_replay",
+            "快取重放"
+          ]
+        ],
+        "default": "live"
+      },
+      {
+        "name": "blocked_reason",
+        "column": "blocked_reason",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "outgoing_links",
+        "column": "outgoing_links",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "headers",
+        "column": "headers",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "element_boxes",
+        "column": "element_boxes",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "layout_metrics",
+        "column": "layout_metrics",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('scan_job', 'url') name='unique_page_per_scan'>"
+    ],
+    "indexes": [
+      [
+        "scan_job",
+        "depth"
+      ],
+      [
+        "origin",
+        "status_code"
+      ]
+    ]
+  },
+  {
+    "app": "scans",
+    "model": "Finding",
+    "table": "scans_finding",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "page",
+        "column": "page_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.Page",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "severity",
+        "column": "severity",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "critical",
+            "嚴重"
+          ],
+          [
+            "high",
+            "高"
+          ],
+          [
+            "medium",
+            "中"
+          ],
+          [
+            "low",
+            "低"
+          ],
+          [
+            "info",
+            "資訊"
+          ]
+        ]
+      },
+      {
+        "name": "category",
+        "column": "category",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "seo",
+            "SEO"
+          ],
+          [
+            "aeo",
+            "AEO"
+          ],
+          [
+            "geo",
+            "GEO"
+          ],
+          [
+            "security",
+            "資安"
+          ],
+          [
+            "ux",
+            "UX"
+          ]
+        ]
+      },
+      {
+        "name": "priority_score",
+        "column": "priority_score",
+        "type": "FloatField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "impact_area",
+        "column": "impact_area",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "confidence",
+        "column": "confidence",
+        "type": "FloatField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "1.0"
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "description",
+        "column": "description",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "remediation",
+        "column": "remediation",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "evidence",
+        "column": "evidence",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "rule_id",
+        "column": "rule_id",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "evidence_type",
+        "column": "evidence_type",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "evidence_json",
+        "column": "evidence_json",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "evidence_source",
+        "column": "evidence_source",
+        "type": "CharField",
+        "max_length": 512,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "ai_explanation",
+        "column": "ai_explanation",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "ai_remediation",
+        "column": "ai_remediation",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "llm_model",
+        "column": "llm_model",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "llm_generated_at",
+        "column": "llm_generated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "bounding_box",
+        "column": "bounding_box",
+        "type": "JSONField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "selector",
+        "column": "selector",
+        "type": "CharField",
+        "max_length": 512,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "owasp_category",
+        "column": "owasp_category",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "cwe_id",
+        "column": "cwe_id",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "ai_handoff_prompt",
+        "column": "ai_handoff_prompt",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "scan_job",
+        "category",
+        "severity"
+      ],
+      [
+        "page",
+        "category"
+      ]
+    ]
+  },
+  {
+    "app": "scans",
+    "model": "ReportVerification",
+    "table": "scans_reportverification",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "report_number",
+        "column": "report_number",
+        "type": "CharField",
+        "max_length": 40,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "content_sha256",
+        "column": "content_sha256",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "generated_at",
+        "column": "generated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "renderer_version",
+        "column": "renderer_version",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "1"
+      },
+      {
+        "name": "previous_sha256",
+        "column": "previous_sha256",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "scans",
+    "model": "AgentSession",
+    "table": "scans_agentsession",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "provider",
+        "column": "provider",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "model",
+        "column": "model",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "queued",
+            "等待中"
+          ],
+          [
+            "running",
+            "執行中"
+          ],
+          [
+            "completed",
+            "已完成"
+          ],
+          [
+            "failed",
+            "失敗"
+          ]
+        ],
+        "default": "queued"
+      },
+      {
+        "name": "max_steps",
+        "column": "max_steps",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "20"
+      },
+      {
+        "name": "total_tokens",
+        "column": "total_tokens",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "error_message",
+        "column": "error_message",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "started_at",
+        "column": "started_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "completed_at",
+        "column": "completed_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "scans",
+    "model": "AgentStep",
+    "table": "scans_agentstep",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "session",
+        "column": "session_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.AgentSession",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "step_number",
+        "column": "step_number",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "observation",
+        "column": "observation",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "thought_summary",
+        "column": "thought_summary",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "tool_name",
+        "column": "tool_name",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "tool_arguments",
+        "column": "tool_arguments",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "tool_result",
+        "column": "tool_result",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "token_count",
+        "column": "token_count",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('session', 'step_number') name='unique_agent_step_per_session'>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "scans",
+    "model": "FixOutput",
+    "table": "scans_fixoutput",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "idle",
+            "尚未產生"
+          ],
+          [
+            "generating",
+            "產生中"
+          ],
+          [
+            "ready",
+            "已完成"
+          ],
+          [
+            "failed",
+            "失敗"
+          ]
+        ],
+        "default": "idle"
+      },
+      {
+        "name": "artifacts",
+        "column": "artifacts",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "provider",
+        "column": "provider",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "model_id",
+        "column": "model_id",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "total_tokens",
+        "column": "total_tokens",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "error",
+        "column": "error",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "generated_at",
+        "column": "generated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "scans",
+    "model": "VerifiedDomain",
+    "table": "scans_verifieddomain",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "domain",
+        "column": "domain",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "pending",
+            "待驗證"
+          ],
+          [
+            "verified",
+            "已驗證"
+          ],
+          [
+            "rejected",
+            "已否決"
+          ],
+          [
+            "expired",
+            "已過期"
+          ]
+        ],
+        "default": "pending"
+      },
+      {
+        "name": "method",
+        "column": "method",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "dns_txt",
+            "DNS TXT 記錄"
+          ],
+          [
+            "meta_tag",
+            "HTML meta 標籤"
+          ],
+          [
+            "html_file",
+            "驗證檔案"
+          ]
+        ],
+        "default": ""
+      },
+      {
+        "name": "token",
+        "column": "token",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "verified_at",
+        "column": "verified_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "expires_at",
+        "column": "expires_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_checked_at",
+        "column": "last_checked_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_error",
+        "column": "last_error",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "admin_override",
+        "column": "admin_override",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "admin_actor",
+        "column": "admin_actor_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "admin_note",
+        "column": "admin_note",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('user', 'domain') name='unique_verified_domain_per_user'>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "rebuild",
+    "model": "SiteRebuild",
+    "table": "rebuild_siterebuild",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "page",
+        "column": "page_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.Page",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "pending",
+            "等待中"
+          ],
+          [
+            "snapshotting",
+            "複刻中"
+          ],
+          [
+            "optimizing",
+            "優化中"
+          ],
+          [
+            "asking",
+            "回答中"
+          ],
+          [
+            "succeeded",
+            "完成"
+          ],
+          [
+            "failed",
+            "失敗"
+          ]
+        ],
+        "default": "pending"
+      },
+      {
+        "name": "snapshot_path",
+        "column": "snapshot_path",
+        "type": "CharField",
+        "max_length": 512,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "optimized_path",
+        "column": "optimized_path",
+        "type": "CharField",
+        "max_length": 512,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "opencode_session_id",
+        "column": "opencode_session_id",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "trace",
+        "column": "trace",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "reply",
+        "column": "reply",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "conversation",
+        "column": "conversation",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "edit_report",
+        "column": "edit_report",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "model_id",
+        "column": "model_id",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "cost_usd",
+        "column": "cost_usd",
+        "type": "DecimalField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "coins_charged",
+        "column": "coins_charged",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "error",
+        "column": "error",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "scan_job",
+        "status"
+      ]
+    ]
+  },
+  {
+    "app": "billing",
+    "model": "CoinWallet",
+    "table": "billing_coinwallet",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "balance",
+        "column": "balance",
+        "type": "PositiveBigIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "total_purchased_ntd",
+        "column": "total_purchased_ntd",
+        "type": "PositiveBigIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "total_scans_used",
+        "column": "total_scans_used",
+        "type": "PositiveBigIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "last_bonus_year",
+        "column": "last_bonus_year",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_bonus_month",
+        "column": "last_bonus_month",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "billing",
+    "model": "PricingPlan",
+    "table": "billing_pricingplan",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "code",
+        "column": "code",
+        "type": "SlugField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "name",
+        "column": "name",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "price_ntd",
+        "column": "price_ntd",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "coin_amount",
+        "column": "coin_amount",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "badge",
+        "column": "badge",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "description",
+        "column": "description",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "sort_order",
+        "column": "sort_order",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "billing",
+    "model": "PurchaseOrder",
+    "table": "billing_purchaseorder",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "PROTECT"
+      },
+      {
+        "name": "plan",
+        "column": "plan_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "billing.PricingPlan",
+        "on_delete": "PROTECT"
+      },
+      {
+        "name": "price_ntd",
+        "column": "price_ntd",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "coin_amount",
+        "column": "coin_amount",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "buyer_name",
+        "column": "buyer_name",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "buyer_email",
+        "column": "buyer_email",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "invoice_type",
+        "column": "invoice_type",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "personal",
+            "個人發票"
+          ],
+          [
+            "company",
+            "公司發票"
+          ]
+        ],
+        "default": "personal"
+      },
+      {
+        "name": "company_name",
+        "column": "company_name",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "tax_id",
+        "column": "tax_id",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "carrier_type",
+        "column": "carrier_type",
+        "type": "CharField",
+        "max_length": 24,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "cloud",
+            "雲端發票（寄 email）"
+          ],
+          [
+            "mobile_barcode",
+            "手機條碼"
+          ],
+          [
+            "citizen_digital",
+            "自然人憑證"
+          ]
+        ],
+        "default": "cloud"
+      },
+      {
+        "name": "carrier_id",
+        "column": "carrier_id",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "pending",
+            "處理中"
+          ],
+          [
+            "paid",
+            "已付款"
+          ],
+          [
+            "cancelled",
+            "已取消"
+          ]
+        ],
+        "default": "pending"
+      },
+      {
+        "name": "transaction",
+        "column": "transaction_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "billing.CoinTransaction",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "note",
+        "column": "note",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "paid_at",
+        "column": "paid_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "user",
+        "-created_at"
+      ],
+      [
+        "status",
+        "-created_at"
+      ]
+    ]
+  },
+  {
+    "app": "billing",
+    "model": "SubscriptionPlan",
+    "table": "billing_subscriptionplan",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "code",
+        "column": "code",
+        "type": "SlugField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "name",
+        "column": "name",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "monthly_price_ntd",
+        "column": "monthly_price_ntd",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "monthly_coins",
+        "column": "monthly_coins",
+        "type": "PositiveIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "features",
+        "column": "features",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "badge",
+        "column": "badge",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "sort_order",
+        "column": "sort_order",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "billing",
+    "model": "UserSubscription",
+    "table": "billing_usersubscription",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "plan",
+        "column": "plan_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "billing.SubscriptionPlan",
+        "on_delete": "PROTECT"
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "active",
+            "生效中"
+          ],
+          [
+            "cancelled",
+            "已取消"
+          ],
+          [
+            "expired",
+            "已到期"
+          ]
+        ],
+        "default": "active"
+      },
+      {
+        "name": "periods_remaining",
+        "column": "periods_remaining",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "1"
+      },
+      {
+        "name": "started_at",
+        "column": "started_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "current_period_end",
+        "column": "current_period_end",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "last_grant_period",
+        "column": "last_grant_period",
+        "type": "CharField",
+        "max_length": 7,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "source",
+        "column": "source",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "admin_grant",
+            "管理員授予"
+          ],
+          [
+            "ecpay_test",
+            "綠界測試付款"
+          ]
+        ]
+      },
+      {
+        "name": "cancelled_at",
+        "column": "cancelled_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "billing",
+    "model": "CoinTransaction",
+    "table": "billing_cointransaction",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "wallet",
+        "column": "wallet_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "billing.CoinWallet",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "amount",
+        "column": "amount",
+        "type": "BigIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "kind",
+        "column": "kind",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "monthly_bonus",
+            "每月贈點"
+          ],
+          [
+            "purchase",
+            "購買"
+          ],
+          [
+            "scan_hold",
+            "掃描預扣"
+          ],
+          [
+            "scan_refund",
+            "掃描退款"
+          ],
+          [
+            "admin_adjust",
+            "管理員調整"
+          ],
+          [
+            "rebuild_hold",
+            "網頁複刻預扣"
+          ],
+          [
+            "rebuild_refund",
+            "網頁複刻退款"
+          ],
+          [
+            "fixgen_grant",
+            "修正產出額度贈與"
+          ],
+          [
+            "fixgen_charge",
+            "修正產出扣款"
+          ],
+          [
+            "fixgen_refund",
+            "修正產出退款"
+          ],
+          [
+            "subscription_grant",
+            "訂閱月贈點"
+          ]
+        ]
+      },
+      {
+        "name": "balance_after",
+        "column": "balance_after",
+        "type": "PositiveBigIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "scan_job",
+        "column": "scan_job_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "scans.ScanJob",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "plan",
+        "column": "plan_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "billing.PricingPlan",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "site_rebuild",
+        "column": "site_rebuild_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "rebuild.SiteRebuild",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "admin_actor",
+        "column": "admin_actor_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "note",
+        "column": "note",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "wallet",
+        "created_at"
+      ],
+      [
+        "kind",
+        "created_at"
+      ]
+    ]
+  },
+  {
+    "app": "reviews",
+    "model": "PlatformReview",
+    "table": "reviews_platformreview",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "rating",
+        "column": "rating",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 120,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "comment",
+        "column": "comment",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "display_name",
+        "column": "display_name",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "show_partial_email",
+        "column": "show_partial_email",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "published",
+            "公開"
+          ],
+          [
+            "hidden",
+            "已隱藏"
+          ]
+        ],
+        "default": "published"
+      },
+      {
+        "name": "experience_at",
+        "column": "experience_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "is_featured",
+        "column": "is_featured",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "rating",
+        "-created_at"
+      ],
+      [
+        "-is_featured",
+        "-created_at"
+      ],
+      [
+        "status",
+        "-created_at"
+      ]
+    ]
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewHelpful",
+    "table": "reviews_reviewhelpful",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "review",
+        "column": "review_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.PlatformReview",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('review', 'user') name='uniq_review_helpful'>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewResponse",
+    "table": "reviews_reviewresponse",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "review",
+        "column": "review_id",
+        "type": "OneToOneField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": true,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.PlatformReview",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "author",
+        "column": "author_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "body",
+        "column": "body",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewResponseHelpful",
+    "table": "reviews_reviewresponsehelpful",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "response",
+        "column": "response_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.ReviewResponse",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('response', 'user') name='uniq_response_helpful'>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewRevision",
+    "table": "reviews_reviewrevision",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "review",
+        "column": "review_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.PlatformReview",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "rating",
+        "column": "rating",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 120,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "comment",
+        "column": "comment",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "display_name",
+        "column": "display_name",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "show_partial_email",
+        "column": "show_partial_email",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewReport",
+    "table": "reviews_reviewreport",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "review",
+        "column": "review_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.PlatformReview",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "response",
+        "column": "response_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.ReviewResponse",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "reporter",
+        "column": "reporter_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "reason",
+        "column": "reason",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "spam",
+            "垃圾或廣告"
+          ],
+          [
+            "privacy",
+            "揭露個資"
+          ],
+          [
+            "abuse",
+            "仇恨、騷擾或不當內容"
+          ],
+          [
+            "other",
+            "其他"
+          ]
+        ]
+      },
+      {
+        "name": "detail",
+        "column": "detail",
+        "type": "CharField",
+        "max_length": 500,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "pending",
+            "待處理"
+          ],
+          [
+            "resolved",
+            "已處理"
+          ],
+          [
+            "dismissed",
+            "不成立"
+          ]
+        ],
+        "default": "pending"
+      },
+      {
+        "name": "resolved_by",
+        "column": "resolved_by_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      },
+      {
+        "name": "resolved_at",
+        "column": "resolved_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('review', 'reporter') name='uniq_review_reporter' condition=(AND: ('response__isnull', True))>",
+      "<UniqueConstraint: fields=('response', 'reporter') name='uniq_response_reporter' condition=(AND: ('response__isnull', False))>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewMessageHelpful",
+    "table": "reviews_reviewmessagehelpful",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "message",
+        "column": "message_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.ReviewMessage",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "user",
+        "column": "user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [
+      "<UniqueConstraint: fields=('message', 'user') name='uniq_msg_helpful'>"
+    ],
+    "indexes": []
+  },
+  {
+    "app": "reviews",
+    "model": "ReviewMessage",
+    "table": "reviews_reviewmessage",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "review",
+        "column": "review_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "reviews.PlatformReview",
+        "on_delete": "CASCADE"
+      },
+      {
+        "name": "author",
+        "column": "author_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "is_admin",
+        "column": "is_admin",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "body",
+        "column": "body",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "image",
+        "column": "image",
+        "type": "FileField",
+        "max_length": 100,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "review",
+        "created_at"
+      ]
+    ]
+  },
+  {
+    "app": "admin_api",
+    "model": "AdminAuditLog",
+    "table": "admin_api_adminauditlog",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "admin_actor",
+        "column": "admin_actor_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "action",
+        "column": "action",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [
+          [
+            "coin_adjust",
+            "調整點數"
+          ],
+          [
+            "subscription_adjust",
+            "調整訂閱"
+          ],
+          [
+            "review_reply",
+            "回覆評論"
+          ],
+          [
+            "review_moderate",
+            "審核評論"
+          ],
+          [
+            "review_delete",
+            "刪除評論"
+          ],
+          [
+            "user_toggle_staff",
+            "切換管理員身份"
+          ],
+          [
+            "domain_override",
+            "網域驗證人工審核"
+          ],
+          [
+            "scan_control",
+            "掃描任務控制"
+          ],
+          [
+            "other",
+            "其他"
+          ]
+        ]
+      },
+      {
+        "name": "target_user",
+        "column": "target_user_id",
+        "type": "ForeignKey",
+        "max_length": null,
+        "null": true,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": [],
+        "related": "accounts.User",
+        "on_delete": "SET_NULL"
+      },
+      {
+        "name": "target_object_repr",
+        "column": "target_object_repr",
+        "type": "CharField",
+        "max_length": 255,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "payload",
+        "column": "payload",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "dict"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": true,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": [
+      [
+        "action",
+        "-created_at"
+      ],
+      [
+        "admin_actor",
+        "-created_at"
+      ]
+    ]
+  },
+  {
+    "app": "admin_api",
+    "model": "Announcement",
+    "table": "admin_api_announcement",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "content",
+        "column": "content",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "type",
+        "column": "type",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "permanent",
+            "常駐公告"
+          ],
+          [
+            "temporary",
+            "臨時公告"
+          ]
+        ],
+        "default": "temporary"
+      },
+      {
+        "name": "active_days",
+        "column": "active_days",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "7"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "content",
+    "model": "ProjectFeature",
+    "table": "content_projectfeature",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "icon",
+        "column": "icon",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "description",
+        "column": "description",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "sort_order",
+        "column": "sort_order",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "content",
+    "model": "TeamMember",
+    "table": "content_teammember",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "name",
+        "column": "name",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "role",
+        "column": "role",
+        "type": "CharField",
+        "max_length": 64,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "student_id",
+        "column": "student_id",
+        "type": "CharField",
+        "max_length": 20,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": ""
+      },
+      {
+        "name": "avatar_emoji",
+        "column": "avatar_emoji",
+        "type": "CharField",
+        "max_length": 8,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "avatar_url",
+        "column": "avatar_url",
+        "type": "CharField",
+        "max_length": 200,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "bio",
+        "column": "bio",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "skills",
+        "column": "skills",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "skill_levels",
+        "column": "skill_levels",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "contributions",
+        "column": "contributions",
+        "type": "JSONField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "list"
+      },
+      {
+        "name": "email",
+        "column": "email",
+        "type": "CharField",
+        "max_length": 254,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "github_url",
+        "column": "github_url",
+        "type": "CharField",
+        "max_length": 200,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "sort_order",
+        "column": "sort_order",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "content",
+    "model": "ProjectMilestone",
+    "table": "content_projectmilestone",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "title",
+        "column": "title",
+        "type": "CharField",
+        "max_length": 128,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "date",
+        "column": "date",
+        "type": "DateField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "description",
+        "column": "description",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "icon",
+        "column": "icon",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "sort_order",
+        "column": "sort_order",
+        "type": "PositiveSmallIntegerField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "created_at",
+        "column": "created_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "updated_at",
+        "column": "updated_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  },
+  {
+    "app": "content",
+    "model": "AppRelease",
+    "table": "content_apprelease",
+    "fields": [
+      {
+        "name": "id",
+        "column": "id",
+        "type": "BigAutoField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": true,
+        "unique": true,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "version",
+        "column": "version",
+        "type": "CharField",
+        "max_length": 32,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "platform",
+        "column": "platform",
+        "type": "CharField",
+        "max_length": 16,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [
+          [
+            "pwa",
+            "PWA（瀏覽器安裝）"
+          ],
+          [
+            "android",
+            "Android"
+          ],
+          [
+            "ios",
+            "iOS"
+          ],
+          [
+            "desktop",
+            "桌面"
+          ]
+        ],
+        "default": "pwa"
+      },
+      {
+        "name": "release_notes",
+        "column": "release_notes",
+        "type": "TextField",
+        "max_length": null,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "download_url",
+        "column": "download_url",
+        "type": "CharField",
+        "max_length": 200,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "icon_url",
+        "column": "icon_url",
+        "type": "CharField",
+        "max_length": 200,
+        "null": false,
+        "blank": true,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      },
+      {
+        "name": "is_active",
+        "column": "is_active",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "True"
+      },
+      {
+        "name": "is_latest",
+        "column": "is_latest",
+        "type": "BooleanField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": [],
+        "default": "False"
+      },
+      {
+        "name": "released_at",
+        "column": "released_at",
+        "type": "DateTimeField",
+        "max_length": null,
+        "null": false,
+        "blank": false,
+        "primary_key": false,
+        "unique": false,
+        "db_index": false,
+        "choices": []
+      }
+    ],
+    "constraints": [],
+    "indexes": []
+  }
+]

@@ -33,7 +33,7 @@
 
 ### 測試與文件
 - `tests_favicon.py`：首頁轉址後解析相對路徑圖示、首頁失敗退回 `/favicon.ico`、時間上限、`image/x-png`、User-Agent、建立時抓取永不拋例外；`tests_site_projects.py`：新增專案即呼叫抓取並回傳圖示（API 測試以 patch 隔離外網）。
-- 文件：`frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`、`docs/adr/0003-site-project-workspace.md`、`.claude/skills/argus-ui-design/SKILL.md`、`專題文件生成/需求書_複賽版完整內容.md`（F-022）。
+- 文件：`frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`、`docs/adr/0003-site-project-workspace.md`、`.claude/skills/argus-ui-design/SKILL.md`、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md`（F-022）。
 
 ## 影響範圍
 - 無 migration。新增專案 API 回應時間增加（實測 1～7 秒，上限約 8 秒）。

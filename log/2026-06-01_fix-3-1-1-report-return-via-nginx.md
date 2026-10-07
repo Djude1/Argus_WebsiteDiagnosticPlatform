@@ -14,7 +14,7 @@
 - 更新底部流程主軸文字為：
   - `User → PWA → Nginx → Django API → Redis/Celery → Playwright → 掃描器/Agent → 報告 → Nginx → PWA`
 - 產出新版圖片：
-  - `專題文件生成/argus_3_1_1_system_flow_nginx_report_return.png`
+  - `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow_nginx_report_return.png`
 - 產出新版文件：
   - `專題文件/Argus_系統手冊_第三章優化版_3-1圖組優化_Nginx_報告回傳修正版.docx`
 

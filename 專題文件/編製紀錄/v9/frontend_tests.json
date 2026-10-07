@@ -1,0 +1,3018 @@
+{
+  "numTotalTestSuites": 83,
+  "numPassedTestSuites": 83,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 209,
+  "numPassedTests": 209,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1791196833232,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 正常日期輸出為 24 小時制、補零",
+          "status": "passed",
+          "title": "正常日期輸出為 24 小時制、補零",
+          "duration": 5.645099999999729,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 接受 ISO 字串",
+          "status": "passed",
+          "title": "接受 ISO 字串",
+          "duration": 1.28899999999976,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 壞輸入 null 回傳破折號，不是 Invalid Date",
+          "status": "passed",
+          "title": "壞輸入 null 回傳破折號，不是 Invalid Date",
+          "duration": 0.6821999999997388,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 壞輸入 undefined 回傳破折號，不是 Invalid Date",
+          "status": "passed",
+          "title": "壞輸入 undefined 回傳破折號，不是 Invalid Date",
+          "duration": 0.30030000000033397,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 壞輸入 \"\" 回傳破折號，不是 Invalid Date",
+          "status": "passed",
+          "title": "壞輸入 \"\" 回傳破折號，不是 Invalid Date",
+          "duration": 0.5216999999997824,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 壞輸入 \"not-a-date\" 回傳破折號，不是 Invalid Date",
+          "status": "passed",
+          "title": "壞輸入 \"not-a-date\" 回傳破折號，不是 Invalid Date",
+          "duration": 0.40619999999989886,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDateTime / formatDate"
+          ],
+          "fullName": "formatDateTime / formatDate 可自訂 fallback",
+          "status": "passed",
+          "title": "可自訂 fallback",
+          "duration": 0.34149999999999636,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 30 秒前 → 30 秒前（單位切換的邊界）",
+          "status": "passed",
+          "title": "30 秒前 → 30 秒前（單位切換的邊界）",
+          "duration": 5.6775000000002365,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 59 秒前 → 59 秒前（單位切換的邊界）",
+          "status": "passed",
+          "title": "59 秒前 → 59 秒前（單位切換的邊界）",
+          "duration": 1.045799999999872,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 60 秒前 → 1 分鐘前（單位切換的邊界）",
+          "status": "passed",
+          "title": "60 秒前 → 1 分鐘前（單位切換的邊界）",
+          "duration": 0.9233000000003813,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 3599 秒前 → 59 分鐘前（單位切換的邊界）",
+          "status": "passed",
+          "title": "3599 秒前 → 59 分鐘前（單位切換的邊界）",
+          "duration": 0.6730999999999767,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 3600 秒前 → 1 小時前（單位切換的邊界）",
+          "status": "passed",
+          "title": "3600 秒前 → 1 小時前（單位切換的邊界）",
+          "duration": 0.5652999999997519,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 86399 秒前 → 23 小時前（單位切換的邊界）",
+          "status": "passed",
+          "title": "86399 秒前 → 23 小時前（單位切換的邊界）",
+          "duration": 0.5471999999999753,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 86400 秒前 → 1 天前（單位切換的邊界）",
+          "status": "passed",
+          "title": "86400 秒前 → 1 天前（單位切換的邊界）",
+          "duration": 0.5354999999999563,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 未來時間用「後」",
+          "status": "passed",
+          "title": "未來時間用「後」",
+          "duration": 0.5846000000001368,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatRelative"
+          ],
+          "fullName": "formatRelative 壞輸入回傳 fallback",
+          "status": "passed",
+          "title": "壞輸入回傳 fallback",
+          "duration": 0.25640000000021246,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 0 → 0 秒",
+          "status": "passed",
+          "title": "0 → 0 秒",
+          "duration": 0.334400000000187,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 59 → 59 秒",
+          "status": "passed",
+          "title": "59 → 59 秒",
+          "duration": 0.25779999999986103,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 60 → 1 分",
+          "status": "passed",
+          "title": "60 → 1 分",
+          "duration": 0.18640000000004875,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 80 → 1 分 20 秒",
+          "status": "passed",
+          "title": "80 → 1 分 20 秒",
+          "duration": 0.12379999999984648,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 59.6 → 1 分",
+          "status": "passed",
+          "title": "59.6 → 1 分",
+          "duration": 0.161200000000008,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration 負數視為 0（時鐘誤差不該顯示負的耗時）",
+          "status": "passed",
+          "title": "負數視為 0（時鐘誤差不該顯示負的耗時）",
+          "duration": 0.17160000000012587,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration null 回傳 fallback",
+          "status": "passed",
+          "title": "null 回傳 fallback",
+          "duration": 0.15000000000009095,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration undefined 回傳 fallback",
+          "status": "passed",
+          "title": "undefined 回傳 fallback",
+          "duration": 0.10210000000006403,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatDuration"
+          ],
+          "fullName": "formatDuration \"abc\" 回傳 fallback",
+          "status": "passed",
+          "title": "\"abc\" 回傳 fallback",
+          "duration": 0.10110000000031505,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd 千分位",
+          "status": "passed",
+          "title": "千分位",
+          "duration": 6.810699999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd 0 是有效值，不能被當成空值吃掉",
+          "status": "passed",
+          "title": "0 是有效值，不能被當成空值吃掉",
+          "duration": 0.2830000000003565,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd 接受數字字串（後端 Decimal 常以字串回傳）",
+          "status": "passed",
+          "title": "接受數字字串（後端 Decimal 常以字串回傳）",
+          "duration": 0.16259999999965657,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd null 回傳 fallback，不是 NaN",
+          "status": "passed",
+          "title": "null 回傳 fallback，不是 NaN",
+          "duration": 0.19769999999971333,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd undefined 回傳 fallback，不是 NaN",
+          "status": "passed",
+          "title": "undefined 回傳 fallback，不是 NaN",
+          "duration": 0.08559999999988577,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd \"\" 回傳 fallback，不是 NaN",
+          "status": "passed",
+          "title": "\"\" 回傳 fallback，不是 NaN",
+          "duration": 0.06120000000009895,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "formatNumber / formatNtd"
+          ],
+          "fullName": "formatNumber / formatNtd \"abc\" 回傳 fallback，不是 NaN",
+          "status": "passed",
+          "title": "\"abc\" 回傳 fallback，不是 NaN",
+          "duration": 0.06309999999984939,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196878936,
+      "endTime": 1791196878967.0857,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/shared/formatters.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 沒有查詢字串時回傳預設值",
+          "status": "passed",
+          "title": "沒有查詢字串時回傳預設值",
+          "duration": 52.80789999999979,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 從網址還原狀態——貼上連結要能看到同一個畫面",
+          "status": "passed",
+          "title": "從網址還原狀態——貼上連結要能看到同一個畫面",
+          "duration": 7.932099999998172,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 數字型參數會轉成 number，不是字串",
+          "status": "passed",
+          "title": "數字型參數會轉成 number，不是字串",
+          "duration": 5.511700000002747,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 壞掉的數字退回預設而不是 NaN",
+          "status": "passed",
+          "title": "壞掉的數字退回預設而不是 NaN",
+          "duration": 4.588599999995495,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 只有非預設值會寫進網址，乾淨狀態不拖著 ?page=1&q=",
+          "status": "passed",
+          "title": "只有非預設值會寫進網址，乾淨狀態不拖著 ?page=1&q=",
+          "duration": 325.8171999999977,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 設成預設值時該參數要從網址移除",
+          "status": "passed",
+          "title": "設成預設值時該參數要從網址移除",
+          "duration": 99.56870000000345,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 改篩選條件會回到第一頁——留在第 5 頁常常直接落到空結果",
+          "status": "passed",
+          "title": "改篩選條件會回到第一頁——留在第 5 頁常常直接落到空結果",
+          "duration": 70.99139999999898,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 換頁本身不會被重設回第一頁",
+          "status": "passed",
+          "title": "換頁本身不會被重設回第一頁",
+          "duration": 42.80079999999725,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery resetFilters 清空所有參數",
+          "status": "passed",
+          "title": "resetFilters 清空所有參數",
+          "duration": 62.9713000000047,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 分頁不算篩選條件——只有 page 時 hasFilters 為 false",
+          "status": "passed",
+          "title": "分頁不算篩選條件——只有 page 時 hasFilters 為 false",
+          "duration": 5.238299999997253,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 未宣告在 defaults 的參數會被忽略（這正是 ?user= 當初失效的原因）",
+          "status": "passed",
+          "title": "未宣告在 defaults 的參數會被忽略（這正是 ?user= 當初失效的原因）",
+          "duration": 7.738299999997253,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "useListQuery"
+          ],
+          "fullName": "useListQuery 把參數加進 defaults 後就讀得到",
+          "status": "passed",
+          "title": "把參數加進 defaults 後就讀得到",
+          "duration": 7.33009999999922,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "nextOrdering"
+          ],
+          "fullName": "nextOrdering 第一次點某欄位用降冪——後台大多要看最大的幾筆",
+          "status": "passed",
+          "title": "第一次點某欄位用降冪——後台大多要看最大的幾筆",
+          "duration": 0.8231999999989057,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "nextOrdering"
+          ],
+          "fullName": "nextOrdering 同欄位再點一次反向",
+          "status": "passed",
+          "title": "同欄位再點一次反向",
+          "duration": 0.5202999999964959,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871206,
+      "endTime": 1791196871902.5203,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/shared/useListQuery.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal open=false 時完全不渲染",
+          "status": "passed",
+          "title": "open=false 時完全不渲染",
+          "duration": 62.59389999999985,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal 以 title 作為對話框的可及名稱",
+          "status": "passed",
+          "title": "以 title 作為對話框的可及名稱",
+          "duration": 340.8733999999995,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal 開啟時 focus 移到第一個可聚焦元素（關閉鈕）",
+          "status": "passed",
+          "title": "開啟時 focus 移到第一個可聚焦元素（關閉鈕）",
+          "duration": 89.63569999999982,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal Esc 關閉",
+          "status": "passed",
+          "title": "Esc 關閉",
+          "duration": 26.840500000000247,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal 點遮罩關閉，但點對話框內部不關閉",
+          "status": "passed",
+          "title": "點遮罩關閉，但點對話框內部不關閉",
+          "duration": 172.6354999999994,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal Tab 在對話框內循環，不會跑到背後的頁面",
+          "status": "passed",
+          "title": "Tab 在對話框內循環，不會跑到背後的頁面",
+          "duration": 299.2588999999998,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal 關閉後 focus 回到開啟前的元素",
+          "status": "passed",
+          "title": "關閉後 focus 回到開啟前的元素",
+          "duration": 26.290399999999863,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminModal"
+          ],
+          "fullName": "AdminModal 傳 onSubmit 時包成 form，輸入框按 Enter 即送出",
+          "status": "passed",
+          "title": "傳 onSubmit 時包成 form，輸入框按 Enter 即送出",
+          "duration": 106.05420000000049,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminField"
+          ],
+          "fullName": "AdminField label 綁到輸入元件，提示與錯誤都用 aria-describedby 連上——讀螢幕軟體才唸得到",
+          "status": "passed",
+          "title": "label 綁到輸入元件，提示與錯誤都用 aria-describedby 連上——讀螢幕軟體才唸得到",
+          "duration": 28.078199999999924,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminField"
+          ],
+          "fullName": "AdminField 沒有提示也沒有錯誤時不帶空的 aria-describedby",
+          "status": "passed",
+          "title": "沒有提示也沒有錯誤時不帶空的 aria-describedby",
+          "duration": 5.696700000000419,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196877595,
+      "endTime": 1791196878753.6968,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/admin/AdminModal.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminPagination"
+          ],
+          "fullName": "AdminPagination 只有一頁時仍顯示總筆數——使用者要知道「就這麼多」而不是懷疑被截斷",
+          "status": "passed",
+          "title": "只有一頁時仍顯示總筆數——使用者要知道「就這麼多」而不是懷疑被截斷",
+          "duration": 105.88120000000026,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPagination"
+          ],
+          "fullName": "AdminPagination 沒有資料時什麼都不顯示",
+          "status": "passed",
+          "title": "沒有資料時什麼都不顯示",
+          "duration": 2.839400000000296,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPagination"
+          ],
+          "fullName": "AdminPagination 總筆數用千分位",
+          "status": "passed",
+          "title": "總筆數用千分位",
+          "duration": 11.734199999999873,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPagination"
+          ],
+          "fullName": "AdminPagination 第一頁不能再往前，最後一頁不能再往後",
+          "status": "passed",
+          "title": "第一頁不能再往前，最後一頁不能再往後",
+          "duration": 218.56709999999975,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPagination"
+          ],
+          "fullName": "AdminPagination 點擊回報目標頁碼",
+          "status": "passed",
+          "title": "點擊回報目標頁碼",
+          "duration": 115.37620000000015,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196882653,
+      "endTime": 1791196883107.3762,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/admin/AdminPagination.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminSortableTh"
+          ],
+          "fullName": "AdminSortableTh 非排序中的欄位：aria-sort=none，說明文字告訴使用者可以點",
+          "status": "passed",
+          "title": "非排序中的欄位：aria-sort=none，說明文字告訴使用者可以點",
+          "duration": 272.1714999999999,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminSortableTh"
+          ],
+          "fullName": "AdminSortableTh 第一次點擊用降冪——後台大多要先看最大的幾筆",
+          "status": "passed",
+          "title": "第一次點擊用降冪——後台大多要先看最大的幾筆",
+          "duration": 82.10909999999967,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminSortableTh"
+          ],
+          "fullName": "AdminSortableTh 降冪中：aria-sort=descending，再點切成升冪",
+          "status": "passed",
+          "title": "降冪中：aria-sort=descending，再點切成升冪",
+          "duration": 61.82880000000023,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminSortableTh"
+          ],
+          "fullName": "AdminSortableTh 升冪中：aria-sort=ascending，再點切回降冪",
+          "status": "passed",
+          "title": "升冪中：aria-sort=ascending，再點切回降冪",
+          "duration": 62.54809999999998,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminSortableTh"
+          ],
+          "fullName": "AdminSortableTh 欄位名只是前綴相同時不算排序中（amount_total ≠ amount）",
+          "status": "passed",
+          "title": "欄位名只是前綴相同時不算排序中（amount_total ≠ amount）",
+          "duration": 12.679900000000089,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196882817,
+      "endTime": 1791196883308.68,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/admin/AdminSortableTh.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminSkeleton"
+          ],
+          "fullName": "AdminSkeleton 對輔助技術宣告為載入中",
+          "status": "passed",
+          "title": "對輔助技術宣告為載入中",
+          "duration": 217.89819999999963,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminSkeleton"
+          ],
+          "fullName": "AdminSkeleton table 變體依 rows 產生列數（加一列表頭）",
+          "status": "passed",
+          "title": "table 變體依 rows 產生列數（加一列表頭）",
+          "duration": 7.331299999999828,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminEmptyState"
+          ],
+          "fullName": "AdminEmptyState 有 actionLabel 與 onAction 時給出口",
+          "status": "passed",
+          "title": "有 actionLabel 與 onAction 時給出口",
+          "duration": 78.04860000000008,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminEmptyState"
+          ],
+          "fullName": "AdminEmptyState 只有 actionLabel 沒有 onAction 時不放一顆按了沒反應的按鈕",
+          "status": "passed",
+          "title": "只有 actionLabel 沒有 onAction 時不放一顆按了沒反應的按鈕",
+          "duration": 3.511199999999917,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminErrorState"
+          ],
+          "fullName": "AdminErrorState 以 role=alert 宣告，無訊息時用預設文字",
+          "status": "passed",
+          "title": "以 role=alert 宣告，無訊息時用預設文字",
+          "duration": 7.959399999999732,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminErrorState"
+          ],
+          "fullName": "AdminErrorState 有 onRetry 時一定有重試鍵——錯誤永遠要留下一步",
+          "status": "passed",
+          "title": "有 onRetry 時一定有重試鍵——錯誤永遠要留下一步",
+          "duration": 65.22490000000016,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196883180,
+      "endTime": 1791196883560.2249,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/admin/AdminStates.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "projectSwitchPath"
+          ],
+          "fullName": "projectSwitchPath 切換時停留在同一個分頁；掃描詳情與其他頁面回到總覽",
+          "status": "passed",
+          "title": "切換時停留在同一個分頁；掃描詳情與其他頁面回到總覽",
+          "duration": 4.43909999999596,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectSwitcher"
+          ],
+          "fullName": "ProjectSwitcher 顯示目前專案，切換到另一個專案後記住它並留在同一個分頁",
+          "status": "passed",
+          "title": "顯示目前專案，切換到另一個專案後記住它並留在同一個分頁",
+          "duration": 708.6169000000009,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectSwitcher"
+          ],
+          "fullName": "ProjectSwitcher 每個專案顯示最新分數與設定入口，從設定入口進入會切換目前專案",
+          "status": "passed",
+          "title": "每個專案顯示最新分數與設定入口，從設定入口進入會切換目前專案",
+          "duration": 266.35109999999986,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectSwitcher"
+          ],
+          "fullName": "ProjectSwitcher 專案多時可搜尋，方向鍵在選項間移動",
+          "status": "passed",
+          "title": "專案多時可搜尋，方向鍵在選項間移動",
+          "duration": 434.437800000007,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectSwitcher"
+          ],
+          "fullName": "ProjectSwitcher 新增專案入口與 Esc 關閉",
+          "status": "passed",
+          "title": "新增專案入口與 Esc 關閉",
+          "duration": 361.2224999999962,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectHomeRedirect（舊入口 /dashboard、/scans、/history）"
+          ],
+          "fullName": "ProjectHomeRedirect（舊入口 /dashboard、/scans、/history） 轉到目前專案的對應分頁",
+          "status": "passed",
+          "title": "轉到目前專案的對應分頁",
+          "duration": 63.81840000000375,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectHomeRedirect（舊入口 /dashboard、/scans、/history）"
+          ],
+          "fullName": "ProjectHomeRedirect（舊入口 /dashboard、/scans、/history） 記住的專案已不在清單時用第一個；沒有任何專案時引導新增",
+          "status": "passed",
+          "title": "記住的專案已不在清單時用第一個；沒有任何專案時引導新增",
+          "duration": 18.395400000001246,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871734,
+      "endTime": 1791196873592.3955,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/navigation/ProjectSwitcher.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "CommandSearch"
+          ],
+          "fullName": "CommandSearch Ctrl+K 打開，關鍵字可找到目前網站的問題，Enter 前往問題分析並帶 ?q=",
+          "status": "passed",
+          "title": "Ctrl+K 打開，關鍵字可找到目前網站的問題，Enter 前往問題分析並帶 ?q=",
+          "duration": 848.4482999999991,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "CommandSearch"
+          ],
+          "fullName": "CommandSearch 可搜尋其他網站專案與目前網站的分頁，找不到時顯示提示，Esc 關閉",
+          "status": "passed",
+          "title": "可搜尋其他網站專案與目前網站的分頁，找不到時顯示提示，Esc 關閉",
+          "duration": 712.6794,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "NotificationBell"
+          ],
+          "fullName": "NotificationBell 有未讀公告時顯示數量，全部標為已讀後寫入 localStorage",
+          "status": "passed",
+          "title": "有未讀公告時顯示數量，全部標為已讀後寫入 localStorage",
+          "duration": 198.65509999999995,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "NotificationBell"
+          ],
+          "fullName": "NotificationBell 沒有公告時顯示空狀態",
+          "status": "passed",
+          "title": "沒有公告時顯示空狀態",
+          "duration": 65.10930000000008,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196877881,
+      "endTime": 1791196879706.1094,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/navigation/TopBarTools.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AeoAnswerPanel"
+          ],
+          "fullName": "AeoAnswerPanel 未充分評估時只顯示原因，不顯示題數與比例",
+          "status": "passed",
+          "title": "未充分評估時只顯示原因，不顯示題數與比例",
+          "duration": 113.53729999999996,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AeoAnswerPanel"
+          ],
+          "fullName": "AeoAnswerPanel 沒有檢測結果（舊掃描）時不顯示",
+          "status": "passed",
+          "title": "沒有檢測結果（舊掃描）時不顯示",
+          "duration": 3.613199999999779,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AeoAnswerPanel"
+          ],
+          "fullName": "AeoAnswerPanel 展開題目後顯示判定理由與原文證據",
+          "status": "passed",
+          "title": "展開題目後顯示判定理由與原文證據",
+          "duration": 551.8226999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AeoAnswerPanel 的 AEO 問答分頁模式（withFilter）"
+          ],
+          "fullName": "AeoAnswerPanel 的 AEO 問答分頁模式（withFilter） 可依判定篩選題目；沒有符合時提示",
+          "status": "passed",
+          "title": "可依判定篩選題目；沒有符合時提示",
+          "duration": 199.60300000000007,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AeoAnswerPanel 的 AEO 問答分頁模式（withFilter）"
+          ],
+          "fullName": "AeoAnswerPanel 的 AEO 問答分頁模式（withFilter） 不重複顯示標題與計數（頁首已有）",
+          "status": "passed",
+          "title": "不重複顯示標題與計數（頁首已有）",
+          "duration": 10.396499999999833,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196879552,
+      "endTime": 1791196880431.3965,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/scans/AeoAnswerPanel.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 非超級管理員看不到，也不打 API",
+          "status": "passed",
+          "title": "非超級管理員看不到，也不打 API",
+          "duration": 43.75630000000092,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 載入失敗顯示錯誤與重試，而不是誤報「尚無公告」",
+          "status": "passed",
+          "title": "載入失敗顯示錯誤與重試，而不是誤報「尚無公告」",
+          "duration": 549.2084000000032,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 新增：送出表單內容，成功後關閉並重新載入",
+          "status": "passed",
+          "title": "新增：送出表單內容，成功後關閉並重新載入",
+          "duration": 684.6173000000053,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 儲存遇到驗證錯誤：錯誤顯示在欄位旁、彈窗留著、內容不會丟（原本毫無反應）",
+          "status": "passed",
+          "title": "儲存遇到驗證錯誤：錯誤顯示在欄位旁、彈窗留著、內容不會丟（原本毫無反應）",
+          "duration": 473.35229999999865,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 儲存遇到非欄位錯誤（網路等）：在彈窗內顯示整體訊息",
+          "status": "passed",
+          "title": "儲存遇到非欄位錯誤（網路等）：在彈窗內顯示整體訊息",
+          "duration": 181.40580000000045,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 重新開啟編輯時清掉上一次的錯誤",
+          "status": "passed",
+          "title": "重新開啟編輯時清掉上一次的錯誤",
+          "duration": 504.2919000000038,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAnnouncementsPage"
+          ],
+          "fullName": "AdminAnnouncementsPage 刪除要先確認；失敗時提示（原本無聲無息）",
+          "status": "passed",
+          "title": "刪除要先確認；失敗時提示（原本無聲無息）",
+          "duration": 226.87309999999707,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871307,
+      "endTime": 1791196873971.873,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminAnnouncementsPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage 非超級管理員看不到，也不打 API",
+          "status": "passed",
+          "title": "非超級管理員看不到，也不打 API",
+          "duration": 61.943200000000616,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage 動作篩選涵蓋後端全部 11 種，含原本漏掉的掃描控制／網域審核／調整訂閱",
+          "status": "passed",
+          "title": "動作篩選涵蓋後端全部 11 種，含原本漏掉的掃描控制／網域審核／調整訂閱",
+          "duration": 473.6707000000006,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage ?action= 從網址還原並送出；不認得的值不送",
+          "status": "passed",
+          "title": "?action= 從網址還原並送出；不認得的值不送",
+          "duration": 134.14679999999953,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage 切換動作後重新載入",
+          "status": "passed",
+          "title": "切換動作後重新載入",
+          "duration": 161.40779999999995,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage 載入失敗顯示錯誤與重試（原本停在「載入中…」）",
+          "status": "passed",
+          "title": "載入失敗顯示錯誤與重試（原本停在「載入中…」）",
+          "duration": 121.65320000000065,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage payload 非空時才提供展開",
+          "status": "passed",
+          "title": "payload 非空時才提供展開",
+          "duration": 34.96600000000035,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminAuditLogPage"
+          ],
+          "fullName": "AdminAuditLogPage 操作者已刪除時明確標示",
+          "status": "passed",
+          "title": "操作者已刪除時明確標示",
+          "duration": 30.025700000000143,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196877892,
+      "endTime": 1791196878910.0256,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminAuditLogPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 篩選條件在網址上——重新整理或從別頁連過來都能還原（原本存在元件 state）",
+          "status": "passed",
+          "title": "篩選條件在網址上——重新整理或從別頁連過來都能還原（原本存在元件 state）",
+          "duration": 579.4803000000029,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 切換狀態會寫進網址並重新載入",
+          "status": "passed",
+          "title": "切換狀態會寫進網址並重新載入",
+          "duration": 207.1912999999986,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 不認得的狀態不送出",
+          "status": "passed",
+          "title": "不認得的狀態不送出",
+          "duration": 33.943099999996775,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 載入失敗顯示錯誤與重試（原本停在「載入中…」）",
+          "status": "passed",
+          "title": "載入失敗顯示錯誤與重試（原本停在「載入中…」）",
+          "duration": 114.78229999999894,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 人工核准要先確認；取消確認就不送出",
+          "status": "passed",
+          "title": "人工核准要先確認；取消確認就不送出",
+          "duration": 253.4195000000036,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 確認核准後送出備註，並原地更新該列、清空備註（不重新載入整頁）",
+          "status": "passed",
+          "title": "確認核准後送出備註，並原地更新該列、清空備註（不重新載入整頁）",
+          "duration": 437.7376000000004,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminDomainsPage"
+          ],
+          "fullName": "AdminDomainsPage 否決走危險樣式的確認，送出 approve=false",
+          "status": "passed",
+          "title": "否決走危險樣式的確認，送出 approve=false",
+          "duration": 255.3272999999972,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871473,
+      "endTime": 1791196873355.3274,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminDomainsPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 毛利依後端的每頁 coin 數計算：旗艦方案約 90%（原本誤算成 2%、標成須重新定價）",
+          "status": "passed",
+          "title": "毛利依後端的每頁 coin 數計算：旗艦方案約 90%（原本誤算成 2%、標成須重新定價）",
+          "duration": 152.9609000000055,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 新增方案有 code 欄位並一起送出（原本沒有，新增一律被後端拒絕）",
+          "status": "passed",
+          "title": "新增方案有 code 欄位並一起送出（原本沒有，新增一律被後端拒絕）",
+          "duration": 1212.7978000000003,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 後端驗證錯誤顯示在對應欄位旁，彈窗留著",
+          "status": "passed",
+          "title": "後端驗證錯誤顯示在對應欄位旁，彈窗留著",
+          "duration": 225.72149999999965,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 編輯時 code 唯讀且不送出（購點與「推薦」標示都以 code 識別方案）",
+          "status": "passed",
+          "title": "編輯時 code 唯讀且不送出（購點與「推薦」標示都以 code 識別方案）",
+          "duration": 466.22359999999753,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 編輯中的即時試算跟著輸入變動",
+          "status": "passed",
+          "title": "編輯中的即時試算跟著輸入變動",
+          "duration": 299.6606000000029,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 載入失敗顯示錯誤與重試，不誤報「尚無方案」",
+          "status": "passed",
+          "title": "載入失敗顯示錯誤與重試，不誤報「尚無方案」",
+          "duration": 129.06590000000142,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminPlansPage"
+          ],
+          "fullName": "AdminPlansPage 刪除已有訂單的方案：顯示後端的 409 說明（原本後端直接 500）",
+          "status": "passed",
+          "title": "刪除已有訂單的方案：顯示後端的 409 說明（原本後端直接 500）",
+          "duration": 205.79149999999936,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871531,
+      "endTime": 1791196874223.7915,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminPlansPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage ?user=5 會以整數送給後端，並提示目前只看單一使用者（失效 1）",
+          "status": "passed",
+          "title": "?user=5 會以整數送給後端，並提示目前只看單一使用者（失效 1）",
+          "duration": 209.48770000000513,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 「顯示全部使用者」會拿掉 user 篩選並重新載入",
+          "status": "passed",
+          "title": "「顯示全部使用者」會拿掉 user 篩選並重新載入",
+          "duration": 631.7829000000056,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 壞的 user 值不送出（不讓後端收到 NaN）",
+          "status": "passed",
+          "title": "壞的 user 值不送出（不讓後端收到 NaN）",
+          "duration": 49.13440000000264,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 不在白名單的 ordering 不送出，交給後端用預設排序",
+          "status": "passed",
+          "title": "不在白名單的 ordering 不送出，交給後端用預設排序",
+          "duration": 44.09729999999399,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 白名單內的 ordering 照送",
+          "status": "passed",
+          "title": "白名單內的 ordering 照送",
+          "duration": 53.670500000000175,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 點表頭排序會改網址並重新載入",
+          "status": "passed",
+          "title": "點表頭排序會改網址並重新載入",
+          "duration": 198.0526000000027,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 點列會進到掃描詳情；鍵盤 Enter 也可以",
+          "status": "passed",
+          "title": "點列會進到掃描詳情；鍵盤 Enter 也可以",
+          "duration": 81.3202999999994,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScansPage"
+          ],
+          "fullName": "AdminScansPage 載入失敗時顯示錯誤與重試，重試會再打一次 API",
+          "status": "passed",
+          "title": "載入失敗時顯示錯誤與重試，重試會再打一次 API",
+          "duration": 113.4291000000012,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage 有 user_id 時提供「查看使用者」連結（失效 2）",
+          "status": "passed",
+          "title": "有 user_id 時提供「查看使用者」連結（失效 2）",
+          "duration": 31.332099999999627,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage 已完成的掃描不能終止也不能重排",
+          "status": "passed",
+          "title": "已完成的掃描不能終止也不能重排",
+          "duration": 38.91649999999936,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage 失敗的掃描可重排：確認後呼叫 API，並明示未扣點",
+          "status": "passed",
+          "title": "失敗的掃描可重排：確認後呼叫 API，並明示未扣點",
+          "duration": 194.6027000000031,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage 取消確認對話框時不呼叫 API",
+          "status": "passed",
+          "title": "取消確認對話框時不呼叫 API",
+          "duration": 199.20390000000043,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage 終止進行中的掃描時顯示實際退回的點數",
+          "status": "passed",
+          "title": "終止進行中的掃描時顯示實際退回的點數",
+          "duration": 218.23659999999654,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminScanDetailPage"
+          ],
+          "fullName": "AdminScanDetailPage top_actions／warning_summary 依產生端的結構呈現",
+          "status": "passed",
+          "title": "top_actions／warning_summary 依產生端的結構呈現",
+          "duration": 53.39409999999771,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871471,
+      "endTime": 1791196873589.394,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminScansPages.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminTransactionsPage"
+          ],
+          "fullName": "AdminTransactionsPage 類型下拉包含後端全部 11 種交易類型（原本只有 5 種）",
+          "status": "passed",
+          "title": "類型下拉包含後端全部 11 種交易類型（原本只有 5 種）",
+          "duration": 607.4311000000016,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminTransactionsPage"
+          ],
+          "fullName": "AdminTransactionsPage 選了新增的類型會送給後端",
+          "status": "passed",
+          "title": "選了新增的類型會送給後端",
+          "duration": 221.56979999999749,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminTransactionsPage"
+          ],
+          "fullName": "AdminTransactionsPage 網址上不認得的 kind 不送出",
+          "status": "passed",
+          "title": "網址上不認得的 kind 不送出",
+          "duration": 107.57819999999629,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage 載入失敗時顯示錯誤與重試（原本整頁空白）",
+          "status": "passed",
+          "title": "載入失敗時顯示錯誤與重試（原本整頁空白）",
+          "duration": 191.9472999999998,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage ?filter=reported 送出 reported=1；不認得的 filter 視為全部",
+          "status": "passed",
+          "title": "?filter=reported 送出 reported=1；不認得的 filter 視為全部",
+          "duration": 91.8214999999982,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage 空白回覆不送出",
+          "status": "passed",
+          "title": "空白回覆不送出",
+          "duration": 134.59829999999783,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage 送出回覆後重新載入",
+          "status": "passed",
+          "title": "送出回覆後重新載入",
+          "duration": 281.95100000000093,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage 隱藏評論要先確認；確認後送出 hidden",
+          "status": "passed",
+          "title": "隱藏評論要先確認；確認後送出 hidden",
+          "duration": 158.31149999999616,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminReviewsPage"
+          ],
+          "fullName": "AdminReviewsPage 已有官方回覆時才出現「移除回覆」",
+          "status": "passed",
+          "title": "已有官方回覆時才出現「移除回覆」",
+          "duration": 41.56590000000142,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871538,
+      "endTime": 1791196873376.566,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminTransactionsAndReviews.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "AdminUsersPage"
+          ],
+          "fullName": "AdminUsersPage 白名單內的 ordering 照送，白名單外的不送",
+          "status": "passed",
+          "title": "白名單內的 ordering 照送，白名單外的不送",
+          "duration": 253.89289999999892,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUsersPage"
+          ],
+          "fullName": "AdminUsersPage 搜尋送出後以 q 重新載入，並回到第一頁",
+          "status": "passed",
+          "title": "搜尋送出後以 q 重新載入，並回到第一頁",
+          "duration": 855.0652999999947,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUsersPage"
+          ],
+          "fullName": "AdminUsersPage 點列進入使用者詳情",
+          "status": "passed",
+          "title": "點列進入使用者詳情",
+          "duration": 259.54619999999704,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 網址上的 id 不是正整數時直接顯示找不到，不打 API",
+          "status": "passed",
+          "title": "網址上的 id 不是正整數時直接顯示找不到，不打 API",
+          "duration": 23.019100000004983,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 「查看全部」連到以 user 篩選的掃描列表——與掃描頁的 ?user= 是同一條路",
+          "status": "passed",
+          "title": "「查看全部」連到以 user 篩選的掃描列表——與掃描頁的 ?user= 是同一條路",
+          "duration": 100.32690000000002,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 沒有任何掃描時不給「查看全部」",
+          "status": "passed",
+          "title": "沒有任何掃描時不給「查看全部」",
+          "duration": 72.78229999999894,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 最近掃描的列可進入該掃描詳情",
+          "status": "passed",
+          "title": "最近掃描的列可進入該掃描詳情",
+          "duration": 133.8286999999982,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 沒有錢包時明確顯示，而不是壞掉",
+          "status": "passed",
+          "title": "沒有錢包時明確顯示，而不是壞掉",
+          "duration": 44.44550000000163,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 調整點數：0 不送出",
+          "status": "passed",
+          "title": "調整點數：0 不送出",
+          "duration": 342.60599999999977,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 調整點數：快捷鍵帶入金額，送出後顯示結果並重新載入",
+          "status": "passed",
+          "title": "調整點數：快捷鍵帶入金額，送出後顯示結果並重新載入",
+          "duration": 497.2898000000059,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 訂閱：預設選第一個啟用中的方案（跳過停用的）",
+          "status": "passed",
+          "title": "訂閱：預設選第一個啟用中的方案（跳過停用的）",
+          "duration": 41.18379999999888,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 訂閱：開通送出所選方案與期數",
+          "status": "passed",
+          "title": "訂閱：開通送出所選方案與期數",
+          "duration": 156.1021000000037,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 訂閱：取消要先確認，取消確認就不呼叫 API",
+          "status": "passed",
+          "title": "訂閱：取消要先確認，取消確認就不呼叫 API",
+          "duration": 285.14770000000135,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage"
+          ],
+          "fullName": "AdminUserDetailPage 登入記錄載入失敗時顯示空狀態，不擋整頁",
+          "status": "passed",
+          "title": "登入記錄載入失敗時顯示空狀態，不擋整頁",
+          "duration": 77.45240000000194,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 管理權限"
+          ],
+          "fullName": "AdminUserDetailPage 管理權限 一般管理員看不到管理權限區塊",
+          "status": "passed",
+          "title": "一般管理員看不到管理權限區塊",
+          "duration": 90.20149999999558,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 管理權限"
+          ],
+          "fullName": "AdminUserDetailPage 管理權限 超級管理員確認後把使用者設為管理員並重新載入",
+          "status": "passed",
+          "title": "超級管理員確認後把使用者設為管理員並重新載入",
+          "duration": 287.28889999999956,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 管理權限"
+          ],
+          "fullName": "AdminUserDetailPage 管理權限 超級管理員帳號與自己都沒有切換按鈕",
+          "status": "passed",
+          "title": "超級管理員帳號與自己都沒有切換按鈕",
+          "duration": 109.67510000000038,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 帳號狀態"
+          ],
+          "fullName": "AdminUserDetailPage 帳號狀態 一般管理員停用一般使用者時帶原因送出並重新載入",
+          "status": "passed",
+          "title": "一般管理員停用一般使用者時帶原因送出並重新載入",
+          "duration": 396.7772999999943,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 帳號狀態"
+          ],
+          "fullName": "AdminUserDetailPage 帳號狀態 刪除要先輸入「刪除帳號」才能送出",
+          "status": "passed",
+          "title": "刪除要先輸入「刪除帳號」才能送出",
+          "duration": 455.9167000000016,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "AdminUserDetailPage 帳號狀態"
+          ],
+          "fullName": "AdminUserDetailPage 帳號狀態 一般管理員不能處理其他管理員；已刪除帳號只顯示說明",
+          "status": "passed",
+          "title": "一般管理員不能處理其他管理員；已刪除帳號只顯示說明",
+          "duration": 121.60480000000098,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871473,
+      "endTime": 1791196876078.6047,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/AdminUsersPages.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 入門方案 NT$100 / 100 coin → 成本 NT$6.7、毛利 93% 10、約 NaN 頁",
+          "status": "passed",
+          "title": "入門方案 NT$100 / 100 coin → 成本 NT$6.7、毛利 93% 10、約 NaN 頁",
+          "duration": 3.8113000000003012,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 標準方案 NT$450 / 500 coin → 成本 NT$33.5、毛利 93% 50、約 NaN 頁",
+          "status": "passed",
+          "title": "標準方案 NT$450 / 500 coin → 成本 NT$33.5、毛利 93% 50、約 NaN 頁",
+          "duration": 0.603099999999813,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 進階方案 NT$800 / 1000 coin → 成本 NT$67、毛利 92% 100、約 NaN 頁",
+          "status": "passed",
+          "title": "進階方案 NT$800 / 1000 coin → 成本 NT$67、毛利 92% 100、約 NaN 頁",
+          "duration": 0.4831000000003769,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 旗艦方案 NT$1500 / 2200 coin → 成本 NT$147.4、毛利 90% 220、約 NaN 頁",
+          "status": "passed",
+          "title": "旗艦方案 NT$1500 / 2200 coin → 成本 NT$147.4、毛利 90% 220、約 NaN 頁",
+          "duration": 0.3427999999998974,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 成本以「頁」計：coin_per_page 變了，成本跟著變（原本把每 coin 當每頁，高估 10 倍）",
+          "status": "passed",
+          "title": "成本以「頁」計：coin_per_page 變了，成本跟著變（原本把每 coin 當每頁，高估 10 倍）",
+          "duration": 0.6183000000000902,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 毛利率門檻：80% 以上健康、50% 以上偏低、其餘須重新定價",
+          "status": "passed",
+          "title": "毛利率門檻：80% 以上健康、50% 以上偏低、其餘須重新定價",
+          "duration": 2.38779999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics 售價 0（免費方案）或欄位未填時不會算出 NaN",
+          "status": "passed",
+          "title": "售價 0（免費方案）或欄位未填時不會算出 NaN",
+          "duration": 0.7680000000000291,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "planEconomics"
+          ],
+          "fullName": "planEconomics coin_per_page 異常（0）時不除以零",
+          "status": "passed",
+          "title": "coin_per_page 異常（0）時不除以零",
+          "duration": 0.4402999999997519,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196882281,
+      "endTime": 1791196882290.4402,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/admin/planEconomics.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "McpAccessPage"
+          ],
+          "fullName": "McpAccessPage 沒有有效訂閱時引導訂閱，且不能建立憑證",
+          "status": "passed",
+          "title": "沒有有效訂閱時引導訂閱，且不能建立憑證",
+          "duration": 530.5610999999999,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "McpAccessPage"
+          ],
+          "fullName": "McpAccessPage 建立憑證後明文只顯示在本頁，並自動帶入所選工具的設定",
+          "status": "passed",
+          "title": "建立憑證後明文只顯示在本頁，並自動帶入所選工具的設定",
+          "duration": 444.72170000000006,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "McpAccessPage"
+          ],
+          "fullName": "McpAccessPage 未建立憑證時設定使用佔位字，不會出現任何憑證",
+          "status": "passed",
+          "title": "未建立憑證時設定使用佔位字，不會出現任何憑證",
+          "duration": 46.24089999999978,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "McpAccessPage"
+          ],
+          "fullName": "McpAccessPage 撤銷前要二次確認，取消就不呼叫 API",
+          "status": "passed",
+          "title": "撤銷前要二次確認，取消就不呼叫 API",
+          "duration": 500.5613999999996,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "McpAccessPage"
+          ],
+          "fullName": "McpAccessPage 驗證連線：收到工具呼叫後顯示成功",
+          "status": "passed",
+          "title": "驗證連線：收到工具呼叫後顯示成功",
+          "duration": 154.58519999999953,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196876405,
+      "endTime": 1791196878081.5852,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/account/McpAccessPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "SubscriptionPanel（綠界定期定額）"
+          ],
+          "fullName": "SubscriptionPanel（綠界定期定額） 正式模式：填發票資料並同意每月扣款後，送出綠界結帳表單",
+          "status": "passed",
+          "title": "正式模式：填發票資料並同意每月扣款後，送出綠界結帳表單",
+          "duration": 1171.1188999999995,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "SubscriptionPanel（綠界定期定額）"
+          ],
+          "fullName": "SubscriptionPanel（綠界定期定額） 後端回 409（已有自動扣款）時顯示原因",
+          "status": "passed",
+          "title": "後端回 409（已有自動扣款）時顯示原因",
+          "duration": 682.2508000000007,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "SubscriptionPanel（綠界定期定額）"
+          ],
+          "fullName": "SubscriptionPanel（綠界定期定額） 自動扣款中的訂閱顯示「每月自動扣款：是」",
+          "status": "passed",
+          "title": "自動扣款中的訂閱顯示「每月自動扣款：是」",
+          "duration": 67.49399999999969,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "SubscriptionPanel（綠界定期定額）"
+          ],
+          "fullName": "SubscriptionPanel（綠界定期定額） 結帳表單只會送往綠界的測試或正式網址",
+          "status": "passed",
+          "title": "結帳表單只會送往綠界的測試或正式網址",
+          "duration": 3.5115999999998166,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196878406,
+      "endTime": 1791196880331.5117,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/account/SubscriptionPanel.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "TopNav 帳號工具"
+          ],
+          "fullName": "TopNav 帳號工具 網域驗證與 MCP 接入直接在頂部導覽列，目前頁標示 aria-current",
+          "status": "passed",
+          "title": "網域驗證與 MCP 接入直接在頂部導覽列，目前頁標示 aria-current",
+          "duration": 219.64120000000003,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196883649,
+      "endTime": 1791196883868.641,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/account/TopNav.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "scoreTone / scoreGrade"
+          ],
+          "fullName": "scoreTone / scoreGrade ≥80 良好、60–79 中等、<60 待加強，沒有分數為 none",
+          "status": "passed",
+          "title": "≥80 良好、60–79 中等、<60 待加強，沒有分數為 none",
+          "duration": 3.509599999999864,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "SeverityDonut"
+          ],
+          "fullName": "SeverityDonut 中心顯示總數，圖例列出每個嚴重度的數量與百分比，只畫有數量的段",
+          "status": "passed",
+          "title": "中心顯示總數，圖例列出每個嚴重度的數量與百分比，只畫有數量的段",
+          "duration": 237.6895999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "SeverityDonut"
+          ],
+          "fullName": "SeverityDonut 沒有問題時只畫底環",
+          "status": "passed",
+          "title": "沒有問題時只畫底環",
+          "duration": 11.89240000000018,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196883274,
+      "endTime": 1791196883526.8923,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/projects/DashboardWidgets.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "SiteFavicon"
+          ],
+          "fullName": "SiteFavicon 有 favicon 顯示圖片，沒有則顯示名稱首字",
+          "status": "passed",
+          "title": "有 favicon 顯示圖片，沒有則顯示名稱首字",
+          "duration": 56.647399999999834,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196883588,
+      "endTime": 1791196883644.6475,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/components/projects/SiteFavicon.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "註冊流程"
+          ],
+          "fullName": "註冊流程 註冊分頁：Google 授權後設定用戶名與密碼才建立帳號",
+          "status": "passed",
+          "title": "註冊分頁：Google 授權後設定用戶名與密碼才建立帳號",
+          "duration": 1922.2488000000012,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "註冊流程"
+          ],
+          "fullName": "註冊流程 登入分頁的 Google 遇到未註冊帳號時直接進入設定用戶名與密碼",
+          "status": "passed",
+          "title": "登入分頁的 Google 遇到未註冊帳號時直接進入設定用戶名與密碼",
+          "duration": 154.69309999999678,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "註冊流程"
+          ],
+          "fullName": "註冊流程 可以用用戶名登入",
+          "status": "passed",
+          "title": "可以用用戶名登入",
+          "duration": 643.8519000000015,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "舊帳號補設"
+          ],
+          "fullName": "舊帳號補設 缺用戶名與密碼時一律先導到補設頁，完成後回到原本頁面",
+          "status": "passed",
+          "title": "缺用戶名與密碼時一律先導到補設頁，完成後回到原本頁面",
+          "duration": 1029.6540000000023,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871646,
+      "endTime": 1791196875397.654,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/auth/AuthPages.register.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "LoginPage 人機驗證"
+          ],
+          "fullName": "LoginPage 人機驗證 驗證完成前登入鈕停用，送出時附上 token，失敗後重設元件",
+          "status": "passed",
+          "title": "驗證完成前登入鈕停用，送出時附上 token，失敗後重設元件",
+          "duration": 1444.5457999999999,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "LoginPage 人機驗證"
+          ],
+          "fullName": "LoginPage 人機驗證 註冊分頁改由 Google 授權確認 Email，不顯示人機驗證",
+          "status": "passed",
+          "title": "註冊分頁改由 Google 授權確認 Email，不顯示人機驗證",
+          "duration": 164.1205,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "PasswordResetRequestPage 人機驗證"
+          ],
+          "fullName": "PasswordResetRequestPage 人機驗證 被 403 擋下時留在表單顯示原因，不顯示「已寄出」",
+          "status": "passed",
+          "title": "被 403 擋下時留在表單顯示原因，不顯示「已寄出」",
+          "duration": 623.9839999999995,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196877924,
+      "endTime": 1791196880156.984,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/auth/AuthPages.turnstile.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "DomainVerifyPage（Search Console 一鍵驗證）"
+          ],
+          "fullName": "DomainVerifyPage（Search Console 一鍵驗證） 未連接時在本頁直接連接 Search Console（前往 Google 授權）",
+          "status": "passed",
+          "title": "未連接時在本頁直接連接 Search Console（前往 Google 授權）",
+          "duration": 518.9160000000002,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "DomainVerifyPage（Search Console 一鍵驗證）"
+          ],
+          "fullName": "DomainVerifyPage（Search Console 一鍵驗證） 已連接時每個待驗證網域可直接用 Search Console 驗證",
+          "status": "passed",
+          "title": "已連接時每個待驗證網域可直接用 Search Console 驗證",
+          "duration": 173.04870000000028,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "DomainVerifyPage（Search Console 一鍵驗證）"
+          ],
+          "fullName": "DomainVerifyPage（Search Console 一鍵驗證） Google 導回後顯示自動驗證的網域數",
+          "status": "passed",
+          "title": "Google 導回後顯示自動驗證的網域數",
+          "duration": 27.777000000000044,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "DomainVerifyPage（Search Console 一鍵驗證）"
+          ],
+          "fullName": "DomainVerifyPage（Search Console 一鍵驗證） 其他驗證方式：展開後載入設定說明，可用 DNS TXT 驗證",
+          "status": "passed",
+          "title": "其他驗證方式：展開後載入設定說明，可用 DNS TXT 驗證",
+          "duration": 311.4465,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196878454,
+      "endTime": 1791196879485.4465,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/domains/DomainVerifyPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "parseSiteUrl"
+          ],
+          "fullName": "parseSiteUrl 沒打協定時補 https，取出網站 origin；不是網址回 null",
+          "status": "passed",
+          "title": "沒打協定時補 https，取出網站 origin；不是網址回 null",
+          "duration": 6.526499999999942,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectCreatePage"
+          ],
+          "fullName": "ProjectCreatePage 送出網址、說明與預設掃描設定，建立後前往掃描分頁",
+          "status": "passed",
+          "title": "送出網址、說明與預設掃描設定，建立後前往掃描分頁",
+          "duration": 1866.1407000000036,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectCreatePage"
+          ],
+          "fullName": "ProjectCreatePage 選主動測試時自動勾上資安且不能取消；選「先到專案總覽」就導到總覽",
+          "status": "passed",
+          "title": "選主動測試時自動勾上資安且不能取消；選「先到專案總覽」就導到總覽",
+          "duration": 1107.6905000000042,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectCreatePage"
+          ],
+          "fullName": "ProjectCreatePage 同網站已有專案時提示並不能送出；餘額不夠掃整站時提示",
+          "status": "passed",
+          "title": "同網站已有專案時提示並不能送出；餘額不夠掃整站時提示",
+          "duration": 852.3093999999983,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196871628,
+      "endTime": 1791196875461.3093,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/projects/ProjectCreatePage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "issuesToCsv"
+          ],
+          "fullName": "issuesToCsv 跳脫逗號、引號與換行，並以 BOM 開頭讓 Excel 正確顯示中文",
+          "status": "passed",
+          "title": "跳脫逗號、引號與換行，並以 BOM 開頭讓 Excel 正確顯示中文",
+          "duration": 6.3945999999996275,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectPagesPage"
+          ],
+          "fullName": "ProjectPagesPage 預設依問題數排序，可篩選錯誤頁並搜尋",
+          "status": "passed",
+          "title": "預設依問題數排序，可篩選錯誤頁並搜尋",
+          "duration": 976.5483999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectPagesPage"
+          ],
+          "fullName": "ProjectPagesPage 點表頭切換排序",
+          "status": "passed",
+          "title": "點表頭切換排序",
+          "duration": 292.7589000000007,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectIssuesPage"
+          ],
+          "fullName": "ProjectIssuesPage 網址的 ?q= 只列出符合的問題，清除搜尋後回到全部",
+          "status": "passed",
+          "title": "網址的 ?q= 只列出符合的問題，清除搜尋後回到全部",
+          "duration": 258.9698999999964,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectIssuesPage"
+          ],
+          "fullName": "ProjectIssuesPage 依嚴重度分組顯示分組列，點嚴重度數量只看該級",
+          "status": "passed",
+          "title": "依嚴重度分組顯示分組列，點嚴重度數量只看該級",
+          "duration": 257.8640000000014,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ProjectScansPage 示範專案"
+          ],
+          "fullName": "ProjectScansPage 示範專案 示範專案不顯示建立掃描表單，改引導新增自己的網站",
+          "status": "passed",
+          "title": "示範專案不顯示建立掃描表單，改引導新增自己的網站",
+          "duration": 85.18890000000101,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196873226,
+      "endTime": 1791196875104.189,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/projects/ProjectPages.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "尚未掃描的網站連接 Search Console"
+          ],
+          "fullName": "尚未掃描的網站連接 Search Console 可以先連接 GSC，同時保留建立 SEO 掃描的入口",
+          "status": "passed",
+          "title": "可以先連接 GSC，同時保留建立 SEO 掃描的入口",
+          "duration": 444.3009000000002,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "尚未掃描的網站連接 Search Console"
+          ],
+          "fullName": "尚未掃描的網站連接 Search Console 授權後可選資源，不要求先建立掃描",
+          "status": "passed",
+          "title": "授權後可選資源，不要求先建立掃描",
+          "duration": 97.06550000000061,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "尚未掃描的網站連接 Search Console"
+          ],
+          "fullName": "尚未掃描的網站連接 Search Console 沒有掃描時仍顯示 Google 回呼錯誤，且可以關閉提示",
+          "status": "passed",
+          "title": "沒有掃描時仍顯示 Google 回呼錯誤，且可以關閉提示",
+          "duration": 182.64739999999983,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196880503,
+      "endTime": 1791196881227.6475,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/projects/ProjectSeoPage.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "ScanJobForm（網站專案）"
+          ],
+          "fullName": "ScanJobForm（網站專案） 以專案的起始網址、預設範圍與維度為初始值",
+          "status": "passed",
+          "title": "以專案的起始網址、預設範圍與維度為初始值",
+          "duration": 404.7478000000001,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "ScanJobForm（網站專案）"
+          ],
+          "fullName": "ScanJobForm（網站專案） 草稿按專案分開：A 網站沒送出的修改不會帶到 B 網站",
+          "status": "passed",
+          "title": "草稿按專案分開：A 網站沒送出的修改不會帶到 B 網站",
+          "duration": 504.6208000000006,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196882459,
+      "endTime": 1791196883368.6208,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/scans/ScanJobForm.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "PartnersPage 洽談表單"
+          ],
+          "fullName": "PartnersPage 洽談表單 送出成功後顯示成功訊息",
+          "status": "passed",
+          "title": "送出成功後顯示成功訊息",
+          "duration": 1521.3650000000007,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "PartnersPage 洽談表單"
+          ],
+          "fullName": "PartnersPage 洽談表單 後端回 400 時把錯誤標在欄位旁",
+          "status": "passed",
+          "title": "後端回 400 時把錯誤標在欄位旁",
+          "duration": 914.4858999999997,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1791196880372,
+      "endTime": 1791196882808.4858,
+      "status": "passed",
+      "message": "",
+      "name": "<專案目錄>/frontend/src/features/public/PartnersPage.test.tsx"
+    }
+  ]
+}

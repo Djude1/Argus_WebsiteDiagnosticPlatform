@@ -21,7 +21,7 @@
 - 精準標註：爬蟲記錄觸控目標／缺標籤欄位／破版元素的行動版文件座標，有這類問題時另拍行動版截圖（`layout_metrics.mobile_screenshot`）；Finding `evidence_json.annotations`；API `screenshot/?variant=mobile`、`PageSerializer.has_mobile_screenshot`；前端 `ScreenshotCanvas` 切到行動版截圖逐一框住元素並標尺寸。
 - 前端：`components/scans/SiteProfilePanel.jsx`（網站架構＋做得好的地方），樣式 `legacy-member/94-report-style.css`；重新產生 `openapi.json`／`apiTypes.ts`（同時補上先前漏產的 `/api/domains/gsc/*`）。
 - 報告改版（`report_render/`，`RENDERER_VERSION` 5）：`theme.TYPE` 字級層級、移除所有彩色左邊條、中風險以上完整卡片／低風險與資訊精簡條目、第一章新增「做得好的地方」「網站架構」（`payload.site_profile`、schema 同步）、附錄驗證表只列中風險以上。ntubimdbirc.tw 由 25 頁降到 19 頁。
-- 文件：`backend/apps/scans/CLAUDE.md`、`security/CLAUDE.md`、`backend/CLAUDE.md`、`frontend/CLAUDE.md`、`專題文件生成/需求書_複賽版完整內容.md`（F-013／018／019／021）。
+- 文件：`backend/apps/scans/CLAUDE.md`、`security/CLAUDE.md`、`backend/CLAUDE.md`、`frontend/CLAUDE.md`、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md`（F-013／018／019／021）。
 
 ## 驗證方式
 - 後端：`ruff check backend`、`makemigrations --check`、`manage.py test apps` 全過；新增 `tests_site_profile.py`、`NoUsablePagesTests`、`SeoSiteFindingsTests`、PII／SSL／HSTS／HEAD fallback／精準標註測試。

@@ -11,12 +11,12 @@
 
 ## 修改
 
-- 以 `專題文件生成/argus_3_1_1_system_flow.png` 的原有風格為底圖局部修改。
+- 以 `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow.png` 的原有風格為底圖局部修改。
 - 新增 `Nginx` 節點於 PWA 與 Django REST API 之間。
 - 將流程更新為 `PWA → Nginx → Django API`。
 - 將報告回傳路徑更新為 `報告/DOCX → Django API → Nginx → PWA`。
 - 產出嵌入用圖片：
-  - `專題文件生成/argus_3_1_1_system_flow_uploaded_style_nginx.png`
+  - `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow_uploaded_style_nginx.png`
 - 已直接替換並儲存：
   - `專題文件/Argus_系統手冊_第三章優化版_3-1圖組優化_Nginx_報告回傳修正版.docx`
 

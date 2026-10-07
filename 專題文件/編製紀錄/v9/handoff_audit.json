@@ -1,0 +1,12 @@
+{
+  "errors": [],
+  "relative_links_checked": 33,
+  "visual_final_pages_covered": 121,
+  "changed_pages_rechecked": [
+    119
+  ],
+  "A": "未修改 Skill，Skills 表格及規則編號同步不適用",
+  "B": "所有本輪交接 MD 相對連結及私庫直接引用存在",
+  "C": "版本、頁數、模型與欄位數、最終雜湊一致；歷史明標",
+  "D": "根入口已連結 v9 現況、QA 與編製契約"
+}

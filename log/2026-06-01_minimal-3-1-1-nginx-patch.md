@@ -9,7 +9,7 @@
 
 ## 修改
 
-- 以 `專題文件生成/argus_3_1_1_system_flow.png` 為底圖做最小局部修補。
+- 以 `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow.png` 為底圖做最小局部修補。
 - 將圖內標題改為「Argus SaaS 分層系統架構圖」。
 - 在 PWA 與 Django REST API 之間加入 Nginx 節點。
 - 將 PWA 與 Django API 的流程改為經過 Nginx。
@@ -19,7 +19,7 @@
 - 已直接替換並儲存：
   - `專題文件/Argus_系統手冊_第三章優化版_3-1圖組優化_Nginx_報告回傳修正版.docx`
 - 產出嵌入圖片：
-  - `專題文件生成/argus_3_1_1_system_flow_minimal_nginx.png`
+  - `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow_minimal_nginx.png`
 
 ## 驗證
 

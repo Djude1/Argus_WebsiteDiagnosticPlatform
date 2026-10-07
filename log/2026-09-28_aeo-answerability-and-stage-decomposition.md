@@ -22,7 +22,7 @@
 - `reports.build_report_payload` → `_sorted_report_groups`、`_report_finding_entry`、`_report_summary`、`_report_priorities`、`_report_why_matters`、`_report_scan_info`、`_report_appendix`。
 
 ### 文件
-- `backend/apps/scans/CLAUDE.md`（AEO 問答檢測、計分第 5 條、進度步驟、階段表、大函式內部結構）、`backend/CLAUDE.md`（ScanJob 欄位）、`frontend/CLAUDE.md`（AeoAnswerPanel、`aeo_answers` 步驟）、`docs/nessus-gap-analysis.md`、`專題文件生成/需求書_複賽版完整內容.md`（ARGUS-F-011 改寫、流程與計分描述）。
+- `backend/apps/scans/CLAUDE.md`（AEO 問答檢測、計分第 5 條、進度步驟、階段表、大函式內部結構）、`backend/CLAUDE.md`（ScanJob 欄位）、`frontend/CLAUDE.md`（AeoAnswerPanel、`aeo_answers` 步驟）、`docs/nessus-gap-analysis.md`、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md`（ARGUS-F-011 改寫、流程與計分描述）。
 
 ## 原因
 使用者指出舊 AEO 只數 FAQPage／HowTo 標記，沒有做任何問答檢測也可能顯示 100 分；要求改成「問題能否從網站內容中被找到、回答並追溯證據」四層檢測，第一版用可重現規則＋人工校驗題集，內容不足時標示未充分評估。另要求把各掃描階段內部的大函式工程化拆成功能函式。

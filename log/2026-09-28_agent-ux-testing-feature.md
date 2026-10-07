@@ -56,7 +56,7 @@
 - `apps/billing/tests.py`：新增 `agent_ux_fee` 三項測試。
 - 同步文件：`backend/apps/scans/CLAUDE.md`、`backend/apps/billing/CLAUDE.md`、
   `backend/apps/agent/CLAUDE.md`、`docs/hermes-agent-architecture.md`、
-  `frontend/CLAUDE.md`、`專題文件生成/需求書_複賽版完整內容.md`（ARGUS-F-015、
+  `frontend/CLAUDE.md`、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md`（ARGUS-F-015、
   成本估算、工具啟用條件）。
 
 ## 原因

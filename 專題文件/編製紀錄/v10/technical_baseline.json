@@ -1,0 +1,1962 @@
+[
+  {
+    "index": 263,
+    "text": "第3章 系統規格"
+  },
+  {
+    "index": 264,
+    "text": "3-1 系統架構"
+  },
+  {
+    "index": 265,
+    "text": "前端以 React 呈現公開頁、網站專案與管理後台；Django REST Framework 提供帳號、專案、掃描、帳務與內容 API。Redis 作為 Celery 訊息佇列，Worker 執行 Playwright、規則分析與選用工具。PostgreSQL 保存正式資料，媒體儲存保存截圖、報告及網頁產物。"
+  },
+  {
+    "index": 266,
+    "text": ""
+  },
+  {
+    "index": 267,
+    "text": "圖3-1-1 Argus 服務架構與資料流"
+  },
+  {
+    "index": 268,
+    "text": "一個 SiteProject 關聯歷次 ScanJob，一筆 ScanJob 關聯擷取的 Page 與 Finding。專案總覽、問題分析、AEO、SEO 及歷史頁各自整理這些資料。頁面級問題可關聯 Page，站台級問題的 Page 可為空；不能因某頁沒有列出問題就忽略站台級結果。"
+  },
+  {
+    "index": 269,
+    "text": "報告產生器先組裝遮罩後的資料，再以 python-docx 排版，透過 LibreOffice 轉成 PDF。對外下載與 SHA-256 查驗都以 PDF 為準。MCP 的掃描、取消、估價與報告工具沿用網站 API 的業務入口，不另建立一套扣點流程。"
+  },
+  {
+    "index": 270,
+    "text": "3-2 系統軟硬體需求與技術平台"
+  },
+  {
+    "index": 271,
+    "text": "一般使用者只需瀏覽器及網路。平台端則需 Python、前端建置環境、資料庫、Redis、背景 Worker 與 Chromium；報告另需 CJK 字型與 LibreOffice。"
+  },
+  {
+    "index": 272,
+    "text": "表3-2-1 軟體平台與相依條件"
+  },
+  {
+    "index": 273,
+    "text": "層級專案使用項目安裝或執行要點前端React 18.3、Vite 6、React Router、Zustand、Axios、React Flow使用鎖定檔；Windows 建置走 Node 22 helper。型別與檢查TypeScript、OpenAPI、ESLint、Vitest部分後台已轉 TypeScript；型別由 schema 產生。後端Python 3.12 以上、Django 5、DRF以 uv.lock 安裝至專案 .venv。背景任務Celery 5、Redis 7、PlaywrightWeb、broker、Worker 與 Chromium 均需可用。資料SQLite 或 PostgreSQL 16本機預設 SQLite；Docker 與 K8s 使用 PostgreSQL。報告python-docx、matplotlib、CJK 字型、LibreOfficeWeb 下載端也可能產生報告，不能只替 Worker 安裝相依。部署Docker Compose、Kubernetes、Argo CD、GitHub Actions本機安裝與公網部署採不同設定及驗證流程。"
+  },
+  {
+    "index": 274,
+    "text": "Python 與 JavaScript 的實際版本以鎖定檔及相依套件 engine 為準。本次 Node 22.17 可完成前端建置，但部分測試相依要求 Node 22.22.2 以上或相容的 Node 24；測試結果與使用版本列於第10章。"
+  },
+  {
+    "index": 275,
+    "text": "3-3 使用標準與工具"
+  },
+  {
+    "index": 276,
+    "text": "本手冊以 UML 表示使用個案、活動、循序、類別、部署、套件、元件及狀態。圖中的程式名稱對應實際模組；分析類別另以 boundary、control、entity 標明概念角色。REST API 使用 JSON，資料結構變更由 migration 管理。[3][4]"
+  },
+  {
+    "index": 277,
+    "text": "表3-3-1 標準與工具的使用範圍"
+  },
+  {
+    "index": 278,
+    "text": "項目本專題用途UML 與 PlantUML描述需求、服務互動、資料關聯與部署；圖稿可重新渲染。OWASP 與 CWE對可對應的安全發現標記弱點分類，不作為完整安全認證。Git 與 GitHub Actions版本管理、品質檢查與映像建置。DRF 與 drf-spectacularAPI 與離線 schema；部分前端型別由 OpenAPI 產生。Django Test、Vitest、TypeScript後端行為、前端元件及型別檢查。Google Search Console API唯讀取得搜尋成效、網址索引狀態與擁有者資源。[6]綠界全方位金流購點、信用卡定期定額與付款結果驗簽。[5]"
+  },
+  {
+    "index": 306,
+    "text": "第5章 需求模型"
+  },
+  {
+    "index": 307,
+    "text": "5-1 使用者需求"
+  },
+  {
+    "index": 308,
+    "text": "系統角色分為訪客、一般會員、有效訂閱會員、管理員與超級管理員。一般會員管理自己的資料；訂閱權益增加 MCP 工具額度；管理員可處理營運資料，超級管理員另可變更一般管理員身分及查閱受限管理頁。"
+  },
+  {
+    "index": 309,
+    "text": "功能需求"
+  },
+  {
+    "index": 310,
+    "text": "功能需求列出各角色的操作、執行條件及驗收結果。"
+  },
+  {
+    "index": 311,
+    "text": "表5-1-1 帳號與網站專案功能需求"
+  },
+  {
+    "index": 312,
+    "text": "需求與角色操作及驗收結果FR-01 訪客註冊先以 Google 驗證 Email，再設定唯一用戶名與密碼；尚未完成資料設定前不直接建立一般會員。FR-02 會員登入可用 Email 或用戶名及密碼登入，亦可使用已註冊 Google 帳號；無效、停用及已刪除帳號依狀態處理。FR-03 會員帳號維護查閱登入方式、修改個人資料、用戶名與頭像、變更或重設密碼；一次性重設 Token 不可重複使用。FR-04 會員刪除帳號停止後續訂閱扣款、撤銷登入與外部連線、移除個資及使用者內容；帳務匿名保留。最後一位啟用超級管理員不得刪除。FR-05 會員新增網站輸入網址、名稱、說明及預設掃描設定，建立專案本身不扣點；同帳號同 origin 不重複建立。FR-06 會員管理專案搜尋、排序與切換網站，查看總覽及各分頁；封存後保留歷史，可恢復既有專案。FR-07 新會員體驗啟用示範資料時建立晨光咖啡示範專案；資料唯讀，不以示範網站建立新掃描。"
+  },
+  {
+    "index": 313,
+    "text": "表5-1-2 掃描與分析功能需求"
+  },
+  {
+    "index": 314,
+    "text": "需求與角色操作及驗收結果FR-08 會員設定範圍單頁只處理輸入頁；全網站依同 origin、深度、頁數及 robots 政策擷取。FR-09 會員選取維度至少選取 SEO、AEO、GEO、UX、資安其中一項；估價依頁數與維度數計算。主動模式必須選資安。FR-10 會員授權掃描保存授權聲明及來源資訊；主動模式另需有效網域所有權或管理員測試權限，缺少條件時拒絕建立。FR-11 會員查詢進度建立成功先回任務編號與 queued；逐階段顯示頁數、子步驟、執行時間及警示。FR-12 會員取消任務對自己的非終態任務取消，退款冪等；Worker 在檢查點結束執行。FR-13 會員閱讀證據按分類、嚴重度與頁面查看 Finding、原文證據、建議與截圖；無座標的站台問題提供文字證據。FR-14 會員查看 AEO顯示題目、可回答／資訊不足／衝突／無答案及原文；正文或題目不足時不評分。FR-15 會員查看 SEO概覽、頁面與內容、連結、搜尋關鍵字分頁均附網址、時間及檢查結果。FR-16 會員關鍵字分析未連接 Search Console 時可設定最多 20 個目標關鍵字，檢查其在 Title、H1、摘要、網址與正文的字面分布。FR-17 會員 Search Console經唯讀 OAuth 連接資源，查 7／28／90 天點擊、曝光、CTR、平均排名與網址檢查；未連接時不虛構搜尋數據。FR-18 會員追蹤問題依同專案前次完成掃描，列出新增、持續及本次未出現；本次未檢查的維度不可視為已修正。FR-19 會員查看頁面與拓樸列出實際擷取頁的狀態、載入時間、問題及連結關係；不把圖中未出現的頁面視為網站不存在。FR-20 會員下載與查驗完成掃描可取得 PDF、固定報告編號及 SHA-256；收件者可公開查驗檔案是否相符及是否最新。FR-21 會員改善交付問題清單可匯出 CSV 或複製修正交接提示詞；修正產出含 JSON-LD、OG／meta、llms.txt 與有原文依據的 FAQ。FR-22 會員網頁產物可下載已擷取頁面的確定性快照；啟用優化服務後可產生修改版。產物不直接覆寫目標網站。"
+  },
+  {
+    "index": 315,
+    "text": "表5-1-3 帳務與平台功能需求"
+  },
+  {
+    "index": 316,
+    "text": "需求與角色操作及驗收結果FR-23 會員網域驗證Search Console 擁有者資源可驗證網域；DNS TXT、首頁 meta、指定驗證檔為備用方式，保留期限及覆核狀態。FR-24 會員點數帳務查餘額、月贈點、預扣、退差、退款及訂單；扣點與退款只經 billing.services。FR-25 會員購點選方案、填買受人及發票資料，轉至相應綠界環境；以有效伺服器通知入點，返回頁不直接決定付款成功。FR-26 會員訂閱新訂阅以信用卡定期定額按期發點；取消停止後續扣款，當期權益保留。舊預付資料維持相容處理。FR-27 訂閱會員 MCP建立或撤銷憑證、取得設定、查呼叫紀錄；每次呼叫檢查帳號、訂閱、額度與頻率。掃描另扣點。FR-28 會員評論符合使用資格後一人一則主評論；本人可編修／刪除，支援討論、有幫助及檢舉，官方回覆獨立。FR-29 訪客免費工具使用單頁快速檢查、網站測速、網址及郵件釣魚風險工具；不扣會員點數，受輸入與頻率限制。FR-30 訪客平台資訊查看介紹、方案、PWA 下載、報告查驗、評論與條款；合作洽談表單送至後台處理。"
+  },
+  {
+    "index": 317,
+    "text": "表5-1-4 管理功能需求"
+  },
+  {
+    "index": 318,
+    "text": "需求與角色操作及驗收結果FR-31 管理員任務治理查詢任務、詳情、警示、費用與執行紀錄，依條件取消或重新排程，操作記入稽核。FR-32 管理員客戶管理查使用者、登入事件、錢包及訂閱，依權限調點、停用、恢復或刪除；不能處理自己的管理對象或超級管理員。FR-33 管理員帳務與網域查點數交易、購點訂單、每期扣款與網域，提供人工核准或否決；不直接修改既有交易帳本。FR-34 管理員內容治理維護網站內容、方案及評論，處理合作洽談；依角色查閱公開與受限管理頁。FR-35 管理員健康查詢查 Web、資料庫、Redis、Worker 與掃描鏈路，區分服務可連線和任務實際完成。FR-36 超級管理員權限可授予／取消其他啟用帳號的一般管理員身分；不能在後台變更自己或其他超級管理員。公告與操作日誌限超級管理員，系統資訊供管理員唯讀查閱。"
+  },
+  {
+    "index": 319,
+    "text": "非功能需求"
+  },
+  {
+    "index": 320,
+    "text": "非功能需求列出安全、執行及維護控制。時間與數量表示程式設定或資源上限。"
+  },
+  {
+    "index": 321,
+    "text": "表5-1-5 安全與資料非功能需求"
+  },
+  {
+    "index": 322,
+    "text": "需求實際控制與驗收方式NFR-01 身分保護Access Token 留在前端記憶體，Refresh Token 使用 HttpOnly Cookie；刷新與登出驗證 CSRF。檢查輪替及失效案例。NFR-02 資料隔離一般會員的專案、掃描、頁面、報告、網域與 MCP 查詢以使用者過濾；跨帳號物件不回傳內容。NFR-03 SSRF 防護入口、轉址、子資源與 WebSocket 檢查公開位址及協定；正式部署另需出站網路政策。驗證私網及非法 port 拒絕。NFR-04 授權可追溯保存目標、授權聲明、時間、來源 IP 及 User-Agent；主動工具按執行計畫限縮。NFR-05 機密管理Key、密碼與 Token 使用環境或 Secret；API 及報告不得回傳測試帳密或 Search Console Refresh Token。MCP 明文憑證僅建立時回傳一次。NFR-06 個資處理報告及 MCP 證據遮罩個資；刪除帳號移除個人內容，帳務匿名保留。檔案清理失敗須記錄原因並追查。NFR-07 帳務一致性錢包異動使用 Atomic Transaction、Row Lock 與冪等判斷；重複通知、退款及並行扣點不重複入帳。NFR-08 結果保真未選維度與不足資料不補滿分；同分類同規則去重，info 不扣分。AEO 答案保留原文與來源。"
+  },
+  {
+    "index": 323,
+    "text": "表5-1-6 執行與維護非功能需求"
+  },
+  {
+    "index": 324,
+    "text": "需求實際控制與驗收方式NFR-09 非同步回應建立 API 不在請求內執行完整掃描；成功先回 201、queued 與 id，再輪詢進度。NFR-10 資源限制預設全網站上限 50 頁、深度 6；主動工具共用每秒請求預算，Agent 有步數與 token 上限。以實際設定為準。NFR-11 中止與異常收斂取消在檢查點停止；逾時、派工失敗及孤兒任務以既有收尾函式處理並核對退款。NFR-12 相依失敗可辨識阻擋頁、缺截圖、模型失敗及報告轉檔失敗顯示原因；PDF 失敗不改提供 DOCX。NFR-13 可操作性導覽、表單、錯誤、狀態與篩選可辨識；以日間、夜間及桌面、手機畫面檢視操作。NFR-14 可維護性依 accounts、scans、billing 等應用分工；前端以 feature 分層，型別與單元測試檢查 API 契約。NFR-15 部署可重建使用 uv.lock、前端鎖定檔、Dockerfile 及 K8s 宣告；資料庫遷移先於新服務啟動。NFR-16 觀測與保存任務、帳務、登入、MCP 與管理稽核分開保存；K8s 提供逾期任務回收及媒體清理排程。"
+  },
+  {
+    "index": 325,
+    "text": "5-2 使用個案圖"
+  },
+  {
+    "index": 326,
+    "text": "會員使用個案涵蓋帳號、網站專案、授權掃描、分析及交付。有效訂閱會員繼承一般會員操作，另可使用 MCP；報告收件者只需查驗編號與檔案指紋。管理員與超級管理員的操作由伺服器權限控制。"
+  },
+  {
+    "index": 327,
+    "text": ""
+  },
+  {
+    "index": 328,
+    "text": "圖5-2-1 訪客會員與訂閱會員使用個案"
+  },
+  {
+    "index": 329,
+    "text": ""
+  },
+  {
+    "index": 330,
+    "text": "圖5-2-2 管理員與超級管理員使用個案"
+  },
+  {
+    "index": 331,
+    "text": "5-3 使用個案描述"
+  },
+  {
+    "index": 332,
+    "text": "UC-01 建立網站專案與掃描"
+  },
+  {
+    "index": 333,
+    "text": "會員先加入網站，系統以協定、主機及連接埠形成 origin，同帳號同 origin 只保留一個專案。既有專案回傳現況；同網站已封存時恢復原專案與歷史。新增專案可保存起始網址、預設範圍、維度及模式，真正掃描仍需再次確認。"
+  },
+  {
+    "index": 334,
+    "text": "建立掃描時檢查網址、至少一個維度、授權與餘額。主動模式還要檢查資安維度及網域資格。資料庫交易建立任務與授權紀錄並預扣點數，派工後回傳編號；派工失敗則收斂為 failed 並退款。示範專案不建立新任務。"
+  },
+  {
+    "index": 335,
+    "text": ""
+  },
+  {
+    "index": 336,
+    "text": "圖5-3-1 建立掃描活動圖"
+  },
+  {
+    "index": 337,
+    "text": "UC-02 檢查網域所有權"
+  },
+  {
+    "index": 338,
+    "text": "會員可連接 Google Search Console，系統只採認 siteOwner 資源。Domain property 可涵蓋該網域與子網域；URL-prefix property 只證明該主機。一般 Full user 或 Restricted user 不等同擁有者。備用驗證使用 DNS TXT、首頁 meta 或指定文字檔。"
+  },
+  {
+    "index": 339,
+    "text": "驗證有效期預設 90 天，管理員可人工核准。staff／superuser 可使用受控測試旁路，免先建立 VerifiedDomain，仍須通過主動授權、合法目標與範圍檢查；一般會員須有有效的網域驗證。"
+  },
+  {
+    "index": 340,
+    "text": ""
+  },
+  {
+    "index": 341,
+    "text": "圖5-3-2 網域驗證與主動測試活動圖"
+  },
+  {
+    "index": 342,
+    "text": "UC-03 查看結果與比較歷史"
+  },
+  {
+    "index": 343,
+    "text": "會員從專案總覽開啟最新報告，或在歷史報告選擇已完成掃描。問題分析按 rule_id 合併，缺 rule_id 才使用分類與標題；同規則的多頁發現仍保留受影響網址。前次比較只包含本次已選取的維度，結果顯示新增、持續與本次未出現。"
+  },
+  {
+    "index": 344,
+    "text": "「本次未出現」表示這次掃描沒有檢出該項，使用者仍須核對頁數、網址與阻擋狀態。評分以已評估維度計算，不能把更少的檢查範圍直接視為品質改善。"
+  },
+  {
+    "index": 345,
+    "text": "UC-04 購點與月訂閱"
+  },
+  {
+    "index": 346,
+    "text": "會員選擇方案、填買受人及發票資料，系統保存價格快照並提供綠界結帳表單。付款伺服器通知通過驗簽後才入點；瀏覽器回到 Argus 不會直接使訂單變成已付款。定期定額的後續通知依成功期數防止重複發點；取消失敗時不得先宣告已停止扣款。"
+  },
+  {
+    "index": 347,
+    "text": ""
+  },
+  {
+    "index": 348,
+    "text": "圖5-3-3 購點與定期定額活動圖"
+  },
+  {
+    "index": 349,
+    "text": "UC-05 取得修正產出"
+  },
+  {
+    "index": 350,
+    "text": "會員在已完成掃描開啟修正產出，先使用附贈額度或扣固定點數，再派送生成任務。已產生中或已完成時回傳既有結果，不重複計費。失敗後可由使用者重新觸發，失敗收尾返還點數或額度；不是背景無限重試。"
+  },
+  {
+    "index": 351,
+    "text": "產物使用已爬取事實及來源政策檢查，無依據的識別資訊變成待填欄位。會員確認內容後自行套用；系統沒有直接修改目標網站的權限。"
+  },
+  {
+    "index": 352,
+    "text": "5-4 分析類別圖"
+  },
+  {
+    "index": 353,
+    "text": "分析類別中，ProjectWorkspace 表示會員介面 boundary，ScanControl 表示專案與掃描協調 control；使用者、專案、任務、頁面、問題與錢包為 entity。這是需求分析的角色劃分；實作中的 serializer、ViewSet、tasks 及 services 在第6章另列。"
+  },
+  {
+    "index": 354,
+    "text": ""
+  },
+  {
+    "index": 355,
+    "text": "圖5-4-1 網站專案與掃描分析類別圖"
+  },
+  {
+    "index": 356,
+    "text": "第6章 設計模型"
+  },
+  {
+    "index": 357,
+    "text": "6-1 循序圖"
+  },
+  {
+    "index": 358,
+    "text": "建立與執行掃描"
+  },
+  {
+    "index": 359,
+    "text": "API 完成輸入驗證與預扣後，將任務交給佇列。Worker 逐階段保存進度、頁面與發現，計分後完成任務，再依實際頁數結算。前端輪詢讀取資料，不能直接變更 Worker 狀態。取消由共用入口更新取消狀態，Worker 在檢查點停止。"
+  },
+  {
+    "index": 360,
+    "text": ""
+  },
+  {
+    "index": 361,
+    "text": "圖6-1-1 掃描建立執行與結算循序圖"
+  },
+  {
+    "index": 362,
+    "text": "Search Console 連線"
+  },
+  {
+    "index": 363,
+    "text": "前端先要求授權網址，伺服器產生簽章 state 與 HttpOnly nonce Cookie。Google callback 必須在有效期內同時核對兩者，成功後以授權碼換取 Refresh Token，經 Fernet 加密保存。後續查詢以 Refresh Token 換短效 Access Token，Token 不回傳前端。"
+  },
+  {
+    "index": 364,
+    "text": ""
+  },
+  {
+    "index": 365,
+    "text": "圖6-1-2 Search Console 授權與查詢循序圖"
+  },
+  {
+    "index": 366,
+    "text": "付款與期別通知"
+  },
+  {
+    "index": 367,
+    "text": "綠界 ReturnURL 處理購點或訂閱首期；PeriodReturnURL 處理後續期別。帳務服務鎖定訂單與錢包後入點，保存 SubscriptionCharge 與成功期數。SimulatePaid 通知只回覆接收，不入點。"
+  },
+  {
+    "index": 368,
+    "text": ""
+  },
+  {
+    "index": 369,
+    "text": "圖6-1-3 付款通知與冪等入帳循序圖"
+  },
+  {
+    "index": 370,
+    "text": "PDF 報告與查驗"
+  },
+  {
+    "index": 371,
+    "text": "下載入口先檢查使用者與任務。快取不存在、版面版本改變或內容條件要求重建時，重新組裝報告並轉成 PDF，保存現行與歷史指紋。公開查驗不提供完整私有報告；收件者以編號和檔案 SHA-256 比對版本。"
+  },
+  {
+    "index": 372,
+    "text": ""
+  },
+  {
+    "index": 373,
+    "text": "圖6-1-4 PDF 產生下載與查驗循序圖"
+  },
+  {
+    "index": 374,
+    "text": "6-2 設計類別圖"
+  },
+  {
+    "index": 375,
+    "text": "ScanJobViewSet 處理 HTTP 操作，ScanJobCreateSerializer 檢查輸入與建立資料，tasks.py 推進掃描狀態並協調階段。billing.services 是錢包唯一寫入入口；reports.py 整理資料，report_pdf.py 處理轉檔。SiteProjectViewSet 繼承 ProjectSeoActions，將專案查詢與 SEO／Search Console 操作放在同一權限範圍。"
+  },
+  {
+    "index": 376,
+    "text": ""
+  },
+  {
+    "index": 377,
+    "text": "圖6-2-1 主要實作類別與服務依賴"
+  },
+  {
+    "index": 378,
+    "text": "CoinWallet 與 User 為 OneToOne 關聯，每個使用者至多一個錢包。CoinTransaction 保存正負異動及異動後餘額。掃描、產物與訂單的扣點、退點都使用 services；關聯模型定義儲存結構，不表示任意呼叫 model.save 即符合業務規則。"
+  },
+  {
+    "index": 379,
+    "text": "資料庫限制與應用檢查互相補足。SiteProject 的 user＋origin、VerifiedDomain 的 user＋domain、AgentStep 的 session＋step_number 使用組合唯一限制；成功的 SubscriptionCharge 對 order＋sequence 有條件唯一限制。主動授權、同網站起始網址、帳務冪等與外部回呼檢查則由 serializer 或 service 執行。"
+  },
+  {
+    "index": 380,
+    "text": "第7章 實作模型"
+  },
+  {
+    "index": 381,
+    "text": "7-1 部署圖"
+  },
+  {
+    "index": 382,
+    "text": "本機直接執行使用 Django runserver 與 SQLite，適合 UI／同步 API 或受限 eager smoke test。Docker Compose 將 PostgreSQL、Redis、migrate、web、worker 及 frontend 分開；公網的 Repo 宣告另採 Kubernetes、Gateway、Cloudflare Tunnel 與 Argo CD。詳細設定及驗證差異見11-1。"
+  },
+  {
+    "index": 383,
+    "text": ""
+  },
+  {
+    "index": 384,
+    "text": "圖7-1-1 本機 Docker Compose 部署圖"
+  },
+  {
+    "index": 385,
+    "text": ""
+  },
+  {
+    "index": 386,
+    "text": "圖7-1-2 公網 Kubernetes 與 GitOps 部署圖"
+  },
+  {
+    "index": 387,
+    "text": "Compose 主機入口是 8081，對應 frontend 容器 80，dev override 沿用此入口。K8s 的 web、worker 與 frontend 設定各兩個副本，共用持久化媒體。"
+  },
+  {
+    "index": 388,
+    "text": "7-2 套件圖"
+  },
+  {
+    "index": 389,
+    "text": "後端共有十個專題 app：accounts、scans、agent、rebuild、billing、reviews、admin_api、content、insights、mcp_access。scans 包含核心擷取、AEO、SEO、安全工具、報告與專案查詢；agent 與 insights 不另建立業務資料表。"
+  },
+  {
+    "index": 390,
+    "text": ""
+  },
+  {
+    "index": 391,
+    "text": "圖7-2-1 前後端套件與模組依賴"
+  },
+  {
+    "index": 392,
+    "text": "7-3 元件圖"
+  },
+  {
+    "index": 393,
+    "text": "前端將公開、帳號、專案、掃描與管理頁依 feature 分開，以共用 API 封裝處理認證及錯誤。後端掃描管線把擷取、逐維度分析、站台檢查、Agent、評分與結算拆為階段；新增階段時須同步進度與執行計畫，避免畫面與實際工具不一致。"
+  },
+  {
+    "index": 394,
+    "text": ""
+  },
+  {
+    "index": 395,
+    "text": "圖7-3-1 診斷與交付元件圖"
+  },
+  {
+    "index": 396,
+    "text": "7-4 狀態機"
+  },
+  {
+    "index": 397,
+    "text": "ScanJob 狀態為 queued、crawling、scanning、agent_testing、completed、failed、cancelled。Agent 階段依執行條件選用；取消或失敗可由執行中階段收尾，completed 為該次任務終態。管理端重新排程需經專用入口清理舊結果與重設相關資料，不任意改一個狀態字串。"
+  },
+  {
+    "index": 398,
+    "text": ""
+  },
+  {
+    "index": 399,
+    "text": "圖7-4-1 ScanJob 狀態機"
+  },
+  {
+    "index": 400,
+    "text": "表7-4-1 其他業務狀態"
+  },
+  {
+    "index": 401,
+    "text": "對象狀態與轉移規則FixOutputidle → generating → ready 或 failed；failed 可由使用者重新觸發。VerifiedDomainpending、verified、rejected、expired；實際通過條件另看人工核准或到期時間。SiteProjectarchived_at 為空表示使用中，寫入時間即封存；restore 恢復並保留歷史。訂閱與期別訂閱權益與綠界定期定額訂單分開保存；付款成功發點，取消保留本期至期末。"
+  },
+  {
+    "index": 402,
+    "text": "完成後的結算失敗保留 completed，於 warning_summary 記錄 settlement_error 供補結算。這種情況不能把已完成任務改成 failed 並全額退款，否則會使結果與帳務不一致。"
+  },
+  {
+    "index": 403,
+    "text": "第8章 資料庫設計"
+  },
+  {
+    "index": 404,
+    "text": "8-1 資料庫關聯表"
+  },
+  {
+    "index": 405,
+    "text": "本系統以 Django ORM 定義業務資料，開發預設 SQLite，Docker 與公網使用 PostgreSQL。以下資料字典涵蓋十個專題 app 中的 40 個業務模型、450 個實體欄位；Django 權限、Session、Token blacklist 等框架表另由套件 migration 管理，不混入業務模型數量。"
+  },
+  {
+    "index": 406,
+    "text": "表8-1-1 業務資料模型總覽"
+  },
+  {
+    "index": 407,
+    "text": "應用模型數主要資料accounts3帳號與登入scans11網站專案、任務、證據與連線billing8錢包、訂單與期別reviews8評論與治理admin_api2管理稽核與公告content5平台資訊與洽談rebuild1網頁產物mcp_access2憑證與呼叫"
+  },
+  {
+    "index": 408,
+    "text": "網站專案與掃描"
+  },
+  {
+    "index": 409,
+    "text": "User 關聯 SiteProject 及 ScanJob。SiteProject 以 user＋origin 保持唯一，ScanJob 關聯專案並保存本次設定。Page 保存擷取資料，Finding 關聯掃描且可選擇指定頁面；AuthorizationConsent、ReportVerification、FixOutput 分別以 OneToOne 關聯任務。"
+  },
+  {
+    "index": 410,
+    "text": "SearchConsoleConnection 關聯 User，可選擇關聯某個專案；專案連線用於 SEO 成效查詢，project 為空的帳號層級連線用於網域所有權驗證。每個專案至多一筆連線，每位使用者至多一筆帳號層級連線。VerifiedDomain 保存網域驗證期限及人工覆核狀態。"
+  },
+  {
+    "index": 411,
+    "text": ""
+  },
+  {
+    "index": 412,
+    "text": "圖8-1-1 專案掃描與證據資料關聯"
+  },
+  {
+    "index": 413,
+    "text": "帳務與訂閱"
+  },
+  {
+    "index": 414,
+    "text": "User 與 CoinWallet 為 OneToOne，錢包關聯多筆 CoinTransaction。PurchaseOrder 保存下單金額、點數及買受人快照，付款完成時關聯入帳交易。UserSubscription 保存當期權益，SubscriptionOrder 保存綠界定期定額契約及方案快照，SubscriptionCharge 保存各次成功或失敗的扣款結果。"
+  },
+  {
+    "index": 415,
+    "text": "成功期別使用 order＋sequence 的條件唯一限制；失敗通知可以保存而不占用成功期別。交易的 scan_job、site_rebuild 等關聯採 SET_NULL，使使用者內容清除後仍能保留金額及交易種類。"
+  },
+  {
+    "index": 416,
+    "text": ""
+  },
+  {
+    "index": 417,
+    "text": "圖8-1-2 點數訂單與訂閱資料關聯"
+  },
+  {
+    "index": 418,
+    "text": "評論與 MCP"
+  },
+  {
+    "index": 419,
+    "text": "PlatformReview 與 User 為 OneToOne，官方回覆、修訂、討論、檢舉及有幫助紀錄各自保存。McpApiKey 與 McpCallLog 關聯 User；明文 MCP 憑證不保存於資料庫，僅保存雜湊及辨識前綴，撤銷後下次請求即拒絕。"
+  },
+  {
+    "index": 420,
+    "text": ""
+  },
+  {
+    "index": 421,
+    "text": "圖8-1-3 評論與 MCP 資料關聯"
+  },
+  {
+    "index": 422,
+    "text": "8-2 表格及其 Meta data"
+  },
+  {
+    "index": 423,
+    "text": "型別使用 ORM 對應的 Int64、Int32、Boolean、String(n)、DateTime、JSON 等名稱。PK、FK、UQ、IDX 分別表示主鍵、外鍵、唯一與索引；NULL 是資料庫可空值，blank 是表單或序列化允許空輸入，兩者不同。ForeignKey 的實體欄位以 _id 結尾，表內列出目標與刪除策略。"
+  },
+  {
+    "index": 424,
+    "text": "DEFAULT 表示 ORM 預設，不表示所有資料庫欄位都建立了同樣的 server default。建立 API 也可給不同預設，例如 ScanJob.max_depth 的 ORM 預設為 3，建立 API 使用設定的 6。choices 為應用列舉，也不直接等同資料庫 CHECK constraint。授權、點數冪等、網域控制與外部通知驗簽需由業務服務檢查，不能只靠資料表關聯證明。"
+  },
+  {
+    "index": 427,
+    "text": "表8-2-1 User 資料字典"
+  },
+  {
+    "index": 428,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼passwordString(128)NOT NULL密碼雜湊last_loginDateTimeNULL；blank最近登入時間is_superuserBooleanNOT NULL；DEFAULT false超級管理員旗標usernameString(150)UQ；NOT NULL登入識別名稱first_nameString(150)NOT NULL；blank名字欄位last_nameString(150)NOT NULL；blank姓氏欄位emailString(254)NOT NULL；blank電子郵件is_staffBooleanNOT NULL；DEFAULT false管理員旗標is_activeBooleanNOT NULL；DEFAULT true啟用狀態date_joinedDateTimeNOT NULL；DEFAULT now帳號建立時間avatarFilePathNULL；blank頭像檔案handleString(30)UQ；NULL；blank唯一用戶名deleted_atDateTimeNULL；blank帳號刪除時間"
+  },
+  {
+    "index": 429,
+    "text": "另有 ManyToMany：groups → Group；user_permissions → Permission，透過中介表關聯。"
+  },
+  {
+    "index": 432,
+    "text": "表8-2-2 LoginEvent 資料字典"
+  },
+  {
+    "index": 433,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEmethodString(16)IDX；NOT NULL登入或驗證方法；選項 password、google、registerip_addressIPAddressNULL；blank來源 IPuser_agentTextNOT NULL；blank瀏覽器識別資訊created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 434,
+    "text": "複合索引：user＋-created_at。"
+  },
+  {
+    "index": 437,
+    "text": "表8-2-3 PasswordResetToken 資料字典"
+  },
+  {
+    "index": 438,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEtoken_digestString(64)UQ；NOT NULL驗證碼雜湊created_atDateTimeNOT NULL；blank建立時間expires_atDateTimeNOT NULL到期時間used_atDateTimeNULL；blank使用時間request_ipIPAddressNULL；blank要求重設的來源 IP"
+  },
+  {
+    "index": 439,
+    "text": "複合索引：user＋-created_at。"
+  },
+  {
+    "index": 442,
+    "text": "表8-2-4 SiteProject 資料字典"
+  },
+  {
+    "index": 443,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEnameString(80)NOT NULL名稱originString(255)IDX；NOT NULL來源站台start_urlString(2048)NOT NULL同網站起始網址default_scopeString(8)NOT NULL；DEFAULT site新掃描預設範圍；選項 site、singledefault_categoriesJSONNOT NULL；DEFAULT default_categories新掃描預設維度default_scan_modeString(16)NOT NULL；DEFAULT passive新掃描預設模式descriptionString(300)NOT NULL；DEFAULT \"\"；blank內容說明is_demoBooleanNOT NULL；DEFAULT false唯讀示範專案旗標target_keywordsJSONNOT NULL；DEFAULT []；blank目標關鍵字清單faviconTextNOT NULL；DEFAULT \"\"；blank網站圖示 data URLfavicon_checked_atDateTimeNULL；blank圖示最後擷取時間archived_atDateTimeNULL；blank封存時間；空值表示使用中created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 444,
+    "text": "額外限制 uniq_site_project_user_origin：user、origin 唯一。"
+  },
+  {
+    "index": 447,
+    "text": "表8-2-5 ScanJob 資料字典"
+  },
+  {
+    "index": 448,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEproject_idInt64FK；IDX；NULL；blank所屬網站專案；SiteProject；SET_NULLoriginal_urlString(2048)NOT NULL使用者輸入網址normalized_urlString(2048)IDX；NOT NULL正規化網址originString(255)IDX；NOT NULL來源站台statusString(32)IDX；NOT NULL；DEFAULT queued處理狀態；選項 queued、crawling、scanning、agent_testing、completed、failed、cancelledscan_modeString(16)IDX；NOT NULL；DEFAULT passive被動或主動模式；選項 passive、activecategoriesJSONNOT NULL；DEFAULT default_categories本次選取維度max_depthInt16NOT NULL；≥ 0；DEFAULT 3深度上限max_pagesInt16NOT NULL；≥ 0；DEFAULT 50頁數上限respect_robotsBooleanNOT NULL；DEFAULT true是否遵循 robots.txtactive_testing_authorizedBooleanNOT NULL；DEFAULT false額外主動測試授權test_auth_email_encryptedTextNOT NULL；DEFAULT \"\"；blank簽章表示的測試帳號；API write-onlytest_auth_password_encryptedTextNOT NULL；DEFAULT \"\"；blank簽章表示的測試密碼；API write-onlyoverall_scoreInt16NULL；≥ 0；blank整體分數category_scoresJSONNOT NULL；DEFAULT {}；blank已評估分類分數top_actionsJSONNOT NULL；DEFAULT []；blank優先改善清單crawl_checkpointJSONNOT NULL；DEFAULT {}；blank擷取進度檢查點warning_summaryJSONNOT NULL；DEFAULT {}；blank警示彙總aeo_reportJSONNOT NULL；DEFAULT {}；blankAEO 題目、判定與原文證據seo_reportJSONNOT NULL；DEFAULT {}；blank連結與站台 SEO 結果progressJSONNOT NULL；DEFAULT {}；blank執行進度scan_logJSONNOT NULL；DEFAULT []；blank掃描執行紀錄error_messageTextNOT NULL；blank錯誤訊息created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間started_atDateTimeNULL；blank開始時間completed_atDateTimeNULL；blank完成時間"
+  },
+  {
+    "index": 449,
+    "text": "複合索引：user＋status；origin＋created_at。"
+  },
+  {
+    "index": 452,
+    "text": "表8-2-6 AuthorizationConsent 資料字典"
+  },
+  {
+    "index": 453,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；UQ；NOT NULL所屬掃描任務；ScanJob；CASCADEuser_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEip_addressIPAddressNOT NULL來源 IPuser_agentTextNOT NULL；blank瀏覽器識別資訊authorized_domainString(255)IDX；NOT NULL授權網域statementTextNOT NULL授權聲明文字active_testing_authorizedBooleanNOT NULL；DEFAULT false額外主動測試授權created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 456,
+    "text": "表8-2-7 Page 資料字典"
+  },
+  {
+    "index": 457,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；IDX；NOT NULL所屬掃描任務；ScanJob；CASCADEurlString(2048)NOT NULL頁面網址final_urlString(2048)IDX；NOT NULL最終回應網址originString(255)IDX；NOT NULL來源站台status_codeInt16IDX；NULL；≥ 0；blankHTTP 狀態碼titleString(512)NOT NULL；blank標題htmlTextNOT NULL；blank原始 HTMLrendered_domTextNOT NULL；blank執行後 DOMhtml_only_textTextNOT NULL；blank由頁面取得的純文字screenshot_pathString(1024)NOT NULL；blank截圖相對位置load_time_msInt32NULL；≥ 0；blank載入時間毫秒depthInt16IDX；NOT NULL；≥ 0；DEFAULT 0探索深度fetch_modeString(32)NOT NULL；DEFAULT live取得資料方式；選項 live、cache_replayblocked_reasonString(255)NOT NULL；blank阻擋原因outgoing_linksJSONNOT NULL；DEFAULT []；blank對外連結清單headersJSONNOT NULL；DEFAULT {}；blankHTTP 回應標頭element_boxesJSONNOT NULL；DEFAULT {}；blank元素座標layout_metricsJSONNOT NULL；DEFAULT {}；blank行動版量測資料created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 458,
+    "text": "額外限制 unique_page_per_scan：scan_job、url 唯一。"
+  },
+  {
+    "index": 459,
+    "text": "複合索引：scan_job＋depth；origin＋status_code。"
+  },
+  {
+    "index": 462,
+    "text": "表8-2-8 Finding 資料字典"
+  },
+  {
+    "index": 463,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；IDX；NOT NULL所屬掃描任務；ScanJob；CASCADEpage_idInt64FK；IDX；NULL；blank對應頁面；站台級可空；Page；CASCADEseverityString(16)IDX；NOT NULL嚴重度；選項 critical、high、medium、low、infocategoryString(16)IDX；NOT NULL診斷分類；選項 seo、aeo、geo、security、uxpriority_scoreFloatIDX；NULL；blank改善排序分數impact_areaString(128)NOT NULL；blank影響面向confidenceFloatNOT NULL；DEFAULT 1.0信心數值titleString(255)NOT NULL標題descriptionTextNOT NULL內容說明remediationTextNOT NULL改善建議evidenceTextNOT NULL；blank文字證據rule_idString(128)IDX；NOT NULL；blank檢核規則識別evidence_typeString(64)NOT NULL；blank證據型態evidence_jsonJSONNOT NULL；DEFAULT {}；blank結構化證據evidence_sourceString(512)NOT NULL；blank證據來源ai_explanationTextNOT NULL；blankAI 說明預留欄位ai_remediationTextNOT NULL；blankAI 建議預留欄位llm_modelString(128)NOT NULL；blank模型紀錄預留欄位llm_generated_atDateTimeNULL；blank生成時間預留欄位bounding_boxJSONNULL；blank元素範圍座標selectorString(512)NOT NULL；blank元素選取器owasp_categoryString(16)IDX；NOT NULL；blankOWASP 對映cwe_idString(16)NOT NULL；blankCWE 對映ai_handoff_promptTextNOT NULL交辦提示詞created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 464,
+    "text": "複合索引：scan_job＋category＋severity；page＋category。"
+  },
+  {
+    "index": 467,
+    "text": "表8-2-9 SearchConsoleConnection 資料字典"
+  },
+  {
+    "index": 468,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼project_idInt64FK；UQ；NULL；blank所屬網站專案；SiteProject；CASCADEuser_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADErefresh_token_encryptedTextNOT NULLFernet 加密的 Google Refresh Tokenproperty_urlString(255)NOT NULL；DEFAULT \"\"；blankSearch Console 資源last_errorString(255)NOT NULL；DEFAULT \"\"；blank最近驗證原因connected_atDateTimeNOT NULL；blank連線建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 469,
+    "text": "額外限制 uniq_account_level_search_console：user 唯一；條件 (AND: ('project__isnull', True))。"
+  },
+  {
+    "index": 472,
+    "text": "表8-2-10 ReportVerification 資料字典"
+  },
+  {
+    "index": 473,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；UQ；NOT NULL所屬掃描任務；ScanJob；CASCADEreport_numberString(40)UQ；NOT NULL固定報告編號content_sha256String(64)NOT NULL現行檔案指紋generated_atDateTimeNOT NULL產生時間created_atDateTimeNOT NULL；blank建立時間renderer_versionInt32NOT NULL；≥ 0；DEFAULT 1報告版面版本previous_sha256JSONNOT NULL；DEFAULT []；blank歷史檔案指紋"
+  },
+  {
+    "index": 476,
+    "text": "表8-2-11 AgentSession 資料字典"
+  },
+  {
+    "index": 477,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；IDX；NOT NULL所屬掃描任務；ScanJob；CASCADEproviderString(64)NOT NULL模型供應商modelString(128)NOT NULL模型名稱statusString(32)IDX；NOT NULL；DEFAULT queued處理狀態；選項 queued、running、completed、failedmax_stepsInt16NOT NULL；≥ 0；DEFAULT 20步數上限total_tokensInt32NOT NULL；≥ 0；DEFAULT 0累計 tokenerror_messageTextNOT NULL；blank錯誤訊息started_atDateTimeNULL；blank開始時間completed_atDateTimeNULL；blank完成時間created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 480,
+    "text": "表8-2-12 AgentStep 資料字典"
+  },
+  {
+    "index": 481,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼session_idInt64FK；IDX；NOT NULL代理工作階段；AgentSession；CASCADEstep_numberInt16NOT NULL；≥ 0步驟序號observationTextNOT NULL；blank觀察內容thought_summaryTextNOT NULL；blank步驟摘要tool_nameString(128)NOT NULL；blank工具名稱tool_argumentsJSONNOT NULL；DEFAULT {}；blank遮罩後工具參數tool_resultJSONNOT NULL；DEFAULT {}；blank工具結果token_countInt32NOT NULL；≥ 0；DEFAULT 0步驟 token 數created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 482,
+    "text": "額外限制 unique_agent_step_per_session：session、step_number 唯一。"
+  },
+  {
+    "index": 485,
+    "text": "表8-2-13 FixOutput 資料字典"
+  },
+  {
+    "index": 486,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；UQ；NOT NULL所屬掃描任務；ScanJob；CASCADEstatusString(16)IDX；NOT NULL；DEFAULT idle處理狀態；選項 idle、generating、ready、failedartifactsJSONNOT NULL；DEFAULT {}；blank產物及欄位來源providerString(64)NOT NULL；blank模型供應商model_idString(128)NOT NULL；blank模型識別名稱total_tokensInt32NOT NULL；≥ 0；DEFAULT 0累計 tokenerrorString(255)NOT NULL；blank可公開的錯誤原因generated_atDateTimeNULL；blank產生時間created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 489,
+    "text": "表8-2-14 VerifiedDomain 資料字典"
+  },
+  {
+    "index": 490,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEdomainString(255)IDX；NOT NULL驗證網域statusString(16)IDX；NOT NULL；DEFAULT pending處理狀態；選項 pending、verified、rejected、expiredmethodString(16)NOT NULL；DEFAULT \"\"；blank登入或驗證方法；選項 dns_txt、meta_tag、html_file、search_consoletokenString(64)NOT NULL驗證用隨機字串verified_atDateTimeNULL；blank驗證成功時間expires_atDateTimeNULL；blank到期時間last_checked_atDateTimeNULL；blank最近驗證檢查時間last_errorString(255)NOT NULL；blank最近驗證原因admin_overrideBooleanNOT NULL；DEFAULT false人工核准旗標admin_actor_idInt64FK；IDX；NULL；blank執行管理操作的帳號；User；SET_NULLadmin_noteString(255)NOT NULL；blank管理員覆核備註created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 491,
+    "text": "額外限制 unique_verified_domain_per_user：user、domain 唯一。"
+  },
+  {
+    "index": 494,
+    "text": "表8-2-15 SiteRebuild 資料字典"
+  },
+  {
+    "index": 495,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼scan_job_idInt64FK；IDX；NOT NULL所屬掃描任務；ScanJob；CASCADEpage_idInt64FK；IDX；NOT NULL對應頁面；站台級可空；Page；CASCADEstatusString(16)IDX；NOT NULL；DEFAULT pending處理狀態；選項 pending、snapshotting、optimizing、asking、succeeded、failedsnapshot_pathString(512)NOT NULL；blank原始快照位置optimized_pathString(512)NOT NULL；blank優化檔位置opencode_session_idString(128)NOT NULL；blank外部工作階段識別traceJSONNOT NULL；DEFAULT []；blank目前輪次過程replyTextNOT NULL；blank對使用者回覆conversationJSONNOT NULL；DEFAULT []；blank歷次互動edit_reportJSONNOT NULL；DEFAULT []；blank修改清單結果model_idString(128)NOT NULL；blank模型識別名稱cost_usdDecimal(10,6)NOT NULL；DEFAULT 0模型實際費用coins_chargedInt32NOT NULL；≥ 0；DEFAULT 0已扣點數errorString(255)NOT NULL；blank可公開的錯誤原因created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 496,
+    "text": "複合索引：scan_job＋status。"
+  },
+  {
+    "index": 499,
+    "text": "表8-2-16 CoinWallet 資料字典"
+  },
+  {
+    "index": 500,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；UQ；NOT NULL所屬使用者；User；CASCADEbalanceInt64NOT NULL；≥ 0；DEFAULT 0目前可用點數total_purchased_ntdInt64NOT NULL；≥ 0；DEFAULT 0累計購點金額total_scans_usedInt64NOT NULL；≥ 0；DEFAULT 0累計完成掃描數last_bonus_yearInt16NULL；≥ 0；blank最近月贈點年份last_bonus_monthInt16NULL；≥ 0；blank最近月贈點月份created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 503,
+    "text": "表8-2-17 PricingPlan 資料字典"
+  },
+  {
+    "index": 504,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼codeString(32)UQ；NOT NULL方案代碼nameString(64)NOT NULL名稱price_ntdInt32NOT NULL；≥ 0新臺幣價格快照或定價coin_amountInt32NOT NULL；≥ 0點數數量badgeString(32)NOT NULL；blank顯示徽章descriptionString(255)NOT NULL；blank內容說明sort_orderInt16NOT NULL；≥ 0；DEFAULT 0顯示順序is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 507,
+    "text": "表8-2-18 PurchaseOrder 資料字典"
+  },
+  {
+    "index": 508,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；PROTECTplan_idInt64FK；IDX；NOT NULL對應方案；PricingPlan；PROTECTprice_ntdInt32NOT NULL；≥ 0新臺幣價格快照或定價coin_amountInt32NOT NULL；≥ 0點數數量buyer_nameString(64)NOT NULL購買者姓名buyer_emailString(255)NOT NULL購買者信箱invoice_typeString(16)NOT NULL；DEFAULT personal發票類型；選項 personal、companycompany_nameString(128)NOT NULL；blank公司名稱tax_idString(16)NOT NULL；blank統一編號carrier_typeString(24)NOT NULL；DEFAULT cloud；blank載具類型；選項 cloud、mobile_barcode、citizen_digitalcarrier_idString(32)NOT NULL；blank載具識別statusString(16)IDX；NOT NULL；DEFAULT pending處理狀態；選項 pending、paid、cancelledtransaction_idInt64FK；IDX；NULL；blank實際入帳交易；CoinTransaction；SET_NULLnoteString(255)NOT NULL；blank備註created_atDateTimeIDX；NOT NULL；blank建立時間paid_atDateTimeNULL；blank付款確認時間"
+  },
+  {
+    "index": 509,
+    "text": "複合索引：user＋-created_at；status＋-created_at。"
+  },
+  {
+    "index": 512,
+    "text": "表8-2-19 SubscriptionPlan 資料字典"
+  },
+  {
+    "index": 513,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼codeString(32)UQ；NOT NULL方案代碼nameString(64)NOT NULL名稱monthly_price_ntdInt32NOT NULL；≥ 0每期價格monthly_coinsInt32NOT NULL；≥ 0每期贈點featuresJSONNOT NULL；DEFAULT []；blank方案特色badgeString(32)NOT NULL；blank顯示徽章sort_orderInt16NOT NULL；≥ 0；DEFAULT 0顯示順序is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 516,
+    "text": "表8-2-20 UserSubscription 資料字典"
+  },
+  {
+    "index": 517,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；UQ；NOT NULL所屬使用者；User；CASCADEplan_idInt64FK；IDX；NOT NULL對應方案；SubscriptionPlan；PROTECTstatusString(16)IDX；NOT NULL；DEFAULT active處理狀態；選項 active、cancelled、expiredperiods_remainingInt16NOT NULL；≥ 0；DEFAULT 1剩餘預付期數started_atDateTimeNOT NULL；blank開始時間current_period_endDateTimeNOT NULL本期結束或下次贈點界線last_grant_periodString(7)NOT NULL；blank最近發點期別sourceString(16)NOT NULL開通來源；選項 admin_grant、ecpay_test、ecpaycancelled_atDateTimeNULL；blank取消時間created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 520,
+    "text": "表8-2-21 SubscriptionOrder 資料字典"
+  },
+  {
+    "index": 521,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；PROTECTplan_idInt64FK；IDX；NOT NULL對應方案；SubscriptionPlan；PROTECTprice_ntdInt32NOT NULL；≥ 0新臺幣價格快照或定價monthly_coinsInt32NOT NULL；≥ 0每期贈點exec_timesInt16NOT NULL；≥ 0定期定額執行次數上限buyer_nameString(64)NOT NULL購買者姓名buyer_emailString(255)NOT NULL購買者信箱invoice_typeString(16)NOT NULL；DEFAULT personal發票類型；選項 personal、companycompany_nameString(128)NOT NULL；blank公司名稱tax_idString(16)NOT NULL；blank統一編號carrier_typeString(24)NOT NULL；DEFAULT cloud；blank載具類型；選項 cloud、mobile_barcode、citizen_digitalcarrier_idString(32)NOT NULL；blank載具識別statusString(16)IDX；NOT NULL；DEFAULT pending處理狀態；選項 pending、active、cancelled、failed、endedsuccess_timesInt16NOT NULL；≥ 0；DEFAULT 0已接受成功期數payment_modeString(16)NOT NULL訂單使用的金流模式noteString(255)NOT NULL；blank備註created_atDateTimeIDX；NOT NULL；blank建立時間activated_atDateTimeNULL；blank開通時間cancelled_atDateTimeNULL；blank取消時間"
+  },
+  {
+    "index": 522,
+    "text": "複合索引：user＋status。"
+  },
+  {
+    "index": 525,
+    "text": "表8-2-22 SubscriptionCharge 資料字典"
+  },
+  {
+    "index": 526,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼order_idInt64FK；IDX；NOT NULL所屬定期定額訂單；SubscriptionOrder；PROTECTsequenceInt16NOT NULL；≥ 0成功扣款期數succeededBooleanNOT NULL扣款是否成功amountInt32NOT NULL；≥ 0扣款金額（新臺幣）rtn_codeString(10)NOT NULL綠界結果代碼rtn_msgString(200)NOT NULL；blank綠界結果訊息provider_refString(40)NOT NULL；blank供應商交易參考碼processed_atString(32)NOT NULL；blank供應商處理時間文字created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 527,
+    "text": "額外限制 uniq_successful_subscription_charge：order、sequence 唯一；條件 (AND: ('succeeded', True))。"
+  },
+  {
+    "index": 530,
+    "text": "表8-2-23 CoinTransaction 資料字典"
+  },
+  {
+    "index": 531,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼wallet_idInt64FK；IDX；NOT NULL所屬錢包；CoinWallet；CASCADEamountInt64NOT NULL異動點數；正入負出kindString(32)IDX；NOT NULL交易種類；選項 monthly_bonus、purchase、scan_hold、scan_refund、admin_adjust、rebuild_hold、rebuild_refund、fixgen_grant、fixgen_charge、fixgen_refund、subscription_grantbalance_afterInt64NOT NULL；≥ 0異動後餘額scan_job_idInt64FK；IDX；NULL；blank所屬掃描任務；ScanJob；SET_NULLplan_idInt64FK；IDX；NULL；blank對應方案；PricingPlan；SET_NULLsite_rebuild_idInt64FK；IDX；NULL；blank對應網頁產物；SiteRebuild；SET_NULLadmin_actor_idInt64FK；IDX；NULL；blank執行管理操作的帳號；User；SET_NULLnoteString(255)NOT NULL；blank備註created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 532,
+    "text": "複合索引：wallet＋created_at；kind＋created_at。"
+  },
+  {
+    "index": 535,
+    "text": "表8-2-24 PlatformReview 資料字典"
+  },
+  {
+    "index": 536,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；UQ；NOT NULL所屬使用者；User；CASCADEratingInt16NOT NULL；≥ 0一至五星評分titleString(120)NOT NULL；blank標題commentTextNOT NULL；blank評論文字display_nameString(32)NOT NULL；blank相容舊版名稱show_partial_emailBooleanNOT NULL；DEFAULT false顯示遮罩信箱選項statusString(16)IDX；NOT NULL；DEFAULT published處理狀態；選項 published、hiddenexperience_atDateTimeNULL；blank使用體驗時間is_featuredBooleanIDX；NOT NULL；DEFAULT false相容舊版精選旗標created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 537,
+    "text": "複合索引：rating＋-created_at；-is_featured＋-created_at；status＋-created_at。"
+  },
+  {
+    "index": 540,
+    "text": "表8-2-25 ReviewHelpful 資料字典"
+  },
+  {
+    "index": 541,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼review_idInt64FK；IDX；NOT NULL所屬主評論；PlatformReview；CASCADEuser_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEcreated_atDateTimeNOT NULL；blank建立時間"
+  },
+  {
+    "index": 542,
+    "text": "額外限制 uniq_review_helpful：review、user 唯一。"
+  },
+  {
+    "index": 545,
+    "text": "表8-2-26 ReviewResponse 資料字典"
+  },
+  {
+    "index": 546,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼review_idInt64FK；UQ；NOT NULL所屬主評論；PlatformReview；CASCADEauthor_idInt64FK；IDX；NULL作者帳號；User；SET_NULLbodyTextNOT NULL回覆或訊息主文created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 549,
+    "text": "表8-2-27 ReviewResponseHelpful 資料字典"
+  },
+  {
+    "index": 550,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼response_idInt64FK；IDX；NOT NULL對應官方回覆；ReviewResponse；CASCADEuser_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEcreated_atDateTimeNOT NULL；blank建立時間"
+  },
+  {
+    "index": 551,
+    "text": "額外限制 uniq_response_helpful：response、user 唯一。"
+  },
+  {
+    "index": 554,
+    "text": "表8-2-28 ReviewRevision 資料字典"
+  },
+  {
+    "index": 555,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼review_idInt64FK；IDX；NOT NULL所屬主評論；PlatformReview；CASCADEratingInt16NOT NULL；≥ 0一至五星評分titleString(120)NOT NULL；blank標題commentTextNOT NULL；blank評論文字display_nameString(32)NOT NULL；blank相容舊版名稱show_partial_emailBooleanNOT NULL；DEFAULT false顯示遮罩信箱選項created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 558,
+    "text": "表8-2-29 ReviewReport 資料字典"
+  },
+  {
+    "index": 559,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼review_idInt64FK；IDX；NOT NULL所屬主評論；PlatformReview；CASCADEresponse_idInt64FK；IDX；NULL；blank對應官方回覆；ReviewResponse；CASCADEreporter_idInt64FK；IDX；NOT NULL提出檢舉的使用者；User；CASCADEreasonString(16)NOT NULL理由；選項 spam、privacy、abuse、otherdetailString(500)NOT NULL；blank補充說明statusString(16)IDX；NOT NULL；DEFAULT pending處理狀態；選項 pending、resolved、dismissedresolved_by_idInt64FK；IDX；NULL；blank處理檢舉的管理者；User；SET_NULLcreated_atDateTimeIDX；NOT NULL；blank建立時間resolved_atDateTimeNULL；blank檢舉處理時間"
+  },
+  {
+    "index": 560,
+    "text": "額外限制 uniq_review_reporter：review、reporter 唯一；條件 (AND: ('response__isnull', True))。"
+  },
+  {
+    "index": 561,
+    "text": "額外限制 uniq_response_reporter：response、reporter 唯一；條件 (AND: ('response__isnull', False))。"
+  },
+  {
+    "index": 564,
+    "text": "表8-2-30 ReviewMessageHelpful 資料字典"
+  },
+  {
+    "index": 565,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼message_idInt64FK；IDX；NOT NULL對應討論訊息；ReviewMessage；CASCADEuser_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEcreated_atDateTimeNOT NULL；blank建立時間"
+  },
+  {
+    "index": 566,
+    "text": "額外限制 uniq_msg_helpful：message、user 唯一。"
+  },
+  {
+    "index": 569,
+    "text": "表8-2-31 ReviewMessage 資料字典"
+  },
+  {
+    "index": 570,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼review_idInt64FK；IDX；NOT NULL所屬主評論；PlatformReview；CASCADEauthor_idInt64FK；IDX；NULL作者帳號；User；SET_NULLis_adminBooleanIDX；NOT NULL；DEFAULT false訊息的管理員身分標記bodyTextNOT NULL；blank回覆或訊息主文imageFilePathNULL；blank訊息附圖檔案created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 571,
+    "text": "複合索引：review＋created_at。"
+  },
+  {
+    "index": 574,
+    "text": "表8-2-32 AdminAuditLog 資料字典"
+  },
+  {
+    "index": 575,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼admin_actor_idInt64FK；IDX；NULL執行管理操作的帳號；User；SET_NULLactionString(32)IDX；NOT NULL管理動作類型；選項 coin_adjust、subscription_adjust、review_reply、review_moderate、review_delete、user_toggle_staff、user_suspend、user_delete、domain_override、scan_control、othertarget_user_idInt64FK；IDX；NULL；blank受影響使用者；User；SET_NULLtarget_object_reprString(255)NOT NULL；blank操作對象描述payloadJSONNOT NULL；DEFAULT {}；blank操作結構化資料created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 576,
+    "text": "複合索引：action＋-created_at；admin_actor＋-created_at。"
+  },
+  {
+    "index": 579,
+    "text": "表8-2-33 Announcement 資料字典"
+  },
+  {
+    "index": 580,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼titleString(128)NOT NULL標題contentTextNOT NULL文字內容typeString(16)NOT NULL；DEFAULT temporary類型；選項 permanent、temporaryactive_daysInt16NOT NULL；≥ 0；DEFAULT 7公告有效天數is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間"
+  },
+  {
+    "index": 583,
+    "text": "表8-2-34 ProjectFeature 資料字典"
+  },
+  {
+    "index": 584,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼titleString(64)NOT NULL標題iconString(16)NOT NULL；blank圖示descriptionTextNOT NULL內容說明sort_orderInt16NOT NULL；≥ 0；DEFAULT 0顯示順序is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 587,
+    "text": "表8-2-35 TeamMember 資料字典"
+  },
+  {
+    "index": 588,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼nameString(64)NOT NULL名稱roleString(64)NOT NULL角色student_idString(20)NOT NULL；DEFAULT \"\"；blank團隊成員學號avatar_emojiString(8)NOT NULL；blank頭像替代圖示avatar_urlString(200)NOT NULL；blank頭像網址bioTextNOT NULL；blank介紹skillsJSONNOT NULL；DEFAULT []；blank技能標籤清單skill_levelsJSONNOT NULL；DEFAULT []；blank技能程度資料contributionsJSONNOT NULL；DEFAULT []；blank公開工作貢獻介紹emailString(254)NOT NULL；blank電子郵件github_urlString(200)NOT NULL；blankGitHub 連結sort_orderInt16NOT NULL；≥ 0；DEFAULT 0顯示順序is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 591,
+    "text": "表8-2-36 ProjectMilestone 資料字典"
+  },
+  {
+    "index": 592,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼titleString(128)NOT NULL標題dateDateNOT NULL日期descriptionTextNOT NULL；blank內容說明iconString(16)NOT NULL；blank圖示sort_orderInt16NOT NULL；≥ 0；DEFAULT 0顯示順序is_activeBooleanNOT NULL；DEFAULT true啟用狀態created_atDateTimeNOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 595,
+    "text": "表8-2-37 AppRelease 資料字典"
+  },
+  {
+    "index": 596,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼versionString(32)NOT NULL版本platformString(16)NOT NULL；DEFAULT pwa平台；選項 pwa、android、ios、desktoprelease_notesTextNOT NULL；blank版本更新說明download_urlString(200)NOT NULL；blank下載連結icon_urlString(200)NOT NULL；blank版本圖示網址is_activeBooleanNOT NULL；DEFAULT true啟用狀態is_latestBooleanNOT NULL；DEFAULT false是否最新released_atDateTimeNOT NULL版本發布時間"
+  },
+  {
+    "index": 599,
+    "text": "表8-2-38 PartnerInquiry 資料字典"
+  },
+  {
+    "index": 600,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼nameString(80)NOT NULL名稱companyString(120)NOT NULL洽談公司或組織emailString(254)NOT NULL電子郵件partner_typeString(16)NOT NULL洽談類型；選項 agency、operations、platform、othermessageTextNOT NULL合作需求與洽談內容phoneString(40)NOT NULL；blank洽談聯絡電話site_countString(40)NOT NULL；blank洽談網站數量statusString(16)IDX；NOT NULL；DEFAULT new處理狀態；選項 new、contacted、closed、spamadmin_noteTextNOT NULL；blank管理員覆核備註created_atDateTimeIDX；NOT NULL；blank建立時間updated_atDateTimeNOT NULL；blank更新時間"
+  },
+  {
+    "index": 603,
+    "text": "表8-2-39 McpApiKey 資料字典"
+  },
+  {
+    "index": 604,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEnameString(60)NOT NULL名稱prefixString(24)NOT NULL辨識用憑證前綴key_hashString(64)UQ；NOT NULL憑證 SHA-256；不存明文created_atDateTimeNOT NULL；blank建立時間last_used_atDateTimeNULL；blank最近使用時間last_clientString(120)NOT NULL；blank最近用戶端資訊revoked_atDateTimeIDX；NULL；blank撤銷時間"
+  },
+  {
+    "index": 607,
+    "text": "表8-2-40 McpCallLog 資料字典"
+  },
+  {
+    "index": 608,
+    "text": "欄位型別限制與預設用途與關聯idInt64PK；NOT NULL；AUTO；blank資料列識別碼user_idInt64FK；IDX；NOT NULL所屬使用者；User；CASCADEapi_key_idInt64FK；IDX；NULL；blank對應 MCP 憑證紀錄；McpApiKey；SET_NULLmethodString(40)NOT NULLJSON-RPC 協定方法toolString(60)NOT NULL；blankMCP 工具名稱outcomeString(20)NOT NULL；DEFAULT ok工具執行結果；選項 ok、tool_error、quota_exceeded、rate_limited、invalidcountedBooleanIDX；NOT NULL；DEFAULT false是否計入工具額度scan_job_idInt64FK；IDX；NULL；blank所屬掃描任務；ScanJob；SET_NULLdetailString(200)NOT NULL；blank補充說明duration_msInt32NOT NULL；≥ 0；DEFAULT 0處理時間毫秒created_atDateTimeIDX；NOT NULL；blank建立時間"
+  },
+  {
+    "index": 609,
+    "text": "複合索引：user＋counted＋created_at。"
+  },
+  {
+    "index": 610,
+    "text": "第9章 程式"
+  },
+  {
+    "index": 611,
+    "text": "9-1 元件清單及其規格描述"
+  },
+  {
+    "index": 612,
+    "text": "表9-1-1 後端應用模組"
+  },
+  {
+    "index": 613,
+    "text": "模組核心元件與責任accountsGoogle 驗證註冊、Email／用戶名登入、JWT、頭像、密碼重設、刪除帳號及登入事件。scans專案、掃描、擷取、五維分析、AEO、SEO、網域驗證、結果、報告及修正產出。agent模型供應商鏈、工具呼叫、資安與 UX 行為測試，執行預算及取消檢查。billing錢包、交易、預扣與退款、購點、訂閱及綠界回呼。rebuild頁面快照、選用 OpenCode 優化、下載、修改清單及用量結算。reviews主評論、官方回覆、討論、圖片、有幫助及檢舉治理。admin_api使用者、任務、訂單、交易、健康、內容、公告、洽談及稽核。content公開功能、團隊、裡程碑、版本資訊與合作洽談入口。insights免費快速檢查、測速及釣魚風險工具。mcp_accessStreamable HTTP、訂閱權益、憑證與九項掃描工具。"
+  },
+  {
+    "index": 614,
+    "text": "表9-1-2 前端主要頁面與責任"
+  },
+  {
+    "index": 615,
+    "text": "元件或路徑責任App.jsx、store.js、api.ts根路由、角色檢查、全域狀態、統一認證與 API 錯誤。features/projects專案清單、新增網站、側欄、總覽、問題、頁面、AEO、SEO、歷史及設定。features/scans進度、互動報告、拓樸、修正產出與網頁優化工作區。features/auth、features/account登入、註冊、帳號設定、購點、訂閱及 MCP。features/admin管理後台及角色受限頁，部分元件以 TypeScript 與型別化 API 實作。features/public、features/reviews公開資訊、免費工具、PWA、查驗、條款、洽談及評論。components/navigation專案切換、搜尋、通知、主題及帳號選單。"
+  },
+  {
+    "index": 616,
+    "text": "9-2 其他附屬之各種元件"
+  },
+  {
+    "index": 617,
+    "text": "主要 API"
+  },
+  {
+    "index": 618,
+    "text": "API 路徑以下列用途分組。一般會員查詢使用 JWT 及物件擁有者限制；MCP 端點只接受專用 Bearer 憑證。公開內容、免費工具、Google callback、綠界回呼及報告查驗各有不同認證方式，不能套用同一份權限假設。"
+  },
+  {
+    "index": 619,
+    "text": "表9-2-1 主要 API 與用途"
+  },
+  {
+    "index": 620,
+    "text": "路徑用途/api/auth/註冊、登入、Token Refresh、登出、帳號及密碼流程。/api/projects/專案 CRUD、封存／恢復、overview、issues、pages、seo 及 gsc。/api/scans/建立、查詢、status、cancel、topology、report、截圖及 fix-output。/api/pages/、/api/findings/已擷取頁面與發現查詢。/api/domains/、/api/domains/gsc/網域資料、驗證與帳號層級 Search Console 連線。/api/gsc/callback/Search Console OAuth 回呼，核對 state 與 nonce。/api/billing/錢包、方案、訂單、訂閱、付款及期別回呼。/api/insights/quick-scan、speed-test、phishing-url、phishing-email。/api/rebuilds/網頁快照與優化服務，實際子路徑以 rebuild.urls 為準。/api/reviews/、/api/content/評論及公開內容、合作洽談。/api/admin/管理端業務操作與角色受限查詢。/api/mcp/、/api/mcp-access/MCP 協定與會員憑證管理。"
+  },
+  {
+    "index": 621,
+    "text": "診斷方法與適用範圍"
+  },
+  {
+    "index": 622,
+    "text": "SEO 的逐頁分析讀取已保存 HTML／DOM，呈現 Title、Description、H1、標題結構、正文、Canonical、Robots、圖片 alt、載入時間與 Open Graph。連結檢查另受數量及時間預算限制；畫面的可索引判斷與 Search Console 的 Google 索引結果分開呈現。"
+  },
+  {
+    "index": 623,
+    "text": "AEO 以 rules-v1 擷取正文、建立問題、檢索站內段落並核對答案。正文不足 100 字或少於三題時不評分；可回答、資訊不足、衝突與無答案採不同權重，其他頁面規則再影響分類分數。這個指標評估已爬取內容的可回答性，沒有實際向所有 AI 搜尋服務詢問，也不保證內容會被引用。"
+  },
+  {
+    "index": 624,
+    "text": "GEO 檢查 JSON-LD、語意結構、可引用內容、llms.txt 與 AI 爬蟲相關訊號。UX 包含行動版版面量測及可選 Agent 行為測試。Agent UX 於全網站且選 UX 時可執行，不必一律使用主動資安模式；能否送出表單仍由網域控制或主動測試條件決定。"
+  },
+  {
+    "index": 625,
+    "text": "被動資安分析公開回應與已取得內容；主動模式依單頁／全網站執行 Nuclei、Katana、敏感路徑及 Agent 等工具。單頁不以 Katana、字典或 Agent 擴成整站。Kali 有 Docker 與 Kubernetes 整合程式，但本次公網 Repo 設定仍為停用。"
+  },
+  {
+    "index": 626,
+    "text": "表9-2-2 工具執行的主要條件"
+  },
+  {
+    "index": 627,
+    "text": "範圍被動模式主動模式及額外條件單頁選取維度的頁面規則及被動檢查。Nuclei 限輸入頁；不執行全站 Katana、敏感字典或 Agent 流程。全網站同 origin 擷取；選 UX 且 Agent 開啟可執行 UX。未驗證網域不送出表單。額外主動授權與網域資格；按開關執行 Nuclei、Katana、敏感路徑及資安 Agent。Kali 驗證不執行。還需 Kali 開關、合法 backend 及受控執行環境；目前公網停用。"
+  },
+  {
+    "index": 628,
+    "text": "版本指紋、CVE 線索及外部工具結果須連同證據覆核。系統不讀取任意網站的後端原始碼，未發現弱點也不能推定所有隱藏 API 或業務權限安全。WAF、robots、登入或 CAPTCHA 造成的覆蓋不足需在結果中辨識。"
+  },
+  {
+    "index": 629,
+    "text": "評分與結果統計"
+  },
+  {
+    "index": 630,
+    "text": "同分類同 rule_id 只計一次懲罰，info 不扣分、不列入 Top Actions。分數使用指數衰減；AEO 使用可回答性基準分，逐題規則不再重複扣分。整體分數的分母是實際評估分類數，未評估維度不以零分或滿分代入。"
+  },
+  {
+    "index": 631,
+    "text": "原始 Finding 筆數、依規則合併的問題數及受影響頁數各有定義。例如同一規則出現在五頁，可有五筆 Finding、一個合併問題及五個受影響網址。因此歷史表與專案總覽的數字可能不同，閱讀時先核對欄位語意。"
+  },
+  {
+    "index": 632,
+    "text": "修正產出與網頁優化"
+  },
+  {
+    "index": 633,
+    "text": "修正產出包含 JSON-LD、OG／meta、llms.txt 與有依據的 FAQ Schema；欄位標記為 verified、extracted、rule、partial 或 placeholder。verified 表示通過程式的來源政策，不是外部機關認證。缺少依據時由維護者填寫，不補造營業時間、電話、地址、價格或評價。"
+  },
+  {
+    "index": 634,
+    "text": "網頁快照由保存的 DOM 確定性組裝，選用優化服務才呼叫外部模型。下載強制 attachment，預覽受 sandbox 限制，產物與正式網站分開。測試帳密為 API write-only，不進結果與報告；現有欄位採 Django Signer 簽章表示，不能僅因欄位名含 encrypted 就宣稱具有加密保密性。"
+  },
+  {
+    "index": 635,
+    "text": "第10章 測試模型"
+  },
+  {
+    "index": 636,
+    "text": "10-1 測試計畫"
+  },
+  {
+    "index": 637,
+    "text": "測試分為隔離自動化、公網操作及部署整合。自動化以暫存 SQLite 資料庫執行後端 apps 測試，關閉正式派工、金流及外部模型；前端執行 Vitest、TypeScript 與正式建置。公網以既有資料查閱新版流程，採日間畫面，不修改使用者、訂單或權限。"
+  },
+  {
+    "index": 638,
+    "text": "表10-1-1 測試範圍與證據"
+  },
+  {
+    "index": 639,
+    "text": "類別方法可證明範圍後端Django Test，隔離資料庫及測試媒體目錄。需求、API、權限、模型、帳務與報告資料的案例行為。前端Vitest、tsc --noEmit、Node 22 helper build。元件案例、型別與資源建置；不取代畫面判讀。公網登入、查閱專案各分頁、網域、MCP、購點與後台健康。本次帳號可見流程及畫面，記錄資料載入後狀態。畫面桌面 1440×1000 與手機 390×844，實際截圖。所檢視狀態的可見介面與操作位置。完整整合Docker／PostgreSQL／Redis／Worker／Chromium／PDF 轉檔。本次未執行。"
+  },
+  {
+    "index": 640,
+    "text": "測試日期為2026年10月5日，對照86e1250。後端測試使用 MD5 PasswordHasher 加速，正式服務沿用專案密碼設定。"
+  },
+  {
+    "index": 641,
+    "text": "10-2 測試個案與測試結果資料"
+  },
+  {
+    "index": 642,
+    "text": "表10-2-1 代表性自動化測試群組"
+  },
+  {
+    "index": 643,
+    "text": "群組預期行為本次結果網站專案同網站唯一、封存與資料隔離25 通過／0 未通過／0 略過維度與執行計畫單頁工具範圍與 UX 分流15 通過／0 未通過／0 略過AEO 判定逐題、原文、衝突與不足資料18 通過／0 未通過／0 略過SEO 分析內容、關鍵字、Search Console 與權限44 通過／0 未通過／0 略過網域控制驗證方法、期限與主動條件39 通過／0 未通過／0 略過定期定額首期、期別、重送與取消13 通過／0 未通過／0 略過註冊與刪除Google 註冊、用戶名與匿名帳務15 通過／0 未通過／0 略過MCP憑證、訂閱、額度及共用掃描服務37 通過／0 未通過／0 略過報告 PDF轉檔流程、失敗與對外格式7 通過／0 未通過／0 略過評分與分組去重、info 與未評估17 通過／0 未通過／0 略過"
+  },
+  {
+    "index": 644,
+    "text": "表10-2-2 本次測試與建置結果"
+  },
+  {
+    "index": 645,
+    "text": "項目結果後端執行1431後端通過1427後端失敗1後端錯誤1後端略過2後端耗時179.23 秒前端 Vitest209／209 通過TypeScripttsc --noEmit，exit code 0前端建置build-node22.ps1，exit code 0"
+  },
+  {
+    "index": 646,
+    "text": "後端使用 Windows、Python 3.12、暫存 SQLite 與既有中文字型。前端 Vitest 及 TypeScript 使用 Node 24.19，建置使用 Node 22.17。"
+  },
+  {
+    "index": 647,
+    "text": "表10-2-3 未通過與略過案例"
+  },
+  {
+    "index": 648,
+    "text": "案例本次結果與限制登入事件排序UserLoginEventsTests 預期第一筆為 Google，實際為 password，Assertion 失敗；尚待定位排序及測試時間條件。缺報告檔重建ReportCacheTests 刪除 PDF 時出現 WinError 32 檔案占用，案例未完成。Redis 競爭條件缺少隔離 Redis test DB，略過。Linux 程序取消案例依賴 /proc 與 POSIX process group，Windows 略過。"
+  },
+  {
+    "index": 649,
+    "text": "報告測試透過 ARGUS_REPORT_FONT_REGULAR／BOLD 指定 Windows 字型，再執行全套案例。"
+  },
+  {
+    "index": 650,
+    "text": "表10-2-4 公網操作查核"
+  },
+  {
+    "index": 651,
+    "text": "功能實際觀察登入與專案以已授權帳號登入；專案清單、總覽、掃描、頁面、AEO、SEO、問題及歷史可載入。網域驗證頁面正常載入，顯示 Search Console 連線與有效期。計費全網站五維估價為 520 coin；公網購點頁為 Stage 測試模式。管理健康當下資料庫、Redis、Worker 探測正常；近一小時無新完成／失敗任務，掃描執行顯示無法判定。MCP接入中心可載入九項工具；頁面組出的端點為 HTTP，需修正外部基底網址後使用 HTTPS，見11-2。PDF 與修正產出PDF 按鈕可操作，下載內容未驗證；修正產出頁顯示「尚未產生」。"
+  },
+  {
+    "index": 652,
+    "text": "10-3 測試結論與後續驗證"
+  },
+  {
+    "index": 653,
+    "text": "前端測試與建置通過。後端有一項 Assertion 失敗、一項錯誤及兩項略過，原因見表10-2-3。正式刷卡、定期定額跨月扣款、Google 新帳號註冊、OAuth 重新授權、Worker 新掃描及備份還原屬整合測試範圍，本次未驗證。"
+  },
+  {
+    "index": 654,
+    "text": "修正成效以同網站、相近範圍及相同維度複掃，保留修改前證據、處理項目與修改後結果。比較「本次未出現」的問題時，須核對是否有頁面被阻擋或掃描範圍減少。"
+  },
+  {
+    "index": 655,
+    "text": "第11章 操作手冊"
+  },
+  {
+    "index": 656,
+    "text": "11-1 本地與公網的差異"
+  },
+  {
+    "index": 657,
+    "text": "本地環境用於開發與測試，公網提供多人連線與持久化服務。兩者使用相同 Repo，但資料、機密、網址、郵件、背景排程及第三方回呼各自設定；在本機調整檔案不會自動改動公網。"
+  },
+  {
+    "index": 658,
+    "text": "表11-1-1 執行模式比較"
+  },
+  {
+    "index": 659,
+    "text": "項目本機直接執行本機 Docker 整合公網部署入口127.0.0.1:8000localhost:8081指定公開 HTTPS 網域。WebDjango runserver，同時服務已建置 dist。frontend Nginx → web Gunicorn。Cloudflare Tunnel → Gateway → frontend／web 服務。資料庫預設 backend/db.sqlite3。PostgreSQL 16 資料卷。PostgreSQL 與持久化儲存宣告。背景工作需 Redis／Worker，或 DEBUG 限定 eager smoke test。Redis 與 Celery Worker，完整派工。獨立 Worker 工作負載與 Redis。eager 限制單一背景 executor，每次一筆，重啟可中斷。eager=false。eager=false，非 DEBUG 開啟會被檢查拒絕。媒體本機 media 目錄。web／worker 共用 media_data。共用 RWX media PVC；可另選 S3 儲存。密碼重設信預設寫入 dev_emails 檔案，不真正寄信。依 .env 設郵件 backend。SMTP 設定及真實可達的重設網址。金流回呼localhost 無法供綠界外部通知。測試回呼仍需可達的公開 HTTPS。HTTPS 443 ReturnURL 與 PeriodReturnURL。Google 與 Turnstile另註冊本機允許來源；新註冊需 Google 設定。依入口設定來源及回呼。註冊公網來源、回呼 URI 與 hostname。報告額外準備字型、LibreOffice 與可執行路徑。Dockerfile 已安裝字型及轉檔工具。使用同一後端映像；仍需檢查實際映像及儲存。更新方式pull、相依同步、migration、build、重啟。重建映像與容器，保留資料卷。品質關卡、映像建置、tag 回寫、Argo 同步與 rollout。"
+  },
+  {
+    "index": 660,
+    "text": "本機能掃公開網址，不表示可以任意掃 localhost 或私網。隔離靶機旁路必須同時有 DEBUG 與 ARGUS_ALLOW_PRIVATE_TARGETS；正式模式不生效。公網預設只能處理公開 HTTP／HTTPS 及標準連接埠，主動模式仍有授權與網域資格限制。"
+  },
+  {
+    "index": 661,
+    "text": "11-2 安裝與部署"
+  },
+  {
+    "index": 662,
+    "text": "本機安裝"
+  },
+  {
+    "index": 663,
+    "text": "先準備 Git、uv、Python 3.12 以上及相容的 Node 22，Windows 建置依專案 helper 設定可找到的 portable Node。於 Repo 根目錄使用下列步驟，既有 .env 不覆寫。"
+  },
+  {
+    "index": 664,
+    "text": "git pull --ff-only"
+  },
+  {
+    "index": 665,
+    "text": "uv sync --locked"
+  },
+  {
+    "index": 666,
+    "text": "if (-not (Test-Path .env)) {"
+  },
+  {
+    "index": 667,
+    "text": "    Copy-Item .env.example .env"
+  },
+  {
+    "index": 668,
+    "text": "}"
+  },
+  {
+    "index": 669,
+    "text": "在 .env 設定獨立的 DJANGO_SECRET_KEY、JWT_SECRET_KEY 與 PASSWORD_RESET_TOKEN_PEPPER；本機使用 DJANGO_DEBUG=true 及 localhost／127.0.0.1 允許主機。機密不寫進程式或 Git。新增註冊需 GOOGLE_OAUTH_CLIENT_ID；沒有 Google 設定時，不把直接 Email 註冊當成可用流程。"
+  },
+  {
+    "index": 670,
+    "text": "Set-Location frontend"
+  },
+  {
+    "index": 671,
+    "text": "npm ci"
+  },
+  {
+    "index": 672,
+    "text": ".\\build-node22.ps1"
+  },
+  {
+    "index": 673,
+    "text": "Set-Location .."
+  },
+  {
+    "index": 674,
+    "text": "uv run python backend/manage.py check"
+  },
+  {
+    "index": 675,
+    "text": "uv run python backend/manage.py migrate"
+  },
+  {
+    "index": 676,
+    "text": "uv run python backend/manage.py createsuperuser"
+  },
+  {
+    "index": 677,
+    "text": "Chromium 安裝在專案內。需要掃描時先安裝，再選定 Worker 或 eager 模式；只啟動 Web 不會自動證明排程可執行。"
+  },
+  {
+    "index": 678,
+    "text": "$env:PLAYWRIGHT_BROWSERS_PATH='.ms-playwright'"
+  },
+  {
+    "index": 679,
+    "text": "uv run playwright install chromium"
+  },
+  {
+    "index": 680,
+    "text": "uv run python backend/manage.py runserver 127.0.0.1:8000"
+  },
+  {
+    "index": 681,
+    "text": "若採 DEBUG eager smoke test，需 ARGUS_AUTO_QUEUE_SCANS=true 及 CELERY_TASK_ALWAYS_EAGER=true。API 先回 queued，再以獨立 Python 程序執行；同時只能接受一筆工作，忙碌時新任務失敗並退款。此模式不包含持久 broker，不作為正式部署。"
+  },
+  {
+    "index": 682,
+    "text": "本機產生 PDF 需在 PATH 可找到 LibreOffice 的 soffice，並提供報告圖表字型。Windows 可指定 ARGUS_REPORT_FONT_REGULAR 為 C:\\Windows\\Fonts\\msjh.ttc、ARGUS_REPORT_FONT_BOLD 為 C:\\Windows\\Fonts\\msjhbd.ttc，使用前確認檔案存在。Word 本身不能取代平台 report_pdf.py 要求的 LibreOffice。本機郵件預設寫檔，使用正式寄信流程時改設定 SMTP。"
+  },
+  {
+    "index": 683,
+    "text": "Docker 整合"
+  },
+  {
+    "index": 684,
+    "text": "Compose 需在 .env 設 POSTGRES_USER、POSTGRES_PASSWORD、POSTGRES_DB 及後端必要鍵。資料庫健康後執行一次性 migrate，成功才啟動 Web／Worker；frontend 提供主機 8081 入口。開發才疊加 dev override，不將其 DEBUG 設定帶到公網。"
+  },
+  {
+    "index": 685,
+    "text": "docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet"
+  },
+  {
+    "index": 686,
+    "text": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build"
+  },
+  {
+    "index": 687,
+    "text": "docker compose -f docker-compose.yml -f docker-compose.dev.yml ps"
+  },
+  {
+    "index": 688,
+    "text": "資料庫與媒體在 named volume，更新時保留資料卷。不要以刪除資料卷處理一般版本更新。只修改前端也需重新建置 frontend，瀏覽器應載入新資源後再驗證畫面。"
+  },
+  {
+    "index": 689,
+    "text": "公網與 GitOps"
+  },
+  {
+    "index": 690,
+    "text": "Repo 的 k8s/kustomization.yaml 管理設定、資料、Web、Worker、frontend、Gateway、網路政策與維護工作。機密檔不納入版本控制，02-secret.example.yaml 是欄位範本，不能直接視為可用正式 Secret。migrate 為 Argo PreSync Job，需確認 Completed 與 exit code 0。"
+  },
+  {
+    "index": 691,
+    "text": "更新 backend 或 frontend 程式時，GitHub Actions 分別建置映像，成功後回寫 tag，Argo CD 再比對與同步。僅更新 k8s 宣告不會自動建新映像。公開網址測試還需確認 Tunnel、Gateway、反向代理、Cookie、允許來源與背景 Worker；不能以 push 或 Pod 程序結束宣稱部署完成。"
+  },
+  {
+    "index": 692,
+    "text": "表11-2-1 外部服務設定重點"
+  },
+  {
+    "index": 693,
+    "text": "服務本地與公網需各自核對的設定Google 登入與註冊OAuth Client ID、允許 JavaScript 來源及驗證流程。Search ConsoleClient ID＋Client Secret、唯讀權限與 /api/gsc/callback/ 回呼；正式需 HTTPS。TurnstileSite key、Secret、hostname 均正確；正式清單不可含 localhost。只設一個 key 不會啟用。綠界payment mode、商店簽章參數與外部可達 HTTPS 443 回呼；測試與正式商店不可混用。MCPARGUS_MCP_PUBLIC_BASE_URL 應為公開 HTTPS 根網址，特別是代理鏈未正確轉送協定時。Agent 與修正產出供應商憑證、模型、用量、逾時及功能開關。不得因介面存在就假設已啟用。"
+  },
+  {
+    "index": 694,
+    "text": "2026年10月5日公網 MCP 頁組出的端點為 http://argus.clouda.dpdns.org/api/mcp/。維運應將 ARGUS_MCP_PUBLIC_BASE_URL 設為指定網站的 HTTPS 根網址並重新載入，或修正代理協定傳遞，再核對設定及短效下載連結。Bearer 憑證只能送至 HTTPS 端點。"
+  },
+  {
+    "index": 695,
+    "text": "11-3 系統管理與異常處理"
+  },
+  {
+    "index": 696,
+    "text": "任務與服務"
+  },
+  {
+    "index": 697,
+    "text": "後台系統健康分別探測資料庫、Redis、Worker、排隊任務與近期掃描。Web health/live 只證明程序能回應，health/ready 主要確認 Web 與資料庫；仍需查 Worker 及實際任務。近一小時沒有完成或失敗任務時，執行成功率可顯示無法判定。"
+  },
+  {
+    "index": 698,
+    "text": ""
+  },
+  {
+    "index": 699,
+    "text": "圖11-3-1 公網系統健康的掃描鏈路"
+  },
+  {
+    "index": 700,
+    "text": "表11-3-1 任務異常處理順序"
+  },
+  {
+    "index": 701,
+    "text": "現象檢查與處理無法啟動 Django先讓 manage.py check 通過，確認必要設定、相依及 migration。長時間 queued確認所在環境、AUTO_QUEUE、broker 與 Worker；沒有 started_at 通常尚未取件。crawling／scanning 卡住查階段、警示、Chromium、目標網站及工具逾時，不直接改狀態。報告產生失敗查 CJK 字型、LibreOffice、暫存設定檔、可寫儲存及轉檔逾時。完成但費用異常查 settlement_error、scan_hold／scan_refund 與錢包；使用帳務服務補結算。使用者反映無法登入查登入識別、停用狀態、Turnstile hostname 及 Cookie／CSRF，不公開完整事件內容。"
+  },
+  {
+    "index": 702,
+    "text": "使用者與帳務"
+  },
+  {
+    "index": 703,
+    "text": "管理員可以停用一般使用者並保留內容，恢復後可重新使用；停用時撤銷 Refresh Token，API 同時檢查啟用旗標。刪除則移除個資及使用者內容，帳務匿名保存。一般管理員不能處理其他管理員；超級管理員也不能在後台停用或刪除超級管理員。"
+  },
+  {
+    "index": 704,
+    "text": "點數調整使用 admin_adjust 並填原因，不能改寫既有 CoinTransaction。新訂閱取消須先停止綠界後續扣款；若外部取消失敗，維持原狀並顯示原因。帳號刪除也會先處理定期定額，避免帳號移除後仍扣款。"
+  },
+  {
+    "index": 705,
+    "text": "保存與備份"
+  },
+  {
+    "index": 706,
+    "text": "K8s 宣告以 CronJob 回收逾時任務，並清理報告 180 天、截圖 90 天、網頁產物 30 天以前的檔案。這是目前宣告的保留政策，需依實際運行確認清理結果；資料庫紀錄與媒體檔案的保存不是同一件事。"
+  },
+  {
+    "index": 707,
+    "text": "備份需包含 PostgreSQL 與媒體，另由維運妥善管理 Secret。還原先在隔離環境核對 migration、帳務、使用者權限及檔案可讀性，再驗證背景任務。Repo pull、映像重建或只複製資料庫都不能代替完整備份還原驗收。"
+  },
+  {
+    "index": 708,
+    "text": "第12章 使用手冊"
+  },
+  {
+    "index": 709,
+    "text": "12-1 畫面導覽與操作轉移"
+  },
+  {
+    "index": 710,
+    "text": "以下以2026年10月5日公網的日間畫面說明操作，範例使用校內公開網站的既有掃描。頁數、分數與問題以當次掃描結果為準。"
+  },
+  {
+    "index": 713,
+    "text": "訪客由首頁進入快速檢查、購買、下載、報告查驗、合作與評論。登入後以網站專案操作：頂部提供專案切換、搜尋、網域驗證、MCP、主題、通知及帳號選單；側欄提供目前網站的各項分析。搜尋可使用 Ctrl＋K，切換網站後確認頁首的名稱與網址。"
+  },
+  {
+    "index": 714,
+    "text": ""
+  },
+  {
+    "index": 715,
+    "text": "圖12-1-2 新版主要畫面轉移圖"
+  },
+  {
+    "index": 716,
+    "text": "表12-1-1 依任務選擇入口"
+  },
+  {
+    "index": 717,
+    "text": "要完成的工作入口與章節登入與個人設定登入／註冊、帳號選單；12-2。不扣點的初步檢查快速檢查；12-3。新增或切換網站所有專案、專案切換器；12-4。建立任務及追蹤進度專案的掃描分頁；12-5。閱讀問題與逐頁證據問題分析、頁面及報告；12-6。查看 SEO 與 AEO專案的 SEO 分析、AEO 問答；12-7。下載與整理交付物歷史報告、修正產出、網站結構圖；12-8。驗證網域及 MCP頂部工具列；12-9、12-11。查點數及訂閱帳號選單的購點與訂閱；12-10。管理平台帳號選單的管理後台；12-13。"
+  },
+  {
+    "index": 718,
+    "text": "12-2 登入註冊與帳號設定"
+  },
+  {
+    "index": 719,
+    "text": "既有會員在「Email 或用戶名」輸入註冊信箱或用戶名，填入密碼後按「登入」；已註冊 Google 帳號也可使用 Google 按鈕。啟用 Turnstile 時等待驗證完成，驗證失敗依畫面重新操作。"
+  },
+  {
+    "index": 720,
+    "text": ""
+  },
+  {
+    "index": 721,
+    "text": "圖12-2-1 日間登入表單"
+  },
+  {
+    "index": 722,
+    "text": "新會員切換到「註冊」，先透過 Google 驗證信箱，再設定用戶名與密碼。用戶名為 3 至 30 個小寫英文字母、數字或 _ . -，以字母或數字開頭，不可重複或使用保留名稱。密碼至少十字元且包含字母與數字。既有 Google 帳號缺少設定資料時，登入後依「帳號設定」流程補齊。"
+  },
+  {
+    "index": 723,
+    "text": "忘記密碼由登入頁的「忘記密碼？」申請，使用收到的有效連結重設；本機預設郵件寫入檔案，公網寄信則依 SMTP 設定。一般帳號頁可維護用戶名、頭像及個人資料，資料儲存後重新核對畫面。"
+  },
+  {
+    "index": 724,
+    "text": "刪除帳號位於帳號設定的危險操作區，需依畫面確認。刪除會移除自己的專案、掃描及內容，帳務匿名保留；已啟用定期定額時先停止後續扣款。停用、封存專案與刪除帳號影響不同，操作前確認畫面所指對象。"
+  },
+  {
+    "index": 725,
+    "text": "12-3 免費快速檢查"
+  },
+  {
+    "index": 726,
+    "text": "公開「快速檢查」提供單頁檢查、網站測速及釣魚風險工具。輸入公開網址或允許檢查的文字，依表單確認條件後送出。免費工具不扣會員點數，需要保存多頁結果及交付報告時改用會員掃描。"
+  },
+  {
+    "index": 727,
+    "text": ""
+  },
+  {
+    "index": 728,
+    "text": "圖12-3-1 單頁快速檢查的完整表單"
+  },
+  {
+    "index": 729,
+    "text": "測速依工具取得的回應與頁面特徵提供線索，不等同所有裝置的 Core Web Vitals。釣魚判斷是特徵風險結果，不能作為網址安全保證。被拒絕時先確認公開位址與輸入格式，依畫面錯誤處理，不重複高頻送出。"
+  },
+  {
+    "index": 730,
+    "text": "12-4 新增與管理網站專案"
+  },
+  {
+    "index": 731,
+    "text": "在「所有專案」查看各網站最新完成分數、趨勢、各維度、問題及最近掃描。可依需要注意、最近掃描或名稱排序，搜尋網站名稱或網址。按網站名稱進入該專案，從側欄選擇分析項目。"
+  },
+  {
+    "index": 734,
+    "text": "新增網站時，按「新增網站專案」，輸入完整網址、名稱及選填說明，選擇預設掃描範圍、維度與模式。再選「前往建立第一次掃描」或「先到專案總覽」，按對應建立按鈕。建立專案本身不扣點，進入掃描表單後仍需確認才送出任務。"
+  },
+  {
+    "index": 735,
+    "text": ""
+  },
+  {
+    "index": 736,
+    "text": "圖12-4-2 新增網站的網址名稱與說明"
+  },
+  {
+    "index": 737,
+    "text": "同一個 origin 已有專案時，使用既有專案；若已封存則恢復原歷史。專案設定可改名稱、起始網址及預設掃描設定，起始網址須屬同網站。封存不刪除掃描與帳務，在所有專案的「顯示已封存的專案」可恢復。"
+  },
+  {
+    "index": 738,
+    "text": "總覽提供最近分數、問題變化、掃描狀態、趨勢及優先改善。按「查看最新報告」進入互動報告，或按「開始新的掃描」。沒有完成資料時依空狀態建立第一次掃描；新會員的晨光咖啡專案為唯讀示範，可看完後封存。"
+  },
+  {
+    "index": 739,
+    "text": ""
+  },
+  {
+    "index": 740,
+    "text": "圖12-4-3 網站專案總覽"
+  },
+  {
+    "index": 741,
+    "text": "12-5 建立掃描與查看進度"
+  },
+  {
+    "index": 742,
+    "text": "在目前專案的「掃描」分頁選擇「單一頁面」或「整個網站」，再選至少一個維度。單頁只檢查起始網址；全網站由入口探索同網站多頁。表單只接受目前專案的網站，掃其他網站時先切換或新增專案。"
+  },
+  {
+    "index": 743,
+    "text": ""
+  },
+  {
+    "index": 744,
+    "text": "圖12-5-1 範圍與五維掃描設定"
+  },
+  {
+    "index": 745,
+    "text": "確認入口網址後按「計算費用上限」，閱讀預扣及退款說明。五維全選預設每頁 10 coin，全網站含 Agent UX 時另加 20 coin，50 頁上限為 520 coin；取消 UX、減少維度或使用單頁會改變估價。餘額不足時補點或調整合法範圍後再送出。"
+  },
+  {
+    "index": 746,
+    "text": "勾選「我擁有此網站或已獲得書面授權測試」。網站看似第三方或敏感產業時須再次確認；主動模式另勾選「啟用主動式資安測試模式」，並確認資安維度及網域資格。管理員的測試旁路不免除授權聲明。"
+  },
+  {
+    "index": 747,
+    "text": ""
+  },
+  {
+    "index": 748,
+    "text": "圖12-5-2 授權確認與建立掃描"
+  },
+  {
+    "index": 749,
+    "text": "按「建立掃描」後進入該次任務，依序查看等待、爬取、逐維度分析、站台檢查及選用 Agent。進度列會依當前階段更新；頁數到上限不代表所有分析已完成。關閉瀏覽器後，公網背景工作仍由 Worker 執行，重新登入後從該專案的掃描或歷史查看原任務。"
+  },
+  {
+    "index": 750,
+    "text": "要停止非終態任務時使用取消按鈕，等待畫面更新狀態及退款。若長時間 queued，由管理者檢查 broker／Worker；不要重複建立相同任務來代替查詢。"
+  },
+  {
+    "index": 751,
+    "text": "12-6 閱讀問題與頁面證據"
+  },
+  {
+    "index": 752,
+    "text": "「問題分析」以規則合併同次掃描結果，列出受影響頁數、修正重點、連續出現次數及與前次的變化。可依维度、嚴重度、變化或文字篩選，使用列表或嚴重度分組，按「查看詳情」開啟證據。需要交付清單時按「匯出 CSV」。"
+  },
+  {
+    "index": 753,
+    "text": ""
+  },
+  {
+    "index": 754,
+    "text": "圖12-6-1 問題分類與持續追蹤"
+  },
+  {
+    "index": 755,
+    "text": "「頁面」列出實際擷取的網址、HTTP 狀態、載入時間與各維度問題，可篩選錯誤／被阻擋、載入慢及有問題頁面。站台層級結果不屬特定頁面，仍需回問題分析查閱。"
+  },
+  {
+    "index": 758,
+    "text": "單次「報告」先確認目標、時間、模式、實際頁數及警示，再讀嚴重度、維度占比與優先處理。這裡的 114 項是原始 Finding 筆數；專案問題分析合併規則後為 21 個問題，两者統計單位不同。"
+  },
+  {
+    "index": 759,
+    "text": ""
+  },
+  {
+    "index": 760,
+    "text": "圖12-6-3 單次報告摘要與分類統計"
+  },
+  {
+    "index": 761,
+    "text": "在左側選頁面、維度與嚴重度，再展開問題，右側顯示描述、怎麼修、規則 ID、證據來源與原文。例圖的 CSP 是站台層級問題，沒有單一元素位置；有座標的問題才會在截圖標示。可複製 Evidence 或「給 AI 的提示詞」交給維護者。"
+  },
+  {
+    "index": 762,
+    "text": ""
+  },
+  {
+    "index": 763,
+    "text": "圖12-6-4 CSP 問題的判定證據與修正方向"
+  },
+  {
+    "index": 764,
+    "text": "12-7 SEO 分析與 AEO 問答"
+  },
+  {
+    "index": 765,
+    "text": "SEO 概覽與逐頁內容"
+  },
+  {
+    "index": 766,
+    "text": "從側欄進入「SEO 分析」，選擇掃描時間，再使用概覽、頁面與內容、連結、搜尋關鍵字四個分頁。概覽整理受影響頁面及優先修復；頁面與內容列 Title、Description、H1、正文、圖片 alt 與載入等檢查。"
+  },
+  {
+    "index": 769,
+    "text": ""
+  },
+  {
+    "index": 770,
+    "text": "圖12-7-2 SEO 逐頁內容與索引狀態"
+  },
+  {
+    "index": 771,
+    "text": "按頁面可查原始值、位置與建議；連結分頁檢查失效或無法連線的目的地及來源頁。Title 與摘要長度以顯示寬度估計，中文字與英文不直接套同一字數。頁面「可索引」是 Argus 的規則判斷，Google 是否收錄須看 Search Console。"
+  },
+  {
+    "index": 772,
+    "text": "搜尋關鍵字與 Search Console"
+  },
+  {
+    "index": 773,
+    "text": "未連接 Search Console 時，設定網站希望使用的目標關鍵字，系統只檢查保存頁面上的字面出現位置，不提供虛構排名。已連接時選擇涵蓋網站的資源及 7／28／90 天期間，查看實際搜尋詞、點擊、曝光、CTR、平均排名與對應頁面。"
+  },
+  {
+    "index": 774,
+    "text": "平均排名是期間統計，資料有延遲；Argus 目前以兩天前作期間結尾，避免把尚未完整的末日資料當成下降。[6] 網址檢查讀 Google 的索引結果，不是發送索引要求。更換或中斷連線依畫面操作；中斷後本地分析資料仍在，外部搜尋資料不能繼續查詢。"
+  },
+  {
+    "index": 775,
+    "text": "AEO 逐題判定"
+  },
+  {
+    "index": 776,
+    "text": "開啟「AEO 問答」，選擇掃描時間，先看題數、可回答比例與原文比例，再依可回答、資訊不足、衝突或無答案篩選。按「看證據」查看來源段落與判定理由，核對答案是否具體、日期是否完整、不同頁是否矛盾。"
+  },
+  {
+    "index": 777,
+    "text": ""
+  },
+  {
+    "index": 778,
+    "text": "圖12-7-3 AEO 問答與判定篩選"
+  },
+  {
+    "index": 779,
+    "text": "內容或題目不足時顯示未充分評估，不當成滿分。沒有答案可能是資訊未提供，也可能答案位於本次未爬到的頁面；先確認入口與 Sitemap。這個畫面是網站內容檢查結果，不能據此推定所有 AI 搜尋平台會引用它。"
+  },
+  {
+    "index": 780,
+    "text": "12-8 歷史報告與改善產物"
+  },
+  {
+    "index": 781,
+    "text": "歷史與 PDF"
+  },
+  {
+    "index": 782,
+    "text": "「歷史報告」顯示各次狀態、分數、變化、頁數及發現，可查看結果、問題分析或下載報告。比較時確認範圍與維度相近，並查看未評估與被阻擋資料。"
+  },
+  {
+    "index": 783,
+    "text": ""
+  },
+  {
+    "index": 784,
+    "text": "圖12-8-1 歷史分數與報告下載"
+  },
+  {
+    "index": 785,
+    "text": "已完成掃描按「下載 PDF 報告」，核對網站、時間、實際涵蓋範圍及報告編號。收件者從公開「報告查驗」輸入編號；要核對手上的檔案，另計算 SHA-256 並輸入比對。Windows 可使用下列命令，將路徑換成下載檔。"
+  },
+  {
+    "index": 786,
+    "text": "Get-FileHash -Algorithm SHA256 -LiteralPath '.\\下載的報告.pdf'"
+  },
+  {
+    "index": 787,
+    "text": ""
+  },
+  {
+    "index": 788,
+    "text": "圖12-8-2 公開報告編號與檔案指紋查驗"
+  },
+  {
+    "index": 789,
+    "text": "編號存在只表示有紀錄，檔案指紋相符才表示內容符合已發出的版本。舊版指紋可能仍相符但不是最新；另存或編輯 PDF 後指紋會變，需保留原始交付檔。"
+  },
+  {
+    "index": 790,
+    "text": "網站結構與修正產出"
+  },
+  {
+    "index": 791,
+    "text": "單次掃描的「網站結構圖」顯示頁面與連結關係，節點顏色代表問題程度。點節點可回報告該頁，孤立頁與被阻擋頁依資料標示。圖只涵蓋這次取得的頁面，不能替代網站完整資訊架構。"
+  },
+  {
+    "index": 794,
+    "text": "開啟「修正產出」閱讀狀態及說明，尚未產生時按「產生修正內容」。已完成時切換 JSON-LD、OG＋meta、llms.txt 或 FAQ Schema，複製片段；llms.txt 可下載。產生失敗先查看原因與退還紀錄，再決定是否重新觸發。"
+  },
+  {
+    "index": 797,
+    "text": "表12-8-1 產物來源標記"
+  },
+  {
+    "index": 798,
+    "text": "標記使用前的核對已驗證 verified程式來源政策已核對，仍需確認語境及業務事實。原文 extracted來自已爬取資料，確認是否完整。規則 rule由固定規則推導，確認套用位置。部分 partial只有部分欄位有依據，逐欄補查。待填 placeholder用正確資料替換「請填寫」，不可原樣發布。"
+  },
+  {
+    "index": 799,
+    "text": "網頁複刻與優化位於已擷取頁面的操作區。先在報告「頁面」選定網址，再依按鈕建立快照或優化版，確認費用、狀態及下載類型。快照與優化是不同產物，系統沒有直接替網站部署；維護者應在測試環境檢查後套用。"
+  },
+  {
+    "index": 800,
+    "text": "12-9 網域所有權驗證"
+  },
+  {
+    "index": 801,
+    "text": "頂部「網域驗證」提供 Search Console 一鍵驗證。連接自己的 Google 資源後，系統只匯入擁有者的網域；已連接可按「重新同步網站」。讀取權限不等於控制權，只有 siteOwner 可作此驗證。"
+  },
+  {
+    "index": 802,
+    "text": ""
+  },
+  {
+    "index": 803,
+    "text": "圖12-9-1 Search Console 網域驗證入口"
+  },
+  {
+    "index": 804,
+    "text": "不能使用 Search Console 時按「手動新增網域」，依系統提供的驗證內容設定三種備用方法。驗證碼必須使用目前網域頁給的值，不能從手冊範例推測。"
+  },
+  {
+    "index": 805,
+    "text": "表12-9-1 驗證方式與條件"
+  },
+  {
+    "index": 806,
+    "text": "方式操作條件Search Console自己是資源擁有者；Domain property 可涵蓋子網域。DNS TXT設 _argus-verification.<網域> 的指定 TXT 內容，等待 DNS 生效。首頁 meta公開首頁加入指定 argus-site-verification 標籤及內容。驗證檔/.well-known/argus-verification.txt 的文字內容等於指定 Token。"
+  },
+  {
+    "index": 807,
+    "text": "成功後核對方法與有效期限，預設 90 天。到期重新驗證；被管理員否決時依錯誤處理，不以重新連接掩蓋覆核。主動掃描仍需額外授權勾選。"
+  },
+  {
+    "index": 808,
+    "text": "12-10 點數與訂閱"
+  },
+  {
+    "index": 809,
+    "text": "帳號選單開啟「購點與訂閱」。一次性購點依選商品、填資料、確認訂購完成，再前往綠界。確認頁中的環境、金額、點數與買受人資料一致後才送出；返回後以訂單與錢包為準，未確認時不要重複購買。"
+  },
+  {
+    "index": 810,
+    "text": ""
+  },
+  {
+    "index": 811,
+    "text": "圖12-10-1 公網 Stage 購點流程及方案"
+  },
+  {
+    "index": 812,
+    "text": "本次公網顯示 Stage，不實際扣款。月訂閱的新開通使用定期定額，既有舊訂閱可能顯示自動扣款否；以帳號實際狀態判斷。取消後確認停止後續扣款及當期結束日；取消不直接回收當期已取得的點數。"
+  },
+  {
+    "index": 813,
+    "text": "月贈點、訂閱贈點、購點、掃描預扣、退款及管理員調整使用不同交易種類。遇到費用疑問時提供任務或訂單編號給管理者核對，保留原交易紀錄。"
+  },
+  {
+    "index": 814,
+    "text": "12-11 MCP 接入"
+  },
+  {
+    "index": 815,
+    "text": "有效訂閱會員從頂部「MCP 接入」選擇使用的工具。輸入憑證名稱並建立，再複製對應設定；明文只顯示一次，安全保存。每個裝置可用不同憑證，遺失或不再使用時撤銷。"
+  },
+  {
+    "index": 816,
+    "text": ""
+  },
+  {
+    "index": 817,
+    "text": "圖12-11-1 MCP 工具選擇與憑證入口"
+  },
+  {
+    "index": 818,
+    "text": "連線後用帳號狀態或掃描列表等讀取工具驗證。tools/call 才計額度，連線及列出工具不計；建立掃描仍另外預扣點數。九項工具涵蓋帳號、網域、估價、建立／取消掃描、列表、進度、發現與報告下載。"
+  },
+  {
+    "index": 819,
+    "text": "公網 MCP 端點的 HTTPS 設定見11-2。憑證只供用戶端連線，避免附在報告、截圖或 Git。"
+  },
+  {
+    "index": 820,
+    "text": "12-12 評論與公開資訊"
+  },
+  {
+    "index": 821,
+    "text": "評論頁可瀏覽回饋，符合使用資格的會員可發表一則主評論，後續本人編修或刪除。討論、官方回覆、有幫助及檢舉分開操作。發表實際體驗時不附帳密、付款資料或未授權的掃描證據。"
+  },
+  {
+    "index": 822,
+    "text": "公開合作頁可填洽談需求，後台保存待處理狀態。下載頁提供 PWA 入口，安裝至桌面或手機後仍需網路才能使用掃描 API。"
+  },
+  {
+    "index": 823,
+    "text": "12-13 管理後台"
+  },
+  {
+    "index": 824,
+    "text": "具 staff 權限的帳號由帳號選單進入「管理後台」。側欄依營運、客戶、內容與社群、系統分組。頁面出現不代表一般管理員擁有所有權限，受限操作仍由伺服器檢查。"
+  },
+  {
+    "index": 825,
+    "text": ""
+  },
+  {
+    "index": 826,
+    "text": "圖12-13-1 管理後台功能導覽"
+  },
+  {
+    "index": 827,
+    "text": "任務管理先查任務編號、帳號、網址、範圍、進度及警示，再決定取消或重新排程。使用者管理可查登入活動、錢包及訂閱；調點填原因，停用與刪除依對象權限操作。授予一般管理員只有超級管理員可做，不能調整自己或超級管理員。"
+  },
+  {
+    "index": 828,
+    "text": "訂單、每期扣款及點數交易用於對帳，不能把 Stage 統計視為正式營收。系統健康查看各環節是否可連線，沒有近期任務時執行情況可能無法判定。內容、評論、合作洽談及公告完成修改後，另回公開頁確認呈現；操作日誌供具權限者追查管理行為。"
+  },
+  {
+    "index": 829,
+    "text": "12-14 手機操作"
+  },
+  {
+    "index": 830,
+    "text": "手機版頂部導覽會換行，專案側欄改為橫向分頁列，可左右捲動選擇功能；專案總覽的卡片及操作依窄版排列。先確認目前網站，再選擇分頁。"
+  },
+  {
+    "index": 831,
+    "text": ""
+  },
+  {
+    "index": 832,
+    "text": "圖12-14-1 手機日間專案總覽"
+  },
+  {
+    "index": 833,
+    "text": ""
+  },
+  {
+    "index": 834,
+    "text": "圖12-14-2 手機日間單頁與全網站範圍設定"
+  },
+  {
+    "index": 835,
+    "text": "表格可包含較多欄位，使用手機時依可捲動區查看，閱讀完整證據或大量比對時可改用較大的畫面。帳號與點數仍使用同一服務，手機不另建立獨立掃描紀錄。"
+  },
+  {
+    "index": 836,
+    "text": "第13章 感想"
+  },
+  {
+    "index": 837,
+    "text": "13-1 系統設計與開發的檢討"
+  },
+  {
+    "index": 838,
+    "text": "本專題的整合重點在相同資料的不同用途。專案以合併問題供維護追蹤，報告保留原始 Finding 與逐頁證據，帳務使用實際頁數結算。三種資料單位須清楚定義，否則使用者看到不同數字容易誤認為結果不一致。"
+  },
+  {
+    "index": 839,
+    "text": "非同步流程也要求狀態與費用一起處理。建立成功、派工失敗、取消、逾時與完成後結算都有不同收尾；共用入口能避免網站與 MCP 各自實作一套規則。新版加入專案與 Search Console 後，帳號層級及網站層級權益也需分清。"
+  },
+  {
+    "index": 840,
+    "text": "13-2 品質與文件維護"
+  },
+  {
+    "index": 841,
+    "text": "程式、介面與文件必須同步核對。新版已更改註冊方式、分析方法、報告格式及訂閱流程，沿用舊版文字會直接造成操作誤解。後續版本應把欄位、前置條件、費用、失敗處理及測試紀錄連結至對應章節。"
+  },
+  {
+    "index": 842,
+    "text": "報告測試受到 Windows 字型與檔案占用影響；SQLite 單元測試與 PostgreSQL、Redis、Linux 程序整合也有不同的執行條件。測試環境與結果記錄於第10章。"
+  },
+  {
+    "index": 843,
+    "text": "13-3 後續改善建議"
+  },
+  {
+    "index": 844,
+    "text": "後續優先修正登入事件排序、報告檔案占用及公網 MCP 的 HTTPS 地址。正式金流整合測試涵蓋首期、後續扣款、取消及通知重送。"
+  },
+  {
+    "index": 845,
+    "text": "檢測品質可使用具預期答案及已知弱點的案例，量測誤報、漏報、涵蓋頁數及工具阻擋。規則與模板更新前執行回歸，保存版本與差異，並以使用者及外部服務結果核對 AEO、GEO 與 UX 分數。排程可增加動態退避，分散的活動紀錄可整合查詢。"
+  },
+  {
+    "index": 846,
+    "text": "校內 PoC 可依授權的目標、時間與工具範圍執行，記錄負載、完成率、成本及修正前後結果。"
+  },
+  {
+    "index": 847,
+    "text": "第14章 參考資料"
+  },
+  {
+    "index": 848,
+    "text": "14-1 技術與文件來源"
+  },
+  {
+    "index": 849,
+    "text": "[1] Argus 專題團隊。Argus Website Diagnostic Platform。main 86e1250，2026年10月5日。模型、API、設定、migration、測試與部署宣告。https://github.com/Djude1/Argus_WebsiteDiagnosticPlatform"
+  },
+  {
+    "index": 850,
+    "text": "[2] 國立臺北商業大學資訊管理系。115年系統手冊模板簡介。大學部物件導向章節、字型、版面與附錄規定。"
+  },
+  {
+    "index": 851,
+    "text": "[3] Object Management Group。Unified Modeling Language 2.5.1。https://www.omg.org/spec/UML/2.5.1/"
+  },
+  {
+    "index": 852,
+    "text": "[4] Django Software Foundation。Django 5.2 documentation。https://docs.djangoproject.com/en/5.2/intro/overview/"
+  },
+  {
+    "index": 853,
+    "text": "[5] 綠界科技。信用卡定期定額技術文件。https://developers.ecpay.com.tw/2868/"
+  },
+  {
+    "index": 854,
+    "text": "[6] Google for Developers。Search Console API Search Analytics query。https://developers.google.com/webmaster-tools/v1/searchanalytics/query"
+  },
+  {
+    "index": 855,
+    "text": "[7] 第113402組。租中自有黃金屋系統手冊。參考章節、需求、測試、畫面操作及評審回覆的編製方式。"
+  },
+  {
+    "index": 856,
+    "text": "[8] Argus 專題團隊。Argus 系統手冊 v8 初評回覆增補版。2026年10月3日。保留的團隊分工與初評意見來源；實作回覆已依本次版本更新。"
+  },
+  {
+    "index": 857,
+    "text": "公開技術文件查閱日期為2026年10月5日。原理與標準使用官方文件，Argus 功能、條件與限制以本次程式及測試為準。"
+  },
+  {
+    "index": 858,
+    "text": "14-2 人工智慧使用說明"
+  },
+  {
+    "index": 859,
+    "text": "☑ 使用人工智慧或生成式人工智慧作為輔助作品產出工具。"
+  },
+  {
+    "index": 860,
+    "text": "表14-2-1 人工智慧輔助工具與範圍"
+  },
+  {
+    "index": 861,
+    "text": "序號工具使用範圍及說明本文頁碼AI1Claude Code前版記載的架構、程式與文件協作。前版紀錄AI2GLM前版手冊文稿與排版基礎。前版紀錄AI3OpenAI Codex本版文稿、程式及資料字典核對、圖稿、截圖、測試與版面檢查。1～114"
+  },
+  {
+    "index": 862,
+    "text": "第1章的〔AI3〕對應本版文稿的輔助工具，前版工具另沿用既有編製紀錄。平台模型功能與費用依第5、9、11章說明。"
+  },
+  {
+    "index": 863,
+    "text": "附錄 評審問題回覆"
+  },
+  {
+    "index": 864,
+    "text": "A-1 初評意見與修正情形"
+  },
+  {
+    "index": 865,
+    "text": "以下三表整理三位委員的十三項初評建議與修正位置。[8]"
+  },
+  {
+    "index": 866,
+    "text": "表A-1-1 委員1建議與修正情形"
+  },
+  {
+    "index": 867,
+    "text": "評審建議事項修正情形可將弱點列表說明，讓問題與處理方向更清楚。9-2說明診斷方法、規則、證據與限制；12-6以新版問題分析及CSP證據畫面說明閱讀與交付。可找簡化實例，實際演示最後的修復清單。12-6至12-8提供問題清單、CSV、證據及修正產出流程；10-3說明同範圍複掃。實際修正前後成效尚待量測。"
+  },
+  {
+    "index": 868,
+    "text": "表A-1-2 委員2建議與修正情形"
+  },
+  {
+    "index": 869,
+    "text": "評審建議事項修正情形每位成員應能分別回答評審問題，留意簡報儀態。4-2列團隊分工與貢獻，配合各章內容分配問答。網站所有權識別不足，建議參考 TWCA 網域驗證。5-3、12-9加入Search Console擁有者及三種備用方法、期限、人工覆核與管理員例外。網域頁已可載入；未串接TWCA，被動掃描仍採授權聲明。釐清主機、Web應用、原始碼與滲透測試範圍，定期更新OWASP規則。9-2列工具範圍與單頁限制，分開公開內容、受控主動工具與後端原始碼；13-3列規則回歸與涵蓋率量測。與校內單位合作做網站健檢 PoC。13-3列校內 PoC 的授權範圍與量測項目；12章提供校內網站操作範例。"
+  },
+  {
+    "index": 870,
+    "text": "表A-1-3 委員3建議與修正情形"
+  },
+  {
+    "index": 871,
+    "text": "評審建議事項修正情形量化成本與收益以支持可行性。2-1列成本項目與記錄方式，2-2列維度計費、Agent附加費及方案價格。如何確認受掃網站為使用者所有。5-3及12-9說明Search Console、DNS、meta、驗證檔與主動模式條件；一般會員與管理員例外分開。第5至7章過於精簡，應補完整。更新36項功能需求、16項非功能需求，補專案、MCP、Search Console、訂閱與管理角色，重繪使用個案、活動、循序、類別、部署及狀態圖。強化所有使用者系統活動紀錄。8、11章列登入、任務、交易、MCP及管理稽核的保存與查詢；13-3列整合查詢方向。補上訂閱、扣點及收費功能。2-2、6-1、8-1、12-10說明預扣、退差、退款及綠界定期定額。補系統管理員維護功能。5-1列管理與超級管理員需求；11-3及12-13說明任務、客戶、帳務、洽談、內容、健康與權限限制。能否檢測後端程式或API。9-2列已發現端點與工具的檢查範圍；Kali的執行條件與公網停用狀態另於表9-2-2說明。"
+  }
+]

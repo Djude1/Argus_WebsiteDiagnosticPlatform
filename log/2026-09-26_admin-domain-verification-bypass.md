@@ -7,7 +7,7 @@
 - `backend/apps/scans/services.py`：`user_owns_domain()` 開頭新增 staff／superuser 旁路——`is_staff` 或 `is_superuser` 一律回 `True`，跳過 VerifiedDomain 查詢。此函式是主動掃描網域閘門的唯一判定點（`ScanJobCreateSerializer.validate` API 層與 `ScanJob.clean()` model 層都走它），單點修改兩道閘門同時生效。
 - `backend/apps/scans/tests_domain_verification.py`：新增 `StaffDomainGateBypassTests`（4 案例）：staff API 旁路（201 且不建 VerifiedDomain 紀錄）、superuser 旁路、staff 的 `model.clean()` 旁路、宣告式授權勾選（`active_testing_authorized`）仍必須。
 - `frontend/src/features/scans/ScanExperience.jsx`：掃描表單讀取 `useArgusStore` 的 `me`；staff／superuser 在未驗證網域開啟主動模式時，改顯示「管理員測試模式：已略過網域驗證閘門」徽章（複用既有 `scan-verified-badge` 樣式），不再顯示「會被系統拒絕」的阻擋警告。
-- 文件同步（同次 commit）：`backend/apps/scans/CLAUDE.md`（閘門小節＋禁止事項表）、`backend/CLAUDE.md`（VerifiedDomain model 速查）、`專題文件生成/需求書_複賽版完整內容.md` F-036（需求說明補句＋驗收方式新增一條）。
+- 文件同步（同次 commit）：`backend/apps/scans/CLAUDE.md`（閘門小節＋禁止事項表）、`backend/CLAUDE.md`（VerifiedDomain model 速查）、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md` F-036（需求說明補句＋驗收方式新增一條）。
 
 ## 原因
 
