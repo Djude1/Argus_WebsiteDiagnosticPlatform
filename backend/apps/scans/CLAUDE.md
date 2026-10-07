@@ -30,6 +30,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面；整站模式以 robots.txt 宣告的 sitemap（或 `/sitemap.xml`）補種子（`discover_sitemap_urls` → `_CrawlState.seed`，同 origin、非 `.gz`、≤2 MB、索引最多展開 3 個子檔；與掃描網址只差 `www.` 前綴的 sitemap 網址由 `to_scan_origin` 改寫成掃描 origin），連結稀疏的網站也能達到頁數上限；預設深度 `ARGUS_DEFAULT_MAX_DEPTH`＝6。`/cdn-cgi/` 路徑一律不爬（`is_crawl_trap`：Cloudflare 給機器人的無限陷阱連結）。Cloudflare 攔截頁判定只認 `/cdn-cgi/challenge-platform/h/`、`_cf_chl_opt` 等攔截頁專屬標記——**不可用裸字串 `challenge-platform`**：CF Bot 偵測會在每個正常頁面插入 `/cdn-cgi/challenge-platform/scripts/` 背景腳本，曾讓整站只爬到首頁且被誤標為被阻擋（`waf_scanner.py` 同理） | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
 | `coverage.py` | 掃描覆蓋契約（見下「掃描覆蓋契約」）：`ScanCoverage` 累積各檢查狀態與產生的問題代號、`category_status`、`incomplete_checks`、`absent_issue_status`（前次有本次沒有的問題狀態）、`issue_key` | 寫 DB、修改 `ScanJob.status` |
+| `evidence/` | 跨模組共用證據（P0-B）：`contacts.py` 的 Email／電話格式、正規化（`normalize_phone`：+886→0、去分機）、`collect_contacts`（每筆帶來源網址、取得方式、位置 content／comment／link、視窗、登入狀態）。資安 `scanners.analyze_data_exposure`、`security/redaction.py` 與 AEO `aeo/answers.py`、`aeo/evaluate.reconcile_contact` 都從這裡取，**不得各自另寫 Email／電話 regex** | 寫 DB、連線目標網站 |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 報告 payload 與排版：`render_report_docx` 產生 .docx（內容測試直接讀它），`build_scan_report` 再交給 `report_pdf.py` 轉成 PDF 並寫 `ReportVerification`；**對外只提供 PDF**（2026-10-03） | 防偽紀錄以外的 DB 寫入 |
@@ -132,6 +133,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
   - 題庫意圖可設 `anchors`（主題詞）。段落或其小標題沒有主題詞時，答案值不算數；沒有任何段落在談這個主題就判 `missing`，不再拿無關段落當「資訊不足」的證據。實例：學員心得裡的「必須」被當成申請資格。
   - 心得／見證段落（小標題含「見證、心得、評價…」，或第一人稱單數「我」出現兩次以上）不能回答題庫問題（`answers.is_testimonial`）。
   - 超過 `MAX_HEADING_CHARS`（80）或含句中句號的 h1–h6 視為內文段落（`content._is_body_text`）。實例：隱私權政策整段寫在 h3 裡，裡面的 Email 被當成標題略過，造成資安判「公開 Email」、AEO 卻判「找不到 Email」的矛盾。
+- **共用聯絡資訊證據（2026-10-07，P0-B）**：`evaluate_site` 以 `evidence.contacts.collect_contacts` 擷取同一份 Email／電話，`reconcile_contact` 核對聯絡題：共用證據的值出現在任何可讀段落（含被當成標題的短段落）就判可回答；只在導覽列、頁首、隱藏區塊或 HTML 註解時判定不變，但理由寫明位置與「與資安檢查情境不同、並不矛盾」。`aeo_report.shared_contacts` 只記筆數不存值。測試 `tests_shared_evidence.py`。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
 - 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
 

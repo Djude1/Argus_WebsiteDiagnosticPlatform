@@ -197,7 +197,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
    - 修正現況盤點：confidence、history diff、link 去重/並發皆是「已有但語義/coverage 不足」，不是全新功能。
    - 驗收：工具 BLOCKED/FAILED 時不加分；前次 finding 只有在相同偵測能力完整重跑時才可標 RESOLVED。
 
-2. **P0-B 小範圍 Shared Evidence MVP（AEO + Security）**
+2. **P0-B 小範圍 Shared Evidence MVP（AEO + Security）**（**MVP 已實作 2026-10-07**：`apps/scans/evidence/contacts.py`；資安個資檢查與 AEO 聯絡題共用格式與擷取，AEO 以共用證據核對並說明情境差異；`tests_shared_evidence.py`）
    - 只先共享 email / phone，帶完整 context contract。
    - 驗收：已知「Security 找到 Email、AEO 說找不到」案例（第二輪已以 `aeo/content.py` 的 `_is_body_text` 修正）納入回歸測試並保持通過；Email／電話改由同一份 evidence 產生、不再各模組各自解析；不同 viewport/auth/DOM context 不被誤判成矛盾。
 

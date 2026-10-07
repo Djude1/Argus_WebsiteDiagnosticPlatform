@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from apps.scans.aeo import questions as q
 from apps.scans.aeo.content import Passage
+from apps.scans.evidence import contacts
 
 ANSWERED = "answered"
 INSUFFICIENT = "insufficient"
@@ -39,15 +40,9 @@ _QUOTE_RADIUS = 70
 
 # ---------- 答案值 ----------
 
-_PHONE = re.compile(
-    r"(?<!\d)(?:\+?886[-\s]?\(?0?\d{1,2}\)?[-\s]?\d{3,4}[-\s]?\d{3,4}"
-    r"|0\d{1,2}[-\s)]\s?\d{3,4}[-\s]?\d{3,4}"
-    r"|09\d{2}[-\s]?\d{3}[-\s]?\d{3}"
-    r"|\(\d{2,3}\)\s?\d{3,4}[-\s]?\d{3,4}"
-    r"|\+?\d{1,3}[-\s]\d{2,4}[-\s]\d{3,4}[-\s]?\d{3,4})(?:\s*(?:#|分機|ext\.?)\s*\d{1,5})?(?!\d)",
-    re.IGNORECASE,
-)
-_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# Email 與電話的格式與資安共用（evidence/contacts.py，P0-B），兩邊對同一頁的判斷才會一致
+_PHONE = contacts.PHONE_PATTERN
+_EMAIL = contacts.EMAIL_PATTERN
 _ADDRESS = re.compile(
     r"(?:[一-鿿]{1,4}[縣市])?[一-鿿]{1,4}[區鄉鎮市]"
     r"[一-鿿\d]{0,12}(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?"

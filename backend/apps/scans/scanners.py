@@ -5,14 +5,11 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
+from apps.scans.evidence import contacts
 from apps.scans.models import Finding
 
 # ---------- PII（個人資料）偵測 ----------
-# email 標準 pattern，要求 TLD 至少 2 字元
-EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
-
-# 台灣手機：09 開頭 + 8 位數字，允許中間有 -、空白；前後 lookahead/lookbehind 避免嵌入更長數字串誤判
-TW_MOBILE_PATTERN = re.compile(r"(?<!\d)09\d{2}[\s\-]?\d{3}[\s\-]?\d{3}(?!\d)")
+# Email 與手機的格式由共用證據模組提供（P0-B），AEO 用同一套，避免兩邊解析結果不一致
 
 # 台灣身分證號：第一碼英文 + 1/2 + 8 位數字。需另經 is_valid_tw_national_id 檢查碼驗證
 TW_NATIONAL_ID_PATTERN = re.compile(r"\b[A-Z][12]\d{8}\b")
@@ -175,8 +172,8 @@ def detect_pii_in_text(text: str) -> dict[str, list[str]]:
         m for m in cc_valid if _is_formatted_card(m) or _card_has_context(text, m)
     ]
     return {
-        "email": list(dict.fromkeys(EMAIL_PATTERN.findall(text))),
-        "mobile": list(dict.fromkeys(TW_MOBILE_PATTERN.findall(text))),
+        "email": contacts.find_emails(text),
+        "mobile": contacts.find_mobiles(text),
         "national_id": [
             m for m in dict.fromkeys(TW_NATIONAL_ID_PATTERN.findall(text))
             if is_valid_tw_national_id(m)
@@ -1140,7 +1137,7 @@ def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
     safe_html = _HTML_PATH_ATTR.sub(" ", safe_html)
     # 輸入框 placeholder 是填寫範例（例：e.g.0911-222-333），不是任何人的資料（2026-10-06 實測）
-    safe_html = _HTML_PLACEHOLDER_ATTR.sub(" ", safe_html)
+    safe_html = contacts.PLACEHOLDER_ATTR.sub(" ", safe_html)
     pii_main = detect_pii_in_text(safe_html)
 
     # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
@@ -1180,8 +1177,8 @@ def _classify_pii(
     # 只列為資訊提示請網站主確認，不當成外洩。
     site_domain = _registrable_domain(urlparse(page_url).hostname or "")
     site_label = site_domain.split(".", 1)[0] if site_domain else ""
-    mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
-    tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
+    mailto = contacts.mailto_addresses(raw_html)
+    tel = contacts.tel_numbers(raw_html)
     comment_values = {v for vals in pii_comments.values() for v in (vals or [])}
 
     sensitive: list[str] = []
@@ -1205,7 +1202,7 @@ def _classify_pii(
             personal_emails.append(email)
     personal_mobiles, public_mobiles = [], []
     for mobile in pii["mobile"]:
-        if mobile not in comment_values and re.sub(r"\D", "", mobile) in tel:
+        if mobile not in comment_values and contacts.normalize_phone(mobile) in tel:
             public_mobiles.append(mobile)
         else:
             personal_mobiles.append(mobile)
@@ -1331,15 +1328,12 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
-_HTML_PLACEHOLDER_ATTR = re.compile(r"""\bplaceholder\s*=\s*(?:"[^"]*"|'[^']*')""", re.IGNORECASE)
 # 角色信箱：對外服務窗口，不屬於特定個人
 _ROLE_MAILBOXES = {
     "info", "service", "services", "contact", "admin", "support", "help", "office", "hr",
     "sales", "marketing", "webmaster", "privacy", "dpo", "noreply", "no-reply", "news",
     "press", "pr", "media", "secretary", "center", "job", "jobs", "career", "careers",
 }
-_MAILTO_PATTERN = re.compile(r"mailto:([^\"'?>\s]+)", re.IGNORECASE)
-_TEL_PATTERN = re.compile(r"tel:([+\d][\d\s()-]{6,})", re.IGNORECASE)
 _SECOND_LEVEL_LABELS = {
     "com", "edu", "gov", "org", "net", "ac", "co", "idv", "mil", "or", "ne", "go",
 }

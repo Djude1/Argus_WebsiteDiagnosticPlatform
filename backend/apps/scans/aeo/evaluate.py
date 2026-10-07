@@ -18,7 +18,8 @@ from django.utils import timezone
 
 from apps.scans.aeo import answers as a
 from apps.scans.aeo.content import extract_page_content
-from apps.scans.aeo.questions import build_question_set
+from apps.scans.aeo.questions import EMAIL, PHONE, build_question_set
+from apps.scans.evidence import contacts as shared
 
 METHOD_VERSION = "rules-v1"
 MIN_MAIN_TEXT_CHARS = 100  # 中文資訊密度高，100 字已足以出題
@@ -123,7 +124,14 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
         )
 
     passages = [p for c in rendered for p in c.passages]
-    results = [a.judge(qn, a.retrieve_candidates(qn, passages), passages) for qn in questions]
+    # 共用聯絡資訊證據（與資安的個資檢查同一套擷取，P0-B）
+    contact_evidence = [c for p in usable for c in shared.collect_contacts(p.url, p.html)]
+    results = [
+        reconcile_contact(
+            a.judge(qn, a.retrieve_candidates(qn, passages), passages), contact_evidence, passages
+        )
+        for qn in questions
+    ]
     counts = {v: sum(1 for r in results if r.verdict == v) for v in a.VERDICT_LABELS}
     answered = [r for r in results if r.verdict == a.ANSWERED]
     score = _score(results)
@@ -140,10 +148,65 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
             else None
         ),
         "score": score,
+        # 共用證據的筆數（只記數量，不重複存個資）
+        "shared_contacts": {
+            kind: sum(1 for c in contact_evidence if c.kind == kind)
+            for kind in (shared.EMAIL, shared.PHONE)
+        },
         "questions": [r.as_dict() for r in results],
     }
     findings = _question_findings(results) + _render_findings(base_summary)
     return AeoEvaluation("evaluated", "", score, results, findings, summary)
+
+
+# ---------- 共用聯絡資訊證據 ----------
+
+_CONTACT_KIND = {EMAIL: shared.EMAIL, PHONE: shared.PHONE}
+_CONTACT_LABEL = {shared.EMAIL: "Email", shared.PHONE: "電話"}
+
+
+def _passage_values(kind: str, passage) -> dict[str, str]:
+    """段落中的聯絡資訊：正規化值 → 原文寫法。"""
+    if kind == shared.EMAIL:
+        return {shared.normalize_email(v): v for v in shared.find_emails(passage.text)}
+    return {shared.normalize_phone(v): v for v in shared.find_phones(passage.text)}
+
+
+def reconcile_contact(result: a.QuestionResult, evidence: list, passages: list) -> a.QuestionResult:
+    """聯絡題（Email／電話）以共用證據核對，避免和資安檢查互相矛盾。
+
+    - 共用證據中的值出現在任何可讀段落（含被當成標題的短段落）：判定為可回答，附該段原文。
+    - 只出現在導覽列、頁首、隱藏區塊、屬性或 HTML 註解：判定不變，但理由寫明它在哪裡、
+      為什麼正文讀不到——情境不同不算矛盾，不能只寫「找不到」。
+    """
+    kind = _CONTACT_KIND.get(result.question.answer_type)
+    if kind is None or result.verdict == a.ANSWERED:
+        return result
+    relevant = [c for c in evidence if c.kind == kind]
+    if not relevant:
+        return result
+    wanted = {c.normalized for c in relevant if c.location != shared.LOCATION_COMMENT}
+    for passage in passages:
+        found = _passage_values(kind, passage)
+        hit = next((found[n] for n in found if n in wanted), "")
+        if hit:
+            return a.QuestionResult(
+                result.question,
+                a.ANSWERED,
+                f"找到具體答案：{hit}",
+                [a._evidence(passage, hit)],
+                result.candidates_checked,
+            )
+    places = "、".join(
+        sorted({shared.LOCATION_LABELS[c.location] for c in relevant})
+    )
+    label = _CONTACT_LABEL[kind]
+    result.reason = (
+        f"{result.reason}（網頁原始碼中有 {len(relevant)} 筆{label}，位置：{places}；"
+        f"但不在正文或頁尾的可讀文字裡，例如只出現在導覽列、頁首、隱藏區塊或 HTML 註解，"
+        f"訪客與 AI 摘要不一定讀得到。資安檢查列出的{label}與此判定情境不同，並不矛盾。）"
+    )
+    return result
 
 
 # ---------- findings ----------
