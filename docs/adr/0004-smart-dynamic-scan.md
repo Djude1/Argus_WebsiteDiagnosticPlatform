@@ -48,96 +48,90 @@ Argus 目前三種掃描都跑**固定管線**：不論對象是 WordPress 部�
 
 這兩條之外的所有設計，衝突時一律服從這兩條。
 
-### 1. 資料模型
+### 1. Strategy / Testing Level：先把語義拆開
 
-不新增掃描模式以外的頂層概念，盡量複用現有欄位。
+「smart」與「active」不是同一個維度：
+- **strategy** 回答「如何決定要掃哪些模組」：`standard | smart`
+- **testing_level** 回答「允許多主動的測試」：`passive | active`
 
-- **`ScanJob.scan_mode` 增加第三值 `smart`**（現有 `passive` / `active`）。
-  `smart` 在授權層面等同 `active`（會跑主動探測），但模組集改由動態決策層決定。
-  沿用現有網域驗證閘門：`smart` 同樣要求主動測試授權（`active_testing_authorized`）才會
-  執行任何主動模組；未授權時退化為「智慧被動」（只加被動類深度模組）。
+理想矩陣：
 
-- **新增 `ScanJob.fingerprint`（JSONField，預設 `{}`）**：收斂後的網站特徵快照，由新的
-  指紋階段寫入。結構見第 2 節 `SiteFingerprint`。空 dict = 舊掃描或非智慧模式。
+| strategy | testing_level | 行為 |
+|---|---|---|
+| standard | passive | 現有被動標準掃描 |
+| standard | active | 現有授權主動掃描 |
+| smart | passive | 基礎被動 + 高信心被動深查 |
+| smart | active | 基礎主動 + 高信心動態深查 / DAST |
 
-- **新增 `ScanJob.dynamic_modules`（JSONField，預設 `{}`）**：記錄「這次因為指紋判定，
-  額外啟用了哪些模組、各自的觸發原因」，供報告呈現與計費結算對帳。結構：
-  ```json
-  {
-    "auth_session":  {"enabled": true,  "reason": "偵測到登入表單 /wp-login.php"},
-    "api_security":  {"enabled": true,  "reason": "偵測到 /api/ 下的 JSON 端點 7 個"},
-    "cms_wordpress": {"enabled": false, "reason": "未偵測到 CMS"}
-  }
-  ```
+**資料模型取捨**：若本期不想做較大的 migration，可暫時保留既有 `scan_mode` 欄位，但 ADR、planner、
+billing 與前端都必須按上述二維語義實作，不能再把「smart 等同 active」當規則。後續再把 DB
+正規化成獨立 `scan_strategy` / `testing_level`。未取得主動授權時，smart 只能執行 smart+passive
+能力，不是「active 失敗後偷偷降級」。
 
-- **migration 一律新增**（遵守 Migration 鐵律），兩個欄位都可空、對既有掃描無影響。
+- 新增 `ScanJob.fingerprint`（JSONField，預設 `{}`）：收斂後網站特徵快照。
+- 新增 `ScanJob.dynamic_modules`（JSONField，預設 `{}`）：記錄額外啟用模組、理由、confidence、
+  evidence、coverage 與實際計費項目。
+- migration 一律新增，對既有掃描保持向後相容。
 
-### 2. 指紋收斂層 `SiteFingerprint`（本案的核心新零件）
+### 2. Signal Collection → Fingerprint Builder（避免 stage dependency 反轉）
 
-現況：`tech_stack.identify_tech_stack()`、`katana_scanner._extract_technologies()`、
-`security/infra_scanner`（CDN/WAF/反代）都已經在產生技術訊號，但**結果只流向報告的
-「網站架構」分頁，沒有任何東西把它回饋成「要掃什麼」的決策**。
+原規劃把 fingerprint 放在 crawl 後，卻同時依賴 Katana / infra_scanner 的後續輸出，會形成
+「前面的 stage 依賴後面的資料」。因此改成兩層：
 
-本案新增 `backend/apps/scans/fingerprint.py`，把分散的訊號收斂成一個**決策導向**的結構
-（與「給人看的技術棧」分開：技術棧是展示，指紋是決策輸入）：
+1. **Pre-scan Signals（crawl 後即可取得）**
+   - HTML / rendered DOM / headers / status / redirect
+   - password form、upload input、401/`WWW-Authenticate`
+   - crawler network listeners 發現的 JSON/REST/GraphQL endpoint
+   - generator meta / basic tech signatures
+2. **Fingerprint Enrichment（相關 scanner 完成後補強）**
+   - Katana technology / endpoint evidence
+   - infra scanner 的 CDN/WAF/reverse proxy
+   - 其他已完成 stage 產生的非破壞性 signal
+
+`fingerprint.py` 本身**不主動發 request**，只消費當下已存在的 signal；缺資料就標 `unknown`
+或 `not_observed`，不能假設為 false。
 
 ```python
 @dataclass(frozen=True)
 class SiteFingerprint:
-    cms: str | None                 # "wordpress" | "drupal" | "joomla" | None
-    frameworks: tuple[str, ...]     # ("laravel", "nextjs", ...)
-    server: str | None              # "nginx" | "apache" | ...
-    edge: str | None                # "cloudflare" | "fastly" | None（來自 infra_scanner）
-    has_login: bool                 # 偵測到登入表單 / 已知登入路徑
+    cms: str | None
+    frameworks: tuple[str, ...]
+    server: str | None
+    edge: str | None
+    has_login: bool | None
     login_urls: tuple[str, ...]
-    has_api: bool                   # 偵測到 JSON/REST/GraphQL 端點
+    has_api: bool | None
     api_urls: tuple[str, ...]
-    has_upload: bool                # 偵測到檔案上傳欄位
-    auth_scheme: str | None         # "cookie-session" | "jwt" | "basic" | None
-    confidence: dict[str, float]    # 每項判定的信心；用於決定是否足以觸發「額外」模組與報告標示
+    has_upload: bool | None
+    auth_scheme: str | None
+    confidence: dict[str, float]
+    evidence: dict[str, tuple[str, ...]]
+    completeness: dict[str, str]   # complete | partial | not_observed | unavailable
 ```
 
-資料來源（全部是**被動**訊號，不為指紋另發破壞性請求）：
-- `cms` / `frameworks` / `server`：`tech_stack.py` 既有簽名 + generator meta。
-- `edge`：`infra_scanner` 既有結果。
-- `has_login` / `login_urls`：掃描已爬頁面的 `<form>` 含 password 欄位，或命中已知登入路徑
-  （`/wp-login.php`、`/login`、`/admin`、`/user/login`…），或 401/`WWW-Authenticate` 標頭。
-- `has_api` / `api_urls`：爬蟲 `_attach_page_listeners` 已收集的 `api_endpoints`（回應
-  `content-type: application/json`）、`/api/`・`/graphql`・`/wp-json/` 路徑、
-  Katana 抽出的端點。
-- `has_upload`：頁面 `<input type="file">`。
-- `auth_scheme`：Set-Cookie 的 session cookie 樣式、`Authorization: Bearer`、Basic。
+**Phase 1 只記錄 Pre-scan Fingerprint，不改任何掃描決策**。Enrichment 可以晚於部分 baseline scanner；
+只有在要執行 Dynamic Planner 前，才以「目前可用 signal」重建/補強 fingerprint。
 
-**放在哪個階段**：新增 `stage_fingerprint`，排在 `stage_crawl`（頁面已抓好）之後、
-所有分析／主動模組之前。它**不發新請求、不花錢、不可因例外中斷整場掃描**。若失敗，
-基礎掃描照常執行，但必須記錄 `stage_fingerprint=FAILED/LIMITED` 與原因，禁止 silent-fail
-被報告成「未偵測到特徵」。
-
-**觸發額外模組的信心門檻**：`confidence` 不影響基礎掃描，但會影響「是否值得加掃」。
-原則上需 `confidence >= 0.8`，或至少兩個獨立 evidence 相互印證；例如僅看到 `/api/` 路徑
-不足以啟動 API 深查，但 `/api/users` + `Content-Type: application/json` 可視為高信心。
+**觸發額外模組**：confidence 不影響 baseline，但會影響 extra scan。原則上
+`confidence >= 0.8` 或至少兩個獨立 evidence；同時必須檢查對應 signal completeness。
 
 ### 3. 動態模組選擇層
 
-`scan_plan.py` 現在是「單次、純靠 `ScanJob` 欄位」的計畫。改成**兩段式**：
+Planner 分三步，不再假設 smart = active：
 
-1. **基礎計畫（維持現狀）**：`build_scan_execution_plan(scan_job)` 不動，智慧模式先得到
-   與 active 模式相同的基礎模組集（Nuclei / Katana / exposure / agent…）。這保證
-   「基礎全掃」底線。
-2. **動態加掛**：新增 `augment_plan_with_fingerprint(plan, fingerprint) -> ScanExecutionPlan`，
-   依指紋把下列**新**旗標打開（只會從 False → True，呼應原則 1）：
+1. **Baseline plan**：依 `testing_level` 取得現有 passive 或 active 的基礎模組集。
+2. **Fingerprint enrichment**：收斂目前已完成 stage 的 signal。
+3. **Dynamic augment**：只有 `strategy=smart` 才依 fingerprint 把額外旗標 False → True。
 
-   | 指紋條件 | 追加模組旗標 | 對應新 stage |
-   |---|---|---|
-   | `has_login` | `run_auth_session` | `stage_auth_session` |
-   | `has_api` | `run_api_security` | `stage_api_security` |
-   | `cms == "wordpress"` | `run_cms_wordpress` | `stage_cms_wordpress` |
-   | `cms in {drupal, joomla}` | `run_cms_generic` | `stage_cms_generic` |
-   | `has_upload`（且已授權主動） | `run_upload_checks` | 併入 `stage_auth_session` 或獨立 |
-   | `has_login \/ has_api \/ has_upload` 且風險面足夠、已授權主動 | `run_zap_dast` | `stage_zap_dast` |
+| 指紋條件 | 額外模組 | testing_level 要求 |
+|---|---|---|
+| `has_login` 高信心 | `run_auth_session` | passive 可做唯讀檢查；主動互動需 active |
+| `has_api` 高信心 | `run_api_security` | passive 唯讀；主動 probe 需 active |
+| WordPress/Drupal/Joomla 高信心 | CMS 專項 | 被動列舉可 passive；額外 probe 需 active |
+| `has_upload` | upload checks | active |
+| login/api/upload 等 attack surface + 已授權 | `run_zap_dast` | active；Passive Analysis 可獨立啟用 |
 
-   `ScanExecutionPlan` 增加這幾個 `run_*` 欄位，預設全 False；只有 `smart` 模式會進
-   augment。非智慧模式永遠拿不到這些旗標 → 行為零變動。
+非 smart strategy 永遠不進 Dynamic augment，既有 standard 行為不變。
 
 ### 4. 新增的深度模組（依 OWASP 既有知識，不重造輪子）
 
@@ -161,12 +155,15 @@ class SiteFingerprint:
   可驗證利用條件成立才升級為 vulnerability。規則思路參考 **WPScan**，但以離線被動為主。
 - **`stage_cms_generic`（Drupal/Joomla）**：對應版本端點與已知敏感路徑。
 - **`stage_zap_dast`（OWASP ZAP 深度 Web DAST）**：
-  - 第一階段只接受控 Passive Scan + Spider / AJAX Spider，先驗證 coverage、效能與噪音。
-  - Active Scan 只有在 `active_testing_authorized=true`、目標位於 Authorized Scope、且 request budget / RPS / timeout 已配置時才能啟動。
-  - 只啟用 Argus 核准的 scan policy；禁止無界限地跑全部 active rules。
-  - ZAP 產生的 alert 先轉成 Shared Evidence，再由 Argus 依 confidence、context、重複證據與 Root Cause 形成最終 Finding；**不得直接照搬 ZAP risk/severity**。
-  - 若 WAF / Rate Limit / Auth 阻擋導致測試不完整，stage 標為 `BLOCKED` 或 `LIMITED`，不得呈現成「沒有漏洞」。
-  - Authenticated Context 留到後續明確提供測試帳號/session 的版本；未登入掃描不能宣稱已完成 authenticated testing。
+  - **Passive Analysis**：只分析既有 HTTP messages，不新增目標流量。
+  - **Traditional Spider / AJAX Spider = Discovery Traffic**：必須受 Authorized Scope 約束；預設 exact-origin，只有明確授權的 host 才可擴張。
+  - Redirect 到 scope 外立即停止追蹤與內容分析；禁止自動提交會改變狀態的表單/按鈕（logout、delete、purchase、password reset、upload submit 等）。
+  - Active Scan 只有在 `testing_level=active`、`active_testing_authorized=true` 且 target 在 Authorized Scope 時才能啟動。
+  - Spider + Active + 自建 probe 共用 request budget / RPS / timeout，避免每個工具各自吃滿上限。
+  - **取消驗收**：scan cancel 後必須停止 ZAP spider、active scanner、subprocess/container，並驗證不再新增網路請求；coverage 記錄 CANCELLED/PARTIAL。
+  - ZAP alert 先轉 Shared Evidence，再由 Argus 形成 Finding；不直接照搬 ZAP risk/severity。
+  - WAF / Rate Limit / Auth 阻擋 → `BLOCKED/LIMITED`，不得呈現「沒有漏洞」。
+  - Authenticated Context 留待有明確測試帳號/session 的版本；未登入掃描不能宣稱已完成 authenticated testing。
 
 ### 5. 計費（實作原則 2 的具體化）
 
@@ -180,11 +177,14 @@ class SiteFingerprint:
   Smart 的基礎費、Agent 附加費與 Dynamic Module 實跑費不得各自演化成重複收費。
 - 前端在啟動前顯示「最高預扣」與估價明細，完成後顯示實際費用與退回點數；Smart Scan 不應
   默認吃掉「首次免費 Standard Full Scan」額度，除非另設 Smart Trial。
+- Billing Matrix 必須同時考慮 `strategy × testing_level × module × coverage/status`：
+  未開始、因 scope 不允許而 SKIPPED、或取消前未實際執行的模組不得按「已執行」收費；
+  BLOCKED/LIMITED 是否收費必須明確定義並可在帳單中對帳。
 
 ### 6. 前端與呈現
 
-- 掃描建立表單新增第三個模式「智慧動態掃描（建議）」，說明「Argus 會先辨識你的網站，
-  再決定要加做哪些深度檢查」。沿用現有被動/主動的 UI 結構。
+- 前端不要把 Smart 與 Passive/Active 做成互斥三選一；應呈現為「掃描策略：Standard / Smart」+
+  「測試層級：Passive / Active」。若暫時沿用舊資料模型，UI 仍需把兩個概念說清楚。
 - 掃描進度：`stage_fingerprint` 與各動態 stage 都進 `progress.steps`，前端現有的分階段
   進度條直接吃（需在 `SCAN_STEP_META` 補對照），讓使用者看到「正在依你的網站特性加掃 X」。
 - 掃描詳情／報告新增一塊「Argus 為這個網站特別做了什麼」：列出 `dynamic_modules` 中
@@ -196,22 +196,20 @@ class SiteFingerprint:
 > 驗證一律：先寫可驗證的測試（`tests_*.py`）→ 跑 `uv run python backend/manage.py test apps.scans`
 > 全綠 + `ruff` → 必要時 Docker 整合實掃。遵守 preflight 與行為準則第 6 條。
 
-**階段 1 — 指紋只記錄、不改行為（風險最低，先驗準確度）**
-- 新增 `fingerprint.py` 的 `SiteFingerprint` 與 `build_fingerprint(ctx)`。
-- 新增 `stage_fingerprint`，寫入 `ScanJob.fingerprint`，**不接任何決策**。
-- migration 新增 `fingerprint` 欄位。
-- 驗證：對示範專案與數個真實站（WordPress、Next.js、純靜態、有 API 的站）實掃，
-  人工核對指紋判定對不對；單元測試覆蓋各訊號來源。**此階段所有現有掃描行為零變動。**
-- 成功條件：指紋對主流 CMS/框架/登入頁/API 的判定準確率可接受（先定義「可接受」門檻）。
+**階段 1 — Pre-scan fingerprint 只記錄、不改行為**
+- 新增 signal/fingerprint builder，只吃 crawl 後已存在的訊號。
+- 寫入 `ScanJob.fingerprint`，不接任何 dynamic decision。
+- 驗證集至少包含 WordPress、Next.js、純靜態、API-heavy、登入站與 CDN/WAF 站。
+- 成功條件開工前明定：各關鍵 fingerprint 的 precision/recall、unknown rate、單次耗時與 **零新增 request**。
+- 此階段所有現有掃描行為與計費零變動。
 
-**階段 2 — 動態「加掃」+ 計費改上限結算**
-- `ScanExecutionPlan` 加 `run_*` 旗標；`augment_plan_with_fingerprint`；`ScanJob.scan_mode`
-  加 `smart`；`dynamic_modules` 欄位 + migration。
-- 實作 `stage_auth_session`、`stage_api_security`、`stage_cms_wordpress`、`stage_cms_generic`。
-- 計費改上限預扣 + 結算退差額。
-- 驗證：單元測試每個新 stage（給定指紋 → 正確啟用/不啟用、finding 格式正確）；
-  計費對稱性測試（全開 vs 部分開 vs 全不開的結算金額）；端對端實掃對 WordPress 站確認
-  CMS 模組真的多跑了、對純靜態站確認沒多跑也沒多收。
+**階段 2 — Enrichment + Dynamic Planner（internal beta）**
+- 接入 Katana / infra 等後續 signal 做 fingerprint enrichment。
+- Planner 採 strategy/testing_level 二維語義；先 internal beta，不立刻對所有使用者開 smart。
+- `dynamic_modules` 記錄 enabled/reason/confidence/evidence/coverage/billing item。
+- 實作 auth/API/CMS 等低風險 extra module；ZAP 先不在本階段全開 Active。
+- 計費走上限預扣 + 實跑結算，但必須先完成 Billing Matrix 測試。
+- 驗證：錯誤 fingerprint 不可關閉 baseline；低信心不得觸發高成本/高流量模組；coverage 與退款對稱。
 
 **階段 3 — 包裝為旗艦模式 + 前端差異化呈現**
 - 前端第三模式、進度步驟、報告「為你特別做了什麼」區塊。
@@ -261,7 +259,7 @@ multi-step exploit chain、privilege escalation 與人工逐項驗證前，不�
 | 動態模組誤報升高（尤其 API/CMS） | 被動偵測 severity 封頂 HIGH、加 `confidence` 分級、結算與評分對低信心打折 |
 | 成本不可預期嚇退使用者 | 預扣上限先講清楚、結算退差額、前端顯示「實際使用 N 點」 |
 | 掃描時間變長且不固定 | 進度條表達「依網站特性加掃中」；無相依的新 stage 可並發 |
-| 主動模組誤觸破壞性操作 | 新自建模組維持唯讀；ZAP Active Scan 僅允許核准 policy、request budget、RPS/timeout 與 Authorized Scope；沿用網域驗證 + 授權閘門，不做暴力或高風險寫入測試 |
+| 主動模組誤觸破壞性操作 | ZAP Spider/AJAX Spider 也視為新增探索流量；所有 discovery/active 流量共用 Authorized Scope、request budget、RPS/timeout，預設禁止狀態改變操作；取消後必須停止子程序與新請求 |
 | API/CMS 模組把掃描帶出授權範圍 | 以 **Authorized Scope** 為邊界：預設同 origin；`api.example.com`／`auth.example.com` 等只有在使用者明確驗證/授權後才能納入，禁止因同 registrable domain 就自動擴張 |
 
 ---
