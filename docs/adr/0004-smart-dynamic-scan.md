@@ -28,6 +28,10 @@ CVE、API 的授權缺陷、登入頁的 Session 安全）目前沒有對應模�
 > 這份文件是**實作計劃**，撰寫時尚未改動任何掃描程式。所有「現況」敘述都對照
 > 2026-10-07 的 `backend/apps/scans/`。落地時每個階段完成都要回來更新本檔與
 > `backend/apps/scans/CLAUDE.md`。
+>
+> **進度（2026-10-07）**：階段 1 已實作——`apps/scans/fingerprint.py`（`SiteFingerprint`、`build_fingerprint`）、
+> `stage_fingerprint`（接在 `enter_scanning` 之後）、`ScanJob.fingerprint`（migration 0031）、準確率資料集
+> `fingerprint_gold.py` 與 `manage.py fingerprint_benchmark`。階段 2、3 尚未開始，`scan_strategy` 欄位也還沒加。
 
 ---
 
@@ -203,7 +207,14 @@ Planner 分三步，不再假設 smart = active：
 > 驗證一律：先寫可驗證的測試（`tests_*.py`）→ 跑 `uv run python backend/manage.py test apps.scans`
 > 全綠 + `ruff` → 必要時 Docker 整合實掃。遵守 preflight 與行為準則第 6 條。
 
-**階段 1 — Pre-scan fingerprint 只記錄、不改行為**
+**階段 1 — Pre-scan fingerprint 只記錄、不改行為**（**已實作 2026-10-07**）
+- 實作結果：資料集 23 個調整用案例（含 6 個容易誤判的案例）＋5 個保留集，涵蓋 WordPress、Drupal、Joomla、
+  Shopify、Next.js、Nuxt、Angular、Gatsby、純靜態、API 為主的 SPA、登入站、上傳表單、Basic／Bearer 驗證、
+  Cloudflare／CloudFront／Fastly／Vercel。成功條件（`fingerprint_benchmark.THRESHOLDS`，`tests_fingerprint.py` 鎖定）：
+  整體 precision、recall ≥ 0.95，且判定期間連線嘗試數＝0（以 socket patch 計數並擋下）。首次量測 precision 1.0、
+  recall 1.0、每站約 0.2 ms、0 次連線；登入／API／上傳三題回「沒看到（None）」的比例 0.82（只是觀察值）。
+  另以 12 個真實網站首頁做初步檢查（只抓原始 HTML＋標頭，非完整爬取），CMS、框架、邊緣服務皆與公開資訊相符；
+  真實網站的完整準確率評估（以實際掃描結果人工核對）留待階段 2 之前進行。
 - 新增 signal/fingerprint builder，只吃 crawl 後已存在的訊號。
 - 寫入 `ScanJob.fingerprint`，不接任何 dynamic decision。
 - 驗證集至少包含 WordPress、Next.js、純靜態、API-heavy、登入站與 CDN/WAF 站。

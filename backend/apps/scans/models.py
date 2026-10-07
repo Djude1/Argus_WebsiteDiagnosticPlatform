@@ -207,6 +207,9 @@ class ScanJob(models.Model):
     # Google PageSpeed Insights 量測（pagespeed.py）：Lighthouse 實驗室分數與 CrUX 真實使用者資料。
     # 外部指標不併入 Argus 分數；空 dict＝沒有量測。
     performance_report = models.JSONField(default=dict, blank=True)
+    # 網站特徵（fingerprint.py，Smart Scan 階段 1）：只記錄爬取階段已有的訊號，
+    # 不影響任何掃描決策；看不出來的特徵為 None 並在 completeness 註明原因
+    fingerprint = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

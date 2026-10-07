@@ -216,7 +216,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 6. **P1 Lighthouse + CrUX** — Lighthouse=Lab、CrUX=Field、GSC=Search impact，保留樣本/裝置/期間/URL-or-origin 範圍與缺資料原因。（**已實作 2026-10-07**：`apps/scans/pagespeed.py` 走 PageSpeed Insights API（行動版、只測首頁、需 `ARGUS_PAGESPEED_API_KEY`），結果存 `ScanJob.performance_report`，掃描「效能」分頁與報告並列呈現、不計入 Argus 分數；覆蓋檢查 `pagespeed`）
 
-7. **P1 Smart Scan Phase 1（只記錄 signal/fingerprint）** — 先修正 stage dependency 與 strategy/testing matrix，再做真實站準確率 benchmark。
+7. **P1 Smart Scan Phase 1（只記錄 signal/fingerprint）** — 先修正 stage dependency 與 strategy/testing matrix，再做真實站準確率 benchmark。（**已實作 2026-10-07**：`apps/scans/fingerprint.py`＋`stage_fingerprint`（緊接 `enter_scanning`，只吃爬取當下已有的訊號，沒有反向依賴後續 stage）、`ScanJob.fingerprint`（migration 0031）；資料集 28 站（含誤判誘餌與保留集）precision／recall 1.0、0 次連線。strategy／testing 二維語義已在 ADR-0004 定案，`scan_strategy` 欄位留待階段 2。尚未做：以真實掃描結果人工核對的準確率評估）
 
 8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。
 

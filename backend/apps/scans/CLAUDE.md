@@ -30,6 +30,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面；整站模式以 robots.txt 宣告的 sitemap（或 `/sitemap.xml`）補種子（`discover_sitemap_urls` → `_CrawlState.seed`，同 origin、非 `.gz`、≤2 MB、索引最多展開 3 個子檔；與掃描網址只差 `www.` 前綴的 sitemap 網址由 `to_scan_origin` 改寫成掃描 origin），連結稀疏的網站也能達到頁數上限；預設深度 `ARGUS_DEFAULT_MAX_DEPTH`＝6。`/cdn-cgi/` 路徑一律不爬（`is_crawl_trap`：Cloudflare 給機器人的無限陷阱連結）。Cloudflare 攔截頁判定只認 `/cdn-cgi/challenge-platform/h/`、`_cf_chl_opt` 等攔截頁專屬標記——**不可用裸字串 `challenge-platform`**：CF Bot 偵測會在每個正常頁面插入 `/cdn-cgi/challenge-platform/scripts/` 背景腳本，曾讓整站只爬到首頁且被誤標為被阻擋（`waf_scanner.py` 同理） | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
 | `coverage.py` | 掃描覆蓋契約（見下「掃描覆蓋契約」）：`ScanCoverage` 累積各檢查狀態與產生的問題代號、`category_status`、`incomplete_checks`、`absent_issue_status`（前次有本次沒有的問題狀態）、`issue_key` | 寫 DB、修改 `ScanJob.status` |
+| `fingerprint.py`、`fingerprint_gold.py`、`fingerprint_benchmark.py` | 網站特徵（Smart Scan 階段 1，見下「網站特徵」）：`build_fingerprint` 只用爬取已有的訊號、`fingerprint_snapshot` 存 `ScanJob.fingerprint`；準確率資料集與指標 | 發任何請求、改變執行計畫或覆蓋紀錄、把「沒看到」寫成 False |
 | `pagespeed.py` | Google PageSpeed Insights（見下「PageSpeed Insights」）：`fetch` 呼叫 PSI v5、`parse` 整理成 `ScanJob.performance_report`、`summary_lines` 給報告範圍表 | 修改 `ScanJob.status`、把金鑰寫進 log 或錯誤訊息、把外部分數併入 Argus 分數 |
 | `evidence/` | 跨模組共用證據（P0-B）：`contacts.py` 的 Email／電話格式、正規化（`normalize_phone`：+886→0、去分機）、`collect_contacts`（每筆帶來源網址、取得方式、位置 content／comment／link、視窗、登入狀態）。資安 `scanners.analyze_data_exposure`、`security/redaction.py` 與 AEO `aeo/answers.py`、`aeo/evaluate.reconcile_contact` 都從這裡取，**不得各自另寫 Email／電話 regex** | 寫 DB、連線目標網站 |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
@@ -438,6 +439,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `target_validation` | `stage_validate_target` | 再次確認目標是公開 HTTP(S) |
 | `crawl` | `stage_crawl` | Playwright BFS；每頁回報進度並當取消檢查點。**沒有任何可分析的頁面（2xx／3xx 且未被阻擋）就丟 `ScanTargetUnreachable`**，由 `finish_unreachable` 標失敗、寫可讀原因並全額退款（2026-10-06：0 頁曾標完成並給 73 分） |
 | `enter_scanning` | `stage_enter_scanning` | 記錄警告、狀態推進到 scanning、落地 `Page` |
+| `fingerprint` | `stage_fingerprint` | 網站特徵（只記錄、不影響掃描）：寫 `ScanJob.fingerprint`；失敗只記 log（`fingerprint.py`） |
 | `page_analysis` | `stage_analyze_pages`（單頁單維度：`_analyze_one_page`） | 逐維度、逐頁規則分析＋inline 秘鑰偵測 |
 | `aeo_answers` | `stage_aeo_answerability`（`_aeo_site_pages`） | AEO 問答檢測（見下「AEO 問答檢測」），結果寫 `ScanJob.aeo_report` |
 | `site_security` | `stage_site_security` | 站台層級 HTTPS/HSTS/CSP 等（只評估一次） |
@@ -478,6 +480,17 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 - **改了 `calculate_scores` 的公式就把 `SCORING_VERSION` +1；改了會影響找出哪些問題、算多嚴重的規則（含 AEO 判定與覆蓋契約）就把 `RULESET_VERSION` 改成當天日期。**
 - `versions.comparable(a, b)`：兩次掃描兩個版本都已知且相同，分數差才可直接解讀。專案總覽 `score_comparable`、走勢每點 `model_changed`／`version_label`、`project_summaries` 的 `score_comparable`；前端版本不同時不顯示 ±分，改寫「評分規則已更新，無法直接比較」，歷史報告列標「規則已更新」。
 - 報告：導讀句版本不同時寫「評分規則與前次不同，分數不宜直接比較」而不是進步／退步；掃描範圍表列「評分版本」（`RENDERER_VERSION` 9）。測試：`tests_scoring_versions.py`。
+
+## 網站特徵（`fingerprint.py`，2026-10-07，ADR-0004 階段 1）
+
+Smart Scan 的第一步：先記錄「這是什麼樣的網站」，**不改任何掃描決策或計費**（[ADR-0004](../../../docs/adr/0004-smart-dynamic-scan.md)）。
+
+- **只用爬取已有的訊號**：頁面 HTML（`rendered_dom` 優先）、回應標頭、狀態碼、爬蟲被動攔截的 XHR／fetch 端點；**不發任何請求**（benchmark 以 socket patch 驗證連線數＝0）。只看 2xx／3xx 且沒被阻擋的頁面；401 頁面只用來讀 `WWW-Authenticate`。
+- **特徵**：`cms`（WordPress／Drupal／Joomla／Shopify／Wix／Squarespace，標記必須在 `src`／`href` 屬性或 meta generator 裡，正文提到路徑不算）、`frameworks`（特有標記或 `X-Powered-By`）、`server`、`edge`（只看標頭，用 `infra_scanner.detect_edge`）、`has_login`／`login_urls`（實際顯示的密碼欄位，`<template>` 裡的不算）、`has_api`／`api_urls`（端點路徑像 API：`/api/`、`/graphql`、`/wp-json/`、`/rest/`、`/v1/`、`.json`；XHR 載入 HTML 片段不算）、`has_upload`、`auth_scheme`。
+- **沒看到＝`None`，不是 `False`**，並在 `completeness` 註明：`complete`（有證據）、`not_observed`（爬取完整但沒看到）、`partial`（爬取不完整——有擷取失敗或達頁數上限；API 與邊緣服務沒看到時一律 partial）、`unavailable`（沒有可分析的頁面）。
+- **信心值**：一頁的證據 0.7、兩頁以上 0.9、meta generator＋路徑 0.95。階段 2 的動態加掃只會用 ≥ 0.8 或兩個獨立證據的特徵。
+- **保存**：`ScanJob.fingerprint`（migration 0031）＝特徵＋`version`、`phase=pre_scan`、`pages_considered`、`endpoints_considered`、`crawl_complete`、`elapsed_ms`；失敗時只有 `error`（例外類別）。目前不進 API、報告與前端。
+- **準確率**：`fingerprint_gold.py`（人工標註；tag `decoy`＝容易誤判、`holdout`＝保留集，不拿來調規則）、`manage.py fingerprint_benchmark [--holdout] [--json]`，門檻 precision／recall ≥ 0.95 且連線數 0，由 `tests_fingerprint.py` 鎖定，只能往上調。**新增特徵或規則：先在資料集加案例並標註，再改規則；不可為了讓規則通過而改標註。**
 
 ---
 

@@ -33,6 +33,7 @@ from apps.scans.coverage import (
 )
 from apps.scans.crawler import crawl_site
 from apps.scans.favicon import needs_refresh, refresh_project_favicon
+from apps.scans.fingerprint import fingerprint_snapshot
 from apps.scans.katana_scanner import run_katana
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.nuclei_scanner import run_nuclei
@@ -631,6 +632,41 @@ def stage_enter_scanning(ctx: ScanRunContext) -> None:
     scan_job.save(update_fields=["status", "warning_summary", "progress", "updated_at"])
     append_log(scan_job_id, f"開始分析，共 {len(ctx.crawled_pages)} 頁待掃描")
     _persist_pages(ctx)
+
+
+def stage_fingerprint(ctx: ScanRunContext) -> None:
+    """網站特徵（Smart Scan 階段 1）：只用爬取已有的訊號，不發請求、不改任何掃描決策。
+
+    失敗只記 log，不影響掃描；結果寫 ScanJob.fingerprint，供之後的準確率評估與動態加掃使用。
+    """
+    scan_job = ctx.scan_job
+    failed = (ctx.warnings or {}).get("failed_urls") or []
+    crawl_complete = not failed and len(ctx.crawled_pages) < scan_job.max_pages
+    try:
+        snapshot = fingerprint_snapshot(
+            ctx.crawled_pages, ctx.discovered_endpoints, crawl_complete=crawl_complete
+        )
+    except Exception as exc:
+        logger.exception("網站特徵整理失敗 scan_job_id=%s", ctx.scan_job_id)
+        append_log(ctx.scan_job_id, f"網站特徵整理失敗（{exc.__class__.__name__}）", level="warn")
+        snapshot = {"version": 1, "phase": "pre_scan", "error": exc.__class__.__name__}
+    scan_job.fingerprint = snapshot
+    scan_job.save(update_fields=["fingerprint", "updated_at"])
+    if "error" not in snapshot:
+        found = [
+            label for label, value in (
+                ("CMS " + (snapshot["cms"] or ""), snapshot["cms"]),
+                ("登入頁", snapshot["has_login"]),
+                ("API", snapshot["has_api"]),
+                ("上傳欄位", snapshot["has_upload"]),
+                ("邊緣服務 " + (snapshot["edge"] or ""), snapshot["edge"]),
+            ) if value
+        ]
+        append_log(
+            ctx.scan_job_id,
+            "網站特徵（只記錄，不影響本次掃描）："
+            + ("、".join(found) if found else "沒有明顯特徵"),
+        )
 
 
 def _analyze_one_page(page: Page, page_data: dict, category: str) -> list[dict]:
@@ -1544,6 +1580,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("target_validation", stage_validate_target),
     ("crawl", stage_crawl),
     ("enter_scanning", stage_enter_scanning),
+    ("fingerprint", stage_fingerprint),
     ("page_analysis", stage_analyze_pages),
     ("aeo_answers", stage_aeo_answerability),
     ("site_security", stage_site_security),

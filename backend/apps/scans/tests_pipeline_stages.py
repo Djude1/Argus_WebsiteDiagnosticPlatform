@@ -40,10 +40,10 @@ class PipelineShapeTests(TestCase):
         self.assertEqual(
             names,
             [
-                "target_validation", "crawl", "enter_scanning", "page_analysis",
-                "aeo_answers", "site_security", "active_probe", "deep_security", "exposure",
-                "geo_site", "seo_links", "pagespeed", "favicon", "agent", "kali", "site_profile",
-                "scoring",
+                "target_validation", "crawl", "enter_scanning", "fingerprint",
+                "page_analysis", "aeo_answers", "site_security", "active_probe", "deep_security",
+                "exposure", "geo_site", "seo_links", "pagespeed", "favicon", "agent", "kali",
+                "site_profile", "scoring",
             ],
         )
         # 每個階段都是可單獨呼叫的函式
