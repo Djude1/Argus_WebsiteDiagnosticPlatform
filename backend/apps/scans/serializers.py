@@ -281,6 +281,8 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "aeo_report",
             "site_profile",
             "coverage",
+            "scoring_version",
+            "ruleset_version",
             "progress",
             "scan_log",
             "error_message",

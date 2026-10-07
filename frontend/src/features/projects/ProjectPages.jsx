@@ -174,10 +174,14 @@ function ProjectOverviewPage() {
 
   const latest = data.latest_scan;
   const previous = data.previous_scan;
+  // 評分公式或規則集不同時，分數差可能只是規則改了，不顯示成進步／退步（後端 versions.py）
+  const comparable = data.score_comparable !== false;
   const delta =
-    latest && previous && latest.overall_score != null && previous.overall_score != null
+    comparable && latest && previous && latest.overall_score != null && previous.overall_score != null
       ? latest.overall_score - previous.overall_score
       : null;
+  const deltaText = previous && !comparable ? "評分規則已更新，無法直接比較" : "—";
+  const modelChanges = data.trend.filter((point) => point.model_changed).length;
   const issuesPath = projectPath(project.id, "issues");
   const trendPoints = data.trend.slice(-trendRange);
 
@@ -224,7 +228,7 @@ function ProjectOverviewPage() {
                 <div>
                   <span className={`project-grade tone-${scoreTone(latest.overall_score)}`}>{scoreGrade(latest.overall_score)}</span>
                   <p className="project-kpi-sub">與上次相比</p>
-                  <p className="project-kpi-delta">{delta === null ? "—" : delta === 0 ? "分數持平" : <DeltaText delta={delta} />}</p>
+                  <p className="project-kpi-delta">{delta === null ? deltaText : delta === 0 ? "分數持平" : <DeltaText delta={delta} />}</p>
                 </div>
               </div>
               <p className="project-kpi-hint">
@@ -275,7 +279,7 @@ function ProjectOverviewPage() {
               </p>
               <p className="project-kpi-sub">與上次相比</p>
               <p className="project-kpi-change">
-                分數變化 <b>{delta === null ? "—" : delta > 0 ? `+${delta}` : delta}</b>
+                分數變化 <b>{delta === null ? deltaText : delta > 0 ? `+${delta}` : delta}</b>
               </p>
               <Link className="project-text-link" to={`/scans/${latest.id}`}>查看這次結果 →</Link>
             </section>
@@ -315,6 +319,11 @@ function ProjectOverviewPage() {
                 ariaLabel={`${project.name} 分數趨勢`}
               />
               {data.trend.length < 2 && <p className="hint-text">完成兩次以上掃描後即可看出趨勢。</p>}
+              {modelChanges > 0 && (
+                <p className="hint-text">
+                  期間評分規則更新過 {modelChanges} 次，更新前後的分數不宜直接比較。
+                </p>
+              )}
             </section>
           </div>
 
@@ -1257,11 +1266,17 @@ function ProjectHistoryPage() {
   const completed = scans.filter((scan) => scan.status === "completed");
   // 每次完成掃描與「前一次完成掃描」的分數差
   const deltaById = new Map();
+  // 評分與規則版本不同（或舊掃描版本不明）的兩次不算分數差
+  const sameModel = (a, b) =>
+    Boolean(a.scoring_version && a.ruleset_version)
+    && a.scoring_version === b.scoring_version
+    && a.ruleset_version === b.ruleset_version;
+  const modelChangedIds = new Set();
   completed.forEach((scan, index) => {
     const older = completed[index + 1];
-    if (older && scan.overall_score != null && older.overall_score != null) {
-      deltaById.set(scan.id, scan.overall_score - older.overall_score);
-    }
+    if (!older || scan.overall_score == null || older.overall_score == null) return;
+    if (sameModel(scan, older)) deltaById.set(scan.id, scan.overall_score - older.overall_score);
+    else modelChangedIds.add(scan.id);
   });
 
   return (
@@ -1305,7 +1320,13 @@ function ProjectHistoryPage() {
                       <td>{formatDateTime(scan.created_at)}</td>
                       <td><ScanStatusBadge status={scan.status} /></td>
                       <td><ScoreBadge score={scan.overall_score} /></td>
-                      <td>{deltaById.has(scan.id) ? <DeltaText delta={deltaById.get(scan.id)} /> : "—"}</td>
+                      <td>
+                        {deltaById.has(scan.id) ? (
+                          <DeltaText delta={deltaById.get(scan.id)} />
+                        ) : modelChangedIds.has(scan.id) ? (
+                          <span className="hint-text" title="評分規則與前一次不同，分數不宜直接比較">規則已更新</span>
+                        ) : "—"}
+                      </td>
                       <td>{scan.pages_count} 頁 · {scan.findings_count} 項</td>
                       <td>
                         <div className="project-table-actions">

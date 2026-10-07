@@ -9337,6 +9337,14 @@
                     "coverage": {
                         "readOnly": true
                     },
+                    "scoring_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "ruleset_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -9404,8 +9412,10 @@
                     "progress",
                     "project",
                     "respect_robots",
+                    "ruleset_version",
                     "scan_log",
                     "scan_mode",
+                    "scoring_version",
                     "site_profile",
                     "started_at",
                     "status",

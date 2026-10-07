@@ -8,6 +8,7 @@ from apps.scans.scanners import (
     analyze_security_site_level,
     calculate_scores,
 )
+from apps.scans.versions import RULESET_VERSION, SCORING_VERSION
 
 
 class Command(BaseCommand):
@@ -113,11 +114,16 @@ class Command(BaseCommand):
         scan_job.overall_score = overall_score
         scan_job.category_scores = category_scores
         scan_job.top_actions = top_actions
+        # 以目前的規則與公式重新分析：版本跟著更新（versions.py）
+        scan_job.scoring_version = SCORING_VERSION
+        scan_job.ruleset_version = RULESET_VERSION
         scan_job.save(
             update_fields=[
                 "overall_score",
                 "category_scores",
                 "top_actions",
+                "scoring_version",
+                "ruleset_version",
                 "updated_at",
             ]
         )

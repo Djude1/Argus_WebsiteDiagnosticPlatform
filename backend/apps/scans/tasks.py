@@ -65,6 +65,7 @@ from apps.scans.seo.collect import build_link_report
 from apps.scans.seo.site_findings import seo_site_findings
 from apps.scans.services import assert_public_http_url
 from apps.scans.site_profile import build_site_profile
+from apps.scans.versions import RULESET_VERSION, SCORING_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -1388,6 +1389,8 @@ def stage_scoring(ctx: ScanRunContext) -> None:
     scan_job.category_scores = category_scores
     scan_job.top_actions = top_actions
     scan_job.coverage = coverage_for(ctx, tested_categories)
+    scan_job.scoring_version = SCORING_VERSION
+    scan_job.ruleset_version = RULESET_VERSION
     if ctx.agent_meta:
         warning_summary = dict(scan_job.warning_summary or {})
         warning_summary["agent"] = ctx.agent_meta
@@ -1407,6 +1410,8 @@ def stage_scoring(ctx: ScanRunContext) -> None:
         top_actions=top_actions,
         warning_summary=scan_job.warning_summary,
         coverage=scan_job.coverage,
+        scoring_version=SCORING_VERSION,
+        ruleset_version=RULESET_VERSION,
         progress={},
         completed_at=completed_at,
         updated_at=completed_at,

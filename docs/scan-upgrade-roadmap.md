@@ -208,7 +208,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
    - 建立 50–100 組 answerable / insufficient / conflict / missing / semantic-near-but-not-answer regression case。
    - 驗收至少追蹤 precision、recall、false-positive rate、平均判定成本與耗時；門檻先在實作票/ADR 明定後再上線。
 
-4. **P1 Coverage-aware scoring + comparable history**
+4. **P1 Coverage-aware scoring + comparable history**（**已實作 2026-10-07**：`scoring_version`／`ruleset_version`（`apps/scans/versions.py`、migration 0029），跨版本不顯示分數增減；coverage-aware 計分與 RESOLVED／NOT_OBSERVED／BLOCKED／INCONCLUSIVE 已於 P0-A 完成。尚未做：評分可解釋化（逐維度扣分來源）、外部 benchmark）
    - 加 `scoring_version` / `ruleset_version`；歷史 diff 升級成 RESOLVED / NOT_OBSERVED / BLOCKED / INCONCLUSIVE。
    - 外部 benchmark 只驗證可對應子指標，不把 Argus 總分校準成 Lighthouse/CrUX。
 

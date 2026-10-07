@@ -63,7 +63,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          project（所屬網站專案，見下 SiteProject）、
          is_trial（首次免費完整掃描，預扣／結算皆 0；migration 0027，見 apps/billing/CLAUDE.md）、
          coverage（JSON，掃描覆蓋紀錄：各項檢查是否完整跑完、產生哪些問題、各維度覆蓋狀態；
-         migration 0028，見 apps/scans/CLAUDE.md「掃描覆蓋契約」）
+         migration 0028，見 apps/scans/CLAUDE.md「掃描覆蓋契約」）、
+         scoring_version／ruleset_version（完成時的計分公式與規則集版本，版本相同分數才可比較；
+         migration 0029，見 apps/scans/CLAUDE.md「評分與規則版本」）
 ```
 
 **SiteProject**（`apps/scans/models.py`，2026-10-02）

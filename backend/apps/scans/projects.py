@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 
 from django.db.models import Count, Q
 
+from apps.scans import versions
 from apps.scans.coverage import (
     ABSENT_STATUS_LABELS,
     absent_issue_status,
@@ -285,14 +286,18 @@ def project_overview(project: SiteProject) -> dict:
             if aeo
             else None,
         }
+    trend_scans = list(reversed(list(completed_scans(project)[:TREND_LIMIT])))
     trend = [
         {
             "id": scan.id,
             "completed_at": scan.completed_at,
             "overall_score": scan.overall_score,
             "category_scores": scan.category_scores or {},
+            "version_label": versions.label(scan),
+            # 與前一點的評分或規則版本不同：走勢圖要標示，不能把這段變化當成網站改善
+            "model_changed": index > 0 and not versions.comparable(scan, trend_scans[index - 1]),
         }
-        for scan in reversed(list(completed_scans(project)[:TREND_LIMIT]))
+        for index, scan in enumerate(trend_scans)
     ]
     recent_scans = [
         {**_scan_brief(scan), "scan_mode": scan.scan_mode, "max_pages": scan.max_pages}
@@ -302,6 +307,8 @@ def project_overview(project: SiteProject) -> dict:
         "latest_scan": latest_payload,
         "recent_scans": recent_scans,
         "previous_scan": _scan_brief(previous),
+        # 兩次掃描的評分與規則版本相同，分數變化才可直接解讀成網站變好／變差（versions.py）
+        "score_comparable": versions.comparable(latest, previous),
         "active_scan": (
             {**_scan_brief(running), "progress": running.progress or {}} if running else None
         ),
@@ -437,6 +444,8 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             "latest_score": None,
             "latest_category_scores": {},
             "previous_score": None,
+            # 最新與前一次完成掃描的版本相同，變化才可直接比較（versions.py）
+            "score_comparable": False,
             "last_completed_at": None,
             "score_history": [],
             "issue_counts": {},
@@ -456,8 +465,11 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             "categories",
             "created_at",
             "completed_at",
+            "scoring_version",
+            "ruleset_version",
         )
     )
+    latest_versions: dict[int, tuple[str, str]] = {}
     for row in rows:
         summary = summaries[row["project_id"]]
         summary["scans_count"] += 1
@@ -478,8 +490,13 @@ def project_summaries(project_ids: list[int]) -> dict[int, dict]:
             summary["last_completed_at"] = row["completed_at"]
             effective = {c for c in (row["categories"] or []) if c in ALL_CATEGORIES}
             latest_completed[row["project_id"]] = (row["id"], effective or set(ALL_CATEGORIES))
+            latest_versions[row["project_id"]] = (row["scoring_version"], row["ruleset_version"])
         elif summary["previous_score"] is None and summary["latest_score"] is not None:
             summary["previous_score"] = row["overall_score"]
+            current = latest_versions.get(row["project_id"], ("", ""))
+            summary["score_comparable"] = all(current) and current == (
+                row["scoring_version"], row["ruleset_version"]
+            )
     _attach_issue_counts(summaries, latest_completed)
     return summaries
 

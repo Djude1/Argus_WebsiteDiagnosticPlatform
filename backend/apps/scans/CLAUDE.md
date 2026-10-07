@@ -358,7 +358,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -446,7 +446,14 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 - **報告**：摘要「已解決 N 項」只算 resolved，其餘寫「另有 N 項本次未出現，但檢查不完整、無法確認已修好」；掃描範圍表列「未完整完成的檢查」（只有 partial 附原因，failed 的例外類別屬內部資訊不印）與「部分評估的面向」。
 - **API**：`ScanJobSerializer.coverage`；專案總覽 `latest_scan.coverage`（`categories`＋`incomplete`），前端顯示不完整提示。
 - **新增檢查**：在 `CHECK_CATEGORIES`／`CHECK_LABELS` 登記，成功、失敗、沒執行三種情況都要 mark。測試：`tests_coverage.py`。
-- 尚未做：rule／resource 級細分、`scoring_version`、把檢查狀態接到計費。
+- 尚未做：rule／resource 級細分、把檢查狀態接到計費。
+
+## 評分與規則版本（`versions.py`，2026-10-07，roadmap P1）
+
+- `ScanJob.scoring_version`（計分公式，`SCORING_VERSION`）與 `ruleset_version`（判定規則集，`RULESET_VERSION`）由 `stage_scoring` 寫入（migration 0029）；`rerun_scan` 兩個都更新，`finding_normalization._rescore` 只更新計分版本（只重跑部分規則）。舊掃描為空字串＝版本不明。
+- **改了 `calculate_scores` 的公式就把 `SCORING_VERSION` +1；改了會影響找出哪些問題、算多嚴重的規則（含 AEO 判定與覆蓋契約）就把 `RULESET_VERSION` 改成當天日期。**
+- `versions.comparable(a, b)`：兩次掃描兩個版本都已知且相同，分數差才可直接解讀。專案總覽 `score_comparable`、走勢每點 `model_changed`／`version_label`、`project_summaries` 的 `score_comparable`；前端版本不同時不顯示 ±分，改寫「評分規則已更新，無法直接比較」，歷史報告列標「規則已更新」。
+- 報告：導讀句版本不同時寫「評分規則與前次不同，分數不宜直接比較」而不是進步／退步；掃描範圍表列「評分版本」（`RENDERER_VERSION` 9）。測試：`tests_scoring_versions.py`。
 
 ---
 

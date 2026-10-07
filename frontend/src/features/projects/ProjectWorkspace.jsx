@@ -357,6 +357,8 @@ function ProjectHomeRedirect({ section = "" }) {
 
 function scoreDelta(summary) {
   if (summary.latest_score == null || summary.previous_score == null) return null;
+  // 評分規則不同的兩次掃描，分數差不代表網站變好或變差
+  if (summary.score_comparable === false) return null;
   return summary.latest_score - summary.previous_score;
 }
 

@@ -23,6 +23,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from apps.scans import versions
 from apps.scans.coverage import incomplete_checks
 from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.report_pdf import convert_docx_to_pdf
@@ -701,6 +702,7 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
     if not_selected:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
+    rows["評分版本"] = versions.label(scan_job)
     incomplete = incomplete_checks(scan_job.coverage)
     if incomplete:
         # 覆蓋契約：有跑但沒完整跑完的檢查要講出來，「沒發現問題」不等於沒有問題
@@ -847,7 +849,12 @@ def _headline(
     parts = []
     if isinstance(score, int):
         parts.append(f"分數落在「{_score_band_label(score)}」區間")
-    if previous is not None and isinstance(score, int):
+    if previous is not None and isinstance(score, int) and not versions.comparable(
+        scan_job, previous
+    ):
+        # 評分公式或規則集不同：分數差可能只是規則改了，不能說成網站進步／退步
+        parts.append("評分規則與前次不同，分數不宜直接比較")
+    elif previous is not None and isinstance(score, int):
         delta = score - previous.overall_score
         if delta > 0:
             parts.append(f"較前次進步 {delta} 分")

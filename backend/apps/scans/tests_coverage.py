@@ -311,3 +311,8 @@ class PipelineWritesCoverageTests(TransactionTestCase):
         self.assertEqual(checks["nuclei"]["status"], SKIPPED)
         # SEO 的連結檢查失敗了，但逐頁分析有跑完：部分評估，不是完整
         self.assertEqual(scan.coverage["categories"]["seo"], PARTIAL)
+        # 評分與規則版本也一起寫入（versions.py）
+        from apps.scans.versions import RULESET_VERSION, SCORING_VERSION
+
+        self.assertEqual((scan.scoring_version, scan.ruleset_version),
+                         (SCORING_VERSION, RULESET_VERSION))
