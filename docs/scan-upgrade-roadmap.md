@@ -189,7 +189,10 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 建議導入優先序（可直接拆實作）
 
-1. **P0-A Coverage Contract + 既有能力盤點**
+1. **P0-A Coverage Contract + 既有能力盤點**（**MVP 已實作 2026-10-07**：`apps/scans/coverage.py`、`ScanJob.coverage`（migration 0028）；
+   檢查級狀態 completed／partial／failed／blocked／skipped、維度級 completed／partial／not_tested，約束計分、
+   專案問題比較（resolved／not_observed／not_tested／blocked／inconclusive）與報告「已解決」。尚未做：rule／resource 級
+   覆蓋細分、`scoring_version`、stage status 流入 billing）
    - 先定義 stage/rule/resource coverage 與 finding lifecycle。
    - 修正現況盤點：confidence、history diff、link 去重/並發皆是「已有但語義/coverage 不足」，不是全新功能。
    - 驗收：工具 BLOCKED/FAILED 時不加分；前次 finding 只有在相同偵測能力完整重跑時才可標 RESOLVED。

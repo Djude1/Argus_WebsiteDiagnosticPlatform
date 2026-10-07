@@ -120,6 +120,26 @@ function ActiveScanBanner({ scan }) {
   );
 }
 
+
+/** 覆蓋契約：有檢查沒完整跑完時提示，分數只反映實際完成的部分（沒有就不顯示）。 */
+function CoverageNotice({ coverage }) {
+  const incomplete = coverage?.incomplete || [];
+  if (!incomplete.length) return null;
+  const partial = Object.entries(coverage.categories || {})
+    .filter(([, state]) => state === "partial")
+    .map(([category]) => CATEGORY_LABELS[category] || category);
+  return (
+    <section className="panel project-coverage-notice" role="status">
+      <p className="project-coverage-title">這次有 {incomplete.length} 項檢查沒有完整完成</p>
+      <p className="hint-text">
+        {incomplete.map((item) => item.label).join("、")}。
+        {partial.length > 0 && `${partial.join("、")} 的分數只反映實際完成的檢查，`}
+        沒有發現問題不代表沒有問題。
+      </p>
+    </section>
+  );
+}
+
 function ProjectOverviewPage() {
   const { project } = useOutletContext();
   const [data, setData] = useState(null);
@@ -195,6 +215,7 @@ function ProjectOverviewPage() {
         </section>
       ) : (
         <>
+          <CoverageNotice coverage={latest.coverage} />
           <div className="project-kpis">
             <section className="project-kpi is-score">
               <p className="project-kpi-label">網站綜合評分</p>
@@ -226,7 +247,10 @@ function ProjectOverviewPage() {
                     較上次掃描：
                     <Link to={`${issuesPath}?change=new`}>新增 {data.changes.new}</Link>、
                     <Link to={`${issuesPath}?change=persisting`}>持續 {data.changes.persisting}</Link>、
-                    <Link to={`${issuesPath}#missing`}>未出現 {data.changes.missing}</Link>
+                    <Link to={`${issuesPath}#missing`}>
+                      未出現 {data.changes.missing}
+                      {data.changes.resolved ? `（已修好 ${data.changes.resolved}）` : ""}
+                    </Link>
                   </>
                 ) : "再掃描一次後會標示新增、持續與未出現的問題"}
               </p>
@@ -803,8 +827,8 @@ function ProjectIssuesPage() {
         <section className="panel" id="missing">
           <h2 className="project-section-title">本次未出現（{data.missing.length}）</h2>
           <p className="hint-text">
-            上一次掃描有、這次沒有出現的問題（只列這次仍有檢查的維度）。可能已修好，
-            也可能是這次沒爬到相關頁面或頁面被阻擋，請到該頁確認。
+            上一次掃描有、這次沒有出現的問題（只列這次仍有檢查的維度）。只有同一項檢查這次完整跑完、
+            相關頁面也重新檢查過，才標示「已修好」；其餘可能是這次沒爬到該頁、檢查失敗或沒有執行，請到該頁確認。
           </p>
           <ul className="project-issue-list is-muted">
             {data.missing.map((issue) => (
@@ -814,6 +838,9 @@ function ProjectIssuesPage() {
                   <p className="project-issue-title">{issue.title}</p>
                   <p className="project-issue-meta">{CATEGORY_LABELS[issue.category] || issue.category}</p>
                 </div>
+                {issue.status_label && (
+                  <span className={`project-change-chip is-${issue.status}`}>{issue.status_label}</span>
+                )}
               </li>
             ))}
           </ul>

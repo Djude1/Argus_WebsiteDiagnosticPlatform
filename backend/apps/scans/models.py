@@ -197,6 +197,9 @@ class ScanJob(models.Model):
     # 網站概況（apps/scans/site_profile.py）：基礎架構（網域／IP／反解／CDN 邊緣）與網站優勢。
     # 空 dict＝舊掃描或本次沒算到。
     site_profile = models.JSONField(default=dict, blank=True)
+    # 掃描覆蓋紀錄（coverage.py）：各項檢查是否完整跑完、產生了哪些問題、各維度覆蓋狀態。
+    # 計分、歷史比較（已修好／未觀察到）與報告都依此判斷；空 dict＝舊掃描，無從判斷。
+    coverage = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

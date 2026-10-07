@@ -29,6 +29,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `process_runner.py` | 以 `Popen` 執行 Nuclei/Katana，輪詢 DB 取消並終止 process tree | 吞掉 `ScanCancelled`、記錄 raw stdout/stderr |
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面；整站模式以 robots.txt 宣告的 sitemap（或 `/sitemap.xml`）補種子（`discover_sitemap_urls` → `_CrawlState.seed`，同 origin、非 `.gz`、≤2 MB、索引最多展開 3 個子檔；與掃描網址只差 `www.` 前綴的 sitemap 網址由 `to_scan_origin` 改寫成掃描 origin），連結稀疏的網站也能達到頁數上限；預設深度 `ARGUS_DEFAULT_MAX_DEPTH`＝6。`/cdn-cgi/` 路徑一律不爬（`is_crawl_trap`：Cloudflare 給機器人的無限陷阱連結）。Cloudflare 攔截頁判定只認 `/cdn-cgi/challenge-platform/h/`、`_cf_chl_opt` 等攔截頁專屬標記——**不可用裸字串 `challenge-platform`**：CF Bot 偵測會在每個正常頁面插入 `/cdn-cgi/challenge-platform/scripts/` 背景腳本，曾讓整站只爬到首頁且被誤標為被阻擋（`waf_scanner.py` 同理） | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
+| `coverage.py` | 掃描覆蓋契約（見下「掃描覆蓋契約」）：`ScanCoverage` 累積各檢查狀態與產生的問題代號、`category_status`、`incomplete_checks`、`absent_issue_status`（前次有本次沒有的問題狀態）、`issue_key` | 寫 DB、修改 `ScanJob.status` |
 | `cancellation.py` | 合作式取消：`is_cancelled` / `raise_if_cancelled` 直接查 DB `ScanJob.status` 是否為 `CANCELLED`（**非 Redis 旗標**），供 worker 在檢查點輪詢 | 直接終止 worker process |
 | `fixgen/` | 修正產出引擎（ADR-0002）：`facts.py` 爬取事實萃取、`policy.py` 事實政策三級驗證、`engine.py` prompt＋單次 JSON 產生＋渲染、`services.py` 計費閘門觸發（先扣後派）＋狀態機冪等、`tasks.py` Celery 任務（不重試）。API 掛在 ScanJobViewSet 的 `fix-output/trigger|status|artifacts` | 修改 `ScanJob.status`、自動重試、繞過事實政策驗證、派工後才計費 |
 | `reports.py` | 報告 payload 與排版：`render_report_docx` 產生 .docx（內容測試直接讀它），`build_scan_report` 再交給 `report_pdf.py` 轉成 PDF 並寫 `ReportVerification`；**對外只提供 PDF**（2026-10-03） | 防偽紀錄以外的 DB 寫入 |
@@ -146,7 +147,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 - **`domain_verified`**：`SiteProjectSerializer` 的唯讀欄位，等於 `user_owns_domain(user, hostname)`，前端頁首顯示已驗證勾勾；權限判斷仍以 view 內的檢查為準。
 - **預設掃描設定**：`SiteProject.default_scope`／`default_categories`／`default_scan_mode`（passive/active，2026-10-03）只是前端表單初始值，建立掃描時仍以實際送出的參數為準；新增專案時可一併設定（`SiteProjectCreateSerializer`），預設主動測試時預設維度必須含資安（`_check_active_needs_security`）。`description`（選填 300 字）在網站沒有 meta description 時顯示在總覽頁首。
 - **示範專案（`is_demo`，2026-10-03，`demo/`）**：Email 註冊與第一次 Google 登入時由 `demo.seed.create_demo_project_safely` 建立（`ARGUS_DEMO_PROJECT_ENABLED`，預設開；失敗只記 log、不影響註冊）。資料是虛構網站 `scripts/demo_site/server.py` 三個版本的**真實掃描**匯出（`manage.py export_demo_dataset`），截圖放在 `demo/screenshots/`、所有示範專案共用；重產步驟見 `demo/README.md`。示範專案唯讀：建立掃描（`_resolve_project`）、PATCH（`SiteProjectUpdateSerializer.validate`）、修正產出觸發、網頁複刻（`apps/rebuild`）都回 400，可以封存。後台統計與清單（`admin_api.views.real_scans()`）與評論資格（`reviews._latest_completed_experience`）都排除示範掃描。`ScanJobSerializer.is_demo` 給前端隱藏複刻。既有帳號補建：`manage.py seed_demo_project --without-projects`（封存過的不補）。測試：`tests_demo_project.py`。
-- **問題的追蹤單位**＝一次掃描中同一條 `rule_id`（沒有就「分類:標題」），與報告合併規則一致；比較對象是同專案前一次「完成」的掃描。「本次未出現」只列本次仍有勾的維度，前端必須提醒不等於已修好。
+- **問題的追蹤單位**＝一次掃描中同一條 `rule_id`（沒有就「分類:標題」），與報告合併規則一致；比較對象是同專案前一次「完成」的掃描。「本次未出現」只列本次仍有勾的維度，每項附覆蓋契約判定的狀態（見「掃描覆蓋契約」），只有 `resolved` 能稱為已修好。
 - **migration 0019 會先清掉殘留**（`drop_orphaned_site_project_schema`）：0019 未套用時若資料庫已有 `scans_siteproject` 表或 `scans_scanjob.project_id` 欄位，只可能是同功能較早版本跑過後被回退（程式與 migration 紀錄退回但表沒刪），會先移除再建立並回填。2026-10-02 Docker migrate 因此報 `relation "scans_siteproject" already exists`；由 `SiteProjectMigrationRecoveryTests` 鎖定（SQLite／PostgreSQL 皆驗證）。**回退含 migration 的功能時要用 `migrate <app> <前一版>` 反向套用，不要只退程式碼或刪 `django_migrations` 紀錄。**
 - **不提供硬刪除**：DELETE＝封存（`archived_at`），單筆讀取仍可讀封存專案（舊掃描詳情要顯示所屬專案），清單只列未封存。
 - **頁面分頁**：`/api/projects/<id>/pages/?scan=` 回一次掃描的每一頁與其問題數（只算有勾的維度），沒有對應頁面的站台層級發現另計 `site_level_findings`。
@@ -354,7 +355,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -428,6 +429,21 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。
 
 網頁 API 與 MCP 共用的掃描入口：`views.enqueue_created_scan()`（派工，失敗全額退款）、`views.ensure_report_file()`（報告快取）、`tasks.request_scan_cancel()`（取消＋退款）。
+
+---
+
+## 掃描覆蓋契約（`coverage.py`，2026-10-07，roadmap P0-A）
+
+工具失敗或沒跑完不能被呈現成「0 項問題」，前次問題沒出現也不等於已修好。
+
+- **記錄**：各 `stage_*` 以 `ctx.coverage.mark(check, status, reason)` 記錄檢查結果（completed／partial／failed／blocked／skipped），`ctx.record(findings, check=...)` 同時記下該檢查產生的問題代號（`issue_key`）。檢查名稱與所屬維度在 `CHECK_CATEGORIES`；外部工具例外一律走 `tasks._tool_failed`（記 log＋標 failed）。agent 的 finding 由 runner 直接落 DB，以規則前綴（`AGENT_UX_`／`agent-`／`kali-`）對回檢查。
+- **保存**：`stage_scoring` 把 `coverage_for(ctx, tested)` 寫入 `ScanJob.coverage`（migration 0028）：`checks`（狀態、原因、問題代號）＋`categories`（completed／partial／not_tested；沒進計分的勾選維度一律 not_tested）。
+- **計分**：某維度有記錄的檢查全部失敗／被阻擋時，從 `tested_categories_for` 移除（顯示未評估）；部分失敗照常評分，但標部分評估。爬取有頁面擷取失敗（`failed_urls`）時 `crawl=partial`，逐頁分析的維度都是部分評估；robots／範圍略過不算。
+- **歷史比較**（`projects.compare_issues`）：前次有、本次沒有的問題，以前次覆蓋紀錄找出是哪項檢查產生的，看該檢查本次狀態——completed 且受影響頁面本次有完整分析（沒被阻擋、HTTP < 400）才是 `resolved`；partial→`not_observed`、failed→`inconclusive`、blocked→`blocked`、沒跑→`not_tested`。前次沒有覆蓋紀錄時退回以維度狀態判斷；本次沒有覆蓋紀錄（舊掃描）一律 `not_observed`。回應附 `status_label`，總覽 `changes.resolved` 只算 resolved。
+- **報告**：摘要「已解決 N 項」只算 resolved，其餘寫「另有 N 項本次未出現，但檢查不完整、無法確認已修好」；掃描範圍表列「未完整完成的檢查」（只有 partial 附原因，failed 的例外類別屬內部資訊不印）與「部分評估的面向」。
+- **API**：`ScanJobSerializer.coverage`；專案總覽 `latest_scan.coverage`（`categories`＋`incomplete`），前端顯示不完整提示。
+- **新增檢查**：在 `CHECK_CATEGORIES`／`CHECK_LABELS` 登記，成功、失敗、沒執行三種情況都要 mark。測試：`tests_coverage.py`。
+- 尚未做：rule／resource 級細分、`scoring_version`、把檢查狀態接到計費。
 
 ---
 

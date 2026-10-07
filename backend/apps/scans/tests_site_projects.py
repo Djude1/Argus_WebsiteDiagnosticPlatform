@@ -273,7 +273,11 @@ class ProjectOverviewAndIssuesTests(APITestCase):
         self.assertEqual(data["active_scan"]["id"], running.id)
         self.assertEqual(data["severity_counts"]["critical"], 1)
         self.assertEqual(data["severity_counts"]["high"], 1)
-        self.assertEqual(data["changes"], {"new": 1, "persisting": 1, "missing": 1})
+        self.assertEqual(
+            data["changes"],
+            # 舊掃描沒有覆蓋紀錄：本次未出現的不能算已修好
+            {"new": 1, "persisting": 1, "missing": 1, "resolved": 0},
+        )
         self.assertEqual([p["id"] for p in data["trend"]], [self.old.id, self.new.id])
         self.assertEqual(data["scans_count"], 3)
         self.assertEqual(data["project"]["summary"]["latest_score"], 75)

@@ -3492,6 +3492,7 @@ export interface components {
             readonly warning_summary: unknown;
             readonly aeo_report: unknown;
             readonly site_profile: unknown;
+            readonly coverage: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;

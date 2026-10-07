@@ -23,6 +23,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from apps.scans.coverage import incomplete_checks
 from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
@@ -648,6 +649,9 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     ]
 
 
+_COVERAGE_STATUS_TEXT = {"partial": "部分完成", "failed": "執行失敗", "blocked": "被阻擋"}
+
+
 def _scan_scope_rows(scan_job: ScanJob) -> dict:
     """掃描範圍。scope 一律取自 scan_plan，不在這裡重複「max_pages==1 代表單頁」。
 
@@ -697,6 +701,25 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
     if not_selected:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
+    incomplete = incomplete_checks(scan_job.coverage)
+    if incomplete:
+        # 覆蓋契約：有跑但沒完整跑完的檢查要講出來，「沒發現問題」不等於沒有問題
+        rows["未完整完成的檢查"] = "；".join(
+            f"{item['label']}（{_COVERAGE_STATUS_TEXT.get(item['status'], item['status'])}"
+            # 只有「部分完成」附原因（人看得懂的說明）；失敗原因是例外類別，屬內部資訊
+            + (f"：{item['reason']}" if item["status"] == "partial" and item["reason"] else "")
+            + "）"
+            for item in incomplete
+        )
+    partial = [
+        CATEGORY_DISPLAY.get(category, category)
+        for category, state in ((scan_job.coverage or {}).get("categories") or {}).items()
+        if state == "partial"
+    ]
+    if partial:
+        rows["部分評估的面向"] = (
+            "、".join(partial) + "（分數只反映實際完成的檢查）"
+        )
     aeo = _aeo_scope_text(scan_job)
     if aeo:
         rows["AEO 問答檢測"] = aeo
@@ -801,19 +824,24 @@ def _severity_rank(severity: str) -> int:
     return order.index(severity) if severity in order else len(order)
 
 
-def _resolved_since(previous, grouped) -> list[str]:
-    """前次有、這次沒有的項目＝已解決。"""
+def _absent_since(scan_job: ScanJob, previous) -> tuple[list[str], int]:
+    """前次有、這次沒有的項目：(確認已修好的標題, 無法確認的數量)。
+
+    覆蓋契約（coverage.absent_issue_status）：只有產生它的檢查本次完整跑完、受影響頁面也有
+    重新分析，才算已修好；工具失敗、沒爬到該頁或舊掃描沒有覆蓋紀錄時，只能說「本次未出現」。
+    """
     if previous is None:
-        return []
-    current = {item["finding"].rule_id for item in grouped if item["finding"].rule_id}
-    return [
-        title
-        for rule, title in previous.findings.values_list("rule_id", "title")
-        if rule and rule not in current
-    ]
+        return [], 0
+    from apps.scans.projects import compare_issues
+
+    _issues, missing = compare_issues(scan_job, previous)
+    resolved = [item["title"] for item in missing if item["status"] == "resolved"]
+    return resolved, len(missing) - len(resolved)
 
 
-def _headline(scan_job: ScanJob, previous, category_scores: dict, resolved=()) -> str:
+def _headline(
+    scan_job: ScanJob, previous, category_scores: dict, resolved=(), unconfirmed: int = 0
+) -> str:
     """一頁摘要的導讀句。只陳述資料本身，不加沒有根據的評價。"""
     score = scan_job.overall_score
     parts = []
@@ -831,6 +859,8 @@ def _headline(scan_job: ScanJob, previous, category_scores: dict, resolved=()) -
     # 收進導讀句而不是讓它消失。
     if resolved:
         parts.append(f"已解決 {len(resolved)} 項")
+    if unconfirmed:
+        parts.append(f"另有 {unconfirmed} 項本次未出現，但檢查不完整、無法確認已修好")
     weakest = sorted(
         ((name, value) for name, value in category_scores.items() if isinstance(value, int)),
         key=lambda item: item[1],
@@ -918,12 +948,11 @@ def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
     scan_date = timezone.localtime(
         scan_job.completed_at or scan_job.created_at or timezone.now()
     ).strftime("%Y-%m-%d")
+    resolved, unconfirmed = _absent_since(scan_job, previous)
     summary: dict = {
         "overall_score": scan_job.overall_score or 0,
         "scan_date": scan_date,
-        "headline": _headline(
-            scan_job, previous, category_scores, _resolved_since(previous, grouped)
-        ),
+        "headline": _headline(scan_job, previous, category_scores, resolved, unconfirmed),
         "score_note": SCORE_NOTE,
         # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
         # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。

@@ -337,6 +337,19 @@
 }
 .project-change-chip.is-new { @apply bg-rose-50 text-rose-700; }
 .project-change-chip.is-persisting { @apply bg-slate-100 text-slate-600; }
+/* 本次未出現的狀態（coverage.absent_issue_status）：只有已修好用綠色，其餘一律中性 */
+.project-change-chip.is-resolved { @apply bg-emerald-50 text-emerald-700; }
+.project-change-chip.is-not_observed,
+.project-change-chip.is-not_tested,
+.project-change-chip.is-blocked,
+.project-change-chip.is-inconclusive { @apply bg-slate-100 text-slate-600; }
+/* 覆蓋不完整提示：整圈淡琥珀邊框＋淡底（全站禁用彩色左邊條） */
+.project-coverage-notice {
+  @apply border border-amber-200 bg-amber-50;
+}
+.project-coverage-title {
+  @apply text-sm font-bold text-amber-900;
+}
 .project-streak-chip {
   @apply rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800;
 }

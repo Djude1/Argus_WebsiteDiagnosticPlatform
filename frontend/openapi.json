@@ -9334,6 +9334,9 @@
                     "site_profile": {
                         "readOnly": true
                     },
+                    "coverage": {
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -9384,6 +9387,7 @@
                     "categories",
                     "category_scores",
                     "completed_at",
+                    "coverage",
                     "created_at",
                     "error_message",
                     "findings_count",

@@ -280,6 +280,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "warning_summary",
             "aeo_report",
             "site_profile",
+            "coverage",
             "progress",
             "scan_log",
             "error_message",

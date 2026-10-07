@@ -153,6 +153,29 @@ describe("ProjectIssuesPage", () => {
   });
 });
 
+describe("ProjectIssuesPage 本次未出現", () => {
+  it("只有覆蓋完整的項目標「已修好」，其餘標示實際狀態", async () => {
+    api.get.mockImplementation(async (url: string) => (url !== "/projects/7/issues/" ? { data: { results: [] } } : {
+      data: {
+        scan: { id: 3, completed_at: "2026-10-01T00:00:00Z", categories: ["security"] },
+        compared_with: { id: 2, completed_at: "2026-09-20T00:00:00Z" },
+        issues: [],
+        missing: [
+          { key: "h", rule_id: "h", title: "缺少 HSTS", category: "security", severity: "medium",
+            status: "resolved", status_label: "已修好" },
+          { key: "x", rule_id: "x", title: "反射型 XSS", category: "security", severity: "high",
+            status: "inconclusive", status_label: "無法判定" },
+        ],
+      },
+    }));
+    renderIssuesTab();
+    const section = await screen.findByRole("heading", { name: /本次未出現/ });
+    const list = section.closest("section") as HTMLElement;
+    expect(within(list).getByText("已修好")).toBeInTheDocument();
+    expect(within(list).getByText("無法判定")).toBeInTheDocument();
+  });
+});
+
 describe("ProjectScansPage 示範專案", () => {
   it("示範專案不顯示建立掃描表單，改引導新增自己的網站", async () => {
     render(
