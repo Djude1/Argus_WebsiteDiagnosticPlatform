@@ -283,6 +283,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "coverage",
             "scoring_version",
             "ruleset_version",
+            "performance_report",
             "progress",
             "scan_log",
             "error_message",

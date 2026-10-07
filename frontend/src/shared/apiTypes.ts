@@ -3495,6 +3495,7 @@ export interface components {
             readonly coverage: unknown;
             readonly scoring_version: string;
             readonly ruleset_version: string;
+            readonly performance_report: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;

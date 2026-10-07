@@ -9345,6 +9345,9 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "performance_report": {
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -9409,6 +9412,7 @@
                     "original_url",
                     "overall_score",
                     "pages_count",
+                    "performance_report",
                     "progress",
                     "project",
                     "respect_robots",

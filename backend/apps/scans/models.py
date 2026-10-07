@@ -204,6 +204,9 @@ class ScanJob(models.Model):
     # 空字串＝舊掃描、版本不明。
     scoring_version = models.CharField(max_length=32, blank=True, default="")
     ruleset_version = models.CharField(max_length=32, blank=True, default="")
+    # Google PageSpeed Insights 量測（pagespeed.py）：Lighthouse 實驗室分數與 CrUX 真實使用者資料。
+    # 外部指標不併入 Argus 分數；空 dict＝沒有量測。
+    performance_report = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

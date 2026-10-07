@@ -22,6 +22,7 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
+import { PerformancePanel } from "../../components/scans/PerformancePanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import { useArgusStore } from "../../store";
@@ -82,7 +83,7 @@ const SCAN_STEP_META = {
   analyze_seo: { label: "SEO", title: "分析 SEO", hint: "檢查 title、meta description、H1、圖片 alt、canonical 與 Open Graph", Icon: StatusScanGlyph },
   analyze_aeo: { label: "AEO", title: "分析 AEO", hint: "檢查索引與摘要限制，以及結構化資料是否與頁面文字一致", Icon: StatusScanGlyph },
   analyze_geo: { label: "GEO", title: "分析 GEO", hint: "檢查 JSON-LD 實體、可引用段落與 JavaScript 渲染依賴", Icon: StatusScanGlyph },
-  analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤與 JavaScript 錯誤", Icon: StatusScanGlyph },
+  analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤、JavaScript 錯誤與 WCAG 無障礙規則（axe-core）", Icon: StatusScanGlyph },
   aeo_answers: { label: "問答檢測", title: "AEO 問答檢測", hint: "依網站內容出題，在已掃描頁面中找答案並核對原文證據", Icon: StatusScanGlyph },
   analyze_security: { label: "資安", title: "分析資安", hint: "檢查表單 CSRF，以及頁面中外洩的金鑰與個資", Icon: StatusScanGlyph },
   active_probe: { label: "主動探測", title: "主動探測", hint: "以 Nuclei／Katana 對授權目標執行受控探測", Icon: StatusScanGlyph },
@@ -90,6 +91,7 @@ const SCAN_STEP_META = {
   exposure_probe: { label: "敏感檔案", title: "敏感檔案探測", hint: "探測常見的敏感檔案路徑是否外洩", Icon: StatusScanGlyph },
   geo_site: { label: "AI 爬蟲", title: "檢查 AI 爬蟲訊號", hint: "檢查 llms.txt 與 robots.txt 對 AI 爬蟲的設定", Icon: StatusScanGlyph },
   seo_links: { label: "連結檢查", title: "檢查連結與網址", hint: "檢查站內外連結的狀態與轉址，以及 robots.txt、HTTPS、www 與 404 頁設定", Icon: StatusScanGlyph },
+  pagespeed: { label: "效能量測", title: "效能量測", hint: "以 Google PageSpeed Insights 量測首頁的 Lighthouse 分數與真實使用者體驗", Icon: StatusScanGlyph },
   agent: { label: "AI Agent", title: "AI Agent 測試", hint: "AI Agent 以擬真使用者操作網站，測試互動流程", Icon: StatusAgentGlyph },
   scoring: { label: "評分", title: "彙整評分", hint: "計算各維度分數並排出優先處理項目", Icon: StatusScanGlyph },
 };
@@ -1833,6 +1835,7 @@ const SCAN_TABS = [
   { path: "", label: "報告" },
   { path: "strengths", label: "網站優勢" },
   { path: "architecture", label: "網站架構" },
+  { path: "performance", label: "效能" },
 ];
 
 function ScanLayout() {
@@ -1889,6 +1892,15 @@ function ScanStrengthsPage() {
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
   return <SiteStrengths profile={scan.site_profile} />;
+}
+
+/** /scans/:scanId/performance：Lighthouse 實驗室分數與 CrUX 真實使用者體驗（外部指標，不計分）。 */
+function ScanPerformancePage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return <PerformancePanel report={scan.performance_report} />;
 }
 
 /** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
@@ -2281,6 +2293,7 @@ export {
   ScanDetailPage,
   ScanStrengthsPage,
   ScanArchitecturePage,
+  ScanPerformancePage,
   TopologyPage,
   isInProgress,
 };

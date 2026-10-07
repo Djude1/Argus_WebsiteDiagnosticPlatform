@@ -26,6 +26,7 @@ from django.utils import timezone
 from apps.scans import versions
 from apps.scans.coverage import incomplete_checks
 from apps.scans.models import Finding, ReportVerification, ScanJob
+from apps.scans.pagespeed import summary_lines as pagespeed_summary_lines
 from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
 from apps.scans.scan_plan import build_scan_execution_plan
@@ -711,6 +712,8 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
     rows["評分版本"] = versions.label(scan_job)
+    # 外部效能指標：與 Argus 分數分開列，標明來源與量測方式
+    rows.update(pagespeed_summary_lines(scan_job.performance_report or {}))
     incomplete = incomplete_checks(scan_job.coverage)
     if incomplete:
         # 覆蓋契約：有跑但沒完整跑完的檢查要講出來，「沒發現問題」不等於沒有問題

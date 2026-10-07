@@ -337,6 +337,13 @@ ARGUS_DEFAULT_MAX_PAGES = 50
 ARGUS_AXE_ENABLED = env_bool("ARGUS_AXE_ENABLED", default=True)
 ARGUS_AXE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_AXE_TIMEOUT_SECONDS", "15"))
 ARGUS_AXE_MAX_PAGES = int(os.getenv("ARGUS_AXE_MAX_PAGES", "50"))
+# Google PageSpeed Insights（apps/scans/pagespeed.py）：Lighthouse 實驗室分數＋CrUX 真實使用者資料，
+# 勾 UX 時只測首頁。金鑰放 .env／Secret；沒設金鑰就不執行（匿名配額幾乎都被用完）。
+ARGUS_PAGESPEED_API_KEY = os.getenv("ARGUS_PAGESPEED_API_KEY", "")
+ARGUS_PAGESPEED_ENABLED = env_bool(
+    "ARGUS_PAGESPEED_ENABLED", default=bool(ARGUS_PAGESPEED_API_KEY)
+)
+ARGUS_PAGESPEED_TIMEOUT_SECONDS = float(os.getenv("ARGUS_PAGESPEED_TIMEOUT_SECONDS", "90"))
 ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"

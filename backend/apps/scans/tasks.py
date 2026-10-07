@@ -36,6 +36,9 @@ from apps.scans.favicon import needs_refresh, refresh_project_favicon
 from apps.scans.katana_scanner import run_katana
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.nuclei_scanner import run_nuclei
+from apps.scans.pagespeed import PageSpeedError
+from apps.scans.pagespeed import enabled as pagespeed_enabled
+from apps.scans.pagespeed import fetch as fetch_pagespeed
 from apps.scans.scan_logger import append_log
 from apps.scans.scan_plan import ScanExecutionPlan, build_scan_execution_plan
 from apps.scans.scanners import (
@@ -120,6 +123,8 @@ def planned_scan_steps(scan_job, execution_plan) -> list[str]:
         steps.append("geo_site")
     if "seo" in cats:
         steps.append("seo_links")
+    if "ux" in cats and pagespeed_enabled():
+        steps.append("pagespeed")
     if settings.ARGUS_AGENT_ENABLED and (execution_plan.run_agent or execution_plan.run_agent_ux):
         steps.append("agent")
     steps.append("scoring")
@@ -1154,6 +1159,40 @@ def stage_seo_links(ctx: ScanRunContext) -> None:
     )
 
 
+def stage_pagespeed(ctx: ScanRunContext) -> None:
+    """Google PageSpeed Insights：首頁的 Lighthouse 實驗室分數＋CrUX 真實使用者資料。
+
+    勾 UX 且有設定金鑰才跑；結果寫 ScanJob.performance_report，不併入 Argus 分數。
+    量測失敗只記 log 與覆蓋紀錄，不影響掃描完成。
+    """
+    scan_job = ctx.scan_job
+    if "ux" not in scan_job.effective_categories or not pagespeed_enabled():
+        return
+    raise_if_cancelled(ctx.scan_job_id)
+    ctx.scanning_progress(ctx.deep_scan_total, "pagespeed")
+    try:
+        report = fetch_pagespeed(scan_job.normalized_url or scan_job.original_url)
+    except PageSpeedError as exc:
+        append_log(ctx.scan_job_id, f"PageSpeed Insights 量測失敗：{exc}", level="warn")
+        ctx.coverage.mark("pagespeed", FAILED, str(exc))
+        return
+    raise_if_cancelled(ctx.scan_job_id)
+    scan_job.performance_report = report
+    scan_job.save(update_fields=["performance_report", "updated_at"])
+    lab = report.get("lab") or {}
+    if lab.get("error"):
+        ctx.coverage.mark("pagespeed", PARTIAL, "Lighthouse 無法完成量測")
+    else:
+        ctx.coverage.mark("pagespeed", COMPLETED)
+    scores = lab.get("scores") or {}
+    field = report.get("field") or {}
+    append_log(
+        ctx.scan_job_id,
+        f"PageSpeed Insights：效能 {scores.get('performance', '—')}；真實使用者資料"
+        + ("有" if field.get("metrics") else "不足"),
+    )
+
+
 def stage_favicon(ctx: ScanRunContext) -> None:
     """更新所屬網站專案的圖示（會員區辨識網站用）；最多每 7 天抓一次，失敗不影響掃描。"""
     project = ctx.scan_job.project
@@ -1513,6 +1552,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("exposure", stage_exposure),
     ("geo_site", stage_geo_site),
     ("seo_links", stage_seo_links),
+    ("pagespeed", stage_pagespeed),
     ("favicon", stage_favicon),
     ("agent", stage_agent),
     ("kali", stage_kali),
