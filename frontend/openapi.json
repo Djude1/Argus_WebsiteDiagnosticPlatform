@@ -6014,6 +6014,43 @@
                 }
             }
         },
+        "/api/scans/{id}/score-breakdown/": {
+            "get": {
+                "operationId": "scans_score_breakdown_retrieve",
+                "description": "各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "scans"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/scans/{id}/status/": {
             "get": {
                 "operationId": "scans_status_retrieve",

@@ -810,3 +810,103 @@
   background: #fee2e2;
   color: #b91c1c;
 }
+
+/* 分數說明分頁（ScoreBreakdownPanel，2026-10-07）：分數一律附數值與等級文字；不用左邊條 */
+.score-explain {
+  display: grid;
+  gap: 1rem;
+}
+.score-explain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+.score-explain-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.score-explain-score {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+}
+.score-explain-score b {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.score-explain-score.is-good b { color: #1d4ed8; }
+.score-explain-score.is-medium b { color: #b45309; }
+.score-explain-score.is-bad b { color: #b91c1c; }
+.score-explain-tag {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.75rem;
+}
+.score-explain-formula {
+  margin: 0 0 0.75rem;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+.score-explain-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.score-explain-weights li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.score-explain-table-wrap {
+  overflow-x: auto;
+}
+.score-explain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.score-explain-table th,
+.score-explain-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+.score-explain-table th {
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.score-explain-table td:nth-child(n + 3) {
+  white-space: nowrap;
+}
+.score-explain-notes {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  font-size: 0.83rem;
+  line-height: 1.7;
+}
+.score-explain-notes:empty {
+  display: none;
+}
+.score-explain-warning {
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #fcd34d;
+  border-radius: 0.6rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}

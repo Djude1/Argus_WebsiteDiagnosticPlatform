@@ -2464,6 +2464,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scans/{id}/score-breakdown/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。 */
+        get: operations["scans_score_breakdown_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scans/{id}/status/": {
         parameters: {
             query?: never;
@@ -7701,6 +7718,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanJob"];
+                };
+            };
+        };
+    };
+    scans_score_breakdown_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

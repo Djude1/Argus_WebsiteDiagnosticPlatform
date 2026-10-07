@@ -48,6 +48,7 @@ from apps.scans.projects import (
 )
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.score_explain import score_explanation
 from apps.scans.seo_views import ProjectSeoActions
 from apps.scans.serializers import (
     DomainVerifySerializer,
@@ -352,6 +353,12 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             "by_category": _counts("category"),
             "by_severity": _counts("severity"),
         })
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["get"], url_path="score-breakdown")
+    def score_breakdown(self, request, pk=None):
+        """各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。"""
+        return Response(score_explanation(self.get_object()))
 
 
     @action(detail=True, methods=["get"])

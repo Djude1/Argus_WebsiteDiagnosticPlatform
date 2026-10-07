@@ -96,7 +96,11 @@ def _renormalize_cookies(scan_job: ScanJob) -> int:
     return changed
 
 
-def _rescore(scan_job: ScanJob) -> None:
+def stored_scoring_inputs(scan_job: ScanJob) -> tuple[list[dict], set[str] | None, dict]:
+    """由資料庫保存的發現還原計分輸入：(findings, tested_categories, base_scores)。
+
+    重新計分（_rescore）與分數說明（score-breakdown API）共用，兩邊的輸入一致。
+    """
     findings = [
         {
             "title": f.title,
@@ -114,6 +118,11 @@ def _rescore(scan_job: ScanJob) -> None:
         if aeo_report.get("status") == "evaluated" and aeo_report.get("score") is not None
         else {}
     )
+    return findings, tested, base_scores
+
+
+def _rescore(scan_job: ScanJob) -> None:
+    findings, tested, base_scores = stored_scoring_inputs(scan_job)
     overall, category_scores, top_actions = calculate_scores(
         findings, tested_categories=tested, base_scores=base_scores
     )

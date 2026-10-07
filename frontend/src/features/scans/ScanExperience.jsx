@@ -23,6 +23,7 @@ import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import { PerformancePanel } from "../../components/scans/PerformancePanel";
+import { ScoreBreakdownPanel } from "../../components/scans/ScoreBreakdownPanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import { useArgusStore } from "../../store";
@@ -1837,6 +1838,7 @@ const SCAN_TABS = [
   { path: "strengths", label: "網站優勢" },
   { path: "architecture", label: "網站架構" },
   { path: "performance", label: "效能" },
+  { path: "score", label: "分數說明" },
 ];
 
 function ScanLayout() {
@@ -1902,6 +1904,26 @@ function ScanPerformancePage() {
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
   return <PerformancePanel report={scan.performance_report} />;
+}
+
+/** /scans/:scanId/score：各維度分數怎麼算出來的（基準分、逐項扣分、未完整完成的檢查）。 */
+function ScanScorePage() {
+  const { scanId } = useParams();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/scans/${scanId}/score-breakdown/`)
+      .then((response) => !cancelled && setData(response.data))
+      .catch(() => !cancelled && setError("無法載入分數說明。"));
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!data) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return <ScoreBreakdownPanel data={data} />;
 }
 
 /** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
@@ -2295,6 +2317,7 @@ export {
   ScanStrengthsPage,
   ScanArchitecturePage,
   ScanPerformancePage,
+  ScanScorePage,
   TopologyPage,
   isInProgress,
 };

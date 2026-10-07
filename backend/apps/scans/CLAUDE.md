@@ -29,6 +29,7 @@ queued → crawling → scanning → [agent_testing] → completed
 | `process_runner.py` | 以 `Popen` 執行 Nuclei/Katana，輪詢 DB 取消並終止 process tree | 吞掉 `ScanCancelled`、記錄 raw stdout/stderr |
 | `crawler.py` | Playwright BFS 爬蟲、收集頁面（`har_dir` 有值時每個 context 錄一個只含同 origin 的 HAR，給 ZAP 被動分析）；整站模式以 robots.txt 宣告的 sitemap（或 `/sitemap.xml`）補種子（`discover_sitemap_urls` → `_CrawlState.seed`，同 origin、非 `.gz`、≤2 MB、索引最多展開 3 個子檔；與掃描網址只差 `www.` 前綴的 sitemap 網址由 `to_scan_origin` 改寫成掃描 origin），連結稀疏的網站也能達到頁數上限；預設深度 `ARGUS_DEFAULT_MAX_DEPTH`＝6。`/cdn-cgi/` 路徑一律不爬（`is_crawl_trap`：Cloudflare 給機器人的無限陷阱連結）。Cloudflare 攔截頁判定只認 `/cdn-cgi/challenge-platform/h/`、`_cf_chl_opt` 等攔截頁專屬標記——**不可用裸字串 `challenge-platform`**：CF Bot 偵測會在每個正常頁面插入 `/cdn-cgi/challenge-platform/scripts/` 背景腳本，曾讓整站只爬到首頁且被誤標為被阻擋（`waf_scanner.py` 同理） | 修改 ScanJob.status、呼叫 billing |
 | `scanners.py` | SEO/AEO/GEO/UX 掃描 + 被動式基本安全檢查（HTTPS/header 存在性/CSRF/PII）、產生 findings | 修改 ScanJob.status、深度資安分析 |
+| `score_explain.py` | 分數說明（`GET /api/scans/<id>/score-breakdown/`）：以 `finding_normalization.stored_scoring_inputs` 還原計分輸入，依目前公式 `scanners.score_breakdown` 逐維度列基準分、扣分項目（權重、出現處數、`score_without`）、`in_base`／`info` 筆數、覆蓋狀態與未完整完成的檢查；重算分數與保存分數不同時 `matches=false` | 寫 DB、自己重寫一套計分邏輯 |
 | `coverage.py` | 掃描覆蓋契約（見下「掃描覆蓋契約」）：`ScanCoverage` 累積各檢查狀態與產生的問題代號、`category_status`、`incomplete_checks`、`absent_issue_status`（前次有本次沒有的問題狀態）、`issue_key` | 寫 DB、修改 `ScanJob.status` |
 | `fingerprint.py`、`fingerprint_gold.py`、`fingerprint_benchmark.py` | 網站特徵（Smart Scan 階段 1，見下「網站特徵」）：`build_fingerprint` 只用爬取已有的訊號、`fingerprint_snapshot` 存 `ScanJob.fingerprint`；準確率資料集與指標 | 發任何請求、改變執行計畫或覆蓋紀錄、把「沒看到」寫成 False |
 | `ai_bots.py` | AI 爬蟲的 robots.txt 政策：13 個 AI 爬蟲依用途分訓練／AI 搜尋／使用者觸發，依 RFC 9309 判斷（點名群組優先於 `*`、產品名稱完全比對、Allow／Disallow 取最長路徑）允許／部分限制／封鎖；爬蟲讀 robots.txt 時算好放 `site_signals.ai_bot_policy`，`site_profile.ai_bots`（勾 GEO）。**只封鎖訓練用爬蟲不算問題**；封鎖 AI 搜尋或使用者觸發的爬蟲才產生 `geo-ai-search-bots-blocked`（低） | 另發請求、把封鎖訓練爬蟲當成問題 |
@@ -111,6 +112,7 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 3. **指數衰減 `100 * exp(-penalty / SCORE_DECAY_CONSTANT)`**，不是 `max(0, 100 - penalty)`。舊公式累積 100 分懲罰後永遠是 0，無法分辨「4 個高風險」與「40 個高風險」。`SCORE_DECAY_CONSTANT` 是可調的產品參數，不是演算法細節。
 4. **未評估的分類不寫進 `category_scores`，缺鍵即代表未評估**。`category_scores` **不保證含全部 5 個分類，取值一律用 `.get()`**。這同時保證「報告列出的分數」與「`overall_score` 平均的分母」是同一組，使用者算得出總分。
 5. **有基準分的分類（`base_scores`，目前只有 AEO）**：`calculate_scores(findings, tested, base_scores={"aeo": N})` 以 N 取代 100 當起點，`BASE_SCORED_RULE_PREFIXES`（`aeo-answer-`）的逐題 finding 不再扣分（已反映在基準分裡），其餘 AEO finding（noindex、標記不一致…）照常衰減扣分。`rerun_scan` 與 `finding_normalization._rescore` 都從 `aeo_report["score"]` 取回基準分（第 5 條由 `tests_aeo_answerability.py` 鎖定）。
+6. **分類分數由 `score_breakdown()` 算出**（2026-10-07）：`calculate_scores` 只取它的 `score`，「分數說明」分頁與計分永遠同一套公式；扣分權重在 `SEVERITY_PENALTY`。改公式時兩者一起變，不要在別處另算（`tests_score_explain.py` 鎖定兩者一致）。
 
 `Finding.Meta.ordering` 一併鎖定兩件事：`priority_score` 必須明確 `nulls_last=True`（PostgreSQL 的 `DESC` 預設 NULLS FIRST、SQLite 是 NULLS LAST，不指定的話同一份報告在本機與正式站排序相反），`severity` 必須用 `Case/When` 的風險序（CharField 直接排是字母序 `critical < high < info < low < medium`，info 會插到 low 與 medium 前面）。
 

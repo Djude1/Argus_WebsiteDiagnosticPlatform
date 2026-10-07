@@ -1650,10 +1650,7 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
     seen: set[tuple[str, str]] = set()
     deduped: list[dict] = []
     for finding in findings:
-        key = (
-            str(finding.get("category") or ""),
-            str(finding.get("rule_id") or finding.get("title") or ""),
-        )
+        key = _finding_key(finding)
         if key in seen:
             continue
         seen.add(key)
@@ -1663,6 +1660,96 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
 
 # 這些 rule 的結果已經反映在分類的「基準分」裡（base_scores），不再另外扣分
 BASE_SCORED_RULE_PREFIXES = ("aeo-answer-",)
+
+SCORE_CATEGORIES = ("seo", "aeo", "geo", "security", "ux")
+
+# 嚴重度必須壓過數量。舊比例 35/25/14/6 讓「1 個 critical」(50 分) 約等於
+# 「6 個 low」(49 分)——六個缺 canonical URL 等於一個嚴重漏洞，站不住腳。
+# 拉開比例後 1 個 critical 是 30 分、6 個 low 是 62 分，數量只能在同一嚴重度
+# 帶內移動分數，不能把嚴重度洗掉。
+SEVERITY_PENALTY = {
+    Finding.Severity.CRITICAL: 60,
+    Finding.Severity.HIGH: 35,
+    Finding.Severity.MEDIUM: 12,
+    Finding.Severity.LOW: 4,
+    Finding.Severity.INFO: 0,
+}
+
+
+def _finding_key(finding: dict) -> tuple[str, str]:
+    return (
+        str(finding.get("category") or ""),
+        str(finding.get("rule_id") or finding.get("title") or ""),
+    )
+
+
+def score_breakdown(
+    findings: list[dict],
+    *,
+    tested_categories: set[str] | None = None,
+    base_scores: dict[str, int] | None = None,
+) -> dict[str, dict]:
+    """各維度分數的來源（roadmap §12 第 3 項：評分可解釋化）。
+
+    calculate_scores() 的分類分數就是由這裡算出，兩者不會不一致。每個維度：
+
+    - ``score``：base × e^(−penalty／SCORE_DECAY_CONSTANT)。
+    - ``base``／``base_source``：基準分（預設 100；AEO 是可回答性分數）。
+    - ``penalty``：扣分權重合計。
+    - ``deductions``：逐項扣分（同一問題在多頁出現只扣一次，``occurrences`` 記出現筆數），
+      ``score_without`` 是只修好這一項時的分數；依權重由大到小。
+    - ``in_base``：已反映在基準分、不另外扣分的問題筆數（AEO 逐題結果）。
+    - ``info``：資訊類（不扣分）筆數。
+    """
+    base_scores = base_scores or {}
+    occurrences: dict[tuple[str, str], int] = {}
+    for finding in findings:
+        key = _finding_key(finding)
+        occurrences[key] = occurrences.get(key, 0) + 1
+    deduped = _dedupe_findings_for_scoring(findings)
+    result: dict[str, dict] = {}
+    for category in SCORE_CATEGORIES:
+        if tested_categories is not None and category not in tested_categories:
+            continue
+        has_base = category in base_scores
+        base = base_scores.get(category, 100)
+        deductions, in_base, info = [], 0, 0
+        for finding in deduped:
+            if finding["category"] != category:
+                continue
+            key = _finding_key(finding)
+            if has_base and str(finding.get("rule_id") or "").startswith(
+                BASE_SCORED_RULE_PREFIXES
+            ):
+                in_base += occurrences[key]
+                continue
+            weight = SEVERITY_PENALTY.get(finding["severity"], 0)
+            if not weight:
+                info += occurrences[key]
+                continue
+            deductions.append({
+                "rule_id": finding.get("rule_id") or "",
+                "title": finding["title"],
+                "severity": finding["severity"],
+                "weight": weight,
+                "occurrences": occurrences[key],
+            })
+        penalty = sum(item["weight"] for item in deductions)
+        for item in deductions:
+            item["score_without"] = round(
+                base * math.exp(-(penalty - item["weight"]) / SCORE_DECAY_CONSTANT)
+            )
+        deductions.sort(key=lambda item: -item["weight"])
+        result[category] = {
+            "score": round(base * math.exp(-penalty / SCORE_DECAY_CONSTANT)),
+            "base": base,
+            "base_source": "aeo_answerability" if has_base and category == "aeo" else "",
+            "penalty": penalty,
+            "deductions": deductions,
+            "in_base": in_base,
+            "info": info,
+        }
+    return result
 
 
 def calculate_scores(
@@ -1695,45 +1782,11 @@ def calculate_scores(
 
     呼叫端注意：category_scores 不再保證含全部 5 個分類，取值請用 .get()。
     """
-    categories = [
-        Finding.Category.SEO,
-        Finding.Category.AEO,
-        Finding.Category.GEO,
-        Finding.Category.SECURITY,
-        Finding.Category.UX,
-    ]
-    # 嚴重度必須壓過數量。舊比例 35/25/14/6 讓「1 個 critical」(50 分) 約等於
-    # 「6 個 low」(49 分)——六個缺 canonical URL 等於一個嚴重漏洞，站不住腳。
-    # 拉開比例後 1 個 critical 是 30 分、6 個 low 是 62 分，數量只能在同一嚴重度
-    # 帶內移動分數，不能把嚴重度洗掉。
-    severity_penalty = {
-        Finding.Severity.CRITICAL: 60,
-        Finding.Severity.HIGH: 35,
-        Finding.Severity.MEDIUM: 12,
-        Finding.Severity.LOW: 4,
-        Finding.Severity.INFO: 0,
-    }
+    breakdown = score_breakdown(
+        findings, tested_categories=tested_categories, base_scores=base_scores
+    )
+    category_scores = {category: entry["score"] for category, entry in breakdown.items()}
     deduped = _dedupe_findings_for_scoring(findings)
-    scored_categories = [
-        category
-        for category in categories
-        if tested_categories is None or category in tested_categories
-    ]
-    category_scores: dict[str, int] = {}
-    base_scores = base_scores or {}
-    for category in scored_categories:
-        has_base = category in base_scores
-        penalty = sum(
-            severity_penalty.get(finding["severity"], 0)
-            for finding in deduped
-            if finding["category"] == category
-            and not (
-                has_base
-                and str(finding.get("rule_id") or "").startswith(BASE_SCORED_RULE_PREFIXES)
-            )
-        )
-        base = base_scores.get(category, 100)
-        category_scores[category] = round(base * math.exp(-penalty / SCORE_DECAY_CONSTANT))
     overall_score = (
         round(sum(category_scores.values()) / len(category_scores))
         if category_scores
