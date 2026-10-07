@@ -1,15 +1,17 @@
 # 智慧動態掃描（Smart Dynamic Scan）
 
-Argus 目前三種掃描都跑**固定管線**：不論對象是 WordPress 部落格、Laravel API、還是純靜態
-行銷頁，`tasks.py` 的 `SCAN_PIPELINE` 都依同一組階段執行，模組的開關只由
-`scan_plan.build_scan_execution_plan()` 依三個 `ScanJob` 欄位（`max_pages` 推出的 scope、
-`scan_mode`、`active_testing_authorized`）決定。這是「固定 checklist 掃描器」的做法：
-穩定、不漏檢，但**對每個網站都問一樣的問題**，既掃了用不到的項目（純靜態站仍跑 Auth/API
-相關邏輯的空轉），也漏了該站特有的深度檢查（WordPress 的外掛 CVE、API 的授權缺陷、
-登入頁的 Session 安全）。
+Argus 目前有**被動／主動兩種掃描模式**（各可選單頁或整站），都跑**固定管線**：不論對象是
+WordPress 部落格、Laravel API、還是純靜態行銷頁，`tasks.py` 的 `SCAN_PIPELINE` 都依同一組階段
+執行，模組的開關只由 `scan_plan.build_scan_execution_plan()` 依 `ScanJob` 欄位（`max_pages` 推出的
+scope、`scan_mode`、`active_testing_authorized`、勾選的面向）決定。這是「固定 checklist 掃描器」
+的做法：穩定、不漏檢，但**對每個網站都問一樣的問題**——該站特有的深度檢查（WordPress 的外掛
+CVE、API 的授權缺陷、登入頁的 Session 安全）目前沒有對應模組可以啟用。
 
-商用掃描器（如 Acunetix 的 Advanced Dynamic Scan）的差異化在於**先認識網站、再決定怎麼掃**。
-本 ADR 定義 Argus 的第三種掃描模式「智慧動態掃描」。第一版採 **Adaptive Deepening（適應式加深）**：
+**命名參考與差異**：「Advanced Dynamic Scan」是 Tenable Nessus 的掃描範本名稱，它的「動態」是
+**使用者自訂外掛篩選條件**、新外掛符合條件就自動納入
+（[Tenable 文件](https://docs.tenable.com/nessus/Content/DynamicPlugins.htm)）。Argus 的智慧掃描
+做法不同：**系統依網站指紋自動決定要加掃哪些模組**，使用者不需要懂掃描設定。
+本 ADR 定義新的掃描策略「智慧動態掃描」（與被動／主動測試層級正交，見決策 §1）。第一版採 **Adaptive Deepening（適應式加深）**：
 基礎掃描不減少，只根據網站特徵追加專屬深度檢查；因此賣點是「更貼合網站特性、檢查更深」，
 **不是**「一定更快」或「只掃需要的東西」。流程為：
 
@@ -37,14 +39,14 @@ Argus 目前三種掃描都跑**固定管線**：不論對象是 WordPress 部�
    動態選擇**永遠只決定要不要『多掃』，不決定『少掃』**。理由：指紋一定會有判錯
    （WordPress 藏在 `/blog/`、API 沒有在首頁露出），若「判不到就不掃」，使用者會在
    不知情的狀況下被漏檢——這比固定模式更危險，等於把工具的可靠性賭在指紋準確度上。
-   固定三模式的行為完全不變；智慧模式是在它們之上疊加。
+   既有被動／主動標準掃描的行為完全不變；智慧策略是在它們之上疊加。
 
-2. **成本事前不可全知，就改「預扣上限 + 實跑結算」。** 動態掃描的本質是「掃到一半才
-   知道要不要加跑 API / CMS 模組」，與現行 `hold_for_scan`（掃描前依
-   `max_pages × 維度數 × 單價` 精算預扣）相衝突。智慧模式必須改用
-   「**預扣一個上限、依實際啟用的模組結算、退回差額**」——這套 Argus 已經在
-   網頁優化（rebuild）用過（`hold_for_rebuild` → `settle_rebuild_actual`），複用其模式，
-   不發明新機制。
+2. **延伸現有「預扣上限 + 實跑結算」，結算依據從頁數擴到模組。** 現行掃描計費**已經**是
+   上限預扣＋實際結算：建立時 `hold_for_scan` 依 `max_pages × 維度數 × 單價`（＋UX 附加費）
+   預扣，完成後 `settle_scan_actual` 依**實際頁數**重算並退差額；網頁優化也是同一套
+   （`hold_for_rebuild` → `settle_rebuild_actual`）。動態掃描的差別只在「掃到一半才知道要不要
+   加跑 API / CMS 模組」，所以預扣上限要涵蓋可能啟用的動態模組，結算時再依**實際執行的模組**
+   重算。延伸現有機制，不發明新機制。
 
 這兩條之外的所有設計，衝突時一律服從這兩條。
 
@@ -63,9 +65,10 @@ Argus 目前三種掃描都跑**固定管線**：不論對象是 WordPress 部�
 | smart | passive | 基礎被動 + 高信心被動深查 |
 | smart | active | 基礎主動 + 高信心動態深查 / DAST |
 
-**資料模型取捨**：若本期不想做較大的 migration，可暫時保留既有 `scan_mode` 欄位，但 ADR、planner、
-billing 與前端都必須按上述二維語義實作，不能再把「smart 等同 active」當規則。後續再把 DB
-正規化成獨立 `scan_strategy` / `testing_level`。未取得主動授權時，smart 只能執行 smart+passive
+**資料模型**：既有 `scan_mode`（`passive`／`active`）就是 testing_level，**不改名、不加值**；新增
+`ScanJob.scan_strategy`（CharField，`standard`／`smart`，預設 `standard`）存放策略。這只是新增一個
+有預設值的欄位，既有掃描自動是 `standard`，向後相容、成本很低；**禁止**把 smart 塞進 `scan_mode`
+當第三個值，ADR、planner、billing 與前端都依二維語義實作。未取得主動授權時，smart 只能執行 smart+passive
 能力，不是「active 失敗後偷偷降級」。
 
 - 新增 `ScanJob.fingerprint`（JSONField，預設 `{}`）：收斂後網站特徵快照。
@@ -164,6 +167,10 @@ Planner 分三步，不再假設 smart = active：
   - ZAP alert 先轉 Shared Evidence，再由 Argus 形成 Finding；不直接照搬 ZAP risk/severity。
   - WAF / Rate Limit / Auth 阻擋 → `BLOCKED/LIMITED`，不得呈現「沒有漏洞」。
   - Authenticated Context 留待有明確測試帳號/session 的版本；未登入掃描不能宣稱已完成 authenticated testing。
+  - **部署與資源**：ZAP 是 Java 服務，記憶體需求明顯高於現有 scanner，不得與 web／worker 跑在同一個 Pod。
+    比照 Kali SQLmap 的做法，在獨立 namespace 以 K8s Job（或固定副本的 daemon）執行：設定 CPU／記憶體
+    requests 與 limits、NetworkPolicy 只放行 Authorized Scope、映像檔以 digest 固定版本、功能旗標預設關閉。
+    上線前實測單次掃描的 CPU 時間、記憶體峰值與請求數，作為 `business-model-plan.md` DAST 計費的依據。
 
 ### 5. 計費（實作原則 2 的具體化）
 
@@ -205,6 +212,7 @@ Planner 分三步，不再假設 smart = active：
 
 **階段 2 — Enrichment + Dynamic Planner（internal beta）**
 - 接入 Katana / infra 等後續 signal 做 fingerprint enrichment。
+- 新增 `scan_strategy` 欄位（migration，預設 `standard`）。
 - Planner 採 strategy/testing_level 二維語義；先 internal beta，不立刻對所有使用者開 smart。
 - `dynamic_modules` 記錄 enabled/reason/confidence/evidence/coverage/billing item。
 - 實作 auth/API/CMS 等低風險 extra module；ZAP 先不在本階段全開 Active。
@@ -212,7 +220,8 @@ Planner 分三步，不再假設 smart = active：
 - 驗證：錯誤 fingerprint 不可關閉 baseline；低信心不得觸發高成本/高流量模組；coverage 與退款對稱。
 
 **階段 3 — 包裝為旗艦模式 + 前端差異化呈現**
-- 前端第三模式、進度步驟、報告「為你特別做了什麼」區塊。
+- 前端新增「掃描策略：Standard／Smart」選項（與既有「測試層級：被動／主動」並列，**不做成三選一**）、
+  進度步驟、報告「為你特別做了什麼」區塊。
 - 競賽 Word 內容 md 同步（對外可見新功能）。
 - 驗證：Playwright 端對端走完建立→進度→報告；lint/typecheck/test/build 全綠。
 
