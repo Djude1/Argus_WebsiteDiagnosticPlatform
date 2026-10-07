@@ -145,6 +145,17 @@ class ReportContentTests(TestCase):
         self.assertIn("掃描有效性警示", text)
         self.assertIn("未抓到任何頁面", text)
 
+    def test_partial_scan_is_labelled(self):
+        """點數不足時使用者確認的部分掃描，報告必須標示，不能當成整站結論。"""
+        self.assertIn("部分掃描：本次只檢查最多 20 頁", self._text())
+
+    def test_standard_and_single_page_scans_are_not_labelled_partial(self):
+        for max_pages in (1, 50):
+            with self.subTest(max_pages=max_pages):
+                self.scan_job.max_pages = max_pages
+                self.scan_job.save(update_fields=["max_pages"])
+                self.assertNotIn("部分掃描", self._text())
+
     def test_blocked_and_failed_urls_are_summarised(self):
         self.scan_job.warning_summary = {
             "blocked_urls": [{"url": "https://example.com/a", "reason": "robots.txt"}],

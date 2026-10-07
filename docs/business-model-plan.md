@@ -334,8 +334,8 @@ Semrush、Sitechecker 等商用工具都以免費試用期或免費額度讓新�
 
 > **實作狀態（2026-10-07）**：第 1–4 項已依本文件建議實作——首次免費完整掃描（`ScanJob.is_trial`，
 > scans migration 0027，開關 `ARGUS_FREE_TRIAL_SCAN_ENABLED`）、Partial Scan 確認（serializer 回
-> `affordable_pages`，前端確認後才縮小頁數；掃描詳情標示部分掃描，**PDF 報告的 coverage 標示沿用既有
-> 「掃描範圍」表的頁數上限欄位，尚未另加專屬說明**）、訂閱 600／1,800／4,000（billing migration 0011）、
+> `affordable_pages`，前端確認後才縮小頁數；掃描詳情標示部分掃描，PDF 報告的掃描警示另列「部分掃描」說明（`reports._scan_warning_lines`，
+> `RENDERER_VERSION` 7））、訂閱 600／1,800／4,000（billing migration 0011）、
 > 深度資安附加費 50 點（`ARGUS_COIN_AGENT_DEEP`，agent 未執行就退回）與派工上限 6
 > （`ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`）、免費贈點累積上限 600（只對從未付費帳號）、頁面優化預扣上限 50。
 > 第 5、6 項尚未處理。細節見 `backend/apps/billing/CLAUDE.md`「2026-10-07 定價調整」。

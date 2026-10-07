@@ -759,6 +759,14 @@ def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
             "掃描有效性警示：本次未抓到任何頁面（目標可能不可達或全部逾時）。"
             "SEO 與 AEO 未評估，分數僅反映站台層級檢查，不應解讀為「網站沒有問題」。"
         )
+    # 部分掃描（docs/business-model-plan.md：Partial Coverage 必須標示）：使用者因點數不足
+    # 選了較少頁數，報告要講明這不是完整掃描，避免收件者把結果當成整站結論。
+    if 1 < scan_job.max_pages < settings.ARGUS_DEFAULT_MAX_PAGES:
+        lines.append(
+            f"部分掃描：本次只檢查最多 {scan_job.max_pages} 頁"
+            f"（標準完整掃描為 {settings.ARGUS_DEFAULT_MAX_PAGES} 頁），"
+            "未檢查到的頁面可能仍有問題，結果不代表整個網站。"
+        )
     for key, template in (
         ("blocked_urls", "依 robots.txt 或掃描範圍限制，略過 {n} 個頁面未檢查。"),
         ("failed_urls", "有 {n} 個頁面擷取失敗（逾時或回應異常），未納入本次分析。"),
