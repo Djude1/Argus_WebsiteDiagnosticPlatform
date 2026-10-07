@@ -355,6 +355,11 @@ ARGUS_ZAP_API_KEY = os.getenv("ARGUS_ZAP_API_KEY", "")
 ARGUS_ZAP_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_TIMEOUT_SECONDS", "120"))
 ARGUS_ZAP_MAX_ENTRIES = int(os.getenv("ARGUS_ZAP_MAX_ENTRIES", "2000"))
 ARGUS_ZAP_MAX_BODY_CHARS = int(os.getenv("ARGUS_ZAP_MAX_BODY_CHARS", "500000"))
+# 已知漏洞優先序補強（apps/scans/security/vuln_intel.py）：EPSS 被利用機率＋OSV.dev 修補版本。
+# 只送出函式庫名稱、版本與 CVE 編號（不含受測網址）；查不到時原樣保留問題。
+ARGUS_VULN_INTEL_ENABLED = env_bool("ARGUS_VULN_INTEL_ENABLED", default=True)
+ARGUS_VULN_INTEL_TIMEOUT_SECONDS = float(os.getenv("ARGUS_VULN_INTEL_TIMEOUT_SECONDS", "10"))
+ARGUS_VULN_INTEL_CACHE_SECONDS = int(os.getenv("ARGUS_VULN_INTEL_CACHE_SECONDS", "86400"))
 ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"

@@ -444,7 +444,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `aeo_answers` | `stage_aeo_answerability`（`_aeo_site_pages`） | AEO 問答檢測（見下「AEO 問答檢測」），結果寫 `ScanJob.aeo_report` |
 | `site_security` | `stage_site_security` | 站台層級 HTTPS/HSTS/CSP 等（只評估一次） |
 | `active_probe` | `stage_active_probe`（`_collect_probe_targets`、`_run_site_active_tools`、`_run_single_page_nuclei`、`_waf_blocked_nuclei_note`） | Nuclei／Katana，遵守範圍與授權矩陣 |
-| `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測 |
+| `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測；已知 CVE 由 `security/vuln_intel.py` 補 EPSS 被利用機率與 OSV 修補版本（只影響排序與說明，不改嚴重度） |
 | `zap_passive` | `stage_zap_passive` | 勾資安且 `ARGUS_ZAP_ENABLED` 才跑：爬取時錄的同網站 HAR 交給 OWASP ZAP 只跑被動規則（零新增請求），重複既有檢查的告警不列；ZAP 不可用只標覆蓋 failed，HAR 用完即刪（`security/zap_passive.py`，見 `docs/zap-passive.md`） |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲可存取性 |

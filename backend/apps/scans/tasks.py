@@ -67,6 +67,7 @@ from apps.scans.security.secret_scanner import build_secret_finding, detect_secr
 from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
+from apps.scans.security.vuln_intel import enrich_findings as enrich_vuln_intel
 from apps.scans.security.waf_scanner import detect_waf_block
 from apps.scans.security.zap_passive import ZapBusy, ZapError, alerts_to_findings
 from apps.scans.security.zap_passive import enabled as zap_enabled
@@ -1085,6 +1086,8 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
     if waf_block_finding:
         findings.append(waf_block_finding)
         append_log(ctx.scan_job_id, "偵測到 WAF／防護機制封鎖跡象，已新增說明 finding")
+    # 已知漏洞補 EPSS 被利用機率與 OSV 修補版本（只送函式庫名稱／版本／CVE；失敗原樣保留）
+    findings = enrich_vuln_intel(findings)
     findings = [owasp_mapper.tag(f) for f in findings]
     ctx.record(findings, check="deep_security")
     ctx.coverage.mark("deep_security", COMPLETED)
