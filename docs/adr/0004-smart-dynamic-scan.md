@@ -134,6 +134,7 @@ class SiteFingerprint:
    | `cms == "wordpress"` | `run_cms_wordpress` | `stage_cms_wordpress` |
    | `cms in {drupal, joomla}` | `run_cms_generic` | `stage_cms_generic` |
    | `has_upload`（且已授權主動） | `run_upload_checks` | 併入 `stage_auth_session` 或獨立 |
+   | `has_login \/ has_api \/ has_upload` 且風險面足夠、已授權主動 | `run_zap_dast` | `stage_zap_dast` |
 
    `ScanExecutionPlan` 增加這幾個 `run_*` 欄位，預設全 False；只有 `smart` 模式會進
    augment。非智慧模式永遠拿不到這些旗標 → 行為零變動。
@@ -159,6 +160,13 @@ class SiteFingerprint:
   XML-RPC 開啟、公開 REST API 預設只列 exposure / attack-surface；只有版本/CVE、錯誤配置或
   可驗證利用條件成立才升級為 vulnerability。規則思路參考 **WPScan**，但以離線被動為主。
 - **`stage_cms_generic`（Drupal/Joomla）**：對應版本端點與已知敏感路徑。
+- **`stage_zap_dast`（OWASP ZAP 深度 Web DAST）**：
+  - 第一階段只接受控 Passive Scan + Spider / AJAX Spider，先驗證 coverage、效能與噪音。
+  - Active Scan 只有在 `active_testing_authorized=true`、目標位於 Authorized Scope、且 request budget / RPS / timeout 已配置時才能啟動。
+  - 只啟用 Argus 核准的 scan policy；禁止無界限地跑全部 active rules。
+  - ZAP 產生的 alert 先轉成 Shared Evidence，再由 Argus 依 confidence、context、重複證據與 Root Cause 形成最終 Finding；**不得直接照搬 ZAP risk/severity**。
+  - 若 WAF / Rate Limit / Auth 阻擋導致測試不完整，stage 標為 `BLOCKED` 或 `LIMITED`，不得呈現成「沒有漏洞」。
+  - Authenticated Context 留到後續明確提供測試帳號/session 的版本；未登入掃描不能宣稱已完成 authenticated testing。
 
 ### 5. 計費（實作原則 2 的具體化）
 
@@ -214,11 +222,36 @@ class SiteFingerprint:
 
 | 模組 | 可接工具 / 資料源 | 性質 |
 |---|---|---|
+| 深度 Web Security / DAST | **OWASP ZAP**（Passive / Spider / AJAX Spider / Active） | P1；先受控接入，再於已授權 Smart/Deep Security Scan 啟用 Active |
 | API 安全 | Nuclei `exposures/`・`misconfiguration/` 模板、OpenAPI/Swagger 自動發現 | 已有 Nuclei，只需擴模板集 |
 | CMS WordPress | WPScan 規則思路（離線）、OSV.dev（外掛 CVE） | 離線比對，沿用現有 CVE 路線 |
 | 漏洞優先序 | OSV.dev + EPSS 分數 | 免費 API，補在 CVE 類 finding |
 | 無障礙（既有 UX） | axe-core（Playwright 注入） | 與本案平行，另案 |
 | 效能基準（既有 SEO/UX） | Lighthouse / PageSpeed Insights（CrUX） | 與本案平行，另案 |
+
+### 8.1 VAPT 方法論定位
+
+VAPT 在 Argus 中不是一個 `stage_vapt`，而是串起現有與新增資安能力的上層 workflow：
+
+```
+Discovery
+  ↓
+Vulnerability Assessment
+  ↓
+Authorized Active Validation
+  ↓
+Evidence / Confidence
+  ↓
+Exploitability / Risk Prioritization
+  ↓
+Remediation
+  ↓
+Retest / Verification
+```
+
+現階段對外建議使用 **VAPT-oriented automated security assessment** 或
+**Automated Vulnerability Assessment with authorized active testing**。在沒有人工 business-logic testing、
+multi-step exploit chain、privilege escalation 與人工逐項驗證前，不宣稱 Argus 等同完整 Penetration Test。
 
 ### 9. 風險與緩解
 
@@ -228,7 +261,7 @@ class SiteFingerprint:
 | 動態模組誤報升高（尤其 API/CMS） | 被動偵測 severity 封頂 HIGH、加 `confidence` 分級、結算與評分對低信心打折 |
 | 成本不可預期嚇退使用者 | 預扣上限先講清楚、結算退差額、前端顯示「實際使用 N 點」 |
 | 掃描時間變長且不固定 | 進度條表達「依網站特性加掃中」；無相依的新 stage 可並發 |
-| 主動模組誤觸破壞性操作 | 新模組一律**唯讀**；沿用網域驗證 + 授權閘門；不做暴力/寫入測試 |
+| 主動模組誤觸破壞性操作 | 新自建模組維持唯讀；ZAP Active Scan 僅允許核准 policy、request budget、RPS/timeout 與 Authorized Scope；沿用網域驗證 + 授權閘門，不做暴力或高風險寫入測試 |
 | API/CMS 模組把掃描帶出授權範圍 | 以 **Authorized Scope** 為邊界：預設同 origin；`api.example.com`／`auth.example.com` 等只有在使用者明確驗證/授權後才能納入，禁止因同 registrable domain 就自動擴張 |
 
 ---
