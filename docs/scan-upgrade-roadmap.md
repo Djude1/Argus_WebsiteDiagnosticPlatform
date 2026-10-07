@@ -37,7 +37,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   `page_audit`、`site_findings`、`gsc`、`keywords`。GSC 已接。
 - **升級**：
   1. 接 **PageSpeed Insights API（CrUX 真實場域資料）**：LCP/INP/CLS 實驗室 vs 真實使用者並列——目前最缺的權威外部訊號。
-  2. 結構化資料驗證（JSON-LD 語法 + Google Rich Results 必填欄位，可離線）。
+  2. 結構化資料驗證（JSON-LD 語法 + Google Rich Results 必填欄位，可離線）。（**已實作 2026-10-07**：語法由 AEO `aeo-markup-syntax` 回報；必填欄位 `seo/structured_data.py`，依 Google Search Central 2026-09 版，涵蓋產品（含 Offer／AggregateOffer）、軟體、職缺、食譜、影片、導覽路徑（含 ListItem）、活動（含地點）、在地商家、評論與評分彙總，缺必填 → `seo-structured-data-required`（低）；商家／組織自評星等 → `seo-structured-data-self-serving-reviews`（資訊）。FAQPage／HowTo 已不在 Google 支援清單、Article／Organization 無必填，不檢查；不檢查建議欄位與值的正確性）
   3. robots/sitemap 一致性交叉檢查（sitemap 列出卻 noindex、canonical 指他頁等矛盾）【待驗證：`site_checks` 現況是否已含】。
   4. 目標關鍵字 vs GSC 實際曝光關鍵字的落差分析。
 

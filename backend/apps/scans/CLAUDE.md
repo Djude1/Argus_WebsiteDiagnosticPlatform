@@ -168,6 +168,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | 模組 | 職責 |
 |---|---|
 | `seo/page_audit.py` | 逐頁解析已保存的 HTML（`rendered_dom` 優先）：Title、Description、H1–H6 清單與跳號、正文（沿用 `aeo/content.extract_page_content`）、canonical、robots meta＋`X-Robots-Tag`、圖片 alt、連結（錨文字含圖片 alt）、OG、hreflang、載入時間。**只讀 DB，不連線** |
+| `seo/structured_data.py` | Google 複合式搜尋結果必填欄位（依 Search Central 2026-09 版；`scanners._seo_structured_data` 逐頁呼叫，Finding `seo-structured-data-required`（低）與自評星等 `seo-structured-data-self-serving-reviews`（資訊））：只套頂層節點（區塊根、陣列、`@graph`、`mainEntity`）的類型規則，Review／AggregateRating 任何層都檢查，Offer／活動地點只在 Product／Event 底下檢查；`@type` 接受 schema.org 網址形式；純 `@id` 參照不檢查；語法錯誤略過（由 AEO 回報）。**不檢查** FAQPage／HowTo（Google 已不支援）、建議欄位、值是否正確 |
 | `seo/link_check.py` | 連結狀態：每一跳都過 `assert_public_http_url`、手動跟隨轉址最多 5 跳並記錄跳轉鏈；HEAD 回 4xx／5xx 或連線層錯誤（`RemoteProtocolError` 等，2026-10-06 domjudge 子網域實測）時改 GET（不讀內容）。站台檢查：robots.txt（`User-agent: *` 的 Disallow）、sitemap、HTTP→HTTPS、www／非 www、隨機路徑 404、`/index.html`、結尾斜線 |
 | `seo/collect.py` | `stage_seo_links` 主體：收集所有頁面的不重複連結（爬蟲已直接造訪且沒轉址的頁面不重查），依站內→子網域→站外排序，前 `ARGUS_SEO_LINK_CHECK_LIMIT`（150）個、總時間 `ARGUS_SEO_LINK_CHECK_SECONDS`（120） |
 | `seo/report.py` | API 資料：概覽（掃描頁數、受影響頁數、重大／警告／提示、可索引頁數、失效連結、優先修復事項）、頁面、問題（每處附網址、檢測時間、證據）、連結（依目標合併、來源頁與錨文字）、站台檢查、關鍵字報告；以「掃描 id＋連結檢查時間」快取 1 小時 |

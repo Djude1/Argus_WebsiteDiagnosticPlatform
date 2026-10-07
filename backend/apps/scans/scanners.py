@@ -11,6 +11,7 @@ from apps.scans.ai_bots import USER as AI_USER
 from apps.scans.ai_bots import blocked as ai_blocked
 from apps.scans.evidence import contacts
 from apps.scans.models import Finding
+from apps.scans.seo.structured_data import validate_blocks as validate_structured_data
 
 # ---------- PII（個人資料）偵測 ----------
 # Email 與手機的格式由共用證據模組提供（P0-B），AEO 用同一套，避免兩邊解析結果不一致
@@ -995,6 +996,66 @@ def _seo_open_graph(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> 
     )
 
 
+def _seo_structured_data(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """已有的結構化資料缺少 Google 複合式搜尋結果的必填欄位（seo/structured_data.py）。"""
+    if not parser.json_ld_blocks:
+        return None
+    result = validate_structured_data(parser.json_ld_blocks)
+    issues = result["issues"]
+    if not issues:
+        return None
+    lines = [f"{i['type']}「{i['item']}」缺少：{'、'.join(i['missing'])}" for i in issues]
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        rule_id="seo-structured-data-required",
+        title="結構化資料缺少 Google 複合式搜尋結果的必填欄位",
+        description=(
+            "頁面的結構化資料缺少 Google 列為必填的欄位，這些項目不符合複合式搜尋結果"
+            "（例如價格、評分星等、活動日期）的顯示資格，只會以一般搜尋結果呈現。"
+        ),
+        remediation=(
+            "依下方清單補上欄位，內容要與頁面上看得到的資訊一致，再用 Google 複合式搜尋結果測試"
+            "（https://search.google.com/test/rich-results）確認。"
+            "若沒有打算爭取複合式搜尋結果，也可以移除不完整的標記。"
+        ),
+        evidence=f"{page_input.url}\n" + "\n".join(lines),
+        selector='script[type="application/ld+json"]',
+        impact_area="structured_data",
+        evidence_json={"url": page_input.url, "issues": issues},
+        priority_score=32,
+    )
+
+
+def _seo_self_serving_reviews(
+    page_input: PageAnalysisInput, parser: HtmlSignalParser
+) -> dict | None:
+    """商家或組織標記了自己的評分：Google 不會顯示星等。"""
+    if not parser.json_ld_blocks:
+        return None
+    names = validate_structured_data(parser.json_ld_blocks)["self_serving"]
+    if not names:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.INFO,
+        rule_id="seo-structured-data-self-serving-reviews",
+        title="商家自己的評分標記不會顯示成搜尋星等",
+        description=(
+            "LocalBusiness 或 Organization 標記裡含有評分或評論。網站自己控制的評論"
+            "（含嵌入的第三方評論元件）屬於 Google 所說的自我評論，不會顯示星等。"
+        ),
+        remediation=(
+            "不需要為了星等保留這段標記；評論內容可以照常顯示在頁面上。"
+            "評價產品或服務時，改標在 Product 等類型上。"
+        ),
+        evidence=f"{page_input.url}\n標記評分的項目：" + "、".join(names),
+        selector='script[type="application/ld+json"]',
+        impact_area="structured_data",
+        evidence_json={"url": page_input.url, "items": names},
+    )
+
+
 # 逐頁 SEO 檢查：每項獨立、順序即 finding 輸出順序；新增檢查寫成同樣簽名的函式加進來。
 SEO_PAGE_CHECKS = (
     _seo_title_length,
@@ -1003,6 +1064,8 @@ SEO_PAGE_CHECKS = (
     _seo_image_alt,
     _seo_canonical,
     _seo_open_graph,
+    _seo_structured_data,
+    _seo_self_serving_reviews,
 )
 
 
