@@ -38,7 +38,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **升級**：
   1. 接 **PageSpeed Insights API（CrUX 真實場域資料）**：LCP/INP/CLS 實驗室 vs 真實使用者並列——目前最缺的權威外部訊號。
   2. 結構化資料驗證（JSON-LD 語法 + Google Rich Results 必填欄位，可離線）。（**已實作 2026-10-07**：語法由 AEO `aeo-markup-syntax` 回報；必填欄位 `seo/structured_data.py`，依 Google Search Central 2026-09 版，涵蓋產品（含 Offer／AggregateOffer）、軟體、職缺、食譜、影片、導覽路徑（含 ListItem）、活動（含地點）、在地商家、評論與評分彙總，缺必填 → `seo-structured-data-required`（低）；商家／組織自評星等 → `seo-structured-data-self-serving-reviews`（資訊）。FAQPage／HowTo 已不在 Google 支援清單、Article／Organization 無必填，不檢查；不檢查建議欄位與值的正確性）
-  3. robots/sitemap 一致性交叉檢查（sitemap 列出卻 noindex、canonical 指他頁等矛盾）【待驗證：`site_checks` 現況是否已含】。
+  3. robots/sitemap 一致性交叉檢查（sitemap 列出卻 noindex、canonical 指他頁等矛盾）。（**已實作 2026-10-07**：原本 `site_checks` 只檢查 robots.txt／sitemap 是否存在、`seo-primary-url-inconsistent` 只比主機，沒有交叉檢查。`seo/site_findings.index_signal_conflicts` → `seo-index-signals-conflict`（低）：sitemap 列出 noindex／canonical 指他頁／回應錯誤／轉址／robots.txt 禁止 Googlebot 的網址，以及 noindex 頁被 robots.txt 擋住；只比對本次爬到的頁面與讀到的 sitemap 網址（最多頁數上限個）。實測 wordpress.org、docs.djangoproject.com、smashingmagazine.com 都抓到真實矛盾並逐筆核對屬實）
   4. 目標關鍵字 vs GSC 實際曝光關鍵字的落差分析。
 
 ## 2. AEO（問答檢測）

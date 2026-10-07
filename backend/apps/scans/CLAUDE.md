@@ -163,7 +163,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 
 ## SEO 分析與 Search Console（2026-10-03，`seo/`）
 
-會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層，是給網站主逐頁查證與修正的工作清單。**例外（2026-10-06）**：`seo/site_findings.py` 把站台層級的結論轉成 Finding（計入 SEO 分數、出現在問題清單與報告）——站內失效連結 `seo-broken-internal-links`（中）、主網址設定不一致 `seo-primary-url-inconsistent`（低；同一個根本原因的症狀合併成一項：www／非 www 都直接回應、og:url／canonical／robots Sitemap 指向另一個主機、沒有 canonical 的頁數，列在 `evidence_json.symptoms`；2026-10-06 前拆成 `seo-www-duplicate`／`seo-declared-host-mismatch` 兩項）、多頁同一個 title `seo-duplicate-titles`（中，≥3 頁且過半）；ntubimdbirc.tw 實測這些只出現在 SEO 頁明細、報告完全沒有。其餘逐頁明細仍不產生 Finding。
+會員區「SEO 分析」分頁（`/projects/:id/seo`）的資料層，是給網站主逐頁查證與修正的工作清單。**例外（2026-10-06）**：`seo/site_findings.py` 把站台層級的結論轉成 Finding（計入 SEO 分數、出現在問題清單與報告）——站內失效連結 `seo-broken-internal-links`（中）、主網址設定不一致 `seo-primary-url-inconsistent`（低；同一個根本原因的症狀合併成一項：www／非 www 都直接回應、og:url／canonical／robots Sitemap 指向另一個主機、沒有 canonical 的頁數，列在 `evidence_json.symptoms`；2026-10-06 前拆成 `seo-www-duplicate`／`seo-declared-host-mismatch` 兩項）、多頁同一個 title `seo-duplicate-titles`（中，≥3 頁且過半）、索引指示互相矛盾 `seo-index-signals-conflict`（低，2026-10-07：sitemap 列出 noindex／canonical 指他頁／錯誤／轉址／robots.txt 禁止 Googlebot 的網址，noindex 頁被 robots.txt 擋住；資料來自 crawler 的 `site_signals.sitemap_urls`／`robots_text`，robots 判斷用 `ai_bots.robots_allows`）；ntubimdbirc.tw 實測這些只出現在 SEO 頁明細、報告完全沒有。其餘逐頁明細仍不產生 Finding。
 
 | 模組 | 職責 |
 |---|---|

@@ -167,6 +167,9 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
         "blocked_ai_crawlers": [],
         "robots_disallow": [],
         "robots_sitemaps": [],
+        # 原文留給 robots／sitemap／noindex 一致性檢查（seo/site_findings.py）；
+        # Google 只讀前 500 KiB
+        "robots_text": None,
     }
     try:
         llms_url = assert_public_http_url(f"{origin}/llms.txt")
@@ -179,7 +182,8 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
         robots_url = assert_public_http_url(f"{origin}/robots.txt")
         resp = await context.request.get(robots_url, timeout=10000, max_redirects=0)
         if resp.ok:
-            robots_text = await resp.text()
+            robots_text = (await resp.text())[:512_000]
+            signals["robots_text"] = robots_text
             robot_parser.parse(robots_text.splitlines())
             signals["robots_disallow"] = parse_robots_disallow(robots_text)
             signals["robots_sitemaps"] = parse_robots_sitemaps(robots_text)
@@ -1172,6 +1176,7 @@ async def crawl_site(
                     context, origin, site_signals.get("robots_sitemaps") or [], max_pages
                 )
                 site_signals["sitemap_seeded"] = state.seed(sitemap_urls)
+                site_signals["sitemap_urls"] = sitemap_urls
             while (target := state.next_target(robot_parser, respect_robots)) is not None:
                 url, depth = target
                 await _throttle(state, min_interval)

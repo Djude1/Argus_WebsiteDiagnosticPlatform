@@ -115,6 +115,17 @@ def _rules_for(groups, token: str) -> tuple[list[tuple[bool, str]], bool]:
     return [r for rules in wildcard for r in rules], False
 
 
+def robots_allows(robots_text: str | None, token: str, url_path: str) -> bool:
+    """robots.txt 是否允許 token（例如 googlebot）抓取 url_path（含查詢字串）。
+
+    沒有 robots.txt＝允許。
+    """
+    if not robots_text:
+        return True
+    rules, _explicit = _rules_for(parse_groups(robots_text), token)
+    return _allowed(rules, url_path or "/")
+
+
 def analyze_policy(robots_text: str | None) -> dict:
     """{robots_found, bots: [{agent, vendor, purpose, note, status, explicit}]}。
 
