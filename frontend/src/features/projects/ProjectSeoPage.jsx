@@ -12,6 +12,7 @@ import { formatDate, formatDateTime } from "../../shared/formatters";
 import { ExternalIcon, GlobeIcon, SearchIcon } from "../../shared/LineIcons";
 import { FilterChips, ScanTimeCard, useProjectScans } from "./ProjectPages.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
+import { keywordGap, untargetedQueries } from "./seoKeywordGap";
 
 const TABS = [
   { key: "overview", label: "概覽" },
@@ -55,6 +56,13 @@ const LINK_FILTERS = {
   unchecked: { label: "未檢查", test: (row) => row.verdict === "unchecked" || row.verdict === "skipped" },
 };
 const GSC_DAYS = [7, 28, 90];
+const MAX_KEYWORDS = 20; // 與後端 seo/keywords.MAX_KEYWORDS 一致
+const RANK_BAND = {
+  first: { label: "第 1 頁", tone: "is-good" },
+  second: { label: "第 2 頁", tone: "is-warn" },
+  beyond: { label: "第 3 頁以後", tone: "is-info" },
+  none: { label: "沒有曝光", tone: "is-muted" },
+};
 const numberFormat = new Intl.NumberFormat("zh-TW");
 
 function worstLevel(checks = []) {
@@ -1135,11 +1143,13 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
   const [error, setError] = useState("");
   useEffect(() => setKeywords(data.keywords), [data.keywords]);
 
-  const gscByQuery = useMemo(() => {
-    const map = new Map();
-    for (const row of performance.data?.queries || []) map.set(row.query.toLowerCase(), row);
-    return map;
-  }, [performance.data]);
+  // Search Console 落差：每個目標關鍵字的相關搜尋詞表現，以及有曝光但還不是目標的字詞
+  const queries = performance.data?.queries;
+  const gapByKeyword = useMemo(
+    () => new Map(keywordGap(data.keyword_report, queries).map((gap) => [gap.keyword, gap])),
+    [data.keyword_report, queries],
+  );
+  const opportunities = useMemo(() => untargetedQueries(keywords, queries), [keywords, queries]);
 
   async function save(next) {
     setSaving(true);
@@ -1206,7 +1216,7 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
             </thead>
             <tbody>
               {data.keyword_report.map((row) => {
-                const gscRow = gscByQuery.get(row.keyword.toLowerCase());
+                const gap = performance.data ? gapByKeyword.get(row.keyword) : null;
                 return (
                   <tr key={row.keyword}>
                     <td><SearchIcon /> {row.keyword}</td>
@@ -1221,12 +1231,12 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
                         <span className="seo-muted">沒有頁面提到</span>
                       )}
                     </td>
-                    <td className="seo-nowrap">
-                      {gscRow
-                        ? `點擊 ${gscRow.clicks}・曝光 ${gscRow.impressions}・平均排名 ${gscRow.position.toFixed(1)}`
-                        : performance.data ? "期間內沒有此搜尋詞" : "—"}
+                    <td>
+                      {gap ? <KeywordGapCell gap={gap} /> : "—"}
                     </td>
-                    <td className="seo-muted">{row.advice || "已出現在重要位置"}</td>
+                    <td className="seo-muted">
+                      {[row.advice, gap?.advice].filter(Boolean).join(" ") || "已出現在重要位置"}
+                    </td>
                   </tr>
                 );
               })}
@@ -1234,8 +1244,73 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
           </table>
         </div>
       )}
-      <p className="seo-muted">依掃描當時保存的頁面內容比對；修改網站後重新掃描才會更新。</p>
+      <p className="seo-muted">
+        依掃描當時保存的頁面內容比對；修改網站後重新掃描才會更新。Search Console 欄位統計包含這個關鍵字的
+        搜尋詞（期間內點擊最多的前 200 個），排名是期間平均。
+      </p>
+      {performance.data && opportunities.length > 0 && (
+        <>
+          <h3 className="seo-subtitle">有曝光但還不是目標的搜尋詞</h3>
+          <p className="seo-muted">這些搜尋詞已經讓網站出現在 Google，但不在目標關鍵字裡；值得經營的可以設為目標，追蹤頁面有沒有好好回應。</p>
+          <div className="project-table-wrap">
+            <table className="project-table seo-keyword-table">
+              <thead>
+                <tr>
+                  <th scope="col">搜尋詞</th>
+                  <th scope="col">曝光</th>
+                  <th scope="col">點擊</th>
+                  <th scope="col">平均排名</th>
+                  <th scope="col">Google 帶到的頁面</th>
+                  <th scope="col"><span className="project-sr-only">動作</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {opportunities.map((row) => (
+                  <tr key={row.query}>
+                    <td>{row.query}</td>
+                    <td>{numberFormat.format(row.impressions)}</td>
+                    <td>{numberFormat.format(row.clicks)}</td>
+                    <td>{row.position.toFixed(1)}</td>
+                    <td className="seo-url">{row.page || "—"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving || keywords.length >= MAX_KEYWORDS}
+                        title={keywords.length >= MAX_KEYWORDS ? `最多 ${MAX_KEYWORDS} 個目標關鍵字` : undefined}
+                        onClick={() => save([...keywords, row.query])}
+                      >
+                        設為目標
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
+  );
+}
+
+/** Search Console 欄：相關搜尋詞的曝光、點擊、最佳平均排名（分段徽章附文字），以及 Google 帶到的頁面。 */
+function KeywordGapCell({ gap }) {
+  const band = RANK_BAND[gap.status];
+  if (gap.status === "none") {
+    return <span className={`seo-chip ${band.tone}`}>{band.label}</span>;
+  }
+  return (
+    <>
+      <span className={`seo-chip ${band.tone}`}>{band.label}</span>
+      <span className="seo-block">
+        {gap.queries} 個相關搜尋詞・曝光 {numberFormat.format(gap.impressions)}・點擊 {numberFormat.format(gap.clicks)}
+      </span>
+      <span className="seo-muted seo-block">最佳平均排名 {gap.bestPosition.toFixed(1)}（「{gap.bestQuery}」）</span>
+      {gap.landingMismatch && (
+        <span className="seo-muted seo-block">Google 帶到：<span className="seo-url">{gap.landingMismatch}</span></span>
+      )}
+    </>
   );
 }
 
