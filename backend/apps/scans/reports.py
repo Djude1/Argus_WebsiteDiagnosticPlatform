@@ -24,6 +24,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.scans import versions
+from apps.scans.ai_bots import summary_line as ai_bots_summary
 from apps.scans.coverage import incomplete_checks
 from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.pagespeed import summary_lines as pagespeed_summary_lines
@@ -231,11 +232,10 @@ RULE_IMPACT = {
     "GEO_GENERAL_A8C8023032":
         "AI 摘要與引用時，較容易取用「可獨立成立的段落」——有明確主題、定義、數據來源。"
         "這是 Argus 依內容結構提出的建議，不是任何搜尋服務公布的門檻。",
-    "GEO_ROBOTS_TXT_AI_AFFA24D778":
-        "robots.txt 阻擋了 GPTBot / ClaudeBot / Google-Extended，代表這些"
-        "AI 系統不會抓你的內容做訓練與引用——會大幅降低你在 AI 回答中的"
-        "曝光。如果你希望被 AI 引用，需要把這些 User-Agent 從 robots 移除"
-        "或在 /llms.txt 提供可引用範圍。",
+    "geo-ai-search-bots-blocked":
+        "OAI-SearchBot、Claude-SearchBot、PerplexityBot 等爬蟲替 AI 搜尋與對話服務讀取網頁；"
+        "被 robots.txt 封鎖時，這些服務比較不會引用、連結你的網站。GPTBot、ClaudeBot、"
+        "Google-Extended 等是訓練用爬蟲，封鎖它們不影響搜尋與引用，是可以單獨做的商業選擇。",
 }
 
 # 「修好了怎麼確認」按 rule_id 客製：給出具體可執行的驗收指令（curl、瀏覽器、開發者工具），
@@ -302,10 +302,10 @@ RULE_VERIFY = {
         "Argus 以區塊標籤（p、div、li、td、標題等）切段，計算 40 字以上的文字區塊；"
         "少於 2 塊或全頁文字少於 300 字時列出。修改後確認主要內容有 2 段以上、"
         "各自成立的完整段落即可。",
-    "GEO_ROBOTS_TXT_AI_AFFA24D778":
-        "在終端機執行 curl -s https://你的網域/robots.txt，"
-        "應不再有 Disallow: / 對 GPTBot、ClaudeBot、Google-Extended。"
-        "或到 https://support.google.com/webmasters/answer/6062596 測試 robots 規則。",
+    "geo-ai-search-bots-blocked":
+        "在終端機執行 curl -s https://你的網域/robots.txt，確認 OAI-SearchBot、Claude-SearchBot、"
+        "PerplexityBot、ChatGPT-User 等爬蟲的群組沒有 Disallow: /，也沒有被 User-agent: * 的 "
+        "Disallow: / 涵蓋；重新掃描後網站架構分頁的 AI 爬蟲政策表會顯示「允許」。",
 }
 
 
@@ -1215,6 +1215,8 @@ def _report_site_profile(scan_job: ScanJob) -> dict:
             facts.append({"label": "DNS 代管", "value": "、".join(infra["nameservers"])})
         if edge and edge.get("evidence"):
             facts.append({"label": "判斷依據", "value": "；".join(edge["evidence"][:3])})
+    if profile.get("ai_bots"):
+        facts.append({"label": "AI 爬蟲政策", "value": ai_bots_summary(profile["ai_bots"])})
     if profile.get("observatory"):
         facts.append(
             {"label": "安全標頭等第", "value": observatory_summary(profile["observatory"])}

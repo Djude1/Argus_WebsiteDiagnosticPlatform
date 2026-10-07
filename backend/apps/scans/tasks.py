@@ -1517,6 +1517,7 @@ def stage_site_profile(ctx: ScanRunContext) -> None:
             findings=ctx.all_findings,
             categories=set(scan_job.effective_categories),
             extra_tech=ctx.katana_tech,
+            ai_bot_policy=ctx.site_signals.get("ai_bot_policy"),
         )
     except Exception:  # noqa: BLE001 - 輔助資訊
         logger.warning("網站概況失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)

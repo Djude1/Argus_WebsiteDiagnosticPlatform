@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
+from apps.scans.ai_bots import SEARCH as AI_SEARCH
+from apps.scans.ai_bots import TRAINING as AI_TRAINING
+from apps.scans.ai_bots import USER as AI_USER
+from apps.scans.ai_bots import blocked as ai_blocked
 from apps.scans.evidence import contacts
 from apps.scans.models import Finding
 
@@ -1588,24 +1592,39 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
                 priority_score=20,
             )
         )
-    blocked = site_signals.get("blocked_ai_crawlers") or []
-    if blocked:
+    # 只有擋到「AI 搜尋與回答」「使用者觸發讀取」的爬蟲才列問題；只擋訓練用爬蟲是正當的商業選擇，
+    # 不影響這些服務的搜尋與引用（網站架構分頁另有完整的 AI 爬蟲政策表）
+    policy = site_signals.get("ai_bot_policy") or {}
+    answer_bots = ai_blocked(policy, AI_SEARCH, AI_USER)
+    if answer_bots:
+        names = "、".join(f"{b['agent']}（{b['vendor']}）" for b in answer_bots)
+        training = [b["agent"] for b in ai_blocked(policy, AI_TRAINING)]
         findings.append(
             make_finding(
                 category=Finding.Category.GEO,
-                severity=Finding.Severity.INFO,
-                title="robots.txt 阻擋了主流 AI 爬蟲",
+                severity=Finding.Severity.LOW,
+                title="robots.txt 擋住 AI 搜尋與回答服務的爬蟲",
                 description=(
-                    "robots.txt 目前阻擋部分 AI 爬蟲；"
-                    "若你希望內容能被 AI 引用，這會降低曝光，請依自身策略判斷。"
+                    f"robots.txt 封鎖了 {names}。這些爬蟲替 AI 搜尋與對話服務讀取網頁，"
+                    "封鎖後這些服務的回答比較不會引用、連結到你的網站。"
+                    + (
+                        f"另外封鎖了訓練用的 {'、'.join(training)}，"
+                        "那是不同的選擇，不影響搜尋與引用。"
+                        if training else ""
+                    )
                 ),
                 remediation=(
-                    "若希望被 AI 系統收錄，檢視 robots.txt 對 AI 爬蟲 User-Agent 的規則；"
-                    "若刻意阻擋則可忽略此項。"
+                    "如果希望出現在 AI 搜尋與回答中，在 robots.txt 允許上述爬蟲；"
+                    "不想被拿去訓練模型的話，"
+                    "只封鎖 GPTBot、ClaudeBot、Google-Extended 等訓練用爬蟲即可。"
+                    "若是刻意不讓 AI 服務讀取，可忽略此項。"
                 ),
-                evidence=f"blocked_ai_crawlers={blocked}",
+                evidence="robots.txt 封鎖：" + "、".join(b["agent"] for b in answer_bots),
+                rule_id="geo-ai-search-bots-blocked",
+                evidence_json={"blocked": [b["agent"] for b in answer_bots],
+                               "blocked_training": training},
                 impact_area="fetchable",
-                priority_score=18,
+                priority_score=30,
             )
         )
     return findings

@@ -81,6 +81,22 @@ describe("SiteProfilePanel", () => {
     expect(screen.getByText(/不是 Observatory 官方結果/)).toBeInTheDocument();
   });
 
+  it("AI 爬蟲政策依用途分組，狀態附文字並說明訓練封鎖不影響搜尋", () => {
+    const ai_bots = {
+      robots_found: true,
+      bots: [
+        { agent: "GPTBot", vendor: "OpenAI", purpose: "training", note: "", status: "blocked", explicit: true },
+        { agent: "OAI-SearchBot", vendor: "OpenAI", purpose: "search", note: "ChatGPT 搜尋", status: "allowed", explicit: false },
+      ],
+    };
+    render(<SiteArchitecture profile={{ ...PROFILE, ai_bots }} />);
+    expect(screen.getByText("AI 爬蟲政策")).toBeInTheDocument();
+    expect(screen.getByText("模型訓練")).toBeInTheDocument();
+    expect(screen.getByText("封鎖")).toBeInTheDocument();
+    expect(screen.getByText("允許")).toBeInTheDocument();
+    expect(screen.getByText(/不影響這些公司的搜尋與 AI 回答引用/)).toBeInTheDocument();
+  });
+
   it("舊掃描沒有網站概況時給說明而不是空白", () => {
     render(<SiteStrengths profile={{}} />);
     expect(screen.getByText(/較早的掃描/)).toBeInTheDocument();

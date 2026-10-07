@@ -51,8 +51,6 @@ CF_JS_CHALLENGE_MARKERS = (
     "cf_captcha",
 )
 
-# 用於診斷的主流 AI 爬蟲 User-Agent；僅檢查 robots.txt 規則，不繞過任何限制
-AI_CRAWLER_USER_AGENTS = ("GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot")
 
 
 def compute_min_interval(scan_mode: str, *, active_rps: int, passive_rps: int) -> float:
@@ -161,6 +159,7 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
 
     robots_disallow 供資安層判斷「robots.txt 是否把敏感路徑當地圖洩露」（被動）。
     """
+    from apps.scans.ai_bots import analyze_policy, blocked
     from apps.scans.security.exposure_scanner import parse_robots_disallow
 
     signals: dict = {
@@ -175,6 +174,7 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
         signals["llms_txt_found"] = response.ok
     except Exception:
         signals["llms_txt_found"] = False
+    robots_text = None
     try:
         robots_url = assert_public_http_url(f"{origin}/robots.txt")
         resp = await context.request.get(robots_url, timeout=10000, max_redirects=0)
@@ -185,9 +185,10 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
             signals["robots_sitemaps"] = parse_robots_sitemaps(robots_text)
     except Exception:
         signals["robots_disallow"] = []
-    for agent in AI_CRAWLER_USER_AGENTS:
-        if not robot_parser.can_fetch(agent, f"{origin}/"):
-            signals["blocked_ai_crawlers"].append(agent)
+    # AI 爬蟲的 robots.txt 政策（ai_bots.py）：依用途分訓練／AI 搜尋／使用者觸發，
+    # 只讀已取得的 robots.txt
+    signals["ai_bot_policy"] = analyze_policy(robots_text)
+    signals["blocked_ai_crawlers"] = [b["agent"] for b in blocked(signals["ai_bot_policy"])]
     return signals
 
 

@@ -749,3 +749,64 @@
     font-size: 0.8125rem;
   }
 }
+
+/* AI 爬蟲政策（SiteProfilePanel AiBotPolicy）：狀態一律附文字，不只靠顏色 */
+.site-ai-group {
+  margin-top: 0.75rem;
+}
+
+.site-ai-group-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.site-ai-bots {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-ai-bots li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.site-ai-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.site-ai-status {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.site-ai-status.is-good {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.site-ai-status.is-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.site-ai-status.is-bad {
+  background: #fee2e2;
+  color: #b91c1c;
+}

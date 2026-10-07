@@ -262,6 +262,7 @@ def build_site_profile(
     findings: list[dict],
     categories: set[str],
     extra_tech: list[str] | None = None,
+    ai_bot_policy: dict | None = None,
 ) -> dict:
     page = _first_usable(pages)
     infrastructure = analyze_infrastructure(hostname, (page or {}).get("headers") or {})
@@ -287,4 +288,6 @@ def build_site_profile(
         "technologies": technologies,
         # 安全標頭參考等第（Mozilla Observatory 規則離線計算，不計入 Argus 分數）
         "observatory": observatory_grade(pages, seo_report) if "security" in categories else {},
+        # AI 爬蟲的 robots.txt 政策（ai_bots.py；依用途分類，說明商業取捨）
+        "ai_bots": (ai_bot_policy or {}) if "geo" in categories else {},
     }

@@ -117,6 +117,54 @@ function ObservatoryGrade({ observatory }) {
   );
 }
 
+const AI_PURPOSES = [
+  ["search", "AI 搜尋與回答", "封鎖後，這些服務的回答比較不會引用、連結你的網站。"],
+  ["user", "使用者觸發讀取", "使用者在對話中要求讀取網頁時才發出；依廠商說明不一定遵守 robots.txt。"],
+  ["training", "模型訓練", "封鎖是正當的商業選擇，不影響這些公司的搜尋與 AI 回答引用。"],
+];
+const AI_STATUS = {
+  allowed: ["允許", "good"],
+  partial: ["部分限制", "warn"],
+  blocked: ["封鎖", "bad"],
+};
+
+// AI 爬蟲的 robots.txt 政策（後端 ai_bots.py）：依用途分組，讓網站主看清楚封鎖的取捨
+function AiBotPolicy({ policy }) {
+  if (!policy?.bots?.length) return null;
+  return (
+    <div className="site-observatory">
+      <h3 className="site-tech-title">AI 爬蟲政策</h3>
+      {!policy.robots_found && (
+        <p className="site-strength-evidence">網站沒有 robots.txt，所有 AI 爬蟲都可以抓取。</p>
+      )}
+      {AI_PURPOSES.map(([purpose, label, hint]) => {
+        const bots = policy.bots.filter((bot) => bot.purpose === purpose);
+        if (!bots.length) return null;
+        return (
+          <div key={purpose} className="site-ai-group">
+            <h4 className="site-ai-group-title">{label}</h4>
+            <p className="site-strength-evidence">{hint}</p>
+            <ul className="site-ai-bots">
+              {bots.map((bot) => {
+                const [statusLabel, tone] = AI_STATUS[bot.status] || ["—", "none"];
+                return (
+                  <li key={bot.agent}>
+                    <span className="site-ai-name">
+                      {bot.agent}
+                      <span className="site-profile-sub">{bot.vendor}{bot.note ? `・${bot.note}` : ""}</span>
+                    </span>
+                    <span className={`site-ai-status is-${tone}`}>{statusLabel}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SiteArchitecture({ profile }) {
   const infra = profile?.infrastructure;
   const technologies = profile?.technologies || [];
@@ -167,6 +215,7 @@ function SiteArchitecture({ profile }) {
         </div>
       )}
       <ObservatoryGrade observatory={profile?.observatory} />
+      <AiBotPolicy policy={profile?.ai_bots} />
       {infra?.hostname && (
         <details className="site-profile-details">
           <summary>詳細資料（IP、反解、DNS）</summary>

@@ -28,7 +28,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **升級**：
   1. **有上限的 Render Readiness**：維持 `domcontentloaded`，再以短暫 hydration grace period、DOM/內容穩定度與可選 site-specific selector 判斷就緒；**不以 networkidle 作為必要條件**。必須有總時間上限，逾時仍保留已取得 DOM/截圖並標示 `LIMITED: render_readiness_timeout`。
   2. 爬取預算可觀測（種子來源、每頁耗時、被節流次數、render readiness 結果寫進 coverage/progress）。
-  3. **Near-duplicate 只做 Analysis Reuse，不做 URL Skip**：SimHash / hreflang 僅可重用文字結構、部分 AEO/GEO 等高成本內容分析；每個 URL 仍必須各自做 headers、canonical/noindex、表單、權限、安全與 URL-specific 檢查。
+  3. **Near-duplicate 只做 Analysis Reuse，不做 URL Skip**：SimHash / hreflang 僅可重用文字結構、部分 AEO/GEO 等高成本內容分析；每個 URL 仍必須各自做 headers、canonical/noindex、表單、權限、安全與 URL-specific 檢查。（**評估後暫緩 2026-10-07**：實測逐頁五維規則分析一頁約 70–150 ms（1.1 MB 的大頁約 1.3 s），50 頁合計約 5–10 秒，遠小於爬取本身的數分鐘；重用最多省幾秒，卻有把逐頁問題錯誤複製的風險。等分析改用 LLM 等高成本方法時再做）
   4. 所有重用必須記錄 `analysis_reused_from`、重用規則與未重用檢查，不能讓 dedupe 犧牲 coverage。
 
 ## 1. SEO
@@ -144,7 +144,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 - **現況**：llms.txt 成熟度檢查、FAQ 結構偵測。
 - **升級**：
-  1. AI bot robots 政策分析（`GPTBot`/`ClaudeBot`/`Google-Extended`/`PerplexityBot` 允許或封鎖，說明商業取捨）。
+  1. AI bot robots 政策分析（`GPTBot`/`ClaudeBot`/`Google-Extended`/`PerplexityBot` 允許或封鎖，說明商業取捨）。（**已實作 2026-10-07**：`apps/scans/ai_bots.py`，13 個 bot 依訓練／AI 搜尋／使用者觸發分類；只封鎖訓練用爬蟲不再列為問題）
   2. 內容可機讀性（語意 HTML 比例、主內容可否與導覽/頁尾分離 `<main>`/`article`）。
 
 ## 11. 連結檢查
@@ -221,7 +221,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。（**Passive Analysis 已實作 2026-10-07**：爬蟲錄同網站 HAR → 獨立 ZAP daemon 只跑被動規則，對目標零新增請求；告警正規化後才成為 Finding，與既有檢查重複者不列、ZAP risk 不直接照搬；預設關閉，compose profile `zap`／`k8s/optional/zap-passive.yaml`（未列入 kustomization），見 [`zap-passive.md`](zap-passive.md)。尚未做：正式叢集部署與資源量測、Spider／AJAX Spider、Active Scan）
 
-9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。（OSV.dev＋EPSS、Observatory 等第 **已實作 2026-10-07**，見 §5 第 2、3 項；Analysis Reuse、AI bot 政策尚未開始）
+9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。（OSV.dev＋EPSS、Observatory 等第、AI bot 政策 **已實作 2026-10-07**，見 §5 第 2、3 項與 §10 第 1 項；Analysis Reuse 經量測後暫緩，見「爬取」第 3 項）
 
 ### 每一階段的共通驗收指標
 

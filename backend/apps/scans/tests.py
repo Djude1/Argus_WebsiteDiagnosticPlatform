@@ -1177,15 +1177,23 @@ class GeoFastScannerTests(APITestCase):
 
         self.assertIn("網站未提供 llms.txt", {finding["title"] for finding in findings})
 
-    def test_analyze_site_signals_flags_blocked_ai_crawlers(self):
-        findings = analyze_site_signals(
-            {"llms_txt_found": True, "blocked_ai_crawlers": ["GPTBot"]}
+    def test_analyze_site_signals_flags_blocked_ai_search_bots(self):
+        from apps.scans.ai_bots import analyze_policy
+
+        policy = analyze_policy("User-agent: OAI-SearchBot\nDisallow: /\n")
+        findings = analyze_site_signals({"llms_txt_found": True, "ai_bot_policy": policy})
+
+        self.assertEqual(
+            [f["rule_id"] for f in findings], ["geo-ai-search-bots-blocked"]
         )
 
-        self.assertIn(
-            "robots.txt 阻擋了主流 AI 爬蟲",
-            {finding["title"] for finding in findings},
-        )
+    def test_blocking_only_training_bots_is_not_a_problem(self):
+        from apps.scans.ai_bots import analyze_policy
+
+        policy = analyze_policy("User-agent: GPTBot\nDisallow: /\n")
+        findings = analyze_site_signals({"llms_txt_found": True, "ai_bot_policy": policy})
+
+        self.assertEqual(findings, [])
 
     def test_analyze_site_signals_clean_site_has_no_findings(self):
         findings = analyze_site_signals({"llms_txt_found": True, "blocked_ai_crawlers": []})
