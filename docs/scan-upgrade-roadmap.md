@@ -43,15 +43,15 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 2. AEO（問答檢測）
 
-- **現況**：`aeo/evaluate.py` 四層判定（可回答/資訊不足/內容衝突/無答案），框架完整，但實測已出現「語意相關段落被誤判為真正答案」與跨模組 evidence 不一致。
+- **現況**：`aeo/evaluate.py` 四層判定（可回答/資訊不足/內容衝突/無答案），框架完整，已有答案蘊含判定（`aeo/answers.py` 的 `entails()`）與日期衝突判定（2026-10-06 第二輪準確度修正）；實測曾出現「語意相關段落被誤判為真正答案」與跨模組 evidence 不一致，已知案例已修正，但**缺少量測基準**，無法知道整體誤判率。
 - **升級**：
-  1. **Answer Entailment Validation（P0）**：候選段落命中後，再判斷是否真的回答問題，不能把 retrieval hit 直接等同 answer。
-  2. **Specificity / Conflict Check（P0）**：日期、價格、資格、聯絡方式等需具體可核對；多頁內容互斥時標記 conflict。
+  1. **Answer Entailment 量測與強化（P0）**：`entails()` 初版已上線，候選段落須通過蘊含判定才算答案。下一步不是重做，而是用 gold dataset（見優先序 P0-C）量測誤判率，再依誤判類型強化。
+  2. **Specificity / Conflict Check（P0）**：衝突判定目前**只判日期**；擴充到價格、資格、聯絡方式等需具體可核對的欄位，多頁內容互斥時標記 conflict。
   3. **Cross-module evidence reuse（P0）**：Email、電話、地址、日期等與 Security／SEO 共用 evidence，避免一個模組「找到」、另一個模組「找不到」。
   4. **Answer confidence（P1）**：輸出 Confirmed／Likely／Possible，並保留引用來源與限制。
   5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。
   6. 引用可得性評分。
-  7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。
+  7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。【部分完成：`reports.py` 已對 llms.txt 標示「依據／限制」並說明是新興慣例；評分權重是否已降級【待驗證】】
 
 
 ## 3. GEO（生成式引擎優化）
@@ -73,22 +73,21 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 5. 被動資安（Passive Security）
 
-- **現況**：HTTPS/header/CSRF/PII、SSL/Cookie/CORS/CSP/SRI/DNS、JS 套件 CVE、服務 CVE、
-  exposure 等規則已具備，OWASP/CWE 對映齊全，NVD 離線庫已接。
+- **現況**：HTTPS/header/CSRF/PII、SSL/Cookie/CORS/CSP/SRI/DNS、JS 套件 CVE、服務 CVE 等規則已具備，OWASP/CWE 對映齊全，NVD 離線庫已接。
 - **升級**：
   1. **校準既有 `Finding.confidence` 的語義與使用方式**：欄位、`make_finding()` 與 serializer 已存在；缺口是規則如何產生 confidence、如何影響 score/report，以及如何區分「配置建議」「曝露面」「疑似弱點」「已驗證弱點」。既有資料的預設 `1.0` 一律視為 **legacy / uncalibrated**，不得回溯解讀為 Confirmed。
   2. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。
   3. CVE 資料源補 **OSV.dev + EPSS**，讓漏洞優先序不只看 CVSS。
-  4. 敏感檔案字典對齊 **SecLists**，每個命中做內容型別與 soft-404 確認。
 
 ## 6. 主動探測（Active Probing）
 
-- **現況**：Nuclei + Katana + Kali(SQLmap) + 自建 probe，可在授權閘門後做主動檢測。
+- **現況**：Nuclei + Katana + Kali(SQLmap) + 敏感檔案探測（`security/exposure_scanner.py`；`scan_plan.py` 的 `run_exposure` 只在主動模式＋已授權＋整站時開啟）+ 自建 probe，可在授權閘門後做主動檢測。
 - **升級**：
   1. **Nuclei 模板治理**：鎖版本與模板雜湊、記錄實際使用模板集、排除高噪音模板，結果可重現。
   2. **SQLMap 專項化**：保留為 SQL Injection 深查工具，不把它當通用 Web DAST。
   3. 主動探測補「掃描來源 IP 宣告」供目標端白名單，並維持 `AuthorizationConsent` + 網域驗證雙閘門。
   4. 所有主動 stage 必須有 request budget、timeout、RPS 上限與 BLOCKED/LIMITED 狀態，避免 WAF 攔截被誤解為 0 findings。
+  5. 敏感檔案探測字典對齊 **SecLists**，每個命中做內容型別確認；`exposure_scanner` 已有 soft-404 基準比對，擴字典時要一併驗證誤報率。
 
 ## 7. 深度 Web Security / DAST
 
@@ -183,7 +182,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 | 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse/ZAP 照契約接 |
 | Finding schema | `make_finding` 與既有 `confidence` 已存在 | 標準化 confidence semantics，新增/整理 `maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`verification_status`；legacy confidence 不回溯解讀 |
 | 結果可重現 | — | 記錄工具版本、模板雜湊、`scoring_version`、`ruleset_version`，寫進報告/掃描 metadata |
-| 掃描設定檔化 | 五維 + 主動/被動 | 後續把 strategy 與 testing level 拆開；計費按實跑項目並與 ADR-0004 共用 Billing Matrix |
+| 掃描設定檔化 | 五維 + 主動/被動 | 依 ADR-0004 新增 `scan_strategy`（standard／smart），與既有 `scan_mode`（testing level）分開；計費按實跑項目並與 ADR-0004 共用 Billing Matrix |
 | 效能 | 階段循序 | 無相依 scanner 可並發，但 coverage、cancel 與 shared request budget 必須一致 |
 
 ---
@@ -197,7 +196,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 2. **P0-B 小範圍 Shared Evidence MVP（AEO + Security）**
    - 只先共享 email / phone，帶完整 context contract。
-   - 驗收：已知「Security 找到 Email、AEO 說找不到」案例消失；不同 viewport/auth/DOM context 不被誤判成矛盾。
+   - 驗收：已知「Security 找到 Email、AEO 說找不到」案例（第二輪已以 `aeo/content.py` 的 `_is_body_text` 修正）納入回歸測試並保持通過；Email／電話改由同一份 evidence 產生、不再各模組各自解析；不同 viewport/auth/DOM context 不被誤判成矛盾。
 
 3. **P0-C AEO Answer Validation + Gold Dataset**
    - 建立 50–100 組 answerable / insufficient / conflict / missing / semantic-near-but-not-answer regression case。
