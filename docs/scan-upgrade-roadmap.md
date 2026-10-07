@@ -26,10 +26,10 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：`crawler.py` Playwright BFS、robots/sitemap 補種子、深度 6、`/cdn-cgi/` 陷阱防護、
   CF 攔截頁精準判定、RPS 節流。紮實。
 - **升級**：
-  1. SPA 渲染等待分級（`networkidle` + 關鍵選擇器才算完成），避免抓到骨架屏。
-  2. 爬取預算可觀測（種子來源、每頁耗時、被節流次數寫進 `progress`）。
-  3. 近重複頁 SimHash 去重（分頁/篩選參數頁只深掃一次）——參考 Screaming Frog near-duplicate。
-  4. hreflang 多語分群，避免重複掃等價頁。
+  1. **有上限的 Render Readiness**：維持 `domcontentloaded`，再以短暫 hydration grace period、DOM/內容穩定度與可選 site-specific selector 判斷就緒；**不以 networkidle 作為必要條件**。必須有總時間上限，逾時仍保留已取得 DOM/截圖並標示 `LIMITED: render_readiness_timeout`。
+  2. 爬取預算可觀測（種子來源、每頁耗時、被節流次數、render readiness 結果寫進 coverage/progress）。
+  3. **Near-duplicate 只做 Analysis Reuse，不做 URL Skip**：SimHash / hreflang 僅可重用文字結構、部分 AEO/GEO 等高成本內容分析；每個 URL 仍必須各自做 headers、canonical/noindex、表單、權限、安全與 URL-specific 檢查。
+  4. 所有重用必須記錄 `analysis_reused_from`、重用規則與未重用檢查，不能讓 dedupe 犧牲 coverage。
 
 ## 1. SEO
 
@@ -76,7 +76,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：HTTPS/header/CSRF/PII、SSL/Cookie/CORS/CSP/SRI/DNS、JS 套件 CVE、服務 CVE、
   exposure 等規則已具備，OWASP/CWE 對映齊全，NVD 離線庫已接。
 - **升級**：
-  1. Finding 加 `confidence` 與 evidence 強度，將「配置建議」「曝露面」「疑似弱點」「已驗證弱點」分開。
+  1. **校準既有 `Finding.confidence` 的語義與使用方式**：欄位、`make_finding()` 與 serializer 已存在；缺口是規則如何產生 confidence、如何影響 score/report，以及如何區分「配置建議」「曝露面」「疑似弱點」「已驗證弱點」。既有資料的預設 `1.0` 一律視為 **legacy / uncalibrated**，不得回溯解讀為 Confirmed。
   2. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。
   3. CVE 資料源補 **OSV.dev + EPSS**，讓漏洞優先序不只看 CVSS。
   4. 敏感檔案字典對齊 **SecLists**，每個命中做內容型別與 soft-404 確認。
@@ -94,12 +94,13 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 - **新增 OWASP ZAP（P1）**：作為 Argus 深度 Web Application DAST 引擎，補足 Nuclei/SQLMap 無法完整覆蓋的
   session-aware、parameter-based、browser-oriented 掃描能力。
-- 建議接入能力：
-  1. ZAP Passive Scan：可在較低風險情境下分析 response / header / DOM 訊號。
-  2. ZAP Traditional Spider / AJAX Spider：補 SPA、動態路由與表單探索。
-  3. ZAP Active Scan：**只在已驗證網域 + 明確主動授權下執行**，並限制 policy、request budget、RPS、timeout。
-  4. Authenticated Context：後續支援測試帳號 / session context 時再開啟，不把登入失敗當成「已測」。
-  5. ZAP alert 先正規化進 Shared Evidence Store，再由 Argus 做 confidence、severity、去重與 Root Cause；**不要直接照搬 ZAP risk 等級到最終報告**。
+- 建議接入能力與邊界：
+  1. **ZAP Passive Analysis**：只分析 Argus 已取得或代理流經的 HTTP message，不主動產生新的目標請求。
+  2. **Traditional Spider / AJAX Spider 屬 Discovery Traffic，不是純被動**：只可在 Authorized Scope 內執行，需限制 exact-origin/已授權 host、redirect boundary、排除路徑、request budget、RPS、timeout；預設禁止提交表單、logout、delete、purchase、password reset、upload submit 等狀態改變操作。
+  3. **ZAP Active Scan**：只在已驗證網域 + 明確主動授權下執行，且只啟用 Argus 核准 policy。
+  4. **取消契約**：使用者取消或 scan 中止時，必須停止 ZAP spider / active scanner / subprocess 或 container，並確認不再產生新的網路流量；coverage 記為 CANCELLED/PARTIAL。
+  5. Authenticated Context：後續支援測試帳號 / session context 時再開啟，不把登入失敗當成「已測」。
+  6. ZAP alert 先正規化進 Shared Evidence Store，再由 Argus 做 confidence、severity、去重與 Root Cause；**不要直接照搬 ZAP risk 等級到最終報告**。
 - 工具定位：
   - Nuclei = template / known-pattern detection
   - SQLMap = SQL Injection 專項驗證
@@ -148,20 +149,23 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 11. 連結檢查
 
-- **現況**：`seo/link_check.py` 分類（站內/子網域/站外）、跳轉鏈、狀態、robots、難懂錨文字。
+- **現況**：`seo/collect.py` 已以 URL 去重跨頁重複連結，`check_links()` 已用 `ThreadPoolExecutor` 並發，並具備站內/子網域/站外分類、跳轉鏈、狀態、robots、難懂錨文字與時間/數量上限。
 - **升級**：
-  1. 跨頁重複外部連結只查一次（scan 層級快取）+ 並發，大站省大量請求。
-  2. 連結健康度趨勢（接下方歷史趨勢後，標「本次新壞的連結」）。
-  3. 錨文字品質延伸（「點這裡」「更多」等無意義文字，SEO + 無障礙雙重影響）。
+  1. 不重做既有 scan-level 去重與並發；改補 **freshness / cache reuse**，避免同一掃描流程內其他 stage 重複查相同外部 URL。
+  2. 連結 coverage 明確區分 checked / restricted / timeout / skipped / budget_exhausted，歷史比較只能在 coverage 足夠時判定 resolved。
+  3. 連結健康度趨勢標記「新壞掉／持續失效／已確認恢復／本次無法確認」。
+  4. 錨文字品質延伸（「點這裡」「更多」等無意義文字，SEO + 無障礙雙重影響）。
 
 ## 12. 評分
 
-- **現況**：`calculate_scores` + `base_scores_for` + `_dedupe_findings_for_scoring`，依 finding 嚴重度加權。
+- **現況**：`calculate_scores` + `base_scores_for` + `_dedupe_findings_for_scoring` 依 finding 嚴重度加權；專案層已有前次分數、new/persisting/本次未出現與趨勢資料，但目前比較主要依「本次有勾該 category」，尚未感知 rule/URL coverage。
 - **升級（整體最關鍵）**：
-  1. **評分可解釋化**：每個維度分數附「扣了幾分、因為哪幾條 finding」，前端可展開。目前是黑盒加總。
-  2. **基準校準**：接外部權威分數（Lighthouse/Observatory/CrUX）後校準自建刻度，避免「Argus 給 90 但 Lighthouse 給 60」的信任落差。
-  3. **信心加權**：低 confidence 的 finding 扣分打折，與「可利用性分級」連動。
-  4. **歷史趨勢 diff**：`ScanJob` 已按專案歸集，新增「分數隨時間」與「本次新增/已修復/仍存在」的 finding diff——留存使用者的核心（Ahrefs/SEMrush Site Audit 都有）。
+  1. **Coverage-aware scoring**：FAILED / BLOCKED / LIMITED / NOT_TESTED 的規則或資源不得被視為「0 問題」而拉高分數。分數需附有效 coverage，coverage 低於門檻時顯示「資料不足／部分評估」，而非假精準高分。
+  2. **歷史狀態語義重做**：`finding absent` 先標 `NOT_OBSERVED`；只有同 rule、相容 resource/context、偵測能力已完整執行且 coverage 足夠時，才能升級成 `RESOLVED`。建議生命週期：`NEW / PERSISTING / RESOLVED / NOT_OBSERVED / NOT_TESTED / BLOCKED / INCONCLUSIVE`。
+  3. **評分可解釋化**：每個維度列出扣分來源、coverage、confidence 與未測範圍。
+  4. **外部指標保持獨立，不做錯誤「對齊總分」**：Lighthouse、CrUX、axe、Observatory 各自呈現；只在同 URL/裝置/期間/構面可直接對應的子指標做 validation。
+  5. **保存 `scoring_version` / `ruleset_version`**：規則或權重版本變更時，歷史圖必須標示模型版本；跨版本不得直接把 score delta 解讀成網站改善。
+  6. **confidence 使用既有欄位但需重新校準**：低 confidence 可影響排序/扣分，但 legacy `confidence=1.0` 不得等同 Confirmed。
 
 ---
 
@@ -169,30 +173,57 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 | 項目 | 現況 | 升級 |
 |---|---|---|
-| **Shared Evidence Store（P0）** | 各 scanner 各自產 finding | DNS／Headers／DOM／Network／Nuclei／axe／Lighthouse／GSC／CrUX 先正規化成 evidence，再由各維度判定；報告前跑 cross-module consistency check |
+| **Coverage Contract（P0-A）** | category 是否有勾是主要比較條件 | 定義 stage/rule/resource coverage：COMPLETED／PARTIAL／FAILED／BLOCKED／SKIPPED／NOT_APPLICABLE；直接約束 scoring、history diff 與「resolved」判定 |
+| **Shared Evidence MVP（P0-B）** | 各 scanner 各自產 finding | 先只接 AEO + Security 共用的 email/phone evidence；驗證跨模組矛盾改善後再擴大，不先做 Universal Evidence Platform |
+| **Evidence Context Contract** | evidence 缺統一情境 | 最小欄位：source_url、observed_at、acquisition_method、viewport、auth/session context、initial_html/rendered_dom/network、source/tool version、artifact ref、limitations、missing_reason、redaction_state；不同 context 不強制一致 |
+| **Evidence Governance** | — | 敏感資料遮罩、cookie/token 永不落 evidence、raw artifact 大小上限、保留期限與刪除策略 |
 | **Root Cause Correlation（P1）** | finding 去重為主 | 聚合成 Root Cause → Related Findings → Evidence → Fix |
-| **Stage Result / Coverage（P0）** | scanner 失敗可被隱藏 | 記錄 COMPLETED／FAILED／SKIPPED／BLOCKED／LIMITED，禁止把工具失敗呈現成「0 findings」 |
-| **智慧動態掃描（旗艦）** | 固定管線 | 指紋→模組選擇決策層；見 [ADR-0004](adr/0004-smart-dynamic-scan.md) |
-| 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse/**ZAP** 都照契約接；ZAP alert 必須先 normalize，不直通最終 Finding |
-| Finding schema | `make_finding` 統一格式 | 加 `confidence`、`maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`first_seen_scan_id`、`verification_status` |
-| 結果可重現 | — | 記錄每次掃描用的工具版本與模板雜湊，寫進報告附錄 |
-| 掃描設定檔化 | 五維 + 主動/被動 | 進階使用者可選單項模組，計費按實跑項目（與 ADR-0004 的結算模型共用） |
-| 效能 | 階段循序 | 無相依的 scanner（SSL/DNS/連結/CVE）可並發 |
+| **Stage Result（P0-A）** | scanner 失敗可被隱藏 | 狀態必須流入 coverage/scoring/history/billing；禁止把工具失敗呈現成「0 findings」 |
+| **智慧動態掃描（旗艦）** | 固定管線 | Signal Collection → Fingerprint → Dynamic Planner；見 [ADR-0004](adr/0004-smart-dynamic-scan.md) |
+| 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse/ZAP 照契約接 |
+| Finding schema | `make_finding` 與既有 `confidence` 已存在 | 標準化 confidence semantics，新增/整理 `maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`verification_status`；legacy confidence 不回溯解讀 |
+| 結果可重現 | — | 記錄工具版本、模板雜湊、`scoring_version`、`ruleset_version`，寫進報告/掃描 metadata |
+| 掃描設定檔化 | 五維 + 主動/被動 | 後續把 strategy 與 testing level 拆開；計費按實跑項目並與 ADR-0004 共用 Billing Matrix |
+| 效能 | 階段循序 | 無相依 scanner 可並發，但 coverage、cancel 與 shared request budget 必須一致 |
 
 ---
 
-## 建議導入優先序（投報比）
+## 建議導入優先序（可直接拆實作）
 
-1. **Shared Evidence Store + Cross-module consistency（P0）** — 先解決不同模組對同一事實互相矛盾。
-2. **Finding confidence + Stage Result（P0）** — 區分 Confirmed／Likely／Possible，並明示 FAILED／BLOCKED／LIMITED。
-3. **AEO Answer Entailment Validation（P0）** — 先解決「語意相關 ≠ 真正回答」的誤判。
-4. **axe-core（UX/無障礙）** — 快速提升 WCAG 2.2 覆蓋與權威性。
-5. **Lighthouse + CrUX（SEO/UX/效能）** — Lighthouse 做 Lab、CrUX 做 Field、GSC 做 Search impact。
-6. **Root Cause correlation + 評分可解釋化 + 歷史趨勢 diff** — 從 finding list 升級為診斷平台。
-7. **智慧動態掃描階段 1（指紋收斂層）** — 先只記錄、不改行為，建立 fingerprint accuracy benchmark。
-8. **OWASP ZAP（Deep Web Security / DAST，P1）** — 先以受控 policy 接入 Passive/Spider，再於已授權 Smart/Deep Security Scan 啟用 Active Scan；結果先正規化再進 Argus。
-9. **OSV.dev + EPSS（資安）** — 補漏洞優先序的外部實證。
-10. 其餘（Observatory 規則、SimHash 去重、AI bot 政策、連結快取）為第二梯次。
+1. **P0-A Coverage Contract + 既有能力盤點**
+   - 先定義 stage/rule/resource coverage 與 finding lifecycle。
+   - 修正現況盤點：confidence、history diff、link 去重/並發皆是「已有但語義/coverage 不足」，不是全新功能。
+   - 驗收：工具 BLOCKED/FAILED 時不加分；前次 finding 只有在相同偵測能力完整重跑時才可標 RESOLVED。
+
+2. **P0-B 小範圍 Shared Evidence MVP（AEO + Security）**
+   - 只先共享 email / phone，帶完整 context contract。
+   - 驗收：已知「Security 找到 Email、AEO 說找不到」案例消失；不同 viewport/auth/DOM context 不被誤判成矛盾。
+
+3. **P0-C AEO Answer Validation + Gold Dataset**
+   - 建立 50–100 組 answerable / insufficient / conflict / missing / semantic-near-but-not-answer regression case。
+   - 驗收至少追蹤 precision、recall、false-positive rate、平均判定成本與耗時；門檻先在實作票/ADR 明定後再上線。
+
+4. **P1 Coverage-aware scoring + comparable history**
+   - 加 `scoring_version` / `ruleset_version`；歷史 diff 升級成 RESOLVED / NOT_OBSERVED / BLOCKED / INCONCLUSIVE。
+   - 外部 benchmark 只驗證可對應子指標，不把 Argus 總分校準成 Lighthouse/CrUX。
+
+5. **P1 axe-core（UX/無障礙）** — 接成熟規則，但同樣走 coverage/evidence 契約。
+
+6. **P1 Lighthouse + CrUX** — Lighthouse=Lab、CrUX=Field、GSC=Search impact，保留樣本/裝置/期間/URL-or-origin 範圍與缺資料原因。
+
+7. **P1 Smart Scan Phase 1（只記錄 signal/fingerprint）** — 先修正 stage dependency 與 strategy/testing matrix，再做真實站準確率 benchmark。
+
+8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。
+
+9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。
+
+### 每一階段的共通驗收指標
+
+- Accuracy：誤報/漏報或對應 regression dataset 指標。
+- Coverage：rule/resource/stage 實際覆蓋率與 blocked/limited 比例。
+- Cost：新增 request 數、耗時、CPU/記憶體與外部 API/LLM 成本。
+- Safety：是否越過 Authorized Scope、是否可能產生狀態改變操作。
+- Rollback：功能旗標或 schema 向後相容策略；未達門檻即可關閉而不影響基礎掃描。
 
 ---
 
