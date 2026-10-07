@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 from apps.scans.security.dns_scanner import email_dns_posture
 from apps.scans.security.infra_scanner import analyze_infrastructure
+from apps.scans.security.observatory import evaluate as observatory_grade
 from apps.scans.security.waf_scanner import RULE_ID as WAF_BLOCK_RULE
 from apps.scans.tech_stack import detect_technologies
 
@@ -284,4 +285,6 @@ def build_site_profile(
         "infrastructure": infrastructure,
         "strengths": strengths,
         "technologies": technologies,
+        # 安全標頭參考等第（Mozilla Observatory 規則離線計算，不計入 Argus 分數）
+        "observatory": observatory_grade(pages, seo_report) if "security" in categories else {},
     }

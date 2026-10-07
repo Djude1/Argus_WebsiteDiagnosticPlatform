@@ -64,6 +64,23 @@ describe("SiteProfilePanel", () => {
     expect(screen.getByText("詳細資料（IP、反解、DNS）")).toBeInTheDocument();
   });
 
+  it("安全標頭等第附分數、逐項加減分，未評估的項目不顯示分數，並註明非官方", () => {
+    const observatory = {
+      grade: "C-",
+      score: 45,
+      tests: [
+        { key: "csp", label: "Content Security Policy", modifier: -25, result: "沒有設定 CSP", evaluated: true },
+        { key: "redirection", label: "HTTP 轉址到 HTTPS", modifier: 0, result: "這次沒有檢查", evaluated: false },
+      ],
+    };
+    render(<SiteArchitecture profile={{ ...PROFILE, observatory }} />);
+    expect(screen.getByText("C-")).toBeInTheDocument();
+    expect(screen.getByText(/45 分/)).toBeInTheDocument();
+    expect(screen.getByText("-25")).toBeInTheDocument();
+    expect(screen.getByText("未評估：這次沒有檢查")).toBeInTheDocument();
+    expect(screen.getByText(/不是 Observatory 官方結果/)).toBeInTheDocument();
+  });
+
   it("舊掃描沒有網站概況時給說明而不是空白", () => {
     render(<SiteStrengths profile={{}} />);
     expect(screen.getByText(/較早的掃描/)).toBeInTheDocument();

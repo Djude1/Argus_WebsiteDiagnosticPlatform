@@ -69,6 +69,54 @@ function SiteStrengths({ profile }) {
 }
 
 /** 「網站架構」分頁上半部：一句話說明流量路徑、使用的技術；IP 等細節收在「詳細資料」。 */
+function gradeTone(grade) {
+  if (grade.startsWith("A")) return "good";
+  if (grade.startsWith("B") || grade.startsWith("C")) return "warn";
+  return "bad";
+}
+
+function formatModifier(value) {
+  if (value > 0) return `+${value}`;
+  return value === 0 ? "0" : String(value);
+}
+
+// 安全標頭參考等第（後端 security/observatory.py）：依 Mozilla HTTP Observatory 公開規則離線計算，
+// 非官方結果、不計入 Argus 分數
+function ObservatoryGrade({ observatory }) {
+  if (!observatory?.grade) return null;
+  return (
+    <div className="site-observatory">
+      <h3 className="site-tech-title">安全標頭等第</h3>
+      <p className="site-observatory-summary">
+        <span className={`site-observatory-grade is-${gradeTone(observatory.grade)}`}>{observatory.grade}</span>
+        <span>{observatory.score} 分（滿分 100，部分項目可加分）</span>
+      </p>
+      <table className="site-observatory-tests">
+        <thead>
+          <tr>
+            <th scope="col">項目</th>
+            <th scope="col">結果</th>
+            <th scope="col">加減分</th>
+          </tr>
+        </thead>
+        <tbody>
+          {observatory.tests.map((test) => (
+            <tr key={test.key}>
+              <td>{test.label}</td>
+              <td>{test.evaluated ? test.result : `未評估：${test.result}`}</td>
+              <td>{test.evaluated ? formatModifier(test.modifier) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="site-strength-evidence">
+        依 Mozilla HTTP Observatory 公開的評分規則，用這次掃描取得的首頁回應計算；不是 Observatory 官方結果，
+        也不計入 Argus 分數。加分項目只在扣分後仍有 90 分以上時計入。
+      </p>
+    </div>
+  );
+}
+
 function SiteArchitecture({ profile }) {
   const infra = profile?.infrastructure;
   const technologies = profile?.technologies || [];
@@ -118,6 +166,7 @@ function SiteArchitecture({ profile }) {
           <p className="site-strength-evidence">只依首頁 HTML 與回應標頭判斷，滑過名稱可看依據；看不出來的不列。</p>
         </div>
       )}
+      <ObservatoryGrade observatory={profile?.observatory} />
       {infra?.hostname && (
         <details className="site-profile-details">
           <summary>詳細資料（IP、反解、DNS）</summary>

@@ -40,6 +40,7 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 | `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |
 | `zap_passive.py` | OWASP ZAP 被動分析：整理爬蟲錄的 HAR（同 origin、去 Cookie／Authorization、遮蔽 Set-Cookie 值）、ZapClient（上傳→匯入→等被動規則→讀告警→**一律清理**）、告警轉 finding（與既有檢查重複的不列、雜訊略過、信心低降一級）；同 origin 以 cache 鎖。啟用與部署見 [`docs/zap-passive.md`](../../../../docs/zap-passive.md) | 已建（預設關閉） |
 | `vuln_intel.py` | 已知漏洞優先序補強（`stage_deep_security` 寫入前呼叫）：`js-lib-known-vuln`／`service-known-cve` 的 CVE 查 EPSS（FIRST.org，被利用機率與百分位）→ `evidence_json.epss`、描述加一句、`priority_score` 最多加 `EPSS_PRIORITY_BOOST`（14，小於嚴重度間距，不越級）；前端函式庫查 OSV.dev（npm）→ `evidence_json.osv`（公告數、Retire.js 沒列的 CVE、涵蓋目前版本的最高修補版本）並改寫修法。**不改嚴重度**；只送函式庫名稱／版本／CVE；結果快取 1 天；查不到寫 `evidence_json.vuln_intel` 原因。`ARGUS_VULN_INTEL_ENABLED`（預設開） | 已建 |
+| `observatory.py` | 安全標頭參考等第：依 Mozilla HTTP Observatory（v2）公開評分規則離線計算 CSP、Cookie、CORS、HTTP→HTTPS、Referrer-Policy、HSTS、SRI、nosniff、X-Frame-Options／frame-ancestors、CORP 十項，100 分起算、加分只在 ≥ 90 時計入、A+～F。只用首頁回應與 SEO 的轉址檢查，**不呼叫 Mozilla、不發請求、不產生問題、不計入 Argus 分數**；判斷不了的標「未評估」。結果在 `site_profile.observatory`（勾資安時），報告「網站架構」表一列（`summary_line`）、前端網站架構分頁 | 已建 |
 | `nvd_db.py` | NVD CVE→backend_services.json 純函式轉換（CPE 過濾 + 版本區間），供 refresh 命令與單元測試 | 已建 |
 
 ---

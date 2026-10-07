@@ -5,7 +5,7 @@ from .report import generate_report
 # 換圖表、改配色、改表格結構。views.py 用它判斷磁碟上的舊報告要不要重產——
 # 沒有這個版本號時，掃描一旦產過報告就永遠拿不到新排版（使用者實際踩過：
 # 修好圖表後重新下載舊掃描的報告，拿到的還是沒有圖表的快取檔，看起來像修復失敗）。
-RENDERER_VERSION = 12  # 12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights（Lighthouse／CrUX）；10：axe-core 無障礙發現的依據與來源；9：評分版本與跨版本比較；8：覆蓋契約（已解決只計確認修好、未完整完成的檢查）；7：部分掃描標示；6：網站優勢附依據、短章節不強制換頁、浮水印縮小；5：重新設計版面（字級層級、精簡低風險、網站概況）；4：改為只提供 PDF
+RENDERER_VERSION = 13  # 13：安全標頭等第（Mozilla Observatory 規則）；12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights（Lighthouse／CrUX）；10：axe-core 無障礙發現的依據與來源；9：評分版本與跨版本比較；8：覆蓋契約（已解決只計確認修好、未完整完成的檢查）；7：部分掃描標示；6：網站優勢附依據、短章節不強制換頁、浮水印縮小；5：重新設計版面（字級層級、精簡低風險、網站概況）；4：改為只提供 PDF
 
 __all__ = ["generate_report", "RENDERER_VERSION"]
 __version__ = "1.0.0"

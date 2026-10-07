@@ -382,7 +382,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights 兩列；10：axe-core 依據與來源；9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 13：安全標頭等第；12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights 兩列；10：axe-core 依據與來源；9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -453,7 +453,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `favicon` | `stage_favicon` | 更新所屬專案的網站圖示（`favicon.py`；失敗只記 log，不影響掃描） |
 | `agent` | `stage_agent` | Hermes-Agent（資安／UX），失敗不讓掃描失敗 |
 | `kali` | `stage_kali` | Kali 主動驗證 fallback |
-| `site_profile` | `stage_site_profile` | 網站概況寫 `ScanJob.site_profile`（`site_profile.py`，version 2）：基礎架構（`security/infra_scanner.py`：A／AAAA／CNAME／NS、IP 反解、Cloudflare 網段、標頭／CNAME 指紋 → 掃到的是 CDN 邊緣還是主機）、「網站優勢」`strengths`（HTTPS、HSTS、nosniff、CSP、DNSSEC、SPF -all、DMARC、robots＋sitemap、正確 404、行動版無破版、載入時間；只列本次有勾的維度、不可與同次問題矛盾；每項附 `evidence` 與 `confidence`＝confirmed／likely。**偵測到 CDN 不等於 WAF 有在擋**：只有本次掃描出現 `waf_block_detected`（403／challenge）才寫「確認防護規則已生效」，否則寫「無法從外部確認」）與「使用的技術」`technologies`（`tech_stack.py`：只看首頁 HTML 與回應標頭的特有路徑／屬性，加上 Katana 已辨識的技術，每項附依據；不回報版本號）；失敗只記 log |
+| `site_profile` | `stage_site_profile` | 網站概況寫 `ScanJob.site_profile`（`site_profile.py`，version 2）：基礎架構（`security/infra_scanner.py`：A／AAAA／CNAME／NS、IP 反解、Cloudflare 網段、標頭／CNAME 指紋 → 掃到的是 CDN 邊緣還是主機）、「網站優勢」`strengths`（HTTPS、HSTS、nosniff、CSP、DNSSEC、SPF -all、DMARC、robots＋sitemap、正確 404、行動版無破版、載入時間；只列本次有勾的維度、不可與同次問題矛盾；每項附 `evidence` 與 `confidence`＝confirmed／likely。**偵測到 CDN 不等於 WAF 有在擋**：只有本次掃描出現 `waf_block_detected`（403／challenge）才寫「確認防護規則已生效」，否則寫「無法從外部確認」）與「使用的技術」`technologies`（`tech_stack.py`：只看首頁 HTML 與回應標頭的特有路徑／屬性，加上 Katana 已辨識的技術，每項附依據；不回報版本號），勾資安時另有 `observatory`（安全標頭參考等第，`security/observatory.py`，非官方、不計入分數）；失敗只記 log |
 | `scoring` | `stage_scoring`（`tested_categories_for`、`base_scores_for`） | 計分並 CAS 推進到 completed |
 
 階段之間只透過 `ScanRunContext` 傳遞中間產物；`ctx.record(findings, page=...)` 同時寫 `Finding` 與納入計分清單。**新增階段**：寫 `stage_xxx(ctx)`、加進 `SCAN_PIPELINE`；要在進度條顯示時同步 `planned_scan_steps()` 與前端 `SCAN_STEP_META`。測試 patch 目標仍是 `apps.scans.tasks.<名稱>`，所以外部依賴一律以模組層級名稱呼叫。結構由 `tests_pipeline_stages.py` 鎖定。

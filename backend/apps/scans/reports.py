@@ -30,6 +30,7 @@ from apps.scans.pagespeed import summary_lines as pagespeed_summary_lines
 from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
 from apps.scans.scan_plan import build_scan_execution_plan
+from apps.scans.security.observatory import summary_line as observatory_summary
 from apps.scans.security.redaction import redact_pii_in_text
 
 # --- 品牌與嚴重度配色 -------------------------------------------------
@@ -1214,6 +1215,10 @@ def _report_site_profile(scan_job: ScanJob) -> dict:
             facts.append({"label": "DNS 代管", "value": "、".join(infra["nameservers"])})
         if edge and edge.get("evidence"):
             facts.append({"label": "判斷依據", "value": "；".join(edge["evidence"][:3])})
+    if profile.get("observatory"):
+        facts.append(
+            {"label": "安全標頭等第", "value": observatory_summary(profile["observatory"])}
+        )
     if not facts and not strengths:
         return {}
     return {"notice": infra.get("notice", ""), "facts": facts, "strengths": strengths}

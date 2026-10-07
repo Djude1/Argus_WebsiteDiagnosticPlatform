@@ -76,7 +76,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：HTTPS/header/CSRF/PII、SSL/Cookie/CORS/CSP/SRI/DNS、JS 套件 CVE、服務 CVE 等規則已具備，OWASP/CWE 對映齊全，NVD 離線庫已接。
 - **升級**：
   1. **校準既有 `Finding.confidence` 的語義與使用方式**：欄位、`make_finding()` 與 serializer 已存在；缺口是規則如何產生 confidence、如何影響 score/report，以及如何區分「配置建議」「曝露面」「疑似弱點」「已驗證弱點」。既有資料的預設 `1.0` 一律視為 **legacy / uncalibrated**，不得回溯解讀為 Confirmed。
-  2. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。
+  2. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。（**已實作 2026-10-07**：`security/observatory.py`，獨立呈現在網站架構與報告，不併入 Argus 分數）
   3. CVE 資料源補 **OSV.dev + EPSS**，讓漏洞優先序不只看 CVSS。（**已實作 2026-10-07**：`security/vuln_intel.py`，EPSS 影響排序與說明、OSV 提供前端函式庫修補版本，不改嚴重度）
 
 ## 6. 主動探測（Active Probing）
@@ -221,7 +221,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 8. **P1/P2 OWASP ZAP controlled integration** — 先 Passive Analysis；Spider/AJAX Spider 視為 discovery traffic；最後才開受控 Active Scan。（**Passive Analysis 已實作 2026-10-07**：爬蟲錄同網站 HAR → 獨立 ZAP daemon 只跑被動規則，對目標零新增請求；告警正規化後才成為 Finding，與既有檢查重複者不列、ZAP risk 不直接照搬；預設關閉，compose profile `zap`／`k8s/optional/zap-passive.yaml`（未列入 kustomization），見 [`zap-passive.md`](zap-passive.md)。尚未做：正式叢集部署與資源量測、Spider／AJAX Spider、Active Scan）
 
-9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。（OSV.dev＋EPSS **已實作 2026-10-07**，見 §5 第 3 項；其餘尚未開始）
+9. **P2 OSV.dev + EPSS、Observatory、Analysis Reuse、AI bot 政策等**。（OSV.dev＋EPSS、Observatory 等第 **已實作 2026-10-07**，見 §5 第 2、3 項；Analysis Reuse、AI bot 政策尚未開始）
 
 ### 每一階段的共通驗收指標
 
