@@ -134,8 +134,9 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
   - 心得／見證段落（小標題含「見證、心得、評價…」，或第一人稱單數「我」出現兩次以上）不能回答題庫問題（`answers.is_testimonial`）。
   - 超過 `MAX_HEADING_CHARS`（80）或含句中句號的 h1–h6 視為內文段落（`content._is_body_text`）。實例：隱私權政策整段寫在 h3 裡，裡面的 Email 被當成標題略過，造成資安判「公開 Email」、AEO 卻判「找不到 Email」的矛盾。
 - **共用聯絡資訊證據（2026-10-07，P0-B）**：`evaluate_site` 以 `evidence.contacts.collect_contacts` 擷取同一份 Email／電話，`reconcile_contact` 核對聯絡題：共用證據的值出現在任何可讀段落（含被當成標題的短段落）就判可回答；只在導覽列、頁首、隱藏區塊或 HTML 註解時判定不變，但理由寫明位置與「與資安檢查情境不同、並不矛盾」。`aeo_report.shared_contacts` 只記筆數不存值。測試 `tests_shared_evidence.py`。
+- **回歸資料集與指標（2026-10-07，P0-C）**：`aeo/gold_dataset.py`（`GOLD_CASES` 調整用＋`HOLDOUT_CASES` 保留集，每題人工標註；tag 分 answerable／insufficient／conflict／missing／near_miss／holdout）、`aeo/benchmark.py`（以「可回答」為正類算 precision、recall、false positive rate、accuracy、每站耗時、混淆矩陣）、`manage.py aeo_benchmark [--holdout] [--json]`（低於門檻非零結束）。門檻 `benchmark.THRESHOLDS`（accuracy／precision／recall ≥ 0.95、FPR ≤ 0.05）由 `tests_aeo_benchmark.py` 鎖定，只能往上調；**不可為了讓規則通過而改標註**，保留集不要拿來調規則。同次依資料集修正的規則：小標題就是主題時段落算候選（`_passage_score` 標題命中權重 1）、「如需／若需」不算條件（`_CONDITIONAL`）、感謝詞算空泛（`_VAGUE`）、營業時間關鍵詞加「無休／全天」。
 - 人工校驗題集在 `tests_aeo_answerability.py` 的 `GOLD_SITES`：改動規則後判定正確率必須維持 100%。**第一版只做可重現的規則判定**；受控 AI 評估與外部平台觀察尚未實作，報告不得宣稱有。
-- 新增意圖或判定規則：先在 `GOLD_SITES` 加一個會踩到的案例，再改規則。
+- 新增意圖或判定規則：先在 `GOLD_SITES`（或 `gold_dataset.GOLD_CASES`）加一個會踩到的案例，再改規則，最後跑 `manage.py aeo_benchmark` 確認門檻。
 
 ## 網站專案（`SiteProject`，2026-10-02）
 

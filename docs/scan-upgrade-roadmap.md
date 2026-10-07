@@ -201,7 +201,10 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
    - 只先共享 email / phone，帶完整 context contract。
    - 驗收：已知「Security 找到 Email、AEO 說找不到」案例（第二輪已以 `aeo/content.py` 的 `_is_body_text` 修正）納入回歸測試並保持通過；Email／電話改由同一份 evidence 產生、不再各模組各自解析；不同 viewport/auth/DOM context 不被誤判成矛盾。
 
-3. **P0-C AEO Answer Validation + Gold Dataset**
+3. **P0-C AEO Answer Validation + Gold Dataset**（**已實作 2026-10-07**：`aeo/gold_dataset.py` 38 個網站、60 題人工標註
+   （含 17 題保留集、13 題「語意相近但不是答案」），`manage.py aeo_benchmark` 輸出指標；門檻 accuracy／precision／recall ≥ 0.95、
+   false positive rate ≤ 0.05，由 `tests_aeo_benchmark.py` 鎖定。首次量測：全體 accuracy 0.983、precision 1.0、recall 1.0、
+   FPR 0；保留集 16／17（唯一不一致是內容太少時 AEO 不評估，屬設計行為）。平均每站 < 1 ms。尚未做：semantic／LLM 判定的成本比較）
    - 建立 50–100 組 answerable / insufficient / conflict / missing / semantic-near-but-not-answer regression case。
    - 驗收至少追蹤 precision、recall、false-positive rate、平均判定成本與耗時；門檻先在實作票/ADR 明定後再上線。
 

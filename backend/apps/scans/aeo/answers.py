@@ -84,9 +84,12 @@ _CRITERIA = re.compile(
 )
 _VAGUE = re.compile(
     r"詳情請|歡迎(?:來電|洽詢|聯絡)|請洽|請來電|敬請期待|另行公告|最優質|一流|頂尖|值得信賴|用心|最專業|"
-    r"更多資訊|如有疑問|請見|請參考|contact us for|learn more",
+    r"更多資訊|如有疑問|請見|請參考|contact us for|learn more"
+    # 感謝詞不是答案（網站自己的問句底下只放一句感謝，2026-10-07 回歸資料集）
+    r"|感謝您|謝謝您|支持與愛護|持續努力|敬請見諒",
     re.IGNORECASE,
 )
+_CONDITIONAL = re.compile(r"如需|若需|如須|若須|如有需要|若有需要")
 _DEADLINE_WORDS = re.compile(r"截止|期限|截至|止|deadline|due", re.IGNORECASE)
 # 心得、見證、評價：描述個人經驗，不是站方對事實的陳述，不能拿來回答題庫問題
 _TESTIMONIAL_HEADING = re.compile(
@@ -152,7 +155,8 @@ def _passage_score(question: q.Question, passage: Passage) -> float:
     heading = (passage.heading or "").lower()
     hits = sum(1 for kw in question.keywords if kw.lower() in text)
     heading_hits = sum(1 for kw in question.keywords if kw.lower() in heading)
-    return hits + 0.5 * heading_hits
+    # 小標題就是主題（例如「申請資格」底下列條件）時，段落本身常不重複主題詞
+    return hits + heading_hits
 
 
 def retrieve_candidates(question: q.Question, passages: list[Passage]) -> list[Passage]:
@@ -234,7 +238,8 @@ def _find_value(answer_type: str, passage: Passage) -> str:
             return verbs[0] if verbs else text[:20]
         return ""
     if answer_type == q.CRITERIA:
-        match = _CRITERIA.search(text)
+        # 「如需退款請聯絡客服」的「需」是假設語氣，不是條件
+        match = _CRITERIA.search(_CONDITIONAL.sub("", text))
         return match.group(0) if match and len(text) >= 12 else ""
     if answer_type == q.DEFINITION:
         if len(text) >= 30 and not _only_vague(text):
