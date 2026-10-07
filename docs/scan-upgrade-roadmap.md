@@ -11,10 +11,13 @@
 
 Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個 `stage_*` 串成管線，
 階段與計費/取消/退款收斂乾淨；安全分「被動（`scanners.py`）／深度主動（`security/`）」兩層；
-工具鏈 Nuclei + Katana + Kali(SQLmap) + 自建 scanner 齊備。**主要缺口不在「缺功能」，在三處**：
-1. 外部權威資料源接得不夠多（目前只有 GSC）；
-2. 各維度評分偏規則加總、缺業界基準校準與可解釋性；
-3. 偵測結果缺「可驗證性分級（confidence）」與歷史趨勢 diff。
+工具鏈 Nuclei + Katana + Kali(SQLmap) + 自建 scanner 齊備。**主要缺口不在「缺功能」，而在可信度與可驗證性**：
+1. Finding 準確度與跨模組一致性不足，同一份 evidence 可能被 Security／SEO／AEO／UX 以不同方式解讀；
+2. Finding 缺「可驗證性分級（confidence）」、完整 evidence 與限制條件；
+3. 各維度評分偏規則加總，缺業界基準校準、Root Cause 關聯與可解釋性；
+4. 外部權威資料源仍不足（目前以 GSC 為主），且缺歷史趨勢 diff 與 coverage 透明度。
+
+**原則：下一階段優先提升 Accuracy → Evidence → Confidence → Consistency → Root Cause，再擴充規則數量。**
 
 ---
 
@@ -40,11 +43,16 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 2. AEO（問答檢測）
 
-- **現況**：`aeo/evaluate.py` 四層判定（可回答/資訊不足/內容衝突/無答案），有 `questions`/`answers`/`content`/`markup`/`page_checks`。設計優秀。
+- **現況**：`aeo/evaluate.py` 四層判定（可回答/資訊不足/內容衝突/無答案），框架完整，但實測已出現「語意相關段落被誤判為真正答案」與跨模組 evidence 不一致。
 - **升級**：
-  1. 問題生成多樣化（從標題/H2 反推使用者問句 + 同業常見問句模板）【待驗證：`questions.py` 現有生成來源】。
-  2. 引用可得性評分（能逐字引用作答的段落字數比例）。
-  3. 對照新興 `llms-full.txt` 慣例。
+  1. **Answer Entailment Validation（P0）**：候選段落命中後，再判斷是否真的回答問題，不能把 retrieval hit 直接等同 answer。
+  2. **Specificity / Conflict Check（P0）**：日期、價格、資格、聯絡方式等需具體可核對；多頁內容互斥時標記 conflict。
+  3. **Cross-module evidence reuse（P0）**：Email、電話、地址、日期等與 Security／SEO 共用 evidence，避免一個模組「找到」、另一個模組「找不到」。
+  4. **Answer confidence（P1）**：輸出 Confirmed／Likely／Possible，並保留引用來源與限制。
+  5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。
+  6. 引用可得性評分。
+  7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。
+
 
 ## 3. GEO（生成式引擎優化）
 
@@ -105,9 +113,12 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 | 項目 | 現況 | 升級 |
 |---|---|---|
+| **Shared Evidence Store（P0）** | 各 scanner 各自產 finding | DNS／Headers／DOM／Network／Nuclei／axe／Lighthouse／GSC／CrUX 先正規化成 evidence，再由各維度判定；報告前跑 cross-module consistency check |
+| **Root Cause Correlation（P1）** | finding 去重為主 | 聚合成 Root Cause → Related Findings → Evidence → Fix |
+| **Stage Result / Coverage（P0）** | scanner 失敗可被隱藏 | 記錄 COMPLETED／FAILED／SKIPPED／BLOCKED／LIMITED，禁止把工具失敗呈現成「0 findings」 |
 | **智慧動態掃描（旗艦）** | 固定管線 | 指紋→模組選擇決策層；見 [ADR-0004](adr/0004-smart-dynamic-scan.md) |
 | 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse 照契約接 |
-| Finding schema | `make_finding` 統一格式 | 加 `confidence`、`source_tool`、`tool_version`、`first_seen_scan_id` |
+| Finding schema | `make_finding` 統一格式 | 加 `confidence`、`maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`first_seen_scan_id`、`verification_status` |
 | 結果可重現 | — | 記錄每次掃描用的工具版本與模板雜湊，寫進報告附錄 |
 | 掃描設定檔化 | 五維 + 主動/被動 | 進階使用者可選單項模組，計費按實跑項目（與 ADR-0004 的結算模型共用） |
 | 效能 | 階段循序 | 無相依的 scanner（SSL/DNS/連結/CVE）可並發 |
@@ -116,13 +127,15 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 ## 建議導入優先序（投報比）
 
-1. **axe-core（UX/無障礙）** — 開源、Playwright 直接注入、立刻提升權威性與覆蓋面。
-2. **Lighthouse + PageSpeed/CrUX（SEO/UX/效能）** — 業界共通語言，解決評分信任問題。
-3. **評分可解釋化 + 歷史趨勢 diff（評分）** — 留存與說服力核心，純自建、不依賴外部。
-4. **智慧動態掃描階段 1（指紋收斂層）** — 見 ADR-0004，風險最低、差異化最大。
-5. **OSV.dev + EPSS（資安）** — 免費 API，讓漏洞優先序有實證依據。
-6. **Finding confidence 分級（全資安）** — 純 schema + 規則調整，風險低、影響大。
-7. 其餘（Observatory 規則、SimHash 去重、AI bot 政策、連結快取）為第二梯次。
+1. **Shared Evidence Store + Cross-module consistency（P0）** — 先解決不同模組對同一事實互相矛盾。
+2. **Finding confidence + Stage Result（P0）** — 區分 Confirmed／Likely／Possible，並明示 FAILED／BLOCKED／LIMITED。
+3. **AEO Answer Entailment Validation（P0）** — 先解決「語意相關 ≠ 真正回答」的誤判。
+4. **axe-core（UX/無障礙）** — 快速提升 WCAG 2.2 覆蓋與權威性。
+5. **Lighthouse + CrUX（SEO/UX/效能）** — Lighthouse 做 Lab、CrUX 做 Field、GSC 做 Search impact。
+6. **Root Cause correlation + 評分可解釋化 + 歷史趨勢 diff** — 從 finding list 升級為診斷平台。
+7. **智慧動態掃描階段 1（指紋收斂層）** — 先只記錄、不改行為，建立 fingerprint accuracy benchmark。
+8. **OSV.dev + EPSS（資安）** — 補漏洞優先序的外部實證。
+9. 其餘（Observatory 規則、SimHash 去重、AI bot 政策、連結快取）為第二梯次。
 
 ---
 
@@ -130,7 +143,8 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 
 - 遵守 Migration 鐵律（欄位一律新增）、`scans/CLAUDE.md` 的 scanner 回傳契約與狀態機規則、
   `docs/environment-preflight.md` 的掃描驗證閘門。
-- 新 scanner：回傳 `list[dict]`（`make_finding` 格式）、不寫 `ScanJob.status`、不呼叫 billing、
-  例外 silent-fail 回 `[]`、被動偵測 severity 封頂 HIGH。
+- 新 scanner：回傳 `list[dict]`（`make_finding` 格式）、不寫 `ScanJob.status`、不呼叫 billing。
+  單一模組例外不得中斷整場掃描，但 orchestrator 必須記錄 stage status / error / coverage；
+  **禁止 silent-fail 被呈現成「0 findings」**。被動偵測 severity 原則封頂 HIGH，並受 confidence 與 page type/context 調整。
 - 每項動手前先寫可驗證測試 → `uv run python backend/manage.py test apps.scans` 全綠 + `ruff` →
   必要時 Docker 整合實掃。對外可見功能異動要同步競賽 Word 內容 md。
