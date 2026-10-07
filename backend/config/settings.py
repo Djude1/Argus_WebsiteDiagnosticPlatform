@@ -332,6 +332,11 @@ CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3300
 # 3 層對連結稀疏的網站常不到 50 頁，因此提高到 6（另由 sitemap.xml 補爬取種子）。
 ARGUS_DEFAULT_MAX_DEPTH = 6
 ARGUS_DEFAULT_MAX_PAGES = 50
+# axe-core 無障礙檢查（apps/scans/accessibility.py，勾 UX 才跑）：每頁逾時與最多檢查幾頁。
+# 超過頁數上限的頁面不檢查，覆蓋紀錄標 partial。
+ARGUS_AXE_ENABLED = env_bool("ARGUS_AXE_ENABLED", default=True)
+ARGUS_AXE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_AXE_TIMEOUT_SECONDS", "15"))
+ARGUS_AXE_MAX_PAGES = int(os.getenv("ARGUS_AXE_MAX_PAGES", "50"))
 ARGUS_ACTIVE_MAX_RPS = 2
 ARGUS_PASSIVE_MAX_RPS = 5
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"

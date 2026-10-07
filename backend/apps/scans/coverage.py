@@ -53,6 +53,7 @@ CHECK_CATEGORIES: dict[str, str | None] = {
     "seo_links": "seo",
     "agent": "security",
     "agent_ux": "ux",
+    "axe": "ux",
     "kali": "security",
 }
 
@@ -74,6 +75,7 @@ CHECK_LABELS: dict[str, str] = {
     "seo_links": "SEO 連結與網址檢查",
     "agent": "AI 深度資安測試",
     "agent_ux": "AI 擬真使用者測試",
+    "axe": "axe-core 無障礙檢查",
     "kali": "Kali 主動驗證",
 }
 

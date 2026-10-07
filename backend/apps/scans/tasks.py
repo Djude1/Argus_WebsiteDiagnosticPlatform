@@ -512,6 +512,7 @@ def stage_crawl(ctx: ScanRunContext) -> None:
             max_pages=scan_job.max_pages,
             respect_robots=scan_job.respect_robots,
             progress_callback=_crawl_progress,
+            run_accessibility=_runs_accessibility(scan_job),
         )
     )
     ctx.crawled_pages = crawled_pages
@@ -531,11 +532,39 @@ def stage_crawl(ctx: ScanRunContext) -> None:
         "crawl", PARTIAL if failed else COMPLETED,
         f"{len(failed)} 個頁面擷取失敗" if failed else "",
     )
+    _mark_axe_coverage(ctx)
     if discovered_endpoints:
         append_log(
             scan_job_id,
             f"爬取期間觀察到 {len(discovered_endpoints)} 個 same-origin API 端點"
             "（XHR/fetch 被動攔截，供主動工具作為攻擊面輸入）",
+        )
+
+
+def _runs_accessibility(scan_job: ScanJob) -> bool:
+    """axe-core 只在勾了 UX 時跑（每頁約 1 秒，沒勾就不花這個時間）。"""
+    return bool(settings.ARGUS_AXE_ENABLED) and "ux" in scan_job.effective_categories
+
+
+def _mark_axe_coverage(ctx: ScanRunContext) -> None:
+    """axe-core 檢查了幾頁：全部可分析頁面都跑完＝completed，部分＝partial，全失敗＝failed。"""
+    if "ux" not in ctx.scan_job.effective_categories:
+        return
+    if not settings.ARGUS_AXE_ENABLED:
+        ctx.coverage.mark("axe", SKIPPED, "已停用")
+        return
+    usable = [p for p in ctx.crawled_pages if not p.get("blocked_reason")]
+    audited = [p for p in usable if (p.get("a11y") or {}).get("violations") is not None]
+    if not usable:
+        return
+    if len(audited) == len(usable):
+        ctx.coverage.mark("axe", COMPLETED)
+    elif not audited:
+        ctx.coverage.mark("axe", FAILED, "每一頁都檢查失敗")
+    else:
+        ctx.coverage.mark(
+            "axe", PARTIAL,
+            f"{len(usable) - len(audited)} 頁未檢查（逾時、失敗或超過頁數上限）",
         )
 
 
@@ -613,6 +642,7 @@ def _analyze_one_page(page: Page, page_data: dict, category: str) -> list[dict]:
             layout_metrics=page_data.get("layout_metrics") or {},
             ux_signals=page_data.get("ux_signals") or {},
             js_errors=page_data.get("js_errors") or [],
+            a11y=page_data.get("a11y") or {},
         ),
         categories={category},
     )
@@ -644,6 +674,11 @@ def stage_analyze_pages(ctx: ScanRunContext) -> None:
             if not page_data["blocked_reason"]:
                 page_findings = _analyze_one_page(page, page_data, category)
                 ctx.record(page_findings, page=page, check=f"page_{category}")
+                if category == "ux":
+                    # axe-core 的 finding 另外歸到 axe 檢查，歷史比較才能對回它
+                    ctx.coverage.add_findings(
+                        "axe", [f for f in page_findings if f["rule_id"].startswith("axe-")]
+                    )
                 page_finding_counts[page_idx] += len(page_findings)
                 category_found += len(page_findings)
             # 每處理一頁就更新 progress；同時當作 cancel 檢查點

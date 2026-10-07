@@ -13,6 +13,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
+from apps.scans.accessibility import run_axe
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.scanners import is_binary_resource
 from apps.scans.services import (
@@ -690,6 +691,15 @@ class _CrawlState:
     api_endpoints: set[str] = field(default_factory=set)
     page_retry_counts: dict[str, int] = field(default_factory=dict)
     last_request_at: float = 0.0
+    # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
+    run_accessibility: bool = False
+    accessibility_runs: int = 0
+
+    def take_accessibility_slot(self) -> bool:
+        if not self.run_accessibility or self.accessibility_runs >= settings.ARGUS_AXE_MAX_PAGES:
+            return False
+        self.accessibility_runs += 1
+        return True
 
     def __post_init__(self) -> None:
         self.queue.append((self.start_url, 0))
@@ -752,6 +762,7 @@ def _empty_capture(js_errors: list[str]) -> dict:
         "element_boxes": {},
         "layout_metrics": {},
         "ux_signals": {},
+        "a11y": {},
         "screenshot_path": None,
         "mobile_screenshot_path": None,
     }
@@ -813,6 +824,7 @@ async def _capture_content(
     warnings: dict,
     stage: _PageStage,
     js_errors: list[str],
+    run_accessibility: bool = False,
 ) -> tuple[dict, str]:
     """擷取同源頁面的內容、截圖、連結與量測；回傳 (capture, blocked_reason)。
 
@@ -850,6 +862,12 @@ async def _capture_content(
     capture["links"] = [] if blocked_reason else await extract_links(page, final_url, origin)
     stage.name = "element_boxes"
     capture["element_boxes"] = await collect_element_boxes(page)
+    # axe-core：在桌面版視窗、內容與截圖都擷取完之後跑（會注入腳本，不能影響已保存的 HTML），
+    # 且必須在行動版量測之前（那一步會改 viewport）。被阻擋的錯誤頁不檢查。
+    capture["a11y"] = {}
+    if run_accessibility and not blocked_reason:
+        stage.name = "accessibility"
+        capture["a11y"] = await run_axe(page, timeout_seconds=settings.ARGUS_AXE_TIMEOUT_SECONDS)
     # 一定要放最後：會改 viewport，跑在截圖或內容擷取之前會讓那些結果變成行動版的
     stage.name = "mobile_layout"
     capture["layout_metrics"] = await collect_mobile_layout(page)
@@ -952,6 +970,7 @@ def _page_record(
         "element_boxes": capture["element_boxes"],
         "layout_metrics": layout_metrics,
         "ux_signals": capture["ux_signals"],
+        "a11y": capture.get("a11y") or {},
         "js_errors": list(js_errors),
     }
 
@@ -1004,6 +1023,7 @@ async def _visit_page(
                 warnings=state.warnings,
                 stage=stage,
                 js_errors=js_errors,
+                run_accessibility=state.take_accessibility_slot(),
             )
         return _page_record(
             url=url,
@@ -1081,6 +1101,7 @@ async def crawl_site(
     max_pages: int,
     respect_robots: bool,
     progress_callback=None,
+    run_accessibility: bool = False,
 ) -> tuple[list[dict], dict, dict, list[str]]:
     """爬整站（同網域 BFS）。
 
@@ -1098,6 +1119,7 @@ async def crawl_site(
     _recycle_context 並 _report_progress。
     """
     state = _CrawlState(start_url, origin, max_depth, max_pages)
+    state.run_accessibility = run_accessibility
     robot_parser = load_robot_parser(origin)
     min_interval = compute_min_interval(
         scan_mode,

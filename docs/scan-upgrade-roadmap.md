@@ -212,7 +212,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
    - 加 `scoring_version` / `ruleset_version`；歷史 diff 升級成 RESOLVED / NOT_OBSERVED / BLOCKED / INCONCLUSIVE。
    - 外部 benchmark 只驗證可對應子指標，不把 Argus 總分校準成 Lighthouse/CrUX。
 
-5. **P1 axe-core（UX/無障礙）** — 接成熟規則，但同樣走 coverage/evidence 契約。
+5. **P1 axe-core（UX/無障礙）** — 接成熟規則，但同樣走 coverage/evidence 契約。（**已實作 2026-10-07**：`apps/scans/accessibility.py`＋`vendor/axe/`（axe-core 4.14.0，MPL-2.0），勾 UX 時爬蟲每頁注入；覆蓋檢查 `axe`；規則 `axe-<id>`）
 
 6. **P1 Lighthouse + CrUX** — Lighthouse=Lab、CrUX=Field、GSC=Search impact，保留樣本/裝置/期間/URL-or-origin 範圍與缺資料原因。
 

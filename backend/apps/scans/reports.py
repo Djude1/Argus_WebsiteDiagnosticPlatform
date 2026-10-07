@@ -369,6 +369,12 @@ CATEGORY_BASIS = {
           "限制：只涵蓋可自動量測的項目，不取代實際使用者測試。",
 }
 
+AXE_BASIS = (
+    "依據：axe-core（Deque Systems 的開源無障礙檢查引擎）在桌面版頁面上執行 WCAG 2.0／2.1／2.2 "
+    "A 與 AA 的自動化規則。限制：自動化檢查只能涵蓋部分 WCAG 準則，沒有違規不代表網站符合 WCAG，"
+    "仍需人工以鍵盤與螢幕報讀軟體實際操作確認。"
+)
+
 # 「判定依據」：高風險以上與 AI 觀察項目固定交代成立條件、實際觀察、尚缺證據與驗證方法，
 # 讓讀者判斷評級是否站得住（2026-09-28 報告審查）。掃描器可在 evidence_json["assessment"]
 # 提供更貼近個案的內容；沒有時用這裡的預設。
@@ -411,6 +417,8 @@ def _source_label(finding) -> str:
         return "外部工具（Nuclei 範本比對，未另行驗證）"
     if source.startswith("katana"):
         return "外部工具（Katana 探索）"
+    if rule.startswith("axe-"):
+        return "外部工具（axe-core 無障礙自動化檢查）"
     if source == "exposure_probe":
         return "主動探測（實際請求常見敏感路徑）"
     if rule.split("-")[0] in {"ssl", "dns", "cookie", "sri", "header", "js", "service", "exposure"}:
@@ -943,8 +951,11 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         if _report_severity(finding) != finding.severity:
             entry["assessment"]["missing"] += "（AI 觀察項目在報告中以中風險為上限呈現。）"
     if not is_security:
-        entry["basis"] = RULE_BASIS.get(finding.rule_id or "") or CATEGORY_BASIS.get(
-            finding.category, ""
+        rule = finding.rule_id or ""
+        entry["basis"] = (
+            RULE_BASIS.get(rule)
+            or (AXE_BASIS if rule.startswith("axe-") else "")
+            or CATEGORY_BASIS.get(finding.category, "")
         )
     return entry
 

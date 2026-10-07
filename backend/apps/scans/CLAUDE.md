@@ -328,6 +328,18 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 - **精準標註（2026-10-06）**：觸控目標、缺標籤欄位、破版元素都記錄行動版文件座標 `box`（`rect + scroll`）；只要有這類問題，爬蟲另拍一張行動版整頁截圖（`page-N-mobile.png`，路徑存 `layout_metrics["mobile_screenshot"]`，API `pages/<id>/screenshot/?variant=mobile`、`PageSerializer.has_mobile_screenshot`）。Finding 的 `evidence_json.annotations = {"viewport": "mobile", "boxes": [...]}`，前端在行動版截圖上逐一框住實際元素，不再框整個區塊。移出視窗左右兩側的抽屜選單不算觸控目標（`isVisible` 排除 `rect.right <= 0 || rect.left >= innerWidth`）。
 - **未捕捉的 JS 例外**（`pageerror` 監聽 → `page["js_errors"]`）：頁面 console 未攔截的
   例外列為 MEDIUM，證據上限 `_MAX_JS_ERROR_EVIDENCE_CHARS`（800）。
+- **axe-core WCAG 自動化檢查（2026-10-07，roadmap P1，`accessibility.py`）**：勾 UX 且
+  `ARGUS_AXE_ENABLED` 時，爬蟲在桌面版視窗、內容／截圖／連結／元素座標都擷取完之後、行動版量測
+  **之前**跑（會注入腳本，不可影響已保存的 HTML；行動版量測會改 viewport）。以 `page.evaluate(原始碼)`
+  注入（DevTools 協定，不受目標網站 CSP 影響；`add_script_tag` 會被擋），只跑 WCAG 2.0／2.1／2.2 A／AA、
+  只回違規；關掉與自建檢查重疊的 `target-size`、`label`、`select-name`。結果在 `page["a11y"]`（不落 DB，
+  與 `ux_signals` 相同），每項違規最多 5 個元素的選擇器、HTML 片段、桌面文件座標。`scanners._ux_axe`
+  轉成 finding：`rule_id=axe-<規則>`、impact critical→高／serious→中／moderate、minor→低、
+  `bounding_box`＝第一個元素、`evidence_source=axe-core <版本>`、常見規則有中文標題與修法（`_AXE_ZH`）。
+  每頁逾時 `ARGUS_AXE_TIMEOUT_SECONDS`（15）、最多 `ARGUS_AXE_MAX_PAGES`（50）頁；覆蓋檢查 `axe`
+  （全部可分析頁跑完＝completed、部分＝partial、全失敗＝failed）。報告來源標「外部工具（axe-core）」、
+  依據 `reports.AXE_BASIS`（自動化檢查不等於符合 WCAG）。axe 檔案固定版本放 `vendor/axe/`（含 LICENSE），
+  升級時換檔並更新 `tests_accessibility_axe.py` 的版本斷言。測試的真實瀏覽器案例需 `ARGUS_TEST_CHROMIUM_PATH`。
 
 `Page.layout_metrics` 為空代表**沒量到**（量測失敗或舊資料），
 不可當成「沒問題」——`tasks.py` 的 `tested_categories` 也依此判斷，否則報告會
@@ -358,7 +370,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 10：axe-core 依據與來源；9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
