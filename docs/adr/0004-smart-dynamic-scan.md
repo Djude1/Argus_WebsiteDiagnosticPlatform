@@ -9,7 +9,9 @@ Argus 目前三種掃描都跑**固定管線**：不論對象是 WordPress 部�
 登入頁的 Session 安全）。
 
 商用掃描器（如 Acunetix 的 Advanced Dynamic Scan）的差異化在於**先認識網站、再決定怎麼掃**。
-本 ADR 定義 Argus 的第三種掃描模式「智慧動態掃描」，流程為：
+本 ADR 定義 Argus 的第三種掃描模式「智慧動態掃描」。第一版採 **Adaptive Deepening（適應式加深）**：
+基礎掃描不減少，只根據網站特徵追加專屬深度檢查；因此賣點是「更貼合網站特性、檢查更深」，
+**不是**「一定更快」或「只掃需要的東西」。流程為：
 
 ```
 指紋辨識 Fingerprint
@@ -92,7 +94,7 @@ class SiteFingerprint:
     api_urls: tuple[str, ...]
     has_upload: bool                # 偵測到檔案上傳欄位
     auth_scheme: str | None         # "cookie-session" | "jwt" | "basic" | None
-    confidence: dict[str, float]    # 每項判定的信心（供報告標示、不影響「只加不減」）
+    confidence: dict[str, float]    # 每項判定的信心；用於決定是否足以觸發「額外」模組與報告標示
 ```
 
 資料來源（全部是**被動**訊號，不為指紋另發破壞性請求）：
@@ -107,8 +109,13 @@ class SiteFingerprint:
 - `auth_scheme`：Set-Cookie 的 session cookie 樣式、`Authorization: Bearer`、Basic。
 
 **放在哪個階段**：新增 `stage_fingerprint`，排在 `stage_crawl`（頁面已抓好）之後、
-所有分析／主動模組之前。它**不發新請求、不花錢、不可失敗中斷**（例外一律吞掉回空指紋，
-退化為「當作什麼都沒偵測到」→ 依原則 1，只少加模組、不影響基礎全掃）。
+所有分析／主動模組之前。它**不發新請求、不花錢、不可因例外中斷整場掃描**。若失敗，
+基礎掃描照常執行，但必須記錄 `stage_fingerprint=FAILED/LIMITED` 與原因，禁止 silent-fail
+被報告成「未偵測到特徵」。
+
+**觸發額外模組的信心門檻**：`confidence` 不影響基礎掃描，但會影響「是否值得加掃」。
+原則上需 `confidence >= 0.8`，或至少兩個獨立 evidence 相互印證；例如僅看到 `/api/` 路徑
+不足以啟動 API 深查，但 `/api/users` + `Content-Type: application/json` 可視為高信心。
 
 ### 3. 動態模組選擇層
 
@@ -134,20 +141,23 @@ class SiteFingerprint:
 ### 4. 新增的深度模組（依 OWASP 既有知識，不重造輪子）
 
 每個都遵守 `scans/CLAUDE.md` 既有鐵律：回傳 `list[dict]`（`make_finding` 格式）、不寫
-`ScanJob.status`、不呼叫 billing、例外 silent-fail 回 `[]`、被動偵測的 severity 封頂 HIGH。
+`ScanJob.status`、不呼叫 billing、被動偵測的 severity 原則封頂 HIGH。單一模組例外不得中斷
+整場掃描，但 orchestrator 必須記錄 `COMPLETED / FAILED / SKIPPED / BLOCKED / LIMITED`；
+**不得把 scanner crash 或 WAF 阻擋等同於 0 findings。**
 
 - **`stage_auth_session`（Auth / Session / Cookie 深查）**：登入頁的傳輸是否 HTTPS、
   表單是否有 CSRF token（現已有基礎版，這裡深化）、session cookie 的 Secure/HttpOnly/
   SameSite（`cookie_scanner` 已有，這裡對「登入後」cookie 重點標示）、密碼欄位 autocomplete、
   是否有帳號列舉跡象（登入錯誤訊息差異——**唯讀觀察，不做暴力嘗試**）。
-- **`stage_api_security`（API 安全）**：對發現的 JSON 端點做**唯讀**檢查——是否無認證即回
-  資料、CORS 是否 `*` + 憑證、錯誤訊息是否洩漏堆疊、是否有 Swagger/OpenAPI 文件暴露
-  （`/swagger.json`、`/openapi.json`、`/api-docs`）。可接 **Nuclei 的 `exposures/apis`
-  模板集**與 **OWASP API Top 10** 的可被動判定項。**不做**需要有效帳號或會改資料的測試。
-- **`stage_cms_wordpress`（WordPress 專屬）**：`/wp-json/wp/v2/users`（使用者列舉）、
-  版本偵測 → 對照 CVE（沿用現有 `nvd_db` / 擬接 OSV）、外掛/佈景列舉（被動從 HTML 的
-  `/wp-content/plugins/<name>/` 路徑）、`xmlrpc.php` 開放、`/wp-admin/` 可達性。
-  規則思路參考 **WPScan**，但以離線被動為主。
+- **`stage_api_security`（API 安全）**：對發現的 JSON 端點做**唯讀**檢查——CORS、錯誤訊息、
+  Swagger/OpenAPI 暴露與未登入狀態可取得的資料。**「無認證即可回 200」本身不得直接判漏洞**：
+  公開 API 預設只列 exposure / informational；僅在回傳資料呈現敏感性、端點語意明顯應受保護，
+  或有可驗證授權繞過時，才提高 severity / confidence。可接 Nuclei `exposures/apis`、
+  `misconfiguration` 與 OWASP API Top 10 可被動判定項。**不做**需要有效帳號或會改資料的測試。
+- **`stage_cms_wordpress`（WordPress 專屬）**：`/wp-json/wp/v2/users`、版本 → CVE、
+  外掛/佈景列舉、`xmlrpc.php`、`/wp-admin/` 等。**存在 ≠ 漏洞**：`/wp-admin/` 可達、
+  XML-RPC 開啟、公開 REST API 預設只列 exposure / attack-surface；只有版本/CVE、錯誤配置或
+  可驗證利用條件成立才升級為 vulnerability。規則思路參考 **WPScan**，但以離線被動為主。
 - **`stage_cms_generic`（Drupal/Joomla）**：對應版本端點與已知敏感路徑。
 
 ### 5. 計費（實作原則 2 的具體化）
@@ -158,6 +168,10 @@ class SiteFingerprint:
   沿用 `settle_scan_actual` 的對稱退款路徑（就像 rebuild 的 `settle_rebuild_actual`）。
 - 失敗／取消一律全額退款（現有 `_refund_or_raise` / `finish_*` 已處理，智慧模式沿用）。
 - 計價參數進 settings（`ARGUS_COIN_SMART_*`），預設關閉模組不計費。
+- **必須與 `business-model-plan.md` 共用同一份 Scan SKU / Billing Matrix**：Passive、Active、
+  Smart 的基礎費、Agent 附加費與 Dynamic Module 實跑費不得各自演化成重複收費。
+- 前端在啟動前顯示「最高預扣」與估價明細，完成後顯示實際費用與退回點數；Smart Scan 不應
+  默認吃掉「首次免費 Standard Full Scan」額度，除非另設 Smart Trial。
 
 ### 6. 前端與呈現
 
@@ -215,7 +229,7 @@ class SiteFingerprint:
 | 成本不可預期嚇退使用者 | 預扣上限先講清楚、結算退差額、前端顯示「實際使用 N 點」 |
 | 掃描時間變長且不固定 | 進度條表達「依網站特性加掃中」；無相依的新 stage 可並發 |
 | 主動模組誤觸破壞性操作 | 新模組一律**唯讀**；沿用網域驗證 + 授權閘門；不做暴力/寫入測試 |
-| API/CMS 模組把掃描帶出授權範圍 | 所有探測目標必須同 origin（沿用 `_enforce_public_request` 與現有邊界） |
+| API/CMS 模組把掃描帶出授權範圍 | 以 **Authorized Scope** 為邊界：預設同 origin；`api.example.com`／`auth.example.com` 等只有在使用者明確驗證/授權後才能納入，禁止因同 registrable domain 就自動擴張 |
 
 ---
 
