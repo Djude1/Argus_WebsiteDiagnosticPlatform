@@ -1325,7 +1325,11 @@ def stage_settlement(ctx: ScanRunContext) -> dict:
     scan_job_id = ctx.scan_job_id
     settlement_error = None
     try:
-        settle_scan_actual(scan_job.user, scan_job, len(ctx.crawled_pages))
+        # 深度資安附加費只在 agent 真的以深度模式跑過才收（沒跑就退回預扣）
+        deep_agent_ran = bool(ctx.execution_plan.run_agent and ctx.agent_result is not None)
+        settle_scan_actual(
+            scan_job.user, scan_job, len(ctx.crawled_pages), deep_agent_ran=deep_agent_ran
+        )
     except Exception as exc:  # noqa: BLE001
         settlement_error = exc.__class__.__name__
         append_log(

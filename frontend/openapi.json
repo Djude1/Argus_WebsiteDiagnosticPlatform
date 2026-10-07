@@ -9306,6 +9306,10 @@
                         "type": "integer",
                         "readOnly": true
                     },
+                    "is_trial": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "respect_robots": {
                         "type": "boolean",
                         "readOnly": true
@@ -9385,6 +9389,7 @@
                     "findings_count",
                     "id",
                     "is_demo",
+                    "is_trial",
                     "max_depth",
                     "max_pages",
                     "normalized_url",

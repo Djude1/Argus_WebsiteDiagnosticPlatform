@@ -176,6 +176,9 @@ class ScanJob(models.Model):
     max_pages = models.PositiveSmallIntegerField(default=50)
     respect_robots = models.BooleanField(default=True)
     active_testing_authorized = models.BooleanField(default=False)
+    # 首次免費完整掃描（2026-10-07，docs/business-model-plan.md）：被動＋整站＋五面向的
+    # 第一次掃描不扣點。失敗或取消的免費掃描不算用掉資格（billing.services.free_trial_available）。
+    is_trial = models.BooleanField(default=False)
     # authenticated scan（選填）：無公開註冊／註冊需驗證的網站，
     # agent 無法自建帳號，auth 類測試靠使用者提供的測試帳密延續
     test_auth_email_encrypted = models.TextField(blank=True, default="")

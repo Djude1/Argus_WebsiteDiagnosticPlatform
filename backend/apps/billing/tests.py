@@ -700,8 +700,12 @@ class PurchaseOrderTests(APITestCase):
 
 
 @override_settings(ARGUS_AUTO_QUEUE_SCANS=False)
+@override_settings(ARGUS_FREE_TRIAL_SCAN_ENABLED=False)
 class ScanCreateCoinIntegrationTests(APITestCase):
-    """整合測試：建立掃描時的 coin 預扣與不足回應。"""
+    """整合測試：建立掃描時的 coin 預扣與不足回應（付費路徑）。
+
+    首次免費掃描另見 tests_pricing_2026_10.FreeTrialScanTests。
+    """
 
     def setUp(self):
         self.user = _make_user("ivy")

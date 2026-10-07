@@ -75,6 +75,8 @@ class CoinWalletSerializer(serializers.ModelSerializer):
     recent_transactions = serializers.SerializerMethodField()
     coin_per_category = serializers.SerializerMethodField()
     agent_ux_fee = serializers.SerializerMethodField()
+    agent_deep_fee = serializers.SerializerMethodField()
+    free_trial_available = serializers.SerializerMethodField()
 
     class Meta:
         model = CoinWallet
@@ -84,6 +86,8 @@ class CoinWalletSerializer(serializers.ModelSerializer):
             "total_scans_used",
             "coin_per_category",
             "agent_ux_fee",
+            "agent_deep_fee",
+            "free_trial_available",
             "recent_transactions",
             "updated_at",
         ]
@@ -107,6 +111,22 @@ class CoinWalletSerializer(serializers.ModelSerializer):
             if dj_settings.ARGUS_AGENT_ENABLED
             else 0
         )
+
+    def get_agent_deep_fee(self, obj) -> int:
+        # 深度資安 Agent 附加費（主動＋已授權＋整站時預扣；agent 沒實際執行就退回）
+        from django.conf import settings as dj_settings
+
+        return (
+            dj_settings.ARGUS_COIN_AGENT_DEEP
+            if dj_settings.ARGUS_AGENT_ENABLED
+            else 0
+        )
+
+    def get_free_trial_available(self, obj) -> bool:
+        # 首次免費完整掃描（被動＋整站＋五面向）是否還能用，前端據此顯示「免費」
+        from apps.billing.services import free_trial_available
+
+        return free_trial_available(obj.user)
 
 
 class PurchaseRequestSerializer(serializers.Serializer):

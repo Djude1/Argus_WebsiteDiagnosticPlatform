@@ -3484,6 +3484,7 @@ export interface components {
             readonly categories: unknown;
             readonly max_depth: number;
             readonly max_pages: number;
+            readonly is_trial: boolean;
             readonly respect_robots: boolean;
             readonly overall_score: number | null;
             readonly category_scores: unknown;

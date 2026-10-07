@@ -14,9 +14,13 @@ ScanJob(active+authorized)
          ├─ dispatch_specialist(role, brief) ──→ specialist subagent ×N
          │    每位：獨立 browser context＋獨立 LLM messages＋步數盒 60
          │    結果摘要即時回 orchestrator → 可追加第二輪
-         └─ finish（安全網：orchestrator 零派工時全角色補跑）
+         └─ finish（安全網：orchestrator 零派工時依序補跑前 N 個角色）
 合併（_merge）→ persist（description 去重）→ 進 scoring
 ```
+
+每次掃描最多派工 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`（預設 6）次，超過時
+`dispatch_specialist` 回 `dispatch_limit_reached`；零派工安全網也只補跑前 N 個角色
+（2026-10-07，控制深度資安附加費 50 coin 的成本上限）。
 
 序列執行（RPS 與 Kali 預算全域共享）；每角色獨立預算上限
 （`ARGUS_AGENT_MAX_TOKENS`；specialist 另受 `_SPECIALIST_MAX_STEPS=60` 步數盒）。

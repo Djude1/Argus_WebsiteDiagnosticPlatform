@@ -327,10 +327,18 @@ Semrush、Sitechecker 等商用工具都以免費試用期或免費額度讓新�
 
 1. 首次體驗採 **Standard Full Scan 免費／scan-only trial credit**（建議）或 600 通用點？若採通用點，需限制 AI 功能與 Smart Scan 可用範圍。
 2. 餘額不足時是否採「顯示可掃 N 頁 → 使用者確認 Partial Scan」？報告必須同步標示 coverage。
-3. 訂閱方案是否照 6.3 重新配點？（只影響新期數；已開通訂閱照原方案發放）
+3. 訂閱方案是否照 6.3 重新配點？（已實作：既有訂閱者從下一期起也拿新點數，避免老客戶比新客戶少）
 4. 深度資安附加費 50 點與派工上限 6 次是否接受？
 5. **建立 Scan SKU / Billing Matrix**：Passive／Active／Smart 的基礎費、Agent 費、Dynamic Module 實跑費要共用單一真相來源，避免重複計費。
 6. 正式金流手續費與發票稅務（定價是否含 5% 營業稅）需依綠界合約與會計確認。
+
+> **實作狀態（2026-10-07）**：第 1–4 項已依本文件建議實作——首次免費完整掃描（`ScanJob.is_trial`，
+> scans migration 0027，開關 `ARGUS_FREE_TRIAL_SCAN_ENABLED`）、Partial Scan 確認（serializer 回
+> `affordable_pages`，前端確認後才縮小頁數；掃描詳情標示部分掃描，**PDF 報告的 coverage 標示沿用既有
+> 「掃描範圍」表的頁數上限欄位，尚未另加專屬說明**）、訂閱 600／1,800／4,000（billing migration 0011）、
+> 深度資安附加費 50 點（`ARGUS_COIN_AGENT_DEEP`，agent 未執行就退回）與派工上限 6
+> （`ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`）、免費贈點累積上限 600（只對從未付費帳號）、頁面優化預扣上限 50。
+> 第 5、6 項尚未處理。細節見 `backend/apps/billing/CLAUDE.md`「2026-10-07 定價調整」。
 
 上述決定後，程式改動集中在：`backend/config/settings.py`（參數）；首次免費完整掃描的額度紀錄
 （比照修正產出的額度機制，新增 `CoinTransaction` 類別或 `ScanJob` 欄位，需要新增 migration；
