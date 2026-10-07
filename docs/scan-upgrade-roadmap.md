@@ -71,17 +71,73 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   2. **接 Lighthouse（programmatic）**：Performance/Accessibility/Best-Practices/SEO 四分數與自建並列。
   3. CLS 元素級歸因（哪個元素造成位移）。
 
-## 5~9. 資安 / 主動探測 / 深度資安 / 敏感檔案 / AI 爬蟲相關
+## 5. 被動資安（Passive Security）
 
-- **現況**：被動（HTTPS/header/CSRF/PII）+ Nuclei + Katana + SSL/Cookie/CORS/CSP/SRI/DNS/
-  JS 庫 CVE/服務 CVE/exposure/Kali SQLmap，OWASP/CWE 對映齊全，NVD 離線庫。覆蓋面達商用水準。
+- **現況**：HTTPS/header/CSRF/PII、SSL/Cookie/CORS/CSP/SRI/DNS、JS 套件 CVE、服務 CVE、
+  exposure 等規則已具備，OWASP/CWE 對映齊全，NVD 離線庫已接。
 - **升級**：
-  1. **可利用性分級（最重要）**：finding 加 `confidence` 三級（已驗證可利用/疑似/僅資訊），報告明確區分；被動偵測封頂 HIGH 的原則推廣到所有被動項。
-  2. Nuclei 模板治理（鎖版本雜湊、記錄用了哪些模板、可排除噪音模板集，結果可重現）。
-  3. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。
-  4. CVE 資料源升級：NVD 已接，補 **OSV.dev**（開源套件漏洞，免費 JSON API）+ **EPSS**（實際被利用機率），讓「先修哪個」有依據。
-  5. 敏感檔案字典對齊 **SecLists**，每個命中做內容型別確認【部分已做：`exposure_scanner` 有 soft-404】。
-  6. 主動探測補「掃描來源 IP 宣告」供對方加白名單【現有 `AuthorizationConsent` + 網域驗證閘門】。
+  1. Finding 加 `confidence` 與 evidence 強度，將「配置建議」「曝露面」「疑似弱點」「已驗證弱點」分開。
+  2. Security headers 評分接 **Mozilla Observatory 規則**（可離線實作，給 A~F 等第）。
+  3. CVE 資料源補 **OSV.dev + EPSS**，讓漏洞優先序不只看 CVSS。
+  4. 敏感檔案字典對齊 **SecLists**，每個命中做內容型別與 soft-404 確認。
+
+## 6. 主動探測（Active Probing）
+
+- **現況**：Nuclei + Katana + Kali(SQLmap) + 自建 probe，可在授權閘門後做主動檢測。
+- **升級**：
+  1. **Nuclei 模板治理**：鎖版本與模板雜湊、記錄實際使用模板集、排除高噪音模板，結果可重現。
+  2. **SQLMap 專項化**：保留為 SQL Injection 深查工具，不把它當通用 Web DAST。
+  3. 主動探測補「掃描來源 IP 宣告」供目標端白名單，並維持 `AuthorizationConsent` + 網域驗證雙閘門。
+  4. 所有主動 stage 必須有 request budget、timeout、RPS 上限與 BLOCKED/LIMITED 狀態，避免 WAF 攔截被誤解為 0 findings。
+
+## 7. 深度 Web Security / DAST
+
+- **新增 OWASP ZAP（P1）**：作為 Argus 深度 Web Application DAST 引擎，補足 Nuclei/SQLMap 無法完整覆蓋的
+  session-aware、parameter-based、browser-oriented 掃描能力。
+- 建議接入能力：
+  1. ZAP Passive Scan：可在較低風險情境下分析 response / header / DOM 訊號。
+  2. ZAP Traditional Spider / AJAX Spider：補 SPA、動態路由與表單探索。
+  3. ZAP Active Scan：**只在已驗證網域 + 明確主動授權下執行**，並限制 policy、request budget、RPS、timeout。
+  4. Authenticated Context：後續支援測試帳號 / session context 時再開啟，不把登入失敗當成「已測」。
+  5. ZAP alert 先正規化進 Shared Evidence Store，再由 Argus 做 confidence、severity、去重與 Root Cause；**不要直接照搬 ZAP risk 等級到最終報告**。
+- 工具定位：
+  - Nuclei = template / known-pattern detection
+  - SQLMap = SQL Injection 專項驗證
+  - ZAP = Web Application DAST / session-aware deep scan
+  - Argus = orchestration + evidence normalization + confidence + root cause + report
+
+## 8. API / CMS / Auth 專項安全
+
+- **方向**：與 Smart Dynamic Scan 共用 fingerprint / risk surface，只有高信心命中時才追加深查。
+- API：OpenAPI/Swagger、CORS、錯誤堆疊、未登入資料曝露；公開 API 本身不等於漏洞。
+- Auth/Session：Cookie、CSRF、登入流程、session 保護與可驗證帳號列舉跡象。
+- CMS：WordPress/Drupal/Joomla 的版本、外掛/佈景、已知 CVE 與 attack surface；「存在」不等於 vulnerability。
+
+## 9. Vulnerability Validation / VAPT Workflow
+
+- **VAPT 不作為單一 scanner 或 stage 名稱**。它是 Argus 資安層的工作流與產品方法論：
+  ```
+  Discovery
+    ↓
+  Vulnerability Assessment
+    ↓
+  Authorized Active Validation
+    ↓
+  Evidence + Confidence
+    ↓
+  Exploitability / Risk Prioritization
+    ↓
+  Remediation
+    ↓
+  Retest / Verification
+  ```
+- Argus 現階段對外定位應採：
+  **VAPT-oriented automated security assessment** /
+  **Automated Vulnerability Assessment with authorized active testing**。
+- **暫不宣稱完整 Penetration Testing**：完整 PT 通常還包含人工商業邏輯測試、多步漏洞鏈、權限提升、
+  authenticated attack paths 與人工驗證；這些不是目前自動掃描可完整覆蓋的能力。
+- 報告需清楚區分：Detected / Suspected / Confirmed / Not Tested / Blocked，並附 evidence 與 coverage。
+
 
 ## 10. AI 爬蟲（可供 AI 抓取性）
 
@@ -117,7 +173,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 | **Root Cause Correlation（P1）** | finding 去重為主 | 聚合成 Root Cause → Related Findings → Evidence → Fix |
 | **Stage Result / Coverage（P0）** | scanner 失敗可被隱藏 | 記錄 COMPLETED／FAILED／SKIPPED／BLOCKED／LIMITED，禁止把工具失敗呈現成「0 findings」 |
 | **智慧動態掃描（旗艦）** | 固定管線 | 指紋→模組選擇決策層；見 [ADR-0004](adr/0004-smart-dynamic-scan.md) |
-| 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse 照契約接 |
+| 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse/**ZAP** 都照契約接；ZAP alert 必須先 normalize，不直通最終 Finding |
 | Finding schema | `make_finding` 統一格式 | 加 `confidence`、`maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`first_seen_scan_id`、`verification_status` |
 | 結果可重現 | — | 記錄每次掃描用的工具版本與模板雜湊，寫進報告附錄 |
 | 掃描設定檔化 | 五維 + 主動/被動 | 進階使用者可選單項模組，計費按實跑項目（與 ADR-0004 的結算模型共用） |
@@ -134,8 +190,9 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 5. **Lighthouse + CrUX（SEO/UX/效能）** — Lighthouse 做 Lab、CrUX 做 Field、GSC 做 Search impact。
 6. **Root Cause correlation + 評分可解釋化 + 歷史趨勢 diff** — 從 finding list 升級為診斷平台。
 7. **智慧動態掃描階段 1（指紋收斂層）** — 先只記錄、不改行為，建立 fingerprint accuracy benchmark。
-8. **OSV.dev + EPSS（資安）** — 補漏洞優先序的外部實證。
-9. 其餘（Observatory 規則、SimHash 去重、AI bot 政策、連結快取）為第二梯次。
+8. **OWASP ZAP（Deep Web Security / DAST，P1）** — 先以受控 policy 接入 Passive/Spider，再於已授權 Smart/Deep Security Scan 啟用 Active Scan；結果先正規化再進 Argus。
+9. **OSV.dev + EPSS（資安）** — 補漏洞優先序的外部實證。
+10. 其餘（Observatory 規則、SimHash 去重、AI bot 政策、連結快取）為第二梯次。
 
 ---
 
