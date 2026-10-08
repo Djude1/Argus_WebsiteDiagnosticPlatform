@@ -74,6 +74,13 @@ from apps.scans.security.zap_passive import ZapBusy, ZapError, alerts_to_finding
 from apps.scans.security.zap_passive import enabled as zap_enabled
 from apps.scans.security.zap_passive import run_passive as run_zap_passive
 from apps.scans.seo.collect import build_link_report
+from apps.scans.seo.link_trend import (
+    coverage_text,
+    crawled_verdicts,
+    effective_verdicts,
+    link_coverage,
+    link_trend,
+)
 from apps.scans.seo.site_findings import seo_site_findings
 from apps.scans.services import assert_public_http_url
 from apps.scans.site_profile import build_site_profile
@@ -1251,6 +1258,14 @@ def stage_seo_links(ctx: ScanRunContext) -> None:
         append_log(ctx.scan_job_id, f"SEO 連結檢查失敗：{exc.__class__.__name__}", level="warning")
         ctx.coverage.mark("seo_links", FAILED, exc.__class__.__name__)
         return
+    report["coverage"] = link_coverage(report)
+    try:
+        trend = _link_trend_for(ctx, report)
+    except Exception:  # noqa: BLE001 - 趨勢是輔助資料，失敗不影響掃描
+        logger.warning("SEO 連結趨勢計算失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
+        trend = None
+    if trend:
+        report["trend"] = trend
     scan_job.seo_report = report
     scan_job.save(update_fields=["seo_report", "updated_at"])
     try:
@@ -1266,9 +1281,10 @@ def stage_seo_links(ctx: ScanRunContext) -> None:
         site_findings = []
     ctx.record(site_findings, check="seo_links")
     unchecked = report.get("unchecked", 0)
+    not_confirmed = coverage_text(report["coverage"])
     ctx.coverage.mark(
         "seo_links", PARTIAL if unchecked else COMPLETED,
-        f"{unchecked} 個連結未檢查（數量或時間上限）" if unchecked else "",
+        f"沒有明確結果的連結：{not_confirmed}" if unchecked else "",
     )
     links = report.get("links") or {}
     broken = sum(1 for r in links.values() if r["verdict"] == "broken")
@@ -1276,6 +1292,37 @@ def stage_seo_links(ctx: ScanRunContext) -> None:
         ctx.scan_job_id,
         f"SEO 連結檢查完成：{len(links)} 個連結（失效 {broken}），"
         f"未檢查 {report.get('unchecked', 0)} 個",
+    )
+
+
+def _link_trend_for(ctx: ScanRunContext, report: dict) -> dict | None:
+    """和同專案上一次有連結檢查的完成掃描比較失效連結（roadmap §11 第 3 項）。
+
+    沒有可比的掃描回 None。
+    """
+    from apps.scans.projects import completed_scans
+
+    scan_job = ctx.scan_job
+    if scan_job.project is None:
+        return None
+    previous = (
+        completed_scans(scan_job.project)
+        .filter(created_at__lt=scan_job.created_at)
+        .exclude(id=scan_job.id)
+        .exclude(seo_report={})
+        .first()
+    )
+    if previous is None or "links" not in (previous.seo_report or {}):
+        return None
+    current = effective_verdicts(report, crawled_verdicts(
+        (page.url, page.final_url, page.status_code) for page, _data in ctx.pages
+    ))
+    before = effective_verdicts(previous.seo_report, crawled_verdicts(
+        previous.pages.values_list("url", "final_url", "status_code")
+    ))
+    return link_trend(
+        current, before, previous_scan_id=previous.id,
+        previous_checked_at=previous.seo_report.get("checked_at"),
     )
 
 

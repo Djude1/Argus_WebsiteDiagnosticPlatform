@@ -5,7 +5,8 @@
 - 302 → 200 這類「轉址後正常」不算失效連結；401／403／429 代表對方拒絕自動檢查，
   標成「無法確認」而不是失效。
 - 先送 HEAD；HEAD 回 4xx／5xx 或連線層錯誤時一律改用 GET 再確認（只讀標頭、不下載內容）。
-- 有總數與總時間上限：外部網站很多時只檢查前 N 個，其餘標「未檢查」。
+- 有總數與總時間上限：外部網站很多時只檢查前 N 個，其餘標「未檢查」；超過數量上限與時間用完
+  分開計數（roadmap §11 第 2 項，`seo/link_trend.link_coverage`）。
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def check_url(url: str, client: httpx.Client | None = None) -> dict:
                 status, location = _request(client, current)
             except httpx.TimeoutException:
                 chain.append({"url": current, "status": None})
-                return _result(url, chain, "error", note="逾時")
+                return _result(url, chain, "timeout", note="逾時")
             except httpx.HTTPError as exc:
                 chain.append({"url": current, "status": None})
                 return _result(url, chain, "error", note=f"無法連線（{exc.__class__.__name__}）")
@@ -139,8 +140,11 @@ def check_links(
     budget_seconds: float,
     should_stop: Callable[[], None] | None = None,
     workers: int = 4,
-) -> tuple[dict[str, dict], int]:
-    """檢查前 limit 個網址；回傳 ({url: result}, 未檢查數)。should_stop 用來接取消檢查點。"""
+) -> tuple[dict[str, dict], dict[str, int]]:
+    """檢查前 limit 個網址；回傳 ({url: result}, 未檢查數依原因)。should_stop 用來接取消檢查點。
+
+    未檢查原因：over_limit＝超過數量上限、budget_exhausted＝總時間用完。
+    """
     targets = urls[:limit]
     deadline = time.monotonic() + budget_seconds
     results: dict[str, dict] = {}
@@ -160,7 +164,10 @@ def check_links(
             for url, result in pool.map(run, targets[start:start + batch]):
                 if result is not None:
                     results[url] = result
-    return results, len(urls) - len(results)
+    return results, {
+        "over_limit": len(urls) - len(targets),
+        "budget_exhausted": len(targets) - len(results),
+    }
 
 
 # ---------------------------------------------------------------- 站台層級檢查

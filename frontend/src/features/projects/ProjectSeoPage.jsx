@@ -31,12 +31,29 @@ const VERDICT_META = {
   broken: { label: "失效", tone: "is-bad" },
   loop: { label: "轉址過多", tone: "is-bad" },
   error: { label: "無法連線", tone: "is-warn" },
+  timeout: { label: "逾時", tone: "is-warn" },
   restricted: { label: "對方限制檢查", tone: "is-info" },
   redirect: { label: "轉址後正常", tone: "is-good" },
   ok: { label: "正常", tone: "is-good" },
   other: { label: "其他", tone: "is-info" },
   unchecked: { label: "未檢查", tone: "is-muted" },
   skipped: { label: "未檢查（非公開位址）", tone: "is-muted" },
+};
+// 和上一次掃描比較的失效連結趨勢（後端 seo/link_trend.py）
+const TREND_META = {
+  new: { label: "新壞掉", tone: "is-bad" },
+  persisting: { label: "持續失效", tone: "is-warn" },
+  recovered: { label: "已確認恢復", tone: "is-good" },
+  unconfirmed: { label: "本次無法確認", tone: "is-muted" },
+};
+// 沒有明確結果的連結狀態（後端 seo/link_trend.COVERAGE_LABELS）
+const COVERAGE_LABELS = {
+  restricted: "對方限制檢查",
+  timeout: "逾時",
+  error: "無法連線",
+  skipped: "非公開位址",
+  over_limit: "超過數量上限",
+  budget_exhausted: "時間用完",
 };
 const LINK_TYPES = { internal: "站內", subdomain: "子網域", external: "站外" };
 const PAGE_FILTERS = {
@@ -52,7 +69,7 @@ const LINK_FILTERS = {
   all: { label: "全部", test: () => true },
   broken: { label: "失效", test: (row) => row.verdict === "broken" || row.verdict === "loop" },
   redirect: { label: "轉址", test: (row) => row.verdict === "redirect" },
-  uncertain: { label: "無法確認", test: (row) => ["error", "restricted", "other"].includes(row.verdict) },
+  uncertain: { label: "無法確認", test: (row) => ["error", "timeout", "restricted", "other"].includes(row.verdict) },
   unchecked: { label: "未檢查", test: (row) => row.verdict === "unchecked" || row.verdict === "skipped" },
 };
 const GSC_DAYS = [7, 28, 90];
@@ -76,6 +93,29 @@ function levelOf(page, key) {
 function LevelChip({ level }) {
   const meta = LEVEL_META[level] || LEVEL_META.notice;
   return <span className={`seo-chip ${meta.tone}`}>{meta.label}</span>;
+}
+
+function TrendChip({ trend }) {
+  const meta = TREND_META[trend];
+  return meta ? <span className={`seo-chip ${meta.tone}`}>{meta.label}</span> : null;
+}
+
+// 連結檢查覆蓋（哪些連結沒有明確結果與原因）與上一次掃描比較的失效連結趨勢
+function LinkCoverageNote({ coverage, trend }) {
+  const gaps = Object.entries(COVERAGE_LABELS).filter(([key]) => coverage?.[key]);
+  const changes = trend ? Object.entries(TREND_META).filter(([key]) => trend.counts?.[key]) : [];
+  if (!gaps.length && !trend) return null;
+  return (
+    <p className="seo-muted seo-legend">
+      {coverage && `已確認 ${coverage.checked} 個連結`}
+      {gaps.length > 0 && `；沒有明確結果：${gaps.map(([key, label]) => `${label} ${coverage[key]}`).join("、")}`}
+      {coverage && "。"}
+      {trend && (changes.length
+        ? `和上一次掃描（${formatDateTime(trend.previous_checked_at)}）相比：${changes.map(([key, meta]) => `${meta.label} ${trend.counts[key]}`).join("、")}。`
+        : `和上一次掃描（${formatDateTime(trend.previous_checked_at)}）相比，兩次都沒有失效連結。`)}
+      {trend && "沒有檢查到或這次找不到的連結只標「本次無法確認」，不算恢復。"}
+    </p>
+  );
 }
 
 function VerdictChip({ verdict }) {
@@ -776,6 +816,7 @@ function LinksTab({ data, keyword, onOpenPage }) {
             : "這次掃描沒有連結狀態檢查；站內已爬到的頁面以爬蟲結果顯示。"}
           302 → 200 這類「轉址後正常」不算失效；401／403／429 代表對方拒絕自動檢查，標為無法確認。
         </p>
+        <LinkCoverageNote coverage={links.coverage} trend={links.trend} />
         {visible.length === 0 ? (
           <p className="hint-text">沒有符合條件的連結。</p>
         ) : (
@@ -799,6 +840,7 @@ function LinksTab({ data, keyword, onOpenPage }) {
                         <td className="seo-nowrap">{LINK_TYPES[row.type]}</td>
                         <td>
                           <VerdictChip verdict={row.verdict} />
+                          {row.trend && <TrendChip trend={row.trend} />}
                           <span className="seo-muted seo-block">{chainText(row.chain)}{row.note ? `；${row.note}` : ""}</span>
                         </td>
                         <td className="seo-nowrap">

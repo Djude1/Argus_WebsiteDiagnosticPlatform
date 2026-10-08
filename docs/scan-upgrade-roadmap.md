@@ -152,8 +152,8 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：`seo/collect.py` 已以 URL 去重跨頁重複連結，`check_links()` 已用 `ThreadPoolExecutor` 並發，並具備站內/子網域/站外分類、跳轉鏈、狀態、robots、難懂錨文字與時間/數量上限。
 - **升級**：
   1. 不重做既有 scan-level 去重與並發；改補 **freshness / cache reuse**，避免同一掃描流程內其他 stage 重複查相同外部 URL。
-  2. 連結 coverage 明確區分 checked / restricted / timeout / skipped / budget_exhausted，歷史比較只能在 coverage 足夠時判定 resolved。
-  3. 連結健康度趨勢標記「新壞掉／持續失效／已確認恢復／本次無法確認」。
+  2. 連結 coverage 明確區分 checked / restricted / timeout / skipped / budget_exhausted，歷史比較只能在 coverage 足夠時判定 resolved。（**已實作 2026-10-08**：`seo/link_trend.link_coverage`；逾時從「無法連線」分出成 `timeout`，未檢查分成超過數量上限與時間用完，存 `seo_report.coverage`，`seo_links` 覆蓋紀錄說明列出沒有明確結果的連結數，SEO 分析頁連結分頁顯示）
+  3. 連結健康度趨勢標記「新壞掉／持續失效／已確認恢復／本次無法確認」。（**已實作 2026-10-08**：`seo/link_trend.link_trend`，和同專案上一次有連結檢查的完成掃描比較；只有這次真的檢查過且正常才算恢復，沒檢查、逾時、被拒或這次頁面上找不到一律「本次無法確認」；併入爬蟲已造訪頁面的 HTTP 狀態。標記顯示在 SEO 分析頁連結列與「站內連結失效」問題的描述與證據。只比對上一次掃描，不追溯更早的歷史）
   4. 錨文字品質延伸（「點這裡」「更多」等無意義文字，SEO + 無障礙雙重影響）。（**已具備，2026-10-08 核對**：`seo/page_audit.GENERIC_ANCHORS`（點此、這裡、更多、了解更多、read more、click here 等）與空錨文字由 `seo/report.py` 列在 SEO 分析頁的連結問題（空錨文字為警告、無意義文字為提示）；沒有可讀名稱的連結另由 axe-core `link-name`（WCAG）列為無障礙問題。「連結目的是否清楚」屬 WCAG 2.4.4，需看上下文，不再以字面規則擴充）
 
 ## 12. 評分

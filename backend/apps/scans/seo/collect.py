@@ -30,7 +30,7 @@ def build_link_report(
                 targets.setdefault(link["url"], classify_link(link["url"], site_host))
     ordered = sorted(targets, key=lambda url: (_TYPE_ORDER[targets[url]], url))
     limit = settings.ARGUS_SEO_LINK_CHECK_LIMIT
-    results, unchecked = check_links(
+    results, unchecked_reasons = check_links(
         ordered, limit=limit, budget_seconds=settings.ARGUS_SEO_LINK_CHECK_SECONDS,
         should_stop=should_stop,
     )
@@ -42,7 +42,8 @@ def build_link_report(
         "version": 1,
         "checked_at": timezone.now().isoformat(),
         "limit": limit,
-        "unchecked": unchecked,
+        "unchecked": sum(unchecked_reasons.values()),
+        "unchecked_reasons": unchecked_reasons,
         "links": results,
         "robots": robots,
         "site_checks": site_checks(start_url, robots, sample_paths),

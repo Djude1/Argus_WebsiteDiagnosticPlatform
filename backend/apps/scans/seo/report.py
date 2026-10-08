@@ -15,9 +15,10 @@ from django.core.cache import cache
 from apps.scans.models import Page, ScanJob, SiteProject
 from apps.scans.seo.keywords import keyword_report
 from apps.scans.seo.link_check import classify_link, robots_blocks
+from apps.scans.seo.link_trend import link_coverage
 from apps.scans.seo.page_audit import GENERIC_ANCHORS, audit_page
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 CACHE_SECONDS = 3600
 LEVEL_ORDER = {"critical": 0, "warning": 1, "notice": 2, "pass": 3}
 MAX_ISSUE_PAGES = 100
@@ -94,6 +95,7 @@ def _pages(scan: ScanJob):
 def _link_rows(audits: list[dict], pages_by_url: dict, seo_report: dict, site_host: str):
     """把所有頁面的連結依目標網址合併，附上檢查結果；另列出錨文字有問題的連結。"""
     results = seo_report.get("links") or {}
+    trend = (seo_report.get("trend") or {}).get("items") or {}
     targets: dict[str, dict] = {}
     anchor_issues: list[dict] = []
     for audit in audits:
@@ -108,6 +110,7 @@ def _link_rows(audits: list[dict], pages_by_url: dict, seo_report: dict, site_ho
                     "sources": [],
                     "source_count": 0,
                     **_link_status(url, results, pages_by_url),
+                    "trend": trend.get(url, ""),
                 }
             row["source_count"] += 1
             row["nofollow"] = row["nofollow"] or "nofollow" in link["rel"]
@@ -134,8 +137,8 @@ def _link_rows(audits: list[dict], pages_by_url: dict, seo_report: dict, site_ho
     return rows, anchor_issues
 
 
-_VERDICT_ORDER = {"broken": 0, "error": 1, "loop": 2, "restricted": 3, "redirect": 4,
-                  "other": 5, "unchecked": 6, "skipped": 7, "ok": 8}
+_VERDICT_ORDER = {"broken": 0, "error": 1, "timeout": 1, "loop": 2, "restricted": 3,
+                  "redirect": 4, "other": 5, "unchecked": 6, "skipped": 7, "ok": 8}
 
 
 def _link_status(url: str, results: dict, pages_by_url: dict) -> dict:
@@ -196,7 +199,7 @@ def _issues(audits, page_meta, link_rows, anchor_issues, seo_report, links_check
 
     by_page = {a["page_id"]: a for a in audits}
     for row in link_rows:
-        if row["verdict"] not in {"broken", "error", "loop", "redirect"}:
+        if row["verdict"] not in {"broken", "error", "timeout", "loop", "redirect"}:
             continue
         if row["verdict"] == "redirect" and row["type"] != "internal":
             continue  # 站外連結轉址很常見，只有站內轉址值得處理
@@ -204,7 +207,8 @@ def _issues(audits, page_meta, link_rows, anchor_issues, seo_report, links_check
             "broken": ("critical" if row["type"] == "internal" else "warning",
                        "站內失效連結" if row["type"] == "internal" else "站外／子網域失效連結",
                        "修正連結網址，或改連到仍存在的頁面。"),
-            "error": ("notice", "連結無法連線", "目標網站逾時或拒絕連線；稍後重掃確認是否持續。"),
+            "error": ("notice", "連結無法連線", "目標網站拒絕連線；稍後重掃確認是否持續。"),
+            "timeout": ("notice", "連結檢查逾時", "目標網站回應太慢；稍後重掃確認是否持續。"),
             "loop": ("warning", "連結轉址過多", "轉址超過 5 次，直接連到最終網址。"),
             "redirect": ("notice", "站內連結經過轉址",
                          "轉址後正常、不算失效；把連結改成最終網址可少一次往返。"),
@@ -282,6 +286,9 @@ def _analysis(scan: ScanJob) -> dict:
         "links": {
             "checked_at": links_checked_at,
             "unchecked": seo_report.get("unchecked", 0),
+            "coverage": seo_report.get("coverage") or link_coverage(seo_report),
+            "trend": {k: v for k, v in (seo_report.get("trend") or {}).items() if k != "items"}
+            or None,
             "limit": seo_report.get("limit"),
             "counts": link_counts,
             "rows": link_rows,

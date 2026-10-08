@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from apps.scans.ai_bots import robots_allows
 from apps.scans.models import Finding
 from apps.scans.scanners import make_finding
+from apps.scans.seo.link_trend import TREND_LABELS
 from apps.scans.seo.page_audit import _same_url, audit_page
 
 MAX_LISTED = 10
@@ -40,14 +41,22 @@ def broken_internal_links(report: dict, audits: list[dict], site_host: str) -> d
         for link in audit["links"]:
             if link["url"] in broken and audit["final_url"] not in found_on[link["url"]]:
                 found_on[link["url"]].append(audit["final_url"])
+    trend = (report.get("trend") or {}).get("items") or {}
     rows = [
-        {"url": url, "status": row.get("status"), "found_on": found_on.get(url, [])[:3]}
+        {"url": url, "status": row.get("status"), "found_on": found_on.get(url, [])[:3],
+         "trend": trend.get(url, "")}
         for url, row in sorted(broken.items())
     ]
     listed = "；".join(
-        f"{r['url']}（HTTP {r['status']}）" + (f" ← {r['found_on'][0]}" if r["found_on"] else "")
+        f"{r['url']}（HTTP {r['status']}"
+        + (f"，{TREND_LABELS[r['trend']]}" if r["trend"] else "") + "）"
+        + (f" ← {r['found_on'][0]}" if r["found_on"] else "")
         for r in rows[:MAX_LISTED]
     )
+    # 和上一次掃描比較時，說明新壞掉與持續失效各幾個（roadmap §11 第 3 項）
+    new = sum(1 for r in rows if r["trend"] == "new")
+    persisting = sum(1 for r in rows if r["trend"] == "persisting")
+    compared = f"和上一次掃描相比，{new} 個是新壞掉、{persisting} 個持續失效。" if trend else ""
     return make_finding(
         category=Finding.Category.SEO,
         severity=Finding.Severity.MEDIUM,
@@ -55,7 +64,7 @@ def broken_internal_links(report: dict, audits: list[dict], site_host: str) -> d
         title="站內連結失效",
         description=(
             f"有 {len(rows)} 個站內連結點下去是錯誤頁。訪客會看到「找不到頁面」，"
-            "搜尋引擎也會浪費爬取額度。"
+            "搜尋引擎也會浪費爬取額度。" + compared
         ),
         remediation="修正或移除這些連結；頁面已搬家的請設定 301 轉址到新網址。",
         evidence=f"失效連結：{listed}",
