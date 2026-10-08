@@ -13,6 +13,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
+from apps.scans.accessibility import run_axe
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.scanners import is_binary_resource
 from apps.scans.services import (
@@ -50,8 +51,6 @@ CF_JS_CHALLENGE_MARKERS = (
     "cf_captcha",
 )
 
-# 用於診斷的主流 AI 爬蟲 User-Agent；僅檢查 robots.txt 規則，不繞過任何限制
-AI_CRAWLER_USER_AGENTS = ("GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot")
 
 
 def compute_min_interval(scan_mode: str, *, active_rps: int, passive_rps: int) -> float:
@@ -160,6 +159,7 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
 
     robots_disallow 供資安層判斷「robots.txt 是否把敏感路徑當地圖洩露」（被動）。
     """
+    from apps.scans.ai_bots import analyze_policy, blocked
     from apps.scans.security.exposure_scanner import parse_robots_disallow
 
     signals: dict = {
@@ -167,26 +167,37 @@ async def probe_site_signals(context, origin: str, robot_parser: RobotFileParser
         "blocked_ai_crawlers": [],
         "robots_disallow": [],
         "robots_sitemaps": [],
+        # 原文留給 robots／sitemap／noindex 一致性檢查（seo/site_findings.py）；
+        # Google 只讀前 500 KiB
+        "robots_text": None,
+        # 已取得的站台檔案 {網址: HTTP 狀態}（不跟隨轉址）；SEO 連結檢查與站台檢查沿用，
+        # 同一次掃描不再對同一網址送第二次請求（roadmap §11 第 1 項）
+        "fetched": {},
     }
     try:
         llms_url = assert_public_http_url(f"{origin}/llms.txt")
         response = await context.request.get(llms_url, timeout=10000, max_redirects=0)
+        signals["fetched"][llms_url] = response.status
         signals["llms_txt_found"] = response.ok
     except Exception:
         signals["llms_txt_found"] = False
+    robots_text = None
     try:
         robots_url = assert_public_http_url(f"{origin}/robots.txt")
         resp = await context.request.get(robots_url, timeout=10000, max_redirects=0)
+        signals["fetched"][robots_url] = resp.status
         if resp.ok:
-            robots_text = await resp.text()
+            robots_text = (await resp.text())[:512_000]
+            signals["robots_text"] = robots_text
             robot_parser.parse(robots_text.splitlines())
             signals["robots_disallow"] = parse_robots_disallow(robots_text)
             signals["robots_sitemaps"] = parse_robots_sitemaps(robots_text)
     except Exception:
         signals["robots_disallow"] = []
-    for agent in AI_CRAWLER_USER_AGENTS:
-        if not robot_parser.can_fetch(agent, f"{origin}/"):
-            signals["blocked_ai_crawlers"].append(agent)
+    # AI 爬蟲的 robots.txt 政策（ai_bots.py）：依用途分訓練／AI 搜尋／使用者觸發，
+    # 只讀已取得的 robots.txt
+    signals["ai_bot_policy"] = analyze_policy(robots_text)
+    signals["blocked_ai_crawlers"] = [b["agent"] for b in blocked(signals["ai_bot_policy"])]
     return signals
 
 
@@ -248,14 +259,18 @@ def sitemap_page_urls(locs: list[str], origin: str) -> list[str]:
     return urls
 
 
-async def _fetch_sitemap(context, url: str, origin: str) -> str:
-    """抓單一 sitemap（同源、公開位址、不跟隨轉址）；失敗或過大回空字串。"""
+async def _fetch_sitemap(context, url: str, origin: str, fetched: dict | None = None) -> str:
+    """抓單一 sitemap（同源、公開位址、不跟隨轉址）；失敗或過大回空字串。
+
+    fetched 有值時記下 {網址: HTTP 狀態}，給 SEO 站台檢查沿用。
+    """
     try:
         if not same_origin(url, origin) or url.lower().endswith(".gz"):
             return ""
-        response = await context.request.get(
-            assert_public_http_url(url), timeout=10000, max_redirects=0
-        )
+        safe_url = assert_public_http_url(url)
+        response = await context.request.get(safe_url, timeout=10000, max_redirects=0)
+        if fetched is not None:
+            fetched[safe_url] = response.status
         if not response.ok:
             return ""
         body = await response.body()
@@ -266,7 +281,9 @@ async def _fetch_sitemap(context, url: str, origin: str) -> str:
         return ""
 
 
-async def discover_sitemap_urls(context, origin: str, declared: list[str], limit: int) -> list[str]:
+async def discover_sitemap_urls(
+    context, origin: str, declared: list[str], limit: int, fetched: dict | None = None
+) -> list[str]:
     """從 robots.txt 宣告的 sitemap（沒有就 /sitemap.xml）取出同源頁面網址，最多 limit 個。
 
     被動、只讀網站公開給搜尋引擎的清單：只靠 <a> 連結 BFS 時，連結稀疏或以 JavaScript
@@ -282,7 +299,7 @@ async def discover_sitemap_urls(context, origin: str, declared: list[str], limit
         if sitemap_url in seen:
             continue
         seen.add(sitemap_url)
-        text = await _fetch_sitemap(context, sitemap_url, origin)
+        text = await _fetch_sitemap(context, sitemap_url, origin, fetched)
         if not text:
             continue
         locs = _SITEMAP_LOC.findall(text)
@@ -316,6 +333,173 @@ async def collect_element_boxes(page) -> dict[str, dict]:
 
 # 行動版量測的視窗寬度。375 是主流手機的 CSS 寬度（iPhone 6 以降的多數機型），
 # 破版在這個寬度看得最清楚。
+# ---------- 渲染就緒（roadmap「爬取」第 1 項） ----------
+# 不等 networkidle（分析工具、客服 widget、長輪詢讓網路永遠不安靜）；改看 DOM 是否穩定：
+# 每 250ms 量一次正文字數與元素數，至少等 _RENDER_GRACE_SECONDS（給前端框架 hydration），
+# 連續兩次幾乎不變就算就緒。輪播、跑馬燈會讓字數小幅變動，所以容許少量差異。
+_RENDER_POLL_MS = 250
+_RENDER_GRACE_SECONDS = 0.5
+_DOM_SAMPLE = """() => [
+    document.body ? document.body.innerText.length : 0,
+    document.getElementsByTagName("*").length,
+]"""
+
+
+def _dom_stable(previous: list, current: list) -> bool:
+    text_before, nodes_before = previous
+    text_now, nodes_now = current
+    return (
+        text_now > 0
+        and abs(text_now - text_before) <= max(20, text_before * 0.005)
+        and abs(nodes_now - nodes_before) <= 2
+    )
+
+
+async def wait_for_render_ready(page, max_seconds: float) -> dict:
+    """等頁面內容穩定，最多 max_seconds；回傳 {"status": ready|timeout|error, "ms": 等待毫秒}。
+
+    逾時不是失敗：照樣擷取當下的 DOM 與截圖，只記錄這頁可能還沒渲染完整。
+    """
+    started = time.perf_counter()
+    previous = None
+
+    def result(status: str) -> dict:
+        return {"status": status, "ms": round((time.perf_counter() - started) * 1000)}
+
+    while True:
+        try:
+            current = await page.evaluate(_DOM_SAMPLE)
+        except Exception:
+            return result("error")
+        elapsed = time.perf_counter() - started
+        if (
+            previous is not None
+            and elapsed >= _RENDER_GRACE_SECONDS
+            and _dom_stable(previous, current)
+        ):
+            return result("ready")
+        if elapsed >= max_seconds:
+            return result("timeout")
+        previous = current
+        await page.wait_for_timeout(_RENDER_POLL_MS)
+
+
+# 版面位移只回報位移最多的幾個元素
+_MAX_LAYOUT_SHIFT_ELEMENTS = 5
+
+
+async def collect_layout_shift(page) -> dict:
+    """量這頁載入與捲動期間的累計版面位移（CLS），並找出位移的元素（roadmap §4 第 3 項）。
+
+    用瀏覽器的 layout-shift 紀錄（buffered，含載入期間已發生的位移），依 Google 的 CLS 定義
+    取最大的工作階段視窗（位移間隔 <1 秒、整段 ≤5 秒）；使用者操作後 0.5 秒內的位移不算。
+    包含 scroll_to_bottom 往下捲動時的位移（延遲載入的圖片），但不含它最後瞬間跳回頂端之後的位移。
+    **在截圖之前呼叫**：整頁截圖會改變視窗大小，可能產生不是使用者會看到的位移。
+
+    這是單次、桌面視窗、無使用者操作的量測，數值會與 Lighthouse／真實使用者不同。
+    失敗或瀏覽器不支援回傳 {}（＝沒量到，不是沒有位移）。
+    """
+    try:
+        return await asyncio.wait_for(
+            page.evaluate(
+                r"""
+                async (maxElements) => {
+                    const types = (window.PerformanceObserver
+                        && PerformanceObserver.supportedEntryTypes) || [];
+                    if (!types.includes("layout-shift")) return {};
+                    const entries = await new Promise((resolve) => {
+                        const list = [];
+                        const observer = new PerformanceObserver(
+                            (l) => list.push(...l.getEntries())
+                        );
+                        observer.observe({ type: "layout-shift", buffered: true });
+                        setTimeout(() => {
+                            list.push(...observer.takeRecords());
+                            observer.disconnect();
+                            resolve(list);
+                        }, 100);
+                    });
+                    let best = 0, bestWindow = [], current = 0, currentWindow = [];
+                    let first = 0, last = 0, total = 0;
+                    const jumpedAt = window.__argusScrollTopAt ?? Infinity;
+                    const counted = entries.filter(
+                        (e) => !e.hadRecentInput && e.startTime < jumpedAt
+                    );
+                    for (const e of counted) {
+                        total += e.value;
+                        if (currentWindow.length && e.startTime - last < 1000
+                            && e.startTime - first < 5000) {
+                            current += e.value;
+                            currentWindow.push(e);
+                        } else {
+                            current = e.value;
+                            currentWindow = [e];
+                            first = e.startTime;
+                        }
+                        last = e.startTime;
+                        if (current > best) {
+                            best = current;
+                            bestWindow = currentWindow.slice();
+                        }
+                    }
+                    const describe = (el) => {
+                        const id = el.id ? `#${el.id}` : "";
+                        const cls = (el.className && typeof el.className === "string")
+                            ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+                            : "";
+                        return (el.tagName.toLowerCase() + id + cls).slice(0, 120);
+                    };
+                    // 每次位移的分數記到這次位移中移動的元素上（一次位移可能有多個元素）；
+                    // 同一次位移裡同名的元素只記一次，否則元素分數會大於整頁 CLS
+                    const elements = new Map();
+                    for (const e of bestWindow) {
+                        const seen = new Set();
+                        for (const source of e.sources || []) {
+                            let node = source.node;
+                            if (node && node.nodeType !== 1) node = node.parentElement;
+                            if (!node || !node.tagName) continue;
+                            const selector = describe(node);
+                            const moved = Math.round(Math.max(
+                                Math.abs(source.currentRect.y - source.previousRect.y),
+                                Math.abs(source.currentRect.x - source.previousRect.x),
+                            ));
+                            const item = elements.get(selector)
+                                || { selector, score: 0, moved_px: 0, shifts: 0 };
+                            item.moved_px = Math.max(item.moved_px, moved);
+                            if (!seen.has(selector)) {
+                                seen.add(selector);
+                                item.score += e.value;
+                                item.shifts += 1;
+                            }
+                            elements.set(selector, item);
+                        }
+                    }
+                    const top = [...elements.values()]
+                        // 同一次位移裡的元素分數相同，移動距離大的排前面
+                        .sort((a, b) => b.score - a.score || b.moved_px - a.moved_px)
+                        .slice(0, maxElements)
+                        .map((item) => ({ ...item, score: Math.round(item.score * 1000) / 1000 }));
+                    // 常見原因：沒有標寬高的圖片／影片／iframe，載入後把下面的內容往下推
+                    const unsized = [...document.querySelectorAll("img, video, iframe")].filter(
+                        (el) => !el.getAttribute("width") || !el.getAttribute("height")
+                    ).length;
+                    return {
+                        cls: Math.round(best * 1000) / 1000,
+                        total: Math.round(total * 1000) / 1000,
+                        shifts: counted.length,
+                        elements: top,
+                        unsized_media: unsized,
+                    };
+                }
+                """,
+                _MAX_LAYOUT_SHIFT_ELEMENTS,
+            ),
+            timeout=10,
+        )
+    except Exception:
+        return {}
+
+
 MOBILE_VIEWPORT = {"width": 375, "height": 812}
 # 只回報最嚴重的幾個元素。一個溢出的子元素會讓所有祖先都超寬，全記等於洗版，
 # 而這份資料每頁都要進 DB。
@@ -550,6 +734,9 @@ async def scroll_to_bottom(page) -> None:
                             }
                         }, 80);
                     });
+                    // 記下跳回頂端的時間：之後的版面位移（例如捲動後縮小的固定標頭又展開）
+                    // 是這個瞬間跳轉造成的，不是讀者會遇到的，collect_layout_shift 不計
+                    window.__argusScrollTopAt = performance.now();
                     window.scrollTo(0, 0);
                 }
                 """
@@ -617,12 +804,24 @@ async def _enforce_public_websocket(websocket_route, origin: str | None = None):
     websocket_route.connect_to_server()
 
 
-async def _make_context(browser, origin: str):
-    """建立標準 scanner 瀏覽器 context（user-agent + viewport）。"""
+async def _make_context(browser, origin: str, har_path: Path | None = None):
+    """建立標準 scanner 瀏覽器 context（user-agent + viewport）。
+
+    har_path：給 ZAP 被動分析用（security/zap_passive.py），只錄同 origin 的請求與回應，
+    在 context 關閉時寫檔；不會多發任何請求。
+    """
+    har_kwargs = {}
+    if har_path is not None:
+        har_kwargs = {
+            "record_har_path": str(har_path),
+            "record_har_content": "embed",
+            "record_har_url_filter": re.compile("^" + re.escape(origin) + "(?:[/?#]|$)"),
+        }
     context = await browser.new_context(
         user_agent=settings.ARGUS_SCANNER_USER_AGENT,
         viewport={"width": 1440, "height": 1000},
         service_workers="block",
+        **har_kwargs,
     )
     async def _request_handler(route, request):
         await _enforce_public_request(route, request, origin)
@@ -690,6 +889,25 @@ class _CrawlState:
     api_endpoints: set[str] = field(default_factory=set)
     page_retry_counts: dict[str, int] = field(default_factory=dict)
     last_request_at: float = 0.0
+    # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
+    run_accessibility: bool = False
+    accessibility_runs: int = 0
+    # 爬取預算（roadmap「爬取」第 2 項）：種子來源、略過原因、節流、每頁耗時，結束時整理成
+    # warnings["crawl_budget"]，讓「為什麼只爬到這些頁」可以回答
+    seeds: dict = field(default_factory=lambda: {"start": 1, "sitemap": 0})
+    links_queued: int = 0
+    links_dropped_limit: int = 0
+    skipped_depth: int = 0
+    throttle_waits: int = 0
+    throttle_wait_seconds: float = 0.0
+    page_seconds: list = field(default_factory=list)  # [(秒數, 網址)]
+    render_ready: list = field(default_factory=list)  # [(狀態, 毫秒, 網址)]
+
+    def take_accessibility_slot(self) -> bool:
+        if not self.run_accessibility or self.accessibility_runs >= settings.ARGUS_AXE_MAX_PAGES:
+            return False
+        self.accessibility_runs += 1
+        return True
 
     def __post_init__(self) -> None:
         self.queue.append((self.start_url, 0))
@@ -698,7 +916,10 @@ class _CrawlState:
         """取下一個要爬的 (url, depth)；已造訪、超過深度或被 robots.txt 禁止的直接略過。"""
         while self.queue and len(self.pages) < self.max_pages:
             url, depth = self.queue.popleft()
-            if url in self.visited or depth > self.max_depth:
+            if url in self.visited:
+                continue
+            if depth > self.max_depth:
+                self.skipped_depth += 1
                 continue
             self.visited.add(url)
             if respect_robots and not robot_parser.can_fetch(
@@ -722,12 +943,64 @@ class _CrawlState:
             self.queue.append((url, depth))
             queued.add(url)
             added += 1
+        self.seeds["sitemap"] += added
         return added
 
     def enqueue_links(self, links: list[str], depth: int) -> None:
+        # 已在佇列裡的不重複排入：重複項目會佔掉頁數上限的名額，把沒排到的新頁面擠掉
+        # （2026-10-08 爬取預算紀錄發現 sitemap 已排入的頁面又被首頁連結排一次）
+        queued = {url for url, _ in self.queue}
         for link in links:
-            if link not in self.visited and len(self.pages) + len(self.queue) < self.max_pages:
+            if link in self.visited or link in queued:
+                continue
+            queued.add(link)
+            if len(self.pages) + len(self.queue) < self.max_pages:
                 self.queue.append((link, depth + 1))
+                self.links_queued += 1
+            else:
+                self.links_dropped_limit += 1
+
+    def budget_summary(self, stop_reason: str, elapsed_seconds: float) -> dict:
+        """爬取預算摘要（寫進 warning_summary["crawl_budget"]）。"""
+        timings = sorted(self.page_seconds, key=lambda item: -item[0])
+        return {
+            "stop_reason": stop_reason,
+            "max_pages": self.max_pages,
+            "max_depth": self.max_depth,
+            "pages": len(self.pages),
+            "seeds": dict(self.seeds),
+            "links_queued": self.links_queued,
+            "links_dropped_limit": self.links_dropped_limit,
+            "skipped_depth": self.skipped_depth,
+            "skipped_robots": sum(
+                1 for row in self.warnings["blocked_urls"] if row.get("reason") == "robots.txt"
+            ),
+            "failed": len(self.warnings["failed_urls"]),
+            "throttle_waits": self.throttle_waits,
+            "throttle_wait_ms": round(self.throttle_wait_seconds * 1000),
+            "elapsed_ms": round(elapsed_seconds * 1000),
+            "page_ms_avg": (
+                round(sum(s for s, _ in timings) / len(timings) * 1000) if timings else None
+            ),
+            "slowest_pages": [
+                {"url": url, "ms": round(seconds * 1000)} for seconds, url in timings[:3]
+            ],
+            "render_readiness": self._render_summary(),
+        }
+
+    def _render_summary(self) -> dict | None:
+        if not self.render_ready:
+            return None
+        counts = {status: 0 for status in ("ready", "timeout", "error")}
+        for status, _ms, _url in self.render_ready:
+            counts[status] = counts.get(status, 0) + 1
+        return {
+            **counts,
+            "avg_ms": round(sum(ms for _s, ms, _u in self.render_ready) / len(self.render_ready)),
+            "timeout_urls": [
+                url for status, _ms, url in self.render_ready if status == "timeout"
+            ][:5],
+        }
 
     def progress(self) -> tuple[int, int]:
         done = len(self.visited)
@@ -752,6 +1025,7 @@ def _empty_capture(js_errors: list[str]) -> dict:
         "element_boxes": {},
         "layout_metrics": {},
         "ux_signals": {},
+        "a11y": {},
         "screenshot_path": None,
         "mobile_screenshot_path": None,
     }
@@ -761,6 +1035,8 @@ async def _throttle(state: _CrawlState, min_interval: float) -> None:
     """per-origin 速率限制：主動模式 RPS <= 2。"""
     wait_seconds = min_interval - (time.perf_counter() - state.last_request_at)
     if wait_seconds > 0:
+        state.throttle_waits += 1
+        state.throttle_wait_seconds += wait_seconds
         await asyncio.sleep(wait_seconds)
     state.last_request_at = time.perf_counter()
 
@@ -813,6 +1089,7 @@ async def _capture_content(
     warnings: dict,
     stage: _PageStage,
     js_errors: list[str],
+    run_accessibility: bool = False,
 ) -> tuple[dict, str]:
     """擷取同源頁面的內容、截圖、連結與量測；回傳 (capture, blocked_reason)。
 
@@ -838,6 +1115,9 @@ async def _capture_content(
         or classify_cf_challenge(capture["html"])
         or classify_blocked(status_code)
     )
+    # 版面位移要在截圖前量：整頁截圖會改變視窗大小。被阻擋的錯誤頁不量。
+    stage.name = "layout_shift"
+    capture["layout_shift"] = {} if blocked_reason else await collect_layout_shift(page)
     # 被阻擋的頁面仍拍截圖供人工核對；截圖失敗只讓這一頁沒有圖，不影響其餘分析。
     stage.name = "screenshot"
     capture["screenshot_path"] = (
@@ -850,6 +1130,12 @@ async def _capture_content(
     capture["links"] = [] if blocked_reason else await extract_links(page, final_url, origin)
     stage.name = "element_boxes"
     capture["element_boxes"] = await collect_element_boxes(page)
+    # axe-core：在桌面版視窗、內容與截圖都擷取完之後跑（會注入腳本，不能影響已保存的 HTML），
+    # 且必須在行動版量測之前（那一步會改 viewport）。被阻擋的錯誤頁不檢查。
+    capture["a11y"] = {}
+    if run_accessibility and not blocked_reason:
+        stage.name = "accessibility"
+        capture["a11y"] = await run_axe(page, timeout_seconds=settings.ARGUS_AXE_TIMEOUT_SECONDS)
     # 一定要放最後：會改 viewport，跑在截圖或內容擷取之前會讓那些結果變成行動版的
     stage.name = "mobile_layout"
     capture["layout_metrics"] = await collect_mobile_layout(page)
@@ -926,6 +1212,8 @@ def _page_record(
     """crawl_site 回傳的單頁資料（tasks.py 落地成 Page，並交給各 scanner 分析）。"""
     screenshot_path = capture["screenshot_path"]
     layout_metrics = dict(capture["layout_metrics"] or {})
+    if capture.get("layout_shift"):
+        layout_metrics["layout_shift"] = capture["layout_shift"]
     if capture.get("mobile_screenshot_path") is not None:
         layout_metrics["mobile_screenshot"] = str(
             capture["mobile_screenshot_path"].relative_to(settings.BASE_DIR)
@@ -952,6 +1240,7 @@ def _page_record(
         "element_boxes": capture["element_boxes"],
         "layout_metrics": layout_metrics,
         "ux_signals": capture["ux_signals"],
+        "a11y": capture.get("a11y") or {},
         "js_errors": list(js_errors),
     }
 
@@ -975,7 +1264,7 @@ async def _visit_page(
         js_errors = _attach_page_listeners(page, origin, state.api_endpoints)
         stage.name = "navigation"
         # 不等 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠無法完全安靜；
-        # 後續 scroll_to_bottom 本身會讓動態內容有時間渲染。
+        # 之後由 wait_for_render_ready 等 DOM 穩定（有上限），scroll_to_bottom 再觸發延遲載入。
         response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         stage.name = "response_headers"
         headers = await response.all_headers() if response else {}
@@ -984,10 +1273,17 @@ async def _visit_page(
         final_url = normalize_crawl_url(assert_public_http_url(page.url))
         final_url_origin = url_origin(final_url) if final_url else origin
 
+        ready_ms = 0
         if final_url_origin != origin:
             # 伺服器端 redirect 導去公開但非授權的網域：不分析其內容
             capture, blocked_reason = _empty_capture(js_errors), _CROSS_ORIGIN_REASON
         else:
+            stage.name = "render_ready"
+            readiness = await wait_for_render_ready(
+                page, settings.ARGUS_RENDER_READY_MAX_SECONDS
+            )
+            state.render_ready.append((readiness["status"], readiness["ms"], url))
+            ready_ms = readiness["ms"]
             capture, blocked_reason = await _capture_same_origin_page(
                 page,
                 response,
@@ -1004,6 +1300,7 @@ async def _visit_page(
                 warnings=state.warnings,
                 stage=stage,
                 js_errors=js_errors,
+                run_accessibility=state.take_accessibility_slot(),
             )
         return _page_record(
             url=url,
@@ -1015,7 +1312,8 @@ async def _visit_page(
             capture=capture,
             blocked_reason=blocked_reason,
             js_errors=js_errors,
-            load_time_ms=round((time.perf_counter() - started_at) * 1000),
+            # 等內容穩定的時間是 Argus 的量測動作，不算進頁面載入時間（SEO「載入慢」依此判斷）
+            load_time_ms=round((time.perf_counter() - started_at) * 1000) - ready_ms,
         )
     finally:
         await _close_playwright_resources(page)
@@ -1042,7 +1340,9 @@ def _record_page_failure(
     state.warnings["failed_urls"].append({"url": url, "reason": reason})
 
 
-async def _recycle_context(browser, context, origin: str, state: _CrawlState, url: str):
+async def _recycle_context(
+    browser, context, origin: str, state: _CrawlState, url: str, har_path: Path | None = None
+):
     """每爬 _CONTEXT_RECYCLE_EVERY 頁換一個 browser context（釋放記憶體）。
 
     回傳新的 context；browser process 已死、開不出新 context 時回 None，
@@ -1050,7 +1350,7 @@ async def _recycle_context(browser, context, origin: str, state: _CrawlState, ur
     """
     try:
         await context.close()
-        return await _make_context(browser, origin)
+        return await _make_context(browser, origin, har_path)
     except Exception as exc:
         state.warnings["failed_urls"].append(
             {"url": url, "reason": f"context_recycle_failed:{exc.__class__.__name__}"}
@@ -1081,6 +1381,8 @@ async def crawl_site(
     max_pages: int,
     respect_robots: bool,
     progress_callback=None,
+    run_accessibility: bool = False,
+    har_dir: Path | None = None,
 ) -> tuple[list[dict], dict, dict, list[str]]:
     """爬整站（同網域 BFS）。
 
@@ -1096,8 +1398,12 @@ async def crawl_site(
     每頁的流程：_throttle（速率限制）→ _visit_page（導覽、擷取、組單頁資料）→
     enqueue_links；失敗走 _record_page_failure（重試或記錄），每頁結束後視需要
     _recycle_context 並 _report_progress。
+
+    har_dir：有值時每個 browser context 各錄一個 HAR（`context-N.har`，只含同 origin 流量），
+    供 ZAP 被動分析；呼叫端負責刪除。
     """
     state = _CrawlState(start_url, origin, max_depth, max_pages)
+    state.run_accessibility = run_accessibility
     robot_parser = load_robot_parser(origin)
     min_interval = compute_min_interval(
         scan_mode,
@@ -1113,24 +1419,39 @@ async def crawl_site(
             headless=True,
             **playwright_launch_kwargs(),
         )
-        context = await _make_context(browser, origin)
+        har_count = 0
+
+        def _next_har() -> Path | None:
+            nonlocal har_count
+            if har_dir is None:
+                return None
+            har_count += 1
+            return har_dir / f"context-{har_count}.har"
+
+        context = await _make_context(browser, origin, _next_har())
         pages_in_context = 0
+        crawl_started = time.perf_counter()
+        stop_reason = "queue_exhausted"
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
             if max_pages > 1:
                 sitemap_urls = await discover_sitemap_urls(
-                    context, origin, site_signals.get("robots_sitemaps") or [], max_pages
+                    context, origin, site_signals.get("robots_sitemaps") or [], max_pages,
+                    site_signals.get("fetched"),
                 )
                 site_signals["sitemap_seeded"] = state.seed(sitemap_urls)
+                site_signals["sitemap_urls"] = sitemap_urls
             while (target := state.next_target(robot_parser, respect_robots)) is not None:
                 url, depth = target
                 await _throttle(state, min_interval)
                 stage = _PageStage()
                 context_broken = False
+                page_started = time.perf_counter()
                 try:
                     record = await _visit_page(
                         context, state, url, depth, screenshot_dir=screenshot_dir, stage=stage
                     )
+                    state.page_seconds.append((time.perf_counter() - page_started, url))
                     state.pages.append(record)
                     if record["blocked_reason"]:
                         state.warnings["blocked_urls"].append(
@@ -1142,7 +1463,9 @@ async def crawl_site(
                 finally:
                     pages_in_context += 1
                     if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
-                        new_context = await _recycle_context(browser, context, origin, state, url)
+                        new_context = await _recycle_context(
+                            browser, context, origin, state, url, _next_har()
+                        )
                         if new_context is None:
                             context_broken = True
                         else:
@@ -1153,7 +1476,13 @@ async def crawl_site(
                 # break 特意放在 finally 外：ruff B012 禁止在 finally 裡 break
                 # （若當時有例外正在傳遞，finally 裡的 break 會把它悄悄吞掉）。
                 if context_broken:
+                    stop_reason = "browser_failed"
                     break
+            if stop_reason == "queue_exhausted" and len(state.pages) >= max_pages:
+                stop_reason = "max_pages"
         finally:
             await _close_playwright_resources(context, browser)
+            state.warnings["crawl_budget"] = state.budget_summary(
+                stop_reason, time.perf_counter() - crawl_started
+            )
     return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)

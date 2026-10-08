@@ -367,7 +367,8 @@ class SeoStageTests(TestCase):
         )
         page = Page.objects.create(scan_job=scan, url=f"{ORIGIN}/", final_url=f"{ORIGIN}/",
                                    origin=ORIGIN, status_code=200, html=_html())
-        ctx = mock.Mock(scan_job=scan, scan_job_id=scan.id, pages=[(page, {})], deep_scan_total=1)
+        ctx = mock.Mock(scan_job=scan, scan_job_id=scan.id, pages=[(page, {})], deep_scan_total=1,
+                        site_signals={})
         return ctx, scan
 
     def test_skipped_without_seo_category(self):
@@ -385,6 +386,17 @@ class SeoStageTests(TestCase):
         self.assertEqual(scan.seo_report["checked_at"], "t")
         with mock.patch("apps.scans.tasks.build_link_report", side_effect=RuntimeError("x")):
             tasks.stage_seo_links(ctx)  # 不應拋出
+
+    def test_passes_sitemap_and_robots_to_index_conflict_check(self):
+        ctx, scan = self._ctx(["seo"])
+        ctx.site_signals = {"sitemap_urls": [f"{ORIGIN}/"],
+                            "robots_text": "User-agent: *\nDisallow: /\n"}
+        with mock.patch("apps.scans.tasks.build_link_report",
+                        return_value={"checked_at": "t", "links": {}, "unchecked": 0}):
+            tasks.stage_seo_links(ctx)
+        findings = ctx.record.call_args.args[0]
+        conflict = next(f for f in findings if f["rule_id"] == "seo-index-signals-conflict")
+        self.assertEqual(conflict["evidence_json"]["symptoms"][0]["kind"], "sitemap_robots_blocked")
 
 
 GSC_ENABLED = {"GOOGLE_OAUTH_CLIENT_ID": "cid.apps.googleusercontent.com",

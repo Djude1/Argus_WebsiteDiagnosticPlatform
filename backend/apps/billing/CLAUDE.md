@@ -33,11 +33,17 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 | 函式（實際簽章） | 說明 | 冪等 |
 |---|---|---|
 | `get_or_create_wallet(user)` | 取得或建立錢包 | ✅ |
-| `grant_monthly_bonus_if_needed(user)` | 月贈點 200 coin | ✅ 同月第二次不執行 |
-| `estimate_scan_cost(max_pages, categories=None)` | 估算掃描所需 coin（`max_pages × 勾選維度數 × ARGUS_COIN_PER_CATEGORY ＋ agent_ux_fee(...)`；categories 省略＝五維全選，全選價與舊每頁定價相同） | 純計算 |
+| `grant_monthly_bonus_if_needed(user)` | 月贈點 200 coin；從未付費（`has_paid_history` 為假）的帳號只補到 `ARGUS_FREE_BONUS_BALANCE_CAP`（600），已達上限仍標記當月已處理 | ✅ 同月第二次不執行 |
+| `estimate_scan_cost(max_pages, categories=None, *, deep_agent=False)` | 估算掃描所需 coin（`max_pages × 勾選維度數 × ARGUS_COIN_PER_CATEGORY ＋ agent_ux_fee(...)`，`deep_agent=True` 另加 `agent_deep_fee`；categories 省略＝五維全選，全選價與舊每頁定價相同） | 純計算 |
+| `agent_deep_fee(max_pages, *, active_authorized)` | 深度資安 Agent 附加費（`ARGUS_COIN_AGENT_DEEP`，預設 50）；agent 關閉、單頁或未授權主動測試回 0 | 純計算 |
+| `scan_hold_amount(scan_job)` | 該掃描應預扣的點數（試用掃描＝0；主動＋已授權含深度附加費） | 純計算 |
+| `qualifies_for_free_trial(max_pages, categories, scan_mode)` | 是否為 Standard Full Scan（被動＋全網站＋五維全選） | 純計算 |
+| `free_trial_available(user, *, exclude_scan_id=None)` | 首次免費完整掃描是否可用（`ARGUS_FREE_TRIAL_SCAN_ENABLED` 開，且沒有非失敗／非取消的 `is_trial` 掃描） | 純查詢 |
+| `affordable_site_pages(balance, categories, *, deep_agent, max_pages)` | 餘額不足時付得起的最多頁數（Partial Scan 提示；不到 2 頁回 0） | 純計算 |
+| `has_paid_history(user)` | 是否購過點或有過訂閱（決定是否套用免費贈點上限） | 純查詢 |
 | `agent_ux_fee(max_pages, categories=None)` | AI Agent 擬真使用者 UX 測試的固定附加費（`ARGUS_COIN_AGENT_UX`，預設 20）；`ARGUS_AGENT_ENABLED` 關、單頁（`max_pages<=1`）或未勾 `ux` 時回 0 | 純計算 |
-| `hold_for_scan(user, scan_job)` | 掃描開始前預扣（`max_pages × 維度數 × 每維單價`） | 否 |
-| `settle_scan_actual(user, scan_job, actual_pages)` | 掃描完成後結算，依實際頁數 × 同組維度退還差額 | 否 |
+| `hold_for_scan(user, scan_job)` | 掃描開始前預扣 `scan_hold_amount`；`is_trial` 掃描在錢包鎖內再確認一次資格，仍可用就記一筆 amount=0 的 `scan_hold`，否則改回付費（`is_trial=False`） | 否 |
+| `settle_scan_actual(user, scan_job, actual_pages, *, deep_agent_ran=False)` | 掃描完成後結算，依實際頁數 × 同組維度退還差額；深度附加費只在 agent 實際執行（`deep_agent_ran`）時保留，與頁數無關；試用掃描結算為 0 | 否 |
 | `refund_full_for_scan(user, scan_job, *, reason)` | 取消或失敗時全退 | ✅ 可重複呼叫 |
 | `purchase_plan(user, plan)` | 購買方案入帳 | 否 |
 | `admin_adjust(*, target_user, delta, admin_actor, note)` | 管理員手動調整 | 否 |
@@ -70,6 +76,16 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
   全退全部自動含這筆、對稱一致，**不新增 `CoinTransaction.kind`、不需 migration**；實際只爬
   1 頁時 settle 以 `actual_pages=1` 重算，fee 回 0 自動退回。wallet API 另暴露 `agent_ux_fee`
   （agent 關閉時回 0），供前端估價顯示。
+
+## 2026-10-07 定價調整（`docs/business-model-plan.md` 短期項）
+
+- **首次免費完整掃描**：`ScanJob.is_trial`（scans migration 0027）。Standard Full Scan（被動＋全網站＋五維全選，上限 50 頁含 UX agent）第一次不扣點；失敗或取消的試用掃描不算用掉。同時送出兩筆時，第二筆在 `hold_for_scan` 的錢包鎖內改回付費。開關 `ARGUS_FREE_TRIAL_SCAN_ENABLED`（預設開），wallet API 暴露 `free_trial_available`。既有帳號只要沒用過也適用。
+- **Partial Scan**：餘額不足時 `ScanJobCreateSerializer` 回 400，附 `affordable_pages`（`affordable_site_pages`）；前端讓使用者確認改成 N 頁後重新送出，**後端絕不自動縮小範圍**。
+- **深度資安附加費**：主動＋已授權＋全網站＋agent 開啟時預扣 `ARGUS_COIN_AGENT_DEEP`（50）；agent 沒跑就在結算時退回。wallet API 暴露 `agent_deep_fee`。專家派工上限 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`（6）。
+- **免費贈點上限**：從未付費帳號的月贈點只補到 `ARGUS_FREE_BONUS_BALANCE_CAP`（600）。
+- **訂閱配點**：billing migration 0011 把 sub-lite／pro／team 的 `monthly_coins` 改為 600／1,800／4,000（舊值 300／900／2,000）。`settle_subscription` 即時讀 `plan.monthly_coins`，所以**既有訂閱者從下一期起也拿新點數**（刻意決策：老客戶不應比新客戶少）。
+- **網頁複刻預扣上限**：`ARGUS_COIN_REBUILD_HOLD` 預設 30 → 50（K8s ConfigMap 同步）。
+- 測試：`tests_pricing_2026_10.py`。
 
 ---
 

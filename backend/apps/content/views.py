@@ -42,6 +42,26 @@ def milestones_list(request):
     return Response({"milestones": ProjectMilestoneSerializer(qs, many=True).data})
 
 
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+def scanner_info(request):
+    """公開頁「掃描來源說明」（/scanner）：讓目標網站管理者辨識、放行或封鎖 Argus 的掃描流量。
+
+    全部取自實際生效的設定，不另外手寫，避免說明與行為不一致。
+    """
+    from django.conf import settings
+
+    user_agent = settings.ARGUS_SCANNER_USER_AGENT
+    return Response({
+        "user_agent": user_agent,
+        # robots.txt 的 User-agent 比對取「/」前的名稱（crawler 以完整 UA 呼叫 can_fetch）
+        "robots_token": user_agent.split("/")[0],
+        "egress_ips": list(settings.ARGUS_SCANNER_EGRESS_IPS),
+        "passive_pages_per_second": settings.ARGUS_PASSIVE_MAX_RPS,
+        "active_requests_per_second": settings.ARGUS_ACTIVE_MAX_RPS,
+    })
+
+
 class PartnerInquiryThrottle(UserRateThrottle):
     """洽談表單專屬額度（`partner_inquiry` scope）；登入與否都計（登入者以帳號、訪客以 IP）。"""
 

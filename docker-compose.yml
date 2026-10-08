@@ -102,11 +102,41 @@ services:
     command: uv run celery -A config worker -l info
     volumes:
       - media_data:/app/backend/media
+    networks:
+      - default
+      - zap_internal
     healthcheck:
       test: ["CMD-SHELL", "uv run celery -A config inspect ping -d celery@$$HOSTNAME --timeout=5"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # OWASP ZAP 被動分析 daemon（apps/scans/security/zap_passive.py）。預設不啟動：
+  #   .env 設 ARGUS_ZAP_API_KEY、ARGUS_ZAP_ENABLED=true、ARGUS_ZAP_API_URL=http://zap:8090，
+  #   再 `docker compose --profile zap up -d zap` 並重啟 worker。
+  # 只接在 internal 網路（沒有對外連線），worker 透過 zap_internal 上傳 HAR。
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:2.16.1@sha256:7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab
+    profiles:
+      - zap
+    environment:
+      ZAP_API_KEY: ${ARGUS_ZAP_API_KEY:-}
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        test -n "$$ZAP_API_KEY" || { echo "請在 .env 設定 ARGUS_ZAP_API_KEY"; exit 1; };
+        exec zap.sh -daemon -host 0.0.0.0 -port 8090
+        -config api.key="$$ZAP_API_KEY"
+        -config api.filexfer=true
+        -config api.addrs.addr.name=.*
+        -config api.addrs.addr.regex=true
+        -config start.checkForUpdates=false
+        -config start.checkAddonUpdates=false
+    mem_limit: 2g
+    networks:
+      - zap_internal
+    restart: unless-stopped
 
   # Phase 3 攻擊平台：Kali container，提供 sqlmap / metasploit 等主動驗證工具。
   # 預設不啟動，僅在明確授權的展示環境用 `docker compose --profile attack up -d kali` 啟動。
@@ -149,3 +179,8 @@ services:
 volumes:
   postgres_data:
   media_data:
+
+networks:
+  # ZAP 專用：internal＝沒有對外連線，只讓 worker 與 zap 互通
+  zap_internal:
+    internal: true

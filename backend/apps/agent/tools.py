@@ -1232,7 +1232,7 @@ class ToolExecutor:
     async def _run_nuclei(self, url: str, tags: str) -> ToolOutcome:
         """agent 自主的 Nuclei 指定模板快掃（worker 本機 binary）。
 
-        與 pipeline 的全模板掃（900s）互補：agent 對特定端點／技術指紋有
+        與 pipeline 的 KEV 模板集（只掃網站根網址）互補：agent 對特定端點／技術指紋有
         假設時，帶 tags 精準掃（120s 上限）。gating＝deep_mode＋同源，
         與 replay_request 同邊界；JSONL 摘要回傳（template id/severity/
         name），命中由 agent report。
@@ -1262,6 +1262,8 @@ class ToolExecutor:
 
         cmd = [
             "nuclei", "-u", url, "-j", "-silent", "-no-stdin", "-duc",
+            # 與 pipeline 用同一份鎖定版本的模板（image 內沒有預設模板目錄）
+            "-t", settings.ARGUS_NUCLEI_TEMPLATES_DIR,
             "-ni", "-dr", "-or",
             "-H", f"User-Agent: {settings.ARGUS_SCANNER_USER_AGENT}",
             "-timeout", "8", "-rl", "5", "-c", "5",

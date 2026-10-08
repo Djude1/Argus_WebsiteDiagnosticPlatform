@@ -247,6 +247,9 @@ class DockerSqlmapExecutor:
             [
                 "sqlmap", "-u", target.url, "--batch", "--flush-session",
                 "--level=3", "--risk=1",
+                # 與其他掃描工具同一個 User-Agent（公開頁「掃描來源說明」承諾可依此辨識；
+                # K8s runner 同樣寫在 kali-runner/runner.py）
+                f"--user-agent={settings.ARGUS_SCANNER_USER_AGENT}",
                 f"--output-dir=/tmp/sqlmap_{scan_job_id}_{target.index}",
             ],
             timeout=timeout,

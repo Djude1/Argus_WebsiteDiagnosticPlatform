@@ -9,13 +9,13 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | URL 前綴 | Django App | 主要端點 |
 |---|---|---|
 | `/api/auth/` | `accounts` | `google/`（OAuth 登入，未註冊回 409＋signup_token）、`register/google/`＋`register/`（Google 授權後設定用戶名與密碼）、`email-login/`（Email 或用戶名）、`me/setup/`（舊帳號補設）、`me/delete/`（自行刪除帳號）、`refresh/`、`logout/`、`password-reset/*`、`me/`、`change-password/`、`turnstile/`（公開，Turnstile 是否啟用與 site key） |
-| `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/pages/?scan=`、`<id>/seo/?scan=`（＋`seo/pages/<頁面 id>/`、`seo/keywords/`）、`<id>/gsc/`（＋`connect/`、`properties/`、`performance/`、`inspect/`；見 `apps/scans/CLAUDE.md`「SEO 分析與 Search Console」） |
+| `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/security/?scan=`（資安分析頁，2026-10-08）、`<id>/pages/?scan=`、`<id>/seo/?scan=`（＋`seo/pages/<頁面 id>/`、`seo/keywords/`）、`<id>/gsc/`（＋`connect/`、`properties/`、`performance/`、`inspect/`；見 `apps/scans/CLAUDE.md`「SEO 分析與 Search Console」） |
 | `/api/gsc/callback/` | `scans` | Google Search Console OAuth 導回（`AllowAny`；身分由簽章 state＋HttpOnly nonce cookie 證明），完成後轉回 `/projects/<id>/seo?gsc=…` |
 | `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（`search_console`／dns_txt／meta_tag／html_file）＋ `gsc/`、`gsc/connect/`、`gsc/sync/`（帳號層級 Search Console 一鍵連接與同步，2026-10-04）（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
 | `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`）、`ecpay/callback/`（綠界 ReturnURL：購點＋訂閱首期）、`ecpay/period-callback/`（訂閱第 2 期起每月扣款） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
-| `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護） |
+| `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護）、`scanner-info/`（公開，掃描來源說明頁 `/scanner` 用：User-Agent、出口 IP、速率） |
 | `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/rebuilds/` | `rebuild` | 網頁複刻與優化：list（`?scan_id=`）／create／retrieve＋`<id>/ask/`、`<id>/turn-trace/`、`<id>/download/`（一律附件＋CSP sandbox）、`<id>/share/`（POST `{access: link|login}` 開啟分享（固定連結、不過期）、DELETE 改回僅限本人）、`cost/`（見 `apps/rebuild/CLAUDE.md`） |
 | `/api/share/rebuilds/<token>/` | `rebuild` | 分享頁資料（`AllowAny`、anon throttle；`login` 模式未登入回 401）：受測網址、發現的問題、修改清單（兩層）、改善指標、說明；`html/?variant=` 回 sandbox HTML，前端以 XHR 取回放進 `sandbox` iframe，直接整頁開啟回 403（2026-10-06） |
@@ -34,7 +34,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 |---|---|---|
 | `accounts` | User model（`handle` 用戶名、`deleted_at`）、Google 授權註冊、Email／用戶名登入、自行刪除帳號（`deletion.py`）、記憶體 access + HttpOnly refresh、密碼重設、LoginEvent 登入事件 | `views.py` `models.py` |
 | `scans` | **核心**：ScanJob 狀態機、Playwright 爬蟲、四維 scanner、PDF 報告（.docx 排版＋LibreOffice 轉檔）、SEO 分析與 Search Console、合作式 cancel | `tasks.py` `crawler.py` `scanners.py` |
-| `agent` | Hermes-Agent 滲透測試：recon→orchestrator(subagent 派工)→6 specialist、20 工具、MiniMax-M3 鏈（預設 `ARGUS_AGENT_ENABLED=false`）——完整架構見 `docs/hermes-agent-architecture.md` | `runner.py` `loop.py` `tools.py` `providers.py` `findings.py` |
+| `agent` | Hermes-Agent 滲透測試：recon→orchestrator(subagent 派工，每次最多 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`＝6 位)→specialist、20 工具、MiniMax-M3 鏈（預設 `ARGUS_AGENT_ENABLED=false`）——完整架構見 `docs/hermes-agent-architecture.md` | `runner.py` `loop.py` `tools.py` `providers.py` `findings.py` |
 | `billing` | 點數錢包＋綠界金流（購點一次付清、訂閱信用卡定期定額；`ARGUS_PAYMENT_MODE` disabled／ecpay_test／ecpay）；**`services.py` 是 wallet 唯一寫入入口**，禁止繞過直接改 model | `services.py` `signals.py` |
 | `reviews` | 已驗證平台評論（一人一則 + 本人編修/刪除 + 官方單一回覆 + 評論／回覆各自按讚與檢舉） | `models.py` `views.py` |
 | `admin_api` | React `/admin/*` 用的 REST API + AdminAuditLog | `views.py` `permissions.py` |
@@ -60,7 +60,16 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          見 apps/scans/CLAUDE.md「AEO 問答檢測」；migration 0018）、
          seo_report（JSON，SEO 連結狀態與站台網址檢查，勾 SEO 時由 seo_links 階段寫入；migration 0022）、
          site_profile（JSON，網站概況：網域／IP／反解／CDN 邊緣、網站優勢（附依據與可信度）、使用的技術，site_profile 階段寫入；migration 0026）、
-         project（所屬網站專案，見下 SiteProject）
+         project（所屬網站專案，見下 SiteProject）、
+         is_trial（首次免費完整掃描，預扣／結算皆 0；migration 0027，見 apps/billing/CLAUDE.md）、
+         coverage（JSON，掃描覆蓋紀錄：各項檢查是否完整跑完、產生哪些問題、各維度覆蓋狀態；
+         migration 0028，見 apps/scans/CLAUDE.md「掃描覆蓋契約」）、
+         scoring_version／ruleset_version（完成時的計分公式與規則集版本，版本相同分數才可比較；
+         migration 0029，見 apps/scans/CLAUDE.md「評分與規則版本」）、
+         performance_report（JSON，Google PageSpeed Insights 首頁 Lighthouse＋CrUX，勾 UX 且有金鑰時寫入、
+         不計入 Argus 分數；migration 0030，見 apps/scans/CLAUDE.md「PageSpeed Insights」）、
+         fingerprint（JSON，網站特徵：CMS、框架、登入頁、API、上傳、邊緣服務；只用爬取已有的訊號、
+         只記錄不影響掃描；migration 0031，見 apps/scans/CLAUDE.md「網站特徵」）
 ```
 
 **SiteProject**（`apps/scans/models.py`，2026-10-02）

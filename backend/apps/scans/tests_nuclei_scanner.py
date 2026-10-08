@@ -1,124 +1,107 @@
-"""nuclei_scanner 模組的單元測試。"""
+"""nuclei_scanner 模組的單元測試（模板治理：固定模板集、只掃根網址、逾時保留部分結果）。"""
+import http.server
 import json
-import os
+import shutil
 import subprocess
+import tempfile
+import textwrap
+import threading
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.scans.cancellation import ScanCancelled
+from apps.scans.nuclei_scanner import (
+    TEMPLATE_POLICY,
+    NucleiUnavailable,
+    _describe_template_set,
+    run_nuclei,
+    template_set_info,
+)
+
+TEMPLATE_SET = {
+    "policy": "kev", "templates_version": "v10.4.9", "templates": 511,
+    "sha256": "a" * 64, "engine": "v3.8.0",
+}
 
 
-class TestRunNuclei(TestCase):
-    """run_nuclei 的單元測試。
+def _record(template_id="CVE-2021-44228", name="Log4Shell RCE", severity="critical"):
+    return json.dumps({
+        "template-id": template_id,
+        "info": {"name": name, "severity": severity, "tags": ["cve", "rce"]},
+        "matched-at": "https://example.com/",
+    })
 
-    所有呼叫 run_nuclei 的案例都必須 patch append_log，
-    否則它會嘗試寫入 DB（ScanJob scan_log 欄位）。
-    """
 
-    def test_binary_missing_returns_empty_list(self):
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value=None),
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            from apps.scans.nuclei_scanner import run_nuclei
-            result = run_nuclei("https://example.com", scan_job_id=1)
-        self.assertEqual(result, [])
+class RunNucleiTests(TestCase):
+    """run_nuclei 的指令與結果處理（patch append_log，避免寫入 DB）。"""
 
-    def test_fast_mode_includes_tags_flag(self):
+    def _run(self, *, stdout="", returncode=0, side_effect=None, **kwargs):
         with (
             patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
+            patch("apps.scans.nuclei_scanner.template_set_info", return_value=TEMPLATE_SET),
             patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei("https://example.com", scan_job_id=1, deep=False)
+            mock_run.return_value = MagicMock(stdout=stdout, returncode=returncode)
+            if side_effect is not None:
+                mock_run.side_effect = side_effect
+            result = run_nuclei(kwargs.pop("url", "https://example.com/a/b?q=1"), 1, **kwargs)
+        return result, mock_run
+
+    @override_settings(ARGUS_NUCLEI_TEMPLATES_DIR="/opt/nuclei-templates", ARGUS_NUCLEI_TIMEOUT=660)
+    def test_command_uses_pinned_templates_kev_policy_and_root_url(self):
+        result, mock_run = self._run()
         cmd = mock_run.call_args[0][0]
-        self.assertIn("-tags", cmd)
-        idx = cmd.index("-tags")
-        self.assertIn("cves", cmd[idx + 1])
-        self.assertEqual(cmd[cmd.index("-c") + 1], "3")
-        self.assertEqual(cmd[cmd.index("-rl") + 1], "5")
-        self.assertIn("-no-stdin", cmd)
-        self.assertIn("-duc", cmd)
-        self.assertIn("-lna", cmd)
-        self.assertIn("-ni", cmd)
-        self.assertIn("-or", cmd)
-        self.assertEqual(cmd[cmd.index("-rsr") + 1], str(2 * 1024 * 1024))
+        self.assertEqual(cmd[cmd.index("-u") + 1], "https://example.com/")
+        self.assertEqual(cmd[cmd.index("-t") + 1], "/opt/nuclei-templates")
+        self.assertEqual(cmd[cmd.index("-tags") + 1], "kev")
+        self.assertEqual(cmd[cmd.index("-severity") + 1], TEMPLATE_POLICY["severity"])
+        self.assertEqual(cmd[cmd.index("-etags") + 1], TEMPLATE_POLICY["exclude_tags"])
         self.assertEqual(cmd[cmd.index("-pt") + 1], "http")
-        self.assertEqual(
-            cmd[cmd.index("-H") + 1],
-            "User-Agent: SiteSense-AI-Scanner/1.0 (authorized-audit)",
-        )
-        self.assertEqual(mock_run.call_args.kwargs["timeout"], 60)
-
-    def test_deep_mode_excludes_tags_flag(self):
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei("https://example.com", scan_job_id=1, deep=True)
-        cmd = mock_run.call_args[0][0]
-        self.assertNotIn("-tags", cmd)
-        self.assertEqual(cmd[cmd.index("-c") + 1], "5")
+        for flag in ("-duc", "-no-stdin", "-lna", "-ni", "-dr", "-or"):
+            self.assertIn(flag, cmd)
+        self.assertNotIn("-l", cmd)
         self.assertEqual(cmd[cmd.index("-rl") + 1], "2")
-        self.assertEqual(mock_run.call_args.kwargs["timeout"], 300)
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 660)
+        self.assertEqual(result.template_set, TEMPLATE_SET)
+        self.assertFalse(result.timed_out)
 
     def test_explicit_rate_limit_is_applied(self):
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei(
-                "https://example.com",
-                scan_job_id=1,
-                deep=True,
-                rate_limit=1,
-            )
-
+        _, mock_run = self._run(rate_limit=1)
         cmd = mock_run.call_args[0][0]
         self.assertEqual(cmd[cmd.index("-rl") + 1], "1")
 
-    def test_parses_nuclei_jsonl_output(self):
-        record = {
-            "template-id": "CVE-2021-44228",
-            "info": {
-                "name": "Log4Shell RCE",
-                "severity": "critical",
-                "description": "JNDI injection leads to RCE.",
-                "remediation": "Upgrade to Log4j 2.17.1+.",
-                "tags": ["cve", "rce"],
-            },
-            "matched-at": "https://example.com/api/login",
-            "extracted-results": ["jndi:ldap://attacker.com/a"],
-        }
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout=json.dumps(record) + "\n", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            results = run_nuclei("https://example.com", scan_job_id=1)
+    def test_parses_and_deduplicates_output(self):
+        stdout = "NOT_JSON\n" + _record() + "\n" + _record() + "\n"
+        result, _ = self._run(stdout=stdout)
+        self.assertEqual(len(result.findings), 1)
+        finding = result.findings[0]
+        self.assertEqual((finding["title"], finding["severity"]), ("Log4Shell RCE", "critical"))
+        self.assertIn("Template：CVE-2021-44228", finding["evidence"])
+        self.assertEqual(finding["impact_area"], "known_vulnerability")
 
-        self.assertEqual(len(results), 1)
-        r = results[0]
-        self.assertEqual(r["title"], "Log4Shell RCE")
-        self.assertEqual(r["severity"], "critical")
-        self.assertEqual(r["category"], "security")
-        self.assertEqual(r["priority_score"], 90.0)
-        self.assertEqual(r["confidence"], 0.85)
-        self.assertIn("CVE-2021-44228", r["evidence"])
-        self.assertEqual(r["selector"], "")
-        self.assertIsNone(r["bounding_box"])
-        self.assertIn("ai_handoff_prompt", r)
+    def test_timeout_keeps_partial_results(self):
+        timeout = subprocess.TimeoutExpired(cmd="nuclei", timeout=660, output=_record() + "\n")
+        result, _ = self._run(side_effect=timeout)
+        self.assertTrue(result.timed_out)
+        self.assertEqual(len(result.findings), 1)
+
+    def test_abnormal_exit_without_output_is_failure_not_zero_findings(self):
+        with self.assertRaises(NucleiUnavailable):
+            self._run(returncode=2)
+
+    def test_missing_binary_is_failure(self):
+        with (
+            patch("apps.scans.nuclei_scanner.shutil.which", return_value=None),
+            self.assertRaises(NucleiUnavailable),
+        ):
+            run_nuclei("https://example.com", 1)
+
+    def test_scan_cancelled_is_not_silenced(self):
+        with self.assertRaises(ScanCancelled):
+            self._run(side_effect=ScanCancelled())
 
     def test_finding_redacts_query_values_and_extracted_results(self):
         from apps.scans.nuclei_scanner import _build_finding
@@ -165,127 +148,98 @@ class TestRunNuclei(TestCase):
                 msg=f"severity={severity}",
             )
 
-    def test_deduplication_removes_duplicate_findings(self):
-        record_json = json.dumps({
-            "template-id": "CVE-2021-44228",
-            "info": {"name": "Log4Shell", "severity": "critical", "tags": []},
-            "matched-at": "https://example.com/api",
-        })
-        two_lines = record_json + "\n" + record_json + "\n"
+
+class TemplateSetInfoTests(SimpleTestCase):
+    def setUp(self):
+        _describe_template_set.cache_clear()
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        (self.dir / "http").mkdir()
+        for name in ("a.yaml", "b.yaml"):
+            (self.dir / "http" / name).write_text("id: x\n")
+        (self.dir / "templates-checksum.txt").write_text("http/a.yaml:111\nhttp/b.yaml:222\n")
+        (self.dir / ".argus-templates-version").write_text("v10.4.9\n")
+
+    def _info(self, listed):
+        listing = MagicMock(
+            stdout="Listing available templates\n" + "".join(f"{p}\n" for p in listed), stderr="",
+        )
+        version = MagicMock(stdout="", stderr="[INF] Nuclei Engine Version: v3.8.0\n")
+        with patch(
+            "apps.scans.nuclei_scanner.subprocess.run",
+            side_effect=lambda cmd, **kw: version if "-version" in cmd else listing,
+        ):
+            return template_set_info(str(self.dir))
+
+    def test_records_versions_count_and_fingerprint(self):
+        info = self._info([self.dir / "http/b.yaml", self.dir / "http/a.yaml"])
+        self.assertEqual(info["engine"], "v3.8.0")
+        self.assertEqual(info["templates_version"], "v10.4.9")
+        self.assertEqual((info["policy"], info["templates"]), ("kev", 2))
+        self.assertEqual(len(info["sha256"]), 64)
+
+    def test_fingerprint_changes_with_template_content(self):
+        before = self._info([self.dir / "http/a.yaml"])["sha256"]
+        _describe_template_set.cache_clear()
+        (self.dir / "templates-checksum.txt").write_text("http/a.yaml:999\nhttp/b.yaml:222\n")
+        after = self._info([self.dir / "http/a.yaml"])["sha256"]
+        self.assertNotEqual(before, after)
+
+    def test_no_selected_templates_is_failure(self):
+        with self.assertRaises(NucleiUnavailable):
+            self._info([])
+
+    def test_missing_directory_is_failure(self):
+        with self.assertRaises(NucleiUnavailable):
+            template_set_info(str(self.dir / "missing"))
+
+
+class _SlowHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        if self.path.startswith("/slow"):
+            threading.Event().wait(30)
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"argus-marker")
+
+    def log_message(self, *args):
+        pass
+
+
+@override_settings(DEBUG=True, ARGUS_ALLOW_PRIVATE_TARGETS=True, ARGUS_NUCLEI_TIMEOUT=6)
+class RealNucleiTimeoutTests(TestCase):
+    """真的執行 nuclei：逾時前已輸出的結果要保留（需要 nuclei binary，沒有就略過）。"""
+
+    def setUp(self):
+        if not shutil.which("nuclei"):
+            self.skipTest("沒有 nuclei binary")
+        _describe_template_set.cache_clear()
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        for template_id, path, word in (
+            ("argus-fast", "/", "argus-marker"), ("argus-slow", "/slow", "never"),
+        ):
+            (self.dir / f"{template_id}.yaml").write_text(textwrap.dedent(f"""\
+                id: {template_id}
+                info: {{name: {template_id}, author: argus, severity: high, tags: kev}}
+                http:
+                  - method: GET
+                    path: ["{{{{RootURL}}}}{path}"]
+                    matchers: [{{type: word, words: ["{word}"]}}]
+            """))
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _SlowHandler)
+        self.server.daemon_threads = True
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+
+    def test_timeout_keeps_results_found_before_timeout(self):
+        url = f"http://127.0.0.1:{self.server.server_address[1]}/page"
         with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
+            override_settings(ARGUS_NUCLEI_TEMPLATES_DIR=str(self.dir)),
             patch("apps.scans.nuclei_scanner.append_log"),
         ):
-            mock_run.return_value = MagicMock(stdout=two_lines, returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            results = run_nuclei("https://example.com", scan_job_id=1)
-        self.assertEqual(len(results), 1)
-
-    def test_timeout_returns_empty_list(self):
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="nuclei", timeout=60)
-            from apps.scans.nuclei_scanner import run_nuclei
-            results = run_nuclei("https://example.com", scan_job_id=1)
-        self.assertEqual(results, [])
-
-    def test_scan_cancelled_is_not_silenced(self):
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch(
-                "apps.scans.nuclei_scanner.run_cancellable_process",
-                side_effect=ScanCancelled,
-            ),
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            from apps.scans.nuclei_scanner import run_nuclei
-
-            with self.assertRaises(ScanCancelled):
-                run_nuclei("https://example.com", scan_job_id=1)
-
-    def test_single_url_uses_u_flag(self):
-        """無 extra_urls 時應使用 -u 單一 URL 旗標。"""
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei("https://example.com", scan_job_id=1)
-        cmd = mock_run.call_args[0][0]
-        self.assertIn("-u", cmd)
-        self.assertNotIn("-l", cmd)
-        self.assertEqual(cmd[cmd.index("-u") + 1], "https://example.com")
-
-    def test_extra_urls_uses_l_flag_with_temp_file(self):
-        """傳入 extra_urls 時應使用 -l 旗標，且 temp file 掃完後被刪除。"""
-        captured_path: list[str] = []
-
-        def fake_run(cmd, **kwargs):
-            # 記錄 temp file 路徑並確認其存在
-            if "-l" in cmd:
-                idx = cmd.index("-l")
-                captured_path.append(cmd[idx + 1])
-                self.assertTrue(os.path.exists(captured_path[0]), "temp file 應在執行時存在")
-            return MagicMock(stdout="", returncode=0)
-
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch(
-                "apps.scans.nuclei_scanner.run_cancellable_process",
-                side_effect=fake_run,
-            ),
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei(
-                "https://example.com",
-                scan_job_id=1,
-                extra_urls=["https://example.com/page1", "https://example.com/page2"],
-            )
-
-        self.assertEqual(len(captured_path), 1, "應有一個 -l 旗標")
-        self.assertFalse(os.path.exists(captured_path[0]), "temp file 應在執行後被刪除")
-
-    def test_extra_urls_deduplicates_entry_url(self):
-        """entry URL 已包含在 extra_urls 中時不應重複。"""
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout="", returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            run_nuclei(
-                "https://example.com",
-                scan_job_id=1,
-                # entry URL 重複出現在 extra_urls
-                extra_urls=["https://example.com", "https://example.com/page1"],
-            )
-        cmd = mock_run.call_args[0][0]
-        self.assertIn("-l", cmd)
-        # 檔案已刪除，無法直接讀取；驗證指令正確即可
-        self.assertNotIn("-u", cmd)
-
-    def test_malformed_json_line_is_skipped(self):
-        good_record = json.dumps({
-            "template-id": "test-id",
-            "info": {"name": "Valid", "severity": "high", "tags": []},
-            "matched-at": "https://example.com",
-        })
-        mixed = "NOT_JSON\n" + good_record + "\n"
-        with (
-            patch("apps.scans.nuclei_scanner.shutil.which", return_value="/usr/bin/nuclei"),
-            patch("apps.scans.nuclei_scanner.run_cancellable_process") as mock_run,
-            patch("apps.scans.nuclei_scanner.append_log"),
-        ):
-            mock_run.return_value = MagicMock(stdout=mixed, returncode=0)
-            from apps.scans.nuclei_scanner import run_nuclei
-            results = run_nuclei("https://example.com", scan_job_id=1)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["title"], "Valid")
+            result = run_nuclei(url, 0, rate_limit=10)
+        self.assertTrue(result.timed_out)
+        self.assertEqual([f["title"] for f in result.findings], ["argus-fast"])
+        self.assertEqual(result.template_set["templates"], 2)

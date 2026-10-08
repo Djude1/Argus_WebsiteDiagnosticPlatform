@@ -602,10 +602,22 @@ async def run_agent_for_scan(
         recon_result = await _run_session(recon_prompt)
         specialist_results: list[AgentRunResult] = []
 
+        dispatch_limit = settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH
+
         async def _dispatcher(role: str, brief: str) -> dict:
             role_def = SPECIALIST_ROLES.get(role)
             if role_def is None:
                 return {"error": f"unknown_role:{role}"}
+            # 派工上限（2026-10-07）：每位專家各有 token 上限，但派工次數不設限時單次
+            # 掃描最壞約 1.3M token；到上限就請指揮官整理既有結果收尾
+            if len(specialist_results) >= dispatch_limit:
+                return {
+                    "error": "dispatch_limit_reached",
+                    "message": (
+                        f"本次掃描已派出 {dispatch_limit} 次專家（上限）。"
+                        "請根據已回報的結果整理結論並 finish，不要再派工。"
+                    ),
+                }
             prompt = role_def["prompt"].format(
                 origin=scan_job.origin, url=target_url
             )
@@ -685,7 +697,8 @@ async def run_agent_for_scan(
 
         if not specialist_results:
             # orchestrator 失效的安全網：全派（與舊編排行為一致）
-            for role_def in SPECIALIST_ROLES.values():
+            # 同樣受派工上限約束（8 種角色不全派）
+            for role_def in list(SPECIALIST_ROLES.values())[:dispatch_limit]:
                 specialist_results.append(
                     await _run_session(
                         role_def["prompt"].format(

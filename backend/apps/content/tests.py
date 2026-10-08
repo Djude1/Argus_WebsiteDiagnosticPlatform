@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -185,3 +187,41 @@ class PartnerInquiryTests(APITestCase):
         )
         self.client.force_authenticate(user)
         self.assertEqual(self.client.get("/api/admin/cms/partner-inquiries/").status_code, 403)
+
+
+class ScannerInfoTests(APITestCase):
+    """公開頁「掃描來源說明」：內容取自實際生效的設定。"""
+
+    @override_settings(
+        ARGUS_SCANNER_EGRESS_IPS=["203.0.113.10", "198.51.100.0/28"],
+        ARGUS_PASSIVE_MAX_RPS=5, ARGUS_ACTIVE_MAX_RPS=2,
+    )
+    def test_public_and_reflects_settings(self):
+        response = self.client.get(reverse("content-scanner-info"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {
+            "user_agent": settings.ARGUS_SCANNER_USER_AGENT,
+            "robots_token": "SiteSense-AI-Scanner",
+            "egress_ips": ["203.0.113.10", "198.51.100.0/28"],
+            "passive_pages_per_second": 5,
+            "active_requests_per_second": 2,
+        })
+
+    def test_robots_token_actually_blocks_crawler_user_agent(self):
+        # 頁面教網站管理者寫的 robots.txt，必須真的擋得住爬蟲（crawler 以完整 UA 呼叫 can_fetch）
+        from urllib.robotparser import RobotFileParser
+
+        token = self.client.get(reverse("content-scanner-info")).data["robots_token"]
+        parser = RobotFileParser()
+        parser.parse([f"User-agent: {token}", "Disallow: /", "", "User-agent: *", "Allow: /"])
+        self.assertFalse(parser.can_fetch(settings.ARGUS_SCANNER_USER_AGENT, "https://example.com/a"))
+        self.assertTrue(parser.can_fetch("OtherBot/1.0", "https://example.com/a"))
+
+    def test_invalid_egress_ip_fails_system_check(self):
+        from apps.scans.checks import check_scanner_egress_ips
+
+        with override_settings(ARGUS_SCANNER_EGRESS_IPS=["203.0.113.10", "not-an-ip"]):
+            errors = check_scanner_egress_ips(None)
+        self.assertEqual([e.id for e in errors], ["scans.E003"])
+        with override_settings(ARGUS_SCANNER_EGRESS_IPS=["2001:db8::/32"]):
+            self.assertEqual(check_scanner_egress_ips(None), [])

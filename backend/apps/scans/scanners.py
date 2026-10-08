@@ -5,14 +5,16 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
+from apps.scans.ai_bots import SEARCH as AI_SEARCH
+from apps.scans.ai_bots import TRAINING as AI_TRAINING
+from apps.scans.ai_bots import USER as AI_USER
+from apps.scans.ai_bots import blocked as ai_blocked
+from apps.scans.evidence import contacts
 from apps.scans.models import Finding
+from apps.scans.seo.structured_data import validate_blocks as validate_structured_data
 
 # ---------- PII（個人資料）偵測 ----------
-# email 標準 pattern，要求 TLD 至少 2 字元
-EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
-
-# 台灣手機：09 開頭 + 8 位數字，允許中間有 -、空白；前後 lookahead/lookbehind 避免嵌入更長數字串誤判
-TW_MOBILE_PATTERN = re.compile(r"(?<!\d)09\d{2}[\s\-]?\d{3}[\s\-]?\d{3}(?!\d)")
+# Email 與手機的格式由共用證據模組提供（P0-B），AEO 用同一套，避免兩邊解析結果不一致
 
 # 台灣身分證號：第一碼英文 + 1/2 + 8 位數字。需另經 is_valid_tw_national_id 檢查碼驗證
 TW_NATIONAL_ID_PATTERN = re.compile(r"\b[A-Z][12]\d{8}\b")
@@ -175,8 +177,8 @@ def detect_pii_in_text(text: str) -> dict[str, list[str]]:
         m for m in cc_valid if _is_formatted_card(m) or _card_has_context(text, m)
     ]
     return {
-        "email": list(dict.fromkeys(EMAIL_PATTERN.findall(text))),
-        "mobile": list(dict.fromkeys(TW_MOBILE_PATTERN.findall(text))),
+        "email": contacts.find_emails(text),
+        "mobile": contacts.find_mobiles(text),
         "national_id": [
             m for m in dict.fromkeys(TW_NATIONAL_ID_PATTERN.findall(text))
             if is_valid_tw_national_id(m)
@@ -244,6 +246,8 @@ class PageAnalysisInput:
     ux_signals: dict | None = None
     # 本頁 JavaScript 執行期錯誤訊息（首行、去重）。空 list＝無錯誤或未量測。
     js_errors: list | None = None
+    # axe-core 無障礙檢查結果（accessibility.py）。空 dict＝沒跑；含 "error"＝跑失敗。
+    a11y: dict | None = None
 
 
 def _is_large_image(attributes: dict[str, str]) -> bool:
@@ -509,8 +513,12 @@ def analyze_page(page_input: PageAnalysisInput, categories: set[str] | None = No
     if runs("aeo"):
         findings.extend(analyze_aeo(page_input, parser))
     if runs("geo"):
+        # 內容結構（geo_structure.py 匯入 make_finding，放在函式內避免循環匯入）
+        from apps.scans.geo_structure import structure_findings
+
         findings.extend(analyze_geo(page_input, parser))
         findings.extend(analyze_geo_fast(page_input, parser))
+        findings.extend(structure_findings(page_input.url, page_input.html))
     if runs("security"):
         findings.extend(analyze_security(page_input, parser))
         findings.extend(analyze_data_exposure(page_input))
@@ -528,16 +536,20 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
 
     判準都是客觀量測、不需要人為評分：
     - 行動版水平溢出（破版）：`layout_metrics`
+    - 版面位移（CLS）與位移的元素：`layout_metrics.layout_shift`（桌面視窗、載入與捲動期間）
     - 觸控目標過小、表單欄位缺可及標籤：`ux_signals`（行動版視窗量測）
     - JavaScript 執行期錯誤：`js_errors`（頁面實際拋出的未捕捉例外）
+    - WCAG 自動化檢查：`a11y`（axe-core，勾 UX 才跑）
 
     各來源為空一律代表「未量測或無問題」，不會硬湊 finding。
     """
     findings: list[dict] = []
     findings.extend(_ux_mobile_overflow(page_input))
+    findings.extend(_ux_layout_shift(page_input))
     findings.extend(_ux_tap_targets(page_input))
     findings.extend(_ux_unlabeled_fields(page_input))
     findings.extend(_ux_js_errors(page_input))
+    findings.extend(_ux_axe(page_input))
     return findings
 
 
@@ -608,6 +620,62 @@ def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
                 "annotations": _mobile_annotations(
                     offenders[:3], lambda o: f"超出 {o.get('overflow_px')}px"
                 ),
+            },
+        )
+    ]
+
+
+# Google CLS 門檻：≤0.1 良好、≤0.25 需改善、>0.25 不佳
+_CLS_NEEDS_IMPROVEMENT = 0.1
+_CLS_POOR = 0.25
+
+
+def _ux_layout_shift(page_input: PageAnalysisInput) -> list[dict]:
+    """版面位移（CLS）過高，並列出位移的元素。沒量到（空 dict）不算通過、也不列問題。"""
+    shift = (page_input.layout_metrics or {}).get("layout_shift") or {}
+    cls = shift.get("cls") or 0
+    if cls <= _CLS_NEEDS_IMPROVEMENT:
+        return []
+    poor = cls > _CLS_POOR
+    elements = shift.get("elements") or []
+    detail = "、".join(
+        f"{e.get('selector')}（位移 {e.get('moved_px')}px）" for e in elements[:3]
+    ) or "瀏覽器沒有回報位移的元素"
+    unsized = shift.get("unsized_media") or 0
+    cause = (
+        f"這頁有 {unsized} 個圖片／影片／iframe 沒有同時標 width 與 height 屬性，"
+        "若 CSS 也沒有預留尺寸，載入後就會把下方內容往下推。"
+        if unsized else ""
+    )
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.MEDIUM if poor else Finding.Severity.LOW,
+            rule_id="ux-layout-shift",
+            title="頁面載入時版面跳動（CLS 偏高）",
+            description=(
+                f"Argus 爬取時量到這頁的累計版面位移（CLS）為 {cls}"
+                "（Google 標準：0.1 以下良好、0.25 以上不佳），"
+                f"屬於「{'不佳' if poor else '需改善'}」。"
+                "內容在讀者閱讀或準備點擊時突然移動，容易點錯、找不到剛才讀到的位置。"
+                + cause
+            ),
+            remediation=(
+                "為圖片、影片、iframe 與廣告版位預留空間（標 width／height 或 CSS aspect-ratio），"
+                "不要在既有內容上方插入橫幅或動態內容，"
+                "網頁字型使用 font-display: optional 或調整備用字型尺寸。"
+                "下列是被推動的元素，原因通常在它上方較晚載入的內容。"
+            ),
+            evidence=f"CLS={cls}（桌面視窗、單次量測）；位移的元素：{detail}",
+            selector=(elements[0].get("selector", "") if elements else ""),
+            impact_area="stability",
+            priority_score=50 if poor else 38,
+            evidence_type="layout_metrics",
+            evidence_json={
+                "cls": cls,
+                "shifts": shift.get("shifts"),
+                "elements": elements[:5],
+                "unsized_media": unsized,
             },
         )
     ]
@@ -708,6 +776,105 @@ def _ux_unlabeled_fields(page_input: PageAnalysisInput) -> list[dict]:
             },
         )
     ]
+
+
+# axe-core 的 impact → 嚴重度。critical／serious 會直接擋住部分使用者，moderate／minor 是障礙
+_AXE_SEVERITY = {
+    "critical": Finding.Severity.HIGH,
+    "serious": Finding.Severity.MEDIUM,
+    "moderate": Finding.Severity.LOW,
+    "minor": Finding.Severity.LOW,
+}
+_AXE_PRIORITY = {"critical": 60, "serious": 45, "moderate": 30, "minor": 20}
+# 常見規則的中文標題與修法（其餘以 axe 的英文說明加官方連結呈現）
+_AXE_ZH = {
+    "image-alt": ("圖片缺少替代文字", "為有意義的圖片加上描述內容的 alt；純裝飾圖片用 alt=\"\"。"),
+    "button-name": ("按鈕沒有可辨識的名稱", "按鈕內放文字，或用 aria-label 說明按下去會做什麼。"),
+    "link-name": ("連結沒有可辨識的文字", "連結內放文字；只有圖示時補 aria-label 或圖片 alt。"),
+    "color-contrast": (
+        "文字與背景對比不足",
+        "一般文字對比至少 4.5:1、大字 3:1；調深文字或調淺背景後再用對比檢查工具確認。",
+    ),
+    "html-has-lang": ("網頁沒有宣告語言", "在 <html> 加上 lang，例如 lang=\"zh-Hant\"。"),
+    "html-lang-valid": ("網頁語言代碼無效", "lang 使用有效的語言代碼，例如 zh-Hant、en。"),
+    "document-title": ("網頁沒有標題", "在 <head> 加上描述這一頁內容的 <title>。"),
+    "frame-title": ("內嵌框架沒有標題", "為 <iframe> 加上說明內容的 title。"),
+    "input-image-alt": ("圖片按鈕缺少替代文字", "為 <input type=\"image\"> 加上 alt。"),
+    "aria-required-attr": ("ARIA 角色缺少必要屬性", "依該 role 的規範補上必要的 aria-* 屬性。"),
+    "aria-valid-attr-value": (
+        "ARIA 屬性值無效", "修正 aria-* 屬性值，指向存在的元素或使用允許的值。"
+    ),
+    "aria-hidden-focus": (
+        "被隱藏的區塊內仍有可聚焦元素",
+        "aria-hidden=\"true\" 的區塊內不可有可用 Tab 聚焦的元素，或移除 aria-hidden。",
+    ),
+    "list": ("清單結構不正確", "<ul>／<ol> 底下只放 <li>（或 script／template）。"),
+    "listitem": ("清單項目不在清單內", "把 <li> 放在 <ul> 或 <ol> 裡。"),
+    "duplicate-id-aria": ("被引用的 id 重複", "讓 aria-labelledby 等引用的 id 在頁面上唯一。"),
+    "meta-viewport": (
+        "禁止使用者縮放頁面", "移除 viewport 的 user-scalable=no 與過小的 maximum-scale。"
+    ),
+    "nested-interactive": ("互動元素巢狀", "不要把按鈕或連結放進另一個按鈕或連結裡。"),
+    "role-img-alt": ("role=img 的元素缺少替代文字", "加上 aria-label 或 aria-labelledby。"),
+    "svg-img-alt": (
+        "SVG 圖片缺少替代文字", "為 role=\"img\" 的 <svg> 加上 <title> 或 aria-label。"
+    ),
+}
+
+
+def _ux_axe(page_input: PageAnalysisInput) -> list[dict]:
+    """axe-core（WCAG 2.x A／AA 自動化檢查）的違規，每條規則一項。
+
+    自動化檢查只涵蓋部分 WCAG 準則：沒有違規不等於符合 WCAG，報告不得如此宣稱。
+    """
+    result = page_input.a11y or {}
+    findings = []
+    for violation in result.get("violations") or []:
+        rule = str(violation.get("id") or "")
+        if not rule:
+            continue
+        impact = violation.get("impact") or "moderate"
+        nodes = violation.get("nodes") or []
+        count = int(violation.get("count") or len(nodes))
+        zh_title, zh_fix = _AXE_ZH.get(rule, ("", ""))
+        help_text = str(violation.get("help") or rule)
+        wcag = "、".join(violation.get("tags") or []) or "WCAG"
+        first_box = next((n.get("box") for n in nodes if n.get("box")), None)
+        evidence_lines = [
+            f"{n.get('target', '')}｜{n.get('html', '')}" for n in nodes
+        ]
+        findings.append(
+            make_finding(
+                category=Finding.Category.UX,
+                severity=_AXE_SEVERITY.get(impact, Finding.Severity.LOW),
+                rule_id=f"axe-{rule}",
+                title=zh_title or f"無障礙：{help_text}",
+                description=(
+                    f"axe-core 自動化檢查在這一頁找到 {count} 個元素不符合規則「{help_text}」"
+                    f"（{wcag}）。{violation.get('description') or ''}"
+                ),
+                remediation=(
+                    (zh_fix + " " if zh_fix else "")
+                    + f"規則說明與修正範例：{violation.get('help_url') or 'https://dequeuniversity.com/rules/axe/'}"
+                ),
+                evidence="\n".join(evidence_lines)[:2000],
+                selector=(nodes[0].get("target", "") if nodes else ""),
+                bounding_box=first_box,
+                impact_area="accessibility",
+                priority_score=_AXE_PRIORITY.get(impact, 25),
+                evidence_type="axe",
+                evidence_source=f"axe-core {result.get('version', '')}".strip(),
+                evidence_json={
+                    "axe_rule": rule,
+                    "impact": impact,
+                    "wcag": violation.get("tags") or [],
+                    "help_url": violation.get("help_url") or "",
+                    "count": count,
+                    "nodes": nodes,
+                },
+            )
+        )
+    return findings
 
 
 def _ux_js_errors(page_input: PageAnalysisInput) -> list[dict]:
@@ -891,6 +1058,66 @@ def _seo_open_graph(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> 
     )
 
 
+def _seo_structured_data(page_input: PageAnalysisInput, parser: HtmlSignalParser) -> dict | None:
+    """已有的結構化資料缺少 Google 複合式搜尋結果的必填欄位（seo/structured_data.py）。"""
+    if not parser.json_ld_blocks:
+        return None
+    result = validate_structured_data(parser.json_ld_blocks)
+    issues = result["issues"]
+    if not issues:
+        return None
+    lines = [f"{i['type']}「{i['item']}」缺少：{'、'.join(i['missing'])}" for i in issues]
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        rule_id="seo-structured-data-required",
+        title="結構化資料缺少 Google 複合式搜尋結果的必填欄位",
+        description=(
+            "頁面的結構化資料缺少 Google 列為必填的欄位，這些項目不符合複合式搜尋結果"
+            "（例如價格、評分星等、活動日期）的顯示資格，只會以一般搜尋結果呈現。"
+        ),
+        remediation=(
+            "依下方清單補上欄位，內容要與頁面上看得到的資訊一致，再用 Google 複合式搜尋結果測試"
+            "（https://search.google.com/test/rich-results）確認。"
+            "若沒有打算爭取複合式搜尋結果，也可以移除不完整的標記。"
+        ),
+        evidence=f"{page_input.url}\n" + "\n".join(lines),
+        selector='script[type="application/ld+json"]',
+        impact_area="structured_data",
+        evidence_json={"url": page_input.url, "issues": issues},
+        priority_score=32,
+    )
+
+
+def _seo_self_serving_reviews(
+    page_input: PageAnalysisInput, parser: HtmlSignalParser
+) -> dict | None:
+    """商家或組織標記了自己的評分：Google 不會顯示星等。"""
+    if not parser.json_ld_blocks:
+        return None
+    names = validate_structured_data(parser.json_ld_blocks)["self_serving"]
+    if not names:
+        return None
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.INFO,
+        rule_id="seo-structured-data-self-serving-reviews",
+        title="商家自己的評分標記不會顯示成搜尋星等",
+        description=(
+            "LocalBusiness 或 Organization 標記裡含有評分或評論。網站自己控制的評論"
+            "（含嵌入的第三方評論元件）屬於 Google 所說的自我評論，不會顯示星等。"
+        ),
+        remediation=(
+            "不需要為了星等保留這段標記；評論內容可以照常顯示在頁面上。"
+            "評價產品或服務時，改標在 Product 等類型上。"
+        ),
+        evidence=f"{page_input.url}\n標記評分的項目：" + "、".join(names),
+        selector='script[type="application/ld+json"]',
+        impact_area="structured_data",
+        evidence_json={"url": page_input.url, "items": names},
+    )
+
+
 # 逐頁 SEO 檢查：每項獨立、順序即 finding 輸出順序；新增檢查寫成同樣簽名的函式加進來。
 SEO_PAGE_CHECKS = (
     _seo_title_length,
@@ -899,6 +1126,8 @@ SEO_PAGE_CHECKS = (
     _seo_image_alt,
     _seo_canonical,
     _seo_open_graph,
+    _seo_structured_data,
+    _seo_self_serving_reviews,
 )
 
 
@@ -1140,7 +1369,7 @@ def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     safe_html = _HTML_SVG_ELEMENTS.sub(" ", safe_html)
     safe_html = _HTML_PATH_ATTR.sub(" ", safe_html)
     # 輸入框 placeholder 是填寫範例（例：e.g.0911-222-333），不是任何人的資料（2026-10-06 實測）
-    safe_html = _HTML_PLACEHOLDER_ATTR.sub(" ", safe_html)
+    safe_html = contacts.PLACEHOLDER_ATTR.sub(" ", safe_html)
     pii_main = detect_pii_in_text(safe_html)
 
     # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
@@ -1180,8 +1409,8 @@ def _classify_pii(
     # 只列為資訊提示請網站主確認，不當成外洩。
     site_domain = _registrable_domain(urlparse(page_url).hostname or "")
     site_label = site_domain.split(".", 1)[0] if site_domain else ""
-    mailto = {m.lower() for m in _MAILTO_PATTERN.findall(raw_html)}
-    tel = {re.sub(r"\D", "", m) for m in _TEL_PATTERN.findall(raw_html)}
+    mailto = contacts.mailto_addresses(raw_html)
+    tel = contacts.tel_numbers(raw_html)
     comment_values = {v for vals in pii_comments.values() for v in (vals or [])}
 
     sensitive: list[str] = []
@@ -1205,7 +1434,7 @@ def _classify_pii(
             personal_emails.append(email)
     personal_mobiles, public_mobiles = [], []
     for mobile in pii["mobile"]:
-        if mobile not in comment_values and re.sub(r"\D", "", mobile) in tel:
+        if mobile not in comment_values and contacts.normalize_phone(mobile) in tel:
             public_mobiles.append(mobile)
         else:
             personal_mobiles.append(mobile)
@@ -1331,15 +1560,12 @@ def analyze_data_exposure(page_input: PageAnalysisInput) -> list[dict]:
     return findings
 
 
-_HTML_PLACEHOLDER_ATTR = re.compile(r"""\bplaceholder\s*=\s*(?:"[^"]*"|'[^']*')""", re.IGNORECASE)
 # 角色信箱：對外服務窗口，不屬於特定個人
 _ROLE_MAILBOXES = {
     "info", "service", "services", "contact", "admin", "support", "help", "office", "hr",
     "sales", "marketing", "webmaster", "privacy", "dpo", "noreply", "no-reply", "news",
     "press", "pr", "media", "secretary", "center", "job", "jobs", "career", "careers",
 }
-_MAILTO_PATTERN = re.compile(r"mailto:([^\"'?>\s]+)", re.IGNORECASE)
-_TEL_PATTERN = re.compile(r"tel:([+\d][\d\s()-]{6,})", re.IGNORECASE)
 _SECOND_LEVEL_LABELS = {
     "com", "edu", "gov", "org", "net", "ac", "co", "idv", "mil", "or", "ne", "go",
 }
@@ -1491,24 +1717,39 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
                 priority_score=20,
             )
         )
-    blocked = site_signals.get("blocked_ai_crawlers") or []
-    if blocked:
+    # 只有擋到「AI 搜尋與回答」「使用者觸發讀取」的爬蟲才列問題；只擋訓練用爬蟲是正當的商業選擇，
+    # 不影響這些服務的搜尋與引用（網站架構分頁另有完整的 AI 爬蟲政策表）
+    policy = site_signals.get("ai_bot_policy") or {}
+    answer_bots = ai_blocked(policy, AI_SEARCH, AI_USER)
+    if answer_bots:
+        names = "、".join(f"{b['agent']}（{b['vendor']}）" for b in answer_bots)
+        training = [b["agent"] for b in ai_blocked(policy, AI_TRAINING)]
         findings.append(
             make_finding(
                 category=Finding.Category.GEO,
-                severity=Finding.Severity.INFO,
-                title="robots.txt 阻擋了主流 AI 爬蟲",
+                severity=Finding.Severity.LOW,
+                title="robots.txt 擋住 AI 搜尋與回答服務的爬蟲",
                 description=(
-                    "robots.txt 目前阻擋部分 AI 爬蟲；"
-                    "若你希望內容能被 AI 引用，這會降低曝光，請依自身策略判斷。"
+                    f"robots.txt 封鎖了 {names}。這些爬蟲替 AI 搜尋與對話服務讀取網頁，"
+                    "封鎖後這些服務的回答比較不會引用、連結到你的網站。"
+                    + (
+                        f"另外封鎖了訓練用的 {'、'.join(training)}，"
+                        "那是不同的選擇，不影響搜尋與引用。"
+                        if training else ""
+                    )
                 ),
                 remediation=(
-                    "若希望被 AI 系統收錄，檢視 robots.txt 對 AI 爬蟲 User-Agent 的規則；"
-                    "若刻意阻擋則可忽略此項。"
+                    "如果希望出現在 AI 搜尋與回答中，在 robots.txt 允許上述爬蟲；"
+                    "不想被拿去訓練模型的話，"
+                    "只封鎖 GPTBot、ClaudeBot、Google-Extended 等訓練用爬蟲即可。"
+                    "若是刻意不讓 AI 服務讀取，可忽略此項。"
                 ),
-                evidence=f"blocked_ai_crawlers={blocked}",
+                evidence="robots.txt 封鎖：" + "、".join(b["agent"] for b in answer_bots),
+                rule_id="geo-ai-search-bots-blocked",
+                evidence_json={"blocked": [b["agent"] for b in answer_bots],
+                               "blocked_training": training},
                 impact_area="fetchable",
-                priority_score=18,
+                priority_score=30,
             )
         )
     return findings
@@ -1534,10 +1775,7 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
     seen: set[tuple[str, str]] = set()
     deduped: list[dict] = []
     for finding in findings:
-        key = (
-            str(finding.get("category") or ""),
-            str(finding.get("rule_id") or finding.get("title") or ""),
-        )
+        key = _finding_key(finding)
         if key in seen:
             continue
         seen.add(key)
@@ -1547,6 +1785,96 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
 
 # 這些 rule 的結果已經反映在分類的「基準分」裡（base_scores），不再另外扣分
 BASE_SCORED_RULE_PREFIXES = ("aeo-answer-",)
+
+SCORE_CATEGORIES = ("seo", "aeo", "geo", "security", "ux")
+
+# 嚴重度必須壓過數量。舊比例 35/25/14/6 讓「1 個 critical」(50 分) 約等於
+# 「6 個 low」(49 分)——六個缺 canonical URL 等於一個嚴重漏洞，站不住腳。
+# 拉開比例後 1 個 critical 是 30 分、6 個 low 是 62 分，數量只能在同一嚴重度
+# 帶內移動分數，不能把嚴重度洗掉。
+SEVERITY_PENALTY = {
+    Finding.Severity.CRITICAL: 60,
+    Finding.Severity.HIGH: 35,
+    Finding.Severity.MEDIUM: 12,
+    Finding.Severity.LOW: 4,
+    Finding.Severity.INFO: 0,
+}
+
+
+def _finding_key(finding: dict) -> tuple[str, str]:
+    return (
+        str(finding.get("category") or ""),
+        str(finding.get("rule_id") or finding.get("title") or ""),
+    )
+
+
+def score_breakdown(
+    findings: list[dict],
+    *,
+    tested_categories: set[str] | None = None,
+    base_scores: dict[str, int] | None = None,
+) -> dict[str, dict]:
+    """各維度分數的來源（roadmap §12 第 3 項：評分可解釋化）。
+
+    calculate_scores() 的分類分數就是由這裡算出，兩者不會不一致。每個維度：
+
+    - ``score``：base × e^(−penalty／SCORE_DECAY_CONSTANT)。
+    - ``base``／``base_source``：基準分（預設 100；AEO 是可回答性分數）。
+    - ``penalty``：扣分權重合計。
+    - ``deductions``：逐項扣分（同一問題在多頁出現只扣一次，``occurrences`` 記出現筆數），
+      ``score_without`` 是只修好這一項時的分數；依權重由大到小。
+    - ``in_base``：已反映在基準分、不另外扣分的問題筆數（AEO 逐題結果）。
+    - ``info``：資訊類（不扣分）筆數。
+    """
+    base_scores = base_scores or {}
+    occurrences: dict[tuple[str, str], int] = {}
+    for finding in findings:
+        key = _finding_key(finding)
+        occurrences[key] = occurrences.get(key, 0) + 1
+    deduped = _dedupe_findings_for_scoring(findings)
+    result: dict[str, dict] = {}
+    for category in SCORE_CATEGORIES:
+        if tested_categories is not None and category not in tested_categories:
+            continue
+        has_base = category in base_scores
+        base = base_scores.get(category, 100)
+        deductions, in_base, info = [], 0, 0
+        for finding in deduped:
+            if finding["category"] != category:
+                continue
+            key = _finding_key(finding)
+            if has_base and str(finding.get("rule_id") or "").startswith(
+                BASE_SCORED_RULE_PREFIXES
+            ):
+                in_base += occurrences[key]
+                continue
+            weight = SEVERITY_PENALTY.get(finding["severity"], 0)
+            if not weight:
+                info += occurrences[key]
+                continue
+            deductions.append({
+                "rule_id": finding.get("rule_id") or "",
+                "title": finding["title"],
+                "severity": finding["severity"],
+                "weight": weight,
+                "occurrences": occurrences[key],
+            })
+        penalty = sum(item["weight"] for item in deductions)
+        for item in deductions:
+            item["score_without"] = round(
+                base * math.exp(-(penalty - item["weight"]) / SCORE_DECAY_CONSTANT)
+            )
+        deductions.sort(key=lambda item: -item["weight"])
+        result[category] = {
+            "score": round(base * math.exp(-penalty / SCORE_DECAY_CONSTANT)),
+            "base": base,
+            "base_source": "aeo_answerability" if has_base and category == "aeo" else "",
+            "penalty": penalty,
+            "deductions": deductions,
+            "in_base": in_base,
+            "info": info,
+        }
+    return result
 
 
 def calculate_scores(
@@ -1579,45 +1907,11 @@ def calculate_scores(
 
     呼叫端注意：category_scores 不再保證含全部 5 個分類，取值請用 .get()。
     """
-    categories = [
-        Finding.Category.SEO,
-        Finding.Category.AEO,
-        Finding.Category.GEO,
-        Finding.Category.SECURITY,
-        Finding.Category.UX,
-    ]
-    # 嚴重度必須壓過數量。舊比例 35/25/14/6 讓「1 個 critical」(50 分) 約等於
-    # 「6 個 low」(49 分)——六個缺 canonical URL 等於一個嚴重漏洞，站不住腳。
-    # 拉開比例後 1 個 critical 是 30 分、6 個 low 是 62 分，數量只能在同一嚴重度
-    # 帶內移動分數，不能把嚴重度洗掉。
-    severity_penalty = {
-        Finding.Severity.CRITICAL: 60,
-        Finding.Severity.HIGH: 35,
-        Finding.Severity.MEDIUM: 12,
-        Finding.Severity.LOW: 4,
-        Finding.Severity.INFO: 0,
-    }
+    breakdown = score_breakdown(
+        findings, tested_categories=tested_categories, base_scores=base_scores
+    )
+    category_scores = {category: entry["score"] for category, entry in breakdown.items()}
     deduped = _dedupe_findings_for_scoring(findings)
-    scored_categories = [
-        category
-        for category in categories
-        if tested_categories is None or category in tested_categories
-    ]
-    category_scores: dict[str, int] = {}
-    base_scores = base_scores or {}
-    for category in scored_categories:
-        has_base = category in base_scores
-        penalty = sum(
-            severity_penalty.get(finding["severity"], 0)
-            for finding in deduped
-            if finding["category"] == category
-            and not (
-                has_base
-                and str(finding.get("rule_id") or "").startswith(BASE_SCORED_RULE_PREFIXES)
-            )
-        )
-        base = base_scores.get(category, 100)
-        category_scores[category] = round(base * math.exp(-penalty / SCORE_DECAY_CONSTANT))
     overall_score = (
         round(sum(category_scores.values()) / len(category_scores))
         if category_scores

@@ -12,6 +12,7 @@ Claude Code 進 `backend/apps/content/` 工作時，本檔在專案層 `CLAUDE.m
 | `team/` | `team_list` | 團隊成員（公開 `/team` 頁已於 2026-09-28 移除，目前前台無消費端） |
 | `releases/` | `releases_list` | `/download` 版本 |
 | `milestones/` | `milestones_list` | `/project` timeline |
+| `scanner-info/` | `scanner_info` | `/scanner` 掃描來源說明：User-Agent、robots 比對名稱、出口 IP（`ARGUS_SCANNER_EGRESS_IPS`）、被動／主動速率；全部取自設定，不經 DB（2026-10-08） |
 | `partner-inquiries/`（**POST**） | `partner_inquiry_create` | `/partners` 洽談表單；`AllowAny`＋`partner_inquiry` throttle（預設 5/hour）＋誘餌欄位 `website`（有值仍回同樣成功訊息，但存成 `status=spam`「疑似垃圾訊息」而不丟棄——2026-09-28 真人送出後台看不到，推定是瀏覽器自動填入誘餌欄位被默默丟掉；前端誘餌欄位 name 改為 `argus_hp_field`、標籤不含「網站／公司」字眼） |
 
 ## 重點

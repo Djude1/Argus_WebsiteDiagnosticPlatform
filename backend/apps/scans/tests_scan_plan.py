@@ -9,6 +9,7 @@ from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.models import ScanJob
+from apps.scans.nuclei_scanner import NucleiRun
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.tasks import run_scan_job
 
@@ -133,7 +134,7 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
             ),
             "nuclei": mock.patch(
                 "apps.scans.tasks.run_nuclei",
-                return_value=[],
+                return_value=NucleiRun(),
             ),
             "ssl": mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),
             "seo_links": mock.patch("apps.scans.tasks.build_link_report", return_value={}),
@@ -223,13 +224,7 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
 
         run_scan_job.run(scan.id)
 
-        self.mocks["nuclei"].assert_called_once_with(
-            "https://example.com/",
-            scan.id,
-            deep=True,
-            extra_urls=[],
-            rate_limit=2,
-        )
+        self.mocks["nuclei"].assert_called_once_with("https://example.com/", scan.id, rate_limit=2)
         self.mocks["kali"].assert_called_once_with(scan.id, [])
         self.mocks["katana"].assert_not_called()
         self.mocks["exposure"].assert_not_called()

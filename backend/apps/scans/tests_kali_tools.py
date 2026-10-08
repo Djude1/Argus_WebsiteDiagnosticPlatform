@@ -10,6 +10,7 @@ import json
 import uuid
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -107,6 +108,16 @@ class TestDockerSqlmapExecutor(TestCase):
         dumped = json.dumps(result.as_dict())
         self.assertNotIn("vulnerable", dumped)
         self.assertNotIn("raw", dumped)
+
+    def test_sqlmap_uses_declared_scanner_user_agent(self):
+        # 公開頁「掃描來源說明」承諾所有掃描流量都帶同一個 User-Agent
+        target = ReservedSqlmapTarget(0, "https://t.local/?id=1", "fp")
+        with mock.patch.object(
+            kali_tools, "_docker_exec", return_value=(0, _VULN_RAW, "")
+        ) as exec_mock:
+            kali_tools.DockerSqlmapExecutor().execute(1, [target])
+        cmd = exec_mock.call_args[0][0]
+        self.assertIn(f"--user-agent={settings.ARGUS_SCANNER_USER_AGENT}", cmd)
 
     def test_target_failure_does_not_abort_batch(self):
         targets = [

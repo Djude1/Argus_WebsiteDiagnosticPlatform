@@ -1542,6 +1542,9 @@ def system_settings(request):
             "MINIMAX_KEY_SET": bool(os.getenv("MINIMAX_API_KEY", "")),
             "GLM_KEY_SET": bool(os.getenv("GLM_API_KEY", "")),
             "GOOGLE_API_KEY_SET": bool(os.getenv("GOOGLE_API_KEY", "")),
+            # 掃描「效能」分頁（PageSpeed Insights）需要這把金鑰才會量測
+            "PAGESPEED_API_KEY_SET": has("ARGUS_PAGESPEED_API_KEY"),
+            "PAGESPEED_ENABLED": bool(dj_settings.ARGUS_PAGESPEED_ENABLED),
         },
         "deployment": {
             "DEBUG": dj_settings.DEBUG,

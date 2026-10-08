@@ -176,6 +176,9 @@ class ScanJob(models.Model):
     max_pages = models.PositiveSmallIntegerField(default=50)
     respect_robots = models.BooleanField(default=True)
     active_testing_authorized = models.BooleanField(default=False)
+    # 首次免費完整掃描（2026-10-07，docs/business-model-plan.md）：被動＋整站＋五面向的
+    # 第一次掃描不扣點。失敗或取消的免費掃描不算用掉資格（billing.services.free_trial_available）。
+    is_trial = models.BooleanField(default=False)
     # authenticated scan（選填）：無公開註冊／註冊需驗證的網站，
     # agent 無法自建帳號，auth 類測試靠使用者提供的測試帳密延續
     test_auth_email_encrypted = models.TextField(blank=True, default="")
@@ -194,6 +197,19 @@ class ScanJob(models.Model):
     # 網站概況（apps/scans/site_profile.py）：基礎架構（網域／IP／反解／CDN 邊緣）與網站優勢。
     # 空 dict＝舊掃描或本次沒算到。
     site_profile = models.JSONField(default=dict, blank=True)
+    # 掃描覆蓋紀錄（coverage.py）：各項檢查是否完整跑完、產生了哪些問題、各維度覆蓋狀態。
+    # 計分、歷史比較（已修好／未觀察到）與報告都依此判斷；空 dict＝舊掃描，無從判斷。
+    coverage = models.JSONField(default=dict, blank=True)
+    # 完成時的計分公式與判定規則集版本（versions.py）；兩次掃描版本相同，分數變化才可直接比較。
+    # 空字串＝舊掃描、版本不明。
+    scoring_version = models.CharField(max_length=32, blank=True, default="")
+    ruleset_version = models.CharField(max_length=32, blank=True, default="")
+    # Google PageSpeed Insights 量測（pagespeed.py）：Lighthouse 實驗室分數與 CrUX 真實使用者資料。
+    # 外部指標不併入 Argus 分數；空 dict＝沒有量測。
+    performance_report = models.JSONField(default=dict, blank=True)
+    # 網站特徵（fingerprint.py，Smart Scan 階段 1）：只記錄爬取階段已有的訊號，
+    # 不影響任何掃描決策；看不出來的特徵為 None 並在 completeness 註明原因
+    fingerprint = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}
@@ -412,6 +428,22 @@ class Finding(models.Model):
 
     def __str__(self) -> str:
         return f"{self.category}:{self.severity}:{self.title}"
+
+    @property
+    def security_kind(self) -> str | None:
+        """資安發現的類型（設定建議／曝露面／疑似弱點／已驗證弱點），由規則與來源推得。"""
+        from apps.scans.security.finding_kind import security_kind
+
+        return security_kind(
+            category=self.category, rule_id=self.rule_id, title=self.title,
+            severity=self.severity, evidence=self.evidence,
+        )
+
+    @property
+    def security_kind_label(self) -> str:
+        from apps.scans.security.finding_kind import KIND_LABELS
+
+        return KIND_LABELS.get(self.security_kind, "")
 
 
 class SearchConsoleConnection(models.Model):

@@ -5,12 +5,8 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.scans.scanners import (
-    CREDIT_CARD_PATTERN,
-    EMAIL_PATTERN,
-    TW_MOBILE_PATTERN,
-    TW_NATIONAL_ID_PATTERN,
-)
+from apps.scans.evidence.contacts import EMAIL_PATTERN, TW_MOBILE_PATTERN
+from apps.scans.scanners import CREDIT_CARD_PATTERN, TW_NATIONAL_ID_PATTERN
 
 
 def _mask_email(match: re.Match) -> str:

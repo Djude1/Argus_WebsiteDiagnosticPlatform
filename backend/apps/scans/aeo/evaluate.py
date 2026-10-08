@@ -8,6 +8,11 @@
 - 內容不足以出題時（正文太少或題目不足）狀態為 insufficient：AEO **不評分**，報告顯示
   「未充分評估」與原因，而不是 100 分。
 - 指標：「有答案的問題比例」與「答案附有原文的比例」（答案值確實出現在引用段落中）。
+- 引用可得性（2026-10-08，roadmap §2 第 6 項）：有答案的題目再看搜尋引擎與 AI 能不能引用——
+  頁面 noindex、禁止摘要（nosnippet、max-snippet:0）或答案段落在 data-nosnippet 區塊內＝無法被引用；
+  答案只在執行 JavaScript 後才出現＝引用受限（多數 AI 爬蟲不執行 JavaScript）。只是逐題標示與
+  比例，不改 AEO 分數、不另產生問題：noindex／nosnippet／data-nosnippet 本身已由
+  `page_checks.py` 逐頁列出並扣分，再列一次會重複扣分。
 """
 
 from __future__ import annotations
@@ -17,8 +22,14 @@ from dataclasses import dataclass, field
 from django.utils import timezone
 
 from apps.scans.aeo import answers as a
-from apps.scans.aeo.content import extract_page_content
-from apps.scans.aeo.questions import build_question_set
+from apps.scans.aeo.content import (
+    blocks_indexing,
+    blocks_snippets,
+    extract_page_content,
+    robots_directives,
+)
+from apps.scans.aeo.questions import ADDRESS, EMAIL, PHONE, build_question_set
+from apps.scans.evidence import contacts as shared
 
 METHOD_VERSION = "rules-v1"
 MIN_MAIN_TEXT_CHARS = 100  # 中文資訊密度高，100 字已足以出題
@@ -35,6 +46,7 @@ class SitePage:
     html: str  # 瀏覽器渲染後的 DOM
     raw_html: str = ""  # 伺服器原始回應
     blocked: bool = False
+    headers: dict = field(default_factory=dict)  # 回應標頭（讀 X-Robots-Tag）
 
 
 @dataclass
@@ -47,12 +59,12 @@ class AeoEvaluation:
     summary: dict = field(default_factory=dict)
 
 
-def _render_comparison(pages: list[SitePage], rendered) -> list[dict]:
+def _render_comparison(pages: list[SitePage], rendered, raw_contents: dict) -> list[dict]:
     rows = []
     for page, content in zip(pages, rendered, strict=True):
-        if not page.raw_html:
+        raw = raw_contents.get(page.url)
+        if raw is None:
             continue
-        raw = extract_page_content(page.url, page.raw_html)
         rows.append(
             {
                 "url": page.url,
@@ -67,6 +79,58 @@ def _render_comparison(pages: list[SitePage], rendered) -> list[dict]:
     return rows
 
 
+# ---------- 引用可得性 ----------
+
+CITABLE = "citable"
+LIMITED = "limited"
+NOT_CITABLE = "not_citable"
+CITATION_LABELS = {CITABLE: "可被引用", LIMITED: "引用受限", NOT_CITABLE: "無法被引用"}
+
+
+def _normalize(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _citation(result: a.QuestionResult, directives: dict, raw_texts: dict) -> dict | None:
+    """有答案的題目能不能被搜尋引擎與 AI 引用；看第一筆證據（判定所依據的段落）。"""
+    if not result.evidence:
+        return None
+    evidence = result.evidence[0]
+    found = directives.get(evidence.page_url) or {}
+    blocked = []
+    if blocks_indexing(found):
+        key = "noindex" if "noindex" in found else "none"
+        blocked.append(f"頁面設定 {key}（{found[key]}），不會被搜尋引擎與 AI 搜尋收錄")
+    elif blocks_snippets(found):
+        key = next(
+            k for k in found if k in {"nosnippet", "none"} or k.startswith("max-snippet")
+        )
+        blocked.append(f"頁面禁止擷取摘要（{key}，{found[key]}）")
+    if evidence.nosnippet:
+        blocked.append("答案所在段落標了 data-nosnippet，不會被拿來當摘要")
+    if blocked:
+        return {"status": NOT_CITABLE, "label": CITATION_LABELS[NOT_CITABLE], "reasons": blocked}
+    raw = raw_texts.get(evidence.page_url)
+    needle = _normalize(evidence.value or evidence.quote.strip("…")[:20])
+    if raw is not None and needle and needle not in raw:
+        return {
+            "status": LIMITED,
+            "label": CITATION_LABELS[LIMITED],
+            "reasons": [
+                "答案只在執行 JavaScript 後才出現在頁面上；Google 會執行 JavaScript，"
+                "但多數 AI 爬蟲只讀原始 HTML"
+            ],
+        }
+    return {"status": CITABLE, "label": CITATION_LABELS[CITABLE], "reasons": []}
+
+
+def _citation_summary(citations: list[dict]) -> dict | None:
+    if not citations:
+        return None
+    counts = {key: sum(1 for c in citations if c["status"] == key) for key in CITATION_LABELS}
+    return {"counts": counts, "citable_ratio": round(counts[CITABLE] / len(citations), 3)}
+
+
 def _score(results: list[a.QuestionResult]) -> int:
     total_weight = sum(r.question.weight for r in results) or 1
     earned = sum(r.question.weight * a.VERDICT_VALUE[r.verdict] for r in results)
@@ -76,8 +140,11 @@ def _score(results: list[a.QuestionResult]) -> int:
 def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
     usable = [p for p in pages if not p.blocked and p.html]
     rendered = [extract_page_content(p.url, p.html) for p in usable]
+    raw_contents = {
+        p.url: extract_page_content(p.url, p.raw_html) for p in usable if p.raw_html
+    }
     main_chars = sum(c.text_chars for c in rendered)
-    render_rows = _render_comparison(usable, rendered)
+    render_rows = _render_comparison(usable, rendered, raw_contents)
     base_summary = {
         "method": METHOD_VERSION,
         "evaluated_at": timezone.now().isoformat(),
@@ -123,10 +190,29 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
         )
 
     passages = [p for c in rendered for p in c.passages]
-    results = [a.judge(qn, a.retrieve_candidates(qn, passages), passages) for qn in questions]
+    # 共用聯絡資訊證據（與資安的個資檢查同一套擷取，P0-B）
+    contact_evidence = [c for p in usable for c in shared.collect_contacts(p.url, p.html)]
+    results = [
+        reconcile_contact(
+            a.judge(qn, a.retrieve_candidates(qn, passages), passages), contact_evidence, passages
+        )
+        for qn in questions
+    ]
     counts = {v: sum(1 for r in results if r.verdict == v) for v in a.VERDICT_LABELS}
     answered = [r for r in results if r.verdict == a.ANSWERED]
     score = _score(results)
+    directives = {p.url: robots_directives(p.html, p.headers) for p in usable}
+    raw_texts = {
+        url: _normalize(" ".join(passage.text for passage in content.passages))
+        for url, content in raw_contents.items()
+    }
+    citations = {id(r): _citation(r, directives, raw_texts) for r in answered}
+    questions = []
+    for r in results:
+        row = r.as_dict()
+        if citations.get(id(r)):
+            row["citation"] = citations[id(r)]
+        questions.append(row)
     summary = {
         **base_summary,
         "status": "evaluated",
@@ -140,10 +226,101 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
             else None
         ),
         "score": score,
-        "questions": [r.as_dict() for r in results],
+        # 共用證據的筆數（只記數量，不重複存個資）
+        "shared_contacts": {
+            kind: sum(1 for c in contact_evidence if c.kind == kind)
+            for kind in (shared.EMAIL, shared.PHONE, shared.ADDRESS)
+        },
+        "citation": _citation_summary([c for c in citations.values() if c]),
+        "questions": questions,
     }
     findings = _question_findings(results) + _render_findings(base_summary)
     return AeoEvaluation("evaluated", "", score, results, findings, summary)
+
+
+# ---------- 共用聯絡資訊證據 ----------
+
+_CONTACT_KIND = {EMAIL: shared.EMAIL, PHONE: shared.PHONE, ADDRESS: shared.ADDRESS}
+_CONTACT_LABEL = {shared.EMAIL: "Email", shared.PHONE: "電話", shared.ADDRESS: "地址"}
+# 另一邊讀同一份證據的模組：情境不同時在理由中點名，說明不是矛盾
+_OTHER_MODULE = {
+    shared.EMAIL: "資安檢查", shared.PHONE: "資安檢查", shared.ADDRESS: "結構化資料檢查",
+}
+
+
+def _passage_values(kind: str, passage) -> dict[str, str]:
+    """段落中的聯絡資訊：正規化值 → 原文寫法。"""
+    if kind == shared.EMAIL:
+        return {shared.normalize_email(v): v for v in shared.find_emails(passage.text)}
+    return {shared.normalize_phone(v): v for v in shared.find_phones(passage.text)}
+
+
+def _passage_hit(kind: str, passage, wanted: set[str], originals: dict[str, str]) -> str:
+    """段落是否寫了共用證據中的值，回傳段落中的寫法（沒有則空字串）。
+
+    地址以「正規化後的字串包含」比對：結構化資料的街道地址（濟南路一段321號）在頁面上
+    常寫成含縣市區的完整地址。
+    """
+    if kind != shared.ADDRESS:
+        found = _passage_values(kind, passage)
+        return next((found[n] for n in found if n in wanted), "")
+    text = shared.normalize_address(passage.text)
+    for normalized in wanted:
+        if normalized in text:
+            written = shared.find_addresses(passage.text)
+            return next(
+                (w for w in written if normalized in shared.normalize_address(w)),
+                originals[normalized],
+            )
+    return ""
+
+
+def reconcile_contact(result: a.QuestionResult, evidence: list, passages: list) -> a.QuestionResult:
+    """聯絡題（Email／電話／地址）以共用證據核對，避免和資安、結構化資料檢查互相矛盾。
+
+    - 共用證據中的值出現在任何可讀段落（含被當成標題的短段落）：判定為可回答，附該段原文。
+    - 只出現在導覽列、頁首、隱藏區塊、屬性或 HTML 註解：判定不變，但理由寫明它在哪裡、
+      為什麼正文讀不到——情境不同不算矛盾，不能只寫「找不到」。
+    - 地址只在 JSON-LD 結構化資料：判定不變，理由說明搜尋引擎讀得到、訪客看不到。
+    """
+    kind = _CONTACT_KIND.get(result.question.answer_type)
+    # 只修正「找不到／資訊不足」；已判可回答或內容衝突（兩頁客服專線不同）的不動
+    if kind is None or result.verdict in {a.ANSWERED, a.CONFLICT}:
+        return result
+    relevant = [c for c in evidence if c.kind == kind]
+    if not relevant:
+        return result
+    originals = {c.normalized: c.value for c in relevant}
+    wanted = {c.normalized for c in relevant if c.location != shared.LOCATION_COMMENT}
+    for passage in passages:
+        hit = _passage_hit(kind, passage, wanted, originals)
+        if hit:
+            return a.QuestionResult(
+                result.question,
+                a.ANSWERED,
+                f"找到具體答案：{hit}",
+                [a._evidence(passage, hit)],
+                result.candidates_checked,
+            )
+    places = "、".join(
+        sorted({shared.LOCATION_LABELS[c.location] for c in relevant})
+    )
+    label = _CONTACT_LABEL[kind]
+    if {c.location for c in relevant} == {shared.LOCATION_STRUCTURED}:
+        where = (
+            "只寫在結構化資料裡，搜尋引擎讀得到，但頁面上沒有顯示，"
+            "訪客看不到，AI 摘要也不一定採用"
+        )
+    else:
+        where = (
+            "但不在正文或頁尾的可讀文字裡，例如只出現在導覽列、頁首、隱藏區塊或 HTML 註解，"
+            "訪客與 AI 摘要不一定讀得到"
+        )
+    result.reason = (
+        f"{result.reason}（網頁原始碼中有 {len(relevant)} 筆{label}，位置：{places}；"
+        f"{where}。{_OTHER_MODULE[kind]}讀到的{label}與此判定情境不同，並不矛盾。）"
+    )
+    return result
 
 
 # ---------- findings ----------

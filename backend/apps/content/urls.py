@@ -5,6 +5,7 @@ from apps.content.views import (
     milestones_list,
     partner_inquiry_create,
     releases_list,
+    scanner_info,
     team_list,
 )
 
@@ -14,4 +15,5 @@ urlpatterns = [
     path("releases/", releases_list, name="content-releases"),
     path("milestones/", milestones_list, name="content-milestones"),
     path("partner-inquiries/", partner_inquiry_create, name="content-partner-inquiry"),
+    path("scanner-info/", scanner_info, name="content-scanner-info"),
 ]

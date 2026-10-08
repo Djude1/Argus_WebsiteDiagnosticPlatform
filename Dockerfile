@@ -34,8 +34,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip wget \
     && unzip /tmp/katana.zip katana -d /usr/local/bin/ \
     && chmod +x /usr/local/bin/katana \
     && rm /tmp/nuclei.zip /tmp/katana.zip \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && nuclei -update-templates -silent || true
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Nuclei 模板鎖定版本（模板治理，見 backend/apps/scans/nuclei_scanner.py）。
+# 原本用 `nuclei -update-templates || true`：每次 build 拿到不同模板，下載失敗也照樣 build 成功，
+# 掃描時沒有模板只會回報「0 項發現」。現在固定版本，並以模板庫自帶的 templates-checksum.txt
+# 驗證每個模板內容（該檔本身以 sha256 鎖定）；任何一步失敗 build 就失敗。
+# 升級模板：改這兩個 ARG（sha256 取新版 templates-checksum.txt），並確認 KEV 模板集的請求量。
+ARG NUCLEI_TEMPLATES_VERSION=v10.4.9
+ARG NUCLEI_TEMPLATES_CHECKSUM_SHA256=feff28857d327d25045f83f59013aa53cf9644ffecf78d3687d87d4370dba6f1
+ENV ARGUS_NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
+RUN mkdir -p /opt/nuclei-templates \
+    && wget -q "https://github.com/projectdiscovery/nuclei-templates/archive/refs/tags/${NUCLEI_TEMPLATES_VERSION}.tar.gz" -O /tmp/nuclei-templates.tar.gz \
+    && tar -xzf /tmp/nuclei-templates.tar.gz -C /opt/nuclei-templates --strip-components=1 \
+    && rm /tmp/nuclei-templates.tar.gz \
+    && cd /opt/nuclei-templates \
+    && echo "${NUCLEI_TEMPLATES_CHECKSUM_SHA256}  templates-checksum.txt" | sha256sum -c --quiet - \
+    && grep -v '^templates-checksum.txt:' templates-checksum.txt \
+        | awk -F: '{h=$NF; sub(/:[^:]*$/,""); print h "  " $0}' | sha1sum -c --quiet - \
+    && echo "${NUCLEI_TEMPLATES_VERSION}" > .argus-templates-version \
+    && test "$(nuclei -duc -t /opt/nuclei-templates -tags kev -pt http -tl -silent 2>/dev/null | grep -c '\.yaml$')" -gt 100
 
 # 安裝 docker CLI 靜態 binary（僅 client，無 daemon）
 # 用途：worker 透過掛載的 host docker.sock 對 argus-kali-1 執行 docker exec（Phase 3 攻擊鏈）

@@ -8,7 +8,7 @@ from pathlib import Path
 from config.throttling import UserRateThrottle
 from django.conf import settings
 from django.db import close_old_connections, connections
-from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery
+from django.db.models import Avg, Count, IntegerField, Max, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
@@ -44,10 +44,12 @@ from apps.scans.projects import (
     project_issues,
     project_overview,
     project_pages,
+    project_security,
     project_summaries,
 )
 from apps.scans.report_render import RENDERER_VERSION
 from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.score_explain import score_explanation
 from apps.scans.seo_views import ProjectSeoActions
 from apps.scans.serializers import (
     DomainVerifySerializer,
@@ -249,11 +251,25 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             .annotate(c=Count("id"))
             .values("c")
         )
+        # 實際扣點＝預扣－退款（CoinTransaction 是唯一事實來源；進行中的掃描是預扣金額）
+        from apps.billing.models import CoinTransaction
+
+        coins_sq = (
+            CoinTransaction.objects.filter(
+                scan_job=OuterRef("pk"),
+                kind__in=[CoinTransaction.Kind.SCAN_HOLD, CoinTransaction.Kind.SCAN_REFUND],
+            )
+            .order_by()
+            .values("scan_job")
+            .annotate(total=Sum("amount"))
+            .values("total")
+        )
         qs = (
             ScanJob.objects.filter(user=self.request.user)
             .annotate(
                 findings_count=Coalesce(Subquery(findings_sq, output_field=IntegerField()), 0),
                 pages_count=Coalesce(Subquery(pages_sq, output_field=IntegerField()), 0),
+                coin_net=Coalesce(Subquery(coins_sq, output_field=IntegerField()), 0),
             )
             .order_by("-created_at")
         )
@@ -352,6 +368,12 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             "by_category": _counts("category"),
             "by_severity": _counts("severity"),
         })
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(detail=True, methods=["get"], url_path="score-breakdown")
+    def score_breakdown(self, request, pk=None):
+        """各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。"""
+        return Response(score_explanation(self.get_object()))
 
 
     @action(detail=True, methods=["get"])
@@ -695,6 +717,12 @@ class SiteProjectViewSet(ProjectSeoActions, viewsets.ModelViewSet):
     def issues(self, request, pk=None):
         project = self.get_object()
         return Response(project_issues(project, self._requested_scan(project)))
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    @action(detail=True, methods=["get"])
+    def security(self, request, pk=None):
+        project = self.get_object()
+        return Response(project_security(project, self._requested_scan(project)))
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     @action(detail=True, methods=["get"])

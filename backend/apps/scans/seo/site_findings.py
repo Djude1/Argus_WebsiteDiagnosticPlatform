@@ -9,9 +9,11 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from urllib.parse import urlsplit
 
+from apps.scans.ai_bots import robots_allows
 from apps.scans.models import Finding
 from apps.scans.scanners import make_finding
-from apps.scans.seo.page_audit import audit_page
+from apps.scans.seo.link_trend import TREND_LABELS
+from apps.scans.seo.page_audit import _same_url, audit_page
 
 MAX_LISTED = 10
 
@@ -39,14 +41,22 @@ def broken_internal_links(report: dict, audits: list[dict], site_host: str) -> d
         for link in audit["links"]:
             if link["url"] in broken and audit["final_url"] not in found_on[link["url"]]:
                 found_on[link["url"]].append(audit["final_url"])
+    trend = (report.get("trend") or {}).get("items") or {}
     rows = [
-        {"url": url, "status": row.get("status"), "found_on": found_on.get(url, [])[:3]}
+        {"url": url, "status": row.get("status"), "found_on": found_on.get(url, [])[:3],
+         "trend": trend.get(url, "")}
         for url, row in sorted(broken.items())
     ]
     listed = "；".join(
-        f"{r['url']}（HTTP {r['status']}）" + (f" ← {r['found_on'][0]}" if r["found_on"] else "")
+        f"{r['url']}（HTTP {r['status']}"
+        + (f"，{TREND_LABELS[r['trend']]}" if r["trend"] else "") + "）"
+        + (f" ← {r['found_on'][0]}" if r["found_on"] else "")
         for r in rows[:MAX_LISTED]
     )
+    # 和上一次掃描比較時，說明新壞掉與持續失效各幾個（roadmap §11 第 3 項）
+    new = sum(1 for r in rows if r["trend"] == "new")
+    persisting = sum(1 for r in rows if r["trend"] == "persisting")
+    compared = f"和上一次掃描相比，{new} 個是新壞掉、{persisting} 個持續失效。" if trend else ""
     return make_finding(
         category=Finding.Category.SEO,
         severity=Finding.Severity.MEDIUM,
@@ -54,7 +64,7 @@ def broken_internal_links(report: dict, audits: list[dict], site_host: str) -> d
         title="站內連結失效",
         description=(
             f"有 {len(rows)} 個站內連結點下去是錯誤頁。訪客會看到「找不到頁面」，"
-            "搜尋引擎也會浪費爬取額度。"
+            "搜尋引擎也會浪費爬取額度。" + compared
         ),
         remediation="修正或移除這些連結；頁面已搬家的請設定 301 轉址到新網址。",
         evidence=f"失效連結：{listed}",
@@ -165,7 +175,95 @@ def duplicate_titles(audits: list[dict]) -> dict | None:
     )
 
 
-def seo_site_findings(report: dict, pages: list, start_url: str) -> list[dict]:
+def _path(url: str) -> str:
+    parts = urlsplit(url)
+    return (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+
+
+def index_signal_conflicts(
+    pages: list, audits: list[dict], sitemap_urls: list[str], robots_text: str | None
+) -> dict | None:
+    """sitemap、robots.txt、noindex、canonical 互相矛盾（roadmap §1 SEO 第 3 項）。
+
+    sitemap 應只列「希望被收錄的正式網址」：列出 noindex、canonical 指向他頁、錯誤或轉址的網址，
+    或 robots.txt 禁止 Googlebot 抓的網址，等於給搜尋引擎相反的指示。另外 noindex 的頁面若被
+    robots.txt 擋住，Google 讀不到 noindex，網址仍可能出現在搜尋結果。
+
+    只看本次實際爬到的頁面與 crawler 讀到的 sitemap 網址（最多掃描頁數上限個）；
+    被 WAF 等攔截（blocked_reason）的頁面不判斷。
+    """
+    in_sitemap = set(sitemap_urls)
+    symptoms: dict[str, list[str]] = defaultdict(list)
+    for page, audit in zip(pages, audits, strict=True):
+        if getattr(page, "blocked_reason", ""):
+            continue
+        url, final_url = audit["url"], audit["final_url"]
+        noindex = any(r.startswith("noindex") for r in audit["not_indexable_reasons"])
+        if url in in_sitemap:
+            if not _same_url(url, final_url):
+                symptoms["sitemap_redirect"].append(f"{url} → {final_url}")
+            elif audit["status_code"] and audit["status_code"] != 200:
+                symptoms["sitemap_error"].append(f"{url}（HTTP {audit['status_code']}）")
+            elif noindex:
+                symptoms["sitemap_noindex"].append(url)
+            elif audit["canonical"] and not _same_url(audit["canonical"], final_url):
+                symptoms["sitemap_canonical"].append(f"{url} → canonical {audit['canonical']}")
+        if noindex and robots_text and not robots_allows(robots_text, "googlebot", _path(url)):
+            symptoms["noindex_robots_blocked"].append(url)
+    if robots_text:
+        for url in sitemap_urls:
+            if not robots_allows(robots_text, "googlebot", _path(url)):
+                symptoms["sitemap_robots_blocked"].append(url)
+    if not symptoms:
+        return None
+    rows = [
+        {"kind": kind, "label": INDEX_CONFLICT_LABELS[kind], "urls": urls[:20], "count": len(urls)}
+        for kind, urls in symptoms.items()
+    ]
+    rows.sort(key=lambda row: list(INDEX_CONFLICT_LABELS).index(row["kind"]))
+    evidence = "\n".join(
+        f"{row['label']}（{row['count']} 個）：" + "；".join(row["urls"][:5]) for row in rows
+    )
+    return make_finding(
+        category=Finding.Category.SEO,
+        severity=Finding.Severity.LOW,
+        rule_id="seo-index-signals-conflict",
+        title="sitemap、robots.txt 與 noindex 的指示互相矛盾",
+        description=(
+            "sitemap 應該只列出希望被搜尋引擎收錄的正式網址。下列網址的 sitemap、robots.txt、"
+            "noindex 或 canonical 設定給了相反的指示，搜尋引擎可能忽略 sitemap、浪費爬取額度，"
+            "或收錄不想被收錄的頁面。"
+        ),
+        remediation=(
+            "從 sitemap 移除 noindex、錯誤與轉址的網址，改列 canonical 指向的正式網址；"
+            "想讓網址被收錄就不要在 robots.txt 擋它。不想被收錄的頁面用 noindex，"
+            "並讓 robots.txt 允許抓取，搜尋引擎才讀得到 noindex。"
+        ),
+        evidence=evidence,
+        evidence_json={"symptoms": rows},
+        impact_area="indexing",
+        priority_score=45,
+    )
+
+
+INDEX_CONFLICT_LABELS = {
+    "sitemap_noindex": "sitemap 列出設為 noindex 的頁面",
+    "sitemap_canonical": "sitemap 列出 canonical 指向其他網址的頁面",
+    "sitemap_error": "sitemap 列出回應錯誤的網址",
+    "sitemap_redirect": "sitemap 列出會轉址的網址",
+    "sitemap_robots_blocked": "sitemap 列出 robots.txt 禁止 Googlebot 抓取的網址",
+    "noindex_robots_blocked": "noindex 頁面被 robots.txt 擋住，Google 讀不到 noindex",
+}
+
+
+def seo_site_findings(
+    report: dict,
+    pages: list,
+    start_url: str,
+    *,
+    sitemap_urls: list[str] | None = None,
+    robots_text: str | None = None,
+) -> list[dict]:
     audits = [audit_page(page) for page in pages]
     served_host = _host(
         next((a["final_url"] for a in audits if a.get("status_code") == 200), start_url)
@@ -174,5 +272,6 @@ def seo_site_findings(report: dict, pages: list, start_url: str) -> list[dict]:
         broken_internal_links(report, audits, _host(start_url)),
         primary_url_inconsistent(report, audits, served_host),
         duplicate_titles(audits),
+        index_signal_conflicts(pages, audits, sitemap_urls or [], robots_text),
     ]
     return [finding for finding in candidates if finding]

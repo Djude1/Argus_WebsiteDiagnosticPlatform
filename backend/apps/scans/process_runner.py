@@ -55,6 +55,15 @@ def _terminate_process_tree(process: subprocess.Popen) -> None:
             pass
 
 
+def _drain(process: subprocess.Popen) -> str:
+    """程序已終止後取回 stdout 已輸出的部分；取不到就回空字串。"""
+    try:
+        stdout, _ = process.communicate(timeout=5)
+    except Exception:  # noqa: BLE001
+        return ""
+    return stdout or ""
+
+
 def run_cancellable_process(
     cmd: list[str],
     *,
@@ -85,7 +94,10 @@ def run_cancellable_process(
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             _terminate_process_tree(process)
-            raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout)
+            # 保留逾時前已輸出的內容（例如 Nuclei 邊掃邊輸出的結果），由呼叫端決定要不要用
+            raise subprocess.TimeoutExpired(
+                cmd=cmd, timeout=timeout, output=_drain(process), stderr=None,
+            )
         try:
             stdout, stderr = process.communicate(timeout=min(_POLL_SECONDS, remaining))
             return subprocess.CompletedProcess(

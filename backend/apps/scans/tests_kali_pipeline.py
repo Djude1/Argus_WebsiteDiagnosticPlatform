@@ -20,6 +20,7 @@ from django.test import TransactionTestCase, override_settings
 from apps.agent.loop import AgentRunResult
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.models import ScanJob
+from apps.scans.nuclei_scanner import NucleiRun
 from apps.scans.tasks import run_scan_job
 
 User = get_user_model()
@@ -59,7 +60,7 @@ class KaliPipelineOrderingTests(TransactionTestCase):
             mock.patch("apps.scans.tasks._ensure_usable_pages"),
             mock.patch("apps.scans.tasks.build_site_profile", return_value={}),
             mock.patch("apps.scans.tasks.run_katana", return_value=([], [])),
-            mock.patch("apps.scans.tasks.run_nuclei", return_value=[]),
+            mock.patch("apps.scans.tasks.run_nuclei", return_value=NucleiRun()),
             mock.patch("apps.scans.tasks.analyze_ssl", return_value=[]),
             mock.patch("apps.scans.tasks.build_link_report", return_value={}),
             mock.patch("apps.scans.tasks.analyze_cookies", return_value=[]),

@@ -23,10 +23,16 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from apps.scans import versions
+from apps.scans.ai_bots import summary_line as ai_bots_summary
+from apps.scans.coverage import incomplete_checks
 from apps.scans.models import Finding, ReportVerification, ScanJob
+from apps.scans.pagespeed import summary_lines as pagespeed_summary_lines
 from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
+from apps.scans.root_causes import annotate_root_causes
 from apps.scans.scan_plan import build_scan_execution_plan
+from apps.scans.security.observatory import summary_line as observatory_summary
 from apps.scans.security.redaction import redact_pii_in_text
 
 # --- 品牌與嚴重度配色 -------------------------------------------------
@@ -227,16 +233,21 @@ RULE_IMPACT = {
     "GEO_GENERAL_A8C8023032":
         "AI 摘要與引用時，較容易取用「可獨立成立的段落」——有明確主題、定義、數據來源。"
         "這是 Argus 依內容結構提出的建議，不是任何搜尋服務公布的門檻。",
-    "GEO_ROBOTS_TXT_AI_AFFA24D778":
-        "robots.txt 阻擋了 GPTBot / ClaudeBot / Google-Extended，代表這些"
-        "AI 系統不會抓你的內容做訓練與引用——會大幅降低你在 AI 回答中的"
-        "曝光。如果你希望被 AI 引用，需要把這些 User-Agent 從 robots 移除"
-        "或在 /llms.txt 提供可引用範圍。",
+    "geo-ai-search-bots-blocked":
+        "OAI-SearchBot、Claude-SearchBot、PerplexityBot 等爬蟲替 AI 搜尋與對話服務讀取網頁；"
+        "被 robots.txt 封鎖時，這些服務比較不會引用、連結你的網站。GPTBot、ClaudeBot、"
+        "Google-Extended 等是訓練用爬蟲，封鎖它們不影響搜尋與引用，是可以單獨做的商業選擇。",
 }
 
 # 「修好了怎麼確認」按 rule_id 客製：給出具體可執行的驗收指令（curl、瀏覽器、開發者工具），
 # 而不是叫使用者「再掃一次 Argus」。
 RULE_VERIFY = {
+    "seo-index-signals-conflict":
+        "打開 sitemap.xml 確認證據列出的網址都已移除或改成正式網址；在 Search Console「網址檢查」"
+        "輸入這些網址，確認「Google 選擇的標準網址」與「是否允許檢索」符合預期。",
+    "seo-structured-data-required":
+        "把「逐頁證據」列出的網址貼到 https://search.google.com/test/rich-results，"
+        "確認對應項目沒有「缺少必要欄位」的錯誤。",
     "SECURITY_PII_8B24BB8B28":
         "逐一開啟「逐頁證據」列出的網址，用瀏覽器「檢視原始碼」搜尋報告中遮罩前的號碼開頭，"
         "確認已移除（含 HTML 註解）。",
@@ -298,10 +309,10 @@ RULE_VERIFY = {
         "Argus 以區塊標籤（p、div、li、td、標題等）切段，計算 40 字以上的文字區塊；"
         "少於 2 塊或全頁文字少於 300 字時列出。修改後確認主要內容有 2 段以上、"
         "各自成立的完整段落即可。",
-    "GEO_ROBOTS_TXT_AI_AFFA24D778":
-        "在終端機執行 curl -s https://你的網域/robots.txt，"
-        "應不再有 Disallow: / 對 GPTBot、ClaudeBot、Google-Extended。"
-        "或到 https://support.google.com/webmasters/answer/6062596 測試 robots 規則。",
+    "geo-ai-search-bots-blocked":
+        "在終端機執行 curl -s https://你的網域/robots.txt，確認 OAI-SearchBot、Claude-SearchBot、"
+        "PerplexityBot、ChatGPT-User 等爬蟲的群組沒有 Disallow: /，也沒有被 User-agent: * 的 "
+        "Disallow: / 涵蓋；重新掃描後網站架構分頁的 AI 爬蟲政策表會顯示「允許」。",
 }
 
 
@@ -345,6 +356,46 @@ RULE_BASIS = {
         "限制：只影響摘要與引用，不影響頁面被收錄。",
     "aeo-markup-syntax":
         "依據：JSON-LD 無法以 JSON 解析。限制：只檢查語法，不檢查型別是否適合該頁。",
+    "geo-entity-organization-missing":
+        "依據：已檢查頁面的結構化資料中沒有 Organization、LocalBusiness 等組織實體。"
+        "限制：只看本次爬到的頁面；組織標記放在沒爬到的頁面時會誤報。",
+    "geo-entity-no-same-as":
+        "依據：組織實體沒有 sameAs 欄位。限制：sameAs 是協助辨識實體的建議做法，"
+        "不保證被知識圖譜或 AI 採用。",
+    "geo-article-author-missing":
+        "依據：文章頁（Article 類標記，或 og:type=article 且有發布時間）沒有 JSON-LD author、"
+        "author meta 或 rel=author 連結。限制：只寫在內文、沒有標記的作者名稱不會被偵測到。",
+    "geo-long-content-no-subheadings":
+        "依據：成句段落（40 字以上）合計約中文 1500 字或英文 1000 詞以上，且頁面沒有 h2–h6。"
+        "限制：只看標題標籤，用粗體或圖片當小標題的頁面也會被列出。",
+    "geo-enumeration-not-list":
+        "依據：同一段文字出現 3 個以上編號（1.／1)／(1)／第一、）。限制：只看編號格式，"
+        "程式碼區塊不檢查。",
+    "ux-layout-shift":
+        "依據：瀏覽器 layout-shift 紀錄，依 Google CLS 定義取最大工作階段視窗；0.1 以上列為需改善、"
+        "0.25 以上為不佳。限制：Argus 爬取時的桌面視窗單次量測、沒有使用者操作，"
+        "數值會與 Lighthouse 及真實使用者不同，網路慢時樣式表晚到也會量到較高的值；"
+        "列出的是被推動的元素，不一定是造成位移的元素。",
+    "geo-article-date-missing":
+        "依據：文章頁的 JSON-LD datePublished／dateModified 與 article:*_time meta 都沒有日期。"
+        "限制：只寫在內文的日期不會被偵測到。",
+    "geo-article-date-invalid":
+        "依據：更新日期比發布日期早超過一天，或日期比掃描當天晚超過一天。"
+        "限制：只比對日期，不比對時刻與時區。",
+    "geo-article-date-inconsistent":
+        "依據：同一頁 JSON-LD 與 meta 的發布或更新日期相差超過一天。"
+        "限制：只檢查日期標記，不判斷內容本身是否過時。",
+    "seo-index-signals-conflict":
+        "依據：Google 說明 sitemap 應只列希望出現在搜尋結果的標準網址；noindex 必須讓爬蟲抓得到"
+        "才會生效。限制：只比對本次爬到的頁面與讀到的 sitemap 網址（最多頁數上限個），"
+        "robots.txt 依 Googlebot 規則判斷。",
+    "seo-structured-data-required":
+        "依據：Google Search Central 各類型結構化資料說明頁列為必填的欄位（產品、軟體、職缺、"
+        "食譜、影片、導覽路徑、活動、在地商家、評論與評分彙總）。限制：只檢查必填欄位是否存在，"
+        "不檢查值是否正確；符合資格也不保證 Google 一定顯示複合式搜尋結果。",
+    "seo-structured-data-self-serving-reviews":
+        "依據：Google 評論摘要說明——LocalBusiness／Organization 的評論由該商家自己控制時，"
+        "不顯示星等。限制：無法從標記判斷評論來源，請自行確認是否屬於自家評論。",
     "aeo-markup-mismatch":
         "依據：標記中的問題、答案、電話或 Email 在頁面可見文字中找不到。"
         "限制：以前 16～20 字比對，改寫過的同義文字可能被判為不一致。",
@@ -366,6 +417,12 @@ CATEGORY_BASIS = {
     "ux": "依據：以行動版視窗實際量測（版面寬度、觸控目標、表單標籤、JavaScript 錯誤）。"
           "限制：只涵蓋可自動量測的項目，不取代實際使用者測試。",
 }
+
+AXE_BASIS = (
+    "依據：axe-core（Deque Systems 的開源無障礙檢查引擎）在桌面版頁面上執行 WCAG 2.0／2.1／2.2 "
+    "A 與 AA 的自動化規則。限制：自動化檢查只能涵蓋部分 WCAG 準則，沒有違規不代表網站符合 WCAG，"
+    "仍需人工以鍵盤與螢幕報讀軟體實際操作確認。"
+)
 
 # 「判定依據」：高風險以上與 AI 觀察項目固定交代成立條件、實際觀察、尚缺證據與驗證方法，
 # 讓讀者判斷評級是否站得住（2026-09-28 報告審查）。掃描器可在 evidence_json["assessment"]
@@ -409,6 +466,10 @@ def _source_label(finding) -> str:
         return "外部工具（Nuclei 範本比對，未另行驗證）"
     if source.startswith("katana"):
         return "外部工具（Katana 探索）"
+    if rule.startswith("axe-"):
+        return "外部工具（axe-core 無障礙自動化檢查）"
+    if rule.startswith("zap-"):
+        return "外部工具（OWASP ZAP 被動分析：只檢查已取得的回應，未另行驗證）"
     if source == "exposure_probe":
         return "主動探測（實際請求常見敏感路徑）"
     if rule.split("-")[0] in {"ssl", "dns", "cookie", "sri", "header", "js", "service", "exposure"}:
@@ -648,6 +709,9 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     ]
 
 
+_COVERAGE_STATUS_TEXT = {"partial": "部分完成", "failed": "執行失敗", "blocked": "被阻擋"}
+
+
 def _scan_scope_rows(scan_job: ScanJob) -> dict:
     """掃描範圍。scope 一律取自 scan_plan，不在這裡重複「max_pages==1 代表單頁」。
 
@@ -697,6 +761,28 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
     if not_selected:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
+    rows["評分版本"] = versions.label(scan_job)
+    # 外部效能指標：與 Argus 分數分開列，標明來源與量測方式
+    rows.update(pagespeed_summary_lines(scan_job.performance_report or {}))
+    incomplete = incomplete_checks(scan_job.coverage)
+    if incomplete:
+        # 覆蓋契約：有跑但沒完整跑完的檢查要講出來，「沒發現問題」不等於沒有問題
+        rows["未完整完成的檢查"] = "；".join(
+            f"{item['label']}（{_COVERAGE_STATUS_TEXT.get(item['status'], item['status'])}"
+            # 只有「部分完成」附原因（人看得懂的說明）；失敗原因是例外類別，屬內部資訊
+            + (f"：{item['reason']}" if item["status"] == "partial" and item["reason"] else "")
+            + "）"
+            for item in incomplete
+        )
+    partial = [
+        CATEGORY_DISPLAY.get(category, category)
+        for category, state in ((scan_job.coverage or {}).get("categories") or {}).items()
+        if state == "partial"
+    ]
+    if partial:
+        rows["部分評估的面向"] = (
+            "、".join(partial) + "（分數只反映實際完成的檢查）"
+        )
     aeo = _aeo_scope_text(scan_job)
     if aeo:
         rows["AEO 問答檢測"] = aeo
@@ -738,9 +824,13 @@ def _aeo_items(scan_job: ScanJob) -> list[dict]:
             if evidence:
                 first = evidence[0]
                 basis += f"（{first['url']}｜{first['location']}）"
+        verdict = question.get("verdict_label", "")
+        if question.get("confidence_label"):
+            # 可信度（確認／可能／推測）附在判定後，不改 schema（RENDERER_VERSION 15）
+            verdict = f"{verdict}（{question['confidence_label']}）"
         items.append({
             "question": question.get("text", ""),
-            "verdict": question.get("verdict_label", ""),
+            "verdict": verdict,
             "basis": basis[:400],
         })
     return items
@@ -758,6 +848,14 @@ def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
         lines.append(
             "掃描有效性警示：本次未抓到任何頁面（目標可能不可達或全部逾時）。"
             "SEO 與 AEO 未評估，分數僅反映站台層級檢查，不應解讀為「網站沒有問題」。"
+        )
+    # 部分掃描（docs/business-model-plan.md：Partial Coverage 必須標示）：使用者因點數不足
+    # 選了較少頁數，報告要講明這不是完整掃描，避免收件者把結果當成整站結論。
+    if 1 < scan_job.max_pages < settings.ARGUS_DEFAULT_MAX_PAGES:
+        lines.append(
+            f"部分掃描：本次只檢查最多 {scan_job.max_pages} 頁"
+            f"（標準完整掃描為 {settings.ARGUS_DEFAULT_MAX_PAGES} 頁），"
+            "未檢查到的頁面可能仍有問題，結果不代表整個網站。"
         )
     for key, template in (
         ("blocked_urls", "依 robots.txt 或掃描範圍限制，略過 {n} 個頁面未檢查。"),
@@ -793,25 +891,35 @@ def _severity_rank(severity: str) -> int:
     return order.index(severity) if severity in order else len(order)
 
 
-def _resolved_since(previous, grouped) -> list[str]:
-    """前次有、這次沒有的項目＝已解決。"""
+def _absent_since(scan_job: ScanJob, previous) -> tuple[list[str], int]:
+    """前次有、這次沒有的項目：(確認已修好的標題, 無法確認的數量)。
+
+    覆蓋契約（coverage.absent_issue_status）：只有產生它的檢查本次完整跑完、受影響頁面也有
+    重新分析，才算已修好；工具失敗、沒爬到該頁或舊掃描沒有覆蓋紀錄時，只能說「本次未出現」。
+    """
     if previous is None:
-        return []
-    current = {item["finding"].rule_id for item in grouped if item["finding"].rule_id}
-    return [
-        title
-        for rule, title in previous.findings.values_list("rule_id", "title")
-        if rule and rule not in current
-    ]
+        return [], 0
+    from apps.scans.projects import compare_issues
+
+    _issues, missing = compare_issues(scan_job, previous)
+    resolved = [item["title"] for item in missing if item["status"] == "resolved"]
+    return resolved, len(missing) - len(resolved)
 
 
-def _headline(scan_job: ScanJob, previous, category_scores: dict, resolved=()) -> str:
+def _headline(
+    scan_job: ScanJob, previous, category_scores: dict, resolved=(), unconfirmed: int = 0
+) -> str:
     """一頁摘要的導讀句。只陳述資料本身，不加沒有根據的評價。"""
     score = scan_job.overall_score
     parts = []
     if isinstance(score, int):
         parts.append(f"分數落在「{_score_band_label(score)}」區間")
-    if previous is not None and isinstance(score, int):
+    if previous is not None and isinstance(score, int) and not versions.comparable(
+        scan_job, previous
+    ):
+        # 評分公式或規則集不同：分數差可能只是規則改了，不能說成網站進步／退步
+        parts.append("評分規則與前次不同，分數不宜直接比較")
+    elif previous is not None and isinstance(score, int):
         delta = score - previous.overall_score
         if delta > 0:
             parts.append(f"較前次進步 {delta} 分")
@@ -823,6 +931,8 @@ def _headline(scan_job: ScanJob, previous, category_scores: dict, resolved=()) -
     # 收進導讀句而不是讓它消失。
     if resolved:
         parts.append(f"已解決 {len(resolved)} 項")
+    if unconfirmed:
+        parts.append(f"另有 {unconfirmed} 項本次未出現，但檢查不完整、無法確認已修好")
     weakest = sorted(
         ((name, value) for name, value in category_scores.items() if isinstance(value, int)),
         key=lambda item: item[1],
@@ -879,6 +989,7 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         "trace": (
             f"規則 {finding.rule_id or '—'}　·　觀測 {observed_at}"
             f"　·　來源：{_source_label(finding)}"
+            + (f"　·　類型：{finding.security_kind_label}" if finding.security_kind_label else "")
         ),
     }
     if len(pages) > 1:
@@ -898,8 +1009,11 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         if _report_severity(finding) != finding.severity:
             entry["assessment"]["missing"] += "（AI 觀察項目在報告中以中風險為上限呈現。）"
     if not is_security:
-        entry["basis"] = RULE_BASIS.get(finding.rule_id or "") or CATEGORY_BASIS.get(
-            finding.category, ""
+        rule = finding.rule_id or ""
+        entry["basis"] = (
+            RULE_BASIS.get(rule)
+            or (AXE_BASIS if rule.startswith("axe-") else "")
+            or CATEGORY_BASIS.get(finding.category, "")
         )
     return entry
 
@@ -910,12 +1024,11 @@ def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
     scan_date = timezone.localtime(
         scan_job.completed_at or scan_job.created_at or timezone.now()
     ).strftime("%Y-%m-%d")
+    resolved, unconfirmed = _absent_since(scan_job, previous)
     summary: dict = {
         "overall_score": scan_job.overall_score or 0,
         "scan_date": scan_date,
-        "headline": _headline(
-            scan_job, previous, category_scores, _resolved_since(previous, grouped)
-        ),
+        "headline": _headline(scan_job, previous, category_scores, resolved, unconfirmed),
         "score_note": SCORE_NOTE,
         # 全部 5 個分類都列出；未評估的給 null，report_render 會標「未評估」
         # 且不計入顏色。缺鍵＝未評估是 calculate_scores() 的既有契約。
@@ -1075,6 +1188,80 @@ def _report_appendix(
     return appendix
 
 
+def _report_score_items(
+    scan_job: ScanJob, grouped: list[dict], findings_payload: list[dict]
+) -> dict:
+    """附錄：各分類的逐項扣分（score_explain.py，與網頁「分數說明」分頁同一份資料）。
+
+    依目前公式重算的分數和保存的分數不同（舊版公式或事後重新判定）時不列明細，
+    只說明原因——列出一份加不回報告分數的表，比不列更讓人困惑。
+    """
+    # 函式內匯入：score_explain → finding_normalization → reports 會循環
+    from apps.scans.score_explain import score_explanation
+
+    explanation = score_explanation(scan_job)
+    if not explanation["available"]:
+        return {}
+    if not explanation["matches"]:
+        return {
+            "note": "這次掃描的分數以舊版計分公式算出，依目前公式無法逐項還原，因此不列扣分明細。"
+        }
+    refs = {
+        item["finding"].rule_id: f["id"]
+        for f, item in zip(findings_payload, grouped, strict=True)
+        if item["finding"].rule_id
+    }
+    categories = []
+    for entry in explanation["categories"]:
+        name = CATEGORY_DISPLAY.get(entry["category"], entry["category"].upper())
+        if entry["base_source"] == "aeo_answerability":
+            basis = f"起始分 {entry['base']}（可回答性分數，逐題結果已反映在這裡）"
+        else:
+            basis = "起始分 100"
+        notes = []
+        if entry["in_base"]:
+            notes.append(f"{entry['in_base']} 筆問答檢測結果已計入起始分")
+        if entry["info"]:
+            notes.append(f"{entry['info']} 筆資訊提示不扣分")
+        categories.append({
+            "name": name,
+            "score": entry["score"],
+            "basis": basis,
+            "notes": "；".join(notes),
+            "items": [
+                {
+                    "ref": refs.get(item["rule_id"], ""),
+                    "title": item["title"],
+                    "severity": _render_severity(item["severity"]),
+                    "weight": item["weight"],
+                    "occurrences": item["occurrences"],
+                    "score_without": item["score_without"],
+                }
+                for item in entry["deductions"]
+            ],
+        })
+    return {"categories": categories}
+
+
+def _report_root_causes(grouped: list[dict], findings_payload: list[dict]) -> list[dict]:
+    """改一處就能一起解決的問題（root_causes.py，與問題分析頁「依根本原因」同一套歸類）。"""
+    issues = [
+        {
+            "key": f["id"],
+            "rule_id": item["finding"].rule_id or "",
+            "severity": item["finding"].severity,
+            "pages": len(item["pages"]),
+        }
+        for f, item in zip(findings_payload, grouped, strict=True)
+        # 資訊提示不用修，不列進「一起修」
+        if item["finding"].severity != Finding.Severity.INFO
+    ]
+    return [
+        {"title": cause["title"], "where": cause["where"], "refs": cause["issues"]}
+        for cause in annotate_root_causes(issues)
+    ]
+
+
 def build_report_payload(scan_job: ScanJob) -> dict:
     """把一次掃描轉成 report_render 的輸入 JSON（契約見 report_render/schema.json）。
 
@@ -1100,6 +1287,9 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         "summary": _report_summary(scan_job, previous, grouped),
         "findings": findings_payload,
     }
+    root_causes = _report_root_causes(grouped, findings_payload)
+    if root_causes:
+        payload["summary"]["root_causes"] = root_causes
     priorities = _report_priorities(scan_job, findings_payload)
     if priorities:
         payload["priorities"] = priorities
@@ -1111,6 +1301,9 @@ def build_report_payload(scan_job: ScanJob) -> dict:
         payload["site_profile"] = site_profile
     payload["scan_info"] = _report_scan_info(scan_job)
     payload["appendix"] = _report_appendix(scan_job, grouped, findings_payload)
+    score_items = _report_score_items(scan_job, grouped, findings_payload)
+    if score_items:
+        payload["appendix"]["score_items"] = score_items
     return payload
 
 
@@ -1154,6 +1347,12 @@ def _report_site_profile(scan_job: ScanJob) -> dict:
             facts.append({"label": "DNS 代管", "value": "、".join(infra["nameservers"])})
         if edge and edge.get("evidence"):
             facts.append({"label": "判斷依據", "value": "；".join(edge["evidence"][:3])})
+    if profile.get("ai_bots"):
+        facts.append({"label": "AI 爬蟲政策", "value": ai_bots_summary(profile["ai_bots"])})
+    if profile.get("observatory"):
+        facts.append(
+            {"label": "安全標頭等第", "value": observatory_summary(profile["observatory"])}
+        )
     if not facts and not strengths:
         return {}
     return {"notice": infra.get("notice", ""), "facts": facts, "strengths": strengths}

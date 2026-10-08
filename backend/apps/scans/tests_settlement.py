@@ -96,6 +96,6 @@ class ScanSettlementFailureTests(TransactionTestCase):
         self.scan_job.refresh_from_db()
         self.assertEqual(self.scan_job.status, ScanJob.Status.COMPLETED)
         self.assertIsNone(result["settlement_error"])
-        self.settle.assert_called_once_with(self.user, mock.ANY, 0)
+        self.settle.assert_called_once_with(self.user, mock.ANY, 0, deep_agent_ran=False)
         self.refund.assert_not_called()
         self.assertNotIn("settlement_error", self.scan_job.warning_summary)

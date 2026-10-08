@@ -42,7 +42,11 @@
         },
         "new_findings":  {"type": "array", "items": {"type": "string"}},
         "priority_note": {"type": "string"},
-        "score_note":    {"type": "string", "description": "分數算法說明"}
+        "score_note":    {"type": "string", "description": "分數算法說明"},
+        "root_causes":   {"type": "array", "description": "改一處就能一起解決的問題（root_causes.py）",
+                          "items": {"type": "object", "required": ["title", "where", "refs"],
+                                    "properties": {"title": {"type": "string"}, "where": {"type": "string"},
+                                                   "refs": {"type": "array", "items": {"type": "string"}}}}}
       }
     },
     "site_profile": {
@@ -162,7 +166,21 @@
                           "items": {"type": "object", "required": ["question", "verdict", "basis"],
                                     "properties": {"question": {"type": "string"}, "verdict": {"type": "string"},
                                                    "basis": {"type": "string"}}}},
-        "authorization": {"type": "object", "description": "項目->內容 的鍵值對"}
+        "authorization": {"type": "object", "description": "項目->內容 的鍵值對"},
+        "score_items":   {"type": "object", "description": "各分類逐項扣分（與網頁「分數說明」同一份資料）；舊版公式算的分數只有 note",
+                          "properties": {
+                            "note": {"type": "string"},
+                            "categories": {"type": "array",
+                              "items": {"type": "object", "required": ["name", "score", "basis", "items"],
+                                        "properties": {"name": {"type": "string"}, "score": {"type": "integer"},
+                                                       "basis": {"type": "string"}, "notes": {"type": "string"},
+                                                       "items": {"type": "array",
+                                                         "items": {"type": "object",
+                                                                   "required": ["title", "severity", "weight", "occurrences", "score_without"],
+                                                                   "properties": {"ref": {"type": "string"}, "title": {"type": "string"},
+                                                                                  "severity": {"type": "string"}, "weight": {"type": "integer"},
+                                                                                  "occurrences": {"type": "integer"},
+                                                                                  "score_without": {"type": "integer"}}}}}}}}}
       }
     }
   }

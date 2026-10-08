@@ -92,6 +92,16 @@ class ReportAppendixTests(TestCase):
             ai_handoff_prompt="p", priority_score=50.0,
         )
 
+        # 覆蓋契約：兩次都由同一項檢查完整跑完，才能判定「已解決」
+        previous.coverage = {"checks": {"site_security": {
+            "status": "completed", "category": "security",
+            "keys": ["header-hsts-missing"]}}}
+        previous.save(update_fields=["coverage"])
+        self.scan_job.coverage = {"checks": {"site_security": {
+            "status": "completed", "category": "security",
+            "keys": ["header-csp-missing"]}}}
+        self.scan_job.save(update_fields=["coverage"])
+
         text = self._text()
 
         # report_render 的比較區塊只有「新出現」欄位；已解決的數量改收進導讀句
@@ -100,6 +110,21 @@ class ReportAppendixTests(TestCase):
         self.assertIn("已解決 1 項", text)   # 前次有、這次沒有
         self.assertIn("新出現", text)
         self.assertIn("缺少 CSP", text)
+
+    def test_absent_issue_without_coverage_is_not_claimed_resolved(self):
+        """舊掃描沒有覆蓋紀錄、或檢查沒跑完：只能說本次未出現，不能說已解決。"""
+        previous = self._make_scan(overall_score=39, completed_offset_days=7)
+        Finding.objects.create(
+            scan_job=previous, page=None, severity="medium",
+            category=Finding.Category.SECURITY, title="缺少 HSTS",
+            description="d", remediation="r", rule_id="header-hsts-missing",
+            ai_handoff_prompt="p", priority_score=50.0,
+        )
+
+        text = self._text()
+
+        self.assertNotIn("已解決", text)
+        self.assertIn("另有 1 項本次未出現", text)
 
     def test_first_scan_of_a_site_has_no_comparison_section(self):
         self.assertNotIn("已解決", self._text())

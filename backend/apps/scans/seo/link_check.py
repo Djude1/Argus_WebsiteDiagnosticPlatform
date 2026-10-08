@@ -5,7 +5,8 @@
 - 302 → 200 這類「轉址後正常」不算失效連結；401／403／429 代表對方拒絕自動檢查，
   標成「無法確認」而不是失效。
 - 先送 HEAD；HEAD 回 4xx／5xx 或連線層錯誤時一律改用 GET 再確認（只讀標頭、不下載內容）。
-- 有總數與總時間上限：外部網站很多時只檢查前 N 個，其餘標「未檢查」。
+- 有總數與總時間上限：外部網站很多時只檢查前 N 個，其餘標「未檢查」；超過數量上限與時間用完
+  分開計數（roadmap §11 第 2 項，`seo/link_trend.link_coverage`）。
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def check_url(url: str, client: httpx.Client | None = None) -> dict:
                 status, location = _request(client, current)
             except httpx.TimeoutException:
                 chain.append({"url": current, "status": None})
-                return _result(url, chain, "error", note="逾時")
+                return _result(url, chain, "timeout", note="逾時")
             except httpx.HTTPError as exc:
                 chain.append({"url": current, "status": None})
                 return _result(url, chain, "error", note=f"無法連線（{exc.__class__.__name__}）")
@@ -139,8 +140,11 @@ def check_links(
     budget_seconds: float,
     should_stop: Callable[[], None] | None = None,
     workers: int = 4,
-) -> tuple[dict[str, dict], int]:
-    """檢查前 limit 個網址；回傳 ({url: result}, 未檢查數)。should_stop 用來接取消檢查點。"""
+) -> tuple[dict[str, dict], dict[str, int]]:
+    """檢查前 limit 個網址；回傳 ({url: result}, 未檢查數依原因)。should_stop 用來接取消檢查點。
+
+    未檢查原因：over_limit＝超過數量上限、budget_exhausted＝總時間用完。
+    """
     targets = urls[:limit]
     deadline = time.monotonic() + budget_seconds
     results: dict[str, dict] = {}
@@ -160,7 +164,10 @@ def check_links(
             for url, result in pool.map(run, targets[start:start + batch]):
                 if result is not None:
                     results[url] = result
-    return results, len(urls) - len(results)
+    return results, {
+        "over_limit": len(urls) - len(targets),
+        "budget_exhausted": len(targets) - len(results),
+    }
 
 
 # ---------------------------------------------------------------- 站台層級檢查
@@ -174,22 +181,31 @@ def _site_check(key: str, label: str, level: str, value: str, advice: str = "", 
 def fetch_robots(origin_url: str) -> dict:
     """抓 robots.txt；回傳狀態、Sitemap 宣告與 User-agent: * 的 Disallow 規則。"""
     url = urljoin(origin_url, "/robots.txt")
-    info = {"url": url, "status": None, "sitemaps": [], "disallow": [], "disallow_all": False}
     try:
         url = assert_public_http_url(url)
         with _client() as client, client.stream("GET", url) as response:
-            info["status"] = response.status_code
             if response.status_code != 200:
-                return info
+                return parse_robots(url, response.status_code, "")
             body = b""
             for chunk in response.iter_bytes():
                 body += chunk
                 if len(body) > MAX_ROBOTS_BYTES:
                     break
     except (PublicScanTargetError, ValueError, httpx.HTTPError):
+        return parse_robots(url, None, "")
+    return parse_robots(url, 200, body.decode("utf-8", "replace"))
+
+
+def parse_robots(url: str, status: int | None, text: str) -> dict:
+    """整理 robots.txt 的狀態、Sitemap 宣告與 User-agent: * 的 Disallow 規則。
+
+    爬蟲已讀過 robots.txt 時直接傳入它的狀態與原文（不跟隨轉址，與 fetch_robots 相同），不再重抓。
+    """
+    info = {"url": url, "status": status, "sitemaps": [], "disallow": [], "disallow_all": False}
+    if status != 200:
         return info
     applies = False
-    for raw in body.decode("utf-8", "replace").splitlines():
+    for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if ":" not in line:
             continue
@@ -219,7 +235,29 @@ def robots_blocks(path: str, disallow: list[str]) -> str:
     return ""
 
 
-def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[dict]:
+def known_result(url: str, status: int) -> dict:
+    """已經知道 HTTP 狀態（沒有轉址）的網址，整理成與 check_url 相同的結果格式。"""
+    return _result(url, [{"url": url, "status": status}], _verdict(status, 0))
+
+
+def site_checks(
+    start_url: str,
+    robots: dict,
+    sample_paths: list[str],
+    known: dict[str, dict] | None = None,
+    reused: list[str] | None = None,
+) -> list[dict]:
+    """站台層級檢查。known 是同一次掃描已檢查過的網址（{網址: check_url 結果}），命中就沿用，
+    並把沿用的網址記進 reused。"""
+    known = known if known is not None else {}
+
+    def lookup(url: str) -> dict:
+        if url in known:
+            if reused is not None:
+                reused.append(url)
+            return known[url]
+        return check_url(url)
+
     parts = urlsplit(start_url)
     host = parts.hostname or ""
     origin = urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
@@ -245,7 +283,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
         ))
 
     sitemap_url = robots["sitemaps"][0] if robots["sitemaps"] else urljoin(origin, "/sitemap.xml")
-    sitemap = check_url(sitemap_url)
+    sitemap = lookup(sitemap_url)
     sitemap_ok = sitemap["verdict"] in {"ok", "redirect"}
     checks.append(_site_check(
         "sitemap", "Sitemap", "pass" if sitemap_ok else "notice",
@@ -256,7 +294,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
 
     if parts.scheme == "https":
         http_url = urlunsplit(("http", parts.netloc, "/", "", ""))
-        result = check_url(http_url)
+        result = lookup(http_url)
         to_https = urlsplit(result["final_url"]).scheme == "https" and result["verdict"] in {
             "redirect", "ok"
         } and len(result["chain"]) > 1
@@ -270,7 +308,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
     alt_host = host[4:] if host.startswith("www.") else f"www.{host}"
     alt_url = urlunsplit((parts.scheme, alt_host + (f":{parts.port}" if parts.port else ""),
                           "/", "", ""))
-    result = check_url(alt_url)
+    result = lookup(alt_url)
     final_host = urlsplit(result["final_url"]).hostname or ""
     if result["verdict"] in {"error", "skipped"}:
         level, advice = "pass", ""
@@ -286,7 +324,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
     ))
 
     missing_url = urljoin(origin, f"/argus-404-check-{secrets.token_hex(4)}")
-    result = check_url(missing_url)
+    result = lookup(missing_url)
     if result["status"] in {404, 410}:
         level, advice = "pass", ""
     elif result["verdict"] in {"ok", "redirect"}:
@@ -300,7 +338,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
     ))
 
     index_url = urljoin(origin, "/index.html")
-    result = check_url(index_url)
+    result = lookup(index_url)
     duplicate = result["verdict"] == "ok"
     checks.append(_site_check(
         "index_page", "首頁 index.html", "notice" if duplicate else "pass", _chain_text(result),
@@ -312,7 +350,7 @@ def site_checks(start_url: str, robots: dict, sample_paths: list[str]) -> list[d
     if sample:
         toggled = sample[:-1] if sample.endswith("/") else f"{sample}/"
         toggled_url = urljoin(origin, toggled)
-        result = check_url(toggled_url)
+        result = lookup(toggled_url)
         duplicate = result["verdict"] == "ok"
         checks.append(_site_check(
             "trailing_slash", "結尾斜線", "notice" if duplicate else "pass",

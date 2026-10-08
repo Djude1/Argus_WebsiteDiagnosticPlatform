@@ -1,18 +1,29 @@
-"""Nuclei 資安掃描整合。
+"""Nuclei 資安掃描整合（模板治理：roadmap §6 第 1 項，2026-10-08）。
 
-以本機 nuclei binary 執行弱點掃描，支援兩種內部工具設定：
-- fast：精選模板 + 60 秒上限
-- deep：中風險以上模板 + 5 分鐘上限
+結果要能重現，所以模板集是固定的：
+- 模板版本鎖在 image 建置時（Dockerfile `NUCLEI_TEMPLATES_VERSION`，放在
+  `ARGUS_NUCLEI_TEMPLATES_DIR`），執行時不更新；目錄沒有模板就算失敗，不能當成「0 項發現」。
+- 只跑 CISA KEV（已知被實際利用的漏洞）模板：全部模板對單一網址約 9500 個請求，
+  在 1–2 RPS 的主動預算下要跑 80 分鐘；KEV 約 630 個請求，5–10 分鐘跑得完。
+- 只掃網站根網址：模板檢查的多半是網站層級路徑（例如 /wp-login.php），
+  對每一頁重複掃只是同樣的探測乘以頁數。
+- 每次執行記錄 Nuclei 版本、模板版本與這次選到的模板集指紋（模板數＋雜湊），
+  同一指紋才代表同一組檢查。
+- 逾時保留逾時前已輸出的結果，回報為部分完成，不當成「完整跑完、沒有問題」。
 
-任何錯誤皆靜默回傳 []，不影響主掃描流程。
+binary 不存在、模板目錄缺失或異常結束 → 拋 NucleiUnavailable，由 tasks.py 記為失敗。
 """
 from __future__ import annotations
 
+import functools
+import hashlib
 import json
-import os
+import re
 import shutil
 import subprocess
-import tempfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
@@ -34,59 +45,157 @@ _TAG_IMPACT: dict[str, str] = {
     "cve": "known_vulnerability",
     "misconfig": "misconfiguration",
     "exposure": "information_exposure",
-    "default-logins": "default_credentials",
+    "default-login": "default_credentials",
     "xss": "cross_site_scripting",
     "sqli": "sql_injection",
     "ssrf": "server_side_request_forgery",
     "rce": "remote_code_execution",
 }
 
+# 模板選擇政策。注意 Nuclei 的標籤是單數（cve、misconfig、exposure），不是模板目錄名稱；
+# 2026-10-08 前的快速模式寫成 cves／misconfigurations，實測只選到 3 個模板。
+TEMPLATE_POLICY = {
+    "name": "kev",
+    "tags": "kev",
+    "severity": "critical,high,medium",
+    "exclude_tags": "dos,fuzz,creds-stuffing,token-spray",
+    "protocol": "http",
+}
+# 高噪音模板（實測誤報才加入，並寫明原因）；目前沒有
+EXCLUDED_TEMPLATE_IDS: tuple[str, ...] = ()
+
+TEMPLATES_VERSION_FILE = ".argus-templates-version"
+_CHECKSUM_FILE = "templates-checksum.txt"
+
+
+class NucleiUnavailable(RuntimeError):
+    """Nuclei 無法執行（沒有 binary、沒有模板或異常結束）。"""
+
+
+@dataclass
+class NucleiRun:
+    findings: list[dict] = field(default_factory=list)
+    timed_out: bool = False
+    template_set: dict = field(default_factory=dict)
+
+
+def _policy_args() -> list[str]:
+    args = [
+        "-tags", TEMPLATE_POLICY["tags"],
+        "-severity", TEMPLATE_POLICY["severity"],
+        "-etags", TEMPLATE_POLICY["exclude_tags"],
+        "-pt", TEMPLATE_POLICY["protocol"],
+    ]
+    if EXCLUDED_TEMPLATE_IDS:
+        args += ["-eid", ",".join(EXCLUDED_TEMPLATE_IDS)]
+    return args
+
+
+def _root_url(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}/"
+
+
+def _engine_version() -> str:
+    try:
+        proc = subprocess.run(  # noqa: S603 — 固定參數
+            ["nuclei", "-version", "-duc"], capture_output=True, text=True, timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+    except Exception:  # noqa: BLE001
+        return "unknown"
+    match = re.search(r"Engine Version:\s*(v[\w.\-]+)", proc.stdout + proc.stderr)
+    return match.group(1) if match else "unknown"
+
+
+@functools.lru_cache(maxsize=4)
+def _describe_template_set(templates_dir: str, checksum_mtime: float) -> dict:
+    """列出這個政策實際選到的模板，算出指紋。checksum_mtime 只用來讓快取跟著模板更新失效。"""
+    root = Path(templates_dir)
+    proc = subprocess.run(  # noqa: S603 — 固定參數
+        # 沒有 -no-stdin 時 nuclei 會等 stdin 的目標清單，在 worker 裡會一直卡到逾時
+        ["nuclei", "-duc", "-no-stdin", "-t", templates_dir, *_policy_args(), "-tl", "-silent"],
+        capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+    )
+    selected = []
+    for line in proc.stdout.splitlines():
+        if not line.strip().endswith(".yaml"):
+            continue  # 「Listing available…」之類的說明列
+        path = Path(line.strip()).resolve()
+        try:
+            selected.append(path.relative_to(root.resolve()).as_posix())
+        except ValueError:
+            selected.append(path.as_posix())
+    selected.sort()
+    checksums: dict[str, str] = {}
+    checksum_file = root / _CHECKSUM_FILE
+    if checksum_file.exists():
+        for line in checksum_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            path, _, digest = line.rpartition(":")
+            if path:
+                checksums[path] = digest
+    # 內容指紋：模板路徑＋該模板的內容雜湊（沒有 checksum 檔時只用路徑）
+    digest = hashlib.sha256(
+        "\n".join(f"{path}:{checksums.get(path, '')}" for path in selected).encode()
+    ).hexdigest()
+    version_file = root / TEMPLATES_VERSION_FILE
+    return {
+        "policy": TEMPLATE_POLICY["name"],
+        "templates_version": (
+            version_file.read_text(encoding="utf-8").strip() if version_file.exists()
+            else "unknown"
+        ),
+        "templates": len(selected),
+        "sha256": digest,
+    }
+
+
+def template_set_info(templates_dir: str) -> dict:
+    """Nuclei 版本、模板版本與這次選到的模板集；目錄沒有模板就拋 NucleiUnavailable。"""
+    root = Path(templates_dir)
+    if not templates_dir or not root.is_dir():
+        raise NucleiUnavailable("templates_dir_missing")
+    checksum_file = root / _CHECKSUM_FILE
+    mtime = checksum_file.stat().st_mtime if checksum_file.exists() else 0.0
+    info = dict(_describe_template_set(str(root), mtime))
+    if not info["templates"]:
+        raise NucleiUnavailable("no_templates_selected")
+    info["engine"] = _engine_version()
+    return info
+
+
+def template_set_text(info: dict) -> str:
+    return (
+        f"Nuclei {info.get('engine', 'unknown')}、模板 {info.get('templates_version', 'unknown')}"
+        f"（{info.get('policy', '')}：{info.get('templates', 0)} 個，"
+        f"指紋 {str(info.get('sha256', ''))[:12]}）"
+    )
+
 
 def run_nuclei(
     url: str,
     scan_job_id: int,
     *,
-    deep: bool = False,
-    extra_urls: list[str] | None = None,
     rate_limit: int | None = None,
-) -> list[dict]:
-    """執行 Nuclei 掃描並回傳 Finding dict 列表。
+) -> NucleiRun:
+    """以固定模板集掃描網站根網址，回傳結果與這次的模板集紀錄。
 
-    deep=False：精選模板
-    （cves/vulnerabilities/misconfigurations/exposures/default-logins），60 秒硬限。
-    deep=True：中風險以上模板，5 分鐘硬限。
-    extra_urls：額外的掃描目標（如已爬取的頁面列表），與 url 合併後整批掃描。
     rate_limit：整個 Nuclei process 的每秒請求上限。
-    binary 不存在或任何例外皆 silent-fail 回傳 []。
+    逾時不拋例外：保留逾時前已輸出的結果並標 timed_out。
     """
     if not shutil.which("nuclei"):
-        append_log(scan_job_id, "Nuclei binary 未安裝，略過", level="warn")
-        return []
+        raise NucleiUnavailable("nuclei_missing")
+    template_set = template_set_info(settings.ARGUS_NUCLEI_TEMPLATES_DIR)
 
-    hard_timeout = getattr(settings, "ARGUS_NUCLEI_DEEP_TIMEOUT", 300) if deep else 60
-    mode_label = "主動完整" if deep else "受限精選"
-    effective_rate_limit = max(
-        int(rate_limit if rate_limit is not None else (2 if deep else 5)),
-        1,
-    )
-
-    # 合併並去重 URL 列表（保留插入順序，入口 URL 在最前）
-    all_urls: list[str] = list(dict.fromkeys([url, *(extra_urls or [])]))
-
-    # 決定目標參數：單 URL 用 -u，多 URL 寫 temp file 用 -l
-    url_file: str | None = None
-    if len(all_urls) == 1:
-        target_args = ["-u", all_urls[0]]
-    else:
-        fd, url_file = tempfile.mkstemp(suffix=".txt", prefix="nuclei_urls_")
-        os.close(fd)
-        with open(url_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(all_urls))
-        target_args = ["-l", url_file]
+    hard_timeout = settings.ARGUS_NUCLEI_TIMEOUT
+    effective_rate_limit = max(int(rate_limit if rate_limit is not None else 2), 1)
+    target = _root_url(url)
 
     cmd = [
         "nuclei",
-        *target_args,
+        "-u", target,
+        "-t", settings.ARGUS_NUCLEI_TEMPLATES_DIR,
+        *_policy_args(),
         "-j",
         "-silent",
         "-no-stdin",
@@ -99,44 +208,40 @@ def run_nuclei(
         "-dr",
         "-or",
         "-H", f"User-Agent: {settings.ARGUS_SCANNER_USER_AGENT}",
-        "-timeout", "15" if deep else "10",
+        "-timeout", "15",
         "-rl", str(effective_rate_limit),
-        "-bs", "5" if deep else "3",
-        "-c", "5" if deep else "3",
+        "-bs", "5",
+        "-c", "5",
         "-mhe", "20",
         "-rsr", str(2 * 1024 * 1024),
-        "-pt", "http",
-        "-etags", "dos,fuzz,creds-stuffing,token-spray",
-        "-severity", "critical,high,medium",
     ]
-    if not deep:
-        cmd += ["-tags", "cves,vulnerabilities,misconfigurations,exposures,default-logins"]
+    append_log(scan_job_id, f"Nuclei 開始：{template_set_text(template_set)}，掃描 {target}")
 
+    timed_out = False
     try:
-        result = run_cancellable_process(
-            cmd,
-            scan_job_id=scan_job_id,
-            timeout=hard_timeout,
-        )
+        result = run_cancellable_process(cmd, scan_job_id=scan_job_id, timeout=hard_timeout)
+        stdout = result.stdout or ""
     except ScanCancelled:
         raise
-    except subprocess.TimeoutExpired:
-        append_log(scan_job_id, f"Nuclei 超時（{hard_timeout}s），略過", level="warn")
-        return []
-    except Exception as exc:  # noqa: BLE001
-        append_log(scan_job_id, f"Nuclei 失敗（{exc.__class__.__name__}），略過", level="warn")
-        return []
-    finally:
-        if url_file and os.path.exists(url_file):
-            os.unlink(url_file)
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        stdout = exc.output or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode("utf-8", errors="replace")
+    else:
+        if result.returncode != 0 and not stdout.strip():
+            raise NucleiUnavailable(f"exit_{result.returncode}")
 
-    if result.returncode != 0 and not result.stdout.strip():
-        append_log(scan_job_id, f"Nuclei 異常退出（exit={result.returncode}），略過", level="warn")
-        return []
-
-    findings = _parse_jsonl(result.stdout.splitlines())
-    append_log(scan_job_id, f"Nuclei 完成（{mode_label}）：{len(findings)} 項發現")
-    return findings
+    findings = _parse_jsonl(stdout.splitlines())
+    if timed_out:
+        append_log(
+            scan_job_id,
+            f"Nuclei 逾時（{hard_timeout} 秒），保留逾時前的 {len(findings)} 項發現",
+            level="warn",
+        )
+    else:
+        append_log(scan_job_id, f"Nuclei 完成：{len(findings)} 項發現")
+    return NucleiRun(findings=findings, timed_out=timed_out, template_set=template_set)
 
 
 def _parse_jsonl(lines: list[str]) -> list[dict]:

@@ -26,6 +26,7 @@ from apps.scans.scanners import (
 from apps.scans.security import owasp_mapper
 from apps.scans.security.cookie_scanner import mask_cookie_line
 from apps.scans.security.ip_context import describe_ips
+from apps.scans.versions import SCORING_VERSION
 
 LEGACY_PII_RULE = "SECURITY_PII_8B24BB8B28"
 _AGENT_PREFIX_OLD = "Hermes-Agent 在實際操作與 probe 觀察中發現："
@@ -95,7 +96,11 @@ def _renormalize_cookies(scan_job: ScanJob) -> int:
     return changed
 
 
-def _rescore(scan_job: ScanJob) -> None:
+def stored_scoring_inputs(scan_job: ScanJob) -> tuple[list[dict], set[str] | None, dict]:
+    """由資料庫保存的發現還原計分輸入：(findings, tested_categories, base_scores)。
+
+    重新計分（_rescore）與分數說明（score-breakdown API）共用，兩邊的輸入一致。
+    """
     findings = [
         {
             "title": f.title,
@@ -113,13 +118,24 @@ def _rescore(scan_job: ScanJob) -> None:
         if aeo_report.get("status") == "evaluated" and aeo_report.get("score") is not None
         else {}
     )
+    return findings, tested, base_scores
+
+
+def _rescore(scan_job: ScanJob) -> None:
+    findings, tested, base_scores = stored_scoring_inputs(scan_job)
     overall, category_scores, top_actions = calculate_scores(
         findings, tested_categories=tested, base_scores=base_scores
     )
     scan_job.overall_score = overall
     scan_job.category_scores = category_scores
     scan_job.top_actions = top_actions
-    scan_job.save(update_fields=["overall_score", "category_scores", "top_actions", "updated_at"])
+    # 只用目前公式重算分數、只重跑部分規則：計分版本更新，規則集版本維持原樣（versions.py）
+    scan_job.scoring_version = SCORING_VERSION
+    scan_job.save(
+        update_fields=[
+            "overall_score", "category_scores", "top_actions", "scoring_version", "updated_at"
+        ]
+    )
 
 
 @transaction.atomic

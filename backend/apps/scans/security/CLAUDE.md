@@ -38,6 +38,10 @@ Claude Code 進 `backend/apps/scans/security/` 工作時，本檔在 `scans/CLAU
 | `infra_scanner.py` | 網站基礎架構：A／AAAA／CNAME／NS、IP 反解、Cloudflare 公告網段、標頭與 CNAME 指紋 → 判斷掃到的是 CDN／WAF／反向代理邊緣還是主機，產生報告提醒文字（只查目標自身網域、不發 HTTP） | 已建 |
 | `js_library_scanner.py` | 第三方 JS 庫版本→CVE 比對：解析 <script> 用 Retire.js 規則庫離線比對已知漏洞 | 已建 |
 | `service_cve_scanner.py` | 後端服務指紋→CVE：解析 Server/X-Powered-By 版本，比對 vendored backend_services.json（nginx/Apache/PHP） | 已建 |
+| `zap_passive.py` | OWASP ZAP 被動分析：整理爬蟲錄的 HAR（同 origin、去 Cookie／Authorization、遮蔽 Set-Cookie 值）、ZapClient（上傳→匯入→等被動規則→讀告警→**一律清理**）、告警轉 finding（與既有檢查重複的不列、雜訊略過、信心低降一級）；同 origin 以 cache 鎖。啟用與部署見 [`docs/zap-passive.md`](../../../../docs/zap-passive.md) | 已建（預設關閉） |
+| `vuln_intel.py` | 已知漏洞優先序補強（`stage_deep_security` 寫入前呼叫）：`js-lib-known-vuln`／`service-known-cve` 的 CVE 查 EPSS（FIRST.org，被利用機率與百分位）→ `evidence_json.epss`、描述加一句、`priority_score` 最多加 `EPSS_PRIORITY_BOOST`（14，小於嚴重度間距，不越級）；前端函式庫查 OSV.dev（npm）→ `evidence_json.osv`（公告數、Retire.js 沒列的 CVE、涵蓋目前版本的最高修補版本）並改寫修法。**不改嚴重度**；只送函式庫名稱／版本／CVE；結果快取 1 天；查不到寫 `evidence_json.vuln_intel` 原因。`ARGUS_VULN_INTEL_ENABLED`（預設開） | 已建 |
+| `observatory.py` | 安全標頭參考等第：依 Mozilla HTTP Observatory（v2）公開評分規則離線計算 CSP、Cookie、CORS、HTTP→HTTPS、Referrer-Policy、HSTS、SRI、nosniff、X-Frame-Options／frame-ancestors、CORP 十項，100 分起算、加分只在 ≥ 90 時計入、A+～F。只用首頁回應與 SEO 的轉址檢查，**不呼叫 Mozilla、不發請求、不產生問題、不計入 Argus 分數**；判斷不了的標「未評估」。結果在 `site_profile.observatory`（勾資安時），報告「網站架構」表一列（`summary_line`）、前端網站架構分頁 | 已建 |
+| `finding_kind.py` | 資安發現類型（roadmap §5 第 1 項第一階段，2026-10-08）：`security_kind()` 依 rule_id、標題、證據來源把資安發現分成設定建議（config）／曝露面（exposure）／疑似弱點（suspected）／已驗證弱點（verified），掃描說明（例如 WAF 之後 0 項發現）回 None。**不看 `Finding.confidence`**（既有 1.0 是未校準，不是已確認）、**不影響分數與排序**、不寫 DB（`Finding.security_kind`／`security_kind_label` property 顯示時推得，舊掃描也有）。用在 `FindingSerializer`、`projects.issue_groups`、報告每項追蹤列（`RENDERER_VERSION` 16）。新增資安規則時要在這裡歸類，否則不顯示類型 | 已建 |
 | `nvd_db.py` | NVD CVE→backend_services.json 純函式轉換（CPE 過濾 + 版本區間），供 refresh 命令與單元測試 | 已建 |
 
 ---
