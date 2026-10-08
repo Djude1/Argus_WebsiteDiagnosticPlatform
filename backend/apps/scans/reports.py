@@ -794,9 +794,13 @@ def _aeo_items(scan_job: ScanJob) -> list[dict]:
             if evidence:
                 first = evidence[0]
                 basis += f"（{first['url']}｜{first['location']}）"
+        verdict = question.get("verdict_label", "")
+        if question.get("confidence_label"):
+            # 可信度（確認／可能／推測）附在判定後，不改 schema（RENDERER_VERSION 15）
+            verdict = f"{verdict}（{question['confidence_label']}）"
         items.append({
             "question": question.get("text", ""),
-            "verdict": question.get("verdict_label", ""),
+            "verdict": verdict,
             "basis": basis[:400],
         })
     return items

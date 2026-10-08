@@ -5,6 +5,8 @@ import { useState } from "react";
 // 內容不足以出題時只顯示「未充分評估」與原因，不顯示分數。
 // 用在網站專案的「AEO 問答」分頁（features/projects/ProjectPages.jsx 的 ProjectAeoPage）；
 // withFilter 時可依判定篩選題目。
+// 可回答與內容衝突的題目另附可信度（確認／可能／推測，後端 aeo/answers.py 的 confidence）與限制說明；
+// 舊掃描沒有這兩個欄位就不顯示。
 
 const VERDICT_FILTERS = [
   ["all", "全部"],
@@ -90,12 +92,16 @@ function AeoAnswerPanel({ report, withFilter = false }) {
                 onClick={() => setOpenKey(open ? null : key)}
               >
                 <span className={`aeo-verdict ${VERDICT_TONE[q.verdict] || ""}`}>{q.verdict_label}</span>
+                {q.confidence_label && (
+                  <span className={`aeo-confidence is-${q.confidence}`}>可信度：{q.confidence_label}</span>
+                )}
                 <span className="aeo-question-text">{q.text}</span>
                 <span className="aeo-question-more" aria-hidden="true">{open ? "收合" : "看證據"}</span>
               </button>
               {open && (
                 <div className="aeo-question-body">
                   <p className="aeo-question-reason">{q.reason}</p>
+                  {q.limitation && <p className="aeo-question-limit">判定限制：{q.limitation}</p>}
                   {(q.evidence || []).length > 0 ? (
                     <ul className="aeo-evidence-list">
                       {q.evidence.map((e, i) => (

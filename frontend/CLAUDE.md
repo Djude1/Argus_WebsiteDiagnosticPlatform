@@ -233,7 +233,7 @@ npm run typecheck
 | `src/components/scans/PerformancePanel.jsx` | 掃描「效能」分頁：Lighthouse 分數磚（≥90 良好／50–89 需改善／<50 不佳，附數值）、指標、改善機會；CrUX 指標附等級文字（樣式 `legacy-member/94-report-style.css` 的 `.perf-*`） |
 | `src/components/projects/ScanDefaultsFields.jsx` | 專案預設掃描設定欄位（範圍、維度、模式）；新增專案頁與專案設定共用，`DEFAULT_SCAN_SETTINGS` 為新專案預設 |
 | `src/components/projects/SiteFavicon.jsx` | 網站圖示（`project.favicon` 或名稱首字）；切換器、側邊欄、總覽、所有專案共用 |
-| `src/components/scans/AeoAnswerPanel.jsx` | 專案「AEO 問答」分頁的逐題結果（`withFilter` 時可依判定篩選、不重複顯示標題與計數）：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、展開看理由與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
+| `src/components/scans/AeoAnswerPanel.jsx` | 專案「AEO 問答」分頁的逐題結果（`withFilter` 時可依判定篩選、不重複顯示標題與計數）：逐題判定（可回答／資訊不足／內容衝突／無可用答案）、可回答與內容衝突另有可信度外框徽章（確認／可能／推測，附文字；2026-10-08）、展開看理由、判定限制與原文證據；`scan.aeo_report.status` 非 `evaluated` 時只顯示「未充分評估」與原因、不顯示比例（樣式在 `legacy-member/92-layout.css` 的 `.aeo-*`） |
 | `src/components/billing/BuyerInvoiceFields.jsx` | 購點與訂閱共用：買受人／發票欄位、`validateBuyer`、`buyerPayload`、`submitEcpayForm`（只允許綠界測試／正式兩個結帳網址）。`live`（`payment_mode === "ecpay"`）切換正式與測試文案 |
 | `src/features/account/AuthenticatedPages.jsx` | 會員區入口：re-export `TopNav`／`BillingPage`（＋`SubscriptionPanel`）／`SettingsPage`，各頁實作在同目錄同名檔；購點為 462848b 舊版 |
 | `src/features/reviews/ReviewsPage.jsx` | 公開評論、評分分布、本人評論、逐則按讚／檢舉（樣式 `50-reviews.css`＋`51-reviews-dark.css`＋`52-reviews-layout-v2.css`） |

@@ -34,6 +34,11 @@ class Command(BaseCommand):
             "thresholds": THRESHOLDS,
             "by_tag": {tag: {"correct": c, "total": n} for tag, (c, n) in result.by_tag().items()},
             "confusion": result.confusion(),
+            # 判「可回答」的題目依可信度分組的 precision：確認 ≥ 可能 ≥ 推測 才代表可信度有意義
+            "precision_by_confidence": {
+                level: {"correct": c, "total": n}
+                for level, (c, n) in result.precision_by_confidence().items()
+            },
             "mismatches": [
                 {"case": j.case, "question": j.key, "expected": j.expected, "actual": j.actual}
                 for j in result.mismatches
@@ -48,6 +53,8 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {name}: {value}" + (f"（門檻 {bound}）" if bound else ""))
             for tag, item in payload["by_tag"].items():
                 self.stdout.write(f"  [{tag}] {item['correct']}/{item['total']}")
+            for level, item in payload["precision_by_confidence"].items():
+                self.stdout.write(f"  可回答（{level}）正確 {item['correct']}/{item['total']}")
             for miss in payload["mismatches"]:
                 self.stdout.write(
                     f"  不一致：{miss['case']}｜{miss['question']}｜"

@@ -39,6 +39,7 @@ class Judgement:
     expected: str
     actual: str
     tags: tuple[str, ...]
+    confidence: str = ""
 
     @property
     def correct(self) -> bool:
@@ -106,6 +107,16 @@ class BenchmarkResult:
                 bucket[1] += 1
         return {tag: (c, n) for tag, (c, n) in out.items()}
 
+    def precision_by_confidence(self) -> dict[str, tuple[int, int]]:
+        """規則判「可回答」的題目，依可信度分組：(標註也是可回答的題數, 該組題數)。"""
+        out: dict[str, list[int]] = {}
+        for j in self.judgements:
+            if j.actual == ANSWERED:
+                bucket = out.setdefault(j.confidence, [0, 0])
+                bucket[0] += int(j.expected == ANSWERED)
+                bucket[1] += 1
+        return {level: (hit, n) for level, (hit, n) in out.items()}
+
     def metrics(self) -> dict[str, float]:
         return {
             "accuracy": round(self.accuracy, 4),
@@ -136,9 +147,13 @@ def run_benchmark(cases: tuple[GoldCase, ...] = ALL_CASES) -> BenchmarkResult:
         started = time.perf_counter()
         evaluation = evaluate_site(list(case.pages))
         benchmark.seconds += time.perf_counter() - started
-        verdicts = {_result_key(r): r.verdict for r in evaluation.results}
+        results = {_result_key(r): r for r in evaluation.results}
         for key, expected in case.expected.items():
+            result = results.get(key)
             benchmark.judgements.append(
-                Judgement(case.name, key, expected, verdicts.get(key, NO_QUESTION), case.tags)
+                Judgement(
+                    case.name, key, expected, result.verdict if result else NO_QUESTION,
+                    case.tags, result.confidence if result else "",
+                )
             )
     return benchmark

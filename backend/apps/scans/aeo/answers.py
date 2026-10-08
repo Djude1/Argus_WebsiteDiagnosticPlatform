@@ -31,6 +31,19 @@ VERDICT_LABELS = {
     CONFLICT: "內容衝突",
     MISSING: "無可用答案",
 }
+# 答案可信度（roadmap §2 AEO 第 4 項）：可回答與內容衝突才有，說明規則確認到什麼程度
+CONFIRMED = "confirmed"
+LIKELY = "likely"
+POSSIBLE = "possible"
+CONFIDENCE_LABELS = {CONFIRMED: "確認", LIKELY: "可能", POSSIBLE: "推測"}
+CONFIDENCE_LIMITS = {
+    CONFIRMED: "答案值（號碼、金額、時間、日期等）逐字出現在引用的原文中；仍需確認是否為最新資訊。",
+    LIKELY: "依規則判斷段落列出步驟或條件，或位於網站自己的問題標題下方；未逐字核對答案是否完整。",
+    POSSIBLE: "只確認相關段落有具體敘述，規則無法判斷是否真的回答了問題，建議人工確認。",
+}
+# 答案值有固定格式、能逐字比對的題型
+_EXACT_TYPES = {q.PHONE, q.EMAIL, q.ADDRESS, q.HOURS, q.PRICE, q.DATE, q.DURATION}
+
 # 計分：可回答 1、資訊不足 0.5、內容衝突 0.25、無答案 0
 VERDICT_VALUE = {ANSWERED: 1.0, INSUFFICIENT: 0.5, CONFLICT: 0.25, MISSING: 0.0}
 
@@ -163,11 +176,28 @@ class QuestionResult:
         """答案值是否真的出現在引用的原文中（第一版規則下應恆為 True，作為自我檢查）。"""
         return any(e.value and e.value in e.quote for e in self.evidence)
 
+    @property
+    def confidence(self) -> str:
+        """確認＝格式化的答案值逐字出現在原文；可能＝步驟／條件規則或網站自己的問題；推測＝其餘。"""
+        if self.verdict == CONFLICT:
+            return CONFIRMED if self.value_in_quote else LIKELY
+        if self.verdict != ANSWERED:
+            return ""
+        if self.question.answer_type in _EXACT_TYPES:
+            return CONFIRMED if self.value_in_quote else LIKELY
+        if self.question.answer_type in {q.STEPS, q.CRITERIA} or self.question.source == "site":
+            return LIKELY
+        return POSSIBLE
+
     def as_dict(self) -> dict:
+        confidence = self.confidence
         return {
             **self.question.as_dict(),
             "verdict": self.verdict,
             "verdict_label": VERDICT_LABELS[self.verdict],
+            "confidence": confidence or None,
+            "confidence_label": CONFIDENCE_LABELS.get(confidence),
+            "limitation": CONFIDENCE_LIMITS.get(confidence),
             "reason": self.reason,
             "evidence": [e.as_dict() for e in self.evidence],
             "candidates_checked": self.candidates_checked,

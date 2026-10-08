@@ -244,6 +244,13 @@
 .aeo-verdict.is-good { @apply bg-emerald-100 text-emerald-700; }
 .aeo-verdict.is-warn { @apply bg-amber-100 text-amber-800; }
 .aeo-verdict.is-bad { @apply bg-rose-100 text-rose-700; }
+/* 可信度（2026-10-08）：外框徽章附文字，與判定的彩色底徽章區分；不用左邊條 */
+.aeo-confidence {
+  @apply shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs;
+}
+.aeo-confidence.is-confirmed { @apply border-emerald-300 text-emerald-700; }
+.aeo-confidence.is-likely { @apply border-sky-300 text-sky-700; }
+.aeo-confidence.is-possible { @apply border-slate-300 text-slate-600; }
 .aeo-question-text {
   @apply min-w-0 flex-1 text-sm text-slate-800;
 }
@@ -255,6 +262,9 @@
 }
 .aeo-question-reason {
   @apply mb-2 text-xs leading-relaxed text-slate-600;
+}
+.aeo-question-limit {
+  @apply mb-2 text-xs leading-relaxed text-slate-500;
 }
 .aeo-evidence-list {
   @apply m-0 grid list-none gap-2 p-0;
