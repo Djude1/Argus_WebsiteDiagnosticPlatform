@@ -80,7 +80,7 @@ data:
   #   MIN     = 每次成功的最低消費
   # 現況：實測一次約 $0.0013，×100 = 0.13 點 < 下限，所以實際都是收 1 點。
   # 要讓用量真的浮動，把 PER_USD 調高（例如 1000）。
-  ARGUS_COIN_REBUILD_HOLD: "30"
+  ARGUS_COIN_REBUILD_HOLD: "50"
   ARGUS_COIN_PER_USD: "100"
   ARGUS_COIN_REBUILD_MIN: "1"
   ARGUS_KALI_ENABLED: "false"

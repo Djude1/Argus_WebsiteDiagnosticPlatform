@@ -1,0 +1,132 @@
+# OWASP ZAP 被動分析 daemon（選用，預設不部署：本檔沒有列在 k8s/kustomization.yaml）。
+#
+# 用途：worker 把爬蟲錄下的同網站 HAR 上傳給 ZAP，只跑被動規則（apps/scans/security/zap_passive.py）。
+# ZAP 不需要也不允許對外連線：NetworkPolicy 只開 argus namespace 的 worker 進來 8090，egress 全擋。
+#
+# 啟用步驟（docs/zap-passive.md）：
+#   1. kubectl create namespace argus-zap（或套用本檔的 Namespace）
+#   2. 在 argus-zap 建 Secret zap-api（key: api-key）；同一個值放進 argus namespace worker 的
+#      ARGUS_ZAP_API_KEY（Secret），不得寫進 Git
+#   3. kubectl apply -f k8s/optional/zap-passive.yaml
+#   4. worker 設 ARGUS_ZAP_ENABLED=true、ARGUS_ZAP_API_URL=http://zap.argus-zap.svc.cluster.local:8090
+# 回滾：worker 設回 ARGUS_ZAP_ENABLED=false 即可（掃描不再錄 HAR、不呼叫 ZAP），再刪本檔資源。
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus-zap
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zap
+  namespace: argus-zap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zap
+  template:
+    metadata:
+      labels:
+        app: zap
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: zap
+          # 官方映像以 digest 固定版本（2.16.1）；升級時一併更新 tests/test_zap_optional_contract.py
+          image: ghcr.io/zaproxy/zaproxy:2.16.1@sha256:7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              exec zap.sh -daemon -host 0.0.0.0 -port 8090 -dir /home/zap/.ZAP
+              -config api.key="$ZAP_API_KEY"
+              -config api.filexfer=true
+              -config api.addrs.addr.name=.*
+              -config api.addrs.addr.regex=true
+              -config start.checkForUpdates=false
+              -config start.checkAddonUpdates=false
+          env:
+            - name: ZAP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: zap-api
+                  key: api-key
+            - name: JAVA_OPTS
+              value: "-Xmx1536m"
+          ports:
+            - containerPort: 8090
+              name: api
+          readinessProbe:
+            tcpSocket:
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: zap-home
+              mountPath: /home/zap/.ZAP
+      volumes:
+        # ZAP 的工作目錄（session、上傳的 HAR）不保存：Pod 重啟即清空
+        - name: zap-home
+          emptyDir:
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zap
+  namespace: argus-zap
+spec:
+  selector:
+    app: zap
+  ports:
+    - name: api
+      port: 8090
+      targetPort: api
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zap-ingress-from-worker-only
+  namespace: argus-zap
+spec:
+  podSelector:
+    matchLabels:
+      app: zap
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argus
+          podSelector:
+            matchLabels:
+              app: worker
+      ports:
+        - protocol: TCP
+          port: 8090
+  # 被動分析不需要任何對外連線（不更新、不送請求到目標網站）
+  egress: []
