@@ -329,6 +329,16 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 三類量測，全部由爬蟲逐頁收集、`analyze_ux()` 逐頁產生 finding：
 
 - **行動版版面**（`collect_mobile_layout()` → `Page.layout_metrics`）：水平溢出等。
+- **版面位移 CLS 與元素歸因（2026-10-08，roadmap §4 第 3 項）**（`collect_layout_shift()` →
+  `layout_metrics["layout_shift"]`，不需 migration）：每頁在 `scroll_to_bottom` 與 `page.content()` 之後、
+  **截圖之前**量（整頁截圖會改視窗大小），被阻擋的頁不量。讀瀏覽器 buffered `layout-shift` 紀錄，依 Google
+  CLS 定義取最大工作階段視窗，`hadRecentInput` 不計；`scroll_to_bottom` 最後瞬間跳回頂端前會設
+  `window.__argusScrollTopAt`，之後的位移（捲動後縮小的標頭又展開）是量測動作造成的、不計。每個元素分數＝它有移動
+  的位移分數合計（同一次位移同名元素只記一次，不會大於整頁 CLS），附最大移動距離；另數沒有同時標
+  width／height 的 img／video／iframe 當可能原因。`scanners._ux_layout_shift` → `ux-layout-shift`：CLS >0.1 低、
+  >0.25 中。PSI（`pagespeed.py`）只測首頁且需金鑰，這裡是每頁、桌面視窗、單次量測，數值會浮動（沙箱實測
+  udn 首頁兩次分別 0.851 與 0.025：網路慢時樣式表晚到也會量到）。測試 `tests_layout_shift.py`（真實瀏覽器部分
+  要用 `goto`：`set_content` 之後的位移會被 Chromium 標成使用者操作後而不計）。
 - **觸控目標過小 ＋ 表單欄位缺可及名稱**（`collect_ux_signals()` → `page["ux_signals"]`）：
   可點元素在手機寬或高 < `_MIN_TAP_TARGET_PX`（40px）列為 tap-target 問題（≥5 個升
   MEDIUM）；`<input>`/`<select>`/`<textarea>` 無 label/aria/title/placeholder 列為

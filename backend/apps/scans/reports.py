@@ -370,6 +370,11 @@ RULE_BASIS = {
     "geo-enumeration-not-list":
         "依據：同一段文字出現 3 個以上編號（1.／1)／(1)／第一、）。限制：只看編號格式，"
         "程式碼區塊不檢查。",
+    "ux-layout-shift":
+        "依據：瀏覽器 layout-shift 紀錄，依 Google CLS 定義取最大工作階段視窗；0.1 以上列為需改善、"
+        "0.25 以上為不佳。限制：Argus 爬取時的桌面視窗單次量測、沒有使用者操作，"
+        "數值會與 Lighthouse 及真實使用者不同，網路慢時樣式表晚到也會量到較高的值；"
+        "列出的是被推動的元素，不一定是造成位移的元素。",
     "geo-article-date-missing":
         "依據：文章頁的 JSON-LD datePublished／dateModified 與 article:*_time meta 都沒有日期。"
         "限制：只寫在內文的日期不會被偵測到。",

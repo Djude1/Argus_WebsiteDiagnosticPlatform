@@ -322,6 +322,122 @@ async def collect_element_boxes(page) -> dict[str, dict]:
 
 # 行動版量測的視窗寬度。375 是主流手機的 CSS 寬度（iPhone 6 以降的多數機型），
 # 破版在這個寬度看得最清楚。
+# 版面位移只回報位移最多的幾個元素
+_MAX_LAYOUT_SHIFT_ELEMENTS = 5
+
+
+async def collect_layout_shift(page) -> dict:
+    """量這頁載入與捲動期間的累計版面位移（CLS），並找出位移的元素（roadmap §4 第 3 項）。
+
+    用瀏覽器的 layout-shift 紀錄（buffered，含載入期間已發生的位移），依 Google 的 CLS 定義
+    取最大的工作階段視窗（位移間隔 <1 秒、整段 ≤5 秒）；使用者操作後 0.5 秒內的位移不算。
+    包含 scroll_to_bottom 往下捲動時的位移（延遲載入的圖片），但不含它最後瞬間跳回頂端之後的位移。
+    **在截圖之前呼叫**：整頁截圖會改變視窗大小，可能產生不是使用者會看到的位移。
+
+    這是單次、桌面視窗、無使用者操作的量測，數值會與 Lighthouse／真實使用者不同。
+    失敗或瀏覽器不支援回傳 {}（＝沒量到，不是沒有位移）。
+    """
+    try:
+        return await asyncio.wait_for(
+            page.evaluate(
+                r"""
+                async (maxElements) => {
+                    const types = (window.PerformanceObserver
+                        && PerformanceObserver.supportedEntryTypes) || [];
+                    if (!types.includes("layout-shift")) return {};
+                    const entries = await new Promise((resolve) => {
+                        const list = [];
+                        const observer = new PerformanceObserver(
+                            (l) => list.push(...l.getEntries())
+                        );
+                        observer.observe({ type: "layout-shift", buffered: true });
+                        setTimeout(() => {
+                            list.push(...observer.takeRecords());
+                            observer.disconnect();
+                            resolve(list);
+                        }, 100);
+                    });
+                    let best = 0, bestWindow = [], current = 0, currentWindow = [];
+                    let first = 0, last = 0, total = 0;
+                    const jumpedAt = window.__argusScrollTopAt ?? Infinity;
+                    const counted = entries.filter(
+                        (e) => !e.hadRecentInput && e.startTime < jumpedAt
+                    );
+                    for (const e of counted) {
+                        total += e.value;
+                        if (currentWindow.length && e.startTime - last < 1000
+                            && e.startTime - first < 5000) {
+                            current += e.value;
+                            currentWindow.push(e);
+                        } else {
+                            current = e.value;
+                            currentWindow = [e];
+                            first = e.startTime;
+                        }
+                        last = e.startTime;
+                        if (current > best) {
+                            best = current;
+                            bestWindow = currentWindow.slice();
+                        }
+                    }
+                    const describe = (el) => {
+                        const id = el.id ? `#${el.id}` : "";
+                        const cls = (el.className && typeof el.className === "string")
+                            ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".")
+                            : "";
+                        return (el.tagName.toLowerCase() + id + cls).slice(0, 120);
+                    };
+                    // 每次位移的分數記到這次位移中移動的元素上（一次位移可能有多個元素）；
+                    // 同一次位移裡同名的元素只記一次，否則元素分數會大於整頁 CLS
+                    const elements = new Map();
+                    for (const e of bestWindow) {
+                        const seen = new Set();
+                        for (const source of e.sources || []) {
+                            let node = source.node;
+                            if (node && node.nodeType !== 1) node = node.parentElement;
+                            if (!node || !node.tagName) continue;
+                            const selector = describe(node);
+                            const moved = Math.round(Math.max(
+                                Math.abs(source.currentRect.y - source.previousRect.y),
+                                Math.abs(source.currentRect.x - source.previousRect.x),
+                            ));
+                            const item = elements.get(selector)
+                                || { selector, score: 0, moved_px: 0, shifts: 0 };
+                            item.moved_px = Math.max(item.moved_px, moved);
+                            if (!seen.has(selector)) {
+                                seen.add(selector);
+                                item.score += e.value;
+                                item.shifts += 1;
+                            }
+                            elements.set(selector, item);
+                        }
+                    }
+                    const top = [...elements.values()]
+                        // 同一次位移裡的元素分數相同，移動距離大的排前面
+                        .sort((a, b) => b.score - a.score || b.moved_px - a.moved_px)
+                        .slice(0, maxElements)
+                        .map((item) => ({ ...item, score: Math.round(item.score * 1000) / 1000 }));
+                    // 常見原因：沒有標寬高的圖片／影片／iframe，載入後把下面的內容往下推
+                    const unsized = [...document.querySelectorAll("img, video, iframe")].filter(
+                        (el) => !el.getAttribute("width") || !el.getAttribute("height")
+                    ).length;
+                    return {
+                        cls: Math.round(best * 1000) / 1000,
+                        total: Math.round(total * 1000) / 1000,
+                        shifts: counted.length,
+                        elements: top,
+                        unsized_media: unsized,
+                    };
+                }
+                """,
+                _MAX_LAYOUT_SHIFT_ELEMENTS,
+            ),
+            timeout=10,
+        )
+    except Exception:
+        return {}
+
+
 MOBILE_VIEWPORT = {"width": 375, "height": 812}
 # 只回報最嚴重的幾個元素。一個溢出的子元素會讓所有祖先都超寬，全記等於洗版，
 # 而這份資料每頁都要進 DB。
@@ -556,6 +672,9 @@ async def scroll_to_bottom(page) -> None:
                             }
                         }, 80);
                     });
+                    // 記下跳回頂端的時間：之後的版面位移（例如捲動後縮小的固定標頭又展開）
+                    // 是這個瞬間跳轉造成的，不是讀者會遇到的，collect_layout_shift 不計
+                    window.__argusScrollTopAt = performance.now();
                     window.scrollTo(0, 0);
                 }
                 """
@@ -867,6 +986,9 @@ async def _capture_content(
         or classify_cf_challenge(capture["html"])
         or classify_blocked(status_code)
     )
+    # 版面位移要在截圖前量：整頁截圖會改變視窗大小。被阻擋的錯誤頁不量。
+    stage.name = "layout_shift"
+    capture["layout_shift"] = {} if blocked_reason else await collect_layout_shift(page)
     # 被阻擋的頁面仍拍截圖供人工核對；截圖失敗只讓這一頁沒有圖，不影響其餘分析。
     stage.name = "screenshot"
     capture["screenshot_path"] = (
@@ -961,6 +1083,8 @@ def _page_record(
     """crawl_site 回傳的單頁資料（tasks.py 落地成 Page，並交給各 scanner 分析）。"""
     screenshot_path = capture["screenshot_path"]
     layout_metrics = dict(capture["layout_metrics"] or {})
+    if capture.get("layout_shift"):
+        layout_metrics["layout_shift"] = capture["layout_shift"]
     if capture.get("mobile_screenshot_path") is not None:
         layout_metrics["mobile_screenshot"] = str(
             capture["mobile_screenshot_path"].relative_to(settings.BASE_DIR)

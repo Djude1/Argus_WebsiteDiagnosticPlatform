@@ -536,6 +536,7 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
 
     判準都是客觀量測、不需要人為評分：
     - 行動版水平溢出（破版）：`layout_metrics`
+    - 版面位移（CLS）與位移的元素：`layout_metrics.layout_shift`（桌面視窗、載入與捲動期間）
     - 觸控目標過小、表單欄位缺可及標籤：`ux_signals`（行動版視窗量測）
     - JavaScript 執行期錯誤：`js_errors`（頁面實際拋出的未捕捉例外）
     - WCAG 自動化檢查：`a11y`（axe-core，勾 UX 才跑）
@@ -544,6 +545,7 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
     """
     findings: list[dict] = []
     findings.extend(_ux_mobile_overflow(page_input))
+    findings.extend(_ux_layout_shift(page_input))
     findings.extend(_ux_tap_targets(page_input))
     findings.extend(_ux_unlabeled_fields(page_input))
     findings.extend(_ux_js_errors(page_input))
@@ -618,6 +620,62 @@ def _ux_mobile_overflow(page_input: PageAnalysisInput) -> list[dict]:
                 "annotations": _mobile_annotations(
                     offenders[:3], lambda o: f"超出 {o.get('overflow_px')}px"
                 ),
+            },
+        )
+    ]
+
+
+# Google CLS 門檻：≤0.1 良好、≤0.25 需改善、>0.25 不佳
+_CLS_NEEDS_IMPROVEMENT = 0.1
+_CLS_POOR = 0.25
+
+
+def _ux_layout_shift(page_input: PageAnalysisInput) -> list[dict]:
+    """版面位移（CLS）過高，並列出位移的元素。沒量到（空 dict）不算通過、也不列問題。"""
+    shift = (page_input.layout_metrics or {}).get("layout_shift") or {}
+    cls = shift.get("cls") or 0
+    if cls <= _CLS_NEEDS_IMPROVEMENT:
+        return []
+    poor = cls > _CLS_POOR
+    elements = shift.get("elements") or []
+    detail = "、".join(
+        f"{e.get('selector')}（位移 {e.get('moved_px')}px）" for e in elements[:3]
+    ) or "瀏覽器沒有回報位移的元素"
+    unsized = shift.get("unsized_media") or 0
+    cause = (
+        f"這頁有 {unsized} 個圖片／影片／iframe 沒有同時標 width 與 height 屬性，"
+        "若 CSS 也沒有預留尺寸，載入後就會把下方內容往下推。"
+        if unsized else ""
+    )
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.MEDIUM if poor else Finding.Severity.LOW,
+            rule_id="ux-layout-shift",
+            title="頁面載入時版面跳動（CLS 偏高）",
+            description=(
+                f"Argus 爬取時量到這頁的累計版面位移（CLS）為 {cls}"
+                "（Google 標準：0.1 以下良好、0.25 以上不佳），"
+                f"屬於「{'不佳' if poor else '需改善'}」。"
+                "內容在讀者閱讀或準備點擊時突然移動，容易點錯、找不到剛才讀到的位置。"
+                + cause
+            ),
+            remediation=(
+                "為圖片、影片、iframe 與廣告版位預留空間（標 width／height 或 CSS aspect-ratio），"
+                "不要在既有內容上方插入橫幅或動態內容，"
+                "網頁字型使用 font-display: optional 或調整備用字型尺寸。"
+                "下列是被推動的元素，原因通常在它上方較晚載入的內容。"
+            ),
+            evidence=f"CLS={cls}（桌面視窗、單次量測）；位移的元素：{detail}",
+            selector=(elements[0].get("selector", "") if elements else ""),
+            impact_area="stability",
+            priority_score=50 if poor else 38,
+            evidence_type="layout_metrics",
+            evidence_json={
+                "cls": cls,
+                "shifts": shift.get("shifts"),
+                "elements": elements[:5],
+                "unsized_media": unsized,
             },
         )
     ]

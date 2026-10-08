@@ -69,7 +69,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **升級**：
   1. **接 axe-core（Playwright 注入）**：目前 a11y 是自建規則，接開源業界標準可一舉覆蓋 WCAG 2.2 數十條。**UX 維度投報率最高**。
   2. **接 Lighthouse（programmatic）**：Performance/Accessibility/Best-Practices/SEO 四分數與自建並列。
-  3. CLS 元素級歸因（哪個元素造成位移）。
+  3. CLS 元素級歸因（哪個元素造成位移）。（**已實作 2026-10-08**：爬蟲逐頁讀瀏覽器 layout-shift 紀錄（`crawler.collect_layout_shift`），依 Google CLS 定義計算並列出位移的元素與移動距離，CLS >0.1 → `ux-layout-shift`（低，>0.25 中）；不需要 PSI 金鑰、每頁都量。排除爬蟲捲到底後跳回頂端造成的位移。列出的是「被推動」的元素，真正原因通常在它上方較晚載入的內容；另提示沒有標寬高的圖片／影片／iframe 數量。限制：桌面視窗單次量測，沙箱實測 udn 首頁兩次 0.851 與 0.025，網路慢時樣式表晚到也會量到；Lighthouse 的 layout-shifts 稽核（根因）需 PSI 金鑰，未接）
 
 ## 5. 被動資安（Passive Security）
 
