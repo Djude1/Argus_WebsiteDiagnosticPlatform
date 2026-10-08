@@ -7,6 +7,11 @@
    每個網站都問；其餘意圖要在網站正文中出現足夠的觸發詞才問——例如整站提到「招生」
    「報名」，才會問「申請截止日是何時？」，不會對咖啡店問招生問題。
 2. 網站自己寫的問題：小標題／dt／summary 以問號結尾的句子（FAQ 常見寫法）。
+
+同業常見問句（2026-10-08，roadmap §2 第 5 項）：付款方式（電商、課程、健身房等收費網站）與
+預約／訂位（診所、餐廳、工作室）也以觸發詞決定要不要問，答案要有可核對的付款方式名稱或
+預約管道。不從一般小標題（例如「交通資訊」）自動造題：那一段本身就是答案，幾乎一定判成
+可回答，只會灌高分數。
 """
 
 from __future__ import annotations
@@ -25,6 +30,8 @@ STEPS = "steps"
 DURATION = "duration"
 DEFINITION = "definition"
 CRITERIA = "criteria"
+PAYMENT = "payment"
+BOOKING = "booking"
 FREEFORM = "freeform"
 
 
@@ -204,6 +211,27 @@ INTENTS: tuple[Intent, ...] = (
         expect="有具體天數或時間範圍",
         anchors=("配送", "出貨", "運送", "寄送", "到貨", "shipping", "delivery"),
     ),
+    Intent(
+        "payment",
+        "可以使用哪些付款方式？",
+        PAYMENT,
+        ("付款", "支付", "付費", "繳費", "繳納", "信用卡", "轉帳", "結帳", "payment"),
+        triggers=("付款", "結帳", "購物車", "訂單", "繳費", "付費", "checkout", "payment"),
+        weight=0.6,
+        expect="列出可用的付款方式（例如信用卡、ATM 轉帳、行動支付、貨到付款）",
+        # 只寫「結帳時可用優惠券」不是在講付款方式
+        anchors=("付款", "支付", "付費", "繳費", "繳納", "payment"),
+    ),
+    Intent(
+        "booking",
+        "如何預約或訂位？",
+        BOOKING,
+        ("預約", "訂位", "預訂", "掛號", "booking", "reserv"),
+        triggers=("預約", "訂位", "預訂", "掛號", "booking", "reservation"),
+        weight=0.7,
+        expect="寫出預約管道（線上系統、表單、電話、LINE）或可照做的步驟",
+        anchors=("預約", "訂位", "預訂", "掛號", "booking", "reserv"),
+    ),
 )
 
 MAX_SITE_QUESTIONS = 8
@@ -262,12 +290,26 @@ def _question_keywords(text: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(w for w in words if w))[:12]
 
 
+# 付款與預約的觸發詞只算小標題與成句段落：學校、醫院網站選單上的「心理諮商線上預約」
+# 「出納付款查詢」連結不代表網站在提供這類服務（2026-10-08 ntub.edu.tw 實測）
+_PROSE_TRIGGER_TYPES = {PAYMENT, BOOKING}
+_MIN_PROSE_CHARS = 15
+
+
 def build_question_set(pages) -> list[Question]:
     """pages：PageContent 清單（已擷取正文）。回傳本站要檢測的題目。"""
     corpus = "\n".join(p.text for p in pages).lower()
+    prose_corpus = "\n".join(
+        passage.text
+        for page in pages
+        for passage in page.passages
+        if passage.region == "main"
+        and (passage.is_heading or len(passage.text.strip()) >= _MIN_PROSE_CHARS)
+    ).lower()
     questions: list[Question] = []
     for intent in INTENTS:
-        hits = _count_hits(corpus, intent.triggers) if intent.triggers else 0
+        text = prose_corpus if intent.answer_type in _PROSE_TRIGGER_TYPES else corpus
+        hits = _count_hits(text, intent.triggers) if intent.triggers else 0
         if intent.triggers and hits < intent.min_trigger_hits:
             continue
         questions.append(

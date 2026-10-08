@@ -42,7 +42,7 @@ CONFIDENCE_LIMITS = {
     POSSIBLE: "只確認相關段落有具體敘述，規則無法判斷是否真的回答了問題，建議人工確認。",
 }
 # 答案值有固定格式、能逐字比對的題型
-_EXACT_TYPES = {q.PHONE, q.EMAIL, q.ADDRESS, q.HOURS, q.PRICE, q.DATE, q.DURATION}
+_EXACT_TYPES = {q.PHONE, q.EMAIL, q.ADDRESS, q.HOURS, q.PRICE, q.DATE, q.DURATION, q.PAYMENT}
 
 # 計分：可回答 1、資訊不足 0.5、內容衝突 0.25、無答案 0
 VERDICT_VALUE = {ANSWERED: 1.0, INSUFFICIENT: 0.5, CONFLICT: 0.25, MISSING: 0.0}
@@ -137,6 +137,29 @@ _TESTIMONIAL_HEADING = re.compile(
 )
 _FIRST_PERSON = re.compile(r"我(?!們)")
 
+# 付款方式名稱（2026-10-08，roadmap §2 第 5 項）
+_PAYMENT_METHOD = re.compile(
+    r"信用卡|金融卡|簽帳卡|ATM|轉帳|匯款|貨到付款|取貨付款|超商代碼|超商付款|行動支付"
+    r"|LINE\s?Pay|街口|Apple\s?Pay|Google\s?Pay|Samsung\s?Pay|台灣\s?Pay|全支付|悠遊付"
+    r"|悠遊卡|一卡通|PayPal|現金|Visa|Mastercard|JCB|銀聯|分期付款"
+    r"|credit card|debit card|bank transfer|wire transfer|cash on delivery",
+    re.IGNORECASE,
+)
+# 預約管道：線上系統、表單、LINE、電話號碼，或「點選／填寫」這類可照做的動作
+_BOOKING_CHANNEL = re.compile(
+    r"線上預約|網路預約|預約系統|預約表單|預約平台|線上掛號|網路掛號|現場掛號|電話預約"
+    # 「inline」單獨出現多半是英文單字（inline style），只認「inline 訂位」；平台名稱本身
+    # （EZTABLE 有權取消此訂單）不是預約管道
+    r"|來電|撥打|\bLINE\b|官方帳號|表單|點選|填寫|inline\s?訂位|book online"
+    rf"|{_PHONE.pattern}",
+    re.IGNORECASE,
+)
+
+# 付款與預約：只看成句的段落。選單連結文字（「出納付款查詢」「心理諮商線上預約」，
+# 2026-10-08 ntub.edu.tw 實測）不是在回答怎麼付款、怎麼預約
+_PROSE_ONLY = {q.PAYMENT, q.BOOKING}
+_MIN_PROSE_CHARS = 15
+
 _VALUE_FINDERS = {
     q.PHONE: _PHONE,
     q.EMAIL: _EMAIL,
@@ -144,6 +167,8 @@ _VALUE_FINDERS = {
     q.HOURS: _HOURS,
     q.PRICE: _PRICE,
     q.DURATION: _DURATION,
+    q.PAYMENT: _PAYMENT_METHOD,
+    q.BOOKING: _BOOKING_CHANNEL,
 }
 
 
@@ -185,7 +210,10 @@ class QuestionResult:
             return ""
         if self.question.answer_type in _EXACT_TYPES:
             return CONFIRMED if self.value_in_quote else LIKELY
-        if self.question.answer_type in {q.STEPS, q.CRITERIA} or self.question.source == "site":
+        if (
+            self.question.answer_type in {q.STEPS, q.CRITERIA, q.BOOKING}
+            or self.question.source == "site"
+        ):
             return LIKELY
         return POSSIBLE
 
@@ -338,6 +366,8 @@ def judge(
         )
 
     on_topic = [p for p in candidates if entails(question, p)]
+    if question.answer_type in _PROSE_ONLY:
+        on_topic = [p for p in on_topic if len(p.text.strip()) >= _MIN_PROSE_CHARS]
     if not on_topic:
         # 只碰到「必須」「限」這類泛用字，沒有任何段落真的在講這個主題
         return QuestionResult(

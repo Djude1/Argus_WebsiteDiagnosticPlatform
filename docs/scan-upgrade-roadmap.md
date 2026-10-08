@@ -49,7 +49,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   2. **Specificity / Conflict Check（P0）**：衝突判定目前**只判日期**；擴充到價格、資格、聯絡方式等需具體可核對的欄位，多頁內容互斥時標記 conflict。（**已實作 2026-10-08**：`aeo/answers._value_conflict` 涵蓋價格、營業時間、客服專線，同一標籤在兩個以上頁面的值不同才算；先在回歸資料集加 6 個調整案例（3 衝突＋3 不是衝突）與 4 個保留集案例再寫規則。量測：全體 accuracy 0.971、precision 1.0、recall 0.974、FPR 0；保留集 19／21（兩題是沒出題，衝突 3／3 全對，不是衝突的案例沒有判成衝突）。資格條件不做：條件文字差異多半是不同方案，字面比對無法可靠判斷）
   3. **Cross-module evidence reuse（P0）**：Email、電話、地址、日期等與 Security／SEO 共用 evidence，避免一個模組「找到」、另一個模組「找不到」。
   4. **Answer confidence（P1）**：輸出 Confirmed／Likely／Possible，並保留引用來源與限制。（**已實作 2026-10-08**：`aeo/answers.QuestionResult.confidence`，確認＝格式化答案值逐字出現在原文、可能＝步驟／條件或網站自己的問題、推測＝介紹類只確認有具體敘述；附 `limitation` 說明判定限制，顯示在 AEO 分頁與報告附錄，不影響計分。`aeo_benchmark` 輸出各等級 precision：目前資料集三個等級都是 100%（全體 precision 已是 1.0），還無法量出等級之間的差異，需要更多「看起來像答案」的案例）
-  5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。
+  5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。（**已實作 2026-10-08**：同業常見問句新增付款方式與預約／訂位兩個意圖（`aeo/questions.py`），先在回歸資料集加 5 個調整案例與 4 個保留集案例並標註再寫規則：保留集 4／4 一次判對，全體 accuracy 0.971→0.975、precision 1.0、recall 0.974→0.977。真實網站核對後修正：選單連結文字不觸發也不當答案（ntub.edu.tw）、英文付款方式（inline.app）、平台名稱 EZTABLE 不算預約管道。不做「標題／H2 自動造題」：該小標題下的段落本身就是答案，幾乎必判可回答，只會灌高分數；網站自己以問號結尾的小標題原本就會出題）
   6. 引用可得性評分。
   7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。（**已驗證 2026-10-08**：`scanners.analyze_site_signals` 的「網站未提供 llms.txt」是 info，計分權重 0、不進優先改善建議，描述與報告依據都寫明是新興做法；由 `tests_accuracy_review.py` 鎖定嚴重度與不扣分。`llms-full.txt` 不檢查）
 

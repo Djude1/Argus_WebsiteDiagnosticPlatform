@@ -129,7 +129,7 @@ AEO 不再數 FAQPage／HowTo 標記，改成檢測「問題能否從網站內�
 | 模組 | 職責 |
 |---|---|
 | `aeo/content.py` | 第 1 層：主要文字擷取（排除 nav／header／aside／表單／隱藏元素；footer 另標 region）、段落與所屬標題、`robots_directives`（meta robots／googlebot＋`X-Robots-Tag`）、`data-nosnippet` |
-| `aeo/questions.py` | 依網站內容出題：固定意圖（電話、Email、地址、營業時間、費用、報名方式／截止、資格、退款、運送…，需在正文命中觸發詞才出題）＋網站自己寫的問句標題 |
+| `aeo/questions.py` | 依網站內容出題：固定意圖（電話、Email、地址、營業時間、費用、報名方式／截止、資格、退款、運送、付款方式、預約…，需在正文命中觸發詞才出題）＋網站自己寫的問句標題。付款方式（`PAYMENT`：答案要有付款方式名稱，含英文 credit card 等，可信度「確認」）與預約（`BOOKING`：答案要有預約管道——線上系統、表單、LINE、電話號碼或點選／填寫；可信度「可能」）2026-10-08 加入（roadmap §2 第 5 項）：觸發詞只算小標題與 ≥15 字的段落、判定也只看 ≥15 字的段落（`answers._PROSE_ONLY`），選單連結文字（ntub.edu.tw 的「出納付款查詢」「心理諮商線上預約」）不算；平台名稱（EZTABLE）與英文單字 inline 不算預約管道。不從一般小標題自動造題（該段本身就是答案，只會灌高分數） |
 | `aeo/answers.py` | 第 2、3 層：逐題找候選段落並判定 `answered`／`insufficient`（空泛、日期無年度）／`conflict`（不同頁截止日期矛盾；2026-10-08 起另有 `_value_conflict`：同一個標籤（值前面同一句的文字）在兩個以上頁面寫了不同的價格、營業時間或客服專線。價格標籤要含項目名稱、標籤或小標題帶原價／優惠／早鳥／平日／假日／連假等字的不比、網站有多個據點時不比營業時間與電話、電話只比客服／訂購／預約專線與總機）／`missing`，附原文與位置。`evaluate.reconcile_contact` 不覆寫 conflict |
 | `aeo/markup.py`、`aeo/page_checks.py` | 第 4 層與逐頁規則：結構化資料語法、標記與可見文字一致性、noindex／nosnippet（`scanners.analyze_aeo` 只委派到這裡） |
 | `aeo/evaluate.py` | 整站評估 `evaluate_site(pages)`：正文 < `MIN_MAIN_TEXT_CHARS` 或題目 < `MIN_QUESTIONS` → `status=insufficient`、**不給分**（`tested_categories_for` 移除 aeo，報告顯示「未評估」）；否則依逐題判定加權算分，產生 `aeo-answer-*` finding 與 `aeo-render-dependent`（主要文字需執行 JS 才出現） |

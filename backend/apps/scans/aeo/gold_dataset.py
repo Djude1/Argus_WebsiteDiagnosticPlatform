@@ -474,6 +474,54 @@ GOLD_CASES: tuple[GoldCase, ...] = (
         {"contact_phone": "answered"},
         (ANSWERABLE, NEAR_MISS),
     ),
+    # ── 付款方式與預約（2026-10-08，roadmap §2 AEO 第 5 項；先標註再寫規則）──────
+    GoldCase(
+        "電商：付款方式列出信用卡、ATM、LINE Pay",
+        _one(
+            "https://shop-pay.example/",
+            _SHOP_INTRO + "<h2>付款方式</h2>"
+            "<p>支援信用卡（Visa、Mastercard、JCB）、ATM 轉帳、LINE Pay 與超商取貨付款。</p>",
+        ),
+        {"payment": "answered"},
+        (ANSWERABLE,),
+    ),
+    GoldCase(
+        "電商：付款說明只叫人洽客服",
+        _one(
+            "https://shop-pay2.example/",
+            _SHOP_INTRO + "<h2>付款說明</h2><p>付款相關問題請洽客服信箱，我們會盡快回覆。</p>",
+        ),
+        {"payment": "insufficient"},
+        (INSUFFICIENT, NEAR_MISS),
+    ),
+    GoldCase(
+        "電商：只有訂單查詢，沒有談付款",
+        _one(
+            "https://shop-pay3.example/",
+            _SHOP_INTRO + "<h2>訂單查詢</h2><p>登入會員後可在訂單頁查詢出貨進度與物流單號。</p>",
+        ),
+        {"payment": "missing"},
+        (MISSING,),
+    ),
+    GoldCase(
+        "診所：線上預約系統與預約電話",
+        _one(
+            "https://clinic-book.example/",
+            _CLINIC_INTRO + "<h2>預約掛號</h2>"
+            "<p>可透過線上預約系統選擇醫師與時段，或撥打 02-2700-1234 預約，初診請攜帶健保卡。</p>",
+        ),
+        {"booking": "answered"},
+        (ANSWERABLE,),
+    ),
+    GoldCase(
+        "咖啡店：只說包場要預約，沒說怎麼預約",
+        _one(
+            "https://cafe-book.example/",
+            _CAFE_INTRO + "<h2>包場預約</h2><p>包場需提前預約，週末名額有限，敬請把握。</p>",
+        ),
+        {"booking": "insufficient"},
+        (INSUFFICIENT, NEAR_MISS),
+    ),
 )
 
 
@@ -489,6 +537,11 @@ _BNB_INTRO = (
 _GYM_INTRO = (
     "<h1>動起來健身房</h1><p>我們提供重訓區、有氧器材與團體課程，"
     "教練皆具國家證照，新會員可免費體驗一次一對一體態評估。</p>"
+)
+
+_BISTRO_INTRO = (
+    "<h1>小巷餐館</h1><p>我們提供義式家常料理與季節甜點，食材每日由市場直送，"
+    "店內有十二個座位與一張可容納八人的長桌，適合朋友小聚。</p>"
 )
 
 HOLDOUT_CASES: tuple[GoldCase, ...] = (
@@ -701,6 +754,47 @@ HOLDOUT_CASES: tuple[GoldCase, ...] = (
         ),
         {"contact_phone": "answered"},
         (ANSWERABLE, NEAR_MISS, HOLDOUT),
+    ),
+    GoldCase(
+        "健身房：月費繳費方式",
+        _one(
+            "https://gym-pay.example/",
+            _GYM_INTRO + "<h2>繳費方式</h2>"
+            "<p>月費可用信用卡定期扣款，或至櫃台以現金、悠遊卡繳納，付款後當日即可入場。</p>"
+            "<p>會員續約時可更換付款方式。</p>",
+        ),
+        {"payment": "answered"},
+        (ANSWERABLE, HOLDOUT),
+    ),
+    GoldCase(
+        "餐廳：訂位方式與人數規定",
+        _one(
+            "https://bistro.example/",
+            _BISTRO_INTRO + "<h2>訂位</h2>"
+            "<p>請於 Google 地圖頁面點選「預訂」，或來電 04-2222-3333 訂位，"
+            "6 人以上請提前三天預約。</p>",
+        ),
+        {"booking": "answered"},
+        (ANSWERABLE, HOLDOUT),
+    ),
+    GoldCase(
+        "工作室：只寫採預約制",
+        _one(
+            "https://studio.example/",
+            _GYM_INTRO + "<h2>體驗課程</h2><p>本館體驗課程採預約制，歡迎預約體驗，名額有限。</p>",
+        ),
+        {"booking": "insufficient"},
+        (INSUFFICIENT, NEAR_MISS, HOLDOUT),
+    ),
+    GoldCase(
+        "電商：結帳只談優惠券，沒有付款方式",
+        _one(
+            "https://shop-pay4.example/",
+            _SHOP_INTRO + "<h2>結帳說明</h2>"
+            "<p>結帳時可使用優惠券折抵，每筆訂單限用一張，折抵後金額需滿 100 元。</p>",
+        ),
+        {"payment": "missing"},
+        (MISSING, NEAR_MISS, HOLDOUT),
     ),
 )
 
