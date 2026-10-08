@@ -355,6 +355,15 @@ RULE_BASIS = {
         "限制：只影響摘要與引用，不影響頁面被收錄。",
     "aeo-markup-syntax":
         "依據：JSON-LD 無法以 JSON 解析。限制：只檢查語法，不檢查型別是否適合該頁。",
+    "geo-entity-organization-missing":
+        "依據：已檢查頁面的結構化資料中沒有 Organization、LocalBusiness 等組織實體。"
+        "限制：只看本次爬到的頁面；組織標記放在沒爬到的頁面時會誤報。",
+    "geo-entity-no-same-as":
+        "依據：組織實體沒有 sameAs 欄位。限制：sameAs 是協助辨識實體的建議做法，"
+        "不保證被知識圖譜或 AI 採用。",
+    "geo-article-author-missing":
+        "依據：文章頁（Article 類標記，或 og:type=article 且有發布時間）沒有 JSON-LD author、"
+        "author meta 或 rel=author 連結。限制：只寫在內文、沒有標記的作者名稱不會被偵測到。",
     "seo-index-signals-conflict":
         "依據：Google 說明 sitemap 應只列希望出現在搜尋結果的標準網址；noindex 必須讓爬蟲抓得到"
         "才會生效。限制：只比對本次爬到的頁面與讀到的 sitemap 網址（最多頁數上限個），"
