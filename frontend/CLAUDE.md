@@ -158,7 +158,7 @@ D:\nodejs\npm.cmd install 套件名
 | `/admin/transactions` | `AdminTransactionsPage` | 點數交易紀錄（`AdminTransactionsPage.tsx`；類型篩選涵蓋 `CoinTransaction.Kind` 全部 11 種）|
 | `/admin/reviews` | `AdminReviewsPage` | 評論治理（官方回覆、評論／回覆檢舉分開統計、隱藏／重新公開；`AdminReviewsPage.tsx`） |
 | `/admin/scans` | `AdminScansPage` | 掃描任務管理（`AdminScansPages.tsx`）|
-| `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角）；含終止與重排處置、`top_actions`、`warning_summary` |
+| `/admin/scans/:scanId` | `AdminScanDetailPage` | 掃描詳情（管理員視角）；含終止與重排處置、`top_actions`、`warning_summary`（爬取警告最上方顯示爬取預算 `crawl_budget`：結束原因、頁面來源、略過、耗時與最慢頁面，2026-10-08） |
 | `/admin/health` | `AdminHealthPage` | 系統健康：動態掃描鏈路圖（資料庫→Redis→Worker→佇列→掃描執行，斷點之後停止流動）＋ 系統資源（CPU／記憶體／磁碟／網路／運行時間）＋ 逐項判定依據；預設每 15 秒自動更新 |
 | `/admin/domains` | `AdminDomainsPage` | 網域驗證管理（搜尋／狀態篩選、人工核准與否決）（`AdminDomainsPage.tsx`；篩選在網址上）|
 | `/admin/content` | `AdminContentPage` | CMS 內容管理 |

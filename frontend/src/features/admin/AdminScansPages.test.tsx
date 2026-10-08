@@ -210,4 +210,25 @@ describe("AdminScanDetailPage", () => {
     expect(screen.getByText("https://example.com/admin")).toBeInTheDocument();
     expect(screen.getByText("403")).toBeInTheDocument();
   });
+
+  it("爬取預算顯示結束原因、頁面來源、略過與耗時", async () => {
+    fetchAdminScanDetail.mockResolvedValue({
+      ...detailResponse(),
+      warning_summary: {
+        crawl_budget: {
+          stop_reason: "max_pages", max_pages: 50, max_depth: 6, pages: 50,
+          seeds: { start: 1, sitemap: 30 }, links_queued: 19, links_dropped_limit: 120,
+          skipped_depth: 2, skipped_robots: 1, failed: 0, throttle_waits: 49,
+          throttle_wait_ms: 24500, elapsed_ms: 183000, page_ms_avg: 3200,
+          slowest_pages: [{ url: "https://example.com/slow", ms: 12400 }],
+        },
+      },
+    });
+    renderAt("/admin/scans/42");
+    expect(await screen.findByText("達到頁數上限（50／50 頁）")).toBeInTheDocument();
+    expect(screen.getByText("起始網址 1、sitemap 30、頁面連結 19")).toBeInTheDocument();
+    expect(screen.getByText(/超過頁數上限 120/)).toBeInTheDocument();
+    expect(screen.getByText(/每頁平均 3.2 秒/)).toBeInTheDocument();
+    expect(screen.getByText("https://example.com/slow")).toBeInTheDocument();
+  });
 });

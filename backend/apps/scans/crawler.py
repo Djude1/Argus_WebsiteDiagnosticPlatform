@@ -830,6 +830,15 @@ class _CrawlState:
     # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
     run_accessibility: bool = False
     accessibility_runs: int = 0
+    # 爬取預算（roadmap「爬取」第 2 項）：種子來源、略過原因、節流、每頁耗時，結束時整理成
+    # warnings["crawl_budget"]，讓「為什麼只爬到這些頁」可以回答
+    seeds: dict = field(default_factory=lambda: {"start": 1, "sitemap": 0})
+    links_queued: int = 0
+    links_dropped_limit: int = 0
+    skipped_depth: int = 0
+    throttle_waits: int = 0
+    throttle_wait_seconds: float = 0.0
+    page_seconds: list = field(default_factory=list)  # [(秒數, 網址)]
 
     def take_accessibility_slot(self) -> bool:
         if not self.run_accessibility or self.accessibility_runs >= settings.ARGUS_AXE_MAX_PAGES:
@@ -844,7 +853,10 @@ class _CrawlState:
         """取下一個要爬的 (url, depth)；已造訪、超過深度或被 robots.txt 禁止的直接略過。"""
         while self.queue and len(self.pages) < self.max_pages:
             url, depth = self.queue.popleft()
-            if url in self.visited or depth > self.max_depth:
+            if url in self.visited:
+                continue
+            if depth > self.max_depth:
+                self.skipped_depth += 1
                 continue
             self.visited.add(url)
             if respect_robots and not robot_parser.can_fetch(
@@ -868,12 +880,49 @@ class _CrawlState:
             self.queue.append((url, depth))
             queued.add(url)
             added += 1
+        self.seeds["sitemap"] += added
         return added
 
     def enqueue_links(self, links: list[str], depth: int) -> None:
+        # 已在佇列裡的不重複排入：重複項目會佔掉頁數上限的名額，把沒排到的新頁面擠掉
+        # （2026-10-08 爬取預算紀錄發現 sitemap 已排入的頁面又被首頁連結排一次）
+        queued = {url for url, _ in self.queue}
         for link in links:
-            if link not in self.visited and len(self.pages) + len(self.queue) < self.max_pages:
+            if link in self.visited or link in queued:
+                continue
+            queued.add(link)
+            if len(self.pages) + len(self.queue) < self.max_pages:
                 self.queue.append((link, depth + 1))
+                self.links_queued += 1
+            else:
+                self.links_dropped_limit += 1
+
+    def budget_summary(self, stop_reason: str, elapsed_seconds: float) -> dict:
+        """爬取預算摘要（寫進 warning_summary["crawl_budget"]）。"""
+        timings = sorted(self.page_seconds, key=lambda item: -item[0])
+        return {
+            "stop_reason": stop_reason,
+            "max_pages": self.max_pages,
+            "max_depth": self.max_depth,
+            "pages": len(self.pages),
+            "seeds": dict(self.seeds),
+            "links_queued": self.links_queued,
+            "links_dropped_limit": self.links_dropped_limit,
+            "skipped_depth": self.skipped_depth,
+            "skipped_robots": sum(
+                1 for row in self.warnings["blocked_urls"] if row.get("reason") == "robots.txt"
+            ),
+            "failed": len(self.warnings["failed_urls"]),
+            "throttle_waits": self.throttle_waits,
+            "throttle_wait_ms": round(self.throttle_wait_seconds * 1000),
+            "elapsed_ms": round(elapsed_seconds * 1000),
+            "page_ms_avg": (
+                round(sum(s for s, _ in timings) / len(timings) * 1000) if timings else None
+            ),
+            "slowest_pages": [
+                {"url": url, "ms": round(seconds * 1000)} for seconds, url in timings[:3]
+            ],
+        }
 
     def progress(self) -> tuple[int, int]:
         done = len(self.visited)
@@ -908,6 +957,8 @@ async def _throttle(state: _CrawlState, min_interval: float) -> None:
     """per-origin 速率限制：主動模式 RPS <= 2。"""
     wait_seconds = min_interval - (time.perf_counter() - state.last_request_at)
     if wait_seconds > 0:
+        state.throttle_waits += 1
+        state.throttle_wait_seconds += wait_seconds
         await asyncio.sleep(wait_seconds)
     state.last_request_at = time.perf_counter()
 
@@ -1293,6 +1344,8 @@ async def crawl_site(
 
         context = await _make_context(browser, origin, _next_har())
         pages_in_context = 0
+        crawl_started = time.perf_counter()
+        stop_reason = "queue_exhausted"
         try:
             site_signals = await probe_site_signals(context, origin, robot_parser)
             if max_pages > 1:
@@ -1306,10 +1359,12 @@ async def crawl_site(
                 await _throttle(state, min_interval)
                 stage = _PageStage()
                 context_broken = False
+                page_started = time.perf_counter()
                 try:
                     record = await _visit_page(
                         context, state, url, depth, screenshot_dir=screenshot_dir, stage=stage
                     )
+                    state.page_seconds.append((time.perf_counter() - page_started, url))
                     state.pages.append(record)
                     if record["blocked_reason"]:
                         state.warnings["blocked_urls"].append(
@@ -1334,7 +1389,13 @@ async def crawl_site(
                 # break 特意放在 finally 外：ruff B012 禁止在 finally 裡 break
                 # （若當時有例外正在傳遞，finally 裡的 break 會把它悄悄吞掉）。
                 if context_broken:
+                    stop_reason = "browser_failed"
                     break
+            if stop_reason == "queue_exhausted" and len(state.pages) >= max_pages:
+                stop_reason = "max_pages"
         finally:
             await _close_playwright_resources(context, browser)
+            state.warnings["crawl_budget"] = state.budget_summary(
+                stop_reason, time.perf_counter() - crawl_started
+            )
     return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)

@@ -27,7 +27,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   CF 攔截頁精準判定、RPS 節流。紮實。
 - **升級**：
   1. **有上限的 Render Readiness**：維持 `domcontentloaded`，再以短暫 hydration grace period、DOM/內容穩定度與可選 site-specific selector 判斷就緒；**不以 networkidle 作為必要條件**。必須有總時間上限，逾時仍保留已取得 DOM/截圖並標示 `LIMITED: render_readiness_timeout`。
-  2. 爬取預算可觀測（種子來源、每頁耗時、被節流次數、render readiness 結果寫進 coverage/progress）。
+  2. 爬取預算可觀測（種子來源、每頁耗時、被節流次數、render readiness 結果寫進 coverage/progress）。（**已實作 2026-10-08**：`crawler._CrawlState.budget_summary` → `warning_summary.crawl_budget`：結束原因（達頁數上限／沒有更多頁面／瀏覽器異常）、種子來源、略過原因與數量、速率限制等待、每頁平均與最慢 3 頁；掃描 log 一行說明、後台掃描詳情顯示。render readiness 要等第 1 項實作後才有。同次發現並修正佇列重複排入同一網址佔掉頁數上限的問題）
   3. **Near-duplicate 只做 Analysis Reuse，不做 URL Skip**：SimHash / hreflang 僅可重用文字結構、部分 AEO/GEO 等高成本內容分析；每個 URL 仍必須各自做 headers、canonical/noindex、表單、權限、安全與 URL-specific 檢查。（**評估後暫緩 2026-10-07**：實測逐頁五維規則分析一頁約 70–150 ms（1.1 MB 的大頁約 1.3 s），50 頁合計約 5–10 秒，遠小於爬取本身的數分鐘；重用最多省幾秒，卻有把逐頁問題錯誤複製的風險。等分析改用 LLM 等高成本方法時再做）
   4. 所有重用必須記錄 `analysis_reused_from`、重用規則與未重用檢查，不能讓 dedupe 犧牲 coverage。
 

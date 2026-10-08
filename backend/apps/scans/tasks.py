@@ -553,6 +553,9 @@ def stage_crawl(ctx: ScanRunContext) -> None:
             f"sitemap 提供 {site_signals['sitemap_seeded']} 個頁面網址，已加入爬取佇列",
         )
     append_log(scan_job_id, f"爬取完成，共 {len(crawled_pages)} 頁")
+    budget = ctx.warnings.get("crawl_budget")
+    if budget:
+        append_log(ctx.scan_job_id, crawl_budget_text(budget))
     _ensure_usable_pages(crawled_pages, warnings)
     # robots／範圍限制略過的頁面是使用者設定，不算不完整；擷取失敗才是
     failed = warnings.get("failed_urls") or []
@@ -637,12 +640,52 @@ def _analyze_categories(ctx: ScanRunContext) -> list[str]:
     return [c for c in ANALYZE_STEP_ORDER if c in ctx.scan_job.effective_categories]
 
 
+_STOP_REASONS = {
+    "max_pages": "達到頁數上限",
+    "queue_exhausted": "沒有更多可爬的同網站頁面",
+    "browser_failed": "瀏覽器異常中止",
+}
+
+
+def crawl_budget_text(budget: dict) -> str:
+    """爬取預算的一行說明（roadmap「爬取」第 2 項）：為什麼停、頁面從哪來、略過多少、花在哪。"""
+    seeds = budget.get("seeds") or {}
+    parts = [
+        f"爬取結束：{_STOP_REASONS.get(budget.get('stop_reason'), budget.get('stop_reason'))}"
+        f"（{budget.get('pages', 0)}／{budget.get('max_pages')} 頁，"
+        f"耗時 {round((budget.get('elapsed_ms') or 0) / 1000)} 秒）",
+        f"來源：起始網址 {seeds.get('start', 0)}、sitemap {seeds.get('sitemap', 0)}、"
+        f"頁面連結 {budget.get('links_queued', 0)}",
+    ]
+    skipped = [
+        f"{label} {budget[key]}"
+        for key, label in (
+            ("links_dropped_limit", "超過頁數上限未排入"),
+            ("skipped_depth", "超過深度"),
+            ("skipped_robots", "robots.txt 禁止"),
+            ("failed", "擷取失敗"),
+        )
+        if budget.get(key)
+    ]
+    if skipped:
+        parts.append("略過：" + "、".join(skipped))
+    if budget.get("throttle_waits"):
+        waited = round(budget["throttle_wait_ms"] / 1000)
+        parts.append(f"速率限制等待 {budget['throttle_waits']} 次共 {waited} 秒")
+    if budget.get("page_ms_avg") is not None:
+        parts.append(f"每頁平均 {round(budget['page_ms_avg'] / 1000, 1)} 秒")
+    return "；".join(parts)
+
+
 def stage_enter_scanning(ctx: ScanRunContext) -> None:
     """爬取 → 分析的狀態轉換：記錄警告、推進到 scanning、落地頁面。"""
     scan_job = ctx.scan_job
     scan_job_id = ctx.scan_job_id
     if ctx.warnings:
         for k, v in ctx.warnings.items():
+            # 爬取預算是摘要不是警告，已在 stage_crawl 以一行說明記錄
+            if k == "crawl_budget":
+                continue
             append_log(scan_job_id, f"爬取警告 [{k}]: {v}", level="warn")
     # 進入 scanning 前再檢查一次：避免使用者剛 cancel 就被 worker 覆蓋回 SCANNING
     raise_if_cancelled(scan_job_id)
