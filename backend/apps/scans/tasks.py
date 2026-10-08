@@ -37,7 +37,7 @@ from apps.scans.coverage import (
 from apps.scans.crawler import crawl_site
 from apps.scans.favicon import needs_refresh, refresh_project_favicon
 from apps.scans.fingerprint import fingerprint_snapshot
-from apps.scans.geo_entity import analyze_entity, entity_findings
+from apps.scans.geo_entity import analyze_entity, entity_findings, freshness_findings
 from apps.scans.katana_scanner import run_katana
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.nuclei_scanner import run_nuclei
@@ -1219,7 +1219,8 @@ def stage_geo_site(ctx: ScanRunContext) -> None:
     if "geo" not in ctx.scan_job.effective_categories:
         return
     findings = analyze_site_signals(ctx.site_signals)
-    findings += entity_findings(analyze_entity([page for page, _data in ctx.pages]))
+    entity = analyze_entity([page for page, _data in ctx.pages])
+    findings += entity_findings(entity) + freshness_findings(entity, timezone.localdate())
     ctx.record(findings, check="geo_site")
     ctx.coverage.mark("geo_site", COMPLETED)
     append_log(ctx.scan_job_id, f"站台訊號分析完成：{len(findings)} 項發現")

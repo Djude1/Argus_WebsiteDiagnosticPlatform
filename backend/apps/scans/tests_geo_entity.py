@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from apps.scans.geo_entity import analyze_entity, entity_findings
+from apps.scans.geo_entity import analyze_entity, entity_findings, freshness_findings, parse_date
 
 
 def _page(url, body="", *, ld=None, head="", status=200, blocked=""):
@@ -94,3 +95,53 @@ class ArticleAuthorTests(SimpleTestCase):
         ]
         self.assertEqual(analyze_entity(pages)["pages"], 0)
         self.assertEqual(_rules(pages), {})
+
+
+class FreshnessTests(SimpleTestCase):
+    """內容新鮮度：文章日期缺少、不合理、JSON-LD 與 meta 不一致（roadmap §3 GEO 第 2 項）。"""
+
+    TODAY = date(2026, 10, 8)
+
+    def _fresh(self, *pages):
+        findings = freshness_findings(analyze_entity(list(pages)), self.TODAY)
+        return {f["rule_id"]: f for f in findings}
+
+    def _article(self, url, ld=None, meta=""):
+        node = {"@type": "BlogPosting", "headline": "h", "author": "王小明", **(ld or {})}
+        return _page(url, ld=[node], head=meta)
+
+    def test_consistent_dates_have_no_finding(self):
+        meta = (
+            '<meta property="article:published_time" content="2026-09-01T10:00:00+08:00">'
+            '<meta property="article:modified_time" content="2026-09-02T23:30:00-06:00">'
+        )
+        page = self._article("https://x.tw/a", {"datePublished": "2026-09-01T02:00:00Z",
+                                                "dateModified": "2026-09-03"}, meta)
+        self.assertEqual(self._fresh(page), {})
+
+    def test_missing_dates(self):
+        finding = self._fresh(self._article("https://x.tw/a"))["geo-article-date-missing"]
+        self.assertEqual(finding["evidence_json"]["urls"], ["https://x.tw/a"])
+
+    def test_invalid_dates(self):
+        pages = [
+            self._article("https://x.tw/a", {"datePublished": "2026-05-10",
+                                             "dateModified": "2026-03-01"}),
+            self._article("https://x.tw/b", {"datePublished": "2027-01-01"}),
+        ]
+        items = self._fresh(*pages)["geo-article-date-invalid"]["evidence_json"]["items"]
+        self.assertEqual(len(items), 2)
+        self.assertIn("早於發布日期", items[0])
+        self.assertIn("在未來", items[1])
+
+    def test_ld_and_meta_disagree(self):
+        meta = '<meta property="article:published_time" content="2026-08-01">'
+        page = self._article("https://x.tw/a", {"datePublished": "2026-09-15"}, meta)
+        finding = self._fresh(page)["geo-article-date-inconsistent"]
+        self.assertIn("JSON-LD 2026-09-15、meta 2026-08-01", finding["evidence"])
+
+    def test_parse_date_formats(self):
+        self.assertEqual(parse_date("2026-10-06 10:00:00 +0000 UTC"), date(2026, 10, 6))
+        self.assertEqual(parse_date("2026-1-5"), date(2026, 1, 5))
+        self.assertIsNone(parse_date("2026-13-40"))
+        self.assertIsNone(parse_date("October 6, 2026"))

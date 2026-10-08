@@ -6,6 +6,10 @@ AI 摘要與知識圖譜要能判斷「這個網站是誰、文章是誰寫的�
 - 文章作者：文章頁（Article／BlogPosting／NewsArticle 標記或 `og:type=article`）要有作者
   （JSON-LD `author`、`<meta name="author">`、`article:author` 或 `rel="author"` 連結）。
 
+- 內容新鮮度（roadmap §3 GEO 第 2 項）：文章的發布／更新日期是否存在、是否合理（更新早於發布、
+  未來日期），以及 JSON-LD 與 article:*_time meta 寫的日期是否一致。只檢查日期標記本身，
+  不判斷內容「舊不舊」——長青內容不需要常更新。
+
 只讀爬蟲已保存的頁面（rendered_dom 優先），不發任何請求；只看 2xx 且沒被阻擋的頁面。
 沒有任何結構化資料的網站已由逐頁的「可補充 JSON-LD」提醒，這裡不重複列「缺少組織實體」。
 """
@@ -14,6 +18,8 @@ from __future__ import annotations
 
 import html
 import json
+import re
+from datetime import date, timedelta
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -48,6 +54,9 @@ SAME_AS_SOURCES = {
     "threads.net": "Threads",
 }
 MAX_LISTED = 10
+_ISO_DATE = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
+# 兩個來源的日期差在這個範圍內視為一致（時區造成的跨日不算）
+DATE_TOLERANCE = timedelta(days=1)
 
 
 class _EntityParser(HTMLParser):
@@ -56,6 +65,8 @@ class _EntityParser(HTMLParser):
         self.json_ld: list[str] = []
         self.og_type = ""
         self.published_time = False
+        self.meta_published = ""
+        self.meta_modified = ""
         self.article_blocks = 0
         self.meta_author = False
         self.rel_author = False
@@ -77,6 +88,9 @@ class _EntityParser(HTMLParser):
                 self.meta_author = True
             elif name == "article:published_time" and content:
                 self.published_time = True
+                self.meta_published = content
+            elif name == "article:modified_time" and content:
+                self.meta_modified = content
         elif tag in {"a", "link"} and "author" in attr.get("rel", "").lower().split():
             self.rel_author = True
 
@@ -132,6 +146,17 @@ def _source_label(url: str) -> str:
     return host
 
 
+def parse_date(value) -> date | None:
+    """取日期部分（ISO 8601 與「2026-10-06 10:00:00 +0000 UTC」這類寫法），失敗回 None。"""
+    match = _ISO_DATE.search(str(value or ""))
+    if not match:
+        return None
+    try:
+        return date(*(int(part) for part in match.groups()))
+    except ValueError:
+        return None
+
+
 def _usable(page) -> bool:
     status = page.status_code or 0
     return 200 <= status < 300 and not page.blocked_reason
@@ -142,7 +167,7 @@ def analyze_entity(pages: list) -> dict:
     articles, articles_without_author: [網址]}。"""
     summary = {
         "pages": 0, "has_json_ld": False, "organizations": [], "articles": 0,
-        "articles_without_author": [],
+        "articles_without_author": [], "article_dates": [],
     }
     seen_orgs: set[str] = set()
     for page in pages:
@@ -162,6 +187,7 @@ def analyze_entity(pages: list) -> dict:
             and parser.article_blocks < LISTING_ARTICLE_BLOCKS
         )
         ld_article = False
+        ld_published = ld_modified = ""
         is_listing = False
         has_author = parser.meta_author or parser.rel_author
         for block in parser.json_ld:
@@ -176,6 +202,8 @@ def analyze_entity(pages: list) -> dict:
                 if types & ARTICLE_TYPES:
                     ld_article = True
                     has_author = has_author or _present(node.get("author"))
+                    ld_published = ld_published or str(node.get("datePublished") or "")
+                    ld_modified = ld_modified or str(node.get("dateModified") or "")
                 if types & ORGANIZATION_TYPES and not types & ARTICLE_TYPES:
                     # 有些網站在 JSON-LD 裡放了 HTML 實體（例如 &#039;）
                     name = html.unescape(str(node.get("name") or "")).strip()
@@ -191,9 +219,15 @@ def analyze_entity(pages: list) -> dict:
                         ],
                     })
         if (ld_article or og_article) and not is_listing:
+            url = page.final_url or page.url
             summary["articles"] += 1
             if not has_author:
-                summary["articles_without_author"].append(page.final_url or page.url)
+                summary["articles_without_author"].append(url)
+            summary["article_dates"].append({
+                "url": url,
+                "ld_published": ld_published, "ld_modified": ld_modified,
+                "meta_published": parser.meta_published, "meta_modified": parser.meta_modified,
+            })
     return summary
 
 
@@ -260,3 +294,92 @@ def entity_findings(summary: dict) -> list[dict]:
             priority_score=33,
         ))
     return findings
+
+
+def freshness_findings(summary: dict, today: date) -> list[dict]:
+    """文章日期：缺少、不合理（更新早於發布、未來日期）、JSON-LD 與 meta 不一致。"""
+    missing, invalid, inconsistent = [], [], []
+    latest_ok = today + DATE_TOLERANCE
+    for item in summary.get("article_dates") or []:
+        ld_pub, ld_mod = parse_date(item["ld_published"]), parse_date(item["ld_modified"])
+        meta_pub, meta_mod = parse_date(item["meta_published"]), parse_date(item["meta_modified"])
+        published, modified = ld_pub or meta_pub, ld_mod or meta_mod
+        if not published and not modified:
+            missing.append(item["url"])
+            continue
+        problems = []
+        if published and modified and modified + DATE_TOLERANCE < published:
+            problems.append(f"更新日期 {modified} 早於發布日期 {published}")
+        future = [d for d in (published, modified) if d and d > latest_ok]
+        if future:
+            problems.append(f"日期 {max(future)} 在未來")
+        if problems:
+            invalid.append(f"{item['url']}（{'；'.join(problems)}）")
+        diffs = [
+            f"{label}：JSON-LD {a}、meta {b}"
+            for label, a, b in (("發布", ld_pub, meta_pub), ("更新", ld_mod, meta_mod))
+            if a and b and abs(a - b) > DATE_TOLERANCE
+        ]
+        if diffs:
+            inconsistent.append(f"{item['url']}（{'；'.join(diffs)}）")
+
+    findings = []
+    if missing:
+        findings.append(make_finding(
+            category=Finding.Category.GEO,
+            severity=Finding.Severity.LOW,
+            rule_id="geo-article-date-missing",
+            title="文章頁沒有標示發布或更新日期",
+            description=(
+                f"{len(missing)} 個文章頁的結構化資料與 meta 都沒有日期。讀者與 AI 無法判斷內容"
+                "是何時寫的、是否仍然適用，引用時也較難附上時間。"
+            ),
+            remediation=(
+                "在文章的 JSON-LD 加上 datePublished，內容有實質修改時更新 dateModified，"
+                "並在頁面上顯示發布與更新日期。"
+            ),
+            evidence="沒有日期的文章頁：" + _listed(missing),
+            impact_area="freshness",
+            evidence_json={"urls": missing[:50]},
+            priority_score=31,
+        ))
+    if invalid:
+        findings.append(make_finding(
+            category=Finding.Category.GEO,
+            severity=Finding.Severity.LOW,
+            rule_id="geo-article-date-invalid",
+            title="文章日期不合理",
+            description=(
+                "有文章的更新日期早於發布日期，或日期在未來。搜尋引擎與 AI 會不信任這類日期，"
+                "也可能誤判內容的時效。"
+            ),
+            remediation=(
+                "檢查網站產生 datePublished／dateModified 的設定（時區、欄位對調、預約發布）。"
+            ),
+            evidence=_listed(invalid),
+            impact_area="freshness",
+            evidence_json={"items": invalid[:50]},
+            priority_score=31,
+        ))
+    if inconsistent:
+        findings.append(make_finding(
+            category=Finding.Category.GEO,
+            severity=Finding.Severity.LOW,
+            rule_id="geo-article-date-inconsistent",
+            title="文章的結構化資料與 meta 寫了不同日期",
+            description=(
+                "同一篇文章的 JSON-LD 與 article:published_time／article:modified_time "
+                "日期相差超過一天，搜尋引擎與 AI 不知道該相信哪一個。"
+            ),
+            remediation="讓 JSON-LD 與 meta 由同一個欄位產生，確保兩邊的發布與更新日期相同。",
+            evidence=_listed(inconsistent),
+            impact_area="freshness",
+            evidence_json={"items": inconsistent[:50]},
+            priority_score=30,
+        ))
+    return findings
+
+
+def _listed(items: list[str]) -> str:
+    more = f"…另 {len(items) - MAX_LISTED} 項" if len(items) > MAX_LISTED else ""
+    return "；".join(items[:MAX_LISTED]) + more

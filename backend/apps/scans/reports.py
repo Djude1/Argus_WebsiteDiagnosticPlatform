@@ -364,6 +364,15 @@ RULE_BASIS = {
     "geo-article-author-missing":
         "依據：文章頁（Article 類標記，或 og:type=article 且有發布時間）沒有 JSON-LD author、"
         "author meta 或 rel=author 連結。限制：只寫在內文、沒有標記的作者名稱不會被偵測到。",
+    "geo-article-date-missing":
+        "依據：文章頁的 JSON-LD datePublished／dateModified 與 article:*_time meta 都沒有日期。"
+        "限制：只寫在內文的日期不會被偵測到。",
+    "geo-article-date-invalid":
+        "依據：更新日期比發布日期早超過一天，或日期比掃描當天晚超過一天。"
+        "限制：只比對日期，不比對時刻與時區。",
+    "geo-article-date-inconsistent":
+        "依據：同一頁 JSON-LD 與 meta 的發布或更新日期相差超過一天。"
+        "限制：只檢查日期標記，不判斷內容本身是否過時。",
     "seo-index-signals-conflict":
         "依據：Google 說明 sitemap 應只列希望出現在搜尋結果的標準網址；noindex 必須讓爬蟲抓得到"
         "才會生效。限制：只比對本次爬到的頁面與讀到的 sitemap 網址（最多頁數上限個），"
