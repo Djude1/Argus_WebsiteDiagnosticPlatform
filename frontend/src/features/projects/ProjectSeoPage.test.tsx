@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectSeoPage } from "./ProjectSeoPage";
 
-vi.mock("../../api", () => ({ api: { get: vi.fn() }, setAccessToken: vi.fn() }));
+vi.mock("../../api", () => ({ api: { get: vi.fn(), post: vi.fn() }, setAccessToken: vi.fn() }));
 const { api } = vi.mocked(await import("../../api"));
 const project = { id: 7, name: "測試網站", origin: "https://example.test", is_demo: false };
 let connection: Record<string, unknown>;
@@ -54,5 +54,45 @@ describe("尚未掃描的網站連接 Search Console", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Google 授權測試失敗");
     await userEvent.click(screen.getByRole("button", { name: "知道了" }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
+describe("搜尋關鍵字：目標關鍵字與 Search Console 的落差", () => {
+  beforeEach(() => {
+    const seo = {
+      scan: { id: 1, completed_at: "2026-10-07T00:00:00Z", seo_checked: true },
+      overview: { pages_scanned: 1 },
+      gsc: { enabled: true, connected: true, property: "https://example.test/", needs_reconnect: false },
+      keywords: ["咖啡豆"],
+      keyword_report: [{
+        keyword: "咖啡豆", pages_found: 1, advice: "", pages: [],
+        best_page: { page_id: 3, url: "https://example.test/beans", title: "豆子", places: ["Title"], body_count: 4 },
+      }],
+    };
+    const performance = {
+      property: "https://example.test/", start: "2026-09-07", end: "2026-10-04", days: 28,
+      totals: { clicks: 9, impressions: 700, ctr: 0.0129 },
+      queries: [
+        { query: "台北 咖啡豆", clicks: 6, impressions: 400, ctr: 0.015, position: 13.4, page: "https://example.test/", clicks_change: null, position_change: null },
+        { query: "耳掛咖啡", clicks: 3, impressions: 300, ctr: 0.01, position: 7.2, page: "https://example.test/drip", clicks_change: null, position_change: null },
+      ],
+      pages: [], trend: [],
+    };
+    api.get.mockImplementation(async (url: string) => {
+      if (url === "/projects/7/seo/") return { data: seo };
+      if (url === "/projects/7/gsc/performance/") return { data: performance };
+      return { data: { results: [] } };
+    });
+    api.post.mockResolvedValue({ data: { keywords: ["咖啡豆", "耳掛咖啡"] } });
+  });
+
+  it("顯示排名分段、Google 帶到的頁面，並可把有曝光的搜尋詞設為目標", async () => {
+    renderPage("?tab=keywords");
+    expect(await screen.findByText("第 2 頁")).toBeInTheDocument();
+    expect(screen.getByText(/1 個相關搜尋詞・曝光 400・點擊 6/)).toBeInTheDocument();
+    expect(screen.getByText(/Google 帶到：/)).toBeInTheDocument();
+    expect(screen.getByText("有曝光但還不是目標的搜尋詞")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "設為目標" }));
+    expect(api.post).toHaveBeenCalledWith("/projects/7/seo/keywords/", { keywords: ["咖啡豆", "耳掛咖啡"] });
   });
 });

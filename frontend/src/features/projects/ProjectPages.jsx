@@ -39,11 +39,12 @@ import {
   ClockIcon,
   DownloadIcon,
   FlagIcon,
+  LayersIcon,
   ListIcon,
   PlayIcon,
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
-import { ScanJobForm, ScanList, scanProgress } from "../scans/ScanExperience.jsx";
+import { ScanJobForm, scanProgress } from "../scans/ScanExperience.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
 
 const OVERVIEW_POLL_MS = 5000;
@@ -120,6 +121,26 @@ function ActiveScanBanner({ scan }) {
   );
 }
 
+
+/** 覆蓋契約：有檢查沒完整跑完時提示，分數只反映實際完成的部分（沒有就不顯示）。 */
+function CoverageNotice({ coverage }) {
+  const incomplete = coverage?.incomplete || [];
+  if (!incomplete.length) return null;
+  const partial = Object.entries(coverage.categories || {})
+    .filter(([, state]) => state === "partial")
+    .map(([category]) => CATEGORY_LABELS[category] || category);
+  return (
+    <section className="panel project-coverage-notice" role="status">
+      <p className="project-coverage-title">這次有 {incomplete.length} 項檢查沒有完整完成</p>
+      <p className="hint-text">
+        {incomplete.map((item) => item.label).join("、")}。
+        {partial.length > 0 && `${partial.join("、")} 的分數只反映實際完成的檢查，`}
+        沒有發現問題不代表沒有問題。
+      </p>
+    </section>
+  );
+}
+
 function ProjectOverviewPage() {
   const { project } = useOutletContext();
   const [data, setData] = useState(null);
@@ -154,10 +175,14 @@ function ProjectOverviewPage() {
 
   const latest = data.latest_scan;
   const previous = data.previous_scan;
+  // 評分公式或規則集不同時，分數差可能只是規則改了，不顯示成進步／退步（後端 versions.py）
+  const comparable = data.score_comparable !== false;
   const delta =
-    latest && previous && latest.overall_score != null && previous.overall_score != null
+    comparable && latest && previous && latest.overall_score != null && previous.overall_score != null
       ? latest.overall_score - previous.overall_score
       : null;
+  const deltaText = previous && !comparable ? "評分規則已更新，無法直接比較" : "—";
+  const modelChanges = data.trend.filter((point) => point.model_changed).length;
   const issuesPath = projectPath(project.id, "issues");
   const trendPoints = data.trend.slice(-trendRange);
 
@@ -195,6 +220,7 @@ function ProjectOverviewPage() {
         </section>
       ) : (
         <>
+          <CoverageNotice coverage={latest.coverage} />
           <div className="project-kpis">
             <section className="project-kpi is-score">
               <p className="project-kpi-label">網站綜合評分</p>
@@ -203,7 +229,7 @@ function ProjectOverviewPage() {
                 <div>
                   <span className={`project-grade tone-${scoreTone(latest.overall_score)}`}>{scoreGrade(latest.overall_score)}</span>
                   <p className="project-kpi-sub">與上次相比</p>
-                  <p className="project-kpi-delta">{delta === null ? "—" : delta === 0 ? "分數持平" : <DeltaText delta={delta} />}</p>
+                  <p className="project-kpi-delta">{delta === null ? deltaText : delta === 0 ? "分數持平" : <DeltaText delta={delta} />}</p>
                 </div>
               </div>
               <p className="project-kpi-hint">
@@ -226,7 +252,10 @@ function ProjectOverviewPage() {
                     較上次掃描：
                     <Link to={`${issuesPath}?change=new`}>新增 {data.changes.new}</Link>、
                     <Link to={`${issuesPath}?change=persisting`}>持續 {data.changes.persisting}</Link>、
-                    <Link to={`${issuesPath}#missing`}>未出現 {data.changes.missing}</Link>
+                    <Link to={`${issuesPath}#missing`}>
+                      未出現 {data.changes.missing}
+                      {data.changes.resolved ? `（已修好 ${data.changes.resolved}）` : ""}
+                    </Link>
                   </>
                 ) : "再掃描一次後會標示新增、持續與未出現的問題"}
               </p>
@@ -251,7 +280,7 @@ function ProjectOverviewPage() {
               </p>
               <p className="project-kpi-sub">與上次相比</p>
               <p className="project-kpi-change">
-                分數變化 <b>{delta === null ? "—" : delta > 0 ? `+${delta}` : delta}</b>
+                分數變化 <b>{delta === null ? deltaText : delta > 0 ? `+${delta}` : delta}</b>
               </p>
               <Link className="project-text-link" to={`/scans/${latest.id}`}>查看這次結果 →</Link>
             </section>
@@ -291,6 +320,11 @@ function ProjectOverviewPage() {
                 ariaLabel={`${project.name} 分數趨勢`}
               />
               {data.trend.length < 2 && <p className="hint-text">完成兩次以上掃描後即可看出趨勢。</p>}
+              {modelChanges > 0 && (
+                <p className="hint-text">
+                  期間評分規則更新過 {modelChanges} 次，更新前後的分數不宜直接比較。
+                </p>
+              )}
             </section>
           </div>
 
@@ -345,6 +379,8 @@ function ProjectOverviewPage() {
               )}
             </section>
           </div>
+
+          {latest.site_summary && <SiteSummaryPanel project={project} scan={latest} />}
         </>
       )}
 
@@ -374,7 +410,11 @@ function ProjectScansPage() {
 
   return (
     <div className="project-page">
-      <ProjectHeader project={project} section="掃描" description="建立新的掃描，或查看這個網站的歷次掃描與進度。" />
+      <ProjectHeader
+        project={project}
+        section="掃描與報告"
+        description="建立新的掃描，查看這個網站的歷次掃描、分數變化與實際扣點，並下載 PDF 報告。"
+      />
       <div className="project-scans-page">
         {project.is_demo ? (
           <section className="panel project-demo-scan-note">
@@ -391,10 +431,91 @@ function ProjectScansPage() {
         {scans === null ? (
           <section className="panel"><p className="hint-text">載入掃描中…</p></section>
         ) : (
-          <ScanList scans={scans} onRefresh={reload} />
+          <ScanHistoryPanel project={project} scans={scans} onRefresh={reload} />
         )}
       </div>
     </div>
+  );
+}
+
+/** 效能為什麼沒有數字：與掃描「效能」分頁的 missingReason 同一套判斷。 */
+function performanceNote(scan) {
+  const perf = scan.site_summary.performance;
+  if (!scan.categories.includes("ux")) return "這次沒有勾選使用體驗";
+  if (perf.status === "skipped") return "平台尚未設定 PageSpeed 金鑰";
+  if (perf.status === "failed") return "量測失敗";
+  return "這次沒有量測";
+}
+
+/** 總覽的效能與網站架構摘要（2026-10-08）：原本只在單次掃描的效能／網站架構分頁看得到。 */
+function SiteSummaryPanel({ project, scan }) {
+  const summary = scan.site_summary;
+  const perf = summary.performance;
+  const hasPerf = perf.score !== null && perf.score !== undefined;
+  const more = summary.technologies_total - summary.technologies.length;
+  return (
+    <section className="panel">
+      <div className="project-section-head">
+        <h2 className="project-section-title">效能與網站架構</h2>
+        <span className="project-section-hint">最新一次完成的掃描</span>
+      </div>
+      <div className="project-site-summary">
+        <Link className="project-site-tile" to={`/scans/${scan.id}/performance`}>
+          <span className="project-site-tile-label">行動版效能（Lighthouse）</span>
+          {hasPerf ? (
+            <strong className={`project-site-tile-value tone-${perf.score >= 90 ? "good" : perf.score >= 50 ? "medium" : "bad"}`}>
+              {perf.score}<small> 分</small>
+            </strong>
+          ) : (
+            <strong className="project-site-tile-value is-muted">—</strong>
+          )}
+          <span className="project-site-tile-hint">
+            {hasPerf
+              ? perf.field_overall_label ? `真實使用者體驗：${perf.field_overall_label}` : "沒有足夠的真實使用者資料"
+              : performanceNote(scan)}
+          </span>
+        </Link>
+        <Link className="project-site-tile" to={projectPath(project.id, "security")}>
+          <span className="project-site-tile-label">安全標頭參考等第</span>
+          <strong className={`project-site-tile-value ${summary.observatory_grade ? "" : "is-muted"}`}>
+            {summary.observatory_grade || "—"}
+          </strong>
+          <span className="project-site-tile-hint">
+            {summary.observatory_grade ? "非官方、不計入分數" : "這次沒有檢查資安或較早的掃描"}
+          </span>
+        </Link>
+        <Link className="project-site-tile" to={`/scans/${scan.id}/architecture`}>
+          <span className="project-site-tile-label">CDN／反向代理</span>
+          {summary.profile_available ? (
+            <>
+              <strong className="project-site-tile-value is-text">{summary.edge || "未偵測到"}</strong>
+              <span className="project-site-tile-hint">{summary.edge ? "流量經過邊緣節點" : "流量看起來直接到網站主機"}</span>
+            </>
+          ) : (
+            <>
+              <strong className="project-site-tile-value is-muted">—</strong>
+              <span className="project-site-tile-hint">較早的掃描沒有這項資料，重新掃描後會顯示</span>
+            </>
+          )}
+        </Link>
+        <Link className="project-site-tile" to={`/scans/${scan.id}/architecture`}>
+          <span className="project-site-tile-label">使用的技術</span>
+          {summary.profile_available ? (
+            <>
+              <strong className="project-site-tile-value is-text">
+                {summary.technologies.length ? summary.technologies.join("、") : "未辨識到"}
+              </strong>
+              <span className="project-site-tile-hint">{more > 0 ? `另有 ${more} 項，查看網站架構` : "依首頁內容與回應標頭判斷"}</span>
+            </>
+          ) : (
+            <>
+              <strong className="project-site-tile-value is-muted">—</strong>
+              <span className="project-site-tile-hint">較早的掃描沒有這項資料，重新掃描後會顯示</span>
+            </>
+          )}
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -503,6 +624,9 @@ function IssueRow({ issue, scanId, open, onToggle }) {
         </th>
         <td className="issue-col-cat">
           <span className={`issue-cat cat-${issue.category}`}>{CATEGORY_LABELS[issue.category] || issue.category}</span>
+          {issue.security_kind_label && (
+            <span className={`security-kind-chip is-${issue.security_kind}`}>{issue.security_kind_label}</span>
+          )}
         </td>
         <td className="issue-col-pages">{issue.pages || "—"}</td>
         <td className="issue-col-fix">
@@ -580,7 +704,9 @@ function ProjectIssuesPage() {
   const severity = searchParams.get("severity") || "all";
   const change = searchParams.get("change") || "all";
   const query = searchParams.get("q") || "";
-  const grouped = searchParams.get("group") === "severity";
+  const groupMode = ["severity", "cause"].includes(searchParams.get("group"))
+    ? searchParams.get("group")
+    : "all";
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [openKey, setOpenKey] = useState(null);
@@ -609,6 +735,8 @@ function ProjectIssuesPage() {
 
   const completed = (scans || []).filter((scan) => scan.status === "completed");
   const issues = useMemo(() => data?.issues || [], [data]);
+  // 根本原因：同一處修法的問題（後端 root_causes.py，2 個以上問題才成組）
+  const rootCauses = data?.root_causes || [];
   const keyword = query.trim().toLowerCase();
   const filtered = issues.filter(
     (issue) =>
@@ -720,12 +848,17 @@ function ProjectIssuesPage() {
         <div className="issue-toolbar-group">
           <span className="issue-toolbar-label">顯示模式</span>
           <div className="issue-segmented" role="group" aria-label="顯示模式">
-            <button type="button" className={!grouped ? "active" : ""} aria-pressed={!grouped} onClick={() => setParam("group", "all")}>
+            <button type="button" className={groupMode === "all" ? "active" : ""} aria-pressed={groupMode === "all"} onClick={() => setParam("group", "all")}>
               <ListIcon aria-hidden="true" /> 列表模式
             </button>
-            <button type="button" className={grouped ? "active" : ""} aria-pressed={grouped} onClick={() => setParam("group", "severity")}>
+            <button type="button" className={groupMode === "severity" ? "active" : ""} aria-pressed={groupMode === "severity"} onClick={() => setParam("group", "severity")}>
               <BarsIcon aria-hidden="true" /> 依嚴重度分組
             </button>
+            {rootCauses.length > 0 && (
+              <button type="button" className={groupMode === "cause" ? "active" : ""} aria-pressed={groupMode === "cause"} onClick={() => setParam("group", "cause")}>
+                <LayersIcon aria-hidden="true" /> 依根本原因
+              </button>
+            )}
           </div>
         </div>
         <label className="issue-toolbar-group">
@@ -777,7 +910,35 @@ function ProjectIssuesPage() {
             <table className="issue-table">
               <caption className="project-sr-only">問題清單</caption>
               <IssueTableHead />
-              {grouped ? (
+              {groupMode === "cause" && rootCauses.length > 0 ? (
+                <>
+                  {rootCauses
+                    .map((cause) => ({ cause, items: filtered.filter((issue) => issue.root_cause === cause.id) }))
+                    .filter(({ items }) => items.length)
+                    .map(({ cause, items }) => (
+                      <tbody key={cause.id}>
+                        <tr className="issue-group-row issue-cause-row">
+                          <td colSpan={6}>
+                            <p className="issue-cause-title">
+                              {cause.title}<span>{items.length} 個問題，修一處一起解決</span>
+                            </p>
+                            <p className="issue-cause-where">在哪裡修：{cause.where}</p>
+                            <p className="issue-cause-summary">{cause.summary}</p>
+                          </td>
+                        </tr>
+                        {renderRows(items)}
+                      </tbody>
+                    ))}
+                  {filtered.some((issue) => !issue.root_cause) && (
+                    <tbody>
+                      <tr className="issue-group-row">
+                        <td colSpan={6}>其他問題：{filtered.filter((issue) => !issue.root_cause).length} 個，各自處理</td>
+                      </tr>
+                      {renderRows(filtered.filter((issue) => !issue.root_cause))}
+                    </tbody>
+                  )}
+                </>
+              ) : groupMode === "severity" ? (
                 SEVERITY_ORDER.filter((s) => filtered.some((issue) => issue.severity === s)).map((s) => {
                   const items = filtered.filter((issue) => issue.severity === s);
                   return (
@@ -803,8 +964,8 @@ function ProjectIssuesPage() {
         <section className="panel" id="missing">
           <h2 className="project-section-title">本次未出現（{data.missing.length}）</h2>
           <p className="hint-text">
-            上一次掃描有、這次沒有出現的問題（只列這次仍有檢查的維度）。可能已修好，
-            也可能是這次沒爬到相關頁面或頁面被阻擋，請到該頁確認。
+            上一次掃描有、這次沒有出現的問題（只列這次仍有檢查的維度）。只有同一項檢查這次完整跑完、
+            相關頁面也重新檢查過，才標示「已修好」；其餘可能是這次沒爬到該頁、檢查失敗或沒有執行，請到該頁確認。
           </p>
           <ul className="project-issue-list is-muted">
             {data.missing.map((issue) => (
@@ -814,6 +975,9 @@ function ProjectIssuesPage() {
                   <p className="project-issue-title">{issue.title}</p>
                   <p className="project-issue-meta">{CATEGORY_LABELS[issue.category] || issue.category}</p>
                 </div>
+                {issue.status_label && (
+                  <span className={`project-change-chip is-${issue.status}`}>{issue.status_label}</span>
+                )}
               </li>
             ))}
           </ul>
@@ -966,6 +1130,12 @@ function ProjectAeoPage() {
                 <dt>答案附有原文</dt>
                 <dd>{report.evidence_ratio == null ? "—" : `${Math.round(report.evidence_ratio * 100)}%`}</dd>
               </div>
+              {report.citation && (
+                <div className="project-portfolio-item">
+                  <dt>答案可被引用</dt>
+                  <dd>{`${Math.round(report.citation.citable_ratio * 100)}%`}</dd>
+                </div>
+              )}
             </dl>
           )}
           <section className="panel">
@@ -1201,9 +1371,17 @@ function ProjectPagesPage() {
 // 歷史報告
 // ============================================================
 
-function ProjectHistoryPage() {
-  const { project } = useOutletContext();
-  const { scans } = useProjectScans(project.id);
+/** 歷史報告的「扣點」欄：預扣－退款（後端 scan.coins_charged）；進行中的掃描是目前預扣的點數。 */
+function coinsChargedText(scan) {
+  if (scan.is_trial) return "免費";
+  const coins = (scan.coins_charged ?? 0).toLocaleString();
+  if (isInProgress(scan.status)) return `預扣 ${coins} 點`;
+  if (scan.status === "failed" || scan.status === "cancelled") return "已全額退回";
+  return `${coins} 點`;
+}
+
+/** 掃描紀錄（2026-10-08 合併原「歷史報告」分頁）：歷次掃描、分數變化、扣點、問題分析與 PDF 報告。 */
+function ScanHistoryPanel({ project, scans, onRefresh }) {
   const [downloading, setDownloading] = useState(null);
   const [error, setError] = useState("");
 
@@ -1225,48 +1403,51 @@ function ProjectHistoryPage() {
     }
   }
 
-  if (scans === null) return <section className="panel"><p className="hint-text">載入歷史中…</p></section>;
-
   const completed = scans.filter((scan) => scan.status === "completed");
+  const running = scans.filter((scan) => isInProgress(scan.status)).length;
   // 每次完成掃描與「前一次完成掃描」的分數差
   const deltaById = new Map();
+  // 評分與規則版本不同（或舊掃描版本不明）的兩次不算分數差
+  const sameModel = (a, b) =>
+    Boolean(a.scoring_version && a.ruleset_version)
+    && a.scoring_version === b.scoring_version
+    && a.ruleset_version === b.ruleset_version;
+  const modelChangedIds = new Set();
   completed.forEach((scan, index) => {
     const older = completed[index + 1];
-    if (older && scan.overall_score != null && older.overall_score != null) {
-      deltaById.set(scan.id, scan.overall_score - older.overall_score);
-    }
+    if (!older || scan.overall_score == null || older.overall_score == null) return;
+    if (sameModel(scan, older)) deltaById.set(scan.id, scan.overall_score - older.overall_score);
+    else modelChangedIds.add(scan.id);
   });
 
   return (
-    <div className="project-page">
-      <ProjectHeader
-        project={project}
-        section="歷史報告"
-        description={`共 ${scans.length} 次掃描，其中 ${completed.length} 次完成。完成的掃描可查看問題分析並下載 PDF 報告。`}
-      />
-      {completed.length > 1 && (
-        <section className="panel">
-          <h2 className="project-section-title">分數趨勢</h2>
-          <LineChart
-            data={completed.slice().reverse().map((scan) => ({ label: formatDate(scan.completed_at).slice(5), value: scan.overall_score }))}
-            ariaLabel={`${project.name} 歷次分數`}
-          />
-        </section>
-      )}
-      {error && <p className="error-text" role="alert">{error}</p>}
+    <div className="project-scans-side">
       <section className="panel">
+        <div className="scan-list-head">
+          <div>
+            <h2 className="project-section-title">掃描紀錄</h2>
+            <p className="hint-text">
+              共 {scans.length} 次，{completed.length} 次完成
+              {running > 0 && `，${running} 次進行中（自動更新）`}。完成的掃描可查看問題分析並下載 PDF 報告。
+            </p>
+          </div>
+          <button className="secondary-button" type="button" onClick={onRefresh}>重新整理</button>
+        </div>
+        {error && <p className="error-text" role="alert">{error}</p>}
         {scans.length === 0 ? (
-          <p className="hint-text">還沒有掃描紀錄。</p>
+          <p className="hint-text">這個網站還沒有掃描；用表單建立第一次掃描。</p>
         ) : (
           <div className="project-table-wrap">
             <table className="project-table">
               <thead>
                 <tr>
                   <th scope="col">建立時間</th>
+                  <th scope="col">範圍</th>
                   <th scope="col">狀態</th>
                   <th scope="col">分數</th>
                   <th scope="col">變化</th>
                   <th scope="col">頁數／發現</th>
+                  <th scope="col">扣點</th>
                   <th scope="col"><span className="project-sr-only">操作</span></th>
                 </tr>
               </thead>
@@ -1275,14 +1456,24 @@ function ProjectHistoryPage() {
                   const done = scan.status === "completed";
                   return (
                     <tr key={scan.id}>
-                      <td>{formatDateTime(scan.created_at)}</td>
+                      <td><Link className="project-text-link" to={`/scans/${scan.id}`}>{formatDateTime(scan.created_at)}</Link></td>
+                      <td>
+                        {scan.max_pages > 1 ? "整個網站" : "單一頁面"}
+                        {scan.scan_mode === "active" && <span className="scan-ledger-tag">主動</span>}
+                      </td>
                       <td><ScanStatusBadge status={scan.status} /></td>
                       <td><ScoreBadge score={scan.overall_score} /></td>
-                      <td>{deltaById.has(scan.id) ? <DeltaText delta={deltaById.get(scan.id)} /> : "—"}</td>
+                      <td>
+                        {deltaById.has(scan.id) ? (
+                          <DeltaText delta={deltaById.get(scan.id)} />
+                        ) : modelChangedIds.has(scan.id) ? (
+                          <span className="hint-text" title="評分規則與前一次不同，分數不宜直接比較">規則已更新</span>
+                        ) : "—"}
+                      </td>
                       <td>{scan.pages_count} 頁 · {scan.findings_count} 項</td>
+                      <td>{coinsChargedText(scan)}</td>
                       <td>
                         <div className="project-table-actions">
-                          <Link className="project-text-link" to={`/scans/${scan.id}`}>查看結果</Link>
                           {done && (
                             <Link className="project-text-link" to={`${projectPath(project.id, "issues")}?scan=${scan.id}`}>問題分析</Link>
                           )}
@@ -1306,6 +1497,15 @@ function ProjectHistoryPage() {
           </div>
         )}
       </section>
+      {completed.length > 1 && (
+        <section className="panel">
+          <h2 className="project-section-title">分數趨勢</h2>
+          <LineChart
+            data={completed.slice().reverse().map((scan) => ({ label: formatDate(scan.completed_at).slice(5), value: scan.overall_score }))}
+            ariaLabel={`${project.name} 歷次分數`}
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -1492,8 +1692,9 @@ function ProjectSettingsPage() {
 export {
   FilterChips,
   ScanTimeCard,
+  SeverityChip,
+  SiteSummaryPanel,
   useProjectScans,
-  ProjectHistoryPage,
   ProjectIssuesPage,
   ProjectOverviewPage,
   ProjectPagesPage,

@@ -194,12 +194,78 @@ type TopAction = {
 type WarningRow = string | { url?: string; reason?: string };
 
 /** 來源：apps/scans/crawler.py 的 warning_summary */
+type CrawlBudget = {
+  stop_reason: string;
+  max_pages: number;
+  pages: number;
+  seeds: { start?: number; sitemap?: number };
+  links_queued: number;
+  links_dropped_limit: number;
+  skipped_depth: number;
+  skipped_robots: number;
+  failed: number;
+  throttle_waits: number;
+  throttle_wait_ms: number;
+  elapsed_ms: number;
+  page_ms_avg: number | null;
+  slowest_pages: { url: string; ms: number }[];
+  render_readiness?: { ready: number; timeout: number; error: number; avg_ms: number; timeout_urls: string[] } | null;
+};
+
 type WarningSummary = {
   blocked_urls?: WarningRow[];
   failed_urls?: WarningRow[];
   screenshot_failures?: WarningRow[];
   tech_stack?: unknown[];
+  crawl_budget?: CrawlBudget;
 };
+
+const STOP_REASONS: Record<string, string> = {
+  max_pages: "達到頁數上限",
+  queue_exhausted: "沒有更多可爬的同網站頁面",
+  browser_failed: "瀏覽器異常中止",
+};
+
+const seconds = (ms: number) => `${Math.round(ms / 100) / 10} 秒`;
+
+// 爬取預算（後端 crawler._CrawlState.budget_summary）：為什麼停、頁面從哪來、略過多少、時間花在哪
+function AdminCrawlBudget({ budget }: { budget: CrawlBudget }) {
+  const rows: [string, string][] = [
+    ["結束原因", `${STOP_REASONS[budget.stop_reason] || budget.stop_reason}（${budget.pages}／${budget.max_pages} 頁）`],
+    ["頁面來源", `起始網址 ${budget.seeds.start ?? 0}、sitemap ${budget.seeds.sitemap ?? 0}、頁面連結 ${budget.links_queued}`],
+    ["略過", `超過頁數上限 ${budget.links_dropped_limit}、超過深度 ${budget.skipped_depth}、robots.txt ${budget.skipped_robots}、擷取失敗 ${budget.failed}`],
+    ["耗時", `共 ${seconds(budget.elapsed_ms)}${budget.page_ms_avg == null ? "" : `，每頁平均 ${seconds(budget.page_ms_avg)}`}；速率限制等待 ${budget.throttle_waits} 次（${seconds(budget.throttle_wait_ms)}）`],
+  ];
+  const ready = budget.render_readiness;
+  if (ready) {
+    rows.push([
+      "內容穩定",
+      `平均等待 ${seconds(ready.avg_ms)}；${ready.timeout ? `${ready.timeout} 頁在上限內未穩定（照樣擷取，內容可能不完整）` : "全部頁面都在上限內穩定"}`,
+    ]);
+  }
+  return (
+    <dl className="admin-crawl-budget">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt className="admin-cell-secondary">{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+      {budget.slowest_pages.length > 0 && (
+        <div>
+          <dt className="admin-cell-secondary">最慢的頁面</dt>
+          <dd>
+            {budget.slowest_pages.map((page) => (
+              <span className="admin-crawl-slow" key={page.url}>
+                <code className="admin-warn-url">{page.url}</code> {seconds(page.ms)}
+              </span>
+            ))}
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+}
 
 const WARNING_GROUPS = [
   { key: "blocked_urls", label: "被阻擋的 URL", hint: "robots.txt / 403 / 429", tone: "warn" },
@@ -211,11 +277,14 @@ const WARNING_GROUPS = [
 function AdminScanWarnings({ summary }: { summary: WarningSummary | null | undefined }) {
   const present = WARNING_GROUPS.filter((g) => (summary?.[g.key] || []).length > 0);
   const techStack = summary?.tech_stack || [];
-  if (present.length === 0 && techStack.length === 0) return null;
+  const budget = summary?.crawl_budget;
+  if (present.length === 0 && techStack.length === 0 && !budget) return null;
 
   return (
     <section className="admin-panel">
       <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>爬取警告</h3>
+
+      {budget && <AdminCrawlBudget budget={budget} />}
 
       {techStack.length > 0 && (
         <div className="admin-tech-stack">

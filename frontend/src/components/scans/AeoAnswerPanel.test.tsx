@@ -14,6 +14,8 @@ const evaluated = {
     {
       key: "contact_phone", text: "聯絡電話是多少？", verdict: "answered", verdict_label: "可回答",
       reason: "找到具體答案：02-2322-6000",
+      confidence: "confirmed", confidence_label: "確認",
+      limitation: "答案值逐字出現在引用的原文中；仍需確認是否為最新資訊。",
       evidence: [{ url: "https://x.example/", location: "頁尾", quote: "聯絡電話：02-2322-6000" }],
     },
     {
@@ -64,5 +66,52 @@ describe("AeoAnswerPanel 的 AEO 問答分頁模式（withFilter）", () => {
     render(<AeoAnswerPanel report={evaluated} withFilter />);
     expect(screen.queryByRole("heading", { name: "AEO 問答檢測" })).not.toBeInTheDocument();
     expect(screen.queryByText(/有答案的問題比例/)).not.toBeInTheDocument();
+  });
+
+  it("可回答的題目顯示可信度與判定限制；沒有可信度的題目不顯示", async () => {
+    const user = userEvent.setup();
+    render(<AeoAnswerPanel report={evaluated} />);
+    expect(screen.getAllByText(/可信度：/)).toHaveLength(1);
+    expect(screen.getByText("可信度：確認")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /聯絡電話是多少/ }));
+    expect(screen.getByText(/判定限制：答案值逐字出現在引用的原文中/)).toBeInTheDocument();
+  });
+});
+
+describe("AeoAnswerPanel 的引用可得性", () => {
+  const withCitation = {
+    ...evaluated,
+    citation: { counts: { citable: 0, limited: 0, not_citable: 1 }, citable_ratio: 0 },
+    questions: [
+      {
+        ...evaluated.questions[0],
+        citation: {
+          status: "not_citable", label: "無法被引用",
+          reasons: ["頁面禁止擷取摘要（nosnippet，meta robots）"],
+        },
+      },
+      evaluated.questions[1],
+    ],
+  };
+
+  it("只標出無法或受限引用的題目，展開後列出原因，並顯示可引用比例", async () => {
+    const user = userEvent.setup();
+    render(<AeoAnswerPanel report={withCitation} />);
+    expect(screen.getByText(/答案可被搜尋引擎與 AI 引用的比例 0%/)).toBeInTheDocument();
+    expect(screen.getAllByText("無法被引用")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: /聯絡電話是多少/ }));
+    expect(screen.getByText(/無法被引用：頁面禁止擷取摘要/)).toBeInTheDocument();
+  });
+
+  it("可被引用的題目不另加標示；舊報告沒有引用資料時不顯示比例", () => {
+    const citable = {
+      ...evaluated,
+      questions: [
+        { ...evaluated.questions[0], citation: { status: "citable", label: "可被引用", reasons: [] } },
+      ],
+    };
+    render(<AeoAnswerPanel report={citable} />);
+    expect(screen.queryByText("可被引用")).not.toBeInTheDocument();
+    expect(screen.queryByText(/引用的比例/)).not.toBeInTheDocument();
   });
 });

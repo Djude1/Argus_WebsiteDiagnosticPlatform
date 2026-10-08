@@ -12,12 +12,12 @@ import { formatDate, formatDateTime, formatNumber, formatRelative } from "../../
 import {
   BrowserIcon,
   ChatIcon,
-  ClockIcon,
   FlagIcon,
   GearIcon,
   HomeIcon,
   LayersIcon,
   MagnifierIcon,
+  ShieldIcon,
   SpiderIcon,
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
@@ -25,12 +25,12 @@ import { useArgusStore } from "../../store";
 // 側邊欄：圖示＋名稱＋一行說明；目前頁用淺色底（不用彩色左邊條）
 const SECTIONS = [
   { key: "", label: "總覽", hint: "分數與本次變化", Icon: HomeIcon },
-  { key: "scans", label: "掃描", hint: "建立與檢視掃描", Icon: SpiderIcon },
+  { key: "scans", label: "掃描與報告", hint: "建立掃描、歷次結果與報告", Icon: SpiderIcon },
   { key: "seo", label: "SEO 分析", hint: "頁面內容、連結、關鍵字", Icon: MagnifierIcon },
+  { key: "security", label: "資安分析", hint: "標頭等第、問題類型與修法", Icon: ShieldIcon },
   { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
   { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
   { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案", Icon: ChatIcon },
-  { key: "history", label: "歷史報告", hint: "歷次分數與報告", Icon: ClockIcon },
   { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存", Icon: GearIcon },
 ];
 
@@ -357,6 +357,8 @@ function ProjectHomeRedirect({ section = "" }) {
 
 function scoreDelta(summary) {
   if (summary.latest_score == null || summary.previous_score == null) return null;
+  // 評分規則不同的兩次掃描，分數差不代表網站變好或變差
+  if (summary.score_comparable === false) return null;
   return summary.latest_score - summary.previous_score;
 }
 
@@ -489,7 +491,7 @@ function ProjectRow({ project, onRestore, restoring }) {
             <button type="button" className="secondary-button" onClick={() => onRestore(project)} disabled={restoring}>
               {restoring ? "恢復中…" : "恢復專案"}
             </button>
-            <Link className="project-text-link" to={projectPath(project.id, "history")}>查看歷史</Link>
+            <Link className="project-text-link" to={projectPath(project.id, "scans")}>查看歷史</Link>
           </>
         ) : (
           <>

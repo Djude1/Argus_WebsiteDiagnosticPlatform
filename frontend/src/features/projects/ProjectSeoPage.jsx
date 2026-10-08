@@ -12,6 +12,7 @@ import { formatDate, formatDateTime } from "../../shared/formatters";
 import { ExternalIcon, GlobeIcon, SearchIcon } from "../../shared/LineIcons";
 import { FilterChips, ScanTimeCard, useProjectScans } from "./ProjectPages.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
+import { keywordGap, untargetedQueries } from "./seoKeywordGap";
 
 const TABS = [
   { key: "overview", label: "概覽" },
@@ -30,12 +31,29 @@ const VERDICT_META = {
   broken: { label: "失效", tone: "is-bad" },
   loop: { label: "轉址過多", tone: "is-bad" },
   error: { label: "無法連線", tone: "is-warn" },
+  timeout: { label: "逾時", tone: "is-warn" },
   restricted: { label: "對方限制檢查", tone: "is-info" },
   redirect: { label: "轉址後正常", tone: "is-good" },
   ok: { label: "正常", tone: "is-good" },
   other: { label: "其他", tone: "is-info" },
   unchecked: { label: "未檢查", tone: "is-muted" },
   skipped: { label: "未檢查（非公開位址）", tone: "is-muted" },
+};
+// 和上一次掃描比較的失效連結趨勢（後端 seo/link_trend.py）
+const TREND_META = {
+  new: { label: "新壞掉", tone: "is-bad" },
+  persisting: { label: "持續失效", tone: "is-warn" },
+  recovered: { label: "已確認恢復", tone: "is-good" },
+  unconfirmed: { label: "本次無法確認", tone: "is-muted" },
+};
+// 沒有明確結果的連結狀態（後端 seo/link_trend.COVERAGE_LABELS）
+const COVERAGE_LABELS = {
+  restricted: "對方限制檢查",
+  timeout: "逾時",
+  error: "無法連線",
+  skipped: "非公開位址",
+  over_limit: "超過數量上限",
+  budget_exhausted: "時間用完",
 };
 const LINK_TYPES = { internal: "站內", subdomain: "子網域", external: "站外" };
 const PAGE_FILTERS = {
@@ -51,10 +69,17 @@ const LINK_FILTERS = {
   all: { label: "全部", test: () => true },
   broken: { label: "失效", test: (row) => row.verdict === "broken" || row.verdict === "loop" },
   redirect: { label: "轉址", test: (row) => row.verdict === "redirect" },
-  uncertain: { label: "無法確認", test: (row) => ["error", "restricted", "other"].includes(row.verdict) },
+  uncertain: { label: "無法確認", test: (row) => ["error", "timeout", "restricted", "other"].includes(row.verdict) },
   unchecked: { label: "未檢查", test: (row) => row.verdict === "unchecked" || row.verdict === "skipped" },
 };
 const GSC_DAYS = [7, 28, 90];
+const MAX_KEYWORDS = 20; // 與後端 seo/keywords.MAX_KEYWORDS 一致
+const RANK_BAND = {
+  first: { label: "第 1 頁", tone: "is-good" },
+  second: { label: "第 2 頁", tone: "is-warn" },
+  beyond: { label: "第 3 頁以後", tone: "is-info" },
+  none: { label: "沒有曝光", tone: "is-muted" },
+};
 const numberFormat = new Intl.NumberFormat("zh-TW");
 
 function worstLevel(checks = []) {
@@ -68,6 +93,29 @@ function levelOf(page, key) {
 function LevelChip({ level }) {
   const meta = LEVEL_META[level] || LEVEL_META.notice;
   return <span className={`seo-chip ${meta.tone}`}>{meta.label}</span>;
+}
+
+function TrendChip({ trend }) {
+  const meta = TREND_META[trend];
+  return meta ? <span className={`seo-chip ${meta.tone}`}>{meta.label}</span> : null;
+}
+
+// 連結檢查覆蓋（哪些連結沒有明確結果與原因）與上一次掃描比較的失效連結趨勢
+function LinkCoverageNote({ coverage, trend }) {
+  const gaps = Object.entries(COVERAGE_LABELS).filter(([key]) => coverage?.[key]);
+  const changes = trend ? Object.entries(TREND_META).filter(([key]) => trend.counts?.[key]) : [];
+  if (!gaps.length && !trend) return null;
+  return (
+    <p className="seo-muted seo-legend">
+      {coverage && `已確認 ${coverage.checked} 個連結`}
+      {gaps.length > 0 && `；沒有明確結果：${gaps.map(([key, label]) => `${label} ${coverage[key]}`).join("、")}`}
+      {coverage && "。"}
+      {trend && (changes.length
+        ? `和上一次掃描（${formatDateTime(trend.previous_checked_at)}）相比：${changes.map(([key, meta]) => `${meta.label} ${trend.counts[key]}`).join("、")}。`
+        : `和上一次掃描（${formatDateTime(trend.previous_checked_at)}）相比，兩次都沒有失效連結。`)}
+      {trend && "沒有檢查到或這次找不到的連結只標「本次無法確認」，不算恢復。"}
+    </p>
+  );
 }
 
 function VerdictChip({ verdict }) {
@@ -768,6 +816,7 @@ function LinksTab({ data, keyword, onOpenPage }) {
             : "這次掃描沒有連結狀態檢查；站內已爬到的頁面以爬蟲結果顯示。"}
           302 → 200 這類「轉址後正常」不算失效；401／403／429 代表對方拒絕自動檢查，標為無法確認。
         </p>
+        <LinkCoverageNote coverage={links.coverage} trend={links.trend} />
         {visible.length === 0 ? (
           <p className="hint-text">沒有符合條件的連結。</p>
         ) : (
@@ -791,6 +840,7 @@ function LinksTab({ data, keyword, onOpenPage }) {
                         <td className="seo-nowrap">{LINK_TYPES[row.type]}</td>
                         <td>
                           <VerdictChip verdict={row.verdict} />
+                          {row.trend && <TrendChip trend={row.trend} />}
                           <span className="seo-muted seo-block">{chainText(row.chain)}{row.note ? `；${row.note}` : ""}</span>
                         </td>
                         <td className="seo-nowrap">
@@ -1135,11 +1185,13 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
   const [error, setError] = useState("");
   useEffect(() => setKeywords(data.keywords), [data.keywords]);
 
-  const gscByQuery = useMemo(() => {
-    const map = new Map();
-    for (const row of performance.data?.queries || []) map.set(row.query.toLowerCase(), row);
-    return map;
-  }, [performance.data]);
+  // Search Console 落差：每個目標關鍵字的相關搜尋詞表現，以及有曝光但還不是目標的字詞
+  const queries = performance.data?.queries;
+  const gapByKeyword = useMemo(
+    () => new Map(keywordGap(data.keyword_report, queries).map((gap) => [gap.keyword, gap])),
+    [data.keyword_report, queries],
+  );
+  const opportunities = useMemo(() => untargetedQueries(keywords, queries), [keywords, queries]);
 
   async function save(next) {
     setSaving(true);
@@ -1206,7 +1258,7 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
             </thead>
             <tbody>
               {data.keyword_report.map((row) => {
-                const gscRow = gscByQuery.get(row.keyword.toLowerCase());
+                const gap = performance.data ? gapByKeyword.get(row.keyword) : null;
                 return (
                   <tr key={row.keyword}>
                     <td><SearchIcon /> {row.keyword}</td>
@@ -1221,12 +1273,12 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
                         <span className="seo-muted">沒有頁面提到</span>
                       )}
                     </td>
-                    <td className="seo-nowrap">
-                      {gscRow
-                        ? `點擊 ${gscRow.clicks}・曝光 ${gscRow.impressions}・平均排名 ${gscRow.position.toFixed(1)}`
-                        : performance.data ? "期間內沒有此搜尋詞" : "—"}
+                    <td>
+                      {gap ? <KeywordGapCell gap={gap} /> : "—"}
                     </td>
-                    <td className="seo-muted">{row.advice || "已出現在重要位置"}</td>
+                    <td className="seo-muted">
+                      {[row.advice, gap?.advice].filter(Boolean).join(" ") || "已出現在重要位置"}
+                    </td>
                   </tr>
                 );
               })}
@@ -1234,8 +1286,73 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
           </table>
         </div>
       )}
-      <p className="seo-muted">依掃描當時保存的頁面內容比對；修改網站後重新掃描才會更新。</p>
+      <p className="seo-muted">
+        依掃描當時保存的頁面內容比對；修改網站後重新掃描才會更新。Search Console 欄位統計包含這個關鍵字的
+        搜尋詞（期間內點擊最多的前 200 個），排名是期間平均。
+      </p>
+      {performance.data && opportunities.length > 0 && (
+        <>
+          <h3 className="seo-subtitle">有曝光但還不是目標的搜尋詞</h3>
+          <p className="seo-muted">這些搜尋詞已經讓網站出現在 Google，但不在目標關鍵字裡；值得經營的可以設為目標，追蹤頁面有沒有好好回應。</p>
+          <div className="project-table-wrap">
+            <table className="project-table seo-keyword-table">
+              <thead>
+                <tr>
+                  <th scope="col">搜尋詞</th>
+                  <th scope="col">曝光</th>
+                  <th scope="col">點擊</th>
+                  <th scope="col">平均排名</th>
+                  <th scope="col">Google 帶到的頁面</th>
+                  <th scope="col"><span className="project-sr-only">動作</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {opportunities.map((row) => (
+                  <tr key={row.query}>
+                    <td>{row.query}</td>
+                    <td>{numberFormat.format(row.impressions)}</td>
+                    <td>{numberFormat.format(row.clicks)}</td>
+                    <td>{row.position.toFixed(1)}</td>
+                    <td className="seo-url">{row.page || "—"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={saving || keywords.length >= MAX_KEYWORDS}
+                        title={keywords.length >= MAX_KEYWORDS ? `最多 ${MAX_KEYWORDS} 個目標關鍵字` : undefined}
+                        onClick={() => save([...keywords, row.query])}
+                      >
+                        設為目標
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
+  );
+}
+
+/** Search Console 欄：相關搜尋詞的曝光、點擊、最佳平均排名（分段徽章附文字），以及 Google 帶到的頁面。 */
+function KeywordGapCell({ gap }) {
+  const band = RANK_BAND[gap.status];
+  if (gap.status === "none") {
+    return <span className={`seo-chip ${band.tone}`}>{band.label}</span>;
+  }
+  return (
+    <>
+      <span className={`seo-chip ${band.tone}`}>{band.label}</span>
+      <span className="seo-block">
+        {gap.queries} 個相關搜尋詞・曝光 {numberFormat.format(gap.impressions)}・點擊 {numberFormat.format(gap.clicks)}
+      </span>
+      <span className="seo-muted seo-block">最佳平均排名 {gap.bestPosition.toFixed(1)}（「{gap.bestQuery}」）</span>
+      {gap.landingMismatch && (
+        <span className="seo-muted seo-block">Google 帶到：<span className="seo-url">{gap.landingMismatch}</span></span>
+      )}
+    </>
   );
 }
 

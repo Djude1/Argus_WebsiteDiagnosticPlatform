@@ -22,6 +22,8 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
+import { PerformancePanel } from "../../components/scans/PerformancePanel";
+import { ScoreBreakdownPanel } from "../../components/scans/ScoreBreakdownPanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import { useArgusStore } from "../../store";
@@ -44,7 +46,6 @@ import {
 } from "../../shared/AppShared.jsx";
 
 const SCAN_POLL_INTERVAL_MS = 2000;
-const LIST_POLL_INTERVAL_MS = 3000;
 const MAX_SITE_SCAN_PAGES = 50;
 // 整站走訪深度（與後端 ARGUS_DEFAULT_MAX_DEPTH 一致）；頁數上限才是實際範圍，後端另讀 sitemap 補種子
 const SITE_SCAN_DEPTH = 6;
@@ -82,14 +83,16 @@ const SCAN_STEP_META = {
   analyze_seo: { label: "SEO", title: "分析 SEO", hint: "檢查 title、meta description、H1、圖片 alt、canonical 與 Open Graph", Icon: StatusScanGlyph },
   analyze_aeo: { label: "AEO", title: "分析 AEO", hint: "檢查索引與摘要限制，以及結構化資料是否與頁面文字一致", Icon: StatusScanGlyph },
   analyze_geo: { label: "GEO", title: "分析 GEO", hint: "檢查 JSON-LD 實體、可引用段落與 JavaScript 渲染依賴", Icon: StatusScanGlyph },
-  analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤與 JavaScript 錯誤", Icon: StatusScanGlyph },
+  analyze_ux: { label: "UX", title: "分析 UX", hint: "檢查行動版破版、觸控目標、表單標籤、JavaScript 錯誤與 WCAG 無障礙規則（axe-core）", Icon: StatusScanGlyph },
   aeo_answers: { label: "問答檢測", title: "AEO 問答檢測", hint: "依網站內容出題，在已掃描頁面中找答案並核對原文證據", Icon: StatusScanGlyph },
   analyze_security: { label: "資安", title: "分析資安", hint: "檢查表單 CSRF，以及頁面中外洩的金鑰與個資", Icon: StatusScanGlyph },
   active_probe: { label: "主動探測", title: "主動探測", hint: "以 Nuclei／Katana 對授權目標執行受控探測", Icon: StatusScanGlyph },
   deep_security: { label: "深度資安", title: "深度資安檢查", hint: "檢查 HTTPS 與安全標頭、TLS 憑證、Cookie、SRI、DNS 與前端套件版本", Icon: StatusScanGlyph },
+  zap_passive: { label: "ZAP", title: "OWASP ZAP 被動分析", hint: "把已爬到的流量交給 OWASP ZAP 檢查，不對網站發出新的請求", Icon: StatusScanGlyph },
   exposure_probe: { label: "敏感檔案", title: "敏感檔案探測", hint: "探測常見的敏感檔案路徑是否外洩", Icon: StatusScanGlyph },
   geo_site: { label: "AI 爬蟲", title: "檢查 AI 爬蟲訊號", hint: "檢查 llms.txt 與 robots.txt 對 AI 爬蟲的設定", Icon: StatusScanGlyph },
   seo_links: { label: "連結檢查", title: "檢查連結與網址", hint: "檢查站內外連結的狀態與轉址，以及 robots.txt、HTTPS、www 與 404 頁設定", Icon: StatusScanGlyph },
+  pagespeed: { label: "效能量測", title: "效能量測", hint: "以 Google PageSpeed Insights 量測首頁的 Lighthouse 分數與真實使用者體驗", Icon: StatusScanGlyph },
   agent: { label: "AI Agent", title: "AI Agent 測試", hint: "AI Agent 以擬真使用者操作網站，測試互動流程", Icon: StatusAgentGlyph },
   scoring: { label: "評分", title: "彙整評分", hint: "計算各維度分數並排出優先處理項目", Icon: StatusScanGlyph },
 };
@@ -348,12 +351,6 @@ function ScanJobForm({ onCreated, project = null }) {
   const initial = loadScanDraft(draftKey) || defaults;
   const [scope, setScope] = useState(initial.scope || "site"); // "single" | "site"
   const [url, setUrl] = useState(initial.url || "");
-  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(
-    initial.authorizationConfirmed || false,
-  );
-  const [thirdPartyReconfirmed, setThirdPartyReconfirmed] = useState(
-    initial.thirdPartyReconfirmed || false,
-  );
   const [activeMode, setActiveMode] = useState(initial.activeMode || false);
   const [activeAuthorized, setActiveAuthorized] = useState(initial.activeAuthorized || false);
   // 掃描維度多選（至少一項；費用＝頁數 × 勾選維度數 × 每維單價）
@@ -362,6 +359,8 @@ function ScanJobForm({ onCreated, project = null }) {
   const [submitting, setSubmitting] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null); // { estimated_pages, estimated_cost, confidence }
+  // Partial Scan：點數不夠掃滿 50 頁時，使用者確認後改掃 N 頁（null＝未選，照常掃滿）
+  const [partialPages, setPartialPages] = useState(null);
   const [verifiedDomains, setVerifiedDomains] = useState([]); // 已通過驗證的網域（URL 徽章提示用）
   const navigate = useNavigate();
   const wallet = useArgusStore((s) => s.wallet);
@@ -412,16 +411,44 @@ function ScanJobForm({ onCreated, project = null }) {
 
   const coinPerCategory = wallet?.coin_per_category ?? 2;
   const coinPerPage = coinPerCategory * categories.length;
-  const effectivePages = scope === "single" ? 1 : MAX_SITE_SCAN_PAGES;
+  const sitePageLimit = partialPages || MAX_SITE_SCAN_PAGES;
+  const effectivePages = scope === "single" ? 1 : sitePageLimit;
   // AI Agent 擬真使用者 UX 測試附加費：僅全網站掃描且勾 UX 時計收（後端 agent 關閉時回 0）。
   const agentUxFee =
     scope !== "single" && categories.includes("ux")
       ? (wallet?.agent_ux_fee ?? 0)
       : 0;
-  const estimatedCost = effectivePages * coinPerPage + agentUxFee;
+  // 深度資安 Agent 附加費：主動＋已授權＋整站時預扣；agent 沒實際執行，結算會退回。
+  const agentDeepFee =
+    scope !== "single" && activeMode && activeAuthorized
+      ? (wallet?.agent_deep_fee ?? 0)
+      : 0;
+  // 首次免費完整掃描：被動＋整站＋五面向全選、帳號還沒用過（後端同一規則再判一次）
+  const freeTrial =
+    Boolean(wallet?.free_trial_available) &&
+    scope !== "single" &&
+    !activeMode &&
+    categories.length === SCAN_CATEGORY_OPTIONS.length;
+  const listCost = effectivePages * coinPerPage + agentUxFee + agentDeepFee;
+  const estimatedCost = freeTrial ? 0 : listCost;
   const balance = wallet?.balance ?? 0;
   const insufficient = balance < estimatedCost;
+  // 點數不夠掃滿時，同一組設定最多付得起幾頁（至少 2 頁才有意義）
+  const affordablePages = useMemo(() => {
+    if (scope === "single" || !insufficient || partialPages) return 0;
+    let best = 0;
+    for (let pages = 2; pages < MAX_SITE_SCAN_PAGES; pages += 1) {
+      if (pages * coinPerPage + agentUxFee + agentDeepFee <= balance) best = pages;
+      else break;
+    }
+    return best;
+  }, [scope, insufficient, partialPages, coinPerPage, agentUxFee, agentDeepFee, balance]);
   const securitySelected = categories.includes("security");
+
+  // 範圍或主動測試設定一變，已確認的部分掃描頁數就不準了，改回完整掃描讓使用者重新確認
+  useEffect(() => {
+    setPartialPages(null);
+  }, [scope, activeMode, activeAuthorized]);
 
   function toggleCategory(value) {
     const next = categories.includes(value)
@@ -430,6 +457,7 @@ function ScanJobForm({ onCreated, project = null }) {
     if (next.length === 0) return; // 至少保留一個維度
     setCategories(next);
     setEstimate(null);
+    setPartialPages(null);
     // 主動測試屬資安維度：取消資安時連動關閉主動模式與其授權勾選
     if (!next.includes("security")) {
       setActiveMode(false);
@@ -441,13 +469,11 @@ function ScanJobForm({ onCreated, project = null }) {
     saveScanDraft({
       scope,
       url,
-      authorizationConfirmed,
-      thirdPartyReconfirmed,
       activeMode,
       activeAuthorized,
       categories,
     }, draftKey);
-  }, [draftKey, scope, url, authorizationConfirmed, thirdPartyReconfirmed, activeMode, activeAuthorized, categories]);
+  }, [draftKey, scope, url, activeMode, activeAuthorized, categories]);
 
   useEffect(() => {
     if (!submitting) return undefined;
@@ -468,24 +494,24 @@ function ScanJobForm({ onCreated, project = null }) {
       // 整站掃描：遵守專案預設上限，避免過度爬取與預扣過高
       const payload = {
         url,
-        authorization_confirmed: authorizationConfirmed,
-        third_party_reconfirmed: thirdPartyReconfirmed,
+        // 送出即聲明擁有此網站或已取得授權（表單上的文字說明）；後端仍寫授權紀錄
+        authorization_confirmed: true,
+        third_party_reconfirmed: true,
         scan_mode: activeMode ? "active" : "passive",
         active_testing_authorized: activeMode && activeAuthorized,
         categories,
-        max_pages: scope === "single" ? 1 : MAX_SITE_SCAN_PAGES,
+        max_pages: scope === "single" ? 1 : sitePageLimit,
         max_depth: scope === "single" ? 1 : SITE_SCAN_DEPTH,
         ...(project ? { project: project.id } : {}),
       };
       const response = await api.post("/scans/", payload);
       setUrl(defaults.url || "");
-      setAuthorizationConfirmed(false);
-      setThirdPartyReconfirmed(false);
       setActiveMode(false);
       setActiveAuthorized(false);
       setCategories(defaults.categories || DEFAULT_SCAN_CATEGORIES);
       setEstimate(null);
       setScope(defaults.scope || "site");
+      setPartialPages(null);
       clearScanDraft(draftKey);
       fetchWallet();
       onCreated(response.data);
@@ -572,6 +598,9 @@ function ScanJobForm({ onCreated, project = null }) {
           費用＝每頁每維度 {coinPerCategory} coin。已選 {categories.length} 維 →
           每頁 {coinPerPage} coin{categories.length === 5 ? "（全選價）" : "，少勾維度即省費用"}。
           {agentUxFee > 0 && <> 全網站掃描含 UX 另加 AI Agent UX 測試 {agentUxFee} coin。</>}
+          {agentDeepFee > 0 && (
+            <> 主動式深度資安 AI Agent 另加 {agentDeepFee} coin（Agent 實際執行才收，沒執行會退回）。</>
+          )}
         </p>
         <div className="category-grid">
           {SCAN_CATEGORY_OPTIONS.map(({ value, label, desc }) => {
@@ -642,6 +671,19 @@ function ScanJobForm({ onCreated, project = null }) {
       </div>
 
       <div className={`coin-estimate ${insufficient ? "is-insufficient" : ""}`}>
+        {freeTrial && (
+          <p className="coin-estimate-free" role="status">
+            首次完整掃描免費：這次被動式整站五面向掃描不扣點（原價最多 {listCost.toLocaleString()} coin）。
+          </p>
+        )}
+        {partialPages && (
+          <p className="coin-estimate-partial" role="status">
+            部分掃描：最多 {partialPages} 頁，結果可能沒有涵蓋網站全部頁面。
+            <button type="button" className="coin-estimate-link" onClick={() => setPartialPages(null)}>
+              改回完整掃描
+            </button>
+          </p>
+        )}
         <div className="coin-estimate-row">
           <span>本次掃描預扣</span>
           <strong>{estimatedCost.toLocaleString()} coin</strong>
@@ -650,6 +692,16 @@ function ScanJobForm({ onCreated, project = null }) {
           <span>目前餘額</span>
           <span>{balance.toLocaleString()} coin</span>
         </div>
+        {insufficient && affordablePages > 0 && (
+          <button
+            className="coin-estimate-cta is-secondary"
+            type="button"
+            onClick={() => setPartialPages(affordablePages)}
+          >
+            改為部分掃描：最多 {affordablePages} 頁（預扣{" "}
+            {(affordablePages * coinPerPage + agentUxFee + agentDeepFee).toLocaleString()} coin）
+          </button>
+        )}
         {insufficient && (
           <button
             className="coin-estimate-cta"
@@ -664,22 +716,6 @@ function ScanJobForm({ onCreated, project = null }) {
         </p>
       </div>
 
-      <label className="checkbox-row">
-        <input
-          type="checkbox"
-          checked={authorizationConfirmed}
-          onChange={(event) => setAuthorizationConfirmed(event.target.checked)}
-        />
-        我擁有此網站或已獲得書面授權測試。
-      </label>
-      <label className="checkbox-row">
-        <input
-          type="checkbox"
-          checked={thirdPartyReconfirmed}
-          onChange={(event) => setThirdPartyReconfirmed(event.target.checked)}
-        />
-        若此網站看似第三方或敏感產業，我已再次確認授權。
-      </label>
       <label className={`checkbox-row ${securitySelected ? "" : "opacity-60"}`}>
         <input
           type="checkbox"
@@ -699,6 +735,12 @@ function ScanJobForm({ onCreated, project = null }) {
           />
           我同意進行侵入式測試，並理解系統會限制 RPS ≤ 2。
         </label>
+      )}
+      {activeMode && (
+        <p className="coin-estimate-hint">
+          網站有 WAF 或機器人防護時，請先放行 Argus 的掃描流量，否則部分檢查會被擋下：
+          <Link to="/scanner" target="_blank" rel="noopener">掃描來源說明</Link>
+        </p>
       )}
       {activeMode && !matchedVerifiedDomain && !staffDomainBypass && (
         <div className="scan-domain-warning" role="alert">
@@ -726,6 +768,7 @@ function ScanJobForm({ onCreated, project = null }) {
         </div>
       )}
       {error && <p className="error-text">{error}</p>}
+      <p className="coin-estimate-hint">送出即表示你擁有此網站或已取得授權進行檢查。</p>
       <button className="primary-button" type="submit" disabled={submitting}>
         {submitting ? "送出中... (請勿關閉視窗)" : "建立掃描"}
       </button>
@@ -740,99 +783,6 @@ function ScanJobForm({ onCreated, project = null }) {
 // 網站專案「掃描」分頁的掃描列表：該網站的全部掃描（卡片多欄、顯示時間與頁數／發現數）。
 // 此網站的掃描：一列一次掃描的表格（時間、範圍與模式、頁數、發現、狀態、分數與變化）。
 // 不用卡片：同一個網站的歷次掃描本來就是要逐列比較的紀錄。
-function ScanList({ scans, onRefresh }) {
-  const navigate = useNavigate();
-  const inProgressCount = scans.filter((scan) => isInProgress(scan.status)).length;
-
-  // 每次掃描與「前一次有分數的掃描」比較（scans 已按 -created_at 排序，同一專案同一個 origin）
-  const deltaById = useMemo(() => {
-    const result = new Map();
-    const scored = scans.filter((scan) => scan.overall_score !== null && scan.overall_score !== undefined);
-    scored.forEach((scan, index) => {
-      const previous = scored[index + 1];
-      if (previous) result.set(scan.id, scan.overall_score - previous.overall_score);
-    });
-    return result;
-  }, [scans]);
-
-  function openRow(event, scanId) {
-    // 列本身可點；列內的連結自己處理
-    if (event.target.closest("a, button")) return;
-    navigate(`/scans/${scanId}`);
-  }
-
-  return (
-    <section className="panel scan-list-wide">
-      <div className="scan-list-head">
-        <div>
-          <h2 className="section-title">此網站的掃描</h2>
-          <p className="scan-list-sub">
-            共 {scans.length} 次
-            {inProgressCount > 0 && `，${inProgressCount} 次進行中（每 ${LIST_POLL_INTERVAL_MS / 1000} 秒自動更新）`}
-          </p>
-        </div>
-        <button className="secondary-button" type="button" onClick={onRefresh}>
-          重新整理
-        </button>
-      </div>
-      {scans.length ? (
-        <div className="scan-ledger-wrap">
-          <table className="scan-ledger">
-            <thead>
-              <tr>
-                <th scope="col">建立時間</th>
-                <th scope="col">範圍</th>
-                <th scope="col" className="is-num">頁數</th>
-                <th scope="col" className="is-num">發現</th>
-                <th scope="col">狀態</th>
-                <th scope="col" className="is-num">分數</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.map((scan) => {
-                const delta = deltaById.get(scan.id);
-                const running = isInProgress(scan.status);
-                return (
-                  <tr
-                    key={scan.id}
-                    className={running ? "is-running" : ""}
-                    onClick={(event) => openRow(event, scan.id)}
-                  >
-                    <th scope="row">
-                      <Link to={`/scans/${scan.id}`} className="scan-ledger-link">
-                        {formatDateTime(scan.created_at)}
-                      </Link>
-                    </th>
-                    <td>
-                      {scan.max_pages > 1 ? "整個網站" : "單一頁面"}
-                      {scan.scan_mode === "active" && <span className="scan-ledger-tag">主動</span>}
-                    </td>
-                    <td className="is-num">{scan.pages_count ?? "—"}</td>
-                    <td className="is-num">{scan.findings_count ?? "—"}</td>
-                    <td>
-                      <ScanStatusBadge status={scan.status} />
-                    </td>
-                    <td className="is-num">
-                      <ScoreBadge score={scan.overall_score} />
-                      {delta !== undefined && delta !== 0 && (
-                        <span className={`scan-ledger-delta ${delta > 0 ? "is-up" : "is-down"}`}>
-                          {delta > 0 ? `+${delta}` : delta}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="hint-text">這個網站還沒有掃描；用左側表單建立第一次掃描。</p>
-      )}
-    </section>
-  );
-}
-
 // ============================================================
 // Findings 分組列表（同分類、同標題的 finding 合併為一群組，例如 11 個「頁面未使用 HTTPS」併成一筆，展開後列出每個頁面）
 // ============================================================
@@ -1073,6 +1023,12 @@ function EvidencePanel({ finding }) {
           <span>證據型態</span>
           <strong>{finding.evidence_type || "text"}</strong>
         </div>
+        {finding.security_kind_label && (
+          <div>
+            <span>資安類型</span>
+            <strong className={`security-kind-chip is-${finding.security_kind}`}>{finding.security_kind_label}</strong>
+          </div>
+        )}
         {finding.owasp_category && (
           <div>
             <span>OWASP</span>
@@ -1586,6 +1542,14 @@ function FindingsWorkspace({ scan }) {
 
       {/* 網站位於 CDN／反向代理之後時提醒一次；網站優勢與架構細節在上方導覽的獨立分頁 */}
       <EdgeNotice profile={scan.site_profile} />
+      {scan.max_pages > 1 && scan.max_pages < MAX_SITE_SCAN_PAGES && (
+        <p className="scan-report-alert">
+          本次為部分掃描：頁數上限 {scan.max_pages} 頁，結果可能沒有涵蓋網站全部頁面。
+        </p>
+      )}
+      {scan.is_trial && (
+        <p className="scan-report-alert">這是你的首次免費完整掃描，沒有扣點。</p>
+      )}
 
       {/* 摘要：嚴重度、各維度、優先處理——放在問題清單與截圖之前，任何寬度都不會被截圖擠到下方 */}
       {(findingStats?.total > 0 || findings.length > 0 || topActions.length > 0) && (
@@ -1767,6 +1731,8 @@ const SCAN_TABS = [
   { path: "", label: "報告" },
   { path: "strengths", label: "網站優勢" },
   { path: "architecture", label: "網站架構" },
+  { path: "performance", label: "效能" },
+  { path: "score", label: "分數說明" },
 ];
 
 function ScanLayout() {
@@ -1823,6 +1789,41 @@ function ScanStrengthsPage() {
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
   if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
   return <SiteStrengths profile={scan.site_profile} />;
+}
+
+/** /scans/:scanId/performance：Lighthouse 實驗室分數與 CrUX 真實使用者體驗（外部指標，不計分）。 */
+function ScanPerformancePage() {
+  const { scanId } = useParams();
+  const { scan, error } = useScanDetail(scanId);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return (
+    <PerformancePanel
+      report={scan.performance_report}
+      categories={scan.categories}
+      check={scan.coverage?.checks?.pagespeed}
+    />
+  );
+}
+
+/** /scans/:scanId/score：各維度分數怎麼算出來的（基準分、逐項扣分、未完整完成的檢查）。 */
+function ScanScorePage() {
+  const { scanId } = useParams();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/scans/${scanId}/score-breakdown/`)
+      .then((response) => !cancelled && setData(response.data))
+      .catch(() => !cancelled && setError("無法載入分數說明。"));
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+  if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
+  if (!data) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  return <ScoreBreakdownPanel data={data} />;
 }
 
 /** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
@@ -2211,10 +2212,11 @@ export {
   scanProgress,
   ScanJobForm,
   ScanLayout,
-  ScanList,
   ScanDetailPage,
   ScanStrengthsPage,
   ScanArchitecturePage,
+  ScanPerformancePage,
+  ScanScorePage,
   TopologyPage,
   isInProgress,
 };

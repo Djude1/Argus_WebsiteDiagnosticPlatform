@@ -61,9 +61,9 @@ describe("CommandSearch", () => {
     await user.type(screen.getByRole("combobox"), "b.ex");
     expect(screen.getByRole("option", { name: /b\.example/ })).toBeInTheDocument();
     await user.clear(screen.getByRole("combobox"));
-    await user.type(screen.getByRole("combobox"), "歷史");
-    await user.click(screen.getByRole("option", { name: "歷史報告" }));
-    expect(screen.getByTestId("location")).toHaveTextContent("/projects/1/history");
+    await user.type(screen.getByRole("combobox"), "資安");
+    await user.click(screen.getByRole("option", { name: "資安分析" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/projects/1/security");
     await user.click(screen.getByRole("button", { name: "搜尋專案、問題或建議" }));
     await user.type(screen.getByRole("combobox"), "zzz");
     expect(screen.getByText(/找不到符合/)).toBeInTheDocument();

@@ -597,3 +597,316 @@
   line-height: 1.25rem;
   white-space: nowrap;
 }
+
+/* 效能分頁（Lighthouse／CrUX，2026-10-07）：外部指標，與 Argus 分數分開呈現；不用左邊條 */
+.perf-panels {
+  display: grid;
+  gap: 1rem;
+}
+.perf-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.perf-subtitle {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.perf-lead {
+  margin: 0 0 0.85rem;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.perf-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.perf-score {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  padding: 0.7rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+.perf-score-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+.perf-score.is-good .perf-score-value { color: #047857; }
+.perf-score.is-warn .perf-score-value { color: #b45309; }
+.perf-score.is-bad .perf-score-value { color: #b91c1c; }
+.perf-score-label {
+  color: #475569;
+  font-size: 0.8rem;
+}
+.perf-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.5rem;
+  margin: 0.85rem 0 0;
+}
+.perf-metrics > div {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+}
+.perf-metrics dt {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.perf-metrics dd {
+  margin: 0.15rem 0 0;
+  font-weight: 700;
+}
+.perf-metrics > div.is-good dd { color: #047857; }
+.perf-metrics > div.is-warn dd { color: #b45309; }
+.perf-metrics > div.is-bad dd { color: #b91c1c; }
+.perf-opportunities {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+.perf-muted {
+  color: #64748b;
+  font-weight: 400;
+}
+
+/* 安全標頭等第（SiteProfilePanel ObservatoryGrade）：等第一律附文字與分數，不只靠顏色 */
+.site-observatory {
+  margin-top: 1.25rem;
+}
+
+.site-observatory-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+  color: #334155;
+}
+
+.site-observatory-grade {
+  display: inline-flex;
+  min-width: 2.75rem;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.site-observatory-grade.is-good {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.site-observatory-grade.is-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.site-observatory-grade.is-bad {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.site-observatory-tests {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.site-observatory-tests th,
+.site-observatory-tests td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.site-observatory-tests th {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.site-observatory-tests td:last-child,
+.site-observatory-tests th:last-child {
+  width: 5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .site-observatory-tests {
+    font-size: 0.8125rem;
+  }
+}
+
+/* AI 爬蟲政策（SiteProfilePanel AiBotPolicy）：狀態一律附文字，不只靠顏色 */
+.site-ai-group {
+  margin-top: 0.75rem;
+}
+
+.site-ai-group-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.site-ai-bots {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-ai-bots li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.site-ai-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.site-ai-status {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.site-ai-status.is-good {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.site-ai-status.is-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.site-ai-status.is-bad {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* 分數說明分頁（ScoreBreakdownPanel，2026-10-07）：分數一律附數值與等級文字；不用左邊條 */
+.score-explain {
+  display: grid;
+  gap: 1rem;
+}
+.score-explain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+.score-explain-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.score-explain-score {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+}
+.score-explain-score b {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.score-explain-score.is-good b { color: #1d4ed8; }
+.score-explain-score.is-medium b { color: #b45309; }
+.score-explain-score.is-bad b { color: #b91c1c; }
+.score-explain-tag {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.75rem;
+}
+.score-explain-formula {
+  margin: 0 0 0.75rem;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+.score-explain-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.score-explain-weights li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.score-explain-table-wrap {
+  overflow-x: auto;
+}
+.score-explain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.score-explain-table th,
+.score-explain-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+.score-explain-table th {
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.score-explain-table td:nth-child(n + 3) {
+  white-space: nowrap;
+}
+.score-explain-notes {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  font-size: 0.83rem;
+  line-height: 1.7;
+}
+.score-explain-notes:empty {
+  display: none;
+}
+.score-explain-warning {
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #fcd34d;
+  border-radius: 0.6rem;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}

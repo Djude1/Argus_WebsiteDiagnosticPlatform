@@ -3587,6 +3587,26 @@
                 }
             }
         },
+        "/api/content/scanner-info/": {
+            "get": {
+                "operationId": "content_scanner_info_retrieve",
+                "description": "公開頁「掃描來源說明」（/scanner）：讓目標網站管理者辨識、放行或封鎖 Argus 的掃描流量。\n\n全部取自實際生效的設定，不另外手寫，避免說明與行為不一致。",
+                "tags": [
+                    "content"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/content/team/": {
             "get": {
                 "operationId": "content_team_retrieve",
@@ -6014,6 +6034,43 @@
                 }
             }
         },
+        "/api/scans/{id}/score-breakdown/": {
+            "get": {
+                "operationId": "scans_score_breakdown_retrieve",
+                "description": "各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "scans"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/scans/{id}/status/": {
             "get": {
                 "operationId": "scans_status_retrieve",
@@ -8110,6 +8167,16 @@
                     "ai_handoff_prompt": {
                         "type": "string"
                     },
+                    "security_kind": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "資安發現的類型（設定建議／曝露面／疑似弱點／已驗證弱點），由規則與來源推得。",
+                        "readOnly": true
+                    },
+                    "security_kind_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8139,6 +8206,8 @@
                     "priority_score",
                     "remediation",
                     "rule_id",
+                    "security_kind",
+                    "security_kind_label",
                     "selector",
                     "severity",
                     "title"
@@ -9306,6 +9375,10 @@
                         "type": "integer",
                         "readOnly": true
                     },
+                    "is_trial": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "respect_robots": {
                         "type": "boolean",
                         "readOnly": true
@@ -9328,6 +9401,20 @@
                         "readOnly": true
                     },
                     "site_profile": {
+                        "readOnly": true
+                    },
+                    "coverage": {
+                        "readOnly": true
+                    },
+                    "scoring_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "ruleset_version": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "performance_report": {
                         "readOnly": true
                     },
                     "progress": {
@@ -9370,6 +9457,10 @@
                         "type": "integer",
                         "readOnly": true
                     },
+                    "coins_charged": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
                     "is_demo": {
                         "type": "boolean",
                         "readOnly": true
@@ -9379,12 +9470,15 @@
                     "aeo_report",
                     "categories",
                     "category_scores",
+                    "coins_charged",
                     "completed_at",
+                    "coverage",
                     "created_at",
                     "error_message",
                     "findings_count",
                     "id",
                     "is_demo",
+                    "is_trial",
                     "max_depth",
                     "max_pages",
                     "normalized_url",
@@ -9392,11 +9486,14 @@
                     "original_url",
                     "overall_score",
                     "pages_count",
+                    "performance_report",
                     "progress",
                     "project",
                     "respect_robots",
+                    "ruleset_version",
                     "scan_log",
                     "scan_mode",
+                    "scoring_version",
                     "site_profile",
                     "started_at",
                     "status",

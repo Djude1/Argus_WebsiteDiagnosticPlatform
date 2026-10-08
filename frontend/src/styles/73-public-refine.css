@@ -762,3 +762,44 @@
 .public-shell .legal-body code {
   overflow-wrap: anywhere;
 }
+/* 掃描來源說明（/scanner）：可複製的 User-Agent 與 robots.txt 規則 */
+.public-shell .scanner-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0 0 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--pub-line-strong);
+  border-radius: 10px;
+  background: var(--pub-surface);
+}
+.public-shell .scanner-copy code {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+  color: var(--pub-heading);
+}
+.public-shell .scanner-copy-button {
+  flex: none;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--pub-line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pub-accent);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.public-shell .scanner-copy-button:hover,
+.public-shell .scanner-copy-button:focus-visible {
+  border-color: var(--pub-accent);
+}
+.public-shell .scanner-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.public-shell .scanner-error p {
+  margin: 0;
+}

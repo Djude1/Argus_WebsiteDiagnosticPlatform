@@ -98,6 +98,8 @@
 .seo-eyebrow { @apply text-xs font-semibold uppercase tracking-wide text-blue-700; }
 .seo-drawer-title { @apply text-lg font-bold text-slate-900; }
 .seo-drawer-subtitle { @apply mb-2 mt-5 text-base font-bold text-slate-900; }
+/* 目標關鍵字下方「有曝光但還不是目標的搜尋詞」小標（Search Console 落差，2026-10-07） */
+.seo-subtitle { @apply mb-1 mt-6 text-base font-bold text-slate-900; }
 .seo-drawer-body { @apply grid gap-2; }
 .seo-drawer-actions { @apply flex flex-wrap gap-4; }
 .seo-preview {

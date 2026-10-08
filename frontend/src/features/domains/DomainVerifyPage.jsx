@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   connectDomainSearchConsole,
@@ -404,6 +404,7 @@ export function DomainVerifyPage() {
         <h1 className="domain-title">網域驗證</h1>
         <p className="domain-lead">
           主動式資安測試只開放給你證明擁有的網站。驗證通過後，該網域與子網域都能使用主動測試，有效期 90 天。
+          要讓 WAF 放行 Argus 的掃描流量，請參考<Link to="/scanner">掃描來源說明</Link>。
         </p>
       </header>
 

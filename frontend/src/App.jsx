@@ -28,6 +28,7 @@ const loadReviewsPage = () => import("./features/reviews/ReviewsPage.jsx");
 const loadPublicPages = () => import("./features/public/PublicPages.jsx");
 const loadPartnersPage = () => import("./features/public/PartnersPage.jsx");
 const loadLegalPages = () => import("./features/public/LegalPages.jsx");
+const loadScannerInfoPage = () => import("./features/public/ScannerInfoPage.jsx");
 const loadMcpAccessPage = () => import("./features/account/McpAccessPage.jsx");
 const loadProjectWorkspace = () => import("./features/projects/ProjectWorkspace.jsx");
 const loadProjectPages = () => import("./features/projects/ProjectPages.jsx");
@@ -54,6 +55,8 @@ const ScanLayout = lazyNamed(loadScanExperience, "ScanLayout");
 const ScanDetailPage = lazyNamed(loadScanExperience, "ScanDetailPage");
 const ScanStrengthsPage = lazyNamed(loadScanExperience, "ScanStrengthsPage");
 const ScanArchitecturePage = lazyNamed(loadScanExperience, "ScanArchitecturePage");
+const ScanPerformancePage = lazyNamed(loadScanExperience, "ScanPerformancePage");
+const ScanScorePage = lazyNamed(loadScanExperience, "ScanScorePage");
 const OptimizationResultPage = lazyNamed(loadOptimizationResult, "OptimizationResultPage");
 const DomainVerifyPage = lazyNamed(loadDomainPages, "DomainVerifyPage");
 const TopNav = lazyNamed(loadAuthenticatedPages, "TopNav");
@@ -72,7 +75,10 @@ const ProjectIssuesPage = lazyNamed(loadProjectPages, "ProjectIssuesPage");
 const ProjectPagesPage = lazyNamed(loadProjectPages, "ProjectPagesPage");
 const ProjectAeoPage = lazyNamed(loadProjectPages, "ProjectAeoPage");
 const ProjectSeoPage = lazyNamed(loadProjectSeoPage, "ProjectSeoPage");
-const ProjectHistoryPage = lazyNamed(loadProjectPages, "ProjectHistoryPage");
+const ProjectSecurityPage = lazyNamed(
+  () => import("./features/projects/ProjectSecurityPage.jsx"),
+  "ProjectSecurityPage",
+);
 const ProjectSettingsPage = lazyNamed(loadProjectPages, "ProjectSettingsPage");
 const PublicLayout = lazyNamed(loadPublicPages, "PublicLayout");
 const SharedOptimizationPage = lazy(() => import("./features/optimize/SharedOptimizationPage.jsx"));
@@ -84,6 +90,7 @@ const VerifyReportPage = lazyNamed(loadPublicPages, "VerifyReportPage");
 const PartnersPage = lazyNamed(loadPartnersPage, "PartnersPage");
 const PrivacyPolicyPage = lazyNamed(loadLegalPages, "PrivacyPolicyPage");
 const TermsOfServicePage = lazyNamed(loadLegalPages, "TermsOfServicePage");
+const ScannerInfoPage = lazyNamed(loadScannerInfoPage, "ScannerInfoPage");
 const RequireAdmin = lazyNamed(loadAdminPages, "RequireAdmin");
 const AdminLayout = lazyNamed(loadAdminPages, "AdminLayout");
 const AdminOverviewPage = lazyNamed(loadAdminOverview, "AdminOverviewPage");
@@ -119,7 +126,7 @@ function AppShell({ googleOAuthEnabled }) {
   const isAdmin = location.pathname.startsWith("/admin");
   // 評論頁：登入後留在會員區（會員導覽列）；未登入才走公開頁版型
   const isPublic = [
-    "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners", "/share", "/optimized",
+    "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners", "/scanner", "/share", "/optimized",
     ...(accessToken ? [] : ["/reviews"]),
   ].some((p) =>
     // 以路徑段比對：/projects（會員的網站專案）不能被當成公開頁 /project
@@ -165,6 +172,7 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="/partners" element={<PartnersPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsOfServicePage />} />
+            <Route path="/scanner" element={<ScannerInfoPage />} />
             {!accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
           </Route>
           {accessToken && <Route path="/reviews" element={<ReviewsPage />} />}
@@ -172,7 +180,7 @@ function AppShell({ googleOAuthEnabled }) {
               /dashboard、/scans、/history 是舊入口，轉到目前專案的對應分頁 */}
           <Route path="/dashboard" element={<RequireAuth><ProjectHomeRedirect /></RequireAuth>} />
           <Route path="/scans" element={<RequireAuth><ProjectHomeRedirect section="scans" /></RequireAuth>} />
-          <Route path="/history" element={<RequireAuth><ProjectHomeRedirect section="history" /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth><ProjectHomeRedirect section="scans" /></RequireAuth>} />
           <Route
             path="/projects"
             element={
@@ -209,7 +217,9 @@ function AppShell({ googleOAuthEnabled }) {
             <Route path="issues" element={<ProjectIssuesPage />} />
             <Route path="pages" element={<ProjectPagesPage />} />
             <Route path="aeo" element={<ProjectAeoPage />} />
-            <Route path="history" element={<ProjectHistoryPage />} />
+            <Route path="security" element={<ProjectSecurityPage />} />
+            {/* 歷史報告 2026-10-08 併入「掃描與報告」 */}
+            <Route path="history" element={<Navigate to="../scans" replace />} />
             <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>
           <Route
@@ -225,6 +235,8 @@ function AppShell({ googleOAuthEnabled }) {
               <Route path="/scans/:scanId" element={<ScanDetailPage />} />
               <Route path="/scans/:scanId/strengths" element={<ScanStrengthsPage />} />
               <Route path="/scans/:scanId/architecture" element={<ScanArchitecturePage />} />
+              <Route path="/scans/:scanId/performance" element={<ScanPerformancePage />} />
+              <Route path="/scans/:scanId/score" element={<ScanScorePage />} />
               {/* 舊網址：網站結構圖併入網站架構、修正產出已移除（2026-10-06） */}
               <Route path="/scans/:scanId/topology" element={<ScanSubpathRedirect to="architecture" />} />
               <Route path="/scans/:scanId/fixes" element={<ScanSubpathRedirect to="" />} />

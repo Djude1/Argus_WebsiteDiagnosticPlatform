@@ -1319,6 +1319,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/content/scanner-info/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 公開頁「掃描來源說明」（/scanner）：讓目標網站管理者辨識、放行或封鎖 Argus 的掃描流量。
+         *
+         *     全部取自實際生效的設定，不另外手寫，避免說明與行為不一致。
+         */
+        get: operations["content_scanner_info_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/content/team/": {
         parameters: {
             query?: never;
@@ -2464,6 +2485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scans/{id}/score-breakdown/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 各維度分數怎麼算出來的：基準分、逐項扣分、未完整完成的檢查（score_explain.py）。 */
+        get: operations["scans_score_breakdown_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scans/{id}/status/": {
         parameters: {
             query?: never;
@@ -3096,6 +3134,9 @@ export interface components {
             bounding_box: unknown;
             selector: string;
             ai_handoff_prompt: string;
+            /** @description 資安發現的類型（設定建議／曝露面／疑似弱點／已驗證弱點），由規則與來源推得。 */
+            readonly security_kind: string | null;
+            readonly security_kind_label: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -3484,6 +3525,7 @@ export interface components {
             readonly categories: unknown;
             readonly max_depth: number;
             readonly max_pages: number;
+            readonly is_trial: boolean;
             readonly respect_robots: boolean;
             readonly overall_score: number | null;
             readonly category_scores: unknown;
@@ -3491,6 +3533,10 @@ export interface components {
             readonly warning_summary: unknown;
             readonly aeo_report: unknown;
             readonly site_profile: unknown;
+            readonly coverage: unknown;
+            readonly scoring_version: string;
+            readonly ruleset_version: string;
+            readonly performance_report: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;
@@ -3504,6 +3550,7 @@ export interface components {
             readonly completed_at: string | null;
             readonly findings_count: number;
             readonly pages_count: number;
+            readonly coins_charged: number;
             readonly is_demo: boolean;
         };
         ScanJobCreate: {
@@ -6087,6 +6134,24 @@ export interface operations {
             };
         };
     };
+    content_scanner_info_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     content_team_retrieve: {
         parameters: {
             query?: never;
@@ -7696,6 +7761,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanJob"];
+                };
+            };
+        };
+    };
+    scans_score_breakdown_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

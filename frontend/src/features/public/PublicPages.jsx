@@ -68,6 +68,7 @@ const FOOTER_GROUPS = [
       { to: "/verify", label: "報告查驗" },
       { to: "/reviews", label: "使用者評論" },
       { to: "/partners", label: "商業合作" },
+      { to: "/scanner", label: "掃描來源說明" },
     ],
   },
   {

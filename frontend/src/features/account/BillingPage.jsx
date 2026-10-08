@@ -11,6 +11,7 @@ import {
   submitEcpayForm,
   validateBuyer,
 } from "../../components/billing/BuyerInvoiceFields";
+import { CoinHistory } from "../../components/billing/CoinHistory";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 
 // ============================================================
@@ -446,6 +447,7 @@ function BillingPage() {
       )}
 
     </section>
+    <CoinHistory transactions={wallet?.recent_transactions} />
     </div>
   );
 }

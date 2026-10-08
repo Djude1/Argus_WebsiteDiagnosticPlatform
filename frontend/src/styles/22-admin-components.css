@@ -326,6 +326,11 @@
 
   /* --- 掃描詳情：技術棧與爬取警告 --- */
   .admin-tech-stack { @apply mb-3 flex flex-wrap items-center gap-1.5; }
+  .admin-crawl-budget { @apply mb-3 grid gap-1.5 text-sm; }
+  .admin-crawl-budget > div { @apply flex flex-wrap gap-x-3; }
+  .admin-crawl-budget dt { @apply w-20 shrink-0; }
+  .admin-crawl-budget dd { @apply min-w-0 flex-1; }
+  .admin-crawl-slow { @apply mr-3 inline-flex items-center gap-1; }
   .admin-tech-chip {
     @apply px-2 py-0.5 text-xs font-medium;
     border-radius: var(--ag-r-xs);

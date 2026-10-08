@@ -69,6 +69,102 @@ function SiteStrengths({ profile }) {
 }
 
 /** 「網站架構」分頁上半部：一句話說明流量路徑、使用的技術；IP 等細節收在「詳細資料」。 */
+function gradeTone(grade) {
+  if (grade.startsWith("A")) return "good";
+  if (grade.startsWith("B") || grade.startsWith("C")) return "warn";
+  return "bad";
+}
+
+function formatModifier(value) {
+  if (value > 0) return `+${value}`;
+  return value === 0 ? "0" : String(value);
+}
+
+// 安全標頭參考等第（後端 security/observatory.py）：依 Mozilla HTTP Observatory 公開規則離線計算，
+// 非官方結果、不計入 Argus 分數
+function ObservatoryGrade({ observatory }) {
+  if (!observatory?.grade) return null;
+  return (
+    <div className="site-observatory">
+      <h3 className="site-tech-title">安全標頭等第</h3>
+      <p className="site-observatory-summary">
+        <span className={`site-observatory-grade is-${gradeTone(observatory.grade)}`}>{observatory.grade}</span>
+        <span>{observatory.score} 分（滿分 100，部分項目可加分）</span>
+      </p>
+      <table className="site-observatory-tests">
+        <thead>
+          <tr>
+            <th scope="col">項目</th>
+            <th scope="col">結果</th>
+            <th scope="col">加減分</th>
+          </tr>
+        </thead>
+        <tbody>
+          {observatory.tests.map((test) => (
+            <tr key={test.key}>
+              <td>{test.label}</td>
+              <td>{test.evaluated ? test.result : `未評估：${test.result}`}</td>
+              <td>{test.evaluated ? formatModifier(test.modifier) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="site-strength-evidence">
+        依 Mozilla HTTP Observatory 公開的評分規則，用這次掃描取得的首頁回應計算；不是 Observatory 官方結果，
+        也不計入 Argus 分數。加分項目只在扣分後仍有 90 分以上時計入。
+      </p>
+    </div>
+  );
+}
+
+const AI_PURPOSES = [
+  ["search", "AI 搜尋與回答", "封鎖後，這些服務的回答比較不會引用、連結你的網站。"],
+  ["user", "使用者觸發讀取", "使用者在對話中要求讀取網頁時才發出；依廠商說明不一定遵守 robots.txt。"],
+  ["training", "模型訓練", "封鎖是正當的商業選擇，不影響這些公司的搜尋與 AI 回答引用。"],
+];
+const AI_STATUS = {
+  allowed: ["允許", "good"],
+  partial: ["部分限制", "warn"],
+  blocked: ["封鎖", "bad"],
+};
+
+// AI 爬蟲的 robots.txt 政策（後端 ai_bots.py）：依用途分組，讓網站主看清楚封鎖的取捨
+function AiBotPolicy({ policy }) {
+  if (!policy?.bots?.length) return null;
+  return (
+    <div className="site-observatory">
+      <h3 className="site-tech-title">AI 爬蟲政策</h3>
+      {!policy.robots_found && (
+        <p className="site-strength-evidence">網站沒有 robots.txt，所有 AI 爬蟲都可以抓取。</p>
+      )}
+      {AI_PURPOSES.map(([purpose, label, hint]) => {
+        const bots = policy.bots.filter((bot) => bot.purpose === purpose);
+        if (!bots.length) return null;
+        return (
+          <div key={purpose} className="site-ai-group">
+            <h4 className="site-ai-group-title">{label}</h4>
+            <p className="site-strength-evidence">{hint}</p>
+            <ul className="site-ai-bots">
+              {bots.map((bot) => {
+                const [statusLabel, tone] = AI_STATUS[bot.status] || ["—", "none"];
+                return (
+                  <li key={bot.agent}>
+                    <span className="site-ai-name">
+                      {bot.agent}
+                      <span className="site-profile-sub">{bot.vendor}{bot.note ? `・${bot.note}` : ""}</span>
+                    </span>
+                    <span className={`site-ai-status is-${tone}`}>{statusLabel}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SiteArchitecture({ profile }) {
   const infra = profile?.infrastructure;
   const technologies = profile?.technologies || [];
@@ -118,6 +214,8 @@ function SiteArchitecture({ profile }) {
           <p className="site-strength-evidence">只依首頁 HTML 與回應標頭判斷，滑過名稱可看依據；看不出來的不列。</p>
         </div>
       )}
+      <ObservatoryGrade observatory={profile?.observatory} />
+      <AiBotPolicy policy={profile?.ai_bots} />
       {infra?.hostname && (
         <details className="site-profile-details">
           <summary>詳細資料（IP、反解、DNS）</summary>
@@ -163,4 +261,4 @@ function SiteArchitecture({ profile }) {
   );
 }
 
-export { EdgeNotice, SiteArchitecture, SiteStrengths };
+export { EdgeNotice, ObservatoryGrade, SiteArchitecture, SiteStrengths };
