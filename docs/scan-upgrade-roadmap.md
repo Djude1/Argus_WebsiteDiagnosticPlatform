@@ -145,7 +145,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：llms.txt 成熟度檢查、FAQ 結構偵測。
 - **升級**：
   1. AI bot robots 政策分析（`GPTBot`/`ClaudeBot`/`Google-Extended`/`PerplexityBot` 允許或封鎖，說明商業取捨）。（**已實作 2026-10-07**：`apps/scans/ai_bots.py`，13 個 bot 依訓練／AI 搜尋／使用者觸發分類；只封鎖訓練用爬蟲不再列為問題）
-  2. 內容可機讀性（語意 HTML 比例、主內容可否與導覽/頁尾分離 `<main>`/`article`）。
+  2. 內容可機讀性（語意 HTML 比例、主內容可否與導覽/頁尾分離 `<main>`/`article`）。（**已驗證 2026-10-08，不新增規則**：既有檢查已涵蓋——缺 `<main>`（`scanners.analyze_geo` 的「缺少語意化主內容區塊」）、正文擷取排除 nav／header／aside／footer（`aeo/content.py`）、核心內容依賴 JavaScript、段落與小標題結構（`geo_structure.py`）。曾評估新增「多個可見 `<main>`」與「`<main>` 只包含少部分正文（<30%）」：實測 8 個網站約 40 頁（ntubimdbirc、ntub、wordpress.org、blog.gslin、cna、setn、law.moj、docs.djangoproject）沒有任何頁面有多個 `<main>`；`<main>` 正文占比除 wordpress.org/showcase（0.31，正文僅約 67 詞）外都在 0.68 以上，沒有 `<main>` 的頁面（cna 首頁、law.moj）已由既有規則列出。新規則不會觸發，不做。「語意 HTML 比例」沒有公認門檻，不做）
 
 ## 11. 連結檢查
 
@@ -154,7 +154,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   1. 不重做既有 scan-level 去重與並發；改補 **freshness / cache reuse**，避免同一掃描流程內其他 stage 重複查相同外部 URL。
   2. 連結 coverage 明確區分 checked / restricted / timeout / skipped / budget_exhausted，歷史比較只能在 coverage 足夠時判定 resolved。
   3. 連結健康度趨勢標記「新壞掉／持續失效／已確認恢復／本次無法確認」。
-  4. 錨文字品質延伸（「點這裡」「更多」等無意義文字，SEO + 無障礙雙重影響）。
+  4. 錨文字品質延伸（「點這裡」「更多」等無意義文字，SEO + 無障礙雙重影響）。（**已具備，2026-10-08 核對**：`seo/page_audit.GENERIC_ANCHORS`（點此、這裡、更多、了解更多、read more、click here 等）與空錨文字由 `seo/report.py` 列在 SEO 分析頁的連結問題（空錨文字為警告、無意義文字為提示）；沒有可讀名稱的連結另由 axe-core `link-name`（WCAG）列為無障礙問題。「連結目的是否清楚」屬 WCAG 2.4.4，需看上下文，不再以字面規則擴充）
 
 ## 12. 評分
 
