@@ -1,7 +1,5 @@
 # Argus — AI 網站全方位健檢平台
 
-專題文件的來源、編製腳本、歷史測試與交接入口，集中於 [專題文件](專題文件/README.md)。接續手冊編製請先讀 [交接檔案](專題文件/交接檔案.md)。
-
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/Django-5.x-092E20?logo=django&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)

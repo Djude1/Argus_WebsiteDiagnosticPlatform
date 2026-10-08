@@ -5,7 +5,7 @@
 
 ## 變更內容
 
-- `專題文件/本機資料/歷史需求書/gen_argus_v3.py`：重寫第 1 章 表 1-2-1「各平台功能特性比較表」。
+- `專題文件生成/gen_argus_v3.py`：重寫第 1 章 表 1-2-1「各平台功能特性比較表」。
   - 舊版將 Argus 與單一用途命令列工具（Nmap、Dirsearch、Katana、Ahrefs 等）並列，
     比較基準不對等。
   - 新版改為與「同屬雲端 SaaS 網站分析平台」之主流商業產品比較：
@@ -30,8 +30,8 @@
 
 ## 驗證方式
 
-- `uv run python 專題文件/本機資料/歷史需求書/gen_argus_v3.py` 無錯誤產出 docx。
-- `uv run python 專題文件/本機資料/歷史需求書/verify_v3.py` → `[OK] 所有硬性需求驗證通過`。
+- `uv run python 專題文件生成/gen_argus_v3.py` 無錯誤產出 docx。
+- `uv run python 專題文件生成/verify_v3.py` → `[OK] 所有硬性需求驗證通過`。
 - python-docx 重讀確認：表 1-2-1 為 6 欄 × 11 列（含表頭），功能維度含「一站式整合四維」；
   參考資料含 Moz Pro [3]、Sucuri [4] 兩筆可點擊連結。
 

@@ -6,8 +6,8 @@
 ## 變更內容
 
 - 新增兩張統一視覺風格的 PNG 圖：
-  - `專題文件/本機資料/歷史需求書/argus_3_1_2_scan_data_flow.png`
-  - `專題文件/本機資料/歷史需求書/argus_3_1_3_scanjob_state_controls.png`
+  - `專題文件生成/argus_3_1_2_scan_data_flow.png`
+  - `專題文件生成/argus_3_1_3_scanjob_state_controls.png`
 - 以 `專題文件/Argus_系統手冊_第三章優化版_3-1-1架構圖優化.docx` 為基底，輸出：
   - `專題文件/Argus_系統手冊_第三章優化版_3-1圖組優化.docx`
 - 替換圖 3-1-2「掃描任務執行資料流圖」：

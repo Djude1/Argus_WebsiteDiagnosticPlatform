@@ -33,7 +33,7 @@
 - 工作區側邊欄 sticky 避開導覽列、表格不撐出水平捲動、歷史表格操作欄底線對齊。
 
 ### 文件
-- `frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`、`.claude/skills/argus-ui-design/SKILL.md`、`專題文件/本機資料/歷史需求書/需求書_複賽版完整內容.md`（ARGUS-F-022）。
+- `frontend/CLAUDE.md`、`backend/CLAUDE.md`、`backend/apps/scans/CLAUDE.md`、`.claude/skills/argus-ui-design/SKILL.md`、`專題文件生成/需求書_複賽版完整內容.md`（ARGUS-F-022）。
 
 ## 原因
 使用者要求參考 Sitechecker 把會員區改為以網站專案為核心；第一版回退後，要求以回退版本為基礎、以第一版經驗做出更好的版本。

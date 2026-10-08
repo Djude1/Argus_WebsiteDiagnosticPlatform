@@ -1,7 +1,5 @@
 # 專案記憶索引
 
-- [2026-10 專題文件整理與接手](memory/document-handoff-organization.md) — 原始編製工作區完整保存、分享紀錄與工具、複審內容路徑及版本差異。
-
 - [2026-08 日間主題光學反相重設計](memory/daylight-theme-redesign.md) — 日／夜角色對稱、Logo 呈現、公開導覽斷點、SVG 主題圖示與視覺 QA 決策。
 - [2026-08 `/billing` 結帳頁重設計](memory/billing-checkout-redesign.md) — Stage 金流能力邊界、結帳資訊架構、無障礙表單與桌機／手機 QA 決策。
 - [2026-07 全專案稽核修復](memory/full-audit-remediation.md) — 21 項設計/安全/部署/UI 稽核的落地決策、驗證與外部阻擋。

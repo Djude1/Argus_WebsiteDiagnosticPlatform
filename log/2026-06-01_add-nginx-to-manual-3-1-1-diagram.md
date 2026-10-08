@@ -7,7 +7,7 @@
 ## 修改
 
 - 產出新版架構圖：
-  - `專題文件/本機資料/歷史需求書/argus_3_1_1_system_flow_nginx.png`
+  - `專題文件生成/argus_3_1_1_system_flow_nginx.png`
 - 在圖 3-1-1 中將流程調整為：
   - User / Browser
   - React PWA

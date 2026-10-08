@@ -5,7 +5,7 @@
 
 ## 變更內容
 
-新增 `專題文件/本機資料/歷史需求書/gen_argus_v3.py`（由 v2 複製後改寫，v2 保留作參考），
+新增 `專題文件生成/gen_argus_v3.py`（由 v2 複製後改寫，v2 保留作參考），
 重新產生 `Argus_系統手冊_v3.docx` 與 `plantuml_diagrams_v3.txt`。
 另新增驗證腳本 `verify_v3.py`、資料來源記錄 `data_sources_v3.md`。
 
@@ -42,13 +42,13 @@
 
 ## 影響範圍
 
-- 僅新增 `專題文件/本機資料/歷史需求書/` 下檔案，未動 Argus 後端/前端程式碼。
+- 僅新增 `專題文件生成/` 下檔案，未動 Argus 後端/前端程式碼。
 - v2 腳本與 docx 完全保留，未覆蓋。
 
 ## 驗證方式
 
-- `uv run python 專題文件/本機資料/歷史需求書/gen_argus_v3.py` 無錯誤產出 docx 與 txt。
-- `uv run python 專題文件/本機資料/歷史需求書/verify_v3.py` → `[OK] 所有硬性需求驗證通過`
+- `uv run python 專題文件生成/gen_argus_v3.py` 無錯誤產出 docx 與 txt。
+- `uv run python 專題文件生成/verify_v3.py` → `[OK] 所有硬性需求驗證通過`
   （版面 1.5cm/頁首尾 1cm/gutter、單行間距、firstLineChars=200、adjustRightInd、
   無估計/估算/猜測/推估、無 (PlantUML) caption、TOC 欄位、cantSplit + tblHeader）。
 - 殘留語句掃描：估計/估算/猜測/推估/滲透率/年收入潛力/MTMG 皆為 0。
