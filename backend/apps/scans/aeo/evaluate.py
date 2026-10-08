@@ -180,7 +180,8 @@ def reconcile_contact(result: a.QuestionResult, evidence: list, passages: list) 
       為什麼正文讀不到——情境不同不算矛盾，不能只寫「找不到」。
     """
     kind = _CONTACT_KIND.get(result.question.answer_type)
-    if kind is None or result.verdict == a.ANSWERED:
+    # 只修正「找不到／資訊不足」；已判可回答或內容衝突（兩頁客服專線不同）的不動
+    if kind is None or result.verdict in {a.ANSWERED, a.CONFLICT}:
         return result
     relevant = [c for c in evidence if c.kind == kind]
     if not relevant:

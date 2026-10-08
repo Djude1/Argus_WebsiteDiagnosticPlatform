@@ -46,7 +46,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **現況**：`aeo/evaluate.py` 四層判定（可回答/資訊不足/內容衝突/無答案），框架完整，已有答案蘊含判定（`aeo/answers.py` 的 `entails()`）與日期衝突判定（2026-10-06 第二輪準確度修正）；實測曾出現「語意相關段落被誤判為真正答案」與跨模組 evidence 不一致，已知案例已修正，但**缺少量測基準**，無法知道整體誤判率。
 - **升級**：
   1. **Answer Entailment 量測與強化（P0）**：`entails()` 初版已上線，候選段落須通過蘊含判定才算答案。下一步不是重做，而是用 gold dataset（見優先序 P0-C）量測誤判率，再依誤判類型強化。
-  2. **Specificity / Conflict Check（P0）**：衝突判定目前**只判日期**；擴充到價格、資格、聯絡方式等需具體可核對的欄位，多頁內容互斥時標記 conflict。
+  2. **Specificity / Conflict Check（P0）**：衝突判定目前**只判日期**；擴充到價格、資格、聯絡方式等需具體可核對的欄位，多頁內容互斥時標記 conflict。（**已實作 2026-10-08**：`aeo/answers._value_conflict` 涵蓋價格、營業時間、客服專線，同一標籤在兩個以上頁面的值不同才算；先在回歸資料集加 6 個調整案例（3 衝突＋3 不是衝突）與 4 個保留集案例再寫規則。量測：全體 accuracy 0.971、precision 1.0、recall 0.974、FPR 0；保留集 19／21（兩題是沒出題，衝突 3／3 全對，不是衝突的案例沒有判成衝突）。資格條件不做：條件文字差異多半是不同方案，字面比對無法可靠判斷）
   3. **Cross-module evidence reuse（P0）**：Email、電話、地址、日期等與 Security／SEO 共用 evidence，避免一個模組「找到」、另一個模組「找不到」。
   4. **Answer confidence（P1）**：輸出 Confirmed／Likely／Possible，並保留引用來源與限制。
   5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。

@@ -53,6 +53,12 @@ class BenchmarkThresholdTests(SimpleTestCase):
         wrong = [j for j in near if j.actual == "answered" and j.expected != "answered"]
         self.assertEqual(wrong, [])
 
+    def test_no_false_conflict_on_near_miss_cases(self):
+        """不同方案、平日與週末、各單位的值本來就不同，判成「內容衝突」會叫網站主改對的內容。"""
+        near = [j for j in run_benchmark().judgements if NEAR_MISS in j.tags]
+        wrong = [j for j in near if j.actual == "conflict" and j.expected != "conflict"]
+        self.assertEqual(wrong, [])
+
     def test_thresholds_are_the_documented_ones(self):
         self.assertEqual(
             THRESHOLDS,

@@ -373,6 +373,107 @@ GOLD_CASES: tuple[GoldCase, ...] = (
         {"price": "insufficient"},
         (NEAR_MISS,),
     ),
+    # ── 內容衝突：價格、營業時間、客服電話（2026-10-08，roadmap §2 AEO 第 2 項）──────
+    GoldCase(
+        "兩頁的同一門課學費不同",
+        (
+            SitePage(
+                "https://code2.example/courses",
+                _html(_COURSE_INTRO
+                    + "<h2>課程列表</h2><p>Python 入門課程學費 NT$4,800，共八週，含作業批改。</p>"),
+            ),
+            SitePage(
+                "https://code2.example/pricing",
+                _html("<h1>課程價格</h1><p>Python 入門課程學費 NT$5,200，報名後寄送上課連結。</p>"),
+            ),
+        ),
+        {"price": "conflict"},
+        (CONFLICT,),
+    ),
+    GoldCase(
+        "不同課程不同價格、原價與早鳥價：不是衝突",
+        (
+            SitePage(
+                "https://code3.example/courses",
+                _html(_COURSE_INTRO
+                    + "<h2>課程費用</h2><p>Python 入門課程學費 NT$4,800，共八週。</p>"
+                    "<p>資料分析實戰課程學費 NT$6,500，共十週。</p>"),
+            ),
+            SitePage(
+                "https://code3.example/promo",
+                _html("<h1>早鳥優惠</h1><p>Python 入門課程早鳥價 NT$3,900，原價 NT$4,800，"
+                    "限前三十名。</p>"),
+            ),
+        ),
+        {"price": "answered"},
+        (ANSWERABLE, NEAR_MISS),
+    ),
+    GoldCase(
+        "兩頁的營業時間不同",
+        (
+            SitePage(
+                "https://cafe2.example/",
+                _html(_CAFE_INTRO + "<h2>營業資訊</h2><p>營業時間：週一至週五 09:00-18:00，"
+                    "週末公休。</p>"),
+            ),
+            SitePage(
+                "https://cafe2.example/contact",
+                _html("<h1>聯絡我們</h1>"
+                    "<p>營業時間：週一至週五 10:00-19:00，來店前可先電話詢問。</p>"),
+            ),
+        ),
+        {"hours": "conflict"},
+        (CONFLICT,),
+    ),
+    GoldCase(
+        "平日與週末、多家門市的營業時間：不是衝突",
+        (
+            SitePage(
+                "https://cafe3.example/",
+                _html(_CAFE_INTRO + "<h2>營業資訊</h2><p>營業時間：週一至週五 09:00-18:00。</p>"
+                    "<p>週六 10:00-16:00，週日公休。</p>"),
+            ),
+            SitePage(
+                "https://cafe3.example/stores",
+                _html("<h1>門市資訊</h1><h2>信義門市</h2><p>營業時間：週一至週五 08:00-20:00。</p>"
+                    "<h2>大安門市</h2><p>營業時間：週一至週五 07:30-17:00。</p>"),
+            ),
+        ),
+        {"hours": "answered"},
+        (ANSWERABLE, NEAR_MISS),
+    ),
+    GoldCase(
+        "兩頁的客服專線不同",
+        (
+            SitePage(
+                "https://shop4.example/",
+                _html(_SHOP_INTRO + "<h2>聯絡我們</h2>"
+                    "<p>客服專線：02-2771-1234，歡迎來電洽詢訂單。</p>"),
+            ),
+            SitePage(
+                "https://shop4.example/faq",
+                _html("<h1>常見問題</h1><h2>訂單問題要找誰？</h2>"
+                    "<p>請撥打客服專線：02-2771-5678，由專人為您查詢。</p>"),
+            ),
+        ),
+        {"contact_phone": "conflict"},
+        (CONFLICT,),
+    ),
+    GoldCase(
+        "不同單位各有電話：不是衝突",
+        (
+            SitePage(
+                "https://school2.example/",
+                _html(_SCHOOL_INTRO + "<h2>聯絡資訊</h2><p>系辦公室電話：02-2322-1111。</p>"),
+            ),
+            SitePage(
+                "https://school2.example/admission",
+                _html("<h1>招生組</h1><p>招生組電話：02-2322-2222，報名問題請洽招生組。</p>"),
+            ),
+        ),
+        {"contact_phone": "answered"},
+        (ANSWERABLE, NEAR_MISS),
+    ),
 )
 
 
@@ -535,6 +636,71 @@ HOLDOUT_CASES: tuple[GoldCase, ...] = (
         ),
         {"apply_deadline": "conflict"},
         (CONFLICT, HOLDOUT),
+    ),
+    # 2026-10-08 價格／營業時間／客服電話衝突：先寫案例與標註，之後才寫規則
+    GoldCase(
+        "健身房：方案價格兩頁不同",
+        (
+            SitePage(
+                "https://gym2.example/",
+                _html(_GYM_INTRO + "<h2>會員方案</h2>"
+                    "<p>年繳會員方案每月 1,288 元，含團體課程。</p>"),
+            ),
+            SitePage(
+                "https://gym2.example/join",
+                _html("<h1>加入會員</h1><p>年繳會員方案每月 1,488 元，簽約即可開始使用。</p>"),
+            ),
+        ),
+        {"price": "conflict"},
+        (CONFLICT, HOLDOUT),
+    ),
+    GoldCase(
+        "民宿：平日與連假房價不同，不是衝突",
+        (
+            SitePage(
+                "https://bnb2.example/",
+                _html(_BNB_INTRO + "<h2>房價</h2><p>海景雙人房平日每晚 3,200 元。</p>"),
+            ),
+            SitePage(
+                "https://bnb2.example/holiday",
+                _html("<h1>連假公告</h1><p>海景雙人房連假期間每晚 4,500 元，請提早預訂。</p>"),
+            ),
+        ),
+        {"price": "answered"},
+        (ANSWERABLE, NEAR_MISS, HOLDOUT),
+    ),
+    GoldCase(
+        "健身房：兩頁的服務時間不同",
+        (
+            SitePage(
+                "https://gym3.example/",
+                _html(_GYM_INTRO + "<h2>開放時間</h2>"
+                    "<p>服務時間：每日 06:00-23:00，國定假日照常開放。</p>"),
+            ),
+            SitePage(
+                "https://gym3.example/faq",
+                _html("<h1>常見問題</h1>"
+                    "<p>服務時間：每日 07:00-22:00，最後入場為關門前一小時。</p>"),
+            ),
+        ),
+        {"hours": "conflict"},
+        (CONFLICT, HOLDOUT),
+    ),
+    GoldCase(
+        "民宿：客服電話與傳真不同，不是衝突",
+        (
+            SitePage(
+                "https://bnb3.example/",
+                _html(_BNB_INTRO + "<h2>聯絡方式</h2>"
+                    "<p>訂房專線：03-832-1111，傳真：03-832-2222。</p>"),
+            ),
+            SitePage(
+                "https://bnb3.example/access",
+                _html("<h1>交通資訊</h1><p>訂房專線：03-832-1111，花蓮火車站開車約十分鐘。</p>"),
+            ),
+        ),
+        {"contact_phone": "answered"},
+        (ANSWERABLE, NEAR_MISS, HOLDOUT),
     ),
 )
 
