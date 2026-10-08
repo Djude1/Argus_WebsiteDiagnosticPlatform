@@ -1002,6 +1002,12 @@ function ProjectAeoPage() {
                 <dt>答案附有原文</dt>
                 <dd>{report.evidence_ratio == null ? "—" : `${Math.round(report.evidence_ratio * 100)}%`}</dd>
               </div>
+              {report.citation && (
+                <div className="project-portfolio-item">
+                  <dt>答案可被引用</dt>
+                  <dd>{`${Math.round(report.citation.citable_ratio * 100)}%`}</dd>
+                </div>
+              )}
             </dl>
           )}
           <section className="panel">

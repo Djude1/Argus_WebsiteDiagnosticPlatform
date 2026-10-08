@@ -797,6 +797,7 @@ def _aeo_site_pages(ctx: ScanRunContext) -> list[SitePage]:
             html=page_data.get("html") or "",
             raw_html=page_data.get("html_only") or "",
             blocked=bool(page_data.get("blocked_reason")),
+            headers=page_data.get("headers") or {},
         )
         for page, page_data in ctx.pages
     ]

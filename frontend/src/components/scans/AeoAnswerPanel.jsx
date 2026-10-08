@@ -51,7 +51,8 @@ function AeoAnswerPanel({ report, withFilter = false }) {
           <h3 id="aeo-panel-title" className="aeo-panel-title">AEO 問答檢測</h3>
           <p className="aeo-panel-note">
             依網站內容建立 {report.questions_total} 個問題，在已掃描頁面中找答案並附上原文。
-            有答案的問題比例 {percent(report.answered_ratio)}，答案附有原文的比例 {percent(report.evidence_ratio)}。
+            有答案的問題比例 {percent(report.answered_ratio)}，答案附有原文的比例 {percent(report.evidence_ratio)}
+            {report.citation ? `，答案可被搜尋引擎與 AI 引用的比例 ${percent(report.citation.citable_ratio)}` : ""}。
           </p>
         </div>
         <dl className="aeo-panel-counts">
@@ -95,6 +96,10 @@ function AeoAnswerPanel({ report, withFilter = false }) {
                 {q.confidence_label && (
                   <span className={`aeo-confidence is-${q.confidence}`}>可信度：{q.confidence_label}</span>
                 )}
+                {/* 引用可得性只標出有問題的（可被引用是常態，不逐題重複） */}
+                {q.citation && q.citation.status !== "citable" && (
+                  <span className={`aeo-citation is-${q.citation.status}`}>{q.citation.label}</span>
+                )}
                 <span className="aeo-question-text">{q.text}</span>
                 <span className="aeo-question-more" aria-hidden="true">{open ? "收合" : "看證據"}</span>
               </button>
@@ -102,6 +107,9 @@ function AeoAnswerPanel({ report, withFilter = false }) {
                 <div className="aeo-question-body">
                   <p className="aeo-question-reason">{q.reason}</p>
                   {q.limitation && <p className="aeo-question-limit">判定限制：{q.limitation}</p>}
+                  {q.citation && q.citation.reasons.length > 0 && (
+                    <p className="aeo-question-limit">{q.citation.label}：{q.citation.reasons.join("；")}</p>
+                  )}
                   {(q.evidence || []).length > 0 ? (
                     <ul className="aeo-evidence-list">
                       {q.evidence.map((e, i) => (

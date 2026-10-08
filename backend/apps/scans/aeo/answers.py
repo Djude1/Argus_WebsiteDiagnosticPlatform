@@ -178,6 +178,8 @@ class Evidence:
     location: str
     quote: str
     value: str = ""
+    # 段落有文字在 data-nosnippet 區塊內（引用可得性，roadmap §2 第 6 項）
+    nosnippet: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -283,7 +285,10 @@ def _quote(text: str, value: str) -> str:
 
 
 def _evidence(passage: Passage, value: str = "") -> Evidence:
-    return Evidence(passage.page_url, passage.location(), _quote(passage.text, value), value)
+    return Evidence(
+        passage.page_url, passage.location(), _quote(passage.text, value), value,
+        passage.nosnippet,
+    )
 
 
 # ---------- 答案蘊含（段落是否真的在回答這一題） ----------

@@ -92,6 +92,7 @@ class Command(BaseCommand):
                     html=page.rendered_dom or page.html,
                     raw_html=page.html_only_text,
                     blocked=bool(page.blocked_reason),
+                    headers=page.headers or {},
                 )
                 for page in scan_job.pages.all()
             ])

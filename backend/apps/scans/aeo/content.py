@@ -106,6 +106,8 @@ class Passage:
     heading: str = ""
     is_heading: bool = False
     region: str = "main"  # "main"＝正文；"footer"＝頁尾
+    # 段落有文字在 data-nosnippet 區塊內：Google 不會拿這段當摘要（引用可得性，roadmap §2 第 6 項）
+    nosnippet: bool = False
 
     def location(self) -> str:
         if self.region == "footer":
@@ -135,34 +137,40 @@ class _MainTextParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.skip_depth = 0
-        self.stack: list[tuple[str, bool, bool]] = []  # (tag, 是否開啟略過, 是否頁尾)
+        # (tag, 是否開啟略過, 是否頁尾, 是否 data-nosnippet)
+        self.stack: list[tuple[str, bool, bool, bool]] = []
         self.footer_depth = 0
         self.buffer: list[str] = []
         self.current_is_heading = False
         self.heading = ""
         self.section_heading = ""
         self.current_heading_tag = ""
-        self.blocks: list[tuple[str, str, bool, str]] = []  # (text, heading, is_heading, region)
+        # (text, heading, is_heading, region, nosnippet)
+        self.blocks: list[tuple[str, str, bool, str, bool]] = []
         self.nosnippet_blocks = 0
         self._nosnippet_depth = 0
+        self._buffer_nosnippet = False
 
     def _flush(self) -> None:
         text = _WS.sub(" ", "".join(self.buffer)).strip()
+        nosnippet = self._buffer_nosnippet
         self.buffer = []
+        self._buffer_nosnippet = False
         if not text:
             return
         region = "footer" if self.footer_depth else "main"
+        heading = self.heading if region == "main" else ""
         if self.current_is_heading and _is_body_text(text):
-            self.blocks.append((text, self.heading if region == "main" else "", False, region))
+            self.blocks.append((text, heading, False, region, nosnippet))
             return
         if self.current_is_heading:
             if region == "main":
                 self.heading = text[:120]
                 if self.current_heading_tag in _SECTION_HEADINGS:
                     self.section_heading = self.heading
-            self.blocks.append((text, text[:120], True, region))
+            self.blocks.append((text, text[:120], True, region, nosnippet))
         else:
-            self.blocks.append((text, self.heading if region == "main" else "", False, region))
+            self.blocks.append((text, heading, False, region, nosnippet))
 
     def handle_starttag(self, tag: str, attrs) -> None:
         tag = tag.lower()
@@ -174,7 +182,8 @@ class _MainTextParser(HTMLParser):
             or a.get("role", "").lower() in _SKIP_ROLES
             or bool(_HIDDEN_STYLE.search(a.get("style", "")))
         )
-        if "data-nosnippet" in a and not self.skip_depth:
+        nosnippet = "data-nosnippet" in a and not self.skip_depth
+        if nosnippet:
             self.nosnippet_blocks += 1
         if tag in _VOID_TAGS:
             if tag == "br" and not self.skip_depth:
@@ -190,7 +199,9 @@ class _MainTextParser(HTMLParser):
         if is_footer:
             self._flush()
             self.footer_depth += 1
-        self.stack.append((tag, skip, is_footer))
+        if nosnippet:
+            self._nosnippet_depth += 1
+        self.stack.append((tag, skip, is_footer, nosnippet))
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -200,11 +211,13 @@ class _MainTextParser(HTMLParser):
         for i in range(len(self.stack) - 1, -1, -1):
             if self.stack[i][0] == tag:
                 self._flush()
-                for _, opened_skip, opened_footer in self.stack[i:]:
+                for _, opened_skip, opened_footer, opened_nosnippet in self.stack[i:]:
                     if opened_skip:
                         self.skip_depth -= 1
                     if opened_footer:
                         self.footer_depth -= 1
+                    if opened_nosnippet:
+                        self._nosnippet_depth -= 1
                 del self.stack[i:]
                 break
         if tag in _BLOCK_TAGS and not self.skip_depth:
@@ -216,6 +229,8 @@ class _MainTextParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if not self.skip_depth:
             self.buffer.append(data)
+            if self._nosnippet_depth and data.strip():
+                self._buffer_nosnippet = True
 
     def close(self) -> None:
         super().close()
@@ -232,7 +247,7 @@ def extract_page_content(url: str, html: str) -> PageContent:
         pass
     content = PageContent(url=url)
     seen: set[str] = set()
-    for text, heading, is_heading, region in parser.blocks:
+    for text, heading, is_heading, region, nosnippet in parser.blocks:
         minimum = MIN_HEADING_CHARS if is_heading else MIN_PASSAGE_CHARS
         if len(text) < minimum or text in seen:
             continue
@@ -245,6 +260,7 @@ def extract_page_content(url: str, html: str) -> PageContent:
                 heading=heading,
                 is_heading=is_heading,
                 region=region,
+                nosnippet=nosnippet,
             )
         )
     content.text_chars = sum(
