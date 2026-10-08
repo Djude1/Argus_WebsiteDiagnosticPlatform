@@ -72,7 +72,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose
 
 - 掃描目標 `http://juice-shop:3000`（主機瀏覽器看 `http://localhost:3000`）；功能面與 K8s 正式環境一致（Agent 開啟、Kali disabled），疊加 attack 時才開 Kali。
 - 私網旁路受雙重保護：runtime `allow_private_targets()` 要求 DEBUG＋開關（`services.py`），部署檢查 `scans.E002`。主動掃描仍需通過網域驗證閘門（`juice-shop` 走 admin override）。
-- Nuclei 私網封鎖（`-lna`）在旁路開啟時自動移除；全模板掃描的時間預算由 `ARGUS_NUCLEI_DEEP_TIMEOUT` 控制（demo 疊加 900，正式預設 300）。
+- Nuclei 私網封鎖（`-lna`）在旁路開啟時自動移除；時間預算由 `ARGUS_NUCLEI_TIMEOUT` 控制（demo 疊加 900，正式預設 660）。模板固定在 image 的 `/opt/nuclei-templates`（`ARGUS_NUCLEI_TEMPLATES_DIR`）；本機直接執行時要指到自己下載的同版本模板目錄，目錄不存在 Nuclei 會記為失敗。
 - 操作紀錄與實測數據見 `log/2026-09-25_juice-shop-local-testenv.md` 與 `docs/competitive-positioning.md`。
 
 ## 3. 其他常被漏掉的前置條件

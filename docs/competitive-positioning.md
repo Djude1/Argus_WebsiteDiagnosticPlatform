@@ -99,7 +99,7 @@ Argus 在組態、注入、存取控制三層都有自動化命中，且存取�
 #11→#16 的提升不是調參，是六個泛化能力（任何網站同樣生效）：
 
 1. **爬蟲被動攔截 XHR/fetch 端點**（crawler.py）：SPA 的 API 呼叫只在真實
-   瀏覽器流量裡；攔截後自動流入 Nuclei extra_urls 與 sqlmap 候選——
+   瀏覽器流量裡；攔截後自動流入 sqlmap 候選（當時也流入 Nuclei；2026-10-08 起 Nuclei 只掃網站根網址）——
    `search?q=` 就是這樣進入攻擊面的（零新請求，純觀察）。
 2. **Agent 網路感知工具 `get_network_requests`**（tools.py）：agent 能「看到」
    頁面發出的 API 請求，自行判斷哪些值得 probe——給眼睛不給答案。
