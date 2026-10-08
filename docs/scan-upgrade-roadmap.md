@@ -51,7 +51,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
   4. **Answer confidence（P1）**：輸出 Confirmed／Likely／Possible，並保留引用來源與限制。（**已實作 2026-10-08**：`aeo/answers.QuestionResult.confidence`，確認＝格式化答案值逐字出現在原文、可能＝步驟／條件或網站自己的問題、推測＝介紹類只確認有具體敘述；附 `limitation` 說明判定限制，顯示在 AEO 分頁與報告附錄，不影響計分。`aeo_benchmark` 輸出各等級 precision：目前資料集三個等級都是 100%（全體 precision 已是 1.0），還無法量出等級之間的差異，需要更多「看起來像答案」的案例）
   5. 問題生成多樣化（標題/H2 + 同業常見問句模板）。
   6. 引用可得性評分。
-  7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。【部分完成：`reports.py` 已對 llms.txt 標示「依據／限制」並說明是新興慣例；評分權重是否已降級【待驗證】】
+  7. `llms.txt`／`llms-full.txt` 僅列為 **Emerging / Experimental** 訊號，不與成熟 SEO 規則等價扣分。（**已驗證 2026-10-08**：`scanners.analyze_site_signals` 的「網站未提供 llms.txt」是 info，計分權重 0、不進優先改善建議，描述與報告依據都寫明是新興做法；由 `tests_accuracy_review.py` 鎖定嚴重度與不扣分。`llms-full.txt` 不檢查）
 
 
 ## 3. GEO（生成式引擎優化）

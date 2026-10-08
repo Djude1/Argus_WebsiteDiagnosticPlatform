@@ -79,6 +79,15 @@ class MaturityAndWafWordingTests(SimpleTestCase):
         finding = analyze_site_signals({"llms_txt_found": False})[0]
         self.assertIn("新興做法", finding["description"])
 
+    def test_llms_txt_does_not_deduct_score(self):
+        """roadmap §2 AEO 第 7 項：llms.txt 是 Emerging 訊號，不與成熟規則等價扣分（只列資訊）。"""
+        from apps.scans.scanners import score_breakdown
+
+        finding = analyze_site_signals({"llms_txt_found": False})[0]
+        self.assertEqual(finding["severity"], "info")
+        geo = score_breakdown([finding], tested_categories={"geo"})["geo"]
+        self.assertEqual((geo["score"], geo["penalty"], geo["info"]), (100, 0, 1))
+
     def test_zero_nuclei_findings_is_not_proof_of_waf_blocking(self):
         ctx = SimpleNamespace(
             nuclei_findings=[], katana_tech=["Cloudflare"], page_urls=["https://example.tw/a"],
