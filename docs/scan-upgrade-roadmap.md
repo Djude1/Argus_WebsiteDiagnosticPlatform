@@ -60,7 +60,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 - **升級**：
   1. 實體與權威訊號（作者、組織、`sameAs` → Wikidata/社群）——E-E-A-T。（**已實作 2026-10-08**：`apps/scans/geo_entity.py`，組織實體缺少（低）、組織沒有 sameAs（資訊）、文章頁沒有作者（低）。真實網站核對：blog.cloudflare.com 只有 WebSite 標記（缺組織）、wordpress.org 與 css-tricks 的組織 sameAs 正確辨識；WordPress 分類頁與 Smashing Magazine 列表頁標了 og:type=article，改以 CollectionPage／`<article>` 區塊數排除，避免誤判成缺作者的文章）
   2. 內容新鮮度（`dateModified`/`datePublished` 與實際更新落差）。（**已實作 2026-10-08**：`geo_entity.freshness_findings`，文章頁缺日期、日期不合理（更新早於發布、未來日期）、JSON-LD 與 article:*_time meta 不一致，各為低風險。只檢查日期標記本身，不判斷內容「舊不舊」（長青內容不需常更新）；也不比對 HTTP Last-Modified——動態網站每次回應都是當下時間，比對沒有意義。真實網站核對 css-tricks、blog.gslin.org 的兩邊日期一致，沒有誤報）
-  3. 可被 AI 摘要性（段落結構、清單化、摘要句位置）——與 AEO 共用訊號但角度不同。
+  3. 可被 AI 摘要性（段落結構、清單化、摘要句位置）——與 AEO 共用訊號但角度不同。（**已實作 2026-10-08**：`apps/scans/geo_structure.py`，段落過長／可引用區塊偏少／缺 main 原本已有；新增長篇內容沒有小標題（低）、列舉寫成一整段（資訊）。「摘要句位置」屬寫作品質，規則無法可靠判定，不做。真實網站核對：ntubimdbirc.tw/about 的「1.技術研究…2.辦理…3.業務…」與 ntub.edu.tw 無障礙說明頁「1) 上方導覽…4) 主要內容區」正確列出；修正四種誤判：RSS 被當網頁、部落格標題在 `<header>` 裡被漏數、入口網站短連結被當長文、CSS 程式碼被當編號）
 
 ## 4. UX
 

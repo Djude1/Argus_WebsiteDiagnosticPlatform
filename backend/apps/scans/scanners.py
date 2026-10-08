@@ -513,8 +513,12 @@ def analyze_page(page_input: PageAnalysisInput, categories: set[str] | None = No
     if runs("aeo"):
         findings.extend(analyze_aeo(page_input, parser))
     if runs("geo"):
+        # 內容結構（geo_structure.py 匯入 make_finding，放在函式內避免循環匯入）
+        from apps.scans.geo_structure import structure_findings
+
         findings.extend(analyze_geo(page_input, parser))
         findings.extend(analyze_geo_fast(page_input, parser))
+        findings.extend(structure_findings(page_input.url, page_input.html))
     if runs("security"):
         findings.extend(analyze_security(page_input, parser))
         findings.extend(analyze_data_exposure(page_input))
