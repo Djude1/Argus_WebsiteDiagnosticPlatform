@@ -778,9 +778,12 @@ def _ux_unlabeled_fields(page_input: PageAnalysisInput) -> list[dict]:
     ]
 
 
-# axe-core 的 impact → 嚴重度。critical／serious 會直接擋住部分使用者，moderate／minor 是障礙
+# axe-core 的 impact → 嚴重度。critical／serious 會擋住使用輔助科技的使用者，
+# moderate／minor 是障礙。
+# 上限是中（2026-10-09，ntubimdbirc.tw 回饋）：axe 的 critical 是「對身障使用者的影響」，不等於
+# 網站整體風險；輪播箭頭沒有可讀名稱被列為高風險，和真正的高風險（已知漏洞）排在一起不合理
 _AXE_SEVERITY = {
-    "critical": Finding.Severity.HIGH,
+    "critical": Finding.Severity.MEDIUM,
     "serious": Finding.Severity.MEDIUM,
     "moderate": Finding.Severity.LOW,
     "minor": Finding.Severity.LOW,
@@ -789,7 +792,11 @@ _AXE_PRIORITY = {"critical": 60, "serious": 45, "moderate": 30, "minor": 20}
 # 常見規則的中文標題與修法（其餘以 axe 的英文說明加官方連結呈現）
 _AXE_ZH = {
     "image-alt": ("圖片缺少替代文字", "為有意義的圖片加上描述內容的 alt；純裝飾圖片用 alt=\"\"。"),
-    "button-name": ("按鈕沒有可辨識的名稱", "按鈕內放文字，或用 aria-label 說明按下去會做什麼。"),
+    "button-name": (
+        "按鈕沒有可辨識的名稱",
+        "按鈕內放文字，或用 aria-label 說明按下去會做什麼（例如輪播箭頭寫「下一張」）；"
+        "按鈕裡只有圖片時，也可以用圖片的 alt 說明。",
+    ),
     "link-name": ("連結沒有可辨識的文字", "連結內放文字；只有圖示時補 aria-label 或圖片 alt。"),
     "color-contrast": (
         "文字與背景對比不足",
@@ -818,6 +825,18 @@ _AXE_ZH = {
     "role-img-alt": ("role=img 的元素缺少替代文字", "加上 aria-label 或 aria-labelledby。"),
     "svg-img-alt": (
         "SVG 圖片缺少替代文字", "為 role=\"img\" 的 <svg> 加上 <title> 或 aria-label。"
+    ),
+}
+
+
+# 視覺上看得懂、但輔助科技讀不到的規則：說清楚影響的是誰，避免被讀成「一般訪客會看不懂」
+_AXE_NOTES = {
+    "button-name": (
+        " 一般訪客看圖示（例如箭頭）就知道用途，但使用螢幕閱讀器的人只會聽到「按鈕」，"
+        "不知道按下去會做什麼。"
+    ),
+    "link-name": (
+        " 一般訪客看圖示就知道連到哪裡，但使用螢幕閱讀器的人只會聽到「連結」。"
     ),
 }
 
@@ -852,6 +871,7 @@ def _ux_axe(page_input: PageAnalysisInput) -> list[dict]:
                 description=(
                     f"axe-core 自動化檢查在這一頁找到 {count} 個元素不符合規則「{help_text}」"
                     f"（{wcag}）。{violation.get('description') or ''}"
+                    + _AXE_NOTES.get(rule, "")
                 ),
                 remediation=(
                     (zh_fix + " " if zh_fix else "")

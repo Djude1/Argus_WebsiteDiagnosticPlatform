@@ -366,7 +366,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
   注入（DevTools 協定，不受目標網站 CSP 影響；`add_script_tag` 會被擋），只跑 WCAG 2.0／2.1／2.2 A／AA、
   只回違規；關掉與自建檢查重疊的 `target-size`、`label`、`select-name`。結果在 `page["a11y"]`（不落 DB，
   與 `ux_signals` 相同），每項違規最多 5 個元素的選擇器、HTML 片段、桌面文件座標。`scanners._ux_axe`
-  轉成 finding：`rule_id=axe-<規則>`、impact critical→高／serious→中／moderate、minor→低、
+  轉成 finding：`rule_id=axe-<規則>`、impact critical、serious→中／moderate、minor→低（2026-10-09 起上限是中：axe 的 critical 是對使用輔助科技者的影響，不等於網站整體風險；button-name／link-name 的說明補上「一般訪客看圖示就懂、螢幕閱讀器使用者聽不到用途」，`_AXE_NOTES`）、
   `bounding_box`＝第一個元素、`evidence_source=axe-core <版本>`、常見規則有中文標題與修法（`_AXE_ZH`）。
   每頁逾時 `ARGUS_AXE_TIMEOUT_SECONDS`（15）、最多 `ARGUS_AXE_MAX_PAGES`（50）頁；覆蓋檢查 `axe`
   （全部可分析頁跑完＝completed、部分＝partial、全失敗＝failed）。報告來源標「外部工具（axe-core）」、

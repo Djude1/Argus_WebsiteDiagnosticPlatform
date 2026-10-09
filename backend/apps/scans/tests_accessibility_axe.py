@@ -54,7 +54,8 @@ class AxeFindingTests(SimpleTestCase):
         finding = findings[0]
         self.assertEqual(finding["rule_id"], "axe-image-alt")
         self.assertEqual(finding["category"], Finding.Category.UX)
-        self.assertEqual(finding["severity"], Finding.Severity.HIGH)
+        # axe 的 critical 上限是中風險（2026-10-09）：高風險留給已知漏洞等網站整體風險
+        self.assertEqual(finding["severity"], Finding.Severity.MEDIUM)
         self.assertEqual(finding["title"], "圖片缺少替代文字")
         self.assertIn("3 個元素", finding["description"])
         self.assertIn("dequeuniversity.com", finding["remediation"])
@@ -166,3 +167,18 @@ class AxeRealBrowserTests(SimpleTestCase):
         self.assertNotIn("label", ids)  # 交給自建表單標籤檢查
         node = next(v for v in result["violations"] if v["id"] == "image-alt")["nodes"][0]
         self.assertEqual(node["target"], "img")
+
+
+class AxeSeverityCapTests(SimpleTestCase):
+    def test_icon_button_without_name_is_medium_and_explains_who_is_affected(self):
+        violation = {
+            "id": "button-name", "impact": "critical", "help": "Buttons must have discernible text",
+            "description": "Ensure buttons have discernible text", "tags": ["wcag2a", "wcag412"],
+            "nodes": [{"target": ".slick-next", "html": "<button><img></button>"}],
+            "count": 2,
+        }
+        findings = analyze_ux(_input({"version": "4.14.0", "violations": [violation]}))
+        finding = next(f for f in findings if f["rule_id"] == "axe-button-name")
+        self.assertEqual(finding["severity"], Finding.Severity.MEDIUM)
+        self.assertIn("螢幕閱讀器", finding["description"])
+        self.assertIn("輪播箭頭", finding["remediation"])

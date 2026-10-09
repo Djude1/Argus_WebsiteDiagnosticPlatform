@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 SCORING_VERSION = "2"
-RULESET_VERSION = "2026.10.08"
+RULESET_VERSION = "2026.10.09"
 
 
 def comparable(scan, other) -> bool:
