@@ -762,6 +762,9 @@ def _scan_scope_rows(scan_job: ScanJob) -> dict:
         skipped.append("未勾選的面向：" + "、".join(not_selected))
     rows["本次未執行的檢查"] = "、".join(skipped) if skipped else "無"
     rows["評分版本"] = versions.label(scan_job)
+    tools = versions.tool_versions(scan_job)
+    if tools:
+        rows["檢測工具版本"] = "、".join(f"{name} {version}" for name, version in tools.items())
     # 外部效能指標：與 Argus 分數分開列，標明來源與量測方式
     rows.update(pagespeed_summary_lines(scan_job.performance_report or {}))
     incomplete = incomplete_checks(scan_job.coverage)

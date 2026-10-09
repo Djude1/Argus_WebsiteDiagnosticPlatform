@@ -1419,6 +1419,8 @@ async def crawl_site(
             headless=True,
             **playwright_launch_kwargs(),
         )
+        # 結果可重現：記下實際使用的瀏覽器版本（渲染結果與 axe-core 判定都依賴它）
+        state.warnings["tools"] = {"Chromium": browser.version}
         har_count = 0
 
         def _next_har() -> Path | None:

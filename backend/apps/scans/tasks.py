@@ -602,6 +602,9 @@ def _mark_axe_coverage(ctx: ScanRunContext) -> None:
     audited = [p for p in usable if (p.get("a11y") or {}).get("violations") is not None]
     if not usable:
         return
+    version = next((p["a11y"].get("version") for p in audited if p["a11y"].get("version")), "")
+    if version:
+        ctx.warnings.setdefault("tools", {})["axe-core"] = version
     if len(audited) == len(usable):
         ctx.coverage.mark("axe", COMPLETED)
     elif not audited:
@@ -692,7 +695,7 @@ def stage_enter_scanning(ctx: ScanRunContext) -> None:
     if ctx.warnings:
         for k, v in ctx.warnings.items():
             # 爬取預算是摘要不是警告，已在 stage_crawl 以一行說明記錄
-            if k == "crawl_budget":
+            if k in ("crawl_budget", "tools"):
                 continue
             append_log(scan_job_id, f"爬取警告 [{k}]: {v}", level="warn")
     # 進入 scanning 前再檢查一次：避免使用者剛 cancel 就被 worker 覆蓋回 SCANNING
@@ -1196,6 +1199,11 @@ def stage_zap_passive(ctx: ScanRunContext) -> None:
         ctx.coverage.mark("zap_passive", SKIPPED, "沒有錄到可分析的流量")
         return
     findings, overlap = alerts_to_findings(result.alerts, result.version)
+    if result.version:
+        warnings = dict(scan_job.warning_summary or {})
+        warnings["tools"] = {**(warnings.get("tools") or {}), "OWASP ZAP": result.version}
+        scan_job.warning_summary = warnings
+        scan_job.save(update_fields=["warning_summary", "updated_at"])
     ctx.record(findings, check="zap_passive")
     if result.queue_drained:
         ctx.coverage.mark("zap_passive", COMPLETED)

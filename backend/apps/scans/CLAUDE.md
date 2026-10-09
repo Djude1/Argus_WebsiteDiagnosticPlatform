@@ -372,7 +372,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
   （全部可分析頁跑完＝completed、部分＝partial、全失敗＝failed）。報告來源標「外部工具（axe-core）」、
   依據 `reports.AXE_BASIS`（自動化檢查不等於符合 WCAG）。axe 檔案固定版本放 `vendor/axe/`（含 LICENSE），
   升級時換檔並更新 `tests_accessibility_axe.py` 的版本斷言。測試的真實瀏覽器案例需 `ARGUS_TEST_CHROMIUM_PATH`。
-- **PageSpeed Insights（2026-10-07，roadmap P1，`pagespeed.py`）**：勾 UX、`ARGUS_PAGESPEED_ENABLED` 且有
+- **PageSpeed Insights（2026-10-07，roadmap P1，`pagespeed.py`；2026-10-09 起快速檢查頁測速也共用 `fetch`，見 `apps/insights/CLAUDE.md`）**：勾 UX、`ARGUS_PAGESPEED_ENABLED` 且有
   `ARGUS_PAGESPEED_API_KEY` 時，`stage_pagespeed` 以 PSI v5（`strategy=mobile`，四個 category）**只測首頁**，結果寫
   `ScanJob.performance_report`（migration 0030）：`lab`＝Lighthouse 實驗室單次量測（四個分數、LCP／CLS／TBT／FCP／
   Speed Index、前 5 項改善機會，`runtimeError` 記在 `lab.error`），`field`＝CrUX 過去 28 天第 75 百分位（優先
@@ -412,7 +412,7 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 | **報告編號跨重新產生保持不變** | 由 `HMAC(SECRET_KEY, scan_id)` 推導，不含時間戳。報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效 |
 | **報告本身只印編號、不印雜湊** | 雜湊要涵蓋整份檔案，檔案裡又要有雜湊＝循環相依。雜湊由查驗端點提供，收件者自行 `sha256sum` 比對 |
 | **`views.py` 的 report action 必須用快取** | 省下每次下載的 IO 與 CPU。三個條件都成立才可重用：有防偽紀錄、檔案存在、`renderer_version` 等於目前的 `report_render.RENDERER_VERSION` |
-| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 18：摘要「改一處就能一起解決」；17：附錄各分類扣分明細；16：資安發現類型；15：AEO 逐題可信度；14：AI 爬蟲政策；13：安全標頭等第；12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights 兩列；10：axe-core 依據與來源；9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
+| **改動報告版面（含轉檔方式）就要把 `RENDERER_VERSION` +1**（目前 20：頁尾品牌改為「Argus 網站健檢平台」；19：掃描範圍「檢測工具版本」；18：摘要「改一處就能一起解決」；17：附錄各分類扣分明細；16：資安發現類型；15：AEO 逐題可信度；14：AI 爬蟲政策；13：安全標頭等第；12：OWASP ZAP 被動分析的來源標示；11：PageSpeed Insights 兩列；10：axe-core 依據與來源；9：評分版本；8：覆蓋契約；7：部分掃描警示；6：網站優勢附依據、短章節不換頁；5：重新設計版面；4：改為 PDF） | 否則掃描一旦產過報告就永遠鎖在舊版面。實際踩過：圖表修好後重新下載舊掃描的報告，拿到沒有圖表的快取檔，看起來像修復失敗 |
 | **重產時舊雜湊要進 `previous_sha256`** | 重產會換掉 `content_sha256`，若直接覆蓋，先前已寄出的正本在查驗頁會被判成「對不上」——等於自己把交付過的報告變成偽造品 |
 | **`/api/verify/<編號>/` 是公開端點，絕不回傳掃描發起人** | 否則用報告編號就能反查使用者身分。回應只有：編號、目標網址、掃描與產生時間、整體分數、內容雜湊。帶 `?content_sha256=` 時另回 `matches` / `is_latest_version`，比對範圍含 `previous_sha256`；歷史雜湊本身不列進回應 |
 
@@ -511,6 +511,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 - **改了 `calculate_scores` 的公式就把 `SCORING_VERSION` +1；改了會影響找出哪些問題、算多嚴重的規則（含 AEO 判定與覆蓋契約）就把 `RULESET_VERSION` 改成當天日期。**
 - `versions.comparable(a, b)`：兩次掃描兩個版本都已知且相同，分數差才可直接解讀。專案總覽 `score_comparable`、走勢每點 `model_changed`／`version_label`、`project_summaries` 的 `score_comparable`；前端版本不同時不顯示 ±分，改寫「評分規則已更新，無法直接比較」，歷史報告列標「規則已更新」。
 - 報告：導讀句版本不同時寫「評分規則與前次不同，分數不宜直接比較」而不是進步／退步；掃描範圍表列「評分版本」（`RENDERER_VERSION` 9）。測試：`tests_scoring_versions.py`。
+- **檢測工具版本（2026-10-09，roadmap「結果可重現」）**：`versions.tool_versions(scan)` 彙整這次實際用到的外部工具版本——`warning_summary["tools"]`（爬蟲寫 Chromium `browser.version`、`_mark_axe_coverage` 寫 axe-core、`stage_zap_passive` 寫 OWASP ZAP）、`warning_summary["nuclei"]`（引擎、模板版本、數量、指紋前 12 碼）、`performance_report.lab.version`（Lighthouse，經 PageSpeed Insights）。沒跑的工具不列；報告掃描範圍表有資料才列「檢測工具版本」（`RENDERER_VERSION` 19）。工具版本不同**不影響** `comparable`，只是說明。`tools` 不是警告，`stage_enter_scanning` 記爬取警告時略過。測試：`tests_tool_versions.py`。
 
 ## 網站特徵（`fingerprint.py`，2026-10-07，ADR-0004 階段 1）
 

@@ -130,6 +130,14 @@ class AxeCoverageTests(TestCase):
         self.assertEqual(self._status([ok, skipped]), PARTIAL)
         self.assertEqual(self._status([bad]), FAILED)
 
+    def test_records_axe_version_for_reproducibility(self):
+        ctx = self._ctx([
+            {"a11y": {"error": "TimeoutError"}},
+            {"a11y": {"version": "4.14.0", "violations": []}},
+        ])
+        tasks._mark_axe_coverage(ctx)
+        self.assertEqual(ctx.warnings["tools"]["axe-core"], "4.14.0")
+
     @override_settings(ARGUS_AXE_ENABLED=False)
     def test_disabled(self):
         self.assertEqual(self._status([{"a11y": {}}]), SKIPPED)

@@ -182,7 +182,7 @@ Argus 掃描架構已達商用雛形：`tasks.py` 以 `ScanRunContext` + 20+ 個
 | **智慧動態掃描（旗艦）** | 固定管線 | Signal Collection → Fingerprint → Dynamic Planner；見 [ADR-0004](adr/0004-smart-dynamic-scan.md) |
 | 外部工具統一介面 | Nuclei/Katana 走 `process_runner`，各自 parse | 抽象 `ExternalTool` protocol（執行/逾時/取消/版本鎖/結果正規化），axe/Lighthouse/ZAP 照契約接 |
 | Finding schema | `make_finding` 與既有 `confidence` 已存在 | 標準化 confidence semantics，新增/整理 `maturity`、`evidence[]`、`limitations[]`、`source_tool`、`tool_version`、`root_cause_id`、`verification_status`；legacy confidence 不回溯解讀 |
-| 結果可重現 | — | 記錄工具版本、模板雜湊、`scoring_version`、`ruleset_version`，寫進報告/掃描 metadata |
+| 結果可重現 | — | 記錄工具版本、模板雜湊、`scoring_version`、`ruleset_version`，寫進報告/掃描 metadata（**已實作 2026-10-09**：計分與規則版本 2026-10-07 已有；Nuclei 引擎／模板版本與指紋 2026-10-08 已有；新增 `warning_summary.tools` 記 Chromium、axe-core、OWASP ZAP 實際版本，`versions.tool_versions` 再併入 Lighthouse 與 Nuclei，報告掃描範圍表列「檢測工具版本」。工具版本不同不阻擋分數比較，只供重現時對照） |
 | 掃描設定檔化 | 五維 + 主動/被動 | 依 ADR-0004 新增 `scan_strategy`（standard／smart），與既有 `scan_mode`（testing level）分開；計費按實跑項目並與 ADR-0004 共用 Billing Matrix |
 | 效能 | 階段循序 | 無相依 scanner 可並發，但 coverage、cancel 與 shared request budget 必須一致 |
 
