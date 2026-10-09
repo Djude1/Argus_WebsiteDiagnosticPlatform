@@ -1,11 +1,17 @@
 /* ========================================
    首頁掃描鏈路圖（依設計稿 掃描鏈路圖.png）
    六階段主流程 → 匯流點 → 扇出四項交付物
-   每個節點的強調色由 data-tone 決定，圖示用 currentColor 自動同色
+   每個節點的強調色由 data-tone 決定（只用在編號與徽章文字）
+   2026-10-09 依使用者要求拿掉螢光：邊框改中性細線、圖示改中性色，
+   移除所有外發光（box-shadow 光暈、drop-shadow、text-shadow、呼吸光點）；版面與內容不變。
    ======================================== */
-
 .pl-wrap {
   --pl: 103, 232, 249;              /* 預設 cyan，各節點以 data-tone 覆寫 */
+  --pl-line: rgba(148, 163, 184, .22);
+  --pl-line-hover: rgba(148, 163, 184, .42);
+  --pl-icon: #cbd5e1;
+  --pl-track: rgba(148, 163, 184, .26);   /* 連線底色 */
+  --pl-flow: #38bdf8;                     /* 沿線流動的亮段（實色、不發光） */
   position: relative;
   padding: 4px 0 8px;
 }
@@ -35,7 +41,6 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 28px rgba(56, 189, 248, .35);
 }
 .pl-subtitle {
   margin: 6px 0 0;
@@ -53,10 +58,9 @@
   font-weight: 600;
   color: #e0f2fe;
   background: rgba(8, 20, 45, .75);
-  border: 1px solid rgba(103, 232, 249, .45);
-  box-shadow: 0 0 20px -6px rgba(56, 189, 248, .55);
+  border: 1px solid var(--pl-line);
 }
-.pl-note-icon { width: 16px; height: 16px; color: var(--argus-cyan-glow); flex: 0 0 auto; }
+.pl-note-icon { width: 16px; height: 16px; color: var(--pl-icon); flex: 0 0 auto; }
 
 /* --- 主流程 --- */
 .pl-flow { display: flex; align-items: center; gap: 0; }
@@ -73,17 +77,14 @@
   padding: 26px 13px 15px;
   text-align: center;
   border-radius: 17px;
-  background:
-    radial-gradient(120% 80% at 50% 0%, rgba(var(--pl), .10), transparent 62%),
-    linear-gradient(180deg, rgba(9, 19, 44, .95), rgba(5, 10, 28, .95));
-  border: 1px solid rgba(var(--pl), .32);
-  box-shadow: inset 0 1px 0 rgba(var(--pl), .18), 0 10px 30px -22px rgba(0, 0, 0, .9);
+  background: linear-gradient(180deg, rgba(9, 19, 44, .95), rgba(5, 10, 28, .95));
+  border: 1px solid var(--pl-line);
+  box-shadow: 0 10px 30px -22px rgba(0, 0, 0, .9);
   transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
 }
 .pl-stage:hover {
   transform: translateY(-3px);
-  border-color: rgba(var(--pl), .6);
-  box-shadow: inset 0 1px 0 rgba(var(--pl), .25), 0 0 26px -6px rgba(var(--pl), .5);
+  border-color: var(--pl-line-hover);
 }
 
 /* 編號：騎在卡片上緣 */
@@ -95,32 +96,30 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 27px;
-  height: 27px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  font-size: .68rem;
+  font-size: .76rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: rgb(var(--pl));
   background: #060b1f;
-  border: 1px solid rgba(var(--pl), .55);
-  box-shadow: 0 0 12px rgba(var(--pl), .45);
+  border: 1px solid var(--pl-line);
 }
 .pl-stage-icon {
   display: inline-flex;
   width: 42px; height: 42px;
   margin: 2px 0 4px;
-  color: rgb(var(--pl));
-  filter: drop-shadow(0 0 9px rgba(var(--pl), .6));
+  color: var(--pl-icon);
 }
 .pl-stage-icon svg { width: 100%; height: 100%; }
 .pl-stage-title {
-  font-size: .95rem;
+  font-size: 1.02rem;
   font-weight: 700;
   color: #f0f9ff;
   letter-spacing: .01em;
 }
-.pl-stage-line { font-size: .7rem; line-height: 1.5; color: #8fa3bd; }
+.pl-stage-line { font-size: .82rem; line-height: 1.5; color: #8fa3bd; }
 
 .pl-badge {
   margin-top: 7px;
@@ -128,13 +127,14 @@
   align-items: center;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: .62rem;
+  max-width: 100%;
+  font-size: .74rem;
   font-weight: 600;
   letter-spacing: .02em;
-  white-space: nowrap;
+  text-align: center;
   color: rgb(var(--pl));
-  background: rgba(var(--pl), .12);
-  border: 1px solid rgba(var(--pl), .4);
+  background: rgba(var(--pl), .08);
+  border: 1px solid rgba(var(--pl), .22);
 }
 .pl-badge.tone-teal   { --pl: 45, 212, 191; }
 .pl-badge.tone-amber  { --pl: 251, 191, 36; }
@@ -169,23 +169,22 @@
   width: 268px;
   padding: 10px 13px;
   border-radius: 13px;
-  background: linear-gradient(120deg, rgba(var(--pl), .12), rgba(6, 12, 30, .9) 58%);
-  border: 1px solid rgba(var(--pl), .36);
+  background: rgba(6, 12, 30, .9);
+  border: 1px solid var(--pl-line);
   transition: border-color .2s ease, transform .2s ease;
 }
-.pl-sub:hover { transform: translateX(3px); border-color: rgba(var(--pl), .62); }
+.pl-sub:hover { transform: translateX(3px); border-color: var(--pl-line-hover); }
 .pl-sub-icon {
   display: inline-flex;
   width: 27px; height: 27px;
   flex: 0 0 auto;
   margin-top: 1px;
-  color: rgb(var(--pl));
-  filter: drop-shadow(0 0 7px rgba(var(--pl), .55));
+  color: var(--pl-icon);
 }
 .pl-sub-icon svg { width: 100%; height: 100%; }
 .pl-sub-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.pl-sub-title { font-size: .88rem; font-weight: 700; color: #f0f9ff; }
-.pl-sub-desc { font-size: .68rem; color: #8fa3bd; }
+.pl-sub-title { font-size: .95rem; font-weight: 700; color: #f0f9ff; }
+.pl-sub-desc { font-size: .8rem; color: #8fa3bd; }
 .pl-sub .pl-badge { margin-top: 5px; align-self: flex-start; }
 
 /* --- 階段之間的箭頭 --- */
@@ -193,7 +192,7 @@
   position: relative;
   flex: 0 0 auto;
   width: 34px;
-  height: 2px;
+  height: 3px;
   margin: 0 3px;
   display: flex;
   align-items: center;
@@ -203,18 +202,17 @@
   inset: 0 7px 0 0;
   border-radius: 999px;
   background: linear-gradient(90deg,
-    rgba(103, 232, 249, .2) 0%, var(--argus-cyan) 50%, rgba(103, 232, 249, .2) 100%);
-  background-size: 240% 100%;
-  animation: pl-flow 2.2s linear infinite;
+    var(--pl-track) 0 34%, var(--pl-flow) 42% 58%, var(--pl-track) 66% 100%);
+  background-size: 300% 100%;
+  animation: pl-flow 1.6s linear infinite;
 }
 .pl-arrow-head {
   position: absolute;
   right: 0;
   width: 0; height: 0;
-  border-left: 7px solid var(--argus-cyan-glow);
+  border-left: 7px solid var(--pl-flow);
   border-top: 4.5px solid transparent;
   border-bottom: 4.5px solid transparent;
-  filter: drop-shadow(0 0 4px rgba(103, 232, 249, .8));
 }
 
 /* --- 匯流點與扇出線 --- */
@@ -231,28 +229,25 @@
   transform: translate(-50%, -50%);
   width: 11px; height: 11px;
   border-radius: 999px;
-  background: var(--argus-cyan-glow);
-  box-shadow: 0 0 14px rgba(103, 232, 249, .95);
-  animation: pl-hub-breathe 2.4s ease-in-out infinite;
+  background: var(--pl-flow);
 }
 .pl-fan-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .pl-wire-base {
   fill: none;
-  stroke: rgba(56, 189, 248, .3);
-  stroke-width: 1.1;
+  stroke: var(--pl-track);
+  stroke-width: 1.4;
   vector-effect: non-scaling-stroke;
 }
 /* pathLength=100 正規化，長短線的脈衝速度與長度一致 */
 .pl-wire-pulse {
   fill: none;
-  stroke: var(--argus-cyan-glow);
-  stroke-width: 1.9;
+  stroke: var(--pl-flow);
+  stroke-width: 2.6;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 10 90;
+  stroke-dasharray: 18 82;
   stroke-dashoffset: 100;
-  animation: pl-pulse 2.4s linear infinite;
-  filter: drop-shadow(0 0 5px rgba(103, 232, 249, .9));
+  animation: pl-pulse 1.8s linear infinite;
 }
 
 /* --- 交付物 --- */
@@ -269,43 +264,42 @@
   width: 262px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: linear-gradient(110deg, rgba(var(--pl), .14), rgba(6, 12, 30, .92) 62%);
-  border: 1px solid rgba(var(--pl), .38);
+  background: rgba(6, 12, 30, .92);
+  border: 1px solid var(--pl-line);
   transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
 .pl-out:hover {
   transform: translateX(4px);
-  border-color: rgba(var(--pl), .68);
-  box-shadow: 0 0 22px -8px rgba(var(--pl), .7);
+  border-color: var(--pl-line-hover);
 }
 .pl-out-icon {
   display: inline-flex;
   width: 30px; height: 30px;
   flex: 0 0 auto;
-  color: rgb(var(--pl));
-  filter: drop-shadow(0 0 8px rgba(var(--pl), .6));
+  color: var(--pl-icon);
 }
 .pl-out-icon svg { width: 100%; height: 100%; }
 .pl-out-body { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.pl-out-title { font-size: .9rem; font-weight: 700; color: #f0f9ff; }
-.pl-out-desc { font-size: .68rem; color: #8fa3bd; }
+.pl-out-title { font-size: .98rem; font-weight: 700; color: #f0f9ff; }
+.pl-out-desc { font-size: .8rem; color: #8fa3bd; }
 .pl-out-chevron {
   display: inline-flex;
   width: 16px; height: 16px;
   flex: 0 0 auto;
-  color: rgba(var(--pl), .75);
+  color: rgba(148, 163, 184, .7);
 }
 .pl-out-chevron svg { width: 100%; height: 100%; }
 
+/* 背景寬 300%：位置 100%→0% 剛好讓亮段從左端外移到右端外 */
 @keyframes pl-flow {
   0% { background-position: 100% 0; }
-  100% { background-position: -140% 0; }
+  100% { background-position: 0% 0; }
+}
+@keyframes pl-flow-y {
+  0% { background-position: 0 100%; }
+  100% { background-position: 0 0%; }
 }
 @keyframes pl-pulse { to { stroke-dashoffset: 0; } }
-@keyframes pl-hub-breathe {
-  0%, 100% { box-shadow: 0 0 10px rgba(103, 232, 249, .7); }
-  50% { box-shadow: 0 0 20px rgba(103, 232, 249, 1); }
-}
 
 /* --- 橫向捲動：這張圖需要約 1500px 才完整，窄於此讓它可橫捲而非擠壞 --- */
 @media (max-width: 1540px) {
@@ -325,13 +319,19 @@
   .pl-stage-slot { flex-direction: column; align-items: stretch; }
   .pl-stage, .pl-stage-group { width: 100%; }
   .pl-sub { width: 100%; }
-  .pl-arrow { width: 2px; height: 22px; margin: 7px auto; }
-  .pl-arrow-line { inset: 0 0 7px 0; background: var(--argus-cyan); animation: none; }
+  .pl-arrow { width: 3px; height: 26px; margin: 7px auto; }
+  .pl-arrow-line {
+    inset: 0 0 7px 0;
+    background: linear-gradient(180deg,
+      var(--pl-track) 0 34%, var(--pl-flow) 42% 58%, var(--pl-track) 66% 100%);
+    background-size: 100% 300%;
+    animation-name: pl-flow-y;
+  }
   .pl-arrow-head {
     right: auto; bottom: 0; left: 50%; transform: translateX(-50%);
     border-left: 4.5px solid transparent;
     border-right: 4.5px solid transparent;
-    border-top: 7px solid var(--argus-cyan-glow);
+    border-top: 7px solid var(--pl-flow);
     border-bottom: none;
   }
   .pl-fan { display: none; }
@@ -341,6 +341,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pl-arrow-line, .pl-wire-pulse, .pl-hub { animation: none; }
+  .pl-arrow-line { background: var(--pl-flow); }
   .pl-wire-pulse { stroke-dasharray: none; opacity: .75; }
   .pl-stage:hover, .pl-sub:hover, .pl-out:hover { transform: none; }
 }

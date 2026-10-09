@@ -96,18 +96,21 @@ export function PipelineDiagram({ title, subtitle, note, stages, outputs, ariaLa
 
   return (
     <div className="pl-wrap" aria-label={ariaLabel}>
-      <header className="pl-head">
-        <div className="pl-head-text">
-          <h3 className="pl-title">{title}</h3>
-          {subtitle && <p className="pl-subtitle">{subtitle}</p>}
-        </div>
-        {note && (
-          <span className="pl-note">
-            <SparkIcon className="pl-note-icon" />
-            {note}
-          </span>
-        )}
-      </header>
+      {/* 標題可省略：首頁改由段落共用的 SectionHead 呈現，與其他段落一致 */}
+      {title && (
+        <header className="pl-head">
+          <div className="pl-head-text">
+            <h3 className="pl-title">{title}</h3>
+            {subtitle && <p className="pl-subtitle">{subtitle}</p>}
+          </div>
+          {note && (
+            <span className="pl-note">
+              <SparkIcon className="pl-note-icon" />
+              {note}
+            </span>
+          )}
+        </header>
+      )}
 
       <div className="pl-flow">
         <div className="pl-stages">
