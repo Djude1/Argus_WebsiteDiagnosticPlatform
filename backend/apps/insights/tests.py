@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.insights.analyzers import analyze_email, score_url_risk
@@ -127,3 +128,122 @@ class InsightsAnalyzerTests(TestCase):
 
         self.assertLess(report["risk_score"], 45)
         self.assertEqual(report["url_count"], 0)
+
+
+def _mock_html_response():
+    response = Mock()
+    response.status_code = 200
+    response.url = "https://example.com/"
+    response.headers = {"content-type": "text/html"}
+    response.encoding = "utf-8"
+    response.content = b"<html><head><title>Example</title></head><body></body></html>"
+    return response
+
+
+PSI_REPORT = {"source": "pagespeed_insights", "lab": {"scores": {"performance": 88}}, "field": {}}
+
+
+PUBLIC_DNS = [(None, None, None, "", ("93.184.216.34", 0))]
+
+
+@patch("apps.insights.analyzers.socket.getaddrinfo", return_value=PUBLIC_DNS)
+@patch("apps.insights.analyzers.requests.get", return_value=_mock_html_response())
+class SpeedTestPageSpeedTests(TestCase):
+    """快速檢查頁測速接 Google PageSpeed Insights：背景量測＋輪詢（pagespeed_jobs）。"""
+
+    def setUp(self):
+        self.client = APIClient()
+        cache.clear()
+
+    def _speed_test(self):
+        return self.client.post(
+            "/api/insights/speed-test/",
+            {"url": "https://example.com", "authorization_confirmed": True},
+            format="json",
+        )
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="", ARGUS_PAGESPEED_ENABLED=False)
+    def test_without_key_reports_unavailable(self, _get, _dns):
+        res = self._speed_test()
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["pagespeed"], {"status": "unavailable"})
+        self.assertIn("PageSpeed Insights / Lighthouse", res.json()["core_web_vitals_note"])
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
+    def test_queues_job_then_poll_returns_result_and_url_is_cached(self, _get, _dns):
+        with patch("apps.insights.tasks.run_public_pagespeed.delay") as delay:
+            res = self._speed_test()
+        self.assertEqual(res.status_code, 200)
+        psi = res.json()["pagespeed"]
+        self.assertEqual(psi["status"], "pending")
+        delay.assert_called_once_with(psi["job"], "https://example.com/")
+        self.assertIn("Google PageSpeed Insights", res.json()["core_web_vitals_note"])
+
+        poll = self.client.get(f"/api/insights/speed-test/pagespeed/{psi['job']}/")
+        self.assertEqual(poll.json(), {"status": "pending"})
+
+        from apps.insights import pagespeed_jobs
+
+        with patch("apps.scans.pagespeed.fetch", return_value=PSI_REPORT):
+            pagespeed_jobs.run(psi["job"], "https://example.com/")
+        poll = self.client.get(f"/api/insights/speed-test/pagespeed/{psi['job']}/")
+        self.assertEqual(poll.json(), {"status": "done", "report": PSI_REPORT})
+
+        # 同網址 10 分鐘內再測：直接回快取，不再呼叫 Google
+        with patch("apps.insights.tasks.run_public_pagespeed.delay") as delay:
+            again = self._speed_test()
+        delay.assert_not_called()
+        self.assertEqual(again.json()["pagespeed"]["status"], "done")
+        self.assertTrue(again.json()["pagespeed"]["cached"])
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
+    def test_same_pending_url_reuses_one_job_and_global_window_limits_dispatches(self, _get, _dns):
+        from apps.insights import pagespeed_jobs
+
+        with patch("apps.insights.tasks.run_public_pagespeed.delay") as delay:
+            first = pagespeed_jobs.start("https://example.com/")
+            same_url = pagespeed_jobs.start("https://example.com/")
+            other_url = pagespeed_jobs.start("https://example.org/")
+
+        self.assertEqual(first["status"], "pending")
+        self.assertEqual(same_url, first)
+        self.assertEqual(other_url["status"], "failed")
+        delay.assert_called_once_with(first["job"], "https://example.com/")
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
+    def test_worker_revalidates_public_url_before_calling_pagespeed(self, _get, _dns):
+        from apps.insights import pagespeed_jobs
+        from apps.insights.analyzers import PublicHostError
+
+        with (
+            patch(
+                "apps.insights.analyzers.assert_public_url",
+                side_effect=PublicHostError("免費公開分析不允許 localhost 或內網位址。"),
+            ) as validate,
+            patch("apps.scans.pagespeed.fetch") as fetch,
+        ):
+            pagespeed_jobs.run("c" * 24, "http://localhost/")
+
+        validate.assert_called_once_with("http://localhost/")
+        fetch.assert_not_called()
+        self.assertEqual(
+            pagespeed_jobs.get("c" * 24),
+            {"status": "failed", "reason": "免費公開分析不允許 localhost 或內網位址。"},
+        )
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
+    def test_failure_reason_is_reported_and_not_cached(self, _get, _dns):
+        from apps.insights import pagespeed_jobs
+        from apps.scans.pagespeed import PageSpeedError
+
+        quota = PageSpeedError("PageSpeed Insights 配額用完")
+        with patch("apps.scans.pagespeed.fetch", side_effect=quota):
+            pagespeed_jobs.run("a" * 24, "https://example.com/")
+        poll = self.client.get(f"/api/insights/speed-test/pagespeed/{'a' * 24}/")
+        self.assertEqual(poll.json(), {"status": "failed", "reason": "PageSpeed Insights 配額用完"})
+        self.assertIsNone(cache.get(pagespeed_jobs._url_key("https://example.com/")))
+
+    def test_poll_unknown_or_malformed_job_is_404(self, _get, _dns):
+        base = "/api/insights/speed-test/pagespeed/"
+        self.assertEqual(self.client.get(f"{base}{'b' * 24}/").status_code, 404)
+        self.assertEqual(self.client.get(f"{base}short/").status_code, 404)

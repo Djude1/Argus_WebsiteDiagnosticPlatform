@@ -3,6 +3,7 @@ from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 
+from apps.insights import pagespeed_jobs
 from apps.insights.analyzers import (
     PublicHostError,
     analyze_email,
@@ -16,6 +17,12 @@ class InsightsAnonThrottle(AnonRateThrottle):
     """免登入 insights 端點的專屬 throttle，用 rate 表中的 `insights` scope。"""
 
     scope = "insights"
+
+
+class InsightsPollThrottle(AnonRateThrottle):
+    """測速結果輪詢用；每次輪詢都算一次，額度另計，不吃掉 `insights` 的 30 次。"""
+
+    scope = "insights_poll"
 
 
 class SpeedAnalysisSerializer(serializers.Serializer):
@@ -63,7 +70,24 @@ def speed_test(request):
             {"detail": "測速失敗，請稍後再試或確認該網址可公開連線。"},
             status=status.HTTP_502_BAD_GATEWAY,
         )
+    result["pagespeed"] = pagespeed_jobs.start(result.get("final_url") or result["url"])
+    if result["pagespeed"]["status"] != "unavailable":
+        result["core_web_vitals_note"] = (
+            "上方是 Argus 單次輕量量測（伺服器回應與 HTML）；下方的 Google PageSpeed Insights "
+            "提供 Lighthouse 分數與 Chrome 真實使用者資料（CrUX）。"
+        )
     return Response(result)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.AllowAny])
+@throttle_classes([InsightsPollThrottle])
+def speed_test_pagespeed(request, job_id):
+    """輪詢測速的 Google PageSpeed Insights 結果：pending／done／failed；代號不存在或過期回 404。"""
+    payload = pagespeed_jobs.get(job_id)
+    if payload is None:
+        return Response({"detail": "量測已過期，請重新測速。"}, status=status.HTTP_404_NOT_FOUND)
+    return Response(payload)
 
 
 @api_view(["POST"])

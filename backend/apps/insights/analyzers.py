@@ -492,7 +492,7 @@ def analyze_quick_scan(url: str, session=requests, timeout: int = 10) -> dict:
         "findings": findings,
         "note": (
             "這是「單頁快速檢查」：只抓這一頁、不跑多頁爬蟲與 Playwright、不含 AI Agent 驗證。"
-            "完整多頁＋四維深掃＋互動報告請登入後到「掃描」功能。"
+            "整站、五個面向與互動報告請登入後建立完整掃描。"
         ),
     }
 

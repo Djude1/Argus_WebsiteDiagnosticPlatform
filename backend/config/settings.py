@@ -290,6 +290,8 @@ REST_FRAMEWORK = {
         "register": os.getenv("THROTTLE_REGISTER", "10/hour"),
         "password_reset": os.getenv("THROTTLE_PASSWORD_RESET", "5/hour"),
         "insights": os.getenv("THROTTLE_INSIGHTS", "30/hour"),
+        # 測速頁輪詢 Google PageSpeed 結果（約每 3 秒一次，單次量測最多 2 分鐘）
+        "insights_poll": os.getenv("THROTTLE_INSIGHTS_POLL", "600/hour"),
         "scan_create": os.getenv("THROTTLE_SCAN_CREATE", "30/hour"),
         "avatar_upload": os.getenv("THROTTLE_AVATAR_UPLOAD", "20/hour"),
         "partner_inquiry": os.getenv("THROTTLE_PARTNER_INQUIRY", "5/hour"),

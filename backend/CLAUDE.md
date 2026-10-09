@@ -16,7 +16,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`）、`ecpay/callback/`（綠界 ReturnURL：購點＋訂閱首期）、`ecpay/period-callback/`（訂閱第 2 期起每月扣款） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護）、`scanner-info/`（公開，掃描來源說明頁 `/scanner` 用：User-Agent、出口 IP、速率） |
-| `/api/insights/` | `insights` | `speed-test/`、`phishing-url/`、`phishing-email/`（公開免費工具，AllowAny、不扣 coin） |
+| `/api/insights/` | `insights` | `speed-test/`（＋`speed-test/pagespeed/<job>/` 輪詢 Google PageSpeed 背景量測，2026-10-09）、`phishing-url/`、`phishing-email/`、`quick-scan/`（公開免費工具，AllowAny、不扣 coin） |
 | `/api/rebuilds/` | `rebuild` | 網頁複刻與優化：list（`?scan_id=`）／create／retrieve＋`<id>/ask/`、`<id>/turn-trace/`、`<id>/download/`（一律附件＋CSP sandbox）、`<id>/share/`（POST `{access: link|login}` 開啟分享（固定連結、不過期）、DELETE 改回僅限本人）、`cost/`（見 `apps/rebuild/CLAUDE.md`） |
 | `/api/share/rebuilds/<token>/` | `rebuild` | 分享頁資料（`AllowAny`、anon throttle；`login` 模式未登入回 401）：受測網址、發現的問題、修改清單（兩層）、改善指標、說明；`html/?variant=` 回 sandbox HTML，前端以 XHR 取回放進 `sandbox` iframe，直接整頁開啟回 403（2026-10-06） |
 | `/api/mcp/` | `mcp_access` | MCP Streamable HTTP 端點（只吃 `Bearer argus_mcp_…` 憑證）＋`reports/<token>/` 短效報告連結 |
