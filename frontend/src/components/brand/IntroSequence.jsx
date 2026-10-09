@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import brandLogo from "../../assets/brand-logo.webp";
 
-const INTRO_PHASE = { storm: 2000, assemble: 2400, display: 400, warp: 2200 };
+const INTRO_PHASE = { storm: 2000, assemble: 2400, display: 400, warp: 1600 };
 const INTRO_TOTAL =
   INTRO_PHASE.storm + INTRO_PHASE.assemble + INTRO_PHASE.display + INTRO_PHASE.warp;
 const INTRO_STORM_CHARS = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$&*+={}/<>";
@@ -11,16 +11,6 @@ const INTRO_STORM_COLORS = [
   "rgba(80, 220, 255, 0.55)", "rgba(100, 235, 255, 0.7)", "rgba(60, 200, 240, 0.65)",
   "rgba(140, 240, 255, 0.6)", "rgba(70, 210, 250, 0.75)", "rgba(170, 245, 255, 0.55)",
   "rgba(40, 180, 220, 0.65)", "rgba(110, 230, 255, 0.7)",
-];
-// 時空穿越光束色盤（沿用開頭動畫的青藍系，不另加雜色）
-const INTRO_WARP_COLORS = [
-  [56, 189, 248],   // argus-cyan
-  [103, 232, 249],  // cyan-glow
-  [125, 211, 252],  // sky
-  [14, 165, 233],   // cyan-dot
-  [150, 220, 255],  // 淺藍
-  [224, 242, 254],  // 近白 cyan tint
-  [255, 255, 255],  // 白
 ];
 
 function IntroSequence({ onComplete }) {
@@ -171,23 +161,17 @@ function IntroSequence({ onComplete }) {
       makeParticles(pts);
     }
 
-    function randomizeWarp(p) {
-      // 不規則：每粒子隨機顏色 / 寬度 / 拉長長度 / 速度
-      p.warpColor = INTRO_WARP_COLORS[(Math.random() * INTRO_WARP_COLORS.length) | 0];
-      p.warpWidth = 2 + Math.random() * 9;        // 粗細不一
-      p.warpLenK = 0.7 + Math.random() * 2.8;     // 拉長長度不一
-      p.warpSpeedK = 0.6 + Math.random() * 1.2;   // 速度不一
-    }
     function initWarp() {
-      // 從粒子「目前位置」(剛聚合成 logo 的位置) 直接往外發射 →
-      // logo 散開無縫接上時空穿越，中間不經過白色閃光。
+      // 收尾（2026-10-09 改柔和）：粒子從 logo 位置緩慢往外飄散並逐一淡出，
+      // 取代原本的白色放射光束，沒有閃光與高速拉線。
       const cx = W / 2, cy = H / 2;
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         const dx = p.x - cx, dy = p.y - cy;
-        p.warpAng = Math.atan2(dy, dx);
-        p.warpDist = Math.max(2, Math.hypot(dx, dy));
-        randomizeWarp(p);
+        p.warpAng = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
+        p.warpX = p.x; p.warpY = p.y;
+        p.warpDrift = 30 + Math.random() * 140;  // 飄散距離
+        p.warpDelay = Math.random() * 0.35;      // 錯開淡出時間
       }
     }
 
@@ -268,47 +252,45 @@ function IntroSequence({ onComplete }) {
       else if (elapsed < INTRO_TOTAL) { phaseName = "WARP"; pt = (elapsed - P.storm - P.assemble - P.display) / P.warp; }
       else { if (finishRef.current) finishRef.current(); return; }
       if (phaseRef.current) phaseRef.current.textContent = phaseName;
-      const STATUS_MAP = { STORM: "ANALYZING", ASSEMBLE: "CONVERGING", DISPLAY: "LOCKED-ON", WARP: "HYPERSPACE" };
+      const STATUS_MAP = { STORM: "ANALYZING", ASSEMBLE: "CONVERGING", DISPLAY: "LOCKED-ON", WARP: "RELEASING" };
       if (statusRef.current) statusRef.current.textContent = STATUS_MAP[phaseName];
 
       if (phaseName === "WARP") {
         if (!warpInited) { initWarp(); warpInited = true; }
-        const zoom = 1 + pt * pt * 0.65;
-        canvas.style.transform = `scale(${zoom})`;
-        // 觀測者越來越快 → 每幀清除越少、上一幀殘留越久 → 粒子拉出長殘影拖曳
-        const trailFade = Math.max(0.05, 0.2 - pt * 0.15);
-        ctx.fillStyle = `rgba(12, 16, 38, ${trailFade})`;
-        ctx.fillRect(0, 0, W, H);
-        const cxw = W / 2, cyw = H / 2;
-        const baseSpeed = 5 + pt * pt * 80;
-        const maxD = Math.max(W, H) * 1.35;
+        const ease = 1 - Math.pow(1 - pt, 3);
+        canvas.style.transform = `scale(${1 + ease * 0.05})`;
+        ctx.clearRect(0, 0, W, H);
+        // 中央一圈淡青光暈，跟著淡出
+        const glow = Math.sin(Math.min(1, pt * 1.6) * Math.PI) * 0.16;
+        if (glow > 0.005) {
+          const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.45);
+          g.addColorStop(0, `rgba(56, 189, 248, ${glow})`);
+          g.addColorStop(1, "rgba(56, 189, 248, 0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W, H);
+        }
+        const logoA = 0.9 * (1 - ease);
+        if (logoA > 0.01) {
+          ctx.save(); ctx.globalAlpha = logoA;
+          if (imgRef && logoBox) ctx.drawImage(imgRef, logoBox.ox, logoBox.oy, logoBox.tw, logoBox.th);
+          else if (fallbackCanvas) ctx.drawImage(fallbackCanvas, 0, 0);
+          ctx.restore();
+        }
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        let lastSize = -1;
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
-          p.warpDist += baseSpeed * p.warpSpeedK;
-          if (p.warpDist > maxD) {
-            // 回收：隨機角度 + 重抽顏色/寬/長 → 持續不規則放射
-            p.warpDist = Math.random() * 40;
-            p.warpAng = Math.random() * Math.PI * 2;
-            randomizeWarp(p);
-          }
-          const cosA = Math.cos(p.warpAng), sinA = Math.sin(p.warpAng);
-          const x = cxw + cosA * p.warpDist, y = cyw + sinA * p.warpDist;
-          // 拉長：長度隨距離增加且每粒子不一
-          const tailLen = (baseSpeed * 1.5 + p.warpDist * 0.3) * p.warpLenK;
-          const tx = cxw + cosA * (p.warpDist - tailLen), ty = cyw + sinA * (p.warpDist - tailLen);
-          // 外端寬、內端收尖的錐形（垂直方向取半寬）
-          const hw = p.warpWidth * Math.min(1, p.warpDist / 200);
-          const px = -sinA, py = cosA;
-          const a = Math.min(0.82, p.warpDist / 130);
-          const c = p.warpColor;
-          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
-          ctx.beginPath();
-          ctx.moveTo(tx, ty);                   // 內端尖點
-          ctx.lineTo(x + px * hw, y + py * hw); // 外端一側
-          ctx.lineTo(x - px * hw, y - py * hw); // 外端另一側
-          ctx.closePath();
-          ctx.fill();
+          const k = Math.min(1, Math.max(0, (pt - p.warpDelay) / (1 - p.warpDelay)));
+          const kk = 1 - Math.pow(1 - k, 2);
+          const alpha = 1 - kk;
+          if (alpha <= 0.01) continue;
+          const d = p.warpDrift * ease;
+          if (p.size !== lastSize) { ctx.font = `bold ${p.size}px 'Consolas', monospace`; lastSize = p.size; }
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = p.displayColor;
+          ctx.fillText(p.char, p.warpX + Math.cos(p.warpAng) * d, p.warpY + Math.sin(p.warpAng) * d);
         }
+        ctx.globalAlpha = 1;
         mainRAF = requestAnimationFrame(mainLoop);
         return;
       }
