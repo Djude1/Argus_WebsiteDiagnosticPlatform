@@ -8,7 +8,7 @@ Claude Code 進 `backend/apps/content/` 工作時，本檔在專案層 `CLAUDE.m
 ## 關鍵端點（`/api/content/`，公開唯讀 GET）
 | 端點 | View | 對應前台 |
 |---|---|---|
-| `features/` | `features_list` | `/project` 特色卡片 |
+| `features/` | `features_list` | 前台目前未使用（2026-10-09 首頁移除「核心功能」段落；後台仍可編輯） |
 | `team/` | `team_list` | 團隊成員（公開 `/team` 頁已於 2026-09-28 移除，目前前台無消費端） |
 | `releases/` | `releases_list` | `/download` 版本 |
 | `milestones/` | `milestones_list` | `/project` timeline |

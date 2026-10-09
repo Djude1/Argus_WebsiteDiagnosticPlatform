@@ -484,9 +484,8 @@ function AdminCmsManager({ schema }) {
 
 const FEATURE_SCHEMA = {
   endpoint: "/admin/cms/features/",
-  title: "專案特色卡片",
-  previewPath: "/project",
-  previewLabel: "預覽 /project",
+  // 2026-10-09 首頁移除「核心功能」段落，這些卡片目前沒有前台頁面顯示，故不提供預覽
+  title: "專案特色卡片（首頁已不顯示）",
   titleField: "title",
   fields: [
     { key: "title", label: "標題", type: "text", required: true },

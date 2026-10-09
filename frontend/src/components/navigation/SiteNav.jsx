@@ -63,8 +63,8 @@ export default function SiteNav({ items, actions, leading = null, className = ""
           title={brandTo ? brandTo.label : "重播開場動畫"}
           aria-label={brandTo ? `ARGUS：${brandTo.label}` : "重播 ARGUS 開場動畫"}
         >
-          <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI 網站健檢平台" />
-          <span className="public-brand-sub">AI 網站健檢平台</span>
+          <img src={brandLogo} className="public-brand-logo" alt="ARGUS — 網站健檢平台" />
+          <span className="public-brand-sub">網站健檢平台</span>
         </button>
         {leading}
         {items.length > 0 && (

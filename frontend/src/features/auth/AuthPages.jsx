@@ -47,7 +47,7 @@ function RequireAuth({ children }) {
 const TRUST_POINTS = [
   {
     Icon: ShieldIcon,
-    title: "授權式掃描",
+    title: "主動檢測需驗證網域",
     body: "主動式資安測試只對你驗證過所有權的網域執行。",
   },
   {
@@ -66,7 +66,7 @@ function AuthShell({ children, backTo, backLabel }) {
   return (
     <div className="auth-shell">
       <aside className="auth-story ag-surface-grid" aria-label="關於 Argus">
-        <ArgusLogo size={40} subtitle="AI 網站健檢平台" />
+        <ArgusLogo size={40} subtitle="網站健檢平台" />
         <div className="auth-story-copy">
           <p className="ag-eyebrow">Night Watch</p>
           <p className="auth-story-title">
@@ -339,7 +339,7 @@ function LoginPage({ googleOAuthEnabled }) {
     <AuthShell backTo="/project" backLabel="返回首頁">
       <header className="auth-head">
         <h1 className="auth-title">{isRegister ? "建立 Argus 帳號" : "登入 Argus"}</h1>
-        <p className="auth-sub">授權式 AI 網站健檢平台</p>
+        <p className="auth-sub">網站健檢平台</p>
       </header>
 
       <div className="auth-tabs" role="tablist" aria-label="登入或註冊">

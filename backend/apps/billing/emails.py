@@ -39,7 +39,7 @@ def _render_receipt_text(order: PurchaseOrder, balance_after: int) -> str:
     lines.extend([
         "",
         "─" * 32,
-        "Argus AI 網站健檢平台",
+        "Argus 網站健檢平台",
         "本收據由系統自動產生，請勿直接回覆。",
     ])
     return "\n".join(lines)
@@ -76,7 +76,7 @@ def _render_receipt_html(order: PurchaseOrder, balance_after: int) -> str:
       {invoice_block}
     </table>
     <p style="margin:24px 0 0;color:#64748b;font-size:12px;line-height:1.6;">
-      Argus AI 網站健檢平台 · 本收據由系統自動產生，請勿直接回覆。<br>
+      Argus 網站健檢平台 · 本收據由系統自動產生，請勿直接回覆。<br>
       點數一經入帳不可退費，如有問題請聯絡管理員。
     </p>
   </div>

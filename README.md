@@ -1,4 +1,4 @@
-# Argus — AI 網站全方位健檢平台
+# Argus 網站健檢平台
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/Django-5.x-092E20?logo=django&logoColor=white)
@@ -13,7 +13,7 @@
 
 ## 目錄
 
-- [Argus — AI 網站全方位健檢平台](#argus--ai-網站全方位健檢平台)
+- [Argus 網站健檢平台](#argus-網站健檢平台)
   - [目錄](#目錄)
   - [專案簡介](#專案簡介)
   - [功能特色](#功能特色)
@@ -44,7 +44,7 @@
 
 ## 專案簡介
 
-**Argus** 是 SaaS 級授權式網站健檢工具。使用者輸入目標網址並確認授權後，系統自動執行：
+**Argus 網站健檢平台**是 SaaS 級網站健檢工具。使用者輸入目標網址並確認授權後，系統自動執行：
 
 1. **全站爬蟲**：Playwright Chromium headless，BFS 廣度優先，同網域最多 50 頁 / 深度 3 層，遵守 `robots.txt`
 2. **四維靜態掃描**：SEO × AEO × GEO × 被動資安，每個問題產出嚴重度、修補建議與 AI Handoff Prompt

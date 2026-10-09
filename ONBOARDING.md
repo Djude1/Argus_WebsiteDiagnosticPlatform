@@ -7,7 +7,7 @@
 
 ## 0. 60 秒總覽
 
-**Argus** 是一個授權式 AI 網站健檢 SaaS：使用者輸入網址 → 全站爬蟲 + 四維掃描（SEO/AEO/GEO/資安）+ LLM Agent 動態 UX 測試 → 產出可互動報告 + Word 文件 + 給 ChatGPT/Claude 的問題 Prompt。
+**Argus 網站健檢平台**是一個網站健檢 SaaS：使用者輸入網址 → 全站爬蟲 + 四維掃描（SEO/AEO/GEO/資安）+ LLM Agent 動態 UX 測試 → 產出可互動報告 + Word 文件 + 給 ChatGPT/Claude 的問題 Prompt。
 
 - **技術棧**：Django 5 + DRF + Celery + Playwright Python async + React 18 + Vite + Tailwind + Zustand
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
@@ -360,7 +360,7 @@ Argus/
 ### 7.5 公開內容 CMS
 | Method | 端點 | 權限 | 說明 |
 |---|---|---|---|
-| GET | `/api/content/features/` | open | /project 用 |
+| GET | `/api/content/features/` | open | 前台目前未使用（2026-10-09 首頁移除「核心功能」段落） |
 | GET | `/api/content/team/` | open | 公開團隊頁已移除，端點與 CMS 資料保留（含 skill_levels + contributions） |
 | GET | `/api/content/releases/` | open | /download 用 |
 | GET | `/api/content/milestones/` | open | /project timeline 用 |

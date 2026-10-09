@@ -43,7 +43,7 @@ type ArgusLogoProps = {
 };
 
 /** 品牌 logo（brand-logo.webp）+ 選填副標 */
-export function ArgusLogo({ size = 34, className = "", subtitle = "AI 網站健檢平台" }: ArgusLogoProps) {
+export function ArgusLogo({ size = 34, className = "", subtitle = "網站健檢平台" }: ArgusLogoProps) {
   const height = Math.round(size * 1.75);
   return (
     <span className={`ag-logo ${className}`}>
