@@ -1,0 +1,35 @@
+# 系統手冊第 9 章程式碼選錄
+
+## 核對範圍與版本
+
+- 日期：2026-10-11；程式碼基準為遠端 `05378fd`。本次僅依程式碼核對使用者提供的第 9 章截圖並選取短片段，未改寫應用程式或線上 Word。
+- 同步遠端時保留先前的第 3 章文件提交；該提交涉及的三份文件與遠端更新沒有重疊，重新套用後為 `f5340cf`。
+- 程式碼摘錄應標示來源函式、用途及省略前後文；片段不是獨立可執行程式。保留元件表，將摘錄接在 9-2 相對應的說明後，避免刊載完整檔案。
+
+## 六段選錄與依據
+
+| 主題 | 程式來源 | 選錄內容與解釋邊界 |
+|---|---|---|
+| 掃描執行條件 | `backend/apps/scans/scan_plan.py::build_scan_execution_plan`，27–38 行（略去說明註解）及 40–49 行 | 單頁／全網站、主動模式與額外授權、UX 維度決定工具計畫；真正執行還有功能開關、網域資格及執行環境檢查。 |
+| AEO 可回答性 | `backend/apps/scans/aeo/evaluate.py::_score`，154–157 行 | 題目權重乘上判定值；`answers.py::VERDICT_VALUE` 為可回答 1、資訊不足 0.5、衝突 0.25、無答案 0。輸入為經 `is_scored` 篩選後的題目，需至少三題才能評分。 |
+| 整體評分 | `backend/apps/scans/scanners.py::calculate_scores`，2048–2057 行 | 分類分數由 `score_breakdown` 處理，再平均實際回傳的分類。`tasks.py::tested_categories_for` 提供已評估分類；不能因函式相容舊呼叫的預設值而宣稱每次都測完五維。 |
+| 掃描預扣 | `backend/apps/billing/services.py::hold_for_scan`，227–231 行 | 選錄付費路徑的餘額再檢查及扣款。完整函式具 `transaction.atomic`、錢包 `select_for_update`，另處理免費試用及交易紀錄；節錄不可取代完整計費入口。 |
+| 修正資料來源政策 | `backend/apps/scans/fixgen/policy.py::identity_field`，25–32 行 | 識別值有語料支持才標示 verified，否則填入 placeholder；verified 是程式來源政策判定，不代表第三方認證或事實真實性保證。 |
+| MCP 共用掃描入口 | `backend/apps/mcp_access/tools.py::create_scan`，270–279 行 | 共用 `ScanJobCreateSerializer` 和 `enqueue_created_scan`；serializer 的建立流程呼叫 `hold_for_scan`。不要將這段描述成一套獨立的 MCP 扣點流程。 |
+
+## 截圖內容需要修訂的事實
+
+- `reviews`：新版公開 API／前端不再提供討論串、訊息點讚與圖片上傳。改述為已驗證評論、本人編修／刪除、官方回覆、有幫助與檢舉治理；舊資料模型仍保留相容用途。來源：`backend/apps/reviews/CLAUDE.md`、`urls.py`、`views.py`。
+- `features/projects`：加入資安分頁；歷史分頁導向 scans，合併為「掃描與報告」。來源：`frontend/src/App.jsx`。
+- `features/scans`：目前路由含報告、網站優勢、網站架構、效能及分數說明；舊 topology 轉到 architecture、舊 fixes 轉回報告。優化結果與分享頁位於 `features/optimize`，不宜繼續將優化工作區列在 `features/scans`。
+- 修正產出：後端 fixgen 仍在，但前端修正產出分頁已移除。選錄這段應定位為後端既有來源政策，不能描述成目前可由報告分頁操作的功能。
+- AEO：`is_scored` 排除 verdict 為 MISSING、source 為 intent、answer_type 不是 PHONE／EMAIL／ADDRESS／HOURS 的題目；篩選後不足三題也未充分評估。原文僅寫正文與最初題數門檻不夠完整。
+- 評分：最新 `SCORE_DECAY_CONSTANT=100.0`；同分類規則去重、info 零扣分、不列優先改善、AEO 題目分已含於基準分。指數衰減是本專案評分模型，不能描述為外部標準評分。
+- API 表中的 `/api/pages/` 與 `/api/findings/` 可保留：`config/urls.py` 將 `apps.scans.urls` 掛於 `/api/`，不是 `/api/scans/`；應由實際掛載點組合 router 路徑。
+- Kali：Repo 的 K8s 設定為 disabled；沒有在本次連線驗證正式叢集，不延伸宣稱線上工具已啟用或實跑成功。
+
+## 驗證及後續使用
+
+- 已對照六段原始檔、計分呼叫端、MCP serializer 計費入口、前端路由、評論 API 及 K8s 設定。
+- 已檢查來源檔語法與摘錄語法、行號範圍、MEMORY.md 引用、Markdown 空白及本次差異；未執行掃描、應用測試或前端建置。
+- 手冊摘錄可沿用上述選錄；重新選錄前應再次核對版本，避免行號或前端入口隨改版漂移。線上 Word 須由使用者貼入及確認排版。
