@@ -193,3 +193,10 @@
     height: 6px;
   }
 }
+
+/* 拓撲節點與圖例改用線條圖示（2026-10-10，取代 🏠 📍 📄 ⛔） */
+.topology-card-icon { color: #334155; }
+.topology-card-icon svg { width: 22px; height: 22px; }
+.topology-card.is-root .topology-card-icon { color: #0369a1; }
+.legend-chip { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-chip svg { width: 15px; height: 15px; }

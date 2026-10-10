@@ -304,7 +304,7 @@ describe("SiteSummaryPanel 效能與網站架構", () => {
     expect(screen.getByRole("link", { name: /行動版效能/ })).toHaveAttribute("href", "/scans/3/performance");
     expect(screen.getByRole("link", { name: /安全標頭參考等第/ })).toHaveAttribute("href", "/projects/7/security");
     expect(screen.getByText("WordPress、jQuery")).toBeInTheDocument();
-    expect(screen.getByText("另有 3 項，查看網站架構")).toBeInTheDocument();
+    expect(screen.getByText("另有 3 項，查看架構與信任")).toBeInTheDocument();
   });
 
   it("效能沒有數字時說明原因", () => {

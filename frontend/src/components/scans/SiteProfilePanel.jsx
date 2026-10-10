@@ -1,9 +1,10 @@
 import { CheckCircleIcon, GlobeIcon } from "../../shared/LineIcons";
+import { AiVendorLogo } from "./AiVendorLogo.jsx";
 
 const CATEGORY_LABELS = { seo: "SEO", aeo: "AEO", geo: "GEO", ux: "UX", security: "資安" };
 
 // 掃描結果的「網站概況」（後端 ScanJob.site_profile，apps/scans/site_profile.py）。
-// 2026-10-06 起拆成掃描頁上方導覽的兩個分頁：「網站優勢」與「網站架構」；
+// 2026-10-06 起拆成掃描頁上方導覽的兩個分頁：「網站優勢」與「網站架構」（2026-10-10 改名「架構與信任」，結構圖另成「網站拓撲」）；
 // 報告分頁只留一行 CDN／反向代理提醒。舊掃描沒有這個欄位就不顯示。
 
 function edgeSummary(infra) {
@@ -68,7 +69,7 @@ function SiteStrengths({ profile }) {
   );
 }
 
-/** 「網站架構」分頁上半部：一句話說明流量路徑、使用的技術；IP 等細節收在「詳細資料」。 */
+/** 「架構與信任」分頁上半部：一句話說明流量路徑、使用的技術；IP 等細節收在「詳細資料」。 */
 function gradeTone(grade) {
   if (grade.startsWith("A")) return "good";
   if (grade.startsWith("B") || grade.startsWith("C")) return "warn";
@@ -200,6 +201,7 @@ function AiBotPolicy({ policy }) {
                 const [statusLabel, tone] = AI_STATUS[bot.status] || ["—", "none"];
                 return (
                   <li key={bot.agent}>
+                    <AiVendorLogo vendor={bot.vendor} />
                     <span className="site-ai-name">
                       {bot.agent}
                       <span className="site-profile-sub">{bot.vendor}{bot.note ? `・${bot.note}` : ""}</span>
@@ -222,7 +224,7 @@ function SiteArchitecture({ profile }) {
   if (!infra?.hostname && !technologies.length) {
     return (
       <section className="panel">
-        <p className="hint-text">這是較早的掃描，沒有網站架構資料；重新掃描後會顯示。</p>
+        <p className="hint-text">這是較早的掃描，沒有架構與信任資料；重新掃描後會顯示。</p>
       </section>
     );
   }
@@ -234,7 +236,7 @@ function SiteArchitecture({ profile }) {
   return (
     <section className="panel site-profile-block">
       <h2 className="site-profile-title">
-        <GlobeIcon aria-hidden="true" /> 網站架構
+        <GlobeIcon aria-hidden="true" /> 架構與信任
       </h2>
       {infra?.hostname && (
         <>

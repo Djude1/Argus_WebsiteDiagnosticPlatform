@@ -51,9 +51,11 @@ describe("尚未掃描的網站連接 Search Console", () => {
 
   it("沒有掃描時仍顯示 Google 回呼錯誤，且可以關閉提示", async () => {
     renderPage("?gsc=error&reason=" + encodeURIComponent("Google 授權測試失敗"));
-    expect(await screen.findByRole("status")).toHaveTextContent("Google 授權測試失敗");
+    // 載入動畫也是 role="status"，所以用提示文字找到那一則提示
+    const flash = await screen.findByText(/Google 授權測試失敗/);
+    expect(flash.closest('[role="status"]')).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "知道了" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Google 授權測試失敗/)).not.toBeInTheDocument();
   });
 });
 

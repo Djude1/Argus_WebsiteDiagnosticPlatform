@@ -852,6 +852,7 @@
 
 .site-ai-name {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
   font-weight: 600;
@@ -979,4 +980,25 @@
   background: #fffbeb;
   color: #92400e;
   font-size: 0.85rem;
+}
+
+/* AI 爬蟲廠商品牌圖示（components/scans/AiVendorLogo.jsx，單色 currentColor；
+   沒有商標路徑的廠商用字母章） */
+.ai-vendor-logo {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: #1e293b;
+}
+.ai-vendor-logo.is-monogram {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }

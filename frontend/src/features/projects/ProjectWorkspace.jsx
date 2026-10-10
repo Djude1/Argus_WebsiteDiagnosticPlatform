@@ -21,6 +21,7 @@ import {
   SpiderIcon,
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 // 側邊欄：圖示＋名稱＋一行說明；目前頁用淺色底（不用彩色左邊條）
 const SECTIONS = [
@@ -286,7 +287,7 @@ function ProjectWorkspace() {
   const location = useLocation();
   const { project, error, setProject } = useProject(projectId);
   if (error) return <ProjectError message={error} />;
-  if (!project) return <section className="panel"><p className="hint-text">載入網站專案中…</p></section>;
+  if (!project) return <section className="panel"><PageLoader label="載入網站專案中…" /></section>;
   return (
     <ProjectFrame project={project} activeSection={sectionOf(location.pathname)} setProject={setProject}>
       <Outlet context={{ project, setProject }} />
@@ -325,7 +326,7 @@ function ProjectScanShell({ section = "scans" }) {
   if (scanError) return <ProjectError message={scanError} />;
   // 沒有所屬專案（理論上不會發生：migration 已回填）或專案讀不到時，仍讓使用者看得到掃描
   if (projectId === "none" || error) return <Outlet context={{ project: null }} />;
-  if (!project) return <section className="panel"><p className="hint-text">載入掃描資料中…</p></section>;
+  if (!project) return <section className="panel"><PageLoader label="載入掃描資料中…" /></section>;
   return (
     <ProjectFrame project={project} activeSection={section} setProject={setProject}>
       <Outlet context={{ project }} />
@@ -349,7 +350,7 @@ function ProjectHomeRedirect({ section = "" }) {
   }, [projects, fetchProjects]);
 
   if (failed) return <ProjectError message="無法載入網站專案，請重新整理頁面。" />;
-  if (projects === null) return <section className="panel"><p className="hint-text">載入網站專案中…</p></section>;
+  if (projects === null) return <section className="panel"><PageLoader label="載入網站專案中…" /></section>;
   if (!projects.length) return <Navigate to="/projects/new" replace />;
   const target = projects.find((item) => item.id === currentProjectId) || projects[0];
   return <Navigate to={projectPath(target.id, section)} replace />;
@@ -586,7 +587,7 @@ function ProjectsListPage() {
           <p className="project-page-sub">一個專案對應一個網站；掃描、問題分析與歷史報告都以網站為單位保存。</p>
         </div>
       </header>
-      {projects === null && <p className="hint-text">載入中…</p>}
+      {projects === null && <PageLoader label="載入中…" />}
       {projects && projects.length === 0 && (
         <section className="panel project-empty">
           <p className="project-empty-title">還沒有網站專案</p>
@@ -637,7 +638,7 @@ function ProjectsListPage() {
         >
           {showArchived ? "隱藏已封存的專案" : "顯示已封存的專案"}
         </button>
-        {showArchived && archived === null && <p className="hint-text">載入中…</p>}
+        {showArchived && archived === null && <PageLoader label="載入中…" />}
         {showArchived && archived?.length === 0 && <p className="hint-text">沒有已封存的專案。</p>}
         {showArchived && archived?.length > 0 && (
           <ProjectTable projects={archived} caption="已封存的網站專案" onRestore={restore} restoringId={restoringId} />

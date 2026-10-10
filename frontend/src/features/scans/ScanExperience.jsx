@@ -27,6 +27,7 @@ import { PerformancePanel } from "../../components/scans/PerformancePanel";
 import { ScoreBreakdownPanel } from "../../components/scans/ScoreBreakdownPanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
+import { BlockedIcon, DocIcon, HomeIcon, PinIcon } from "../../shared/LineIcons.jsx";
 import { useArgusStore } from "../../store";
 import {
   CATEGORY_COLOR,
@@ -45,6 +46,7 @@ import {
   StatusScanGlyph,
   useConfirmDialogs,
 } from "../../shared/AppShared.jsx";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 const SCAN_POLL_INTERVAL_MS = 2000;
 const MAX_SITE_SCAN_PAGES = 50;
@@ -1742,10 +1744,13 @@ function FindingsWorkspace({ scan }) {
 // 掃描詳情的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，這裡只放返回與分頁。
 // 2026-10-06：「網站優勢」「網站架構」（含網站結構圖）獨立成分頁；修正產出移除——
 // 它產生的 JSON-LD／OG／FAQ 片段與「頁面」分頁的頁面優化重疊，而頁面優化直接給整頁成品。
+// 2026-10-10：「網站架構」再拆成「架構與信任」（流量路徑、技術、安全標頭、信任輪廓、AI 爬蟲政策；
+// 網址沿用 architecture）與「網站拓撲」（結構圖，網址 topology）。
 const SCAN_TABS = [
   { path: "", label: "報告" },
   { path: "strengths", label: "網站優勢" },
-  { path: "architecture", label: "網站架構" },
+  { path: "architecture", label: "架構與信任" },
+  { path: "topology", label: "網站拓撲" },
   { path: "performance", label: "效能" },
   { path: "score", label: "分數說明" },
 ];
@@ -1802,7 +1807,7 @@ function ScanStrengthsPage() {
   const { scanId } = useParams();
   const { scan, error } = useScanDetail(scanId);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!scan) return <section className="panel"><PageLoader label="載入中…" /></section>;
   return <SiteStrengths profile={scan.site_profile} />;
 }
 
@@ -1811,7 +1816,7 @@ function ScanPerformancePage() {
   const { scanId } = useParams();
   const { scan, error } = useScanDetail(scanId);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!scan) return <section className="panel"><PageLoader label="載入中…" /></section>;
   return (
     <PerformancePanel
       report={scan.performance_report}
@@ -1837,20 +1842,20 @@ function ScanScorePage() {
     };
   }, [scanId]);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!data) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!data) return <section className="panel"><PageLoader label="載入中…" /></section>;
   return <ScoreBreakdownPanel data={data} />;
 }
 
-/** /scans/:scanId/architecture：網站架構（流量路徑、使用的技術）＋網站結構圖。 */
+/** /scans/:scanId/architecture：架構與信任（流量路徑、使用的技術、安全標頭、信任輪廓、AI 爬蟲政策）。
+ *  網站結構圖 2026-10-10 拆到 /scans/:scanId/topology（TopologyPage）。 */
 function ScanArchitecturePage() {
   const { scanId } = useParams();
   const { scan, error } = useScanDetail(scanId);
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!scan) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!scan) return <section className="panel"><PageLoader label="載入中…" /></section>;
   return (
     <div className="scan-architecture">
       <SiteArchitecture profile={scan.site_profile} />
-      <TopologyPage />
     </div>
   );
 }
@@ -1960,10 +1965,11 @@ function buildTreeLayout(apiNodes, apiEdges) {
 
 function TopologyCustomNode({ data }) {
   const toneClass = `tone-${data.tone}`;
-  let icon = "\u{1F4C4}"; // 📄
-  if (data.isRoot) icon = "\u{1F3E0}"; // 🏠
-  else if (data.blocked) icon = "\u{26D4}"; // ⛔
-  else if (data.isOrphan) icon = "\u{1F4CD}"; // 📍
+  // 線條圖示（不用 emoji）：首頁＝房子、被阻擋＝禁止、孤立頁＝圖釘、一般頁＝文件
+  let Icon = DocIcon;
+  if (data.isRoot) Icon = HomeIcon;
+  else if (data.blocked) Icon = BlockedIcon;
+  else if (data.isOrphan) Icon = PinIcon;
 
   let statusText = "無問題";
   if (data.blocked) statusText = "被阻擋";
@@ -1975,7 +1981,7 @@ function TopologyCustomNode({ data }) {
   return (
     <div className={`topology-card ${toneClass} ${rootClass} ${orphanClass}`}>
       <Handle type="target" position={Position.Left} className="topology-handle" />
-      <div className="topology-card-icon" aria-hidden="true">{icon}</div>
+      <div className="topology-card-icon" aria-hidden="true"><Icon /></div>
       <div className="topology-card-body">
         <div className="topology-card-title" title={data.url}>
           {data.isRoot ? "首頁" : data.shortUrl}
@@ -2112,11 +2118,12 @@ function TopologyPage() {
           </div>
         ) : null}
         <div className="topology-legend">
-          <span className="legend-chip tone-good">✓ 無問題</span>
+          <span className="legend-chip tone-good">無問題</span>
           <span className="legend-chip tone-medium">中度問題</span>
           <span className="legend-chip tone-bad">高/嚴重問題</span>
-          <span className="legend-chip">🏠 首頁（根）</span>
-          <span className="legend-chip">📍 孤立頁</span>
+          <span className="legend-chip"><HomeIcon aria-hidden="true" /> 首頁（根）</span>
+          <span className="legend-chip"><PinIcon aria-hidden="true" /> 孤立頁</span>
+          <span className="legend-chip"><BlockedIcon aria-hidden="true" /> 被阻擋</span>
         </div>
       </header>
       <div className="topology-canvas">

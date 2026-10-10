@@ -46,6 +46,7 @@ import {
 import { useArgusStore } from "../../store";
 import { ScanJobForm, scanProgress } from "../scans/ScanExperience.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 const OVERVIEW_POLL_MS = 5000;
 const SCANS_POLL_MS = 3000;
@@ -171,7 +172,7 @@ function ProjectOverviewPage() {
   }, [running, load]);
 
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!data) return <section className="panel"><p className="hint-text">載入專案總覽中…</p></section>;
+  if (!data) return <section className="panel"><PageLoader label="載入專案總覽中…" /></section>;
 
   const latest = data.latest_scan;
   const previous = data.previous_scan;
@@ -429,7 +430,7 @@ function ProjectScansPage() {
           <ScanJobForm project={project} onCreated={handleCreated} />
         )}
         {scans === null ? (
-          <section className="panel"><p className="hint-text">載入掃描中…</p></section>
+          <section className="panel"><PageLoader label="載入掃描中…" /></section>
         ) : (
           <ScanHistoryPanel project={project} scans={scans} onRefresh={reload} />
         )}
@@ -505,7 +506,7 @@ function SiteSummaryPanel({ project, scan }) {
               <strong className="project-site-tile-value is-text">
                 {summary.technologies.length ? summary.technologies.join("、") : "未辨識到"}
               </strong>
-              <span className="project-site-tile-hint">{more > 0 ? `另有 ${more} 項，查看網站架構` : "依首頁內容與回應標頭判斷"}</span>
+              <span className="project-site-tile-hint">{more > 0 ? `另有 ${more} 項，查看架構與信任` : "依首頁內容與回應標頭判斷"}</span>
             </>
           ) : (
             <>
@@ -756,7 +757,7 @@ function ProjectIssuesPage() {
   );
 
   if (error) return <div className="project-page">{header(null)}<section className="panel"><p className="error-text">{error}</p></section></div>;
-  if (!data) return <div className="project-page">{header(null)}<section className="panel"><p className="hint-text">載入問題分析中…</p></section></div>;
+  if (!data) return <div className="project-page">{header(null)}<section className="panel"><PageLoader label="載入問題分析中…" /></section></div>;
   if (!data.scan) {
     return (
       <div className="project-page">
@@ -1059,7 +1060,7 @@ function PageScreenshot({ scanId, pageId }) {
     };
   }, [scanId, pageId]);
   if (failed) return <p className="hint-text">截圖無法載入（可能已超過保留期限）。</p>;
-  if (!src) return <p className="hint-text">載入截圖中…</p>;
+  if (!src) return <PageLoader label="載入截圖中…" />;
   return <img className="project-page-shot" src={src} alt="此頁掃描當下的截圖" />;
 }
 
@@ -1091,7 +1092,7 @@ function ProjectAeoPage() {
     };
   }, [targetId]);
 
-  if (scans === null) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (scans === null) return <section className="panel"><PageLoader label="載入中…" /></section>;
   if (!completed.length) {
     return (
       <section className="panel project-empty">
@@ -1127,7 +1128,7 @@ function ProjectAeoPage() {
         )}
       />
       {!scan ? (
-        <section className="panel"><p className="hint-text">載入中…</p></section>
+        <section className="panel"><PageLoader label="載入中…" /></section>
       ) : !checked ? (
         <section className="panel project-empty">
           <p className="project-empty-title">這次掃描沒有勾選 AEO</p>
@@ -1243,7 +1244,7 @@ function ProjectPagesPage() {
   const completed = (scans || []).filter((scan) => scan.status === "completed");
 
   if (error) return <section className="panel"><p className="error-text">{error}</p></section>;
-  if (!data) return <section className="panel"><p className="hint-text">載入頁面清單中…</p></section>;
+  if (!data) return <section className="panel"><PageLoader label="載入頁面清單中…" /></section>;
   if (!data.scan) {
     return (
       <section className="panel project-empty">

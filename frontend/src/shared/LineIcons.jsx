@@ -396,6 +396,15 @@ export function ShareIcon(props) {
   );
 }
 
+export function BlockedIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle className="ln-fill" cx="12" cy="12" r="8.4" />
+      <path d="M6.1 6.1l11.8 11.8" />
+    </svg>
+  );
+}
+
 export function MoreIcon(props) {
   return (
     <svg {...base} {...props}>

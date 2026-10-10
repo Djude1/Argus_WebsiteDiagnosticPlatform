@@ -12,6 +12,7 @@ import ProjectHeader from "../../components/projects/ProjectHeader.jsx";
 import { ObservatoryGrade, SiteStrengths } from "../../components/scans/SiteProfilePanel.jsx";
 import { ScanTimeCard, SeverityChip, useProjectScans } from "./ProjectPages.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 // 由重到輕：已驗證弱點最需要處理，設定建議是加強防護
 const KIND_ORDER = ["verified", "suspected", "exposure", "config"];
@@ -63,7 +64,7 @@ export function ProjectSecurityPage() {
   );
 
   if (error) return <div className="project-page">{header(null)}<section className="panel"><p className="error-text">{error}</p></section></div>;
-  if (!data) return <div className="project-page">{header(null)}<section className="panel"><p className="hint-text">載入資安分析中…</p></section></div>;
+  if (!data) return <div className="project-page">{header(null)}<section className="panel"><PageLoader label="載入資安分析中…" /></section></div>;
   if (!data.scan) {
     return (
       <div className="project-page">
