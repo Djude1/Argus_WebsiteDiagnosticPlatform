@@ -272,6 +272,11 @@ class ToolSchemaTests(TestCase):
         }
         self.assertEqual(names, expected)
 
+    def test_report_ux_issue_severity_enum_tops_out_at_medium(self):
+        report = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "report_ux_issue")
+        enum = report["function"]["parameters"]["properties"]["severity"]["enum"]
+        self.assertEqual(enum, ["medium", "low", "info"])
+
     def test_report_ux_issue_required_fields(self):
         report = next(t for t in TOOL_SCHEMAS if t["function"]["name"] == "report_ux_issue")
         required = report["function"]["parameters"]["required"]
@@ -327,7 +332,8 @@ class ToolExecutorTests(TestCase):
         )
         self.assertTrue(outcome.ok)
         self.assertIsNotNone(outcome.issue)
-        self.assertEqual(outcome.issue["severity"], "high")
+        # AI 自評的 high 封頂為 medium
+        self.assertEqual(outcome.issue["severity"], "medium")
         self.assertEqual(outcome.issue["selector"], ".checkout-btn")
         self.assertEqual(outcome.issue["url"], "https://example.com/test")
 
@@ -345,6 +351,43 @@ class ToolExecutorTests(TestCase):
         executor, _ = self._make_executor()
         outcome = asyncio.run(executor.run("finish", {"summary": "ok"}))
         self.assertTrue(outcome.finish)
+
+    def _security_args(self, **kw):
+        base = {
+            "severity": "critical",
+            "title": "登入 SQL 注入繞過",
+            "description": "以 ' OR 1=1-- 繞過密碼取得 JWT。",
+            "evidence": "HTTP/1.1 200 OK\\n{\"authentication\":{\"token\":\"ey...\"}}",
+            "url": "https://example.com/rest/user/login",
+        }
+        base.update(kw)
+        return base
+
+    def test_security_issue_unverified_high_capped_to_medium(self):
+        # 2026-10-10：沒用主動工具驗證（verified 缺省）→ 高風險自評一律降 medium
+        executor, _ = self._make_executor()
+        outcome = asyncio.run(executor.run("report_security_issue", self._security_args()))
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.security_finding["severity"], "medium")
+        self.assertFalse(outcome.security_finding["evidence_json"]["tool_verified"])
+
+    def test_security_issue_verified_claim_without_tool_still_capped(self):
+        # verified=true 但從沒成功呼叫過主動工具（_active_confirmations 空）→ 仍降 medium
+        executor, _ = self._make_executor()
+        outcome = asyncio.run(
+            executor.run("report_security_issue", self._security_args(verified=True))
+        )
+        self.assertEqual(outcome.security_finding["severity"], "medium")
+
+    def test_security_issue_verified_with_tool_keeps_critical(self):
+        # 真的用主動工具確認過 + verified=true → 保留 critical
+        executor, _ = self._make_executor()
+        executor._active_confirmations.add("replay_request")
+        outcome = asyncio.run(
+            executor.run("report_security_issue", self._security_args(verified=True))
+        )
+        self.assertEqual(outcome.security_finding["severity"], "critical")
+        self.assertTrue(outcome.security_finding["evidence_json"]["tool_verified"])
 
 
 class RedactToolDataTests(TestCase):
@@ -1329,6 +1372,16 @@ class PersistAgentIssuesTests(TestCase):
         created = persist_agent_issues(self.scan_job, issues)
         self.assertEqual(len(created), 1)
         self.assertIsNone(created[0].page)
+
+    def test_critical_and_high_capped_to_medium(self):
+        # 2026-10-10 實測：Agent 把「加入購物車導向聯絡表單」自評 critical，UX 從 41 掉到 23
+        issues = [
+            {"severity": "critical", "title": "購物車導向聯絡表單", "description": "x"},
+            {"severity": "high", "title": "結帳按鈕沒反應", "description": "y"},
+            {"severity": "info", "title": "提示", "description": "z"},
+        ]
+        created = persist_agent_issues(self.scan_job, issues)
+        self.assertEqual([f.severity for f in created], ["medium", "medium", "info"])
 
     def test_invalid_severity_normalized(self):
         issues = [

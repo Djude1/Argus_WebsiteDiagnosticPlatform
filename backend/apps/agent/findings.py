@@ -26,6 +26,18 @@ UX_HANDOFF_TEMPLATE = """我網站有以下 UX 問題，請協助我分析並提
 
 VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
+# AI 擬真使用者回報的 UX 問題最高中風險（2026-10-10 MiniMax 實測）：Agent 曾把
+# 「加入購物車導向聯絡表單」判成嚴重，和「SSL 憑證已過期」同級、UX 分數 41→23。
+# 流程問題會讓使用者卡住，但不會讓網站被入侵或資料外洩；與資安 Agent 觀察的報告上限一致。
+UX_SEVERITY_CAP = "medium"
+
+
+def cap_ux_severity(severity: str | None) -> str:
+    """Agent UX 問題的嚴重度：未知值當 low，critical／high 降為 medium。"""
+    if severity not in VALID_SEVERITIES:
+        return "low"
+    return UX_SEVERITY_CAP if severity in ("critical", "high") else severity
+
 
 def persist_agent_issues(
     scan_job: ScanJob, issues: Iterable[dict], default_priority: float = 50.0
@@ -47,9 +59,7 @@ def persist_agent_issues(
         if not title or title in existing_titles:
             continue
 
-        severity = issue.get("severity") or "low"
-        if severity not in VALID_SEVERITIES:
-            severity = "low"
+        severity = cap_ux_severity(issue.get("severity"))
 
         description = (issue.get("description") or "").strip()
         if not description:

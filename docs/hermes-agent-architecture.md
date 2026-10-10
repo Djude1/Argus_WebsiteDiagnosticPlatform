@@ -41,6 +41,8 @@ ScanJob(scope=site 且 categories 含 ux)         # 不需 active/authorized
 - **觸發**：`scan_plan.build_scan_execution_plan` 設 `run_agent_ux = scope=="site" and "ux" in effective_categories`；`tasks.py` 以 `run_agent or run_agent_ux` 觸發 agent。單頁不跑（無流程）。
 - **表單送出閘門（`may_submit_forms`）**：`tasks.py` 算 `may_submit_forms = run_agent(deep_mode) or user_owns_domain(user, hostname)`，傳入 `run_agent_for_scan`。`runner` 的 passive 分支據此組 `submit_clause`（送出 vs 只填不送）並傳 `_run_session(..., allow_form_submit=...)` → `build_tool_schemas` 在不允許時隱藏 `send_message`。未驗證他站只做「填入示意資料觀察欄位／驗證提示」，不留測試資料。
 - **計費**：固定附加費 `ARGUS_COIN_AGENT_UX`（見 billing `agent_ux_fee`），與 `run_agent_ux` 收費條件對齊。
+- **嚴重度封頂中風險（2026-10-10）**：`report_ux_issue` 的 severity 只開放 medium／low／info，`findings.cap_ux_severity` 在工具與落庫兩處把 critical／high 降為 medium、未知值當 low。實測 Agent 把「加入購物車導向聯絡表單」自評 critical，單一觀察讓 UX 從 41 分掉到 23 分；AI 觀察沒有規則依據，不應比規則式檢查扣得更重。
+- **token 預算（2026-10-10）**：UX session 用 `ARGUS_AGENT_UX_MAX_TOKENS`（預設 120000），資安各角色仍用 `ARGUS_AGENT_MAX_TOKENS`。實測 6 萬約 14 步就用完。預算用完前回報的問題照樣保存，覆蓋紀錄標 partial（「token 預算內未完成」），不再標 failed。
 - **與規則式 UX 的分工**：規則式檢查（tap target/未標記欄位/JS 例外，見 `scans/CLAUDE.md`）每頁都跑、不需 LLM，是 UX 的地板；Agent UX 是需要 LLM 的擬真流程測試，兩者都產 `category=UX` finding。
 
 ## 2. Specialist 角色目錄（SPECIALIST_ROLES）
@@ -106,8 +108,11 @@ JWT kid/jku、$regex 盲注、優惠碼規律、上傳 polyglot、SSRF 無 OOB�
 LLM/chatbot 注入）；關鍵詞評分（tags×3＋標題×2＋內文）回 top 3 段落。設計依據：
 Excalibur 檢索增強知識；網路搜尋裁定不做（黑箱抄答案＋目標外洩）。
 
-**回報/調度**：`report_security_issue`（2026-09-28 起封頂 medium、附判定依據與 IP 核對；回報前自問
-「攻擊者現在能做到嗎？證據能重現嗎？」）／`report_ux_issue`／
+**回報/調度**：`report_security_issue`（2026-09-28 起預設封頂 medium、附判定依據與 IP 核對；回報前自問
+「攻擊者現在能做到嗎？證據能重現嗎？」。**2026-10-10 放寬**：帶 `verified=true` 且 agent 真的成功呼叫過
+主動工具（`ToolExecutor._active_confirmations` 非空：replay_request／probe_payload_injection／
+probe_unauthorized_access／probe_sql_injection／run_nuclei）時才保留 high／critical，不需 Kali sqlmap；
+兩道關卡缺一就降 medium，`evidence_json.tool_verified` 記錄，報告層 `_report_severity` 據此不封頂）／`report_ux_issue`／
 `dispatch_specialist`（僅 orchestrator）／`decode_jwt`（不驗簽）／
 `finish`（summary 必含「未能完成的測試與原因」→ `warning_summary.agent.feedback`）
 
@@ -136,6 +141,7 @@ M3 特性：思考型、探索深（步數上限會切斷）、行為非決定�
 |---|---|---|---|
 | `ARGUS_AGENT_ENABLED` | false | true | 總開關 |
 | `ARGUS_AGENT_MAX_STEPS` | 20 | 100 | orchestrator/recon 用；specialist 另受 60 盒 |
+| `ARGUS_AGENT_UX_MAX_TOKENS` | 120000 | 120000 | 擬真使用者 UX 測試單一 session 的上限（2026-10-10 實測 6 萬約 14 步用完）；用完＝覆蓋 partial |
 | `ARGUS_AGENT_MAX_TOKENS` | 60000 | 500000 | 每角色各自上限；**chat 場景 500k 不足**（回應全文進 context，#53-55 實測 900k 三 specialist 仍爆至 908-938k）——chat 導向輪建議 exec 進程同步 apply 覆寫（Celery 常駐進程不吃 exec env） |
 | `ARGUS_NUCLEI_TIMEOUT` | 660 | 900 | pipeline Nuclei（KEV 模板集、只掃網站根網址；2026-10-08 前為 `ARGUS_NUCLEI_DEEP_TIMEOUT` 全模板） |
 | `ARGUS_KALI_TIMEOUT` | 120 | 240 | sqlmap level3 需 ≥240（120 會邊緣超時） |

@@ -235,13 +235,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "report_ux_issue",
-            "description": "回報一個 UX 問題；不要回報修復程式碼，只描述問題與方向。",
+            "description": (
+                "回報一個 UX 問題；不要回報修復程式碼，只描述問題與方向。"
+                "嚴重度：medium＝會讓使用者卡住或完成不了主要任務；low＝造成困惑但繞得過去；"
+                "info＝只是建議。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "severity": {
                         "type": "string",
-                        "enum": ["critical", "high", "medium", "low", "info"],
+                        "enum": ["medium", "low", "info"],
                     },
                     "title": {"type": "string"},
                     "description": {"type": "string"},
@@ -537,13 +541,24 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "「攻擊者現在就能做到嗎？」「別人拿著我的證據能重現嗎？」——"
                 "任一為否就不要回報。攻擊性驗證請用 "
                 "probe_sql_injection / probe_unauthorized_access，不要自行組攻擊 payload。"
+                "severity 為 high／critical 時必須 verified=true，且你要真的先用主動工具"
+                "（replay_request／probe_payload_injection／probe_unauthorized_access／"
+                "probe_sql_injection）重現確認可被利用；只是觀察、沒實際驗證就維持 medium 以下，"
+                "系統會自動把未驗證的 high／critical 降為 medium。"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "severity": {
                         "type": "string",
-                        "enum": ["high", "medium", "low", "info"],
+                        "enum": ["critical", "high", "medium", "low", "info"],
+                    },
+                    "verified": {
+                        "type": "boolean",
+                        "description": (
+                            "你是否已用主動工具（replay_request／probe_*）實際重現並確認"
+                            "此問題可被利用。只有 true 時 high／critical 才會保留。"
+                        ),
                     },
                     "title": {"type": "string"},
                     "description": {
@@ -994,6 +1009,10 @@ class ToolExecutor:
         # 被動網路觀察：SPA 的 API 端點只存在於真實流量，agent 靠這個「看到」
         # 頁面自己發出的 XHR/fetch（不發任何新請求）。
         self._network_log: list[dict[str, Any]] = []
+        # 主動驗證紀錄：成功呼叫過的主動工具名稱（replay_request／probe_*／run_nuclei）。
+        # report_security_issue 的 high／critical 只有在這裡非空（agent 真的用工具驗證過）
+        # 且 verified=true 時才保留，否則降 medium——不需 Kali，但擋 AI 純臆測自評高風險。
+        self._active_confirmations: set[str] = set()
         if scan_job is not None:
             self.page.on("response", self._on_network_response)
 
@@ -1017,6 +1036,12 @@ class ToolExecutor:
             )
         except Exception:
             pass
+
+    def _track_verification(self, name: str, outcome: ToolOutcome) -> ToolOutcome:
+        """主動工具成功時記錄：之後 report_security_issue 才可破 medium 封頂。"""
+        if outcome.ok:
+            self._active_confirmations.add(name)
+        return outcome
 
     async def run(self, name: str, args: dict[str, Any]) -> ToolOutcome:
         try:
@@ -1057,8 +1082,8 @@ class ToolExecutor:
                     str(args.get("secret", "")),
                 )
             if name == "run_nuclei":
-                return await self._run_nuclei(
-                    args.get("url", ""), args.get("tags", "")
+                return self._track_verification(
+                    name, await self._run_nuclei(args.get("url", ""), args.get("tags", ""))
                 )
             if name == "take_screenshot":
                 return await self._take_screenshot()
@@ -1074,28 +1099,32 @@ class ToolExecutor:
             if name == "navigate_and_observe":
                 return await self._navigate_and_observe(args.get("url", ""))
             if name == "probe_payload_injection":
-                return await self._probe_payload_injection(
+                return self._track_verification(name, await self._probe_payload_injection(
                     args.get("url", ""),
                     str(args.get("family", "")),
                     str(args.get("method", "GET")).upper(),
                     str(args.get("query_param", "")),
                     args.get("body"),
                     str(args.get("inject_field", "")),
-                )
+                ))
             if name == "report_ux_issue":
                 return self._report_ux_issue(args)
             if name == "probe_sql_injection":
-                return await self._probe_sql_injection(args.get("url", ""))
+                return self._track_verification(
+                    name, await self._probe_sql_injection(args.get("url", ""))
+                )
             if name == "probe_unauthorized_access":
-                return await self._probe_unauthorized_access(args.get("url", ""))
+                return self._track_verification(
+                    name, await self._probe_unauthorized_access(args.get("url", ""))
+                )
             if name == "replay_request":
-                return await self._replay_request(
+                return self._track_verification(name, await self._replay_request(
                     args.get("url", ""),
                     args.get("method", "GET"),
                     args.get("body"),
                     args.get("store_token_key", ""),
                     args.get("files"),
-                )
+                ))
             if name == "report_security_issue":
                 return self._report_security_issue(args)
             if name == "dispatch_specialist":
@@ -1785,6 +1814,8 @@ class ToolExecutor:
         return ToolOutcome(ok=True, result={"path": str(path)})
 
     def _report_ux_issue(self, args: dict[str, Any]) -> ToolOutcome:
+        from apps.agent.findings import cap_ux_severity
+
         severity = args.get("severity", "low")
         title = (args.get("title") or "").strip()[:255]
         description = (args.get("description") or "").strip()
@@ -1798,9 +1829,8 @@ class ToolExecutor:
         if not title or not description:
             return ToolOutcome(ok=False, result={"error": "missing_title_or_description"})
 
-        valid_sev = {"critical", "high", "medium", "low", "info"}
         payload = {
-            "severity": severity if severity in valid_sev else "low",
+            "severity": cap_ux_severity(severity),
             "title": title,
             "description": description,
             "remediation": remediation or "請檢視該流程的可用性並對齊使用者預期。",
@@ -2073,9 +2103,12 @@ class ToolExecutor:
         """把 agent 觀察到的資安問題組成 security finding（走 probe_sql_injection
         同一條 security_finding 落地鏈，由 loop → persist_agent_security_findings 寫入）。
 
-        觀察型回報的 severity 上限 medium：AI 的觀察只證明「看到了什麼」，不證明能被利用；
-        high／critical 保留給工具確認的漏洞（sqlmap confirmed）。2026-09-28 報告審查時，
-        agent 把 WAF 攔截頁回顯的來源 IP 判成「伺服器內部 IP 外洩」並列高風險，即為此例。
+        觀察型回報的 severity 上限 medium：AI 的觀察只證明「看到了什麼」，不證明能被利用。
+        **high／critical 只有在 agent 真的用主動工具確認過（self._active_confirmations 非空：
+        replay_request／probe_payload_injection／probe_unauthorized_access／probe_sql_injection／
+        run_nuclei 任一成功）且本次回報帶 verified=true 時才保留**（2026-10-10 放寬：不需 Kali
+        sqlmap，用 agent 自己的工具驗證即可，但「有驗證」這道關卡保留，擋純臆測自評高風險）。
+        2026-09-28 報告審查時 agent 把 WAF 攔截頁回顯的來源 IP 判成高風險，即為缺驗證之例。
         """
         from urllib.parse import urlparse
 
@@ -2083,9 +2116,11 @@ class ToolExecutor:
         from apps.scans.security.ip_context import describe_ips
 
         severity = str(args.get("severity", "low")).lower()
-        if severity in {"critical", "high"}:
+        # verified 需 agent 自己宣告，且必須真的呼叫過主動工具才算數（防純自評）
+        tool_verified = bool(args.get("verified")) and bool(self._active_confirmations)
+        if severity in {"critical", "high"} and not tool_verified:
             severity = "medium"
-        if severity not in {"medium", "low", "info"}:
+        if severity not in {"critical", "high", "medium", "low", "info"}:
             severity = "low"
         title = (args.get("title") or "").strip()[:255]
         description = (args.get("description") or "").strip()[:5000]
@@ -2109,7 +2144,12 @@ class ToolExecutor:
             title=title,
             description=(
                 f"AI Agent 在實際操作網站時觀察到：{full_description}{ip_text}\n"
-                "這是 AI 的觀察與判讀，附有擷取的回應作為證據，但未經工具或人工驗證可被利用。"
+                + (
+                    "AI Agent 以主動工具重現並確認此問題可被利用，附有擷取的回應作為證據。"
+                    if tool_verified
+                    else "這是 AI 的觀察與判讀，附有擷取的回應作為證據，"
+                    "但未經工具或人工驗證可被利用。"
+                )
             ),
             remediation=remediation or "依證據內容對應的存取控制／資料保護強化。",
             evidence=evidence,
@@ -2117,12 +2157,17 @@ class ToolExecutor:
             evidence_json={
                 "type": "text",
                 "source": "hermes_agent",
+                "tool_verified": tool_verified,
                 "excerpt": evidence[:1000],
                 "assessment": {
                     "condition": "攻擊者能利用這項觀察，取得原本拿不到的資訊、權限或繞過既有防護。",
                     "observed": "AI Agent 送出的請求與擷取到的回應內容（見檢測依據）。"
                     + (f"IP 核對：{'；'.join(ip_notes)}。" if ip_notes else ""),
-                    "missing": "AI 對影響的判讀未經工具重現或人工確認；觀察到資訊不等於能被利用。",
+                    "missing": (
+                        "AI 已用主動工具重現，仍建議資安人員就實際影響做最終確認。"
+                        if tool_verified
+                        else "AI 對影響的判讀未經工具重現或人工確認；觀察到資訊不等於能被利用。"
+                    ),
                     "verify": (
                         "依檢測依據重送相同請求確認回應一致，再由資安人員評估該資訊能否被實際利用。"
                     ),

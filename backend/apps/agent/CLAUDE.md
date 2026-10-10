@@ -19,7 +19,9 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
   `report_ux_issue`（UX 類 finding）。**不需要主動授權**，但 `may_submit_forms` 閘門決定能否
   送出表單：deep_mode 或掃描目標已通過 `user_owns_domain` 才可送出；否則 runner 隱藏
   `send_message` 工具、prompt 只填欄位不送出，避免在未驗證網域留下測試資料。
-  計費見 billing 的 `agent_ux_fee`（固定附加點數）。
+  計費見 billing 的 `agent_ux_fee`（固定附加點數）。`report_ux_issue` severity 封頂 **medium**
+  （`findings.cap_ux_severity`，2026-10-10）；token 上限另用 `ARGUS_AGENT_UX_MAX_TOKENS`（120000），
+  用完時覆蓋紀錄標 partial。
 
 ## 關鍵檔案
 
@@ -37,7 +39,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 - Playwright context 套 public target policy＋same-origin 主文件/WebSocket 攔截；`navigate_and_observe` 是唯一導覽工具，**runtime 同源再驗＋deep_mode 再驗**（不繞過 context route 邊界）；不得新增其他可跨源導覽的能力。
 - 主動工具（`probe_sql_injection`／`probe_unauthorized_access`／`replay_request`／`run_nuclei`／`navigate_and_observe`／`probe_payload_injection`）＝deep_mode schema 隔離＋runtime 再驗＋同源閘三層；任何新主動工具必須接同邊界。
 - `replay_request`：method 限 GET/POST/PUT/PATCH（禁 DELETE）；不跟隨 redirect；`store_token_key` 只寫 agent 自己的 browser context。
-- `report_security_issue` severity 封頂 **medium**（2026-09-28 起；AI 觀察未經工具或人工驗證可被利用，高風險以上只給工具確認項）；evidence 必填、經遮罩。description 開頭固定「AI Agent 在實際操作網站時觀察到：」、附證據中 IP 的自動核對（`security/ip_context.describe_ips`：私有 IP／本站公開 IP／不明，WAF 攔截頁常回顯的是掃描器自己的 IP），`evidence_json.assessment` 寫成立條件／實際觀察／尚缺證據／驗證方法。
+- `report_security_issue` severity 預設封頂 **medium**（2026-09-28 起；AI 觀察未經工具或人工驗證可被利用）。**2026-10-10 放寬**：agent 真的用自己的主動工具確認過（`ToolExecutor._active_confirmations` 非空：`replay_request`／`probe_payload_injection`／`probe_unauthorized_access`／`probe_sql_injection`／`run_nuclei` 任一成功）**且**本次回報帶 `verified=true` 時，才保留 high／critical（不需 Kali sqlmap）；缺任一條件一律降 medium——兩道關卡擋 AI 純臆測自評高風險，`evidence_json.tool_verified` 記錄是否通過。evidence 必填、經遮罩。description 開頭固定「AI Agent 在實際操作網站時觀察到：」、附證據中 IP 的自動核對（`security/ip_context.describe_ips`：私有 IP／本站公開 IP／不明，WAF 攔截頁常回顯的是掃描器自己的 IP），`evidence_json.assessment` 寫成立條件／實際觀察／尚缺證據／驗證方法。
 - specialist 不掛 `dispatch_specialist`（防遞迴）；orchestrator 只掛 dispatch/finish/report。
 - Kali 攻擊鏈正式環境 disabled；啟用 runbook 見 `docs/runbooks/kali-sqlmap-rollout.md`。
 

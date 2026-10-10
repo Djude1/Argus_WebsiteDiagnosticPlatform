@@ -518,6 +518,7 @@ async def run_agent_for_scan(
         orchestrator: bool = False,
         specialist_dispatcher=None,
         allow_form_submit: bool = True,
+        max_tokens: int | None = None,
     ) -> AgentRunResult:
         """單一 session：獨立 browser context（乾淨 localStorage／cookie）
         與獨立 LLM messages。orchestrator=True 時只掛調度工具（不親自測試）。"""
@@ -558,6 +559,7 @@ async def run_agent_for_scan(
                     forced_first_tool=(
                         "dispatch_specialist" if orchestrator else None
                     ),
+                    max_tokens=max_tokens,
                 )
                 return await agent.run(task_prompt=role_prompt)
             finally:
@@ -720,7 +722,11 @@ async def run_agent_for_scan(
         prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
             origin=scan_job.origin, url=target_url, submit_clause=submit_clause
         )
-        result = await _run_session(prompt, allow_form_submit=allow_form_submit)
+        result = await _run_session(
+            prompt,
+            allow_form_submit=allow_form_submit,
+            max_tokens=settings.ARGUS_AGENT_UX_MAX_TOKENS,
+        )
 
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)
