@@ -37,11 +37,10 @@
 }
 .seo-kpi .project-kpi-value { @apply text-2xl font-bold text-slate-900; }
 .seo-kpi .project-kpi-value.is-bad { @apply text-rose-700; }
-/* SEO 分數卡（2026-10-10）：寬螢幕佔左側兩列，其餘 6 張排成 3×2，不會剩一列只有兩張 */
-.seo-kpi-score .project-kpi-value { @apply text-4xl; }
+/* SEO 分數卡（2026-10-10）：與其他數字卡同尺寸（原本佔兩列、字級放大，使用者回饋面板過大）；
+   寬螢幕固定 4 欄，7 張卡排成 4＋3 */
 @media (min-width: 1100px) {
   .seo-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .seo-kpis > .seo-kpi-score { grid-row: span 2; justify-content: center; }
 }
 
 .seo-chip {

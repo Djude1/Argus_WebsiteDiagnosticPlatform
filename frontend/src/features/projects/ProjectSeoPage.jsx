@@ -415,7 +415,7 @@ function OverviewTab({ data, keyword, googleIndexed, gsc, onOpenPage }) {
 // SEO 分數卡：與資安分析頁的分數卡相同（數值＋等級文字，≥80 藍／60–79 琥珀／<60 紅）
 function SeoScoreKpi({ score }) {
   return (
-    <div className="project-kpi seo-kpi seo-kpi-score">
+    <div className="project-kpi seo-kpi">
       <span className="project-kpi-label">SEO 分數</span>
       {score === null || score === undefined ? (
         <span className="project-kpi-value is-small">未評估</span>
