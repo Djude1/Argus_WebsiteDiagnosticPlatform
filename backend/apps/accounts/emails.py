@@ -29,7 +29,7 @@ def _render_reset_text(email: str, link: str, expires_minutes: int) -> str:
         f"{link}\n\n"
         "若您沒有提出這個要求，請忽略本信；您的密碼不會變動。\n"
         "若這封信不是您預期收到的，建議您確認帳號近期的登入紀錄。\n\n"
-        "Argus 網站健檢平台\n"
+        "Argus AI網站健檢平台\n"
         "本信由系統自動產生，請勿直接回覆。\n"
     )
 
@@ -55,7 +55,7 @@ def _render_reset_html(email: str, link: str, expires_minutes: int) -> str:
     <div style="border-top:1px dashed rgba(148,163,184,0.35);padding-top:16px;margin-top:24px;font-size:12px;line-height:1.7;color:#64748b;">
       若您<strong style="color:#fbbf24;">沒有</strong>提出這個要求，請忽略本信，您的密碼不會變動。<br>
       若這封信不是您預期的，建議您確認帳號最近的登入紀錄。<br><br>
-      Argus 網站健檢平台 · 本信由系統自動產生，請勿直接回覆。
+      Argus AI網站健檢平台 · 本信由系統自動產生，請勿直接回覆。
     </div>
   </div>
 </body>

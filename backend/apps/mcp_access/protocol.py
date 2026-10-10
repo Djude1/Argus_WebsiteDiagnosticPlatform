@@ -26,7 +26,7 @@ LATEST_PROTOCOL_VERSION = "2025-06-18"
 
 SERVER_INFO = {"name": "argus", "title": "Argus 網站健檢", "version": "1.0.0"}
 INSTRUCTIONS = (
-    "Argus 是網站健檢平台（SEO、AEO、GEO、使用體驗、資安）。"
+    "Argus 是 AI網站健檢平台（SEO、AEO、GEO、使用體驗、資安）。"
     "只能掃描使用者擁有或已取得書面授權的網站；建立掃描會預扣點數，"
     "建立前可用 estimate_scan 估價、get_account_status 查餘額。"
     "掃描需要數分鐘，建立後用 get_scan 追蹤進度，完成後用 get_scan_findings 與 "

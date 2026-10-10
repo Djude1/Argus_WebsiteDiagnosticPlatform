@@ -7,7 +7,7 @@
 
 ## 0. 60 秒總覽
 
-**Argus 網站健檢平台**是一個網站健檢 SaaS：使用者輸入網址 → 全站爬蟲 + 四維掃描（SEO/AEO/GEO/資安）+ LLM Agent 動態 UX 測試 → 產出可互動報告 + Word 文件 + 給 ChatGPT/Claude 的問題 Prompt。
+**Argus AI網站健檢平台**是一個網站健檢 SaaS：使用者輸入網址 → 全站爬蟲 + 四維掃描（SEO/AEO/GEO/資安）+ LLM Agent 動態 UX 測試 → 產出可互動報告 + Word 文件 + 給 ChatGPT/Claude 的問題 Prompt。
 
 - **技術棧**：Django 5 + DRF + Celery + Playwright Python async + React 18 + Vite + Tailwind + Zustand
 - **資料**：SQLite（dev）/ PostgreSQL（prod）；掃描截圖預設走共享 media，評論圖片可用 `ARGUS_MEDIA_STORAGE_BACKEND` 切換至 S3-compatible storage
@@ -227,7 +227,7 @@ Argus/
 | `/` | redirect | 未登入跳 `/project`、已登入跳 `/dashboard` |
 | `/project` ★ | `ProjectPage` | 公開介紹頁 |
 | `/free-tools` ★ | `FreeToolsPage` | 免費分析（測速 / URL 風險 / 郵件原始碼風險），呼叫 `/api/insights/*` |
-| `/purchase` ★ | `PurchasePage` | marketing + 4 方案 + FAQ，CTA 跳 `/billing` |
+| `/purchase` ★ | `PurchasePage` | 方案與計費：計費規則、試算範例、即時讀取的月訂閱與點數包價格、比較表、FAQ；結帳跳 `/billing` |
 | `/download` ★ | `DownloadPage` | PWA 一鍵安裝 + 三平台步驟 |
 | `/login` ★ | `LoginPage` | Email 登入 / 新帳號註冊；有 Google Client ID 時才顯示 Google OAuth |
 | `/reviews` ★ | `ReviewsPage`（`PublicLayout`） | 夜間科技評論頁；沿用公開 top bar／footer，提供星等分布／篩選、本人評論管理與評論／官方回覆的逐則按讚、檢舉 |
