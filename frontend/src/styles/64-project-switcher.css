@@ -274,11 +274,24 @@
 :root:has(.public-nav.is-member) {
   scrollbar-gutter: stable;
 }
-/* 「AI網站健檢平台」與頭像在會員工具列放大一級 */
-.public-nav.is-member .public-brand-sub {
-  font-size: 1.12rem !important;
+/* 左上角品牌小字「AI網站健檢平台」：公開頁、會員頁、登入頁同一份樣式（2026-10-10）。
+   字級放大、行高等於旁邊 logo 的高度（52px）讓兩者等高；夜間接近白色、日間接近純黑。
+   放在 35-public-legacy 之後，覆寫那裡各處分散的字級與顏色（≤1180px 仍照原規則隱藏）。 */
+.public-brand-sub,
+.brand-lockup .ag-logo-sub {
+  font-size: 1.32rem !important;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 52px;
+  color: #f8fafc;
+  text-shadow: none;
 }
+:root[data-theme="light"] .public-brand-sub,
+:root[data-theme="light"] .brand-lockup .ag-logo-sub {
+  color: #0b1220;
+  text-shadow: none;
+}
+/* 頭像在會員工具列放大一級 */
 .public-nav.is-member .app-account-trigger .app-avatar {
   width: 42px;
   height: 42px;

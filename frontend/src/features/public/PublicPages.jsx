@@ -13,6 +13,7 @@ import { HomeSections } from "../../components/public/home/HomeSections.jsx";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
 import TechMarquee from "../../components/public/TechMarquee.jsx";
 import SiteNav, { SiteThemeToggle } from "../../components/navigation/SiteNav.jsx";
+import PageLoader from "../../shared/PageLoader.jsx";
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -444,7 +445,7 @@ function PurchasePage() {
         {!plans.loading && !plans.error && !plans.payEnabled && (
           <p className="pricing-banner">線上付款目前尚未開放，以下為參考價格；需要點數請透過「商業合作」與我們聯絡。</p>
         )}
-        {plans.loading && <p className="pricing-note">載入方案中…</p>}
+        {plans.loading && <PageLoader label="載入方案中…" />}
         {plans.error && (
           <p className="pricing-banner">
             {plans.error}

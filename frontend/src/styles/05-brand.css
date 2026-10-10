@@ -85,3 +85,23 @@
   background: currentColor;
   box-shadow: 0 0 0 3px var(--ag-primary-soft-2);
 }
+
+/* 載入動畫：Argus Minimal Loading Pack 原樣使用（2026-10-10 使用者指定不改）。
+   01 · Signal Bars＝頁面切換／頁面載入（shared/PageLoader.jsx）；
+   08 · Thought Spark＝AI 分析（AiInsightPanel，在會員區內，樣式見 legacy-member/92-layout.css）。
+   數值、顏色、時間與原檔相同，只把 class 加上 ag- 前綴避免與其他頁面撞名。 */
+.ag-page-loader { display: grid; place-items: center; min-height: 135px; }
+.ag-page-loader.is-route { min-height: 50vh; }
+@keyframes ag-updown { 0%, 100% { transform: scaleY(.45); opacity: .35; } 50% { transform: scaleY(1); opacity: 1; } }
+.ag-signal { display: flex; gap: 7px; align-items: end; height: 62px; }
+.ag-signal i { display: block; width: 6px; border-radius: 999px; background: linear-gradient(#57d9ff, #4f7cff); animation: ag-updown 1s ease-in-out infinite; }
+.ag-signal i:nth-child(1) { height: 18px; }
+.ag-signal i:nth-child(2) { height: 32px; animation-delay: .08s; }
+.ag-signal i:nth-child(3) { height: 52px; animation-delay: .16s; }
+.ag-signal i:nth-child(4) { height: 30px; animation-delay: .24s; }
+.ag-signal i:nth-child(5) { height: 42px; animation-delay: .32s; }
+.ag-loader-label { font-size: 11px; color: #a7bfd4; margin-top: 10px; text-align: center; }
+.ag-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

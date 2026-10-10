@@ -6,6 +6,7 @@ import OptimizationReport from "../../components/optimize/OptimizationReport";
 import ShareDialog from "../../components/optimize/ShareDialog";
 import { ACCESS_OPTIONS } from "../../components/optimize/optimizeLabels";
 import { formatDateTime } from "../../shared/formatters";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 const POLL_INTERVAL_MS = 1500;
 const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing", "asking"]);
@@ -214,7 +215,7 @@ function OptimizationResultPage() {
       </section>
     );
   }
-  if (!rebuild) return <section className="panel"><p className="hint-text">載入中…</p></section>;
+  if (!rebuild) return <section className="panel"><PageLoader label="載入中…" /></section>;
 
   const running = IN_PROGRESS.has(rebuild.status) && rebuild.status !== "asking";
   const done = rebuild.status === "succeeded" || rebuild.status === "asking";
