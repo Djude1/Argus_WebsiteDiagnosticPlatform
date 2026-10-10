@@ -54,6 +54,10 @@ from apps.scans.scanners import (
     calculate_scores,
 )
 from apps.scans.security import exposure_scanner, owasp_mapper
+from apps.scans.security.content_injection import (
+    build_injection_finding,
+    detect_content_injection,
+)
 from apps.scans.security.cookie_scanner import analyze_cookies
 from apps.scans.security.dns_scanner import analyze_dns
 from apps.scans.security.header_scanner import analyze_headers
@@ -64,7 +68,11 @@ from apps.scans.security.redaction import (
     redact_url_query_values,
     redact_warning_summary,
 )
-from apps.scans.security.secret_scanner import build_secret_finding, detect_secrets_in_text
+from apps.scans.security.secret_scanner import (
+    build_browser_key_finding,
+    build_secret_finding,
+    detect_secrets_in_text,
+)
 from apps.scans.security.service_cve_scanner import analyze_services
 from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
@@ -411,6 +419,8 @@ class ScanRunContext:
     nuclei_template_set: dict = field(default_factory=dict)
     # AEO 可回答性檢測（aeo/evaluate.py 的 AeoEvaluation）
     aeo_evaluation: object | None = None
+    # PageSpeed Insights 背景量測（stage_pagespeed_start 送出，stage_pagespeed 取結果）
+    pagespeed_future: object | None = None
     # Agent 階段
     agent_meta: dict = field(default_factory=dict)
     agent_result: object | None = None
@@ -775,15 +785,18 @@ def _analyze_one_page(page: Page, page_data: dict, category: str) -> list[dict]:
         ),
         categories={category},
     )
-    # Inline/HTML 硬編碼秘鑰偵測（被動：只分析已抓到的 HTML，不發額外請求）
+    # Inline/HTML 硬編碼秘鑰偵測＋AI 提示詞注入（被動：只解析已抓到的 HTML，不發額外請求）
     if category == "security":
-        secret_finding = build_secret_finding(
-            detect_secrets_in_text(page.html),
-            page.final_url or page.url,
-            source="inline_html",
-        )
-        if secret_finding:
-            page_findings.append(owasp_mapper.tag(secret_finding))
+        secrets = detect_secrets_in_text(page.html)
+        location = page.final_url or page.url
+        injection = build_injection_finding(detect_content_injection(page.html), location)
+        for secret_finding in (
+            build_secret_finding(secrets, location, source="inline_html"),
+            build_browser_key_finding(secrets, location, source="inline_html"),
+            injection,
+        ):
+            if secret_finding:
+                page_findings.append(owasp_mapper.tag(secret_finding))
     return page_findings
 
 
@@ -1396,11 +1409,31 @@ def _link_trend_for(ctx: ScanRunContext, report: dict) -> dict | None:
     )
 
 
+# PageSpeed Insights 只是等 Google 量測（20～90 秒），不佔本機資源：爬取完就在背景送出，
+# 與頁面分析、資安檢查、連結檢查同時進行，stage_pagespeed 只取結果（2026-10-10）。
+# 只在背景執行網路請求，資料庫寫入與覆蓋紀錄仍在主流程做。
+_PAGESPEED_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pagespeed")
+
+
+def _pagespeed_target(ctx: ScanRunContext) -> str:
+    return ctx.scan_job.normalized_url or ctx.scan_job.original_url
+
+
+def stage_pagespeed_start(ctx: ScanRunContext) -> None:
+    """勾 UX 且已設定金鑰時，在背景送出 PageSpeed Insights 量測。"""
+    if "ux" not in ctx.scan_job.effective_categories or not pagespeed_enabled():
+        return
+    url = _pagespeed_target(ctx)
+    # 用 lambda 在執行時才取 fetch_pagespeed，測試 patch 模組名稱才有效
+    ctx.pagespeed_future = _PAGESPEED_EXECUTOR.submit(lambda: fetch_pagespeed(url))
+
+
 def stage_pagespeed(ctx: ScanRunContext) -> None:
     """Google PageSpeed Insights：首頁的 Lighthouse 實驗室分數＋CrUX 真實使用者資料。
 
     勾 UX 且有設定金鑰才跑；結果寫 ScanJob.performance_report，不併入 Argus 分數。
-    量測失敗只記 log 與覆蓋紀錄，不影響掃描完成。
+    量測失敗只記 log 與覆蓋紀錄，不影響掃描完成。量測通常已在背景完成
+    （stage_pagespeed_start），這裡只等結果；沒有背景量測時當場量測。
     """
     scan_job = ctx.scan_job
     if "ux" not in scan_job.effective_categories:
@@ -1412,7 +1445,10 @@ def stage_pagespeed(ctx: ScanRunContext) -> None:
     raise_if_cancelled(ctx.scan_job_id)
     ctx.scanning_progress(ctx.deep_scan_total, "pagespeed")
     try:
-        report = fetch_pagespeed(scan_job.normalized_url or scan_job.original_url)
+        if ctx.pagespeed_future is not None:
+            report = ctx.pagespeed_future.result()
+        else:
+            report = fetch_pagespeed(_pagespeed_target(ctx))
     except PageSpeedError as exc:
         append_log(ctx.scan_job_id, f"PageSpeed Insights 量測失敗：{exc}", level="warn")
         ctx.coverage.mark("pagespeed", FAILED, str(exc))
@@ -1533,7 +1569,8 @@ def stage_agent(ctx: ScanRunContext) -> None:
 
 
 def _mark_agent_coverage(ctx: ScanRunContext) -> None:
-    """Agent 的覆蓋狀態：跑完＝completed、步數用完＝partial、出錯＝failed、沒啟動＝skipped。
+    """Agent 的覆蓋狀態：跑完＝completed、步數或 token 預算用完＝partial、
+    出錯＝failed、沒啟動＝skipped。
 
     agent 的 finding 由 runner 直接落 DB，歷史比較以規則前綴（AGENT_UX_／agent-）對回檢查。
     """
@@ -1546,6 +1583,9 @@ def _mark_agent_coverage(ctx: ScanRunContext) -> None:
         status, reason = COMPLETED, ""
     elif str(result.error or "").startswith("max_steps_reached"):
         status, reason = PARTIAL, "步數上限內未完成"
+    elif str(result.error or "").startswith("token_budget_exceeded"):
+        # 預算用完前回報的問題照樣有效，只是沒跑完全部流程（2026-10-10 實測 14 步用完 6 萬）
+        status, reason = PARTIAL, "token 預算內未完成"
     else:
         status, reason = FAILED, str(result.error or "")[:120]
     plan = ctx.execution_plan
@@ -1772,6 +1812,10 @@ def stage_settlement(ctx: ScanRunContext) -> dict:
             f"修正產出額度贈與失敗（{exc.__class__.__name__}）",
             level="warn",
         )
+    # AI 掃描解讀：完成後另外排背景任務，不拖慢掃描；失敗只記在 ai_insight
+    from apps.scans.ai_insight import schedule_ai_insight
+
+    schedule_ai_insight(scan_job)
     return {
         "status": scan_job.status,
         "pages": len(ctx.crawled_pages),
@@ -1786,6 +1830,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("target_validation", stage_validate_target),
     ("crawl", stage_crawl),
     ("enter_scanning", stage_enter_scanning),
+    ("pagespeed_start", stage_pagespeed_start),
     ("fingerprint", stage_fingerprint),
     ("page_analysis", stage_analyze_pages),
     ("aeo_answers", stage_aeo_answerability),
@@ -1879,6 +1924,14 @@ def finish_unreachable(scan_job: ScanJob, message: str) -> dict:
     )
     _refund_or_raise(scan_job, reason="失敗", label="失敗")
     return {"status": "failed", "reason": "no_usable_pages"}
+
+
+@shared_task
+def run_ai_insight_task(scan_job_id: int) -> None:
+    """AI 掃描解讀（ai_insight.py）。不重試：每次都會花 token，失敗由使用者決定是否重新產生。"""
+    from apps.scans.ai_insight import generate_ai_insight
+
+    generate_ai_insight(scan_job_id)
 
 
 @shared_task(bind=True)

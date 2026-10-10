@@ -338,7 +338,7 @@ def _build_footer(sec, report_id):
     p = footer.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     X.set_para_borders(p, {"top": (4, T.LINE, "6")})
-    add_run(p, "Argus 網站健檢平台　|　第 ", size=8, color=T.GREY)
+    add_run(p, "Argus AI網站健檢平台　|　第 ", size=8, color=T.GREY)
     X.add_page_number_field(p)
     add_run(p, f" 頁　|　{report_id}", size=8, color=T.GREY)
 

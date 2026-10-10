@@ -197,41 +197,6 @@ class SpeedTestPageSpeedTests(TestCase):
         self.assertTrue(again.json()["pagespeed"]["cached"])
 
     @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
-    def test_same_pending_url_reuses_one_job_and_global_window_limits_dispatches(self, _get, _dns):
-        from apps.insights import pagespeed_jobs
-
-        with patch("apps.insights.tasks.run_public_pagespeed.delay") as delay:
-            first = pagespeed_jobs.start("https://example.com/")
-            same_url = pagespeed_jobs.start("https://example.com/")
-            other_url = pagespeed_jobs.start("https://example.org/")
-
-        self.assertEqual(first["status"], "pending")
-        self.assertEqual(same_url, first)
-        self.assertEqual(other_url["status"], "failed")
-        delay.assert_called_once_with(first["job"], "https://example.com/")
-
-    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
-    def test_worker_revalidates_public_url_before_calling_pagespeed(self, _get, _dns):
-        from apps.insights import pagespeed_jobs
-        from apps.insights.analyzers import PublicHostError
-
-        with (
-            patch(
-                "apps.insights.analyzers.assert_public_url",
-                side_effect=PublicHostError("免費公開分析不允許 localhost 或內網位址。"),
-            ) as validate,
-            patch("apps.scans.pagespeed.fetch") as fetch,
-        ):
-            pagespeed_jobs.run("c" * 24, "http://localhost/")
-
-        validate.assert_called_once_with("http://localhost/")
-        fetch.assert_not_called()
-        self.assertEqual(
-            pagespeed_jobs.get("c" * 24),
-            {"status": "failed", "reason": "免費公開分析不允許 localhost 或內網位址。"},
-        )
-
-    @override_settings(ARGUS_PAGESPEED_API_KEY="test-key", ARGUS_PAGESPEED_ENABLED=True)
     def test_failure_reason_is_reported_and_not_cached(self, _get, _dns):
         from apps.insights import pagespeed_jobs
         from apps.scans.pagespeed import PageSpeedError

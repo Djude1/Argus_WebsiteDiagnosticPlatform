@@ -256,10 +256,14 @@ def _build_secret_finding(secret: dict[str, Any], endpoint: str) -> dict | None:
 
     # 依類型決定嚴重度
     severity = "high"
-    for keyword, sev in _SECRET_SEVERITY.items():
-        if keyword in secret_type.lower() or keyword in match_val.lower():
-            severity = sev
-            break
+    if match_val.startswith("AIza"):
+        # Google 地圖／Firebase 的瀏覽器用金鑰本來就放在前端，靠來源限制保護（見 secret_scanner）
+        severity = "low"
+    else:
+        for keyword, sev in _SECRET_SEVERITY.items():
+            if keyword in secret_type.lower() or keyword in match_val.lower():
+                severity = sev
+                break
 
     safe_endpoint = redact_pii_in_text(redact_url_query_values(str(endpoint)))
     masked = mask_sensitive_value(match_val)

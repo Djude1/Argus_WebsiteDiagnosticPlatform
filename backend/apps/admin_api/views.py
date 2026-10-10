@@ -1525,6 +1525,7 @@ def system_settings(request):
             "ARGUS_AGENT_ENABLED": dj_settings.ARGUS_AGENT_ENABLED,
             "ARGUS_AGENT_MAX_STEPS": dj_settings.ARGUS_AGENT_MAX_STEPS,
             "ARGUS_AGENT_MAX_TOKENS": dj_settings.ARGUS_AGENT_MAX_TOKENS,
+            "ARGUS_AGENT_UX_MAX_TOKENS": dj_settings.ARGUS_AGENT_UX_MAX_TOKENS,
         },
         "email": {
             "EMAIL_BACKEND": dj_settings.EMAIL_BACKEND,

@@ -1,7 +1,7 @@
 [project]
 name = "argus"
 version = "0.1.0"
-description = "Argus 網站健檢平台"
+description = "Argus AI網站健檢平台"
 readme = "Project_說明.md"
 requires-python = ">=3.12"
 dependencies = [

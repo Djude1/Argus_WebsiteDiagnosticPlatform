@@ -54,6 +54,10 @@ data:
   # 沿用程式預設 60 秒會逾時落到 fallback（見 log/2026-09-11_fixgen-e2e-selftest）。
   ARGUS_FIXGEN_ENABLED: "true"
   ARGUS_FIXGEN_TIMEOUT: "180"
+  # AI 掃描解讀：每次掃描完成後花一次 token（約 4～5 千 tokens 輸入），沿用 Agent 的 provider 金鑰；
+  # 只送問題標題、說明與遮罩後的證據；不影響分數。關閉改 "false"。
+  ARGUS_AI_INSIGHT_ENABLED: "true"
+  ARGUS_AI_INSIGHT_TIMEOUT: "180"
   # Email：預設 filebased（寄出的信寫到 container 內 backend/dev_emails/*.log）
   # 要真寄信改成 django.core.mail.backends.smtp.EmailBackend 並把 EMAIL_* 放進 Secret
   DJANGO_EMAIL_BACKEND: "django.core.mail.backends.filebased.EmailBackend"

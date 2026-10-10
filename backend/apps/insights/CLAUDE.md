@@ -15,9 +15,9 @@ Claude Code 進 `backend/apps/insights/` 工作時，本檔在專案層 `CLAUDE.
 | `quick-scan/` | `analyze_quick_scan` | 單頁健檢（免登入試用版）：HTTP 抓單頁 + 不需瀏覽器的輕量四維檢查（SEO/資安/AEO·GEO），需 `authorization_confirmed=true`，沿用 `assert_public_url` + `_safe_get` SSRF 防護，不啟 Playwright、不扣 coin |
 
 ## 測速接 PageSpeed Insights 的設計理由（2026-10-09）
-- **不可在 web 請求裡同步呼叫 PSI**：單次 20～60 秒，正式站 web 只有 2 workers × 4 threads，幾個免登入請求就會卡滿網站。一律走 Celery＋cache 輪詢；同網址的 pending job 以 cache 原子去重，公開端點每分鐘只派送一個新網址量測，避免耗盡與完整掃描共用的 PSI 配額。
+- **不可在 web 請求裡同步呼叫 PSI**：單次 20～60 秒，正式站 web 只有 2 workers × 4 threads，幾個免登入請求就會卡滿網站。一律走 Celery＋cache 輪詢。
 - cache 在正式環境是 Redis（`DJANGO_CACHE_BACKEND`）；本機預設 LocMemCache 與 worker 不共用，若本機開獨立 worker 要測這段，需改用 Redis cache 或 `CELERY_TASK_ALWAYS_EAGER=true`。
-- 量測由 Google 機房發出，不會從我們的主機連受測網址；受測網址仍先經 `assert_public_url`／`_safe_get`，送 PSI 的是 `final_url`，Celery worker 在呼叫 PSI 前再做一次 `assert_public_url`，避免排隊期間 DNS 改指或遭到非預期任務注入。
+- 量測由 Google 機房發出，不會從我們的主機連受測網址；受測網址仍先經 `assert_public_url`／`_safe_get`，送 PSI 的是 `final_url`。
 - 公開端點會消耗與完整掃描共用的 PSI 配額：靠 `insights` 30/hour／IP 與同網址 10 分鐘快取控制。
 
 ## 安全（硬規則，務必保留）

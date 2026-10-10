@@ -1447,14 +1447,16 @@ export interface paths {
         };
         /**
          * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
-         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
+         *     （專案的連線不動；已驗證的網域照常有效到期滿）。沒有帳號層級連線、只有專案連線時，
+         *     DELETE 中斷全部專案連線——那是這一頁唯一看得到的連線，不能讓使用者無從中斷。
          */
         get: operations["domains_gsc_retrieve"];
         put?: never;
         post?: never;
         /**
          * @description GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
-         *     （專案的連線不動；已驗證的網域照常有效到期滿）。
+         *     （專案的連線不動；已驗證的網域照常有效到期滿）。沒有帳號層級連線、只有專案連線時，
+         *     DELETE 中斷全部專案連線——那是這一頁唯一看得到的連線，不能讓使用者無從中斷。
          */
         delete: operations["domains_gsc_destroy"];
         options?: never;
@@ -1641,6 +1643,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["insights_speed_test_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/insights/speed-test/pagespeed/{job_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 輪詢測速的 Google PageSpeed Insights 結果：pending／done／failed；代號不存在或過期回 404。 */
+        get: operations["insights_speed_test_pagespeed_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1984,6 +2003,29 @@ export interface paths {
          *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
          */
         post: operations["projects_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/security/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description 網站專案（docs/adr/0003-site-project-workspace.md）。
+         *
+         *     清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含
+         *     overview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。
+         *     DELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。
+         */
+        get: operations["projects_security_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2337,6 +2379,23 @@ export interface paths {
         get: operations["scans_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scans/{id}/ai-insight/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 重新產生 AI 掃描解讀：只有沒有結果、失敗或卡住時才派工（已完成的不重產）。 */
+        post: operations["scans_ai_insight_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3537,6 +3596,7 @@ export interface components {
             readonly scoring_version: string;
             readonly ruleset_version: string;
             readonly performance_report: unknown;
+            readonly ai_insight: unknown;
             readonly progress: unknown;
             readonly scan_log: unknown;
             readonly error_message: string;
@@ -6557,6 +6617,26 @@ export interface operations {
             };
         };
     };
+    insights_speed_test_pagespeed_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mcp_access_connection_retrieve: {
         parameters: {
             query?: never;
@@ -7087,6 +7167,30 @@ export interface operations {
             };
         };
     };
+    projects_security_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     projects_seo_retrieve: {
         parameters: {
             query?: never;
@@ -7597,6 +7701,27 @@ export interface operations {
         };
     };
     scans_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanJob"];
+                };
+            };
+        };
+    };
+    scans_ai_insight_create: {
         parameters: {
             query?: never;
             header?: never;

@@ -317,3 +317,30 @@ class PipelineWritesCoverageTests(TransactionTestCase):
 
         self.assertEqual((scan.scoring_version, scan.ruleset_version),
                          (SCORING_VERSION, RULESET_VERSION))
+
+
+class AgentCoverageTests(TestCase):
+    def _ctx(self, error: str):
+        from apps.agent.loop import AgentRunResult
+
+        user = User.objects.create_user(username="cov-agent", password="safe-test-password")
+        scan = _scan(user, categories=["ux"], max_pages=10)
+        ctx = tasks.ScanRunContext(
+            scan_job=scan, execution_plan=build_scan_execution_plan(scan), steps=[],
+            crawl_phase_started="",
+        )
+        ctx.agent_result = AgentRunResult(
+            session_id=1, status="failed", steps=14, total_tokens=60123, error=error
+        )
+        return ctx
+
+    def test_token_budget_exhausted_is_partial_not_failed(self):
+        # 預算用完前回報的問題仍有效，只是沒跑完全部流程
+        ctx = self._ctx("token_budget_exceeded(60123/60000)")
+        tasks._mark_agent_coverage(ctx)
+        self.assertEqual(ctx.coverage.status_of("agent_ux"), PARTIAL)
+
+    def test_other_error_is_failed(self):
+        ctx = self._ctx("provider_error")
+        tasks._mark_agent_coverage(ctx)
+        self.assertEqual(ctx.coverage.status_of("agent_ux"), FAILED)

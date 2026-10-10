@@ -302,10 +302,10 @@ class AeoScoringTests(SimpleTestCase):
         _, scores, _ = calculate_scores(
             findings, tested_categories={"aeo"}, base_scores={"aeo": 80}
         )
-        # 只有 noindex（medium=12）扣分：80 × e^(−12/50)
-        self.assertEqual(scores["aeo"], 63)
+        # 只有 noindex（medium=12）扣分：80 × e^(−12/100)
+        self.assertEqual(scores["aeo"], 71)
         _, scores, _ = calculate_scores(findings, tested_categories={"aeo"})
-        self.assertEqual(scores["aeo"], 62)  # 沒有基準分時照舊扣兩次
+        self.assertEqual(scores["aeo"], 79)  # 沒有基準分時照舊扣兩次
 
 
 User = get_user_model()
@@ -437,3 +437,37 @@ class AeoReportTests(TransactionTestCase):
         )
         self.assertIn("未充分評估", _aeo_scope_text(scan))
         self.assertEqual(_aeo_items(scan), [])
+
+
+class AeoNotScoredTests(SimpleTestCase):
+    """2026-10-10：網站沒有任何段落談到的題庫題目不計分；聯絡方式與網站自己的問題照常計分。"""
+
+    def _result(self, key, answer_type, verdict, source="intent"):
+        from apps.scans.aeo import answers as a
+        from apps.scans.aeo import questions as q
+
+        question = q.Question(
+            key=key, text=key, answer_type=answer_type, keywords=(), weight=1.0, source=source
+        )
+        return a.QuestionResult(question=question, verdict=verdict, reason="")
+
+    def test_missing_topic_question_is_not_scored(self):
+        from apps.scans.aeo import answers as a
+        from apps.scans.aeo import questions as q
+        from apps.scans.aeo.evaluate import is_scored
+
+        self.assertFalse(is_scored(self._result("apply_deadline", q.DATE, a.MISSING)))
+        # 有相關段落但不完整、聯絡方式、網站自己寫的問題都照常計分
+        self.assertTrue(is_scored(self._result("apply_deadline", q.DATE, a.INSUFFICIENT)))
+        self.assertTrue(is_scored(self._result("contact_phone", q.PHONE, a.MISSING)))
+        self.assertTrue(is_scored(self._result("site_1", q.DATE, a.MISSING, source="site")))
+
+    def test_english_keywords_match_from_word_start(self):
+        from apps.scans.aeo.questions import count_term, has_term
+
+        # tel 不可命中 intellectual、payment 不可命中 overpayments（GOV.UK 實測）
+        self.assertFalse(has_term("protect your intellectual property", "tel"))
+        self.assertEqual(count_term("find out about overpayments", "payment"), 0)
+        self.assertTrue(has_term("tel: 02-1234-5678", "tel"))
+        self.assertTrue(has_term("check eligibility first", "eligib"))
+        self.assertEqual(count_term("聯絡電話與電話號碼", "電話"), 2)

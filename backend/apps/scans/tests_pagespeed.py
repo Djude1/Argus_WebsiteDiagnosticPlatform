@@ -174,6 +174,33 @@ class StageTests(TestCase):
         self.assertEqual(self.scan.performance_report, {})
         self.assertEqual(self.ctx.coverage.status_of("pagespeed"), FAILED)
 
+    @override_settings(ARGUS_PAGESPEED_ENABLED=True, ARGUS_PAGESPEED_API_KEY="k")
+    def test_started_in_background_and_collected_later(self):
+        # 爬取完就在背景量測，stage_pagespeed 只取結果，不再發第二次請求（2026-10-10）
+        with mock.patch("apps.scans.tasks.fetch_pagespeed",
+                        return_value=pagespeed.parse(PSI_RESPONSE)) as fetch:
+            tasks.stage_pagespeed_start(self.ctx)
+            self.assertIsNotNone(self.ctx.pagespeed_future)
+            self.ctx.pagespeed_future.result(timeout=5)
+            tasks.stage_pagespeed(self.ctx)
+        fetch.assert_called_once_with("https://example.com/")
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.performance_report["lab"]["scores"]["performance"], 72)
+        self.assertEqual(self.ctx.coverage.status_of("pagespeed"), COMPLETED)
+
+    @override_settings(ARGUS_PAGESPEED_ENABLED=True, ARGUS_PAGESPEED_API_KEY="k")
+    def test_background_failure_is_recorded(self):
+        with mock.patch("apps.scans.tasks.fetch_pagespeed",
+                        side_effect=pagespeed.PageSpeedError("PageSpeed Insights 逾時")):
+            tasks.stage_pagespeed_start(self.ctx)
+            tasks.stage_pagespeed(self.ctx)
+        self.assertEqual(self.ctx.coverage.status_of("pagespeed"), FAILED)
+
+    @override_settings(ARGUS_PAGESPEED_API_KEY="")
+    def test_background_not_started_without_key(self):
+        tasks.stage_pagespeed_start(self.ctx)
+        self.assertIsNone(self.ctx.pagespeed_future)
+
     @override_settings(ARGUS_PAGESPEED_API_KEY="")
     def test_skipped_without_key_or_ux(self):
         with mock.patch("apps.scans.tasks.fetch_pagespeed") as fetch:

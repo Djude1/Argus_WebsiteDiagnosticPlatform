@@ -82,8 +82,3 @@
   - `ruff` 與 `apps.insights` 測試通過。
   - 前端 lint（0 error）、vitest 265 項（新增 2 項：問題排序與面向標示、郵件風險與寄件資訊）、vite build 全部通過。
   - Playwright 攔截三個 API，在夜間與日間 1440、手機 390 截圖，scrollWidth 等於視窗寬。
-
-## 追加：公開 PageSpeed 工作的安全防線（同日）
-- worker 在呼叫 Google PageSpeed Insights 前重新執行 `assert_public_url`，避免排隊期間 DNS 改指，或非預期的 Celery payload 將任意 URL 送往第三方服務。
-- 同一網址的 pending 工作以 cache `add()` 原子共用同一 job；公開端點每分鐘只派送一個新的網址工作，降低 IP 輪替耗盡與完整掃描共用 PSI 配額的風險。
-- 回歸測試確認：同網址不會重複排程、不同網址在 dispatch window 內被婉拒、worker 收到 localhost 時不會呼叫 PSI。

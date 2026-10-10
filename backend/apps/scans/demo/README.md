@@ -13,7 +13,7 @@
 
 資料**不是手寫的**，而是對虛構網站 `scripts/demo_site/server.py`（`www.morninglight-coffee.example`）跑三次真實的全網站主動掃描。三次分別對應網站的 v1、v2、v3，網站逐步改善。
 
-- 分數：57 → 60 → 61。
+- 分數：建立時以目前公式重算（`seed.rescore_with_current_formula`），2026-10-10 衰減常數改為 100 後是 67 → 70 → 71（匯出時的舊公式是 57 → 60 → 61）。三次掃描建立時寫入同一組評分版本（`versions.py` 的目前值），總覽才會顯示分數變化，而不是「評分規則已更新，無法直接比較」；2026-10-09 前建立的示範專案由 migration `0032_demo_scan_versions` 補上。
 - 問題分析有「新增／持續／本次未出現」，總覽有趨勢。
 - 網站刻意埋了五個維度的常見問題：
   - 缺 alt、重複 H1、缺 meta description

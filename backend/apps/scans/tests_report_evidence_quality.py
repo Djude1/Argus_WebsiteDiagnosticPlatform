@@ -69,6 +69,19 @@ class ReportEvidenceQualityTests(TestCase):
         self.assertNotIn("Hermes-Agent", item["problem"])
         self.assertIn("AI Agent", payload["appendix"]["method_note"])
 
+    def test_agent_tool_verified_finding_keeps_severity(self):
+        # 2026-10-10：agent 以主動工具驗證過（evidence_json.tool_verified）→ 報告不封頂
+        self._finding(
+            severity="critical", category=Finding.Category.SECURITY,
+            rule_id="agent-observed-security", title="登入 SQL 注入繞過",
+            evidence="POST /rest/user/login → 200, token:ey...",
+            description="AI Agent 以主動工具重現並確認此問題可被利用：登入繞過",
+            evidence_source="hermes_agent",
+            evidence_json={"type": "text", "tool_verified": True, "excerpt": "x"},
+        )
+        payload = build_report_payload(self.scan)
+        self.assertEqual(self._find(payload, "登入 SQL 注入繞過")["severity"], "嚴重風險")
+
     def test_method_note_without_agent_says_rules_do_not_use_ai(self):
         self._finding(title="缺 title")
         note = build_report_payload(self.scan)["appendix"]["method_note"]

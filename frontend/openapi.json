@@ -3857,7 +3857,7 @@
         "/api/domains/gsc/": {
             "get": {
                 "operationId": "domains_gsc_retrieve",
-                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
+                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。沒有帳號層級連線、只有專案連線時，\nDELETE 中斷全部專案連線——那是這一頁唯一看得到的連線，不能讓使用者無從中斷。",
                 "tags": [
                     "domains"
                 ],
@@ -3882,7 +3882,7 @@
             },
             "delete": {
                 "operationId": "domains_gsc_destroy",
-                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。",
+                "description": "GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權\n（專案的連線不動；已驗證的網域照常有效到期滿）。沒有帳號層級連線、只有專案連線時，\nDELETE 中斷全部專案連線——那是這一頁唯一看得到的連線，不能讓使用者無從中斷。",
                 "tags": [
                     "domains"
                 ],
@@ -4150,6 +4150,36 @@
         "/api/insights/speed-test/": {
             "post": {
                 "operationId": "insights_speed_test_create",
+                "tags": [
+                    "insights"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/insights/speed-test/pagespeed/{job_id}/": {
+            "get": {
+                "operationId": "insights_speed_test_pagespeed_retrieve",
+                "description": "輪詢測速的 Google PageSpeed Insights 結果：pending／done／failed；代號不存在或過期回 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "job_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
                 "tags": [
                     "insights"
                 ],
@@ -4991,6 +5021,44 @@
                 }
             }
         },
+        "/api/projects/{id}/security/": {
+            "get": {
+                "operationId": "projects_security_retrieve",
+                "description": "網站專案（docs/adr/0003-site-project-workspace.md）。\n\n清單預設只列未封存（?archived=true 改列已封存，供「所有專案」頁恢復）；單筆（含\noverview／issues）可讀已封存的專案，讓舊掃描詳情仍能顯示所屬專案。\nDELETE＝封存，掃描與點數紀錄全數保留。別人的專案一律 404。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this site project.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/projects/{id}/seo/": {
             "get": {
                 "operationId": "projects_seo_retrieve",
@@ -5744,6 +5812,42 @@
         "/api/scans/{id}/": {
             "get": {
                 "operationId": "scans_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "scans"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ScanJob"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/scans/{id}/ai-insight/": {
+            "post": {
+                "operationId": "scans_ai_insight_create",
+                "description": "重新產生 AI 掃描解讀：只有沒有結果、失敗或卡住時才派工（已完成的不重產）。",
                 "parameters": [
                     {
                         "in": "path",
@@ -9417,6 +9521,9 @@
                     "performance_report": {
                         "readOnly": true
                     },
+                    "ai_insight": {
+                        "readOnly": true
+                    },
                     "progress": {
                         "readOnly": true
                     },
@@ -9468,6 +9575,7 @@
                 },
                 "required": [
                     "aeo_report",
+                    "ai_insight",
                     "categories",
                     "category_scores",
                     "coins_charged",

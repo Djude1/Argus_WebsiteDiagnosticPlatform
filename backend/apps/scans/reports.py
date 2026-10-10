@@ -34,6 +34,7 @@ from apps.scans.root_causes import annotate_root_causes
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.observatory import summary_line as observatory_summary
 from apps.scans.security.redaction import redact_pii_in_text
+from apps.scans.trust_stack import summary_line as trust_stack_summary
 
 # --- 品牌與嚴重度配色 -------------------------------------------------
 # frontend/src/styles.css 的 token 是為深色背景設計的，--argus-cyan (#38bdf8)
@@ -71,7 +72,7 @@ CATEGORY_DISPLAY = {
 SCORE_NOTE = (
     "分數怎麼算：每個分類從 100 分起算，依該分類的發現扣分——嚴重風險 60、高風險 35、中風險 12、"
     "低風險 4、資訊提示 0；同一條規則在同一分類只扣一次（出現在多頁不重複扣）。"
-    "分類分數＝100 × e^(−扣分總和 ÷ 50)，扣越多下降越慢、不會直接歸零；"
+    "分類分數＝100 × e^(−扣分總和 ÷ 100)，扣越多下降越慢、不會直接歸零；"
     "總分是「已評估」各分類分數的平均，每個分類權重相同。"
     "AEO 例外：以「可回答性」為起始分（每題可回答 1、資訊不足 0.5、內容衝突 0.25、無答案 0，"
     "聯絡、價格、期限等核心題權重較高），再依索引限制、標記錯誤等其他 AEO 問題扣分；"
@@ -371,6 +372,27 @@ RULE_BASIS = {
     "geo-enumeration-not-list":
         "依據：同一段文字出現 3 個以上編號（1.／1)／(1)／第一、）。限制：只看編號格式，"
         "程式碼區塊不檢查。",
+    "geo-citability-no-sources":
+        "依據：Princeton「GEO: Generative Engine Optimization」(Aggarwal et al., KDD 2024) 在 "
+        "GEO-bench 一萬題實測，內容補上權威來源引用可提升被生成式引擎引用的機率約 27%；本規則檢查"
+        "有篇幅的正文頁是否完全沒有權威來源連結、<cite> 或參考資料區塊。"
+        "限制：這是研究的平均相關性，不是對個別網站的保證；缺少來源不代表現在不會被引用，補上有助提高機率。",
+    "geo-citability-no-statistics":
+        "依據：同一份 Princeton GEO 研究中，加入具體統計數字可提升被引用機率約 33%；本規則檢查正文"
+        "是否幾乎沒有百分比、金額或量化數據。限制：軟訊號，缺少不代表內容錯誤；數字仍須正確並註明"
+        "來源與年份才有意義。",
+    "geo-citability-no-quotations":
+        "依據：同一份 Princeton GEO 研究中，加入專家引言可提升被引用機率約 41%（三種寫法中最高）；"
+        "本規則檢查是否有 blockquote／<q>／署名引言。限制：軟訊號，引言須真實且可歸屬，為衝數量而"
+        "虛構引言反而有害。",
+    "geo-content-decay":
+        "依據：頁面同時出現過去年份、時效性措辭、軟體版本或定期價格等會隨時間變動的內容，卻沒有更新"
+        "日期訊號時，AI 引擎較難確認資訊是否仍正確、較不願引用。限制：只看文字樣式、不判斷內容實際"
+        "是否過時；長青內容補上更新日期或改相對寫法即可排除。",
+    "geo-rag-chunking":
+        "依據：生成式引擎多以「區段（chunk）」為單位檢索引用，區段過長時一段混多個主題、不利乾淨"
+        "擷取（SE Ranking 2026 觀察約 100–150 字的區段被引用率較高）；本規則估算有小標題頁面的平均"
+        "段長。限制：以原始 HTML 小標題數估算、非精確切塊，字數換算偏保守，僅為可讀性建議。",
     "ux-layout-shift":
         "依據：瀏覽器 layout-shift 紀錄，依 Google CLS 定義取最大工作階段視窗；0.1 以上列為需改善、"
         "0.25 以上為不佳。限制：Argus 爬取時的桌面視窗單次量測、沒有使用者操作，"
@@ -495,9 +517,13 @@ def _assessment_for(finding) -> dict | None:
 
 
 def _report_severity(finding) -> str:
-    """報告顯示的嚴重度：AI 觀察項目上限為中風險（與 agent 新版回報規則一致，涵蓋舊紀錄）。"""
+    """報告顯示的嚴重度：AI 觀察項目上限為中風險（涵蓋舊紀錄）。
+    2026-10-10 放寬：agent 以主動工具驗證過的發現（evidence_json.tool_verified）不封頂，
+    照 finding 已存的嚴重度顯示（落庫時已確認 verified＋真的呼叫過主動工具）。"""
     if (finding.rule_id or "").startswith("agent-") and _severity_rank(finding.severity) < 2:
-        return AGENT_SEVERITY_CAP
+        evidence_json = getattr(finding, "evidence_json", None) or {}
+        if not evidence_json.get("tool_verified"):
+            return AGENT_SEVERITY_CAP
     return finding.severity
 
 
@@ -1356,6 +1382,10 @@ def _report_site_profile(scan_job: ScanJob) -> dict:
         facts.append(
             {"label": "安全標頭等第", "value": observatory_summary(profile["observatory"])}
         )
+    if profile.get("trust_stack"):
+        line = trust_stack_summary(profile["trust_stack"])
+        if line:
+            facts.append({"label": "信任輪廓（五層）", "value": line})
     if not facts and not strengths:
         return {}
     return {"notice": infra.get("notice", ""), "facts": facts, "strengths": strengths}

@@ -18,7 +18,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from apps.scans.aeo.answers import ANSWERED, VERDICT_LABELS
+from apps.scans.aeo.answers import ANSWERED, MISSING, VERDICT_LABELS
 from apps.scans.aeo.evaluate import evaluate_site
 from apps.scans.aeo.gold_dataset import ALL_CASES, GoldCase
 
@@ -148,11 +148,18 @@ def run_benchmark(cases: tuple[GoldCase, ...] = ALL_CASES) -> BenchmarkResult:
         evaluation = evaluate_site(list(case.pages))
         benchmark.seconds += time.perf_counter() - started
         results = {_result_key(r): r for r in evaluation.results}
+        # 內容太少、整站不評估時，Argus 對任何題目都不宣稱有答案，視同「找不到」；
+        # 記成「沒出題」會把正確的不評估當成規則漏掉（2026-10-10）
+        site_not_evaluated = evaluation.status == "insufficient" and not evaluation.results
         for key, expected in case.expected.items():
             result = results.get(key)
+            if result:
+                actual = result.verdict
+            else:
+                actual = MISSING if site_not_evaluated else NO_QUESTION
             benchmark.judgements.append(
                 Judgement(
-                    case.name, key, expected, result.verdict if result else NO_QUESTION,
+                    case.name, key, expected, actual,
                     case.tags, result.confidence if result else "",
                 )
             )

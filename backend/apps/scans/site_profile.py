@@ -17,8 +17,9 @@ from apps.scans.security.infra_scanner import analyze_infrastructure
 from apps.scans.security.observatory import evaluate as observatory_grade
 from apps.scans.security.waf_scanner import RULE_ID as WAF_BLOCK_RULE
 from apps.scans.tech_stack import detect_technologies
+from apps.scans.trust_stack import evaluate as trust_stack_evaluate
 
-VERSION = 2  # 2：新增 technologies（網站使用的技術）、strengths 附 evidence／confidence
+VERSION = 3  # 3：trust_stack 五層信任分聚合；2：technologies＋strengths 附依據/信心
 _HSTS_MIN_AGE = 15552000  # 180 天，常見的最低建議值
 
 
@@ -281,13 +282,22 @@ def build_site_profile(
         (page or {}).get("headers") or {},
         extra_tech,
     )
+    observatory = observatory_grade(pages, seo_report) if "security" in categories else {}
+    # Trust Stack 五層信任分：聚合既有訊號（observatory 分數＋本次 findings 規則），不重新偵測
+    trust = trust_stack_evaluate(
+        findings_rules={f.get("rule_id") or "" for f in findings},
+        observatory=observatory,
+        categories=categories,
+    )
     return {
         "version": VERSION,
         "infrastructure": infrastructure,
         "strengths": strengths,
         "technologies": technologies,
         # 安全標頭參考等第（Mozilla Observatory 規則離線計算，不計入 Argus 分數）
-        "observatory": observatory_grade(pages, seo_report) if "security" in categories else {},
+        "observatory": observatory,
+        # 五層信任分（既有訊號聚合，不計入 Argus 分數）
+        "trust_stack": trust,
         # AI 爬蟲的 robots.txt 政策（ai_bots.py；依用途分類，說明商業取捨）
         "ai_bots": (ai_bot_policy or {}) if "geo" in categories else {},
     }

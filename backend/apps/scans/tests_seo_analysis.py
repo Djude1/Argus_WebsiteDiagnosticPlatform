@@ -737,6 +737,34 @@ class AccountLevelSearchConsoleTests(TestCase):
         self.assertTrue(response.data["connected"])  # 專案連線還在
         self.assertTrue(SearchConsoleConnection.objects.filter(project=project).exists())
 
+    def test_project_only_connection_broken_shows_reconnect_and_can_disconnect(self):
+        """2026-10-09 使用者回報：只有 SEO 分析頁的專案連線、授權失效時，網域驗證頁仍顯示已連接、
+        同步失敗卻沒有重新連接或中斷連線。"""
+        project = SiteProject.objects.create(
+            user=self.user, name="Shop", origin=ORIGIN, start_url=f"{ORIGIN}/"
+        )
+        SearchConsoleConnection.objects.create(
+            project=project, user=self.user, refresh_token_encrypted=gsc.encrypt_token("p"),
+        )
+        status = self.client.get("/api/domains/gsc/").data
+        self.assertTrue(status["connected"])
+        self.assertFalse(status["account_connection"])
+        self.assertFalse(status["needs_reconnect"])
+
+        with mock.patch(
+            "apps.scans.seo.gsc.list_sites",
+            side_effect=gsc.GscError("Search Console 授權已失效，請重新連接。", reconnect=True),
+        ):
+            synced = self.client.post("/api/domains/gsc/sync/")
+        self.assertEqual(synced.status_code, 400)
+        self.assertTrue(synced.data["needs_reconnect"])
+
+        with mock.patch("apps.scans.seo.gsc.revoke") as revoke:
+            response = self.client.delete("/api/domains/gsc/")
+        revoke.assert_called_once()
+        self.assertFalse(response.data["connected"])
+        self.assertFalse(SearchConsoleConnection.objects.filter(user=self.user).exists())
+
     def test_sync_without_connection_is_400(self):
         self.assertEqual(self.client.post("/api/domains/gsc/sync/").status_code, 400)
 

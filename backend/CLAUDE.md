@@ -12,7 +12,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/projects/` | `scans` | 網站專案：list（`?archived=true` 列已封存）／create（同網站 409、已封存自動恢復）／retrieve／PATCH（名稱、起始網址、預設掃描設定）／DELETE（＝封存）＋`<id>/restore/`、`<id>/overview/`、`<id>/issues/?scan=`、`<id>/security/?scan=`（資安分析頁，2026-10-08）、`<id>/pages/?scan=`、`<id>/seo/?scan=`（＋`seo/pages/<頁面 id>/`、`seo/keywords/`）、`<id>/gsc/`（＋`connect/`、`properties/`、`performance/`、`inspect/`；見 `apps/scans/CLAUDE.md`「SEO 分析與 Search Console」） |
 | `/api/gsc/callback/` | `scans` | Google Search Console OAuth 導回（`AllowAny`；身分由簽章 state＋HttpOnly nonce cookie 證明），完成後轉回 `/projects/<id>/seo?gsc=…` |
 | `/api/domains/` | `scans` | 網域所有權驗證 CRUD ＋ `<id>/verify/`（`search_console`／dns_txt／meta_tag／html_file）＋ `gsc/`、`gsc/connect/`、`gsc/sync/`（帳號層級 Search Console 一鍵連接與同步，2026-10-04）（前端 2026-10-02 前誤呼叫 `/api/scans/domains/`，該路徑會被當成掃描 id） |
-| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
+| `/api/scans/` | `scans` | `scans/`（CRUD + `status/`/`cancel/`/`report/`/`topology/`/`screenshot`/`finding-stats`/`ai-insight/`（重新產生 AI 解讀）/`fix-output/trigger`/`fix-output/status`/`fix-output/artifacts`）、`domains/`（網域所有權驗證 CRUD + `<id>/verify/`）、`estimate/`、`pages/`、`findings/`、`dashboard/`、`history/`（兩者為舊 Dashboard／歷史頁用，保留相容）、`audit/`、`findings-by-category/` |
 | `/api/billing/` | `billing` | `wallet/`、`plans/`、`purchase/`、`orders/`、`subscription/`（+ `plans/`、`subscribe/`、`cancel/`）、`ecpay/callback/`（綠界 ReturnURL：購點＋訂閱首期）、`ecpay/period-callback/`（訂閱第 2 期起每月扣款） |
 | `/api/reviews/` | `reviews` | 公開列表/統計、本人 CRUD、helpful、report（完成掃描才可發表） |
 | `/api/content/` | `content` | `features/`、`team/`、`releases/`、`milestones/`（公開 CMS）、`partner-inquiries/`（公開洽談表單，Turnstile 保護）、`scanner-info/`（公開，掃描來源說明頁 `/scanner` 用：User-Agent、出口 IP、速率） |
@@ -69,7 +69,9 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
          performance_report（JSON，Google PageSpeed Insights 首頁 Lighthouse＋CrUX，勾 UX 且有金鑰時寫入、
          不計入 Argus 分數；migration 0030，見 apps/scans/CLAUDE.md「PageSpeed Insights」）、
          fingerprint（JSON，網站特徵：CMS、框架、登入頁、API、上傳、邊緣服務；只用爬取已有的訊號、
-         只記錄不影響掃描；migration 0031，見 apps/scans/CLAUDE.md「網站特徵」）
+         只記錄不影響掃描；migration 0031，見 apps/scans/CLAUDE.md「網站特徵」）、
+         ai_insight（JSON，AI 掃描解讀：整體診斷、優先處理、高風險問題複核；不影響分數；
+         migration 0033，見 apps/scans/CLAUDE.md 的 ai_insight.py）
 ```
 
 **SiteProject**（`apps/scans/models.py`，2026-10-02）

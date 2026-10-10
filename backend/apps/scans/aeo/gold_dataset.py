@@ -522,6 +522,36 @@ GOLD_CASES: tuple[GoldCase, ...] = (
         {"booking": "insufficient"},
         (INSUFFICIENT, NEAR_MISS),
     ),
+    # 2026-10-10 價格的其他說法：「價目」「房價」與金額本身（保留集民宿案例沒出價格題）
+    GoldCase(
+        "露營區：營位價目",
+        _one(
+            "https://camp.example/",
+            "<h1>山嵐露營區</h1><p>我們位於海拔八百公尺的茶園旁，提供草地與雨棚營位，"
+            "園區有熱水衛浴與炊事區，假日另有導覽活動。</p>"
+            "<h2>營位價目</h2><p>草地營位每帳每晚 1,200 元，雨棚營位每帳每晚 1,600 元。</p>",
+        ),
+        {"price": "answered"},
+        (ANSWERABLE,),
+    ),
+    GoldCase(
+        "旅館：房型與房價",
+        _one(
+            "https://inn.example/",
+            "<h1>港邊旅店</h1><p>我們提供十二間客房，步行五分鐘可到漁港與夜市，"
+            "櫃檯可代訂機車與船票，適合家庭與背包客。</p>"
+            "<h2>房型與房價</h2><p>標準雙人房每晚 2,800 元，含兩客早餐。</p>",
+        ),
+        {"price": "answered"},
+        (ANSWERABLE,),
+    ),
+    # 內容太少、整站不評估：Argus 不宣稱有答案，視同找不到（見 benchmark.run_benchmark）
+    GoldCase(
+        "活動頁：只有標題與敬請期待",
+        _one("https://fair.example/", "<h1>2027 春季市集</h1><p>即將開幕，敬請期待！</p>"),
+        {"about": "missing"},
+        (MISSING,),
+    ),
 )
 
 

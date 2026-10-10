@@ -40,7 +40,7 @@ class PipelineShapeTests(TestCase):
         self.assertEqual(
             names,
             [
-                "target_validation", "crawl", "enter_scanning", "fingerprint",
+                "target_validation", "crawl", "enter_scanning", "pagespeed_start", "fingerprint",
                 "page_analysis", "aeo_answers", "site_security", "active_probe", "deep_security",
                 "zap_passive", "exposure", "geo_site", "seo_links", "pagespeed", "favicon", "agent",
                 "kali", "site_profile", "scoring",

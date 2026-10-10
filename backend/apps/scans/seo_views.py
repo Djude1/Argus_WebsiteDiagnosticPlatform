@@ -317,14 +317,23 @@ def _back_to_seo(project_id, **params) -> HttpResponseRedirect:
 
 
 def _account_status(user) -> dict:
-    account = SearchConsoleConnection.objects.filter(user=user, project__isnull=True).first()
+    connections = SearchConsoleConnection.objects.filter(user=user)
+    account = connections.filter(project__isnull=True).first()
+    connected = connections.exists()
+    # 只有專案連線（從 SEO 分析頁連接）時，看專案連線：全部都授權失效才需要重新連接。
+    # 2026-10-09 前只看帳號層級連線，專案連線失效時網域驗證頁仍顯示「已連接」，
+    # 同步失敗卻沒有重新連接或中斷連線可按
+    if account is not None:
+        broken = account if account.last_error else None
+    else:
+        broken = None if connections.filter(last_error="").exists() else connections.first()
     return {
         "enabled": gsc.is_enabled(),
         # 任一連線（帳號層級或任一專案）都能用來驗證網域
-        "connected": SearchConsoleConnection.objects.filter(user=user).exists(),
+        "connected": connected,
         "account_connection": account is not None,
-        "needs_reconnect": bool(account and account.last_error),
-        "error": account.last_error if account else "",
+        "needs_reconnect": broken is not None,
+        "error": broken.last_error if broken else "",
         "connected_at": account.connected_at.isoformat() if account else None,
     }
 
@@ -350,13 +359,14 @@ def _sync_all(user) -> tuple[list[str], str]:
 @permission_classes([IsAuthenticated])
 def domains_gsc(request):
     """GET 帳號的 Search Console 連線狀態；DELETE 中斷帳號層級連線並撤銷 Google 授權
-    （專案的連線不動；已驗證的網域照常有效到期滿）。"""
+    （專案的連線不動；已驗證的網域照常有效到期滿）。沒有帳號層級連線、只有專案連線時，
+    DELETE 中斷全部專案連線——那是這一頁唯一看得到的連線，不能讓使用者無從中斷。"""
     if request.method == "DELETE":
-        account = SearchConsoleConnection.objects.filter(
-            user=request.user, project__isnull=True
-        ).first()
-        if account is not None:
-            _disconnect(account)
+        connections = SearchConsoleConnection.objects.filter(user=request.user)
+        account = connections.filter(project__isnull=True).first()
+        targets = [account] if account is not None else list(connections)
+        for connection in targets:
+            _disconnect(connection)
     return Response(_account_status(request.user))
 
 

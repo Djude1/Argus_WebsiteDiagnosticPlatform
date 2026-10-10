@@ -36,9 +36,9 @@ class ReportScoreItemsTests(TestCase):
         self._finding("seo", "medium", "seo-a", "標題太短")
         self._finding("seo", "low", "seo-b", "缺少 alt")
         self._finding("security", "info", "sec-waf", "位於 WAF 之後")
-        # 依目前公式：SEO 扣 16 → 73；資安只有資訊提示 → 100
-        self.scan_job.category_scores = {"seo": 73, "security": 100}
-        self.scan_job.overall_score = 87
+        # 依目前公式（衰減常數 100）：SEO 扣 16 → 85；資安只有資訊提示 → 100
+        self.scan_job.category_scores = {"seo": 85, "security": 100}
+        self.scan_job.overall_score = 92
         self.scan_job.save()
 
     def _finding(self, category, severity, rule_id, title):
@@ -55,13 +55,13 @@ class ReportScoreItemsTests(TestCase):
 
         seo, security = payload["appendix"]["score_items"]["categories"]
         self.assertEqual((seo["name"], seo["score"], seo["basis"]),
-                         ("SEO 搜尋引擎最佳化", 73, "起始分 100"))
+                         ("SEO 搜尋引擎最佳化", 85, "起始分 100"))
         first = seo["items"][0]
         self.assertEqual(
             (first["title"], first["severity"], first["weight"], first["occurrences"]),
             ("標題太短", "中風險", 12, 2),
         )
-        self.assertEqual(first["score_without"], 92)
+        self.assertEqual(first["score_without"], 96)
         # 項次對回第 4 章的卡片編號
         refs = {f["title"]: f["id"] for f in payload["findings"]}
         self.assertEqual(first["ref"], refs["標題太短"])
@@ -94,6 +94,6 @@ class ReportScoreItemsTests(TestCase):
         document = Document(render_report_docx(self.scan_job))
         text = "\n".join(p.text for p in document.paragraphs)
         self.assertIn("各分類扣分明細", text)
-        self.assertIn("SEO 搜尋引擎最佳化　73 分", text)
+        self.assertIn("SEO 搜尋引擎最佳化　85 分", text)
         cells = {cell.text for table in document.tables for row in table.rows for cell in row.cells}
-        self.assertTrue({"只修好這項時", "−12", "92 分"} <= cells)
+        self.assertTrue({"只修好這項時", "−12", "96 分"} <= cells)

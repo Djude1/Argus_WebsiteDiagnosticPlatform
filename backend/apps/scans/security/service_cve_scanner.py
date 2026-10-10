@@ -34,6 +34,14 @@ _DB_PATH = Path(__file__).parent / "data" / "backend_services.json"
 _SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 _RANK_TO_CAPPED = {1: "low", 2: "medium", 3: "high", 4: "high"}
 
+# 作業系統發行版的套件（Ubuntu、Debian、RHEL…）會把安全修補補進舊版本、版本號不變，
+# 標頭帶這些註記時「版本號落在受影響範圍」多半不代表真的有漏洞（2026-10-10）。
+_DISTRO_MARKER = re.compile(
+    r"\((?:ubuntu|debian|centos|red ?hat|rhel|fedora|amazon|almalinux|rocky|suse|alpine|oracle)"
+    r"|ubuntu|[.+~]deb\d|\.el\d|\.fc\d|amzn",
+    re.IGNORECASE,
+)
+
 
 @lru_cache(maxsize=1)
 def _load_db() -> dict:
@@ -57,9 +65,14 @@ def _parse_server(value: str) -> tuple[str, str] | None:
 
 
 def _build_cve_finding(
-    product: str, version: str, via: str, source: str, vulns: list[dict]
+    product: str, version: str, via: str, source: str, vulns: list[dict],
+    backport_possible: bool = False,
 ) -> dict:
-    """把命中的 vuln 聚合成單筆 CVE 等級 finding；per-CVE 細節進 evidence_json。"""
+    """把命中的 vuln 聚合成單筆 CVE 等級 finding；per-CVE 細節進 evidence_json。
+
+    只憑標頭的版本號比對，屬「疑似」：一律附判定依據；標頭帶發行版註記
+    （backport_possible）時發行版多半已修補，嚴重度封頂中風險。
+    """
     cve_ids: list[str] = []
     detail: list[dict] = []
     rank = 1
@@ -75,6 +88,8 @@ def _build_cve_finding(
             "info": v.get("info") or [],
         })
     capped = _RANK_TO_CAPPED.get(rank, "low")
+    if backport_possible and _SEVERITY_RANK[capped] > _SEVERITY_RANK["medium"]:
+        capped = "medium"
     cve_ids = list(dict.fromkeys(cve_ids))  # 去重保序
     if not cve_ids:
         cve_summary, cve_list = f"{len(vulns)} 項已知漏洞", "（無 CVE 編號，詳見參考連結）"
@@ -84,16 +99,38 @@ def _build_cve_finding(
         cve_summary, cve_list = f"{cve_ids[0]} 等 {len(cve_ids)} 項", "、".join(cve_ids)
     return make_finding(
         category="security", severity=capped, rule_id="service-known-cve",
-        title=f"過時的 {product} {version} 含已知漏洞（{cve_summary}）",
+        title=f"{product} {version} 的版本號落在已知漏洞範圍（{cve_summary}）",
         description=(
-            f"偵測到後端服務 {product} {version}，此版本存在 {len(vulns)} 項已知公開漏洞"
-            f"（{cve_list}）。攻擊者可利用對應漏洞對此服務發動攻擊。"
+            f"回應標頭顯示後端服務是 {product} {version}，這個版本號落在 {len(vulns)} 項"
+            f"已知公開漏洞（{cve_list}）的受影響範圍。這是依標頭版本號比對，"
+            + (
+                "標頭帶有作業系統發行版註記，發行版常把安全修補補進舊版本而不改版本號，"
+                "實際很可能已修補。"
+                if backport_possible
+                else "沒有實際驗證；若伺服器版本已更新但標頭沒變，或套件已修補，可能不受影響。"
+            )
         ),
-        remediation=f"將 {product} 升級至已修補的最新穩定版本，並建立定期更新流程。",
+        remediation=(
+            f"確認伺服器實際安裝的 {product} 套件版本與修補狀態"
+            + ("（例如用發行版的套件管理工具查詢該 CVE 是否已修補）" if backport_possible else "")
+            + "；確認未修補時升級至已修補的穩定版本，並移除標頭中的版本號。"
+        ),
         evidence=f"{product} {version}（{via}；來源：{source}）；命中：{cve_list}",
         evidence_json={
             "product": product, "version": version, "detected_from": source, "via": via,
             "vulnerabilities": detail,
+            "backport_possible": backport_possible,
+            "assessment": {
+                "condition": f"伺服器實際執行的 {product} 沒有套用這些漏洞的修補。",
+                "observed": f"回應標頭 {via} 寫著 {product} {version}，版本號落在受影響範圍。",
+                "missing": (
+                    "只看到標頭上的版本號，沒有實際驗證漏洞；"
+                    "發行版的修補通常不改版本號，標頭也可能沒有隨升級更新。"
+                ),
+                "verify": (
+                    f"在伺服器上查詢 {product} 套件的實際版本與修補紀錄，確認這些 CVE 是否已修補。"
+                ),
+            },
         },
         impact_area="vulnerability",
     )
@@ -131,7 +168,8 @@ def analyze_services(pages: list[dict]) -> list[dict]:
             headers = (page or {}).get("headers") or {}
             source = (page or {}).get("final_url") or (page or {}).get("url") or ""
             for hkey in _HEADER_SOURCES:
-                parsed = _parse_server(headers.get(hkey, ""))
+                raw_value = str(headers.get(hkey, "") or "")
+                parsed = _parse_server(raw_value)
                 if not parsed:
                     continue
                 product, version = parsed
@@ -145,7 +183,11 @@ def analyze_services(pages: list[dict]) -> list[dict]:
                 seen.add((product, version))
                 label = _HEADER_LABEL[hkey]
                 out.append(
-                    _build_cve_finding(product, version, label, source, matched) if matched
+                    _build_cve_finding(
+                        product, version, label, source, matched,
+                        backport_possible=bool(_DISTRO_MARKER.search(raw_value)),
+                    )
+                    if matched
                     else _exposure_finding(product, version, label, source)
                 )
         return out

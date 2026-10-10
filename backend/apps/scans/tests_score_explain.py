@@ -92,8 +92,8 @@ class ScoreBreakdownEndpointTests(TestCase):
         self._finding("seo", "medium", "seo-a")
         self._finding("seo", "medium", "seo-a")
         self._finding("security", "high", "sec-a")
-        self.scan_job.category_scores = {"seo": 79, "security": 50}
-        self.scan_job.overall_score = 65
+        self.scan_job.category_scores = {"seo": 89, "security": 70}
+        self.scan_job.overall_score = 80
         self.scan_job.coverage = {
             "version": 1,
             "checks": {"nuclei": {"status": "failed", "category": "security",
@@ -120,7 +120,7 @@ class ScoreBreakdownEndpointTests(TestCase):
         data = self._get()
         self.assertFalse(data["matches"])
         seo = data["categories"][0]
-        self.assertEqual((seo["score"], seo["recomputed_score"]), (94, 92))
+        self.assertEqual((seo["score"], seo["recomputed_score"]), (94, 96))
 
     def test_unscored_scan_is_not_available(self):
         self.assertEqual(self._get()["categories"], [])

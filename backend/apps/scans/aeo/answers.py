@@ -235,8 +235,8 @@ class QuestionResult:
 def _passage_score(question: q.Question, passage: Passage) -> float:
     text = passage.text.lower()
     heading = (passage.heading or "").lower()
-    hits = sum(1 for kw in question.keywords if kw.lower() in text)
-    heading_hits = sum(1 for kw in question.keywords if kw.lower() in heading)
+    hits = sum(1 for kw in question.keywords if q.has_term(text, kw))
+    heading_hits = sum(1 for kw in question.keywords if q.has_term(heading, kw))
     # 小標題就是主題（例如「申請資格」底下列條件）時，段落本身常不重複主題詞
     return hits + heading_hits
 
@@ -301,7 +301,7 @@ def entails(question: q.Question, passage: Passage) -> bool:
     if not question.anchors:
         return True
     haystack = f"{passage.heading or ''} {passage.text}".lower()
-    return any(anchor.lower() in haystack for anchor in question.anchors)
+    return any(q.has_term(haystack, anchor) for anchor in question.anchors)
 
 
 # ---------- 判定 ----------
@@ -387,7 +387,7 @@ def judge(
                 for p in all_passages
                 if not p.is_heading
                 and p.region == "main"
-                and any(kw in p.heading for kw in question.keywords)
+                and any(q.has_term((p.heading or "").lower(), kw) for kw in question.keywords)
             ]
         )
         if heading:

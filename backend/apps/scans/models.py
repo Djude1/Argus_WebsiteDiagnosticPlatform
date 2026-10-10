@@ -210,6 +210,9 @@ class ScanJob(models.Model):
     # 網站特徵（fingerprint.py，Smart Scan 階段 1）：只記錄爬取階段已有的訊號，
     # 不影響任何掃描決策；看不出來的特徵為 None 並在 completeness 註明原因
     fingerprint = models.JSONField(default=dict, blank=True)
+    # AI 掃描解讀（ai_insight.py）：掃描完成後由 AI 依問題與證據寫整體診斷、優先處理建議，
+    # 並複核高風險問題是否可能誤報。只是參考說明，不改任何問題的嚴重度與分數
+    ai_insight = models.JSONField(default=dict, blank=True)
     # 即時進度（worker 寫入；前端輪詢顯示）
     # {pages_done: int, pages_total: int, phase: "crawling"|"scanning"|"agent_testing",
     #  phase_started_at: ISO8601 str}

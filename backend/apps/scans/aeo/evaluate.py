@@ -28,7 +28,7 @@ from apps.scans.aeo.content import (
     extract_page_content,
     robots_directives,
 )
-from apps.scans.aeo.questions import ADDRESS, EMAIL, PHONE, build_question_set
+from apps.scans.aeo.questions import ADDRESS, EMAIL, HOURS, PHONE, build_question_set
 from apps.scans.evidence import contacts as shared
 
 METHOD_VERSION = "rules-v1"
@@ -131,6 +131,26 @@ def _citation_summary(citations: list[dict]) -> dict | None:
     return {"counts": counts, "citable_ratio": round(counts[CITABLE] / len(citations), 3)}
 
 
+# 聯絡方式是幾乎每個網站訪客都會問的；其他題庫題目（報名、資格、退款、運送…）只在網站
+# 真的談到該主題時才有意義
+_CONTACT_TYPES = {PHONE, EMAIL, ADDRESS, HOURS}
+NOT_SCORED_REASON = "網站沒有任何段落談到這個主題，可能不提供這項服務，不計分。"
+
+
+def is_scored(result: a.QuestionResult) -> bool:
+    """題庫題目判定「無可用答案」且不是聯絡方式時不計分（2026-10-10）。
+
+    出題只看關鍵字出現次數，GOV.UK 這類入口網站處處有 apply，就被問「報名截止日期」，
+    找不到任何相關段落仍扣滿分，AEO 只剩 48 分。有相關段落但答案不完整（資訊不足）
+    照常計分。
+    """
+    return not (
+        result.verdict == a.MISSING
+        and result.question.source == "intent"
+        and result.question.answer_type not in _CONTACT_TYPES
+    )
+
+
 def _score(results: list[a.QuestionResult]) -> int:
     total_weight = sum(r.question.weight for r in results) or 1
     earned = sum(r.question.weight * a.VERDICT_VALUE[r.verdict] for r in results)
@@ -200,7 +220,19 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
     ]
     counts = {v: sum(1 for r in results if r.verdict == v) for v in a.VERDICT_LABELS}
     answered = [r for r in results if r.verdict == a.ANSWERED]
-    score = _score(results)
+    scored = [r for r in results if is_scored(r)]
+    if len(scored) < MIN_QUESTIONS:
+        reason = (
+            f"扣除網站沒有談到的主題後，只剩 {len(scored)} 個可檢測的問題"
+            f"（至少需要 {MIN_QUESTIONS} 個），AEO 本次未充分評估。"
+        )
+        return AeoEvaluation(
+            "insufficient",
+            reason,
+            summary={**base_summary, "status": "insufficient", "reason": reason},
+            findings=_render_findings(base_summary),
+        )
+    score = _score(scored)
     directives = {p.url: robots_directives(p.html, p.headers) for p in usable}
     raw_texts = {
         url: _normalize(" ".join(passage.text for passage in content.passages))
@@ -210,6 +242,9 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
     questions = []
     for r in results:
         row = r.as_dict()
+        row["scored"] = is_scored(r)
+        if not row["scored"]:
+            row["not_scored_reason"] = NOT_SCORED_REASON
         if citations.get(id(r)):
             row["citation"] = citations[id(r)]
         questions.append(row)
@@ -219,7 +254,8 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
         "reason": "",
         "questions_total": len(results),
         "counts": counts,
-        "answered_ratio": round(len(answered) / len(results), 3),
+        "answered_ratio": round(len(answered) / len(scored), 3),
+        "not_scored": len(results) - len(scored),
         "evidence_ratio": (
             round(sum(1 for r in answered if r.value_in_quote) / len(answered), 3)
             if answered
@@ -234,7 +270,7 @@ def evaluate_site(pages: list[SitePage]) -> AeoEvaluation:
         "citation": _citation_summary([c for c in citations.values() if c]),
         "questions": questions,
     }
-    findings = _question_findings(results) + _render_findings(base_summary)
+    findings = _question_findings(scored) + _render_findings(base_summary)
     return AeoEvaluation("evaluated", "", score, results, findings, summary)
 
 

@@ -108,6 +108,20 @@ class TestBuildSecretFinding(SimpleTestCase):
         self.assertEqual(finding["rule_id"], "exposure-hardcoded-secret")
         self.assertNotIn("R3dArch1ve2024", finding["evidence"])
 
+    def test_browser_google_key_is_low_reminder_not_secret(self):
+        # Google 地圖／Firebase 的瀏覽器用金鑰本來就放在網頁裡（2026-10-10，原本判高風險）
+        html_text = 'firebase.initializeApp({apiKey: "AIzaSyFAKEfakeFAKEfakeFAKE123456"});'
+        secrets = secret_scanner.detect_secrets_in_text(html_text)
+        self.assertEqual([s["kind"] for s in secrets], ["google_api_key"])
+        self.assertIsNone(
+            secret_scanner.build_secret_finding(secrets, "https://a.example/", source="s")
+        )
+        finding = secret_scanner.build_browser_key_finding(
+            secrets, "https://a.example/", source="s"
+        )
+        self.assertEqual(finding["severity"], "low")
+        self.assertEqual(finding["rule_id"], "exposure-browser-api-key")
+
     def test_build_finding_none_when_empty(self):
         self.assertIsNone(
             secret_scanner.build_secret_finding([], "x", source="s")

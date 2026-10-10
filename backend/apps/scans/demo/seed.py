@@ -24,6 +24,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.scans.models import Finding, FixOutput, Page, ScanJob, SiteProject
+from apps.scans.versions import RULESET_VERSION, SCORING_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,10 @@ def create_demo_project(user) -> SiteProject | None:
         )
         scan.started_at = _parse(row["started_at"]) + delta
         scan.completed_at = target
+        # 三次示範掃描視為同一套規則，總覽才會顯示 57 → 60 → 61 的分數變化；
+        # 匯出資料沒有版本欄位，空字串會被當成版本不明而寫「評分規則已更新，無法直接比較」
+        scan.scoring_version = SCORING_VERSION
+        scan.ruleset_version = RULESET_VERSION
         scan.save()
         # created_at 是 auto_now_add，只能建立後再改
         ScanJob.objects.filter(id=scan.id).update(created_at=_parse(row["created_at"]) + delta)
@@ -188,6 +193,8 @@ def create_demo_project(user) -> SiteProject | None:
                 for finding in entry["findings"]
             ]
         )
+        # 匯出資料的分數是當時公式算的；用目前公式重算，與分數說明、評分版本一致
+        rescore_with_current_formula(scan)
         fix = row.get("fix_output")
         if fix:
             FixOutput.objects.create(
@@ -199,6 +206,12 @@ def create_demo_project(user) -> SiteProject | None:
                 generated_at=target + timedelta(minutes=10),
             )
     return project
+
+
+def rescore_with_current_formula(scan) -> None:
+    from apps.scans.finding_normalization import _rescore
+
+    _rescore(scan)
 
 
 def create_demo_project_safely(user) -> None:

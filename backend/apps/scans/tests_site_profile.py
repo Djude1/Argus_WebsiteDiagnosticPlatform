@@ -197,7 +197,7 @@ class StrengthTests(SimpleTestCase):
                 findings=[],
                 categories={"security"},
             )
-        self.assertEqual(profile["version"], 2)
+        self.assertEqual(profile["version"], 3)
         self.assertIn("https", {s["key"] for s in profile["strengths"]})
 
 

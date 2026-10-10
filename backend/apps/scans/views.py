@@ -443,6 +443,30 @@ class ScanJobViewSet(viewsets.ModelViewSet):
             status=status.HTTP_202_ACCEPTED if dispatched else status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=["post"], url_path="ai-insight")
+    def ai_insight(self, request, pk=None):
+        """重新產生 AI 掃描解讀：只有沒有結果、失敗或卡住時才派工（已完成的不重產）。"""
+        from apps.scans.ai_insight import can_regenerate, schedule_ai_insight
+
+        scan_job = self.get_object()
+        if not settings.ARGUS_AI_INSIGHT_ENABLED:
+            return Response(
+                {"detail": "AI 掃描解讀目前未開放。"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if scan_job.status != ScanJob.Status.COMPLETED or (
+            scan_job.project_id and scan_job.project.is_demo
+        ):
+            return Response(
+                {"detail": "只有已完成的掃描可以產生 AI 解讀。"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not can_regenerate(scan_job.ai_insight):
+            return Response({"ai_insight": scan_job.ai_insight}, status=status.HTTP_200_OK)
+        schedule_ai_insight(scan_job)
+        scan_job.refresh_from_db(fields=["ai_insight"])
+        return Response({"ai_insight": scan_job.ai_insight}, status=status.HTTP_202_ACCEPTED)
+
     @action(detail=True, methods=["get"], url_path="fix-output/status")
     def fix_output_status(self, request, pk=None):
         """輪詢修正產出狀態（idle/generating/ready/failed 含原因）。"""

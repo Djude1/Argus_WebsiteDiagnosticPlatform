@@ -55,7 +55,7 @@ _SECRET_PATTERNS: tuple[tuple[str, str, str, re.Pattern[str], int], ...] = (
      re.compile(r"\bgh[pousr]_[0-9A-Za-z_]{16,}\b"), 0),
     ("stripe_live", "Stripe 正式金鑰 (sk_live)", "critical",
      re.compile(r"\bsk_live_[0-9A-Za-z_]{10,}\b"), 0),
-    ("google_api_key", "Google API Key", "high",
+    ("google_api_key", "Google API Key", "low",
      re.compile(r"\bAIza[0-9A-Za-z_\-]{10,}\b"), 0),
     ("stripe_test", "Stripe 測試金鑰 (sk_test)", "high",
      re.compile(r"\bsk_test_[0-9A-Za-z_]{10,}\b"), 0),
@@ -109,6 +109,9 @@ def detect_secrets_in_text(text: str) -> list[dict]:
             val = m.group("val")
             if _is_placeholder(val):
                 continue
+            # 值本身已由特定格式抓到（例：Firebase 設定 apiKey: "AIza…"），不重複列
+            if any(p.fullmatch(val) for _k, _l, _s, p, _g in _SECRET_PATTERNS):
+                continue
             key_name = m.group("key")
             _add("credential_assignment", f"明文機密賦值（{key_name}）", "medium",
                  f"{key_name}={val}", f"{key_name}={_mask(val)}")
@@ -155,12 +158,49 @@ def _summarize(secrets: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# 設計上就放在網頁裡給瀏覽器用的金鑰：Google Maps／Firebase 的 AIza 金鑰必須出現在前端
+# 才能運作，安全性靠 Google Cloud 的「HTTP 參照網址」與「API」限制，不是保密。
+# 頁面中出現時另列低風險提醒，不當成外洩的秘鑰（2026-10-10，原本判高風險）。
+BROWSER_PUBLIC_KINDS = frozenset({"google_api_key"})
+
+
+def build_browser_key_finding(secrets: list[dict], location: str, *, source: str) -> dict | None:
+    """頁面中的瀏覽器用金鑰（BROWSER_PUBLIC_KINDS）→ 低風險提醒；沒有回 None。"""
+    keys = [s for s in secrets if s["kind"] in BROWSER_PUBLIC_KINDS]
+    if not keys:
+        return None
+    return make_finding(
+        category="security",
+        severity="low",
+        rule_id="exposure-browser-api-key",
+        title="頁面中的瀏覽器用 API 金鑰需確認已設限制",
+        description=(
+            f"「{location}」的網頁程式碼裡有 {len(keys)} 組 Google API 金鑰。"
+            "Google 地圖、Firebase 等服務的金鑰本來就要放在網頁裡才能運作，"
+            "出現在頁面上不等於外洩；"
+            "但沒有設定使用限制時，別人可以拿去呼叫你的付費 API。"
+        ),
+        remediation=(
+            "到 Google Cloud Console 的「憑證」頁面，確認這組金鑰已設定"
+            "「應用程式限制：HTTP 參照網址（只允許你的網域）」"
+            "與「API 限制（只開放實際使用的 API）」。"
+        ),
+        evidence=f"位置：{location}\n{_summarize(keys)}",
+        evidence_source=source,
+        impact_area="secret_disclosure",
+        confidence=0.6,
+        priority_score=30.0,
+    )
+
+
 def build_secret_finding(secrets: list[dict], location: str, *, source: str) -> dict | None:
     """把一批秘鑰偵測結果包成單一 Finding dict（用 make_finding，含 owasp 待 tag）。
 
     location：來源描述（頁面 URL 或檔案路徑）。source：evidence_source 標記。
+    瀏覽器用金鑰（BROWSER_PUBLIC_KINDS）不算，另由 build_browser_key_finding 處理。
     無秘鑰回 None。severity 取批次中最高者。
     """
+    secrets = [s for s in secrets if s["kind"] not in BROWSER_PUBLIC_KINDS]
     if not secrets:
         return None
     order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}

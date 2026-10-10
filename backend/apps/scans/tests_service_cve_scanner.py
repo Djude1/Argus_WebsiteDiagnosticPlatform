@@ -74,6 +74,28 @@ class TestAnalyzeServices(TestCase):
         self.assertEqual(findings[0]["rule_id"], "service-known-cve")
         self.assertEqual(findings[0]["severity"], "high")
 
+    def test_distro_marker_caps_at_medium_with_assessment(self):
+        # 發行版會把修補補進舊版本、版本號不變：只憑標頭不足以判高風險（2026-10-10）
+        for server in ("nginx/1.15.7 (Ubuntu)", "nginx/1.12.0-1+deb9u3"):
+            finding = scs.analyze_services(self._pages(server))[0]
+            self.assertEqual(finding["rule_id"], "service-known-cve")
+            self.assertEqual(finding["severity"], "medium")
+            self.assertTrue(finding["evidence_json"]["backport_possible"])
+            self.assertIn("發行版", finding["description"])
+
+    def test_cve_finding_always_has_assessment(self):
+        finding = scs.analyze_services(self._pages("nginx/1.12.0"))[0]
+        self.assertFalse(finding["evidence_json"]["backport_possible"])
+        assessment = finding["evidence_json"]["assessment"]
+        self.assertEqual(set(assessment), {"condition", "observed", "missing", "verify"})
+        self.assertIn("版本號落在已知漏洞範圍", finding["title"])
+
+    def test_php_distro_suffix_counts_as_marker(self):
+        pages = [{"headers": {"x-powered-by": "PHP/7.4.3-4ubuntu2.19"},
+                  "final_url": "https://example.com/"}]
+        finding = scs.analyze_services(pages)[0]
+        self.assertTrue(finding["evidence_json"]["backport_possible"])
+
     def test_patched_version_in_db_falls_back_to_exposure(self):
         findings = scs.analyze_services(self._pages("nginx/1.20.0"))
         self.assertEqual(len(findings), 1)

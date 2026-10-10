@@ -1,4 +1,5 @@
 import hashlib
+import html
 import math
 import re
 from dataclasses import dataclass
@@ -141,10 +142,44 @@ _CARD_CONTEXT_KEYWORDS = (
 )
 
 
+# 卡片上印的分組方式：4-4-4-4（Visa／Master 等）、4-6-5（Amex）、4-6-4（Diners）、4-4-4-4-3（19 位）
+_CARD_GROUPINGS = ((4, 4, 4, 4), (4, 6, 5), (4, 6, 4), (4, 4, 4, 4, 3))
+
+
 def _is_formatted_card(match: str) -> bool:
-    """卡號有 4-4-4-4 / 4-6-5 之類分隔且去分隔後為 15/16 位 → 視為高信心格式。"""
-    digits = re.sub(r"\D", "", match)
-    return ("-" in match or " " in match) and len(digits) in (15, 16)
+    """卡號以同一種分隔符號照卡片的分組方式分段 → 視為高信心格式。
+
+    只看「有分隔、位數對」不夠：圖片檔名 20221027 0069652（日期＋流水號，8＋7 位）
+    巧合通過 Luhn 就被當成卡號（2026-10-10 實測誤報）。
+    """
+    separators = set(re.findall(r"\D", match))
+    if len(separators) != 1:
+        return False
+    groups = tuple(len(g) for g in re.split(r"\D", match))
+    return groups in _CARD_GROUPINGS
+
+
+def _card_issuer_ok(digits: str) -> bool:
+    """開頭（發卡機構代碼 IIN）與位數符合現行卡組織的號碼規則。
+
+    隨機數字串通過 Luhn 的機率是十分之一，再要求開頭與位數對得上卡組織，
+    日期、訂單號、檔名裡的數字幾乎都會被排除。
+    """
+    n = len(digits)
+    p2, p3, p4 = int(digits[:2]), int(digits[:3]), int(digits[:4])
+    if digits[0] == "4":  # Visa
+        return n in (13, 16, 19)
+    if 51 <= p2 <= 55 or 2221 <= p4 <= 2720:  # Mastercard
+        return n == 16
+    if p2 in (34, 37):  # American Express
+        return n == 15
+    if p2 in (62, 65) or p4 == 6011 or 644 <= p3 <= 649:  # 銀聯、Discover
+        return 16 <= n <= 19
+    if 3528 <= p4 <= 3589:  # JCB
+        return 16 <= n <= 19
+    if p2 in (36, 38, 39) or 300 <= p3 <= 305:  # Diners Club
+        return 14 <= n <= 19
+    return False
 
 
 def _card_has_context(text: str, match: str, window: int = 48) -> bool:
@@ -165,13 +200,14 @@ def detect_pii_in_text(text: str) -> dict[str, list[str]]:
 
     身分證與信用卡會額外用檢查碼過濾，降低 false positive。
 
-    信用卡精準度（收斂誤報）：通過 Luhn 後，僅在「格式化（含分隔且 15/16 位）」
+    信用卡精準度（收斂誤報）：通過 Luhn 且開頭與位數符合卡組織規則後，僅在「照卡片分組」
     或「附近有信用卡關鍵字」時才採計；裸數字串（流水號、座標、雜湊片段巧過 Luhn）
     不採計，避免報告灌入大量假卡號（已於靶機報告觀察到此問題）。
     """
     text = text or ""
     cc_valid = [
-        m for m in dict.fromkeys(CREDIT_CARD_PATTERN.findall(text)) if is_valid_luhn(m)
+        m for m in dict.fromkeys(CREDIT_CARD_PATTERN.findall(text))
+        if is_valid_luhn(m) and _card_issuer_ok(re.sub(r"\D", "", m))
     ]
     credit_card = [
         m for m in cc_valid if _is_formatted_card(m) or _card_has_context(text, m)
@@ -273,6 +309,7 @@ class HtmlSignalParser(HTMLParser):
         self.image_empty_alt_large = 0
         self.form_count = 0
         self.form_without_csrf = 0
+        self.form_get_only = 0
         self.json_ld_blocks: list[str] = []
         self.dl_count = 0
         self.og_tags: set[str] = set()
@@ -313,10 +350,17 @@ class HtmlSignalParser(HTMLParser):
             self.form_count += 1
             self.in_form = True
             self.form_has_csrf = False
+            # 沒寫 method 依 HTML 規範是 GET；GET 表單（站內搜尋、篩選）不改變狀態，
+            # 不需要 CSRF token
+            self.form_is_post = attributes.get("method", "").strip().lower() == "post"
+            self.form_has_password = False
         elif normalized_tag == "input" and self.in_form:
             name = attributes.get("name", "").lower()
             if "csrf" in name or attributes.get("type", "").lower() == "hidden" and "token" in name:
                 self.form_has_csrf = True
+            if attributes.get("type", "").lower() == "password":
+                # 登入表單常不寫 method、改用 JavaScript 送出，仍視為會改變狀態
+                self.form_has_password = True
         elif normalized_tag == "script":
             self.current_script_type = attributes.get("type", "").lower()
             self.current_script_parts = []
@@ -337,7 +381,9 @@ class HtmlSignalParser(HTMLParser):
             self.current_script_type = ""
             self.current_script_parts = []
         elif normalized_tag == "form" and self.in_form:
-            if not self.form_has_csrf:
+            if not (self.form_is_post or self.form_has_password):
+                self.form_get_only += 1
+            elif not self.form_has_csrf:
                 self.form_without_csrf += 1
             self.in_form = False
             self.form_has_csrf = False
@@ -513,12 +559,18 @@ def analyze_page(page_input: PageAnalysisInput, categories: set[str] | None = No
     if runs("aeo"):
         findings.extend(analyze_aeo(page_input, parser))
     if runs("geo"):
-        # 內容結構（geo_structure.py 匯入 make_finding，放在函式內避免循環匯入）
+        # 內容結構／可引用性／衰退／RAG 分塊（匯入 make_finding，放在函式內避免循環匯入）
+        from apps.scans.geo_citability import citability_findings
+        from apps.scans.geo_decay import decay_findings
+        from apps.scans.geo_rag import rag_findings
         from apps.scans.geo_structure import structure_findings
 
         findings.extend(analyze_geo(page_input, parser))
         findings.extend(analyze_geo_fast(page_input, parser))
         findings.extend(structure_findings(page_input.url, page_input.html))
+        findings.extend(citability_findings(page_input.url, page_input.html))
+        findings.extend(decay_findings(page_input.url, page_input.html))
+        findings.extend(rag_findings(page_input.url, page_input.html))
     if runs("security"):
         findings.extend(analyze_security(page_input, parser))
         findings.extend(analyze_data_exposure(page_input))
@@ -548,9 +600,55 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
     findings.extend(_ux_layout_shift(page_input))
     findings.extend(_ux_tap_targets(page_input))
     findings.extend(_ux_unlabeled_fields(page_input))
+    findings.extend(_ux_fake_buttons(page_input))
     findings.extend(_ux_js_errors(page_input))
     findings.extend(_ux_axe(page_input))
     return findings
+
+
+# 假按鈕：非互動元素帶 onclick 但完全沒有 role —— 對螢幕報讀者、鍵盤與 AI agent 都不可見
+# （借鑑 claude-seo 的 agent_ux_check，MIT）。要求「完全沒有 role」把誤報壓到最低：
+# 作者只要加了 role=button/link 就代表有意識處理語意，不列入。
+_FAKE_BUTTON_RE = re.compile(
+    r"<(?:div|span|li)\b(?![^>]*\brole\s*=)[^>]*\bonclick\s*=",
+    re.IGNORECASE,
+)
+_MAX_FAKE_BUTTONS = 8
+
+
+def _ux_fake_buttons(page_input: PageAnalysisInput) -> list[dict]:
+    """假按鈕：用 <div>／<span> 掛 onclick 當按鈕，卻沒有 role。
+
+    真正的按鈕要用 <button>／<a>（或至少補 role＋tabindex＋鍵盤事件）。只掛 onclick 的
+    非互動元素：螢幕報讀者唸不出、鍵盤 Tab 不到、AI agent 從可及性樹也看不到這是可點的。
+    只讀原始 HTML、不需量測。
+    """
+    html = page_input.html or ""
+    count = len(_FAKE_BUTTON_RE.findall(html))
+    if count == 0:
+        return []
+    samples = [m.group(0)[:80] for m in list(_FAKE_BUTTON_RE.finditer(html))[:_MAX_FAKE_BUTTONS]]
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.LOW,
+            rule_id="ux-fake-button",
+            title="用 div／span 當按鈕（缺少語意）",
+            description=(
+                f"頁面有 {count} 個以 onclick 掛在 <div>／<span> 上的「假按鈕」，但沒有 role 標記。"
+                "螢幕報讀者會唸不出它是按鈕、鍵盤使用者 Tab 不到、AI 代理從可及性樹也看不到這是"
+                "可點擊的元素，等於對這些使用者隱藏了功能。"
+            ),
+            remediation=(
+                "改用真正的 <button>（頁面內動作）或 <a href>（導覽）；若必須用 <div>／<span>，"
+                "至少補上 role=\"button\"、tabindex=\"0\" 與鍵盤事件（Enter／Space）。"
+            ),
+            evidence="；".join(samples),
+            impact_area="accessibility",
+            priority_score=40,
+            evidence_type="html",
+        )
+    ]
 
 
 def _mobile_annotations(offenders: list[dict], label) -> dict | None:
@@ -1379,6 +1477,18 @@ def analyze_security_site_level(pages: list[dict]) -> list[dict]:
     return findings
 
 
+_HTML_NON_VISIBLE = re.compile(
+    r"<(script|style|template)\b[^>]*>.*?</\1\s*>|<!--.*?-->", re.IGNORECASE | re.DOTALL
+)
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+
+def _visible_text(html_text: str) -> str:
+    """頁面上看得到的文字：去掉 script／style／註解與所有標籤（含屬性值）。"""
+    text = _HTML_NON_VISIBLE.sub(" ", html_text)
+    return html.unescape(_HTML_TAG.sub(" ", text))
+
+
 def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     """從頁面 HTML 萃取 PII。
 
@@ -1391,6 +1501,12 @@ def _collect_pii(raw_html: str) -> tuple[dict, dict, dict, list[str]]:
     # 輸入框 placeholder 是填寫範例（例：e.g.0911-222-333），不是任何人的資料（2026-10-06 實測）
     safe_html = contacts.PLACEHOLDER_ATTR.sub(" ", safe_html)
     pii_main = detect_pii_in_text(safe_html)
+    # 身分證與信用卡（高風險）只看頁面上看得到的文字：屬性值（圖片檔名、網址）與
+    # script 裡的數字（時間戳、編號）巧合通過檢查碼的機會很高（2026-10-10：Next.js 圖片
+    # 檔名「20221027 0069652-ISO 9001…」被判成信用卡號）。HTML 註解另外掃，見下。
+    visible = detect_pii_in_text(_visible_text(safe_html))
+    pii_main["national_id"] = visible["national_id"]
+    pii_main["credit_card"] = visible["credit_card"]
 
     # B2: 額外掃 HTML 註解內容（開發者常留測試資料 / TODO / 卡號 / token）
     comments_text = "\n".join(_HTML_COMMENT.findall(raw_html))
@@ -1777,11 +1893,13 @@ def analyze_site_signals(site_signals: dict) -> list[dict]:
 
 # 分數衰減常數：category_score = 100 * exp(-penalty / SCORE_DECAY_CONSTANT)。
 # 這是刻意可調的產品參數，不是演算法細節。目前值讓：
-#   1 個低風險(4)   -> 92 分      1 個中風險(12)  -> 79 分
-#   1 個高風險(35)  -> 50 分      1 個嚴重(60)    -> 30 分
-#   典型中小企業體質(2 中 4 低 = 40) -> 45 分
+#   1 個低風險(4)   -> 96 分      1 個中風險(12)  -> 89 分
+#   1 個高風險(35)  -> 70 分      1 個嚴重(60)    -> 55 分
+#   典型中小企業體質(2 中 4 低 = 40) -> 67 分
 # 調小 = 更嚴格（分數掉更快），調大 = 更寬鬆。
-SCORE_DECAY_CONSTANT = 50.0
+# 2026-10-10 由 50 調為 100：50 時 GOV.UK、MDN 這類公認維護良好的網站只有 74、59 分，
+# 幾個中低風險項目就讓一個面向掉到 50 以下，分數反映的是「小問題累積多少」而不是網站品質。
+SCORE_DECAY_CONSTANT = 100.0
 
 
 def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:

@@ -56,6 +56,13 @@ class DemoDatasetTests(APITestCase):
         self.assertTrue(scans[0].findings.filter(severity="critical").exists())
         self.assertEqual(FixOutput.objects.get(scan_job=latest).status, FixOutput.Status.READY)
 
+    def test_scores_are_comparable_across_demo_scans(self):
+        """2026-10-09：示範專案要顯示 57 → 60 → 61 的分數變化，不能寫「評分規則已更新」。"""
+        from apps.scans.projects import project_overview
+
+        overview = project_overview(self.project)
+        self.assertTrue(overview["score_comparable"])
+
     def test_timestamps_are_spread_up_to_yesterday(self):
         scans = list(ScanJob.objects.filter(project=self.project).order_by("completed_at"))
         now = timezone.now()
