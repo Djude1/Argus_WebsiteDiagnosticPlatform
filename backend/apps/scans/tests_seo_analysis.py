@@ -309,6 +309,15 @@ class SeoReportTests(TestCase):
 
         self.assertIsNotNone(self._issue(data, "連結沒有可讀文字"))
 
+    def test_scan_carries_seo_score(self):
+        # 概覽的 SEO 分數卡：取 category_scores 的 seo，沒評估為 None
+        self.scan.category_scores = {"seo": 73, "security": 50}
+        self.scan.save(update_fields=["category_scores"])
+        self.assertEqual(project_seo(self.project, self.scan)["scan"]["score"], 73)
+        self.scan.category_scores = {"security": 50}
+        self.scan.save(update_fields=["category_scores"])
+        self.assertIsNone(project_seo(self.project, self.scan)["scan"]["score"])
+
     def test_robots_disallow_affects_indexable_and_duplicate_titles(self):
         data = project_seo(self.project, self.scan)
         pages = {page["url"]: page for page in data["pages"]}

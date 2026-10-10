@@ -1812,10 +1812,8 @@ def stage_settlement(ctx: ScanRunContext) -> dict:
             f"修正產出額度贈與失敗（{exc.__class__.__name__}）",
             level="warn",
         )
-    # AI 掃描解讀：完成後另外排背景任務，不拖慢掃描；失敗只記在 ai_insight
-    from apps.scans.ai_insight import schedule_ai_insight
-
-    schedule_ai_insight(scan_job)
+    # AI 掃描解讀不在完成時自動產生（2026-10-10 使用者決策）：每次都花 token，
+    # 改由使用者在報告頁按「產生 AI 解讀」才派工（views.ScanJobViewSet.ai_insight）
     return {
         "status": scan_job.status,
         "pages": len(ctx.crawled_pages),

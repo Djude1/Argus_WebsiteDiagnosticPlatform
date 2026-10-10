@@ -178,6 +178,14 @@ class AiInsightScheduleTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
+    def test_scan_completion_does_not_auto_generate(self):
+        # 2026-10-10 使用者決策：掃描完成不自動產生，只在使用者按按鈕時派工
+        import inspect
+
+        from apps.scans import tasks
+
+        self.assertNotIn("schedule_ai_insight", inspect.getsource(tasks.stage_settlement))
+
     @override_settings(ARGUS_AI_INSIGHT_ENABLED=False)
     def test_disabled_does_not_schedule(self):
         self.assertFalse(ai_insight.schedule_ai_insight(self.scan))

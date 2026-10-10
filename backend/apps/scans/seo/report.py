@@ -357,6 +357,8 @@ def project_seo(project: SiteProject, scan: ScanJob | None) -> dict:
             "created_at": _iso(scan.created_at),
             "completed_at": _iso(scan.completed_at),
             "seo_checked": "seo" in scan.effective_categories,
+            # 與資安分析頁相同：Argus 計分的 SEO 維度分數（沒評估＝None）
+            "score": (scan.category_scores or {}).get("seo"),
         },
         "overview": analysis["overview"],
         "pages": analysis["pages"],

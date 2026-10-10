@@ -315,8 +315,8 @@ def generate_ai_insight(scan_id: int, chain=None) -> dict:
 
 
 def schedule_ai_insight(scan: ScanJob) -> bool:
-    """排入背景產生（掃描完成時與使用者按「重新產生」共用）；未啟用或示範專案不排。
-    排程失敗只記在 ai_insight。"""
+    """排入背景產生：只在使用者按「產生 AI 解讀」時呼叫，掃描完成不自動產生。
+    未啟用或示範專案不排；排程失敗只記在 ai_insight。"""
     if not settings.ARGUS_AI_INSIGHT_ENABLED:
         return False
     if scan.project_id and scan.project.is_demo:
