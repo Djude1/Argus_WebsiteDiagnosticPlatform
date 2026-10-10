@@ -117,6 +117,57 @@ function ObservatoryGrade({ observatory }) {
   );
 }
 
+// 分數色調：≥80 良好／60–79 中等／<60 待加強（與總覽 scoreTone 一致）
+function scoreToneOf(score) {
+  if (score >= 80) return "good";
+  if (score >= 60) return "warn";
+  return "bad";
+}
+
+// Trust Stack 五層信任分（後端 trust_stack.py）：聚合既有訊號，不重新偵測、不計入分數
+function TrustStack({ trust }) {
+  if (!trust?.layers?.length) return null;
+  const scored = trust.layers.filter((layer) => layer.evaluated);
+  if (!scored.length) return null;
+  return (
+    <div className="site-observatory site-trust">
+      <h3 className="site-tech-title">信任輪廓（五層）</h3>
+      <p className="site-observatory-summary">
+        <span className={`site-observatory-grade is-${scoreToneOf(trust.overall_score)}`}>
+          {trust.overall_grade}
+        </span>
+        <span>總分 {trust.overall_score}（已評估面向的平均）</span>
+      </p>
+      <ul className="site-trust-layers">
+        {trust.layers.map((layer) => (
+          <li key={layer.key} className="site-trust-layer">
+            <span className="site-trust-label">{layer.label}</span>
+            {layer.evaluated ? (
+              <>
+                <span className="site-trust-bar" aria-hidden="true">
+                  <span
+                    className={`site-trust-fill is-${scoreToneOf(layer.score)}`}
+                    style={{ width: `${layer.score}%` }}
+                  />
+                </span>
+                <span className={`site-trust-score is-${scoreToneOf(layer.score)}`}>
+                  {layer.score}
+                </span>
+              </>
+            ) : (
+              <span className="site-trust-na">未評估</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="site-strength-evidence">
+        把這次掃描已經算出的訊號（安全標頭、結構化資料、來源引用、日期一致性等）換個角度聚合成五層，
+        看出哪一層強、哪一層弱；只對有掃到的面向評分，不重新偵測、不計入 Argus 分數。
+      </p>
+    </div>
+  );
+}
+
 const AI_PURPOSES = [
   ["search", "AI 搜尋與回答", "封鎖後，這些服務的回答比較不會引用、連結你的網站。"],
   ["user", "使用者觸發讀取", "使用者在對話中要求讀取網頁時才發出；依廠商說明不一定遵守 robots.txt。"],
@@ -215,6 +266,7 @@ function SiteArchitecture({ profile }) {
         </div>
       )}
       <ObservatoryGrade observatory={profile?.observatory} />
+      <TrustStack trust={profile?.trust_stack} />
       <AiBotPolicy policy={profile?.ai_bots} />
       {infra?.hostname && (
         <details className="site-profile-details">

@@ -27,7 +27,7 @@ function PrivacyPolicyPage() {
     <LegalLayout
       eyebrow="PRIVACY · 隱私權政策"
       title="Argus 隱私權政策"
-      intro="說明 Argus 網站健檢平台（以下稱「本服務」）收集哪些資料、為什麼收集、如何保存與保護，以及你可以行使的權利。"
+      intro="說明 Argus AI網站健檢平台（以下稱「本服務」）收集哪些資料、為什麼收集、如何保存與保護，以及你可以行使的權利。"
     >
       <section>
         <h2>1. 我們收集的資料</h2>
@@ -145,7 +145,7 @@ function TermsOfServicePage() {
     <LegalLayout
       eyebrow="TERMS · 服務條款"
       title="Argus 服務條款"
-      intro="使用 Argus 網站健檢平台（以下稱「本服務」）前，請閱讀以下條款。註冊或使用本服務即表示你同意這些條款。"
+      intro="使用 Argus AI網站健檢平台（以下稱「本服務」）前，請閱讀以下條款。註冊或使用本服務即表示你同意這些條款。"
     >
       <section>
         <h2>1. 服務內容</h2>

@@ -13,15 +13,28 @@ import { HomeSections } from "../../components/public/home/HomeSections.jsx";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
 import TechMarquee from "../../components/public/TechMarquee.jsx";
 import SiteNav, { SiteThemeToggle } from "../../components/navigation/SiteNav.jsx";
+import {
+  CheckCircleIcon,
+  ClockIcon,
+  CoinIcon,
+  DownloadIcon,
+  GaugeIcon,
+  MonitorIcon,
+  MoreIcon,
+  ScoreIcon,
+  ShareIcon,
+  ShieldIcon,
+  SparkIcon,
+} from "../../shared/LineIcons.jsx";
 
 const PUBLIC_NAV_ITEMS = [
   { to: "/project", label: "專案介紹" },
   { to: "/free-tools", label: "快速檢查" },
-  { to: "/purchase", label: "購買" },
-  { to: "/download", label: "下載" },
+  { to: "/purchase", label: "方案" },
   { to: "/verify", label: "報告查驗" },
   { to: "/partners", label: "商業合作" },
   { to: "/reviews", label: "評論" },
+  { to: "/download", label: "下載" },
 ];
 
 function PublicNav() {
@@ -76,7 +89,7 @@ function PublicFooter() {
       <div className="public-footer-inner">
         <div className="public-footer-about">
           <img src={brandLogo} className="public-footer-logo" alt="ARGUS" width="96" height="64" />
-          <div className="public-footer-sub">網站健檢平台</div>
+          <div className="public-footer-sub">AI網站健檢平台</div>
           <p className="public-footer-tagline">
             找出網站在 SEO、AEO、GEO、資安與使用體驗上的問題，附上證據並給出可直接套用的修正。
           </p>
@@ -96,7 +109,7 @@ function PublicFooter() {
           ))}
         </nav>
         <div className="public-footer-copy">
-          © Argus 網站健檢平台
+          © Argus AI網站健檢平台
         </div>
       </div>
     </footer>
@@ -139,6 +152,22 @@ const HOME_FAQ = [
   {
     q: "收到的報告怎麼確認是真的？",
     a: "每份報告都有唯一編號與 SHA-256 指紋，任何人都能在「報告查驗」頁輸入編號核對，不需要登入。",
+  },
+  {
+    q: "為什麼 JavaScript 動態載入的內容不會被檢測？",
+    a: "因為稽核主要模擬搜尋引擎與 AI 爬蟲直接透過 HTTP 取得網頁原始內容的情境，不會像完整瀏覽器一樣執行 JavaScript 並等待動態內容載入。如果重要文字、FAQ、產品資訊或結構化內容只有在 JavaScript 執行後才出現，部分搜尋引擎或 AI 爬蟲可能無法穩定取得這些資訊。因此，這類內容未被檢測到時，往往也代表網站在 SEO、AEO 或 GEO 上可能存在可見性風險。",
+  },
+  {
+    q: "掃描會不會影響或拖慢我的網站？",
+    a: "預設的被動模式只讀取頁面、不做任何破壞性操作，且請求有速率限制，正常網站幾乎不會有感。只有在你完成網域驗證、主動開啟的主動式資安測試才會送出探測性請求，而這也受範圍與授權層層控制。",
+  },
+  {
+    q: "分數是怎麼算出來的？是業界標準嗎？",
+    a: "分數是 Argus 自訂的模型、不是官方或業界標準：每個面向從 100 分起算，依發現問題的嚴重度與數量以指數方式衰減。報告與「分數說明」會逐項列出扣了多少、為什麼，你可以自己加總核對，不是一個黑盒數字。",
+  },
+  {
+    q: "為什麼有些項目顯示「未評估」？",
+    a: "當某項檢查沒有跑完、被網站阻擋，或內容太少不足以判斷時，我們寧可標示「未評估」也不會假裝「沒問題」。這代表這次無法下結論、不等於安全或滿分；你可以針對該面向重新掃描或補齊內容後再看。",
   },
 ];
 
@@ -236,65 +265,107 @@ function ProjectPage() {
   );
 }
 
+// 方案與計費頁（/purchase，2026-10-10 依現行計費改寫）。
+// 計費規則以 apps/billing/CLAUDE.md 為準：每頁每面向 2 點、首次完整掃描免費、每月贈點、
+// AI 擬真 UX 測試與深度資安附加費；點數包與月訂閱的價格一律讀公開 API，不寫死在前端。
+const BILLING_RULES = [
+  {
+    Icon: SparkIcon,
+    title: "第一次完整掃描免費",
+    desc: "註冊後第一次「被動、全網站、五個面向全選」的完整掃描（最多 50 頁，含 AI 擬真使用者測試）不扣點；掃描失敗或取消不算用掉。",
+  },
+  {
+    Icon: CoinIcon,
+    title: "依頁數 × 面向計費",
+    desc: "每頁每個面向 2 點，只勾需要的面向（五個全選＝每頁 10 點）。建立時依頁數上限預扣，完成後依實際掃到的頁數退回差額。",
+  },
+  {
+    Icon: CheckCircleIcon,
+    title: "失敗或取消全額退回",
+    desc: "掃描失敗、無法連線或你主動取消，預扣的點數自動全額退回；購買的點數不會過期。",
+  },
+];
+
+const COST_EXAMPLES = [
+  { scope: "單一頁面，五個面向", calc: "1 頁 × 5 面向 × 2 點", total: "10 點" },
+  { scope: "全網站 20 頁，只看 SEO 與 GEO", calc: "20 頁 × 2 面向 × 2 點", total: "80 點" },
+  { scope: "全網站 50 頁，五個面向", calc: "50 頁 × 5 面向 × 2 點 ＋ AI 擬真使用者測試 20 點", total: "520 點" },
+  { scope: "再加主動式深度資安測試", calc: "需先完成網域驗證；AI 資安專家沒有實際執行就退回", total: "＋50 點" },
+];
+
 const PURCHASE_FAQ = [
   {
     q: "點數會過期嗎？",
-    a: "不會。已購點數永久有效，未使用的點數可一直累積。",
+    a: "購買與訂閱取得的點數不會過期，未用完可以一直累積。",
   },
   {
-    q: "如何計算所需點數？",
-    a: "掃描按維度計費：每頁每維度 2 coin，只勾需要的維度即省費用（五維全選＝每頁 10 coin）。建立時依「最大頁數」預扣，完成後依實際頁數退回未使用的部分。",
+    q: "每月贈點是怎麼給的？",
+    a: "會員每月自動獲得 200 點。還沒有購點或訂閱過的帳號，贈點只會把餘額補到 600 點為止；購點或訂閱後就沒有這個上限。",
   },
   {
-    q: "支援哪些付款方式？",
-    a: "信用卡付款由綠界科技處理：購點送出訂單後導向綠界付款頁，付款完成由綠界回傳通知後才會入點；月訂閱以綠界信用卡定期定額每月自動扣款，可隨時取消。電子發票依你填寫的資料開立並寄至 Email。",
+    q: "點數包和月訂閱差在哪？",
+    a: "點數包是一次付清、立即入點，適合偶爾掃描；月訂閱以信用卡每月自動扣款、每期開始時發放點數，單價較低，適合定期巡檢，可隨時取消，已開始的當期點數照樣保留。",
+  },
+  {
+    q: "支援哪些付款方式？會開發票嗎？",
+    a: "信用卡付款由綠界科技處理，付款完成並由綠界回傳通知後才會入點。電子發票依你結帳時填寫的資料開立並寄到 Email。",
   },
   {
     q: "可以退費嗎？",
-    a: "如有特殊狀況請聯絡管理員，由 admin 在後台手動退費。掃描失敗或被取消時，系統會自動全額退回預扣的點數。",
+    a: "掃描失敗或取消時系統會自動退回點數。已購買點數如有特殊狀況需要退費，請透過商業合作頁或客服聯絡我們，由管理員協助處理。",
   },
 ];
 
 const COMPARE_ROWS = [
-  {
-    feature: "全站爬蟲（同網域、深度 3、最多 50 頁）",
-    argus: true, self: "技術門檻高", competitor: "通常另計",
-  },
-  {
-    feature: "SEO + AEO + GEO + 資安四維掃描",
-    argus: true, self: "工具多套需自己整合", competitor: "多為單一維度",
-  },
-  {
-    feature: "AI Agent 擬真使用者 UX 測試",
-    argus: true, self: "無", competitor: "罕見",
-  },
-  {
-    feature: "可互動報告（截圖紅框 + 雙向跳轉）",
-    argus: true, self: "Lighthouse 純文字", competitor: "PDF 為主",
-  },
-  {
-    feature: "PDF 報告自動匯出",
-    argus: true, self: "手寫", competitor: "額外加購",
-  },
-  {
-    feature: "結構化問題 Prompt 帶去 ChatGPT 修",
-    argus: true, self: "需要自己整理", competitor: "—",
-  },
-  {
-    feature: "按頁付費（用多少付多少）",
-    argus: true, self: "—", competitor: "月費綁約",
-  },
-  {
-    feature: "首月免費 200 coin",
-    argus: true, self: "—", competitor: "需信用卡綁定試用",
-  },
+  { feature: "全網站爬取（同網域、最多 50 頁，依 sitemap 補齊頁面）", self: "技術門檻高", competitor: "通常另計" },
+  { feature: "SEO、AEO、GEO、使用體驗、資安五個面向一次檢查", self: "多套工具自己整合", competitor: "多為單一面向" },
+  { feature: "AI 擬真使用者操作網站的使用體驗測試", self: "無", competitor: "罕見" },
+  { feature: "互動報告：截圖框出問題元素、逐項附證據", self: "Lighthouse 文字報告", competitor: "以 PDF 為主" },
+  { feature: "PDF 報告與公開防偽查驗", self: "需自行整理", competitor: "常需加購" },
+  { feature: "依頁數與面向計費，點數不過期", self: "—", competitor: "月費綁約" },
+  { feature: "第一次完整掃描免費", self: "—", competitor: "需綁信用卡試用" },
 ];
 
+function formatNtd(value) {
+  return `NT$ ${Number(value || 0).toLocaleString("zh-Hant")}`;
+}
+
+function formatCoins(value) {
+  return `${Number(value || 0).toLocaleString("zh-Hant")} 點`;
+}
+
+// 公開方案清單：點數包（/billing/plans/）與月訂閱（/billing/subscription/plans/）
+function usePublicPlans() {
+  const [state, setState] = useState({ loading: true, error: "", packs: [], subs: [], payEnabled: true });
+  const load = useCallback(() => {
+    setState((s) => ({ ...s, loading: true, error: "" }));
+    Promise.all([api.get("/billing/plans/"), api.get("/billing/subscription/plans/")])
+      .then(([packs, subs]) =>
+        setState({
+          loading: false,
+          error: "",
+          packs: packs.data.plans || [],
+          subs: subs.data.plans || [],
+          payEnabled: Boolean(packs.data.purchase_enabled),
+        }),
+      )
+      .catch(() => setState((s) => ({ ...s, loading: false, error: "方案載入失敗，請稍後重新整理。" })));
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  return { ...state, reload: load };
+}
+
 function PurchasePage() {
-  const [openFaq, setOpenFaq] = useState(0);
-  const navigate = useNavigate();
+  const accessToken = useArgusStore((s) => s.accessToken);
+  const plans = usePublicPlans();
+  // 結帳在會員區 /billing；未登入先登入再回到結帳
+  const checkoutTo = accessToken ? "/billing" : `/login?next=${encodeURIComponent("/billing")}`;
+  const planCta = accessToken ? "前往結帳" : "登入後購買";
+
   return (
-    <div className="public-page">
+    <div className="public-page pricing-page">
       <section className="public-hero compact">
         <div className="public-hero-bg" aria-hidden="true">
           <span className="hero-orb hero-orb-1" />
@@ -302,30 +373,138 @@ function PurchasePage() {
           <span className="hero-orb hero-orb-3" />
         </div>
         <div className="public-hero-content">
-          <span className="public-hero-eyebrow">PRICING · 為什麼選 Argus</span>
+          <span className="public-hero-eyebrow">PRICING · 方案與計費</span>
           <h1 className="public-hero-title">
-            <span className="hero-grad">按頁付費</span>，永久有效
+            先<span className="hero-grad">免費掃一次</span>
           </h1>
           <p className="public-hero-sub">
-            掃描按維度計費，每頁每維度 2 coin、只勾選需要的項目；新會員每月自動贈送 200 coin；買越多越划算，
-            點數不會過期，失敗或取消自動全額退回。
+            看完報告再決定怎麼付。之後依「頁數 × 面向」用點數計費，用多少扣多少；失敗或取消全額退回，點數不會過期。
           </p>
           <div className="public-hero-actions">
-            <button
-              type="button"
-              className="public-cta-primary"
-              onClick={() => navigate("/billing")}
-            >
-              看方案 + 開始結帳 →
-            </button>
+            <NavLink to={accessToken ? "/projects" : "/login?tab=register"} className="public-cta-primary">
+              {accessToken ? "開始掃描" : "免費註冊並掃描"}
+            </NavLink>
+            <a className="public-cta-ghost" href="#plans">看方案價格</a>
           </div>
         </div>
       </section>
 
       <section className="public-section">
         <header className="public-section-head">
+          <h2>怎麼計費</h2>
+          <p>三件事就能算清楚，沒有月費綁約。</p>
+        </header>
+        <ul className="pub-card-grid">
+          {BILLING_RULES.map(({ Icon, title, desc }) => (
+            <li key={title} className="pub-card">
+              <span className="hx-icon-box"><Icon /></span>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>試算範例</h2>
+          <p>建立掃描時會先顯示預估點數，確認後才送出。</p>
+        </header>
+        <div className="pricing-table-wrap">
+          <table className="pricing-table">
+            <thead>
+              <tr>
+                <th scope="col">掃描內容</th>
+                <th scope="col">算法</th>
+                <th scope="col">點數</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COST_EXAMPLES.map((row) => (
+                <tr key={row.scope}>
+                  <th scope="row">{row.scope}</th>
+                  <td>{row.calc}</td>
+                  <td className="pricing-table-total">{row.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="pricing-note">
+          AI 擬真使用者測試只在全網站且勾選使用體驗時收取；若實際只掃到 1 頁會自動退回。以上為平台目前的計費單價。
+        </p>
+      </section>
+
+      <section className="public-section" id="plans">
+        <header className="public-section-head">
+          <h2>方案價格</h2>
+          <p>偶爾掃描買點數包；定期巡檢用月訂閱，單價更低。</p>
+        </header>
+
+        {!plans.loading && !plans.error && !plans.payEnabled && (
+          <p className="pricing-banner">線上付款目前尚未開放，以下為參考價格；需要點數請透過「商業合作」與我們聯絡。</p>
+        )}
+        {plans.loading && <p className="pricing-note">載入方案中…</p>}
+        {plans.error && (
+          <p className="pricing-banner">
+            {plans.error}
+            <button type="button" className="pricing-retry" onClick={plans.reload}>重新載入</button>
+          </p>
+        )}
+
+        {plans.subs.length > 0 && (
+          <>
+            <h3 className="pricing-group-title">月訂閱</h3>
+            <ul className="pricing-plans">
+              {plans.subs.map((plan) => (
+                <li key={plan.code} className={`pub-card pricing-plan ${plan.badge ? "is-featured" : ""}`}>
+                  <div className="pricing-plan-head">
+                    <h4>{plan.name}</h4>
+                    {plan.badge && <span className="pricing-badge">{plan.badge}</span>}
+                  </div>
+                  <p className="pricing-price">
+                    {formatNtd(plan.monthly_price_ntd)}<small>／月</small>
+                  </p>
+                  <p className="pricing-coins">每月 {formatCoins(plan.monthly_coins)}</p>
+                  {plan.features?.length > 0 && (
+                    <ul className="pricing-features">
+                      {plan.features.map((feature) => (
+                        <li key={feature}><CheckCircleIcon /> {feature}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <NavLink to={checkoutTo} className="public-cta-ghost pricing-plan-cta">{planCta}</NavLink>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {plans.packs.length > 0 && (
+          <>
+            <h3 className="pricing-group-title">點數包（一次付清）</h3>
+            <ul className="pricing-plans">
+              {plans.packs.map((plan) => (
+                <li key={plan.code} className="pub-card pricing-plan">
+                  <div className="pricing-plan-head">
+                    <h4>{plan.name}</h4>
+                    {plan.badge && <span className="pricing-badge">{plan.badge}</span>}
+                  </div>
+                  <p className="pricing-price">{formatNtd(plan.price_ntd)}</p>
+                  <p className="pricing-coins">{formatCoins(plan.coin_amount)}</p>
+                  {plan.description && <p className="pricing-desc">{plan.description}</p>}
+                  <NavLink to={checkoutTo} className="public-cta-ghost pricing-plan-cta">{planCta}</NavLink>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <section className="public-section">
+        <header className="public-section-head">
           <h2>為什麼選 Argus</h2>
-          <p>Argus、自己做、市面工具，三者比一比</p>
+          <p>Argus、自己整合工具、市面上的健檢工具，三者比一比。</p>
         </header>
         <div className="public-compare-wrap">
           <table className="public-compare-table">
@@ -333,18 +512,19 @@ function PurchasePage() {
               <tr>
                 <th className="public-compare-feature">功能</th>
                 <th className="public-compare-argus">
-                  <div className="public-compare-brand">⟡ ARGUS</div>
+                  <div className="public-compare-brand">ARGUS</div>
                 </th>
-                <th>自己做</th>
-                <th>競品工具</th>
+                <th>自己整合</th>
+                <th>一般健檢工具</th>
               </tr>
             </thead>
             <tbody>
-              {COMPARE_ROWS.map((row, idx) => (
-                <tr key={idx}>
+              {COMPARE_ROWS.map((row) => (
+                <tr key={row.feature}>
                   <td className="public-compare-feature">{row.feature}</td>
                   <td className="public-compare-argus">
-                    {row.argus === true ? <span className="check-yes">✓</span> : row.argus}
+                    <CheckCircleIcon className="pricing-check" />
+                    <span className="pub-sr-only">有</span>
                   </td>
                   <td className="public-compare-cell">{row.self}</td>
                   <td className="public-compare-cell">{row.competitor}</td>
@@ -360,13 +540,8 @@ function PurchasePage() {
           <h2>常見問題</h2>
         </header>
         <div className="public-faq">
-          {PURCHASE_FAQ.map((item, idx) => (
-            <details
-              key={idx}
-              open={openFaq === idx}
-              onToggle={(e) => e.target.open && setOpenFaq(idx)}
-              className="public-faq-item"
-            >
+          {PURCHASE_FAQ.map((item) => (
+            <details key={item.q} className="public-faq-item">
               <summary>{item.q}</summary>
               <p>{item.a}</p>
             </details>
@@ -377,19 +552,17 @@ function PurchasePage() {
       <section className="public-section public-final-cta-wrap">
         <div className="public-final-cta">
           <div>
-            <h2 className="public-final-cta-title">準備好了嗎？</h2>
-            <p className="public-final-cta-sub">3 步驟結帳，30 秒入帳，馬上開始健檢你的網站。</p>
+            <h2 className="public-final-cta-title">先免費完整掃一次</h2>
+            <p className="public-final-cta-sub">第一次完整掃描不扣點，看完報告再決定要不要買點數或訂閱。</p>
           </div>
-          <button
-            type="button"
+          <NavLink
+            to={accessToken ? "/projects" : "/login?tab=register"}
             className="public-cta-primary public-final-cta-btn"
-            onClick={() => navigate("/billing")}
           >
-            前往結帳 →
-          </button>
+            {accessToken ? "開始掃描 →" : "免費註冊 →"}
+          </NavLink>
         </div>
       </section>
-
     </div>
   );
 }
@@ -413,6 +586,13 @@ function useInsightTool(endpoint) {
   };
   return { loading, result, error, run };
 }
+
+// 快速檢查分頁：圖示沿用首頁的線條圖示（.hx-icon-box），不用 emoji
+const FREE_TOOL_TABS = [
+  { key: "scan", label: "單頁檢查", Icon: ScoreIcon },
+  { key: "speed", label: "網站測速", Icon: GaugeIcon },
+  { key: "phish", label: "釣魚偵測", Icon: ShieldIcon },
+];
 
 function FreeToolsPage() {
   // 導流 CTA「登入建立完整掃描」要用；先前漏宣告，按鈕點了會丟 ReferenceError
@@ -471,10 +651,19 @@ function FreeToolsPage() {
         </div>
       </section>
 
-      <div className="insight-tabs">
-        <button type="button" className={`insight-tab ${tool === "scan" ? "active" : ""}`} onClick={() => setTool("scan")}>🩺 單頁檢查</button>
-        <button type="button" className={`insight-tab ${tool === "speed" ? "active" : ""}`} onClick={() => setTool("speed")}>⚡ 網站測速</button>
-        <button type="button" className={`insight-tab ${tool === "phish" ? "active" : ""}`} onClick={() => setTool("phish")}>🛡️ 釣魚偵測</button>
+      <div className="insight-tabs" role="group" aria-label="選擇檢查工具">
+        {FREE_TOOL_TABS.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            className={`insight-tab ${tool === key ? "active" : ""}`}
+            aria-pressed={tool === key}
+            onClick={() => setTool(key)}
+          >
+            <span className="hx-icon-box insight-tab-icon"><Icon /></span>
+            {label}
+          </button>
+        ))}
       </div>
 
       {tool === "scan" && (
@@ -764,6 +953,52 @@ function VerifyReportPage() {
 }
 
 
+// 下載頁（/download，2026-10-10 改版）：圖示改用全站線條圖示，不用 emoji。
+// 安裝卡片的圖示＝該平台要按的關鍵按鈕（安裝圖示／⋮ 選單／分享），平台名稱寫在標題。
+// 離線說明依 public/service-worker.js 的實際行為：只快取介面資源，API 不寫入快取。
+const INSTALL_BENEFITS = [
+  {
+    Icon: MonitorIcon,
+    title: "像 App 一樣開啟",
+    desc: "從桌面或主畫面一鍵進入，以獨立視窗執行，不用每次找分頁或輸入網址。",
+  },
+  {
+    Icon: SparkIcon,
+    title: "自動保持最新版",
+    desc: "不經過 App Store，Argus 更新後下次開啟就是新版本，不需要手動下載安裝檔。",
+  },
+  {
+    Icon: ClockIcon,
+    title: "開啟更快",
+    desc: "介面資源會保存在裝置上，再次開啟更快；掃描結果與報告仍需要連線才能讀取。",
+  },
+];
+
+const INSTALL_PLATFORMS = [
+  {
+    Icon: DownloadIcon,
+    platform: "電腦（Chrome／Edge）",
+    key: "網址列右側的安裝圖示",
+    steps: ["點網址列右側的「安裝」圖示（或瀏覽器選單裡的「安裝 Argus」）", "按「安裝」，桌面與開始選單就會出現 Argus"],
+  },
+  {
+    Icon: MoreIcon,
+    platform: "Android（Chrome）",
+    key: "右上角 ⋮ 選單",
+    steps: ["點右上角的 ⋮ 選單", "選「加到主畫面」或「安裝應用程式」並確認"],
+  },
+  {
+    Icon: ShareIcon,
+    platform: "iPhone／iPad（Safari）",
+    key: "下方的分享按鈕",
+    steps: ["用 Safari 開啟本網站，點下方的分享按鈕", "選「加入主畫面」，再按右上角「新增」"],
+  },
+];
+
+function formatReleaseDate(value) {
+  return value ? new Date(value).toLocaleDateString("zh-Hant") : "";
+}
+
 function DownloadPage() {
   const [releases, setReleases] = useState([]);
   const { canInstall, installed, trigger } = useInstallPrompt();
@@ -772,27 +1007,29 @@ function DownloadPage() {
   }, []);
   const latest = releases.find((r) => r.is_latest) || releases[0];
   return (
-    <div className="public-page">
-      <section className="public-hero">
+    <div className="public-page download-page">
+      <section className="public-hero compact">
         <div className="public-hero-bg" aria-hidden="true">
           <span className="hero-orb hero-orb-1" />
           <span className="hero-orb hero-orb-2" />
         </div>
         <div className="public-hero-content">
-          <span className="public-hero-eyebrow">DOWNLOAD · 下載安裝</span>
+          <span className="public-hero-eyebrow">DOWNLOAD · 安裝 App</span>
           <h1 className="public-hero-title">
-            <span className="hero-grad">隨身</span>使用 Argus
+            <span className="hero-grad">一鍵安裝</span> Argus
           </h1>
           <p className="public-hero-sub">
-            Argus 是 PWA（漸進式網頁應用），無需透過 App Store — 直接從瀏覽器加到主畫面，像 App 一樣開啟，支援離線瀏覽既有報告。
+            Argus 是漸進式網頁應用（PWA），不需要經過 App Store：從瀏覽器加入桌面或主畫面，就能像 App 一樣開啟。
           </p>
           <div className="public-hero-actions">
             {installed ? (
-              <span className="public-install-installed">✓ 已安裝，請從主畫面開啟</span>
+              <span className="public-install-installed">
+                <CheckCircleIcon className="install-inline-icon" /> 已安裝，請從桌面或主畫面開啟
+              </span>
             ) : (
               <button
                 type="button"
-                className="public-cta-primary public-install-cta"
+                className="public-cta-primary install-cta"
                 onClick={async () => {
                   if (canInstall) {
                     await trigger();
@@ -805,7 +1042,7 @@ function DownloadPage() {
                   }
                 }}
               >
-                ⬇ 點擊下載
+                <DownloadIcon className="install-inline-icon" /> 安裝 Argus
               </button>
             )}
             {!installed && latest?.download_url && (
@@ -814,40 +1051,49 @@ function DownloadPage() {
               </a>
             )}
           </div>
+          {!installed && !canInstall && (
+            <p className="install-hero-hint">這個瀏覽器不支援一鍵安裝時，按鈕會帶你到下方的手動步驟。</p>
+          )}
         </div>
+      </section>
+
+      <section className="public-section">
+        <header className="public-section-head">
+          <h2>安裝後可以做什麼</h2>
+          <p>功能與網頁版完全相同，只是開啟更方便。</p>
+        </header>
+        <ul className="pub-card-grid">
+          {INSTALL_BENEFITS.map(({ Icon, title, desc }) => (
+            <li key={title} className="pub-card">
+              <span className="hx-icon-box"><Icon /></span>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="public-section" id="install-guide">
         <header className="public-section-head">
           <h2>安裝步驟</h2>
-          <p>三大平台一覽</p>
+          <p>找到各平台的關鍵按鈕，兩步完成。</p>
         </header>
-        <div className="public-install-grid">
-          <div className="public-install-card">
-            <div className="public-install-icon">💻</div>
-            <div className="public-install-title">桌面（Chrome / Edge）</div>
-            <ol>
-              <li>網址列右側點選安裝圖示 <kbd>⬇</kbd></li>
-              <li>點「安裝」即出現桌面捷徑</li>
-            </ol>
-          </div>
-          <div className="public-install-card">
-            <div className="public-install-icon">🤖</div>
-            <div className="public-install-title">Android（Chrome）</div>
-            <ol>
-              <li>右上 ⋮ 選單 → 「加到主畫面」</li>
-              <li>確認 → 出現於主畫面</li>
-            </ol>
-          </div>
-          <div className="public-install-card">
-            <div className="public-install-icon">🍎</div>
-            <div className="public-install-title">iOS（Safari）</div>
-            <ol>
-              <li>下方分享按鈕 → 「加入主畫面」</li>
-              <li>確認 → 出現於主畫面</li>
-            </ol>
-          </div>
-        </div>
+        <ul className="pub-card-grid">
+          {INSTALL_PLATFORMS.map(({ Icon, platform, key, steps }) => (
+            <li key={platform} className="pub-card install-platform">
+              <div className="install-platform-head">
+                <span className="hx-icon-box"><Icon /></span>
+                <div>
+                  <h3>{platform}</h3>
+                  <p className="install-platform-key">關鍵按鈕：{key}</p>
+                </div>
+              </div>
+              <ol className="install-steps">
+                {steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {latest && (
@@ -856,18 +1102,16 @@ function DownloadPage() {
             <h2>版本資訊</h2>
             <p>最新版 {latest.version}（{latest.platform_label}）</p>
           </header>
-          <div className="public-release-card">
-            <div className="public-release-version">
-              <span className="public-release-badge">最新</span>
-              v{latest.version}
+          <div className="pub-card install-release">
+            <div className="install-release-head">
+              <span className="pricing-badge">最新</span>
+              <strong>v{latest.version}</strong>
+              <span className="install-release-date">{formatReleaseDate(latest.released_at)}</span>
             </div>
-            <div className="public-release-date">
-              {new Date(latest.released_at).toLocaleDateString("zh-Hant")}
-            </div>
-            <p className="public-release-notes">{latest.release_notes}</p>
+            {latest.release_notes && <p className="install-release-notes">{latest.release_notes}</p>}
             {latest.download_url && (
-              <a className="public-cta-primary" href={latest.download_url}>
-                ⬇ 取得 {latest.platform_label}
+              <a className="public-cta-ghost" href={latest.download_url}>
+                <DownloadIcon className="install-inline-icon" /> 取得 {latest.platform_label}
               </a>
             )}
           </div>
@@ -879,9 +1123,7 @@ function DownloadPage() {
                 {releases.slice(1).map((r) => (
                   <li key={r.id}>
                     <strong>v{r.version}</strong>
-                    <span className="public-release-history-date">
-                      {new Date(r.released_at).toLocaleDateString("zh-Hant")}
-                    </span>
+                    <span className="public-release-history-date">{formatReleaseDate(r.released_at)}</span>
                     <span>{r.release_notes}</span>
                   </li>
                 ))}
@@ -893,6 +1135,7 @@ function DownloadPage() {
     </div>
   );
 }
+
 
 // ============================================================
 // /admin React 後台（精簡 5 大分類 + dark cyan 主題）

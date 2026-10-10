@@ -405,8 +405,7 @@
 :root[data-theme="light"] .public-empty { color: #64748b; }
 :root[data-theme="light"] .insight-tool-card,
 :root[data-theme="light"] .insight-result-card,
-:root[data-theme="light"] .verify-aside,
-:root[data-theme="light"] .public-install-card {
+:root[data-theme="light"] .verify-aside {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
@@ -434,8 +433,7 @@
   background: rgba(15, 23, 42, 0.06);
   color: #0c4a6e;
 }
-:root[data-theme="light"] .insight-card-title,
-:root[data-theme="light"] .public-install-title { color: #132033; }
+:root[data-theme="light"] .insight-card-title { color: #132033; }
 :root[data-theme="light"] .insight-result-sub,
 :root[data-theme="light"] .insight-note,
 :root[data-theme="light"] .insight-metrics-grid span { color: #475569; }
@@ -451,8 +449,6 @@
   background: #f8fafc;
   border-color: rgba(15, 23, 42, 0.08);
 }
-:root[data-theme="light"] .public-install-card ol,
-:root[data-theme="light"] .public-install-card li { color: #475569; }
 :root[data-theme="light"] .public-compare-wrap {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -584,10 +580,6 @@
 :root[data-theme="light"] .public-faq-item summary { color: #132033; }
 :root[data-theme="light"] .public-faq-item summary::after { color: #0e7490; }
 :root[data-theme="light"] .public-faq-item p { color: #475569; }
-:root[data-theme="light"] .public-release-card {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-}
 :root[data-theme="light"] .public-release-history { background: #f8fafc; }
 :root[data-theme="light"] .public-release-history li { background: #FFFFFF; }
 :root[data-theme="light"] .public-footer {
@@ -633,22 +625,13 @@
   color: #991B1B;
   background: rgba(185, 28, 28, 0.14);
 }
-:root[data-theme="light"] .public-release-card h3 { color: #132033; }
-:root[data-theme="light"] .public-release-date,
-:root[data-theme="light"] .public-release-notes,
 :root[data-theme="light"] .public-release-history li { color: #475569; }
-:root[data-theme="light"] .public-release-version { color: #132033; }
 :root[data-theme="light"] .public-release-history li strong { color: #075985; }
 :root[data-theme="light"] .public-release-history summary { color: #075985; }
 :root[data-theme="light"] .public-install-installed {
   background: #dcfce7;
   color: #166534;
   border-color: rgba(22, 101, 52, 0.18);
-}
-:root[data-theme="light"] .public-install-card kbd {
-  background: #e0f2fe;
-  color: #075985;
-  border-color: rgba(8, 145, 178, 0.2);
 }
 :root[data-theme="light"] .insight-result-title { color: #132033; }
 
@@ -818,10 +801,8 @@
 }
 :root[data-theme="light"] .insight-tool-card,
 :root[data-theme="light"] .insight-result-card,
-:root[data-theme="light"] .public-install-card,
 :root[data-theme="light"] .public-final-cta,
 :root[data-theme="light"] .public-faq-item,
-:root[data-theme="light"] .public-release-card,
 :root[data-theme="light"] .public-compare-wrap {
   background: linear-gradient(145deg, var(--public-day-surface-strong), var(--public-day-surface));
   border-color: var(--public-day-line);
@@ -899,7 +880,6 @@
     gap: 0.5rem;
   }
 }
-
 
 /* ── 取自改版前 60-fix-output.css（462848b） ── */
 .insight-upsell {

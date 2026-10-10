@@ -49,7 +49,7 @@ export default function SharedOptimizationPage() {
     <div className="member-legacy">
       <div className="opt-public">
         <header className="opt-public-bar">
-          <Link to="/project" className="opt-public-brand" aria-label="Argus 網站健檢平台">
+          <Link to="/project" className="opt-public-brand" aria-label="Argus AI網站健檢平台">
             <ArgusLogo size={26} subtitle={null} />
           </Link>
           <span className="opt-public-badge">唯讀分享</span>

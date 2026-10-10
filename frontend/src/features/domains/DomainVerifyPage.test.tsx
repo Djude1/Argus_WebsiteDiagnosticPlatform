@@ -57,6 +57,23 @@ describe("DomainVerifyPage（Search Console 一鍵驗證）", () => {
     expect(await screen.findByText(/驗證成功/)).toBeInTheDocument();
   });
 
+  it("只有網站專案的連線且授權失效時，提示重新連接並可中斷連線", async () => {
+    // 2026-10-09 使用者回報：同步跳出授權失效，卻看不到中斷連線
+    api.fetchDomainSearchConsole.mockResolvedValue({
+      ...NOT_CONNECTED, connected: true, account_connection: false, needs_reconnect: true,
+    });
+    renderPage();
+    expect(await screen.findByText("授權已失效，請重新連接。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "連接 Google Search Console" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "中斷連線" })).toBeInTheDocument();
+  });
+
+  it("只有網站專案的連線（正常）時也有中斷連線", async () => {
+    api.fetchDomainSearchConsole.mockResolvedValue({ ...CONNECTED, account_connection: false });
+    renderPage();
+    expect(await screen.findByRole("button", { name: "中斷連線" })).toBeInTheDocument();
+  });
+
   it("Google 導回後顯示自動驗證的網域數", async () => {
     renderPage("/domains?gsc=connected&verified=3");
     expect(await screen.findByText("已連接 Search Console，3 個網域已自動通過驗證。")).toBeInTheDocument();

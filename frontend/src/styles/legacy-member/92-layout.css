@@ -256,6 +256,9 @@
 }
 .aeo-citation.is-not_citable { @apply bg-rose-50 text-rose-700; }
 .aeo-citation.is-limited { @apply bg-amber-50 text-amber-800; }
+.aeo-not-scored {
+  @apply shrink-0 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600;
+}
 .aeo-question-text {
   @apply min-w-0 flex-1 text-sm text-slate-800;
 }
@@ -285,4 +288,61 @@
 }
 .aeo-evidence-list blockquote {
   @apply m-0 border-l-2 border-cyan-300 pl-2 leading-relaxed text-slate-700;
+}
+
+/* AI 掃描解讀（components/scans/AiInsightPanel.jsx）：AI 產生的內容一律有標籤；
+   判斷用彩色徽章＋文字，不用左邊條 */
+.ai-insight {
+  @apply mb-4 flex flex-col gap-3;
+}
+.ai-insight-header {
+  @apply flex flex-wrap items-center gap-2;
+}
+.ai-insight-title {
+  @apply m-0 text-base font-semibold text-slate-900;
+}
+.ai-insight-tag {
+  @apply rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-xs text-cyan-800;
+}
+.ai-insight-summary {
+  @apply m-0 text-sm leading-relaxed text-slate-800;
+}
+.ai-insight-note {
+  @apply m-0 text-xs text-slate-500;
+}
+.ai-insight-empty {
+  @apply flex flex-wrap items-center gap-3;
+}
+.ai-insight-subtitle {
+  @apply m-0 mt-1 text-sm font-semibold text-slate-900;
+}
+.ai-insight-priorities {
+  @apply m-0 flex list-decimal flex-col gap-3 pl-5;
+}
+.ai-insight-priority-title {
+  @apply m-0 text-sm font-semibold text-slate-900;
+}
+.ai-insight-text {
+  @apply m-0 text-sm leading-relaxed text-slate-700;
+}
+.ai-insight-links {
+  @apply m-0 flex flex-wrap items-center gap-2 text-xs text-slate-500;
+}
+.ai-insight-link {
+  @apply cursor-pointer border-0 bg-transparent p-0 text-left text-sm text-cyan-700 underline-offset-2 hover:underline;
+}
+.ai-insight-triage {
+  @apply m-0 flex list-none flex-col gap-2 p-0;
+}
+.ai-insight-triage-row {
+  @apply flex flex-wrap items-baseline gap-2 rounded-lg border border-slate-200 px-3 py-2;
+}
+.ai-verdict {
+  @apply shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium;
+}
+.ai-verdict.is-good { @apply bg-emerald-100 text-emerald-700; }
+.ai-verdict.is-warn { @apply bg-amber-100 text-amber-800; }
+.ai-verdict.is-bad { @apply bg-rose-100 text-rose-700; }
+.ai-triage-note {
+  @apply m-0 flex flex-wrap items-baseline gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700;
 }

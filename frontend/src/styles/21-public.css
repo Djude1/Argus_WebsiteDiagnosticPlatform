@@ -777,18 +777,6 @@
     background: rgba(100, 116, 139, 0.045);
     color: #cbd5e1;
   }
-  .check-yes{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
-    color: #ffffff;
-    font-weight: 700;
-    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.35);
-  }
 
   .public-final-cta-wrap{
     margin-top: 24px;
@@ -1206,70 +1194,6 @@
     background: rgba(16, 185, 129, 0.15);
     color: #6ee7b7;
     border: 1px solid rgba(110, 231, 183, 0.4);
-  }
-  .public-install-hint{
-    @apply mx-auto max-w-md text-xs;
-    color: #94a3b8;
-  }
-  .public-install-cta{
-    animation: install-pulse 2.4s ease-in-out infinite;
-  }
-  @keyframes install-pulse {
-    0%, 100% { box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32); }
-    50% { box-shadow: 0 8px 28px rgba(99, 102, 241, 0.65); }
-  }
-  .public-install-grid{
-    @apply grid gap-4;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
-  .public-install-card{
-    @apply rounded-2xl p-6;
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(148, 163, 184, 0.14);
-  }
-  .public-install-icon{
-    @apply mb-3 text-3xl;
-  }
-  .public-install-title{
-    @apply mb-3 text-base font-bold;
-    color: #f1f5f9;
-  }
-  .public-install-card ol{
-    @apply space-y-1 pl-5 text-sm;
-    color: #cbd5e1;
-    list-style: decimal;
-    line-height: 1.7;
-  }
-  .public-install-card kbd{
-    @apply rounded px-1.5 py-0.5 text-xs;
-    background: rgba(56, 189, 248, 0.18);
-    color: #67e8f9;
-    border: 1px solid rgba(56, 189, 248, 0.4);
-  }
-
-  /* Release notes */
-  .public-release-card{
-    @apply rounded-2xl p-6;
-    background: linear-gradient(160deg, rgba(6, 182, 212, 0.1), rgba(15, 23, 42, 0.8));
-    border: 1px solid rgba(103, 232, 249, 0.35);
-  }
-  .public-release-version{
-    @apply inline-flex items-center gap-3 text-2xl font-bold;
-    color: #f1f5f9;
-  }
-  .public-release-badge{
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold;
-    background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%);
-    color: #fff;
-  }
-  .public-release-date{
-    @apply mt-1 text-xs;
-    color: #94a3b8;
-  }
-  .public-release-notes{
-    @apply mt-3 text-sm;
-    color: #cbd5e1;
-    line-height: 1.8;
   }
   .public-release-history{
     @apply mt-3 rounded-xl p-4;

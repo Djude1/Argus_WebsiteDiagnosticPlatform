@@ -274,7 +274,7 @@
 :root:has(.public-nav.is-member) {
   scrollbar-gutter: stable;
 }
-/* 「網站健檢平台」與頭像在會員工具列放大一級 */
+/* 「AI網站健檢平台」與頭像在會員工具列放大一級 */
 .public-nav.is-member .public-brand-sub {
   font-size: 1.12rem !important;
   font-weight: 700;

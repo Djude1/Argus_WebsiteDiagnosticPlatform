@@ -166,11 +166,9 @@ function SearchConsoleCard({ status, busy, onConnect, onSync, onDisconnect }) {
             <button className="primary-button" type="button" onClick={onSync} disabled={busy}>
               {busy === "sync" ? "同步中…" : "重新同步網站"}
             </button>
-            {status.account_connection && (
-              <button className="domain-text-btn" type="button" onClick={onDisconnect} disabled={Boolean(busy)}>
-                中斷連線
-              </button>
-            )}
+            <button className="domain-text-btn" type="button" onClick={onDisconnect} disabled={Boolean(busy)}>
+              中斷連線
+            </button>
           </>
         ) : (
           <>
@@ -179,6 +177,11 @@ function SearchConsoleCard({ status, busy, onConnect, onSync, onDisconnect }) {
               {busy === "connect" ? "前往 Google…" : "連接 Google Search Console"}
             </button>
             <p className="domain-gsc-note">會前往 Google 授權頁，完成後自動回到這裡。</p>
+            {status.connected && (
+              <button className="domain-text-btn" type="button" onClick={onDisconnect} disabled={Boolean(busy)}>
+                中斷連線
+              </button>
+            )}
           </>
         )}
       </div>
@@ -289,7 +292,9 @@ export function DomainVerifyPage() {
   }
 
   async function handleDisconnect() {
-    const ok = await confirmDialog("中斷 Search Console 連線？Argus 會向 Google 撤銷授權；已驗證的網域照常有效到期滿。", { danger: true });
+    // 只有網站專案的連線（從 SEO 分析頁連接）時，這裡會一併中斷那些專案連線
+    const scope = gscStatus?.account_connection ? "" : "各網站專案 SEO 分析的連線也會一併中斷；";
+    const ok = await confirmDialog(`中斷 Search Console 連線？Argus 會向 Google 撤銷授權；${scope}已驗證的網域照常有效到期滿。`, { danger: true });
     if (!ok) return;
     setGscBusy("disconnect");
     try {

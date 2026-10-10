@@ -366,6 +366,44 @@ export function DownloadIcon(props) {
   );
 }
 
+// ── 公開頁：快速檢查分頁、下載頁安裝步驟（2026-10-10，取代 emoji） ──
+
+export function GaugeIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M3.8 16.6a8.2 8.2 0 0116.4 0z" />
+      <path d="M12 16.6l3.6-4.8" />
+      <circle cx="12" cy="16.6" r="1.1" />
+    </svg>
+  );
+}
+
+export function MonitorIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <rect className="ln-fill" x="3.4" y="4.4" width="17.2" height="11.6" rx="1.6" />
+      <path d="M12 16v3.6M8.6 19.8h6.8" />
+    </svg>
+  );
+}
+
+export function ShareIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path className="ln-fill" d="M8 10.4H6.4a1 1 0 00-1 1v7.8a1 1 0 001 1h11.2a1 1 0 001-1v-7.8a1 1 0 00-1-1H16" />
+      <path d="M12 3.6v10.2M8.6 7L12 3.6 15.4 7" />
+    </svg>
+  );
+}
+
+export function MoreIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 5.6h.01M12 12h.01M12 18.4h.01" strokeWidth="2.8" />
+    </svg>
+  );
+}
+
 export function ExternalIcon(props) {
   return (
     <svg {...base} {...props}>

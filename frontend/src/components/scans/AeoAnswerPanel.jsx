@@ -93,6 +93,9 @@ function AeoAnswerPanel({ report, withFilter = false }) {
                 onClick={() => setOpenKey(open ? null : key)}
               >
                 <span className={`aeo-verdict ${VERDICT_TONE[q.verdict] || ""}`}>{q.verdict_label}</span>
+                {q.scored === false && (
+                  <span className="aeo-not-scored" title={q.not_scored_reason}>不計分</span>
+                )}
                 {q.confidence_label && (
                   <span className={`aeo-confidence is-${q.confidence}`}>可信度：{q.confidence_label}</span>
                 )}
@@ -106,6 +109,7 @@ function AeoAnswerPanel({ report, withFilter = false }) {
               {open && (
                 <div className="aeo-question-body">
                   <p className="aeo-question-reason">{q.reason}</p>
+                  {q.scored === false && <p className="aeo-question-reason">{q.not_scored_reason}</p>}
                   {q.limitation && <p className="aeo-question-limit">判定限制：{q.limitation}</p>}
                   {q.citation && q.citation.reasons.length > 0 && (
                     <p className="aeo-question-limit">{q.citation.label}：{q.citation.reasons.join("；")}</p>

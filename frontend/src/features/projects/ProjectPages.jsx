@@ -782,6 +782,12 @@ function ProjectIssuesPage() {
       />
     ));
 
+  // 列表模式把 info 軟性建議（多為 GEO 內容訊號、加分項，不扣分）另外成區，
+  // 問題表只留需處理的項目；分組模式維持原本的完整分組，不拆開。
+  const listMode = groupMode === "all";
+  const problems = listMode ? filtered.filter((issue) => issue.severity !== "info") : filtered;
+  const suggestions = listMode ? filtered.filter((issue) => issue.severity === "info") : [];
+
   return (
     <div className="project-page">
       {header(
@@ -905,6 +911,8 @@ function ProjectIssuesPage() {
       <section className="panel issue-table-card">
         {filtered.length === 0 ? (
           <p className="hint-text">{issues.length ? "沒有符合篩選條件的問題。" : "這次掃描沒有發現問題。"}</p>
+        ) : listMode && problems.length === 0 ? (
+          <p className="hint-text">沒有需要處理的問題，只有下方的建議項目。</p>
         ) : (
           <div className="project-table-wrap">
             <table className="issue-table">
@@ -953,12 +961,29 @@ function ProjectIssuesPage() {
                   );
                 })
               ) : (
-                <tbody>{renderRows(filtered)}</tbody>
+                <tbody>{renderRows(problems)}</tbody>
               )}
             </table>
           </div>
         )}
       </section>
+
+      {listMode && suggestions.length > 0 && (
+        <section className="panel issue-table-card issue-suggest-card">
+          <h2 className="project-section-title">可強化的建議（{suggestions.length}）</h2>
+          <p className="hint-text">
+            以下是影響較小或屬加分性質的軟性建議（多為 GEO／內容層面的訊號），不一定代表問題；
+            有餘力再處理即可。
+          </p>
+          <div className="project-table-wrap">
+            <table className="issue-table">
+              <caption className="project-sr-only">建議清單</caption>
+              <IssueTableHead />
+              <tbody>{renderRows(suggestions)}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {data.missing.length > 0 && (
         <section className="panel" id="missing">

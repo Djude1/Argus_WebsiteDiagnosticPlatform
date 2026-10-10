@@ -1528,3 +1528,117 @@
   .speed-scores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .speed-scores.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ========================================
+   方案與計費、下載頁、快速檢查分頁（2026-10-10）
+   ----------------------------------------
+   圖示一律用首頁的線條圖示（.hx-icon-box，中性色），不用 emoji；
+   卡片沿用 --pub-* / --hx-card，深淺主題自動切換；提示框用整圈細框＋淡底，不用彩色左邊條。
+   ======================================== */
+.public-shell .pub-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* 快速檢查分頁：圖示＋文字；選中時圖示跟著反白 */
+.public-shell .insight-tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+}
+.public-shell .insight-tab-icon { width: 30px; height: 30px; border-radius: 8px; }
+.public-shell .insight-tab-icon svg { width: 17px; height: 17px; }
+.public-shell .insight-tab.active .insight-tab-icon {
+  color: #fff; border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.14);
+}
+
+/* 通用卡片格線（方案頁計費規則、下載頁好處與安裝步驟） */
+.public-shell .pub-card-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem;
+  list-style: none; margin: 0; padding: 0;
+}
+@media (min-width: 900px) {
+  .public-shell .pub-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.public-shell .pub-card {
+  display: flex; flex-direction: column; gap: 0.75rem;
+  padding: 1.4rem;
+  border: 1px solid var(--pub-line-strong);
+  border-radius: 14px;
+  background: var(--hx-card);
+}
+.public-shell .pub-card h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--pub-heading); }
+.public-shell .pub-card p { margin: 0; font-size: 0.95rem; line-height: 1.75; color: var(--pub-text); }
+
+/* 試算表 */
+.public-shell .pricing-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--pub-line-strong); border-radius: 14px; background: var(--hx-card);
+}
+.public-shell .pricing-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 0.95rem; }
+.public-shell .pricing-table th,
+.public-shell .pricing-table td {
+  padding: 0.85rem 1.1rem; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--pub-line); color: var(--pub-text);
+}
+.public-shell .pricing-table thead th { font-size: 0.85rem; font-weight: 600; color: var(--pub-muted); }
+.public-shell .pricing-table tbody th { font-weight: 600; color: var(--pub-heading); }
+.public-shell .pricing-table tbody tr:last-child > * { border-bottom: none; }
+.public-shell .pricing-table-total { white-space: nowrap; font-weight: 700; color: var(--pub-heading) !important; }
+.public-shell .pricing-note { margin: 0.85rem 0 0; font-size: 0.875rem; color: var(--pub-muted); }
+.public-shell .pricing-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem;
+  margin: 0 0 1.25rem; padding: 0.85rem 1.1rem;
+  border: 1px solid rgba(217, 119, 6, 0.45); border-radius: 12px;
+  background: rgba(217, 119, 6, 0.08); color: var(--pub-text); font-size: 0.925rem;
+}
+.public-shell .pricing-retry {
+  padding: 0.3rem 0.8rem; border: 1px solid var(--pub-line-strong); border-radius: 8px;
+  background: transparent; color: var(--pub-heading); font: inherit; cursor: pointer;
+}
+.public-shell .pricing-retry:hover { border-color: var(--pub-accent); }
+.public-shell .pricing-retry:focus-visible { outline: 2px solid var(--pub-accent); outline-offset: 2px; }
+
+/* 方案卡 */
+.public-shell .pricing-group-title {
+  margin: 1.5rem 0 0.85rem; font-size: 1.05rem; font-weight: 700; color: var(--pub-heading);
+}
+.public-shell .pricing-group-title:first-of-type { margin-top: 0; }
+.public-shell .pricing-plans {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;
+  list-style: none; margin: 0; padding: 0;
+}
+.public-shell .pricing-plan { gap: 0.55rem; }
+.public-shell .pricing-plan.is-featured { border-color: rgba(var(--hx-accent-rgb), 0.55); }
+.public-shell .pricing-plan-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.public-shell .pricing-plan-head h4 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--pub-heading); }
+.public-shell .pricing-badge {
+  display: inline-flex; align-items: center; padding: 0.15rem 0.55rem; border-radius: 999px;
+  border: 1px solid rgba(var(--hx-accent-rgb), 0.5); background: rgba(var(--hx-accent-rgb), 0.1);
+  color: var(--pub-accent); font-size: 0.8rem; font-weight: 700; white-space: nowrap;
+}
+.public-shell .pricing-price { font-size: 1.7rem !important; font-weight: 800; color: var(--pub-heading) !important; line-height: 1.2 !important; }
+.public-shell .pricing-price small { margin-left: 0.15rem; font-size: 0.9rem; font-weight: 600; color: var(--pub-muted); }
+.public-shell .pricing-coins { font-weight: 700; color: var(--pub-accent) !important; }
+.public-shell .pricing-desc { color: var(--pub-muted) !important; }
+.public-shell .pricing-features { display: grid; gap: 0.4rem; margin: 0.2rem 0 0; padding: 0; list-style: none; }
+.public-shell .pricing-features li {
+  display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.9rem; line-height: 1.6; color: var(--pub-text);
+}
+.public-shell .pricing-features svg { width: 17px; height: 17px; flex-shrink: 0; margin-top: 0.15rem; color: var(--hx-icon); }
+.public-shell .pricing-plan-cta { margin-top: auto; justify-content: center; text-align: center; }
+.public-shell .pricing-check { width: 22px; height: 22px; color: var(--pub-accent); vertical-align: middle; }
+
+/* 下載頁 */
+.public-shell .install-inline-icon { width: 18px; height: 18px; vertical-align: -3px; }
+.public-shell .install-cta { display: inline-flex; align-items: center; gap: 0.5rem; }
+.public-shell .install-hero-hint { margin: 0.9rem 0 0; font-size: 0.875rem; color: var(--pub-muted); }
+.public-shell .install-platform-head { display: flex; align-items: center; gap: 0.85rem; }
+.public-shell .install-platform-key { font-size: 0.85rem !important; color: var(--pub-muted) !important; }
+.public-shell .install-steps {
+  margin: 0; padding-left: 1.25rem; list-style: decimal;
+  display: grid; gap: 0.4rem; font-size: 0.95rem; line-height: 1.7; color: var(--pub-text);
+}
+.public-shell .install-release { gap: 0.85rem; align-items: flex-start; }
+.public-shell .install-release-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; }
+.public-shell .install-release-head strong { font-size: 1.35rem; color: var(--pub-heading); }
+.public-shell .install-release-date { font-size: 0.875rem; color: var(--pub-muted); }
+.public-shell .install-release-notes { white-space: pre-line; }

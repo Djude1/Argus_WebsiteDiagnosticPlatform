@@ -32,6 +32,25 @@ describe("AeoAnswerPanel", () => {
     expect(screen.queryByText("可回答")).not.toBeInTheDocument();
   });
 
+  it("網站沒有談到的題目標示不計分並說明原因", async () => {
+    const user = userEvent.setup();
+    const report = {
+      ...evaluated,
+      questions: [
+        ...evaluated.questions,
+        {
+          key: "refund", text: "退款或退貨規定是什麼？", verdict: "missing", verdict_label: "無可用答案",
+          reason: "已掃描的頁面中找不到提到這個主題的段落", evidence: [],
+          scored: false, not_scored_reason: "網站沒有任何段落談到這個主題，可能不提供這項服務，不計分。",
+        },
+      ],
+    };
+    render(<AeoAnswerPanel report={report} />);
+    expect(screen.getByText("不計分")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /退款或退貨規定是什麼？/ }));
+    expect(screen.getByText(/可能不提供這項服務，不計分/)).toBeInTheDocument();
+  });
+
   it("沒有檢測結果（舊掃描）時不顯示", () => {
     const { container } = render(<AeoAnswerPanel report={{}} />);
     expect(container).toBeEmptyDOMElement();

@@ -1,7 +1,7 @@
 {
-  "name": "Argus 網站健檢平台",
+  "name": "Argus AI網站健檢平台",
   "short_name": "Argus",
-  "description": "Argus 網站健檢平台 — SEO、AEO、GEO、使用體驗與資安五面向檢查＋互動式報告",
+  "description": "Argus AI網站健檢平台 — SEO、AEO、GEO、使用體驗與資安五面向檢查＋互動式報告",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

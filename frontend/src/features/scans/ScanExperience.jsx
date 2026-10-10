@@ -22,6 +22,7 @@ import { api, fetchVerifiedDomains } from "../../api";
 import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
+import { AiInsightPanel, AiTriageNote } from "../../components/scans/AiInsightPanel";
 import { PerformancePanel } from "../../components/scans/PerformancePanel";
 import { ScoreBreakdownPanel } from "../../components/scans/ScoreBreakdownPanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
@@ -1123,10 +1124,11 @@ function ScreenshotCanvas({ scan, targetPage, findings, selectedFinding, onSelec
         URL.revokeObjectURL(objectUrl);
       }
     };
-    // scan 只認 id：ScanDetailPage 每 2 秒 polling 會產生全新的 scan 物件參考，
-    // 若把整個 scan 物件放進依賴陣列，即使內容沒變也會每次重新清空/重抓截圖，畫面閃爍。
+    // scan 與 targetPage 都只認 id：掃描進行中每 2 秒 polling 會產生全新的物件參考，
+    // 放整個物件進依賴陣列，即使內容沒變也會每次清空／重抓截圖，SEO、AEO… 各階段畫面一直閃。
+    // 截圖在爬取階段就和頁面一起存好，同一頁不會再變，不需要重抓（2026-10-09）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan?.id, targetPage, variant]);
+  }, [scan?.id, targetPage?.id, variant]);
 
   function syncScale() {
     const image = imageRef.current;
@@ -1324,6 +1326,8 @@ function FindingsWorkspace({ scan }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [cancelBusy, setCancelBusy] = useState(false);
+  // AI 解讀（AiInsightPanel 產生中會自己輪詢，更新後同步到這裡給問題詳情的 AI 複核用）
+  const [aiInsight, setAiInsight] = useState(null);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
 
   async function handleCancel() {
@@ -1605,6 +1609,16 @@ function FindingsWorkspace({ scan }) {
         </div>
       )}
 
+      <AiInsightPanel
+        scan={scan}
+        findings={findings}
+        onInsightChange={setAiInsight}
+        onSelectRule={(ruleId) => {
+          const matched = findings.find((f) => f.rule_id === ruleId);
+          if (matched) selectFinding(matched);
+        }}
+      />
+
       {/* 檢視器：左邊問題清單、右邊選中問題的說明與頁面截圖 */}
       <div className="scan-inspector">
         <div className="panel scan-inspector-list">
@@ -1661,6 +1675,7 @@ function FindingsWorkspace({ scan }) {
                 <span className={`category-pill cat-${selectedFinding.category}`}>{CATEGORY_LABELS[selectedFinding.category] || selectedFinding.category}</span>
               </p>
               <h3 className="finding-detail-title">{selectedFinding.title}</h3>
+              <AiTriageNote insight={aiInsight} finding={selectedFinding} />
               <p>{selectedFinding.description}</p>
               <p className="finding-detail-label">怎麼修</p>
               <p>{selectedFinding.remediation}</p>

@@ -7,7 +7,7 @@ const CATEGORY_LABELS = { seo: "SEO", aeo: "AEO", geo: "GEO", security: "資安"
 const SEVERITY_LABELS = { critical: "嚴重", high: "高", medium: "中", low: "低", info: "資訊" };
 const WEIGHT_ORDER = ["critical", "high", "medium", "low", "info"];
 
-function CategoryBreakdown({ entry }) {
+function CategoryBreakdown({ entry, decay }) {
   const label = CATEGORY_LABELS[entry.category] || entry.category;
   const tone = scoreTone(entry.score);
   return (
@@ -24,7 +24,7 @@ function CategoryBreakdown({ entry }) {
           ? `基準分 ${entry.base}（AEO 問答檢測的可回答性分數）`
           : `基準分 ${entry.base}`}
         {entry.penalty > 0
-          ? `，扣分權重合計 ${entry.penalty}：${entry.base} × e^(−${entry.penalty}／50) ≈ ${entry.recomputed_score} 分`
+          ? `，扣分權重合計 ${entry.penalty}：${entry.base} × e^(−${entry.penalty}／${decay}) ≈ ${entry.recomputed_score} 分`
           : "，沒有扣分項目"}
       </p>
       {entry.deductions.length > 0 && (
@@ -100,7 +100,7 @@ function ScoreBreakdownPanel({ data }) {
         )}
       </section>
       {data.categories.map((entry) => (
-        <CategoryBreakdown key={entry.category} entry={entry} />
+        <CategoryBreakdown key={entry.category} entry={entry} decay={data.decay_constant} />
       ))}
     </div>
   );
