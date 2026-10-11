@@ -93,6 +93,67 @@ class AiInsightGenerateTests(TestCase):
         self.scan.refresh_from_db()
         self.assertEqual(self.scan.ai_insight["status"], "ready")
 
+    def _agent_finding(self, **evidence_json):
+        return _finding(
+            self.scan, severity="medium", title="/api/content/scanner-info/ 洩漏掃描器設定",
+            description="AI Agent 觀察到端點回傳掃描器 User-Agent",
+            evidence="GET https://example.com/api/content/scanner-info/ → 200",
+            rule_id="agent-observed-security", evidence_json=evidence_json,
+        )
+
+    def _agent_first_payload(self):
+        return self._payload(priorities=[
+            {"title": "關閉掃描器資訊端點", "why": "AI 觀察", "how": "加上授權",
+             "rule_ids": ["agent-observed-security"]},
+            {"title": "確認頁面號碼來源", "why": "可能是個資", "how": "檢查頁面",
+             "rule_ids": ["SECURITY_PII_8B24BB8B28"]},
+        ])
+
+    def test_unverified_agent_observation_not_first_priority(self):
+        # 2026-10-11 Argus 自掃：刻意公開的 scanner-info 被 AI 觀察誤判，AI 解讀卻列為第一優先
+        self._agent_finding()
+        chain = FakeChain(self._agent_first_payload())
+        insight = ai_insight.generate_ai_insight(self.scan.id, chain=chain)
+        self.assertEqual(
+            [p["rule_ids"] for p in insight["priorities"]],
+            [["SECURITY_PII_8B24BB8B28"], ["agent-observed-security"]],
+        )
+        # 提示詞標明來源，並要求不可排第一
+        self.assertIn("AI Agent 觀察，未經工具驗證", chain.prompts[0])
+        self.assertIn("不可排在第一件", chain.prompts[0])
+
+    def test_tool_verified_agent_observation_keeps_order(self):
+        self._agent_finding(tool_verified=True)
+        insight = ai_insight.generate_ai_insight(
+            self.scan.id, chain=FakeChain(self._agent_first_payload())
+        )
+        self.assertEqual(insight["priorities"][0]["rule_ids"], ["agent-observed-security"])
+
+    def test_sentences_with_hosts_not_in_scan_results_are_removed(self):
+        # AI 自行補上報告沒有的 Google Fonts（2026-10-11 Argus 自掃實例）
+        _finding(
+            self.scan, severity="low", title="外部資源缺少 SRI 完整性驗證",
+            description=(
+                "外部資源 https://challenges.cloudflare.com/turnstile/v0/api.js 未設定 integrity"
+            ),
+            evidence="<script ...>", rule_id="sri-missing-integrity",
+        )
+        payload = self._payload(
+            summary="example.com 的安全標頭不足。fonts.googleapis.com 的字型缺少 SRI。",
+            priorities=[{
+                "title": "補強外部資源",
+                "why": "challenges.cloudflare.com 的腳本沒有 SRI。",
+                "how": "檢查 api.js 的載入方式。對 fonts.googleapis.com 的 link 加上 integrity。",
+                "rule_ids": ["sri-missing-integrity"],
+            }],
+        )
+        insight = ai_insight.generate_ai_insight(self.scan.id, chain=FakeChain(payload))
+        self.assertEqual(insight["summary"], "example.com 的安全標頭不足。")
+        priority = insight["priorities"][0]
+        self.assertEqual(priority["why"], "challenges.cloudflare.com 的腳本沒有 SRI。")
+        # api.js 是檔名不是網域，該句保留；捏造網域的句子刪掉
+        self.assertEqual(priority["how"], "檢查 api.js 的載入方式。")
+
     def test_does_not_change_severity_or_score(self):
         ai_insight.generate_ai_insight(self.scan.id, chain=FakeChain(self._payload()))
         self.scan.refresh_from_db()

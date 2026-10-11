@@ -631,17 +631,27 @@ class CrawlerHelperTests(APITestCase):
             "Cloudflare JavaScript 驗證，自動掃描無法通過",
         )
 
-    def test_classify_cf_challenge_detects_turnstile(self):
-        html = '<div class="cf-turnstile" data-sitekey="xxx"></div>'
+    def test_classify_cf_challenge_detects_managed_challenge(self):
+        html = '<div id="challenge-running">Checking your browser</div>'
         self.assertEqual(
             classify_cf_challenge(html),
             "Cloudflare Turnstile 驗證，需使用者互動才能通過",
         )
 
-    def test_classify_cf_challenge_turnstile_takes_priority_over_js(self):
-        # 兩種標記並存時 Turnstile 較嚴重（必擋），應優先回報
+    def test_classify_cf_challenge_ignores_turnstile_widget_in_site_form(self):
+        # 網站自己的登入／聯絡表單內嵌 Turnstile 是正常頁面（2026-10-11 Argus 自掃誤判 3 頁）
         html = (
-            '<script src="/cdn-cgi/challenge-platform/x.js"></script>'
+            "<html><body><h1>登入</h1><form>"
+            '<div class="cf-turnstile" data-sitekey="xxx"></div>'
+            '<input type="hidden" name="cf-turnstile-response" value="">'
+            "<button>登入</button></form></body></html>"
+        )
+        self.assertEqual(classify_cf_challenge(html), "")
+
+    def test_classify_cf_challenge_turnstile_takes_priority_over_js(self):
+        # 攔截頁同時帶 Turnstile 元件時，回報 Turnstile（必擋）
+        html = (
+            '<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/x.js"></script>'
             '<div class="cf-turnstile"></div>'
         )
         self.assertEqual(

@@ -31,7 +31,13 @@ class _SriParser(HTMLParser):
 # 這些服務的腳本內容會隨時更新、網址不帶版本，官方也不提供 SRI hash；加上 integrity
 # 反而會讓腳本在下一次更新後被瀏覽器擋掉。對它們建議 SRI 是做不到的建議，改由 CSP
 # 限制可載入的來源，所以不列入 SRI 缺失。
+# 2026-10-11 補上：Cloudflare Turnstile（官方說明不可鎖版本）、Google Fonts（CSS 依瀏覽器
+# 回不同內容）、reCAPTCHA 備援網域、hCaptcha——Argus 自掃時對 Turnstile 提出了做不到的建議。
 _DYNAMIC_SCRIPT_HOSTS = (
+    "challenges.cloudflare.com",
+    "fonts.googleapis.com",
+    "recaptcha.net",
+    "hcaptcha.com",
     "googletagmanager.com",
     "google-analytics.com",
     "googleadservices.com",

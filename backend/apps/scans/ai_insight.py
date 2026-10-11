@@ -50,6 +50,17 @@ _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 _SEVERITY_ZH = {"critical": "嚴重", "high": "高", "medium": "中", "low": "低", "info": "資訊"}
 
 
+_UNVERIFIED_LABEL = "AI Agent 觀察，未經工具驗證"
+
+# 輸出裡的網域（只認常見頂級網域，避免把 api.js、index.html 當成網域）
+_HOST_RE = re.compile(
+    r"(?<![\w.-])((?:[a-z0-9-]+\.)+(?:com|net|org|io|dev|app|co|ai|tw|jp|cn|uk|hk|gov|edu|"
+    r"info|biz|me|cloud|xyz|site|online))(?![\w-])",
+    re.IGNORECASE,
+)
+_SENTENCE_RE = re.compile(r"[^。！？；\n]+[。！？；\n]?")
+
+
 class AiInsightError(Exception):
     """可直接顯示給使用者的失敗原因（不含機密）。"""
 
@@ -85,8 +96,12 @@ def collect_groups(scan: ScanJob) -> list[dict]:
                 "source": finding.evidence_source or "",
                 "url": (finding.page.url if finding.page else "") or "",
                 "pages": 0,
+                # AI Agent 的資安觀察（agent-*）只要有一筆經主動工具驗證就算已驗證
+                "unverified_ai": key.startswith("agent-"),
             }
         group["pages"] += 1
+        if (finding.evidence_json or {}).get("tool_verified"):
+            group["unverified_ai"] = False
     ordered = sorted(
         groups.values(), key=lambda g: (_SEVERITY_ORDER.get(g["severity"], 9), -g["pages"])
     )
@@ -110,6 +125,7 @@ def build_prompt(scan: ScanJob, groups: list[dict], candidates: list[dict]) -> s
             "標題": g["title"],
             "說明": g["description"],
             "影響頁數": g["pages"],
+            "來源": _UNVERIFIED_LABEL if g.get("unverified_ai") else "規則或工具檢測",
         }
         for g in groups
     ]
@@ -145,7 +161,11 @@ def build_prompt(scan: ScanJob, groups: list[dict], candidates: list[dict]) -> s
         "也不要建議補 FAQPage／HowTo 結構化資料（Google 已不再顯示這兩種複合式搜尋結果）。\n"
         "2. priorities：挑最多 3 件最值得先處理的事。每件寫 title（動詞開頭的短句）、why"
         "（為什麼先做，1～2 句）、how（具體怎麼做，2～3 句）、rule_ids（對應的 rule_id，"
-        "只能用資料裡出現過的）。修法在同一處的問題可以合併成一件。\n"
+        "只能用資料裡出現過的）。修法在同一處的問題可以合併成一件。"
+        f"來源是「{_UNVERIFIED_LABEL}」的問題是 AI 的推測，可能是誤報（例如網站刻意公開的"
+        "說明資訊）：不可排在第一件；若列入，why 要寫明尚待人工確認，how 先寫怎麼確認。\n"
+        "提到具體網址、網域、檔案或第三方服務名稱時，必須是資料裡原文出現過的，"
+        "不可自行補上資料沒有的服務或資源。\n"
         "3. triage：對【待複核】的每一項，看證據判斷規則是否可能誤報。verdict 只能是 "
         f"\"{LIKELY_VALID}\"（證據支持這個問題）、\"{POSSIBLE_FALSE_POSITIVE}\"（證據看起來"
         f"不像真的問題，例如號碼其實是檔名、日期或編號）或 \"{NEEDS_CHECK}\"（證據不足以判斷）。"
@@ -183,24 +203,57 @@ def _text(value, limit: int) -> str:
     return str(value or "").strip()[:limit]
 
 
-def validate(data: dict, groups: list[dict], candidates: list[dict]) -> dict:
-    """只保留合約內的欄位：規則代號必須是本次掃描的、verdict 必須是列舉值。"""
+def known_hosts(scan_url: str, groups: list[dict]) -> set[str]:
+    """掃描結果裡出現過的網域（受測網站＋問題標題、說明、證據、頁面）。"""
+    text = " ".join(
+        [scan_url or ""]
+        + [f"{g['title']} {g['description']} {g['evidence']} {g['url']}" for g in groups]
+    )
+    return {h.lower() for h in _HOST_RE.findall(text)}
+
+
+def _host_known(host: str, known: set[str]) -> bool:
+    host = host.lower()
+    return any(host == k or k.endswith("." + host) or host.endswith("." + k) for k in known)
+
+
+def strip_unknown_hosts(text: str, known: set[str]) -> str:
+    """刪掉提到掃描結果沒出現過的網域的句子（AI 自行補上的資源，例如沒偵測到的 Google Fonts）。"""
+    kept = [
+        sentence for sentence in _SENTENCE_RE.findall(text or "")
+        if all(_host_known(h, known) for h in _HOST_RE.findall(sentence))
+    ]
+    return "".join(kept).strip()
+
+
+def validate(
+    data: dict, groups: list[dict], candidates: list[dict], scan_url: str = ""
+) -> dict:
+    """只保留合約內的欄位：規則代號必須是本次掃描的、verdict 必須是列舉值。
+    另外刪掉提到掃描結果沒出現過的網域的句子，並把只對應未驗證 AI 觀察的建議排到最後。"""
     known = {g["rule_id"] for g in groups}
     titles = {g["rule_id"]: g["title"] for g in groups}
-    summary = _text(data.get("summary"), 800)
+    unverified = {g["rule_id"] for g in groups if g.get("unverified_ai")}
+    hosts = known_hosts(scan_url, groups)
+    summary = strip_unknown_hosts(_text(data.get("summary"), 800), hosts)
     if not summary:
         raise AiInsightError("AI 沒有產生整體診斷")
     priorities = []
     for item in (data.get("priorities") or [])[:3]:
-        if not isinstance(item, dict) or not _text(item.get("title"), 80):
+        if not isinstance(item, dict):
+            continue
+        title = strip_unknown_hosts(_text(item.get("title"), 80), hosts)
+        if not title:
             continue
         rule_ids = [r for r in (item.get("rule_ids") or []) if isinstance(r, str) and r in known]
         priorities.append({
-            "title": _text(item.get("title"), 80),
-            "why": _text(item.get("why"), 300),
-            "how": _text(item.get("how"), 500),
+            "title": title,
+            "why": strip_unknown_hosts(_text(item.get("why"), 300), hosts),
+            "how": strip_unknown_hosts(_text(item.get("how"), 500), hosts),
             "rule_ids": list(dict.fromkeys(rule_ids)),
         })
+    # 只對應未經工具驗證的 AI 觀察的建議不放在前面（可能是誤報，例如刻意公開的資訊）
+    priorities.sort(key=lambda p: bool(p["rule_ids"]) and set(p["rule_ids"]) <= unverified)
     candidate_ids = {g["rule_id"] for g in candidates}
     triage = []
     seen: set[str] = set()
@@ -296,7 +349,10 @@ def generate_ai_insight(scan_id: int, chain=None) -> dict:
 
             chain = build_default_chain()
         response = _chat_with_retry(chain, build_prompt(scan, groups, candidates))
-        result = validate(parse_response(response.content), groups, candidates)
+        result = validate(
+            parse_response(response.content), groups, candidates,
+            scan.normalized_url or scan.original_url,
+        )
     except AiInsightError as exc:
         insight = {"status": "failed", "reason": str(exc)}
     except Exception as exc:  # noqa: BLE001 — provider 錯誤只記類別，不外洩回應內容

@@ -29,13 +29,20 @@ BLOCKED_STATUS_REASONS = {
     429: "請求頻率過高被限流",
 }
 
-# Cloudflare Turnstile / Managed Challenge 特徵字串。
+# Cloudflare Managed Challenge（Turnstile 攔截頁）特徵字串：只出現在 CF 擋下請求時回的攔截頁。
 # 這類驗證需要使用者互動（點擊勾選框），headless 瀏覽器無法自動通過。
 CF_TURNSTILE_MARKERS = (
-    "cf-turnstile",
-    "turnstile-wrapper",
     "cf-chl-bypass",
     "challenge-running",
+)
+
+# Turnstile 元件特徵：網站自己的登入、聯絡表單內嵌 Turnstile 時也會出現（`cf-turnstile`
+# 容器、`cf-turnstile-response` 隱藏欄位），單獨出現不代表頁面被攔截，只用來在確定是
+# 攔截頁時決定原因文字。2026-10-11 掃 Argus 自己的網站時，登入、商業合作等 3 個正常頁面
+# 因此被判成被阻擋、完全沒有分析。
+CF_TURNSTILE_WIDGET_MARKERS = (
+    "cf-turnstile",
+    "turnstile-wrapper",
 )
 
 # Cloudflare JavaScript challenge 特徵字串。
@@ -105,17 +112,21 @@ def classify_oversized(headers: dict | None, body: str | None = None) -> str:
 def classify_cf_challenge(html: str | None) -> str:
     """偵測頁面是否為 Cloudflare challenge 攔截頁，回傳中文原因；非 challenge 回傳空字串。
 
-    Turnstile 優先於一般 JS challenge：兩者並存時前者更嚴重（必擋）。
+    只有出現攔截頁才有的特徵時才算被阻擋；頁面只是內嵌 Turnstile 表單元件（登入、聯絡表單）
+    是正常頁面，照常分析。是攔截頁時，有 Turnstile 特徵的回報 Turnstile（需使用者互動，必擋），
+    否則回報 JavaScript 驗證。
     CF challenge 經常回 200 status code 但 body 是攔截頁，若交給 scanners 分析
     會誤判為「H1 缺失、meta 缺失」等假 finding，因此須在爬蟲層攔下並設為 blocked。
     """
     if not html:
         return ""
-    if any(marker in html for marker in CF_TURNSTILE_MARKERS):
+    managed = any(marker in html for marker in CF_TURNSTILE_MARKERS)
+    js_challenge = any(marker in html for marker in CF_JS_CHALLENGE_MARKERS)
+    if not (managed or js_challenge):
+        return ""
+    if managed or any(marker in html for marker in CF_TURNSTILE_WIDGET_MARKERS):
         return "Cloudflare Turnstile 驗證，需使用者互動才能通過"
-    if any(marker in html for marker in CF_JS_CHALLENGE_MARKERS):
-        return "Cloudflare JavaScript 驗證，自動掃描無法通過"
-    return ""
+    return "Cloudflare JavaScript 驗證，自動掃描無法通過"
 
 
 def normalize_crawl_url(url: str) -> str:

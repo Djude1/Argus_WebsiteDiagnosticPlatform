@@ -327,6 +327,17 @@ class TestSriScanner(TestCase):
         findings = sri_scanner.analyze_sri([self._page(html), self._page(html)])
         self.assertEqual(len(findings), 1)
 
+    def test_non_pinnable_services_not_flagged(self):
+        # 官方不支援鎖雜湊的服務：Turnstile、Google Fonts、reCAPTCHA 備援、hCaptcha（2026-10-11）
+        html = (
+            '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">'
+            "</script>"
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">'
+            '<script src="https://www.recaptcha.net/recaptcha/api.js"></script>'
+            '<script src="https://js.hcaptcha.com/1/api.js"></script>'
+        )
+        self.assertEqual(sri_scanner.analyze_sri([self._page(html)]), [])
+
     def test_empty_html_returns_empty(self):
         page = {"html": "", "final_url": "https://example.com/"}
         self.assertEqual(sri_scanner.analyze_sri([page]), [])
