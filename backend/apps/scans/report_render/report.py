@@ -74,9 +74,9 @@ def add_para(doc_or_cell, runs=None, align=None, before=0, after=6, line=1.15,
     return p
 
 
-def chip_run(paragraph, severity):
+def chip_run(paragraph, severity, size=9):
     meta = T.SEVERITY[severity]
-    add_run(paragraph, f" {severity} ", size=9, color=meta["text"], bold=True,
+    add_run(paragraph, f" {severity} ", size=size, color=meta["text"], bold=True,
             chip=meta["fill"])
 
 
@@ -109,8 +109,14 @@ def _dxa(cols):  # column widths list
     return cols
 
 
-def data_table(doc, headers, rows, widths):
-    """rows: list of lists; each cell is str OR list-of-run-dicts OR ('chip',sev)."""
+def data_table(doc, headers, rows, widths, grid=True, keep_together=None):
+    """rows: list of lists; each cell is str OR list-of-run-dicts OR ('chip',sev).
+
+    欄寬寫進表格格線（w:gridCol）：只設儲存格寬度時 LibreOffice 轉 PDF 會平均分欄，
+    「#」欄和「問題」欄一樣寬、說明欄擠成窄條（2026-10-11 逐頁審查）。
+    keep_together：短表（預設 6 列以內）整張不跨頁，避免只剩一兩列被擠到下一頁、
+    那一頁幾乎全白。
+    """
     table = doc.add_table(rows=1, cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
     table.autofit = False
@@ -133,6 +139,16 @@ def data_table(doc, headers, rows, widths):
             cell.width = Emu(int(widths[i] * 635))
             _fill_cell(cell, _normalize_cell(cell_data), fill=fill)
     _apply_table_borders(table)
+    if grid:
+        for i, col in enumerate(table.columns):
+            col.width = Emu(int(widths[i] * 635))
+    if keep_together is None:
+        keep_together = len(rows) <= 6
+    if keep_together:
+        for tr in table.rows[:-1]:
+            for cell in tr.cells:
+                for para in cell.paragraphs:
+                    para.paragraph_format.keep_with_next = True
     return table
 
 
@@ -302,11 +318,12 @@ def _card_label(doc, text, color=None):
 
 def severity_group_header(doc, severity, count):
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(16)
-    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.space_before = Pt(18)
+    p.paragraph_format.space_after = Pt(4)
     p.paragraph_format.keep_with_next = True
-    chip_run(p, severity)
-    add_run(p, f"  {severity}項目（{count} 項）", size=11.5, color=T.NAVY, bold=True)
+    # 2026-10-11 使用者回饋：分組標題要比問題名稱明顯大，一眼看出分段
+    chip_run(p, severity, size=12)
+    add_run(p, f"  {severity}項目（{count} 項）", size=15, color=T.NAVY, bold=True)
 
 
 # ---------- section/header/footer ----------
@@ -367,8 +384,13 @@ def generate_report(data, out_path, workdir=None):
     _priorities(doc, data)
     _why_matters(doc, data)
     _findings(doc, data)
-    _scan_info(doc, data, chart_paths)
-    _appendix(doc, data)
+    # 第 5 章起依實際有的內容編號：有 AEO 問答檢測時獨立一章，掃描資訊與附錄順延
+    next_no = 5
+    if (data.get("appendix") or {}).get("aeo_items"):
+        _aeo_chapter(doc, data, next_no)
+        next_no += 1
+    _scan_info(doc, data, chart_paths, next_no)
+    _appendix(doc, data, next_no + 1)
 
     X.fix_zoom_setting(doc)
     doc.save(out_path)
@@ -414,37 +436,13 @@ def _cover(doc, data, ch):
 
 def _summary(doc, data, ch):
     s = data["summary"]
-    h1(doc, "1", "一頁摘要")
+    h1(doc, "1", "網站總覽")
     if s.get("headline"):
         add_para(doc, [{"text": s["headline"], "size": T.TYPE["body"], "color": T.SLATE}],
                  after=8, line=1.5)
-    # 摘要頁要能直接回答「先做什麼」（2026-10-06 審查）：優先清單前三項提到最前面
-    top = (data.get("priorities") or [])[:3]
-    if top:
-        h2(doc, f"建議先處理這 {len(top)} 件事")
-        for i, pr in enumerate(top, 1):
-            p = add_para(doc, after=3, line=1.4)
-            add_run(p, f"{i}.  ", size=T.TYPE["body"], color=T.SLATE, bold=True)
-            chip_run(p, pr["severity"])
-            add_run(p, f"  {pr['problem']}", size=T.TYPE["body"], color=T.SLATE, bold=True)
-            if pr.get("ref"):
-                add_run(p, f"　詳見 {pr['ref']}", size=T.TYPE["meta"], color=T.GREY)
-    # 改一處就能一起解決的問題（Argus 在地修改：root_causes.py，與問題分析頁同一套歸類）
-    causes = s.get("root_causes") or []
-    if causes:
-        h2(doc, "改一處就能一起解決")
-        for cause in causes:
-            p = add_para(doc, after=1, line=1.4)
-            add_run(p, cause["title"], size=T.TYPE["body"], color=T.SLATE, bold=True)
-            add_run(p, f'　{len(cause["refs"])} 項：{"、".join(cause["refs"])}',
-                    size=T.TYPE["meta"], color=T.GREY)
-            add_para(doc, [{"text": f'在哪裡修：{cause["where"]}', "size": T.TYPE["meta"],
-                            "color": T.GREY}], after=5)
-    _site_profile(doc, data.get("site_profile") or {})
-    scores_heading = h2(doc, "各分類分數")
-    if data.get("site_profile"):
-        # 網站概況已佔滿第一頁：分數圖從新頁開始，避免標題孤零零留在頁尾
-        scores_heading.paragraph_format.page_break_before = True
+    # 2026-10-11 使用者要求：第一章先用圖表呈現整體狀況（分數、分佈、前次比較、
+    # 效能、連結、搜尋、拓撲與架構），要處理的問題從第 2 章開始
+    h2(doc, "各分類分數")
     add_image(doc, ch["categories"], 5.5)
     add_para(doc, [{"text": "虛線為 60 / 80 分門檻。分數為各「已評估」分類的平均；標示「未評估」者不納入計算。",
                     "size": 8, "color": T.LIGHTGREY}], after=8)
@@ -485,11 +483,11 @@ def _summary(doc, data, ch):
     # 互補。圖上只標得下較寬的分段，數量一律由下方文字圖例補齊。
     if "category_share" in ch:
         h2(doc, "問題集中在哪些分類")
-        add_image(doc, ch["category_share"], 5.5)
+        add_image(doc, ch["category_share"], 5.5).paragraph_format.keep_with_next = True
         cat_counts = {}
         for f in data["findings"]:
             cat_counts[f["category"]] = cat_counts.get(f["category"], 0) + 1
-        legend = add_para(doc, after=8)
+        legend = add_para(doc, after=8, keep_next=True)
         for name, n in [(c["name"], cat_counts.get(c["name"], 0)) for c in s["categories"]]:
             if not n:
                 continue
@@ -517,6 +515,8 @@ def _summary(doc, data, ch):
         ["40–59", "建議儘快處理", "累積的問題已可能影響流量或安全，建議近期處理。"],
         ["0–39", "需優先處理", "存在較高風險的項目，建議優先安排修補。"],
     ], [1600, 2100, 4400])
+    _site_metrics(doc, data, ch)
+    _site_profile(doc, data.get("site_profile") or {})
 
 
 def _site_profile(doc, sp):
@@ -600,7 +600,7 @@ def _clear_table_borders(table):
 def _priorities(doc, data):
     h1(doc, "2", "優先處理清單")
     add_para(doc, [{"text": "以下依「嚴重度 × 影響範圍」排序，是本次最值得先處理的項目。編號對應第 4 章的完整說明，可直接跳轉查看「怎麼修」。",
-                    "size": 10, "color": T.SLATE}], after=8, line=1.44)
+                    "size": 10, "color": T.SLATE}], after=8, line=1.44, keep_next=True)
     rows = []
     for i, pr in enumerate(data.get("priorities", []), 1):
         rows.append([str(i), ("chip", pr["severity"]), pr["problem"],
@@ -608,6 +608,17 @@ def _priorities(doc, data):
     if rows:
         data_table(doc, ["#", "嚴重度", "問題", "分類", "詳見"], rows,
                    [600, 1300, 3900, 1300, 1000])
+    # 改一處就能一起解決的問題（Argus 在地修改：root_causes.py，與問題分析頁同一套歸類）
+    causes = data["summary"].get("root_causes") or []
+    if causes:
+        h2(doc, "改一處就能一起解決")
+        for cause in causes:
+            p = add_para(doc, after=1, line=1.4)
+            add_run(p, cause["title"], size=T.TYPE["body"], color=T.SLATE, bold=True)
+            add_run(p, f'　{len(cause["refs"])} 項：{"、".join(cause["refs"])}',
+                    size=T.TYPE["meta"], color=T.GREY)
+            add_para(doc, [{"text": f'在哪裡修：{cause["where"]}', "size": T.TYPE["meta"],
+                            "color": T.GREY}], after=5)
     if data["summary"].get("priority_note"):
         add_para(doc, [{"text": data["summary"]["priority_note"], "size": 9, "color": T.GREY}],
                  before=6, after=0, line=1.38)
@@ -615,11 +626,14 @@ def _priorities(doc, data):
 
 def _why_matters(doc, data):
     items = data.get("why_matters", [])
-    if not items:
-        return
     h1(doc, "3", "這些分類為什麼重要", page_break=False)
     add_para(doc, [{"text": "在逐項細節之前，先說明本次最弱的面向若不處理會有什麼實際後果，幫助你判斷投入的優先次序。",
-                    "size": 10, "color": T.SLATE}], after=8, line=1.44)
+                    "size": 10, "color": T.SLATE}], after=8, line=1.44, keep_next=True)
+    if not items:
+        # 章節固定存在（第 4 章的編號與說明都引用它）；沒有需要說明的分類就寫明
+        add_para(doc, [{"text": "本次沒有中風險以上、需要特別說明後果的分類。", "size": 9.5,
+                        "color": T.GREY}], after=6)
+        return
     rows = [[it["category"], it["consequence"]] for it in items]
     data_table(doc, ["分類", "沒處理的話會怎樣"], rows, [2600, 5500])
 
@@ -627,7 +641,7 @@ def _why_matters(doc, data):
 def _findings(doc, data):
     h1(doc, "4", "發現項目")
     n = len(data["findings"])
-    add_para(doc, [{"text": f"共 {n} 項，依嚴重度由高至低分組排列。每一張卡片獨立完整：問題是什麼、怎麼修、以及當下觀測到的檢測依據。各分類「為什麼重要」見第 3 章，修補後如何驗證見附錄 6.3。",
+    add_para(doc, [{"text": f"共 {n} 項，依嚴重度由高至低分組排列。每一張卡片獨立完整：問題是什麼、怎麼修、以及當下觀測到的檢測依據。各分類「為什麼重要」見第 3 章，修補後如何驗證見附錄「修補後如何驗證」。",
                     "size": 10, "color": T.SLATE}], after=6, line=1.44)
     # 資安與網站內容改善分開呈現（沒有 group 欄位的舊 payload 全部歸在同一段）
     parts = [
@@ -655,11 +669,153 @@ def _findings(doc, data):
                 finding_card(doc, f)
 
 
-def _scan_info(doc, data, ch):
+def _site_metrics(doc, data, ch):
+    """第 1 章後段：網站效能、連結、搜尋與拓撲（Argus 在地擴充，2026-10-11）。
+
+    網頁上有、報告原本沒有的資訊：PageSpeed 效能分數、SEO 分析頁的連結檢查、
+    Search Console 實際搜尋詞與網站拓撲；與網頁同一份資料、不計入分數。
+    沒有資料的段落寫明原因。
+    """
+    sm = data.get("site_metrics") or {}
+    if not sm:
+        return
+    _performance_section(doc, sm.get("performance") or {}, ch)
+    _links_section(doc, sm.get("links") or {}, ch)
+    _search_section(doc, sm.get("search") or {}, ch)
+    _topology_section(doc, sm.get("topology") or {}, ch)
+
+
+def _note(doc, text, keep_next=False):
+    add_para(doc, [{"text": text, "size": 9.5, "color": T.GREY}], after=6, line=1.4,
+             keep_next=keep_next)
+
+
+def _rating_cell(rating):
+    color = {"良好": "15803D", "需改善": "B45309", "不佳": "B91C1C"}.get(rating, T.GREY)
+    return [{"text": rating or "—", "size": 9.5, "color": color, "bold": bool(rating)}]
+
+
+def _performance_section(doc, perf, ch):
+    h2(doc, "Google Lighthouse 首頁檢查（PageSpeed Insights）")
+    if not perf.get("scores"):
+        _note(doc, perf.get("note") or "本次沒有效能量測。")
+        return
+    _note(doc, f"行動版、首頁{('（' + perf['url'] + '）') if perf.get('url') else ''}，"
+               "由 Google Lighthouse 實驗室單次量測；90 分以上為良好、50–89 需改善、50 以下不佳。",
+          keep_next=True)
+    add_image(doc, ch["perf_gauges"], 6.0).paragraph_format.keep_with_next = True
+    pages = f"全部 {perf['pages']} 頁" if perf.get("pages") else "全部頁面"
+    add_para(doc, [{"text": f"只看首頁的基本項目；本章開頭的 Argus 分數檢查{pages}，兩者不同是正常的。",
+                    "size": 9, "color": T.GREY}], after=6, line=1.4, keep_next=True)
+    if perf.get("metrics"):
+        data_table(doc, ["實驗室指標", "數值", "評等"],
+                   [[m["label"], m["value"] or "—", _rating_cell(m["rating"])]
+                    for m in perf["metrics"]], [3800, 2400, 1900])
+    if perf.get("field"):
+        add_para(doc, [{"text": f"真實使用者體驗（CrUX，過去 28 天，{perf['field_scope']}）",
+                        "size": T.TYPE["label"], "color": T.NAVY, "bold": True}],
+                 before=8, after=3, keep_next=True)
+        data_table(doc, ["指標", "第 75 百分位", "評等"],
+                   [[m["label"], m["value"], _rating_cell(m["rating"])] for m in perf["field"]],
+                   [3800, 2400, 1900])
+    elif perf.get("field_note"):
+        add_para(doc, [{"text": "真實使用者體驗（CrUX）：" + perf["field_note"], "size": 9.5,
+                        "color": T.GREY}], before=6, after=6, line=1.4)
+    if perf.get("opportunities"):
+        add_para(doc, [{"text": "最值得先改善的項目", "size": T.TYPE["label"], "color": T.NAVY,
+                        "bold": True}], before=8, after=3, keep_next=True)
+        for o in perf["opportunities"]:
+            add_para(doc, [{"text": "•  " + o["title"], "size": 9.5, "color": T.SLATE},
+                           {"text": f"　{o['saving']}" if o.get("saving") else "", "size": 9,
+                            "color": T.GREY}], after=1, line=1.35)
+
+
+def _links_section(doc, links, ch):
+    h2(doc, "連結檢查（站內、子網域與站外）")
+    if not links.get("matrix"):
+        _note(doc, links.get("note") or "本次沒有連結檢查。")
+        return
+    when = f"，檢查時間 {links['checked_at']}" if links.get("checked_at") else ""
+    _note(doc, f"共 {links['total']} 個不重複的連結目標{when}。「無法確認」是對方拒絕檢查、逾時或無法連線，"
+               "不一定是失效；「未檢查」是超過檢查數量或時間上限。", keep_next=True)
+    if "link_matrix" in ch:
+        add_image(doc, ch["link_matrix"], 5.2)
+    if links.get("broken"):
+        add_para(doc, [{"text": f"失效連結（{links['broken_total']} 個）", "size": T.TYPE["label"],
+                        "color": "B91C1C", "bold": True}], before=6, after=3, keep_next=True)
+        data_table(doc, ["網址", "狀態", "類型", "出現在"],
+                   [[b["url"], b["status"], b["type"], b["sources"]] for b in links["broken"]],
+                   [3600, 1300, 900, 2300])
+        if links["broken_total"] > len(links["broken"]):
+            _note(doc, f"另有 {links['broken_total'] - len(links['broken'])} 個，完整清單見網頁版「SEO 分析 → 連結」。")
+    else:
+        _note(doc, "沒有發現失效連結。")
+    if links.get("external"):
+        add_para(doc, [{"text": f"站外連結（共 {links['external_total']} 個，列出最常出現的 "
+                                f"{len(links['external'])} 個）", "size": T.TYPE["label"],
+                        "color": T.NAVY, "bold": True}], before=6, after=3, keep_next=True)
+        data_table(doc, ["網址", "狀態", "出現在"],
+                   [[e["url"], e["status"], e["sources"]] for e in links["external"]],
+                   [4200, 1600, 2300])
+
+
+def _search_section(doc, search, ch):
+    h2(doc, "實際搜尋詞（Google Search Console）")
+    if not search.get("totals"):
+        _note(doc, search.get("note") or "沒有 Search Console 資料。")
+        return
+    _note(doc, f"資源 {search['property']}・期間 {search['period']}（Search Console 資料約延遲 2–3 天；"
+               f"報告產生時取得：{search['fetched_at']}）。", keep_next=True)
+    add_image(doc, ch["search_kpis"], 6.2).paragraph_format.keep_with_next = True
+    if "search_trend" in ch:
+        add_image(doc, ch["search_trend"], 6.2)
+    if search.get("queries"):
+        add_para(doc, [{"text": f"點擊最多的搜尋詞（前 {len(search['queries'])} 個）",
+                        "size": T.TYPE["label"], "color": T.NAVY, "bold": True},],
+                 before=6, after=3, keep_next=True)
+        data_table(doc, ["搜尋詞", "點擊", "曝光", "CTR", "平均排名", "對應頁面"],
+                   [[q["query"], f"{q['clicks']:,}", f"{q['impressions']:,}",
+                     f"{q['ctr'] * 100:.1f}%", f"{q['position']:.1f}", q["page"] or "—"]
+                    for q in search["queries"]],
+                   [1900, 650, 850, 950, 1050, 2700])
+        _note(doc, "平均排名是期間內所有曝光的平均統計值，不是某一刻的即時名次。")
+
+
+def _topology_section(doc, topo, ch):
+    h2(doc, "網站拓撲")
+    if not topo.get("nodes"):
+        _note(doc, topo.get("note") or "沒有可以畫的網站結構。")
+        return
+    shown = len(topo["nodes"])
+    extra = f"，圖中顯示前 {shown} 頁" if topo.get("total", shown) > shown else ""
+    _note(doc, f"入口頁在中央，越外圈離首頁越多次點擊；節點顏色是該頁最嚴重的問題等級。"
+               f"本次共 {topo.get('total', shown)} 頁{extra}，標籤只列入口頁與第一層頁面的路徑。",
+          keep_next=True)
+    add_image(doc, ch["topology"], 5.0)
+
+
+def _aeo_chapter(doc, data, number):
+    """AEO 問答檢測逐題結果（2026-10-11 從附錄獨立成章：這是檢測結果，不是參考資料）。"""
+    items = data["appendix"]["aeo_items"]
+    h1(doc, str(number), "AEO 問答檢測結果")
+    add_para(doc, [{"text": "Argus 依網站內容建立訪客可能會問的問題，逐題檢查能否在已掃描的頁面中找到答案，"
+                            "並附上答案原文與位置。判定不是「可回答」的題目，也列在第 4 章的發現項目中並附修正建議。",
+                    "size": 10, "color": T.SLATE}], after=6, line=1.44, keep_next=True)
+    counts = {}
+    for item in items:
+        label = item["verdict"].split("（")[0]
+        counts[label] = counts.get(label, 0) + 1
+    add_para(doc, [{"text": f"共 {len(items)} 題：" + "、".join(f"{k} {v} 題" for k, v in counts.items()),
+                    "size": T.TYPE["label"], "color": T.NAVY, "bold": True}], after=4, keep_next=True)
+    rows = [[i["question"], i["verdict"], i["basis"]] for i in items]
+    data_table(doc, ["題目", "判定", "答案原文或理由"], rows, [2300, 1300, 4500])
+
+
+def _scan_info(doc, data, ch, number=5):
     si = data.get("scan_info", {})
-    h1(doc, "5", "掃描資訊與範圍", page_break=False)
+    h1(doc, str(number), "掃描資訊與範圍", page_break=False)
     add_para(doc, [{"text": "本節說明這份報告涵蓋與未涵蓋的範圍，以及掃描當下擷取的網站畫面，供你確認判讀基礎。",
-                    "size": 10, "color": T.SLATE}], after=8, line=1.44)
+                    "size": 10, "color": T.SLATE}], after=8, line=1.44, keep_next=True)
     h2(doc, "掃描範圍")
     scope = si.get("scope", {})
     rows = [[k, str(v)] for k, v in scope.items()]
@@ -671,30 +827,53 @@ def _scan_info(doc, data, ch):
             add_para(doc, [{"text": f"•  {w}", "size": 9.5, "color": T.SLATE}],
                      after=2, line=1.38)
     if si.get("screenshot"):
-        h2(doc, "掃描當下的網站畫面")
-        add_image(doc, si["screenshot"], 2.3)
+        # 全頁截圖縮到 2.3 吋寬時字小到看不清，標題、圖、圖說還會各自掉到不同頁：
+        # 只取第一屏放大，並把三者綁在一起
+        h2(doc, "掃描當下的網站畫面（首屏）")
+        shot = _first_screen(si["screenshot"])
+        add_image(doc, shot, 4.3).paragraph_format.keep_with_next = True
         add_para(doc, [{"text": si.get("screenshot_caption", ""), "size": 8, "color": T.GREY}],
                  align=WD_ALIGN_PARAGRAPH.CENTER, after=0)
 
 
-def _appendix(doc, data):
+def _first_screen(path):
+    """全頁截圖只留頂端一屏（寬高比 4:3）；失敗時用原圖。"""
+    try:
+        from PIL import Image
+
+        with Image.open(path) as im:
+            width, height = im.size
+            limit = int(width * 0.75)
+            if height <= limit:
+                return path
+            out = os.path.join(tempfile.mkdtemp(prefix="argus_"), "first-screen.png")
+            im.crop((0, 0, width, limit)).save(out)
+            return out
+    except Exception:  # noqa: BLE001 — 截圖只是輔助，裁切失敗不能讓報告產不出來
+        return path
+
+
+def _appendix(doc, data, number=6):
+    """附錄：小節依實際有的內容連續編號；「免責與報告產生方式」固定在整份報告最後。"""
     ap = data.get("appendix", {})
-    h1(doc, "6", "附錄")
-    # glossary
+    h1(doc, str(number), "附錄")
+    counter = iter(range(1, 20))
+
+    def sub(title):
+        h2(doc, f"{number}.{next(counter)}　{title}")
+
     if ap.get("glossary"):
-        h2(doc, "6.1　名詞解釋")
+        sub("名詞解釋")
         add_para(doc, [{"text": "只列出本報告實際用到的專有名詞，方便對照閱讀。", "size": 9, "color": T.GREY}], after=5)
         rows = [[g["term"], g["explanation"]] for g in ap["glossary"]]
         data_table(doc, ["名詞", "白話說明"], rows, [1800, 6300])
-    # tech index
     if ap.get("tech_index"):
-        h2(doc, "6.2　技術索引")
+        sub("技術索引")
         add_para(doc, [{"text": "供工程師與稽核人員對照。OWASP 為國際公認的網站安全風險分類，CWE 為通用軟體弱點編號；一般讀者可略過。",
                         "size": 9, "color": T.GREY}], after=5)
         rows = [[t["ref"], t["rule_id"], t.get("owasp_cwe", "— / —")] for t in ap["tech_index"]]
         data_table(doc, ["項次", "規則 ID", "OWASP / CWE"], rows, [1200, 4400, 2500])
-    # verify
-    h2(doc, "6.3　修補後如何驗證")
+    sub("修補後如何驗證")
     add_para(doc, [{"text": ap.get("verify_note",
                     "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；下一份報告的摘要會列出這次解決了哪些項目。"),
                     "size": 10, "color": T.SLATE}], after=8, line=1.44)
@@ -709,30 +888,10 @@ def _appendix(doc, data):
     if hidden > 0:
         add_para(doc, [{"text": f"其餘 {hidden} 項低風險與資訊提示：修正後重新掃描，確認該項不再出現即可。",
                         "size": T.TYPE["label"], "color": T.GREY}], before=4, after=6)
-    # authorization
-    if ap.get("authorization"):
-        h2(doc, "6.4　掃描授權聲明")
-        auth = ap["authorization"]
-        rows = [[k, str(v)] for k, v in auth.items()]
-        data_table(doc, ["項目", "內容"], rows, [2600, 5500])
-    # disclaimer
-    h2(doc, "6.5　免責與報告產生方式")
-    add_para(doc, [{"text": "本報告僅反映掃描當下、從網際網路可觀測到的外部特徵，不等同完整滲透測試或原始碼稽核，也不構成法律或合規意見。未列出的項目不代表不存在風險，實際修補請由具備權限的維運人員評估後執行。",
-                    "size": 10, "color": T.SLATE}], after=6, line=1.44)
-    add_para(doc, [{"text": ap.get("method_note") or "本報告採 Evidence-first 原則：每一項發現都附上掃描當下實際觀測到的內容。",
-                    "size": 10, "color": T.SLATE}], after=0, line=1.44)
-    # AEO 逐題結果（Argus 在地修改：可回答性檢測的每一題與原文證據）
-    if ap.get("aeo_items"):
-        h2(doc, "6.6　AEO 問答檢測逐題結果")
-        add_para(doc, [{"text": "Argus 依網站內容建立的問題，以及在已掃描頁面中找到的答案原文與位置；"
-                                "判定不是「可回答」的題目也列在發現清單中，附修正建議。",
-                        "size": 9, "color": T.GREY}], after=5)
-        rows = [[i["question"], i["verdict"], i["basis"]] for i in ap["aeo_items"]]
-        data_table(doc, ["題目", "判定", "答案原文或理由"], rows, [2300, 1100, 4700])
     # 逐項扣分（Argus 在地修改：與網頁「分數說明」分頁同一份資料，讀者可自行加總核對）
     score_items = ap.get("score_items") or {}
     if score_items:
-        h2(doc, f"6.{7 if ap.get('aeo_items') else 6}　各分類扣分明細")
+        sub("各分類扣分明細")
         add_para(doc, [{"text": "每一項的扣分依嚴重度固定（嚴重 60、高 35、中 12、低 4），同一個問題出現在多頁只扣一次；"
                                 "「只修好這項時」是其他問題不變、只修好這一項後的分類分數。",
                         "size": 9, "color": T.GREY}], after=5)
@@ -742,7 +901,7 @@ def _appendix(doc, data):
             add_para(doc, [{"text": f'{cat["name"]}　{cat["score"]} 分', "size": T.TYPE["body"],
                             "color": T.SLATE, "bold": True},
                            {"text": f'　{cat["basis"]}', "size": T.TYPE["meta"], "color": T.GREY}],
-                     before=6, after=3)
+                     before=6, after=3, keep_next=True)
             if cat["items"]:
                 rows = [[i.get("ref") or "—", i["title"], i["severity"], f'−{i["weight"]}',
                          str(i["occurrences"]), f'{i["score_without"]} 分'] for i in cat["items"]]
@@ -753,3 +912,14 @@ def _appendix(doc, data):
             if cat.get("notes"):
                 add_para(doc, [{"text": cat["notes"] + "。", "size": T.TYPE["meta"], "color": T.GREY}],
                          before=2, after=4)
+    if ap.get("authorization"):
+        sub("掃描授權聲明")
+        auth = ap["authorization"]
+        rows = [[k, str(v)] for k, v in auth.items()]
+        data_table(doc, ["項目", "內容"], rows, [2600, 5500])
+    # 免責與報告產生方式：放在整份報告的最後（2026-10-11 使用者要求）
+    sub("免責與報告產生方式")
+    add_para(doc, [{"text": "本報告僅反映掃描當下、從網際網路可觀測到的外部特徵，不等同完整滲透測試或原始碼稽核，也不構成法律或合規意見。未列出的項目不代表不存在風險，實際修補請由具備權限的維運人員評估後執行。",
+                    "size": 10, "color": T.SLATE}], after=6, line=1.44)
+    add_para(doc, [{"text": ap.get("method_note") or "本報告採 Evidence-first 原則：每一項發現都附上掃描當下實際觀測到的內容。",
+                    "size": 10, "color": T.SLATE}], after=0, line=1.44)

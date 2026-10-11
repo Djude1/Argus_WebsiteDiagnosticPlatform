@@ -15,6 +15,7 @@
 """
 
 import hmac
+import re
 import tempfile
 from collections import OrderedDict
 from hashlib import sha256
@@ -30,6 +31,7 @@ from apps.scans.models import Finding, ReportVerification, ScanJob
 from apps.scans.pagespeed import summary_lines as pagespeed_summary_lines
 from apps.scans.report_pdf import convert_docx_to_pdf
 from apps.scans.report_render import RENDERER_VERSION, generate_report
+from apps.scans.report_site_metrics import site_metrics
 from apps.scans.root_causes import annotate_root_causes
 from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.security.observatory import summary_line as observatory_summary
@@ -511,7 +513,7 @@ def _assessment_for(finding) -> dict | None:
             "condition": f"「{finding.title}」描述的狀況確實存在於正式網站，且能被外部利用。",
             "observed": "見檢測依據：規則或工具在掃描當下的實際輸出。",
             "missing": "規則或範本比對的結果未經人工重現，可能有誤判。",
-            "verify": "依附錄 6.3 的方式重現；確認後再決定是否維持此評級。",
+            "verify": "依附錄「修補後如何驗證」的方式重現；確認後再決定是否維持此評級。",
         }
     return None
 
@@ -833,7 +835,7 @@ def _aeo_scope_text(scan_job: ScanJob) -> str:
     )
     if report.get("evidence_ratio") is not None:
         text += f"，答案附有原文的比例 {round(report['evidence_ratio'] * 100)}%"
-    return text + "（逐題結果見附錄）"
+    return text + "（逐題結果見「AEO 問答檢測結果」一章）"
 
 
 def _aeo_items(scan_job: ScanJob) -> list[dict]:
@@ -938,7 +940,7 @@ def _absent_since(scan_job: ScanJob, previous) -> tuple[list[str], int]:
 def _headline(
     scan_job: ScanJob, previous, category_scores: dict, resolved=(), unconfirmed: int = 0
 ) -> str:
-    """一頁摘要的導讀句。只陳述資料本身，不加沒有根據的評價。"""
+    """第 1 章「網站總覽」的導讀句。只陳述資料本身，不加沒有根據的評價。"""
     score = scan_job.overall_score
     parts = []
     if isinstance(score, int):
@@ -969,7 +971,7 @@ def _headline(
     if weakest:
         names = "與".join(CATEGORY_DISPLAY.get(c, c.upper()).split()[0] for c, _ in weakest)
         parts.append(f"主要待補強的是{names}")
-    return "這一頁讓你 30 秒掌握整體狀況：" + "；".join(parts) + "。細節見後續章節。"
+    return "這一章用圖表呈現整體狀況：" + "；".join(parts) + "。要處理的問題從第 2 章開始。"
 
 
 def _score_band_label(score: int) -> str:
@@ -1009,8 +1011,8 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
         "group": "security" if is_security else "content",
         "scope": _pages_label(pages),
-        "problem": _description_for_report(finding),
-        "fix": finding.remediation or "（無）",
+        "problem": _compress_cve_lists(_description_for_report(finding)),
+        "fix": _compress_cve_lists(finding.remediation or "（無）"),
         # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
         # 殘缺數字命不中 regex，反而以明文殘留。
         "evidence": _report_evidence(finding, finding.evidence)[:_MAX_EVIDENCE_CHARS],
@@ -1021,7 +1023,13 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
             + (f"　·　類型：{finding.security_kind_label}" if finding.security_kind_label else "")
         ),
     }
-    if len(pages) > 1:
+    shared = _shared_component(item)
+    if shared:
+        # 每一頁的證據都一樣＝同一個全站共用元件（導覽列、頁尾），改一處就全部解決；
+        # 寫「影響 N 個頁面」會讓讀者以為要改 N 次（2026-10-11 報告審查）
+        entry["scope"] = f"全站共用元件（{len(pages)} 個頁面出現同一處）"
+        entry["evidence"] = _report_evidence(finding, shared)[:_MAX_EVIDENCE_CHARS]
+    elif len(pages) > 1:
         locations = item.get("locations") or []
         entry["locations"] = [
             {"url": url, "evidence": _report_evidence(finding, evidence)[:160]}
@@ -1045,6 +1053,44 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
             or CATEGORY_BASIS.get(finding.category, "")
         )
     return entry
+
+
+# 連續列出的 CVE 超過這麼多個就收成「等共 N 個 CVE」：舊版伺服器動輒對應上百個 CVE，
+# 整串印出來佔滿一整頁、讀者也不會逐一查（完整清單在網頁版的證據裡）
+_MAX_LISTED_CVES = 8
+_CVE_RUN = re.compile(r"CVE-\d{4}-\d{4,7}(?:\s*[、,，]\s*CVE-\d{4}-\d{4,7})+")
+_CVE_ID = re.compile(r"CVE-\d{4}-\d{4,7}")
+
+
+def _compress_cve_lists(text: str) -> str:
+    def shorten(match: re.Match) -> str:
+        ids = _CVE_ID.findall(match.group(0))
+        if len(ids) <= _MAX_LISTED_CVES:
+            return match.group(0)
+        return "、".join(ids[:_MAX_LISTED_CVES]) + f" 等共 {len(ids)} 個 CVE"
+
+    return _CVE_RUN.sub(shorten, text or "")
+
+
+# 證據指向具體頁面元素的規則：多頁證據完全相同才是「同一個元件」。其他規則的證據多半是
+# 計數（json_ld_blocks=0），每頁相同只代表每頁都有同一種問題，要逐頁修。
+_ELEMENT_RULE_PREFIXES = ("axe-", "ux-fake-button")
+_ELEMENT_EVIDENCE_PREFIXES = ("過小的觸控目標：", "缺標籤的欄位：")
+
+
+def _shared_component(item: dict) -> str:
+    """多頁的元件證據完全相同時回傳該證據，否則回空字串。"""
+    locations = item.get("locations") or []
+    if len(locations) < 2:
+        return ""
+    evidence = {(text or "").strip() for _url, text in locations}
+    if len(evidence) != 1:
+        return ""
+    only = evidence.pop()
+    rule = item["finding"].rule_id or ""
+    if rule.startswith(_ELEMENT_RULE_PREFIXES) or only.startswith(_ELEMENT_EVIDENCE_PREFIXES):
+        return only
+    return ""
 
 
 def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
@@ -1071,7 +1117,8 @@ def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
     }
     if previous is not None:
         summary["previous"] = {
-            "date": timezone.localtime(previous.completed_at).strftime("%m-%d"),
+            # 與本次的 scan_date 同一個格式（舊版只印月日，與「2026-10-09」並列像兩種日期）
+            "date": timezone.localtime(previous.completed_at).strftime("%Y-%m-%d"),
             "score": previous.overall_score,
         }
         previous_rules = {
@@ -1169,7 +1216,7 @@ def _report_appendix(
     appendix["verify_note"] = (
         "完成修補後可重新執行一次 Argus 掃描，下一份報告的摘要會列出這次不再出現的項目。"
         "但「重新掃描後沒有出現」不一定代表已修好：也可能是這次沒有爬到該頁、頁面被阻擋，"
-        "或掃描範圍與設定不同。請先對照新報告第 5 章，確認相同頁面確實有被檢查，"
+        "或掃描範圍與設定不同。請先對照新報告的「掃描資訊與範圍」一章，確認相同頁面確實有被檢查，"
         "再用下表的方式逐項手動確認。"
         "想更深入了解任何一項：把該項的「問題是什麼」「怎麼修」「檢測依據」三段文字複製起來，"
         "貼給 ChatGPT、Claude 等 AI 助手並補一句「請說明這個問題的影響與具體修復步驟」即可。"
@@ -1328,6 +1375,8 @@ def build_report_payload(scan_job: ScanJob) -> dict:
     site_profile = _report_site_profile(scan_job)
     if site_profile:
         payload["site_profile"] = site_profile
+    # 第 1 章後段：網站效能、連結、搜尋詞與拓撲（網頁上有、報告原本沒有的資訊，2026-10-11）
+    payload["site_metrics"] = site_metrics(scan_job)
     payload["scan_info"] = _report_scan_info(scan_job)
     payload["appendix"] = _report_appendix(scan_job, grouped, findings_payload)
     score_items = _report_score_items(scan_job, grouped, findings_payload)

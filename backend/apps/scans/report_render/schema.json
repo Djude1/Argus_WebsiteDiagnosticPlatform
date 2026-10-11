@@ -78,6 +78,39 @@
         }
       }
     },
+    "site_metrics": {
+      "type": "object",
+      "description": "第 5 章：網站效能、搜尋與架構（report_site_metrics.py）；各段沒有資料時只有 note",
+      "properties": {
+        "performance": {"type": "object", "properties": {
+          "note": {"type": "string"}, "url": {"type": "string"}, "pages": {"type": "integer"},
+          "scores": {"type": "array", "items": {"type": "object", "required": ["label", "score"],
+                     "properties": {"label": {"type": "string"}, "score": {"type": "integer"}}}},
+          "metrics": {"type": "array", "items": {"type": "object", "required": ["label", "value", "rating"]}},
+          "field": {"type": "array", "items": {"type": "object", "required": ["label", "value", "rating"]}},
+          "field_scope": {"type": "string"}, "field_note": {"type": "string"},
+          "opportunities": {"type": "array", "items": {"type": "object", "required": ["title"]}}}},
+        "links": {"type": "object", "properties": {
+          "note": {"type": "string"}, "checked_at": {"type": "string"}, "total": {"type": "integer"},
+          "matrix": {"type": "array", "items": {"type": "object", "required": ["type", "total", "groups"]}},
+          "group_labels": {"type": "array", "items": {"type": "object", "required": ["key", "label"]}},
+          "broken": {"type": "array", "items": {"type": "object", "required": ["url", "status", "type", "sources"]}},
+          "broken_total": {"type": "integer"},
+          "external": {"type": "array", "items": {"type": "object", "required": ["url", "status", "sources"]}},
+          "external_total": {"type": "integer"}, "unchecked": {"type": "integer"}}},
+        "search": {"type": "object", "properties": {
+          "note": {"type": "string"}, "property": {"type": "string"}, "period": {"type": "string"},
+          "fetched_at": {"type": "string"},
+          "totals": {"type": "object", "required": ["clicks", "impressions", "ctr", "queries"]},
+          "trend": {"type": "array", "items": {"type": "object", "required": ["date", "clicks", "impressions"]}},
+          "queries": {"type": "array", "items": {"type": "object",
+                      "required": ["query", "clicks", "impressions", "ctr", "position", "page"]}}}},
+        "topology": {"type": "object", "properties": {
+          "note": {"type": "string"}, "total": {"type": "integer"},
+          "nodes": {"type": "array", "items": {"type": "object", "required": ["id", "label", "depth", "tone"]}},
+          "edges": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}}}}
+      }
+    },
     "priorities": {
       "type": "array",
       "description": "優先處理清單（選填）",

@@ -86,7 +86,7 @@ class ReportLayoutTests(TestCase):
         text = self._text()
 
         self.assertIn("ARGUS", text)
-        self.assertIn("一頁摘要", text)
+        self.assertIn("1\u3000網站總覽", text)
         self.assertIn("整體分數", text)
 
     def test_report_has_header_and_footer_with_page_number(self):
