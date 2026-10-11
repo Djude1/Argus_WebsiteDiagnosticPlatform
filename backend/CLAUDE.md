@@ -196,6 +196,14 @@ status（published/hidden）、experience_at（完成掃描時間）
 - 合併分支時兩邊都有新 migration：保留雙方已部署的檔案，用 merge migration 或後續 migration 收斂，不要刪掉其中一邊。
 - 動到 migration 圖時，先在 PostgreSQL 以「正式環境已套用的舊鏈」建庫，再用新程式碼跑 `migrate` 驗證（2026-10-04 的驗證方式見 `log/2026-10-04_fix-migration-history.md`）。
 
+## 測試速度設定（2026-10-11）
+
+`manage.py test` 時 `config/settings.py` 自動：
+- 改用 `MD5PasswordHasher`：預設 PBKDF2（100 萬次）每次約 0.6 秒，幾乎每個測試都建立使用者。
+- `ARGUS_REPORT_CHART_DPI=72`：報告圖表的 PNG 編碼是產生報告最慢的一步；正式報告維持 300 dpi（`report_render/theme.chart_dpi`）。
+
+`apps.scans`＋`apps.agent` 全套由約 450 秒降到約 50 秒。只在測試生效，正式環境與 runserver 不受影響；不要在測試裡斷言雜湊演算法或圖表解析度。
+
 ## 三種管理介面
 
 - **前台**：`http://127.0.0.1:8000/` — 一般使用者

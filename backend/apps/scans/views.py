@@ -48,7 +48,7 @@ from apps.scans.projects import (
     project_summaries,
 )
 from apps.scans.report_render import RENDERER_VERSION
-from apps.scans.reports import build_scan_report, report_output_path
+from apps.scans.reports import build_scan_report, report_download_name, report_output_path
 from apps.scans.score_explain import score_explanation
 from apps.scans.seo_views import ProjectSeoActions
 from apps.scans.serializers import (
@@ -192,11 +192,12 @@ def ensure_report_file(scan_job: ScanJob) -> Path:
     return report_path
 
 
-def report_file_response(report_path: Path) -> FileResponse:
+def report_file_response(report_path: Path, filename: str = "") -> FileResponse:
+    # 下載檔名用報告編號（argus-report-20261011-E03E.pdf），不露出內部的掃描編號
     return FileResponse(
         report_path.open("rb"),
         as_attachment=True,
-        filename=report_path.name,
+        filename=filename or report_path.name,
         content_type="application/pdf",
     )
 
@@ -381,7 +382,9 @@ class ScanJobViewSet(viewsets.ModelViewSet):
     def report(self, request, pk=None):
         # 已產生過就直接送既有檔案，不重跑產生器（快取規則見 ensure_report_file）
         scan_job = self.get_object()
-        return report_file_response(ensure_report_file(scan_job))
+        return report_file_response(
+            ensure_report_file(scan_job), report_download_name(scan_job)
+        )
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):

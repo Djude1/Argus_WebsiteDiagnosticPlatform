@@ -31,7 +31,7 @@ def _hex(c):  # matplotlib wants leading '#'
 
 
 def score_donut(score, out):
-    fig, ax = plt.subplots(figsize=(3.0, 3.0), dpi=300)
+    fig, ax = plt.subplots(figsize=(3.0, 3.0), dpi=T.chart_dpi())
     col = _hex(T.score_band_color(score))
     ax.pie([score, 100 - score], colors=[col, _hex(T.LINE)],
            startangle=90, counterclock=False,
@@ -51,7 +51,7 @@ def category_bars(categories, out):
     """categories: list of {name, score} (score may be None = 未評估)."""
     cats = [c["name"] for c in categories]
     vals = [c["score"] for c in categories]
-    fig, ax = plt.subplots(figsize=(5.6, 0.55 * len(cats) + 0.4), dpi=300)
+    fig, ax = plt.subplots(figsize=(5.6, 0.55 * len(cats) + 0.4), dpi=T.chart_dpi())
     y = np.arange(len(cats))[::-1]
     ax.barh(y, 100, color="#F1F5F9", height=0.55, zorder=1)
     for yi, v in zip(y, vals):
@@ -79,7 +79,7 @@ def category_bars(categories, out):
 
 def severity_bar(counts, out):
     """counts: dict severity_label -> int. Draws a single stacked bar."""
-    fig, ax = plt.subplots(figsize=(5.6, 0.78), dpi=300)
+    fig, ax = plt.subplots(figsize=(5.6, 0.78), dpi=T.chart_dpi())
     left = 0
     total = sum(counts.get(s, 0) for s in T.SEVERITY_ORDER) or 1
     for s in T.SEVERITY_ORDER:
@@ -106,7 +106,7 @@ def category_share(ordered_counts, out):
     回答的是「問題集中在哪一類」，與上方「各分類分數」的「這一類做得多好」互補。
     佔比小的分段塞不下數字，數量由 report.py 在圖下方以文字圖例呈現。
     """
-    fig, ax = plt.subplots(figsize=(5.6, 0.78), dpi=300)
+    fig, ax = plt.subplots(figsize=(5.6, 0.78), dpi=T.chart_dpi())
     total = sum(n for _, n in ordered_counts) or 1
     left = 0
     for name, n in ordered_counts:
@@ -129,7 +129,7 @@ def category_share(ordered_counts, out):
 
 def trend_line(prev, curr, out):
     """prev/curr: {date, score}. Draws a 2-point sparkline."""
-    fig, ax = plt.subplots(figsize=(2.4, 1.5), dpi=300)
+    fig, ax = plt.subplots(figsize=(2.4, 1.5), dpi=T.chart_dpi())
     xs, ys = [0, 1], [prev["score"], curr["score"]]
     ax.plot(xs, ys, color=_hex(T.NAVY), lw=2.5, marker="o", markersize=7,
             markerfacecolor=_hex(T.NAVY), zorder=3)
@@ -179,7 +179,7 @@ def _save(fig, out):
 def perf_gauges(scores, out):
     """Lighthouse 四項分數：一列圓環儀表，中間大數字、下方名稱與等級。"""
     n = len(scores)
-    fig, axes = plt.subplots(1, n, figsize=(1.75 * n, 2.15), dpi=300)
+    fig, axes = plt.subplots(1, n, figsize=(1.75 * n, 2.15), dpi=T.chart_dpi())
     axes = np.atleast_1d(axes)
     for ax, item in zip(axes, scores):
         score = item["score"]
@@ -204,7 +204,7 @@ _LINK_COLORS = {"ok": GOOD, "redirect": BLUE, "broken": BAD, "unknown": WARN, "u
 def link_matrix(matrix, group_labels, out):
     """站內／子網域／站外連結各一條堆疊長條，依檢查結果分段；圖例在下方。"""
     rows = [m for m in matrix if m["total"]]
-    fig, ax = plt.subplots(figsize=(5.8, 0.42 * len(rows) + 0.6), dpi=300)
+    fig, ax = plt.subplots(figsize=(5.8, 0.42 * len(rows) + 0.6), dpi=T.chart_dpi())
     width = max(m["total"] for m in rows)
     for i, m in enumerate(rows[::-1]):
         left = 0
@@ -243,7 +243,7 @@ def link_matrix(matrix, group_labels, out):
 def kpi_tiles(tiles, out):
     """一列數字卡：大數字＋說明（Search Console 點擊、曝光、點閱率、搜尋詞數）。"""
     n = len(tiles)
-    fig, ax = plt.subplots(figsize=(6.2, 1.15), dpi=300)
+    fig, ax = plt.subplots(figsize=(6.2, 1.15), dpi=T.chart_dpi())
     ax.set_xlim(0, n)
     ax.set_ylim(0, 1)
     ax.axis("off")
@@ -259,7 +259,7 @@ def kpi_tiles(tiles, out):
 
 def search_trend(trend, out):
     """每日點擊與每日曝光：兩張並排的小圖（各自的縱軸，不做雙軸圖）。"""
-    fig, axes = plt.subplots(1, 2, figsize=(6.2, 1.9), dpi=300)
+    fig, axes = plt.subplots(1, 2, figsize=(6.2, 1.9), dpi=T.chart_dpi())
     dates = [t["date"] for t in trend]
     xs = np.arange(len(dates))
     for ax, key, title in ((axes[0], "clicks", "每日點擊"), (axes[1], "impressions", "每日曝光")):
@@ -342,7 +342,7 @@ def topology_map(nodes, edges, out):
             cursor += share
 
     place(root, np.pi / 2, 2 * np.pi)
-    fig, ax = plt.subplots(figsize=(6.2, 5.4), dpi=300)
+    fig, ax = plt.subplots(figsize=(6.2, 5.4), dpi=T.chart_dpi())
     tree_edges = {(p, c) for c, p in parent.items() if p is not None}
     for source, target in edges:
         if (source, target) in tree_edges or (target, source) in tree_edges:

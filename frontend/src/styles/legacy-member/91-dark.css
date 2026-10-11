@@ -27,3 +27,22 @@
   border-color: #24344f;
   color: #e2e8f0;
 }
+
+/* 複製按鈕的已複製／失敗狀態（94-report-style.css） */
+:root[data-theme="dark"] .copy-feedback-button {
+  --copy-ok: #4ade80;
+  --copy-ok-bg: rgba(34, 197, 94, 0.14);
+  --copy-fail: #f87171;
+  --copy-fail-bg: rgba(239, 68, 68, 0.14);
+}
+/* 自動產生的深色 .secondary-button 特異度較高，狀態色要在這裡再寫一次 */
+:root[data-theme="dark"] .copy-feedback-button[data-state="copied"] {
+  border-color: var(--copy-ok);
+  background: var(--copy-ok-bg);
+  color: var(--copy-ok);
+}
+:root[data-theme="dark"] .copy-feedback-button[data-state="failed"] {
+  border-color: var(--copy-fail);
+  background: var(--copy-fail-bg);
+  color: var(--copy-fail);
+}

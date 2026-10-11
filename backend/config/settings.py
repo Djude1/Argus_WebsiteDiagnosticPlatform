@@ -1,5 +1,6 @@
 import ipaddress
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -140,6 +141,13 @@ DATABASES = {
         conn_max_age=0,
     )
 }
+
+# 測試時改用快速雜湊：預設 PBKDF2（100 萬次迭代）每次約 0.6 秒，幾乎每個測試都會建立使用者，
+# 全套測試因此多花好幾分鐘。只在 `manage.py test` 生效，正式環境與本機 runserver 不受影響。
+if len(sys.argv) > 1 and sys.argv[1] == "test":
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    # 報告圖表在測試只需能產生、不需印刷品質（見 report_render/theme.chart_dpi）
+    os.environ.setdefault("ARGUS_REPORT_CHART_DPI", "72")
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

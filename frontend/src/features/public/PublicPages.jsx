@@ -876,7 +876,7 @@ function VerifyReportPage() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="ARGUS-28-20260831-A1B2"
+                placeholder="ARGUS-20260831-A1B2"
                 autoComplete="off"
                 required
               />

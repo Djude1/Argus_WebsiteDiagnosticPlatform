@@ -574,22 +574,52 @@ DISCLAIMER = (
 _CJK_FONT = "Microsoft JhengHei"
 
 
+def _report_token(scan_job: ScanJob, length: int = 4) -> str:
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        f"argus-report:{scan_job.pk}".encode(),
+        sha256,
+    ).hexdigest()[:length].upper()
+
+
+def _report_date(scan_job: ScanJob) -> str:
+    issued = scan_job.completed_at or scan_job.created_at or timezone.now()
+    return issued.strftime("%Y%m%d")
+
+
 def build_report_number(scan_job: ScanJob) -> str:
-    """產生對外揭露的報告編號：ARGUS-{掃描編號}-{日期}-{4 碼驗證碼}。
+    """產生對外揭露的報告編號：ARGUS-{日期}-{驗證碼}，例如 ARGUS-20261011-E03E。
 
     驗證碼用 SECRET_KEY 做 HMAC，讓編號無法被憑空捏造出「看起來合理」的值；
-    只取 4 碼是因為它防的是隨手偽造，真正的比對靠查驗端點與內容雜湊。
+    它防的是隨手偽造，真正的比對靠查驗端點與內容雜湊。
+
+    2026-10-11 起不再含掃描編號（使用者要求報告與檔名不出現內部流水號）；驗證碼與舊格式
+    `ARGUS-{掃描編號}-{日期}-{驗證碼}` 相同，舊編號仍可查驗（`legacy_report_number`）。
+    少了掃描編號後同一天的驗證碼可能重複，遇到時加長到 6、8 碼。
 
     刻意只用 scan_job 的固定欄位（不含產生時間），所以**重新產生報告時編號不變**
     ——報告一旦交付就可能被轉寄存檔，換編號會讓已流出的副本失效。
     """
-    issued = scan_job.completed_at or scan_job.created_at or timezone.now()
-    token = hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
-        f"argus-report:{scan_job.pk}".encode(),
-        sha256,
-    ).hexdigest()[:4].upper()
-    return f"ARGUS-{scan_job.pk}-{issued.strftime('%Y%m%d')}-{token}"
+    date = _report_date(scan_job)
+    number = ""
+    for length in (4, 6, 8):
+        number = f"ARGUS-{date}-{_report_token(scan_job, length)}"
+        clash = ReportVerification.objects.filter(report_number=number).exclude(
+            scan_job=scan_job
+        )
+        if not clash.exists():
+            break
+    return number
+
+
+def legacy_report_number(scan_job: ScanJob) -> str:
+    """2026-10-11 前的編號格式（含掃描編號）；已寄出的報告印的是這個，查驗時要認得。"""
+    return f"ARGUS-{scan_job.pk}-{_report_date(scan_job)}-{_report_token(scan_job)}"
+
+
+def report_download_name(scan_job: ScanJob) -> str:
+    """下載檔名：argus-report-20261011-E03E.pdf（不含內部的掃描編號）。"""
+    return f"argus-report-{build_report_number(scan_job).removeprefix('ARGUS-')}.pdf"
 
 
 # 報告用的品牌圖檔必須放在 backend/ 之內：backend image 只有 COPY backend ./backend，

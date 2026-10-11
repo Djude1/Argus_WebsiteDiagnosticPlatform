@@ -121,6 +121,45 @@ class ReportVerificationTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    # --- 2026-10-11 編號不含掃描編號；舊格式仍可查驗 ---------------------
+    def test_report_number_and_file_name_do_not_contain_the_scan_id(self):
+        from apps.scans.reports import report_download_name
+
+        build_scan_report(self.scan_job)
+        number = ReportVerification.objects.get(scan_job=self.scan_job).report_number
+        self.assertRegex(number, r"^ARGUS-\d{8}-[0-9A-F]{4}$")
+        self.assertNotIn(f"-{self.scan_job.pk}-", number)
+        self.assertEqual(report_download_name(self.scan_job),
+                         f"argus-report-{number.removeprefix('ARGUS-')}.pdf")
+
+    def test_legacy_number_with_scan_id_still_verifies(self):
+        from apps.scans.reports import legacy_report_number
+
+        build_scan_report(self.scan_job)
+        legacy = legacy_report_number(self.scan_job)
+        response = APIClient().get(reverse("report-verify", args=[legacy]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["scan_target"], "https://example.com/")
+        # 只換掉驗證碼的舊格式編號不能查到（不能靠猜掃描編號查別人的報告）
+        forged = legacy[:-4] + ("0000" if not legacy.endswith("0000") else "FFFF")
+        self.assertEqual(APIClient().get(reverse("report-verify", args=[forged])).status_code, 404)
+
+    def test_same_day_token_collision_gets_a_longer_code(self):
+        from apps.scans.reports import build_report_number
+
+        number = build_report_number(self.scan_job)
+        other = ScanJob.objects.create(
+            user=self.user, original_url="https://other.example/",
+            normalized_url="https://other.example/", origin="other.example",
+            status=ScanJob.Status.COMPLETED,
+            completed_at=self.scan_job.completed_at or self.scan_job.created_at,
+        )
+        ReportVerification.objects.create(
+            scan_job=other, report_number=number, content_sha256="0" * 64,
+            generated_at=other.completed_at, renderer_version=RENDERER_VERSION,
+        )
+        self.assertRegex(build_report_number(self.scan_job), r"^ARGUS-\d{8}-[0-9A-F]{6}$")
+
 
 @fake_pdf_conversion
 class ReportCacheTests(TestCase):

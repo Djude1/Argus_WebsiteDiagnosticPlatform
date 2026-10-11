@@ -47,6 +47,7 @@ import { useArgusStore } from "../../store";
 import { ScanJobForm, scanProgress } from "../scans/ScanExperience.jsx";
 import { projectPath } from "./ProjectWorkspace.jsx";
 import PageLoader from "../../shared/PageLoader.jsx";
+import { saveBlobResponse } from "../../shared/download";
 
 const OVERVIEW_POLL_MS = 5000;
 const SCANS_POLL_MS = 3000;
@@ -1416,12 +1417,7 @@ function ScanHistoryPanel({ project, scans, onRefresh }) {
     setError("");
     try {
       const response = await api.get(`/scans/${scan.id}/report/`, { responseType: "blob" });
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `argus-scan-${scan.id}-report.pdf`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      saveBlobResponse(response, "argus-report.pdf");
     } catch {
       setError("報告下載失敗，請稍後再試。");
     } finally {

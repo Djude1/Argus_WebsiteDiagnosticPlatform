@@ -1065,3 +1065,35 @@
   letter-spacing: 0.02em;
   line-height: 1;
 }
+/* 複製按鈕（複製 Evidence、複製給 AI 的提示詞）：按下縮放、複製後 2 秒顯示「已複製」（2026-10-11）。
+   狀態色走自訂屬性，深色值在 91-dark.css（建置外掛不轉換自訂屬性） */
+.copy-feedback-button {
+  --copy-ok: #15803d;
+  --copy-ok-bg: #f0fdf4;
+  --copy-fail: #b91c1c;
+  --copy-fail-bg: #fef2f2;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    transform 0.08s ease, box-shadow 0.15s ease;
+}
+.copy-feedback-button:hover {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+.copy-feedback-button:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: none;
+}
+.copy-feedback-button:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
+}
+.copy-feedback-button[data-state="copied"] {
+  border-color: var(--copy-ok);
+  background: var(--copy-ok-bg);
+  color: var(--copy-ok);
+}
+.copy-feedback-button[data-state="failed"] {
+  border-color: var(--copy-fail);
+  background: var(--copy-fail-bg);
+  color: var(--copy-fail);
+}

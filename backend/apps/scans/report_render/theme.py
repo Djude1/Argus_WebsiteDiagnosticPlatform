@@ -25,6 +25,17 @@ TYPE = {
     "evidence": 8.5,
 }
 
+def chart_dpi() -> int:
+    """圖表解析度。正式報告 300 dpi（印刷清晰）；測試以 ARGUS_REPORT_CHART_DPI 調低，
+    PNG 編碼是產生報告最花時間的一步，版面不受影響（圖片在報告裡以固定寬度放置）。"""
+    import os
+
+    try:
+        return max(50, int(os.getenv("ARGUS_REPORT_CHART_DPI", "300")))
+    except ValueError:
+        return 300
+
+
 # Fonts
 FONT_CJK  = "Microsoft JhengHei"
 FONT_MONO = "Consolas"

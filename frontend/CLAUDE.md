@@ -272,6 +272,7 @@ npm run typecheck
 | `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、忘記密碼、商業合作洽談（註冊改由 Google 授權，不用 Turnstile） |
 | `src/shared/PageLoader.jsx` | 頁面切換與頁面資料載入的動畫：使用者提供的 Argus Minimal Loading Pack「01 · Signal Bars」**原樣使用、不可改**（數值、顏色、時間與下方「Loading」字樣都照原檔；`label` 只給螢幕閱讀器；AI 解讀用同一套的「08 · Thought Spark」＋「AI Agent 正在分析…」，2026-10-10 使用者指定）：`App.jsx` 換頁的 `Suspense` fallback、各頁 `if (!data)` 的載入狀態都用它（`<PageLoader label="載入…中…" />`），`role="status"`；樣式在 `05-brand.css`（會員區外）與 `legacy-member/92-layout.css`（會員區內，舊版範圍會重置外部規則；顏色經由自訂屬性 `--ag-pack-*` 給值，建置外掛不轉換自訂屬性，深色主題仍是原檔顏色）。新頁面的載入狀態用它，不要再寫 `<p className="hint-text">載入中…</p>` |
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
+| `src/components/scans/CopyButton.tsx` | 掃描詳情的「複製 Evidence」「複製給 AI 的提示詞」：按下縮放，複製後 2 秒顯示「已複製」／「複製失敗」（`data-state`；樣式 `legacy-member/94-report-style.css` 的 `.copy-feedback-button`，深色狀態色在 `91-dark.css`，2026-10-11） |
 | `src/components/scans/ScanBadges.jsx` | 掃描狀態與風險等級徽章 |
 | `src/api.ts` | Axios instance，統一處理 base URL 與 CSRF token；後台列表函式的參數與回傳綁定產生的型別 |
 | `src/shared/apiTypes.ts` | **自動產生，禁止手改**：OpenAPI → TS 型別 |

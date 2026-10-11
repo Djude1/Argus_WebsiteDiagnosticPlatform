@@ -137,6 +137,7 @@ def mcp_endpoint(request):
 
 def mcp_report_download(request, token: str):
     """MCP 報告連結：簽章內含掃描與使用者，逾時或被竄改即失效。"""
+    from apps.scans.reports import report_download_name
     from apps.scans.views import ensure_report_file, report_file_response
 
     try:
@@ -151,7 +152,7 @@ def mcp_report_download(request, token: str):
     ).first()
     if scan is None:
         raise Http404("找不到報告。")
-    return report_file_response(ensure_report_file(scan))
+    return report_file_response(ensure_report_file(scan), report_download_name(scan))
 
 
 # ---------- 會員區管理 API ----------

@@ -23,6 +23,7 @@ import { formatDateTime } from "../../shared/formatters";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
 import { AiInsightPanel, AiTriageNote } from "../../components/scans/AiInsightPanel";
+import { CopyButton } from "../../components/scans/CopyButton";
 import { PerformancePanel } from "../../components/scans/PerformancePanel";
 import { ScoreBreakdownPanel } from "../../components/scans/ScoreBreakdownPanel";
 import { EdgeNotice, SiteArchitecture, SiteStrengths } from "../../components/scans/SiteProfilePanel";
@@ -47,6 +48,7 @@ import {
   useConfirmDialogs,
 } from "../../shared/AppShared.jsx";
 import PageLoader from "../../shared/PageLoader.jsx";
+import { saveBlobResponse } from "../../shared/download";
 
 const SCAN_POLL_INTERVAL_MS = 2000;
 const MAX_SITE_SCAN_PAGES = 50;
@@ -1069,13 +1071,11 @@ function EvidencePanel({ finding }) {
         </div>
       )}
 
-      <button
-        className="secondary-button evidence-copy-button"
-        type="button"
-        onClick={() => navigator.clipboard.writeText(buildEvidenceCopyText(finding))}
-      >
-        複製 Evidence
-      </button>
+      <CopyButton
+        className="evidence-copy-button"
+        text={buildEvidenceCopyText(finding)}
+        label="複製 Evidence"
+      />
     </details>
   );
 }
@@ -1409,12 +1409,7 @@ function FindingsWorkspace({ scan }) {
       const response = await api.get(`/scans/${scan.id}/report/`, {
         responseType: "blob",
       });
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `argus-scan-${scan.id}-report.pdf`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      saveBlobResponse(response, "argus-report.pdf");
     } catch {
       setExportError("報告匯出失敗，請稍後再試。");
     } finally {
@@ -1698,14 +1693,11 @@ function FindingsWorkspace({ scan }) {
               <p className="finding-detail-label">怎麼修</p>
               <p>{selectedFinding.remediation}</p>
               <EvidencePanel finding={selectedFinding} />
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => navigator.clipboard.writeText(selectedFinding.ai_handoff_prompt)}
+              <CopyButton
+                text={selectedFinding.ai_handoff_prompt}
+                label="複製給 AI 的提示詞"
                 title="複製問題、證據與修法，貼給 ChatGPT／Claude 取得更深入的說明"
-              >
-                複製給 AI 的提示詞
-              </button>
+              />
             </article>
           ) : (
             <p className="scan-inspector-hint">從左側選一個問題，這裡會顯示說明、修法與證據，截圖會標出位置。</p>

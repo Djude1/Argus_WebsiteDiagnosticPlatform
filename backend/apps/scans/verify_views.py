@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import re
+
 from config.throttling import AnonRateThrottle
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -15,16 +17,37 @@ from rest_framework.response import Response
 
 from apps.scans.models import ReportVerification
 
+# 2026-10-11 前的格式 ARGUS-{掃描編號}-{日期}-{驗證碼}：已寄出的報告印的是這個
+_LEGACY_NUMBER = re.compile(r"^ARGUS-(\d+)-\d{8}-[0-9A-F]{4}$")
+
+
+def _find(report_number: str) -> ReportVerification | None:
+    record = ReportVerification.objects.select_related("scan_job").filter(
+        report_number=report_number
+    ).first()
+    if record is not None:
+        return record
+    match = _LEGACY_NUMBER.match(report_number)
+    if not match:
+        return None
+    # 舊編號：用掃描編號找到紀錄後，必須重新算出完全相同的舊編號（含 HMAC 驗證碼）才算數，
+    # 不能讓人只靠猜流水號就查到別的報告
+    from apps.scans.reports import legacy_report_number
+
+    record = ReportVerification.objects.select_related("scan_job").filter(
+        scan_job_id=int(match.group(1))
+    ).first()
+    if record is None or legacy_report_number(record.scan_job) != report_number:
+        return None
+    return record
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @throttle_classes([AnonRateThrottle])
 def verify_report(request, report_number: str):
-    try:
-        record = ReportVerification.objects.select_related("scan_job").get(
-            report_number=report_number
-        )
-    except ReportVerification.DoesNotExist:
+    record = _find(report_number.strip().upper())
+    if record is None:
         return Response(
             {"detail": "查無此報告編號。這份報告可能不是由 Argus 出具，或編號輸入有誤。"},
             status=status.HTTP_404_NOT_FOUND,
