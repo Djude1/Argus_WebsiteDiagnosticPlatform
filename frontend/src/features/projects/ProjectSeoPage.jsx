@@ -1076,8 +1076,12 @@ function GscPanel({ project, gsc, performance, keyword, onChanged }) {
     <section className="panel">
       <div className="seo-gsc-head">
         <div>
-          <h2 className="project-section-title">實際搜尋詞（Google Search Console）</h2>
+          <h2 className="project-section-title">
+            實際搜尋詞（Google Search Console）
+            {gsc.demo && <span className="seo-chip is-warn">示範資料</span>}
+          </h2>
           <p className="seo-muted">
+            {gsc.demo && "示範專案是虛構網站，以下是示範用的搜尋資料・"}
             資源 {gsc.property}
             {!gsc.property_matches && "（與此網站網址不符，請確認）"}
             {perf && `・期間 ${formatDate(perf.start)}–${formatDate(perf.end)}（Search Console 資料約延遲 2–3 天）`}
@@ -1085,8 +1089,12 @@ function GscPanel({ project, gsc, performance, keyword, onChanged }) {
         </div>
         <div className="seo-gsc-actions">
           <FilterChips label="期間" value={performance.days} onChange={performance.setDays} options={GSC_DAYS.map((days) => ({ value: days, label: `${days} 天` }))} />
-          <button type="button" className="project-text-link" disabled={busy} onClick={() => choose("")}>更換資源</button>
-          <button type="button" className="project-text-link" disabled={busy} onClick={disconnect}>中斷連線</button>
+          {!gsc.demo && (
+            <>
+              <button type="button" className="project-text-link" disabled={busy} onClick={() => choose("")}>更換資源</button>
+              <button type="button" className="project-text-link" disabled={busy} onClick={disconnect}>中斷連線</button>
+            </>
+          )}
         </div>
       </div>
       {performance.loading && <PageLoader label="載入 Search Console 資料中…" />}

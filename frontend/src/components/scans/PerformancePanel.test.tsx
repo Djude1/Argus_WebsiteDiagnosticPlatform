@@ -22,10 +22,17 @@ describe("PerformancePanel", () => {
   it("分開呈現 Lighthouse 實驗室分數與 CrUX 真實使用者資料，並註明不計入 Argus 分數", () => {
     render(<PerformancePanel report={REPORT} />);
     expect(screen.getByText("72")).toBeInTheDocument();
-    expect(screen.getByText(/不計入 Argus 分數/)).toBeInTheDocument();
+    expect(screen.getAllByText(/不計入 Argus 分數/).length).toBeGreaterThan(0);
     expect(screen.getByText("2.6 秒")).toBeInTheDocument();
     expect(screen.getByText(/這個網址的資料不足，以下是整個網站的資料/)).toBeInTheDocument();
     expect(screen.getByText("Reduce unused JavaScript")).toBeInTheDocument();
+  });
+
+  it("與 Argus 同名的分數標成基本檢查，並說明和 Argus 分數不同", () => {
+    render(<PerformancePanel report={REPORT} pagesCount={17} />);
+    expect(screen.getByText("SEO 基本檢查")).toBeInTheDocument();
+    expect(screen.getByText("無障礙基本檢查")).toBeInTheDocument();
+    expect(screen.getByText(/只看首頁的基本項目/)).toHaveTextContent("全部 17 頁");
   });
 
   it("沒有真實使用者資料時顯示原因，不顯示數字", () => {

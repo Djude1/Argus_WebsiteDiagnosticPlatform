@@ -20,6 +20,7 @@ from rest_framework.decorators import action, api_view, permission_classes, thro
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.scans.demo.gsc import demo_inspection, demo_performance, demo_property
 from apps.scans.domain_verification import sync_owned_domains, sync_search_console_ownership
 from apps.scans.models import Page, ScanJob, SearchConsoleConnection, SiteProject
 from apps.scans.seo import gsc
@@ -94,6 +95,8 @@ class ProjectSeoActions:
     def gsc_connection(self, request, pk=None):
         """GET 連線狀態；PATCH {property} 選擇資源；DELETE 中斷連線並撤銷 Google 授權。"""
         project = self.get_object()
+        if project.is_demo and request.method != "GET":
+            return Response({"detail": _DEMO_READONLY}, status=400)
         if request.method == "GET":
             _ensure_project_connection(project)
         connection = SearchConsoleConnection.objects.filter(project=project).first()
@@ -144,6 +147,8 @@ class ProjectSeoActions:
             throttle_classes=[GscThrottle])
     def gsc_properties(self, request, pk=None):
         project = self.get_object()
+        if project.is_demo:
+            return Response({"detail": _DEMO_READONLY}, status=400)
         connection = _connection_or_404(project)
         try:
             sites = gsc.list_sites(connection)
@@ -159,10 +164,13 @@ class ProjectSeoActions:
     def gsc_performance(self, request, pk=None):
         """搜尋成效（?days=7|28|90）。平均排名是期間內的統計值，不是即時名次。"""
         project = self.get_object()
+        days = request.query_params.get("days", "28")
+        if project.is_demo:
+            # 示範專案是虛構網站，回固定的示範資料（demo/gsc.py），讓這一頁可以完整瀏覽
+            return Response(demo_performance(project, int(days) if days.isdigit() else 28))
         connection = _connection_or_404(project)
         if not connection.property_url:
             return Response({"detail": "請先選擇 Search Console 資源。"}, status=400)
-        days = request.query_params.get("days", "28")
         try:
             data = gsc.performance(connection, int(days) if days.isdigit() else 28)
         except gsc.GscError as exc:
@@ -175,13 +183,15 @@ class ProjectSeoActions:
     def gsc_inspect(self, request, pk=None):
         """網址檢查：查詢 Google 是否已收錄這個網址（只接受本專案網站的網址）。"""
         project = self.get_object()
-        connection = _connection_or_404(project)
-        if not connection.property_url:
-            return Response({"detail": "請先選擇 Search Console 資源。"}, status=400)
         url = str(request.data.get("url") or "")
         target, origin = urlsplit(url), urlsplit(project.origin)
         if target.scheme not in {"http", "https"} or target.hostname != origin.hostname:
             return Response({"url": ["只能檢查這個網站的網址。"]}, status=400)
+        if project.is_demo:
+            return Response(demo_inspection(url))
+        connection = _connection_or_404(project)
+        if not connection.property_url:
+            return Response({"detail": "請先選擇 Search Console 資源。"}, status=400)
         try:
             return Response(gsc.inspect_url(connection, url))
         except gsc.GscError as exc:
@@ -288,7 +298,15 @@ def _connection_or_404(project: SiteProject) -> SearchConsoleConnection:
     return connection
 
 
+_DEMO_READONLY = "示範專案是虛構網站，Search Console 資料為示範資料，無法連接或更換。"
+
+
 def _gsc_status(project: SiteProject) -> dict:
+    if project.is_demo:
+        # 示範專案：顯示已連接的示範資料（demo/gsc.py），前端標示「示範資料」並隱藏連線操作
+        return {"enabled": True, "connected": True, "property": demo_property(project),
+                "property_matches": True, "needs_reconnect": False, "error": "",
+                "connected_at": None, "demo": True}
     connection = SearchConsoleConnection.objects.filter(project=project).first()
     return {
         "enabled": gsc.is_enabled(),

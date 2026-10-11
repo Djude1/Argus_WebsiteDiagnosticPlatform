@@ -154,6 +154,69 @@
   font-size: 1.5rem;
   line-height: 1;
 }
+/* 下載 PDF 報告：主要動作要看得出可點、按下有回饋，匯出中顯示轉圈與文字（2026-10-11）。
+   顏色走自訂屬性：建置外掛會把舊版規則的顏色自動轉成深色版，主色按鈕被轉暗就看不出能按 */
+.scan-report-download {
+  --dl-bg: #0284c7;
+  --dl-bg-hover: #0369a1;
+  --dl-text: #ffffff;
+  --dl-ring: rgba(255, 255, 255, 0.45);
+  --dl-shadow: rgba(2, 132, 199, 0.35);
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+.scan-report-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--dl-bg);
+  border-radius: 10px;
+  background: var(--dl-bg);
+  color: var(--dl-text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+}
+.scan-report-download-button:hover:not(:disabled) {
+  background: var(--dl-bg-hover);
+  box-shadow: 0 4px 12px var(--dl-shadow);
+}
+.scan-report-download-button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: none;
+}
+.scan-report-download-button:focus-visible {
+  outline: 2px solid var(--dl-bg);
+  outline-offset: 2px;
+}
+.scan-report-download-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.scan-report-download-button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.9;
+}
+.scan-report-spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 2px solid var(--dl-ring);
+  border-top-color: var(--dl-text);
+  border-radius: 50%;
+  animation: scan-report-spin 0.8s linear infinite;
+}
+@keyframes scan-report-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.scan-report-download .error-text {
+  margin: 0;
+  font-size: 0.8rem;
+}
 .scan-report-progress {
   display: grid;
   gap: 0.5rem;

@@ -857,3 +857,43 @@ class DomainDetailInstructionsTests(TestCase):
         self.assertIn("dns_txt", data["instructions"])
         client.force_authenticate(other)
         self.assertEqual(client.get(f"/api/domains/{record.id}/").status_code, 404)
+
+
+class DemoSearchConsoleTests(TestCase):
+    """示範專案的 Search Console：虛構網站無法連接，回固定的示範資料（demo/gsc.py，2026-10-11）。"""
+
+    def setUp(self):
+        cache.clear()
+        self.user = _user("gsc-demo")
+        self.project = SiteProject.objects.create(
+            user=self.user, name="晨光咖啡烘焙所", origin="http://www.morninglight-coffee.example",
+            start_url="http://www.morninglight-coffee.example/", is_demo=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.base = f"/api/projects/{self.project.id}/gsc"
+
+    def test_status_shows_connected_demo_data_even_without_oauth(self):
+        response = self.client.get(f"{self.base}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["connected"])
+        self.assertTrue(response.data["demo"])
+        self.assertEqual(response.data["property"], "sc-domain:morninglight-coffee.example")
+
+    def test_performance_returns_stable_demo_data_for_each_period(self):
+        first = self.client.get(f"{self.base}/performance/", {"days": 28}).data
+        again = self.client.get(f"{self.base}/performance/", {"days": 28}).data
+        self.assertEqual(first, again)
+        self.assertTrue(first["demo"])
+        self.assertEqual(len(first["trend"]), 28)
+        self.assertEqual(first["totals"]["clicks"], sum(t["clicks"] for t in first["trend"]))
+        self.assertTrue(all(q["page"].startswith(self.project.origin) for q in first["queries"]))
+        week = self.client.get(f"{self.base}/performance/", {"days": 7}).data
+        self.assertLess(week["totals"]["impressions"], first["totals"]["impressions"])
+
+    def test_demo_cannot_connect_or_change_but_can_inspect(self):
+        self.assertEqual(self.client.patch(f"{self.base}/", {"property": "x"}).status_code, 400)
+        self.assertEqual(self.client.delete(f"{self.base}/").status_code, 400)
+        response = self.client.post(f"{self.base}/inspect/",
+                                    {"url": "http://www.morninglight-coffee.example/menu"})
+        self.assertEqual(response.data["verdict"], "PASS")

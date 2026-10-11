@@ -2,11 +2,13 @@
 // Lighthouse＝Google 機房單次實驗室量測；CrUX＝Chrome 使用者過去 28 天的真實體驗。
 // 兩者都是外部指標，不計入 Argus 分數，畫面上必須分開呈現並標示來源。
 
+// 「無障礙」「SEO」與 Argus 自己的分數同名但範圍不同（Lighthouse 只看首頁的基本項目），
+// 標成「基本檢查」並在下方說明，避免使用者以為兩個 SEO 分數有一個算錯（2026-10-11）
 const SCORE_LABELS = [
   ["performance", "效能"],
-  ["accessibility", "無障礙"],
+  ["accessibility", "無障礙基本檢查"],
   ["best-practices", "最佳做法"],
-  ["seo", "SEO"],
+  ["seo", "SEO 基本檢查"],
 ];
 
 function scoreTone(score) {
@@ -41,9 +43,10 @@ function missingReason(categories, check) {
  *   report: any,
  *   categories?: string[] | null,
  *   check?: { status?: string, reason?: string } | null,
+ *   pagesCount?: number | null,
  * }} props
  */
-function PerformancePanel({ report, categories = null, check = null }) {
+function PerformancePanel({ report, categories = null, check = null, pagesCount = null }) {
   if (!report?.lab) {
     return (
       <section className="panel">
@@ -57,7 +60,7 @@ function PerformancePanel({ report, categories = null, check = null }) {
   return (
     <div className="perf-panels">
       <section className="panel perf-block">
-        <h2 className="perf-title">Lighthouse 實驗室量測</h2>
+        <h2 className="perf-title">Google Lighthouse 首頁檢查</h2>
         <p className="perf-lead">
           Google 以模擬行動裝置量測首頁一次（Lighthouse {lab.version || ""}）。單次量測會隨網路與伺服器狀況浮動，
           不計入 Argus 分數。
@@ -73,6 +76,11 @@ function PerformancePanel({ report, categories = null, check = null }) {
               </li>
             ))}
           </ul>
+        )}
+        {!lab.error && (
+          <p className="hint-text">
+            只看首頁的基本項目；Argus 分數檢查{pagesCount ? `全部 ${pagesCount} 頁` : "全部頁面"}，兩者不同是正常的。
+          </p>
         )}
         {metrics.length > 0 && (
           <dl className="perf-metrics">

@@ -23,6 +23,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.scans.demo.gsc import DEMO_TARGET_KEYWORDS
 from apps.scans.models import Finding, FixOutput, Page, ScanJob, SiteProject
 from apps.scans.versions import RULESET_VERSION, SCORING_VERSION
 
@@ -147,6 +148,7 @@ def create_demo_project(user) -> SiteProject | None:
         favicon=meta.get("favicon") or "",
         favicon_checked_at=timezone.now(),
         description="Argus 示範專案：虛構網站的三次真實掃描結果，讓你先看看 Argus 能分析什麼。",
+        target_keywords=list(DEMO_TARGET_KEYWORDS),
     )
 
     now = timezone.now()

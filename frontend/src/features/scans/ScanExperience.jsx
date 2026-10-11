@@ -1328,6 +1328,8 @@ function FindingsWorkspace({ scan }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   // AI 解讀（AiInsightPanel 產生中會自己輪詢，更新後同步到這裡給問題詳情的 AI 複核用）
   const [aiInsight, setAiInsight] = useState(null);
   const { confirmDialog, notifyDialog, dialogHost } = useConfirmDialogs();
@@ -1400,15 +1402,24 @@ function FindingsWorkspace({ scan }) {
   }
 
   async function downloadReport() {
-    const response = await api.get(`/scans/${scan.id}/report/`, {
-      responseType: "blob",
-    });
-    const url = URL.createObjectURL(response.data);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `argus-scan-${scan.id}-report.pdf`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    // 第一次產生報告要轉檔、可能要十幾秒：按下後立刻顯示「匯出中…」並停用按鈕，避免重複點擊
+    setExporting(true);
+    setExportError("");
+    try {
+      const response = await api.get(`/scans/${scan.id}/report/`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `argus-scan-${scan.id}-report.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError("報告匯出失敗，請稍後再試。");
+    } finally {
+      setExporting(false);
+    }
   }
 
   // page tab 過濾：「all」顯示全部、某 page id 顯示該頁與站台級 finding
@@ -1506,15 +1517,20 @@ function FindingsWorkspace({ scan }) {
             <span>網站分數</span>
           </p>
         )}
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={downloadReport}
-          disabled={!completed}
-          title={completed ? "下載這次掃描的 PDF 報告" : "掃描完成後可下載"}
-        >
-          下載 PDF 報告
-        </button>
+        <div className="scan-report-download">
+          <button
+            className="scan-report-download-button"
+            type="button"
+            onClick={downloadReport}
+            disabled={!completed || exporting}
+            aria-busy={exporting}
+            title={completed ? "下載這次掃描的 PDF 報告" : "掃描完成後可下載"}
+          >
+            {exporting && <span className="scan-report-spinner" aria-hidden="true" />}
+            {exporting ? "匯出中…" : "下載 PDF 報告"}
+          </button>
+          {exportError && <p className="error-text" role="alert">{exportError}</p>}
+        </div>
       </header>
 
       {isInProgress(scan.status) && (
@@ -1822,6 +1838,7 @@ function ScanPerformancePage() {
       report={scan.performance_report}
       categories={scan.categories}
       check={scan.coverage?.checks?.pagespeed}
+      pagesCount={scan.pages_count}
     />
   );
 }
