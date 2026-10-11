@@ -444,6 +444,8 @@ def project_security(project: SiteProject, scan: ScanJob | None = None) -> dict:
         ],
         "observatory": profile.get("observatory") or None,
         "edge": ((profile.get("infrastructure") or {}).get("edge")) or None,
+        # 被動 API 檢查的端點清單（2026-10-11；較早的掃描沒有＝None）
+        "api_surface": (scan.warning_summary or {}).get("api_surface") or None,
         "kinds": kinds,
         "issues": issues,
         "missing": [i for i in data["missing"] if i["category"] == "security"],

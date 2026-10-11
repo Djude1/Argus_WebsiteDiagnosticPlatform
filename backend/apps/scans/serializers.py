@@ -377,6 +377,8 @@ class FindingSerializer(serializers.ModelSerializer):
             "evidence",
             "rule_id",
             "owasp_category",
+            "owasp_2025",
+            "owasp_2025_label",
             "cwe_id",
             "evidence_type",
             "evidence_json",

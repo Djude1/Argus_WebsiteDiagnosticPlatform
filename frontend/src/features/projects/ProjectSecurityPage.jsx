@@ -214,6 +214,8 @@ export function ProjectSecurityPage() {
         )}
       </section>
 
+      {data.api_surface && <ApiSurface surface={data.api_surface} />}
+
       {data.observatory && (
         <section className="panel">
           <ObservatoryGrade observatory={data.observatory} />
@@ -238,5 +240,47 @@ export function ProjectSecurityPage() {
         </section>
       )}
     </div>
+  );
+}
+
+const API_RULE_LABELS = {
+  "api-error-stack-trace": "錯誤回應洩漏堆疊",
+  "api-cors-wildcard": "任何網站可讀取",
+};
+
+// 被動觀察到的 API 端點（後端 security/api_scanner.py 產生，存 warning_summary.api_surface）
+function ApiSurface({ surface }) {
+  return (
+    <section className="panel">
+      <h2 className="project-section-title">API 端點（{surface.total}）</h2>
+      <p className="hint-text">
+        網站前端在瀏覽過程中自己呼叫的 API；只分析這些回應，不另外發送請求。
+        {surface.total > surface.endpoints.length && `列出前 ${surface.endpoints.length} 個，有問題的排前面。`}
+      </p>
+      <div className="security-api-wrap">
+        <table className="security-api-table">
+          <thead>
+            <tr><th>方法</th><th>路徑</th><th>狀態碼</th><th>內容類型</th><th>發現</th></tr>
+          </thead>
+          <tbody>
+            {surface.endpoints.map((row) => (
+              <tr key={`${row.method} ${row.path}`}>
+                <td className="security-api-method">{row.method}</td>
+                <td className="security-api-path">{row.path}</td>
+                <td>{row.status ?? "—"}</td>
+                <td>{row.content_type || "—"}</td>
+                <td>
+                  {row.rules.length === 0
+                    ? <span className="security-api-ok">無</span>
+                    : row.rules.map((rule) => (
+                      <span key={rule} className="security-api-chip">{API_RULE_LABELS[rule] || rule}</span>
+                    ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

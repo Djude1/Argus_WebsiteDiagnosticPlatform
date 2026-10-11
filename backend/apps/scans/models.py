@@ -448,6 +448,20 @@ class Finding(models.Model):
 
         return KIND_LABELS.get(self.security_kind, "")
 
+    @property
+    def owasp_2025(self) -> str:
+        """OWASP Top 10:2025 代號（由 2021 代號與 CWE 推導；DB 只存 2021 代號）。"""
+        from apps.scans.security.owasp_mapper import owasp_2025
+
+        return owasp_2025(self.owasp_category, self.cwe_id)
+
+    @property
+    def owasp_2025_label(self) -> str:
+        """顯示用：「A02:2025 安全設定錯誤」。"""
+        from apps.scans.security.owasp_mapper import owasp_2025_text
+
+        return owasp_2025_text(self.owasp_category, self.cwe_id)
+
 
 class SearchConsoleConnection(models.Model):
     """Google Search Console 連線（OAuth，scope 只有 webmasters.readonly）。

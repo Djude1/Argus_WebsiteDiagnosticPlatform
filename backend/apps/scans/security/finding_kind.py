@@ -54,6 +54,8 @@ _EXACT = {
     "security-pii-public-contact": EXPOSURE,
     "security-pii-personal-contact": EXPOSURE,
     "SECURITY_PII_8B24BB8B28": EXPOSURE,
+    "api-error-stack-trace": EXPOSURE,
+    "api-cors-wildcard": CONFIG,
 }
 _PREFIXES = (
     ("header-", CONFIG),

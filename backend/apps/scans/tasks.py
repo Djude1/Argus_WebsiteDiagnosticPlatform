@@ -54,6 +54,7 @@ from apps.scans.scanners import (
     calculate_scores,
 )
 from apps.scans.security import exposure_scanner, owasp_mapper
+from apps.scans.security.api_scanner import analyze_api
 from apps.scans.security.content_injection import (
     build_injection_finding,
     detect_content_injection,
@@ -1170,6 +1171,7 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
     findings = [owasp_mapper.tag(f) for f in findings]
     ctx.record(findings, check="deep_security")
     ctx.coverage.mark("deep_security", COMPLETED)
+    _passive_api_check(ctx)
     owasp_mapper.backfill(scan_job)
     append_log(ctx.scan_job_id, f"深度被動安全掃描完成：{len(findings)} 項發現")
     ctx.scanning_progress(
@@ -1178,6 +1180,33 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
             ctx.steps, "zap_passive", "exposure_probe", "geo_site", "seo_links", "agent",
             "scoring",
         ),
+    )
+
+
+def _passive_api_check(ctx: ScanRunContext) -> None:
+    """被動 API 檢查：爬取期間前端自己呼叫的同網站 API 回應（不發新請求）。
+
+    API 端點清單存 `warning_summary["api_surface"]`（方法、路徑、狀態碼，不含查詢字串與回應內容）。
+    """
+    observations = ctx.site_signals.get("api_observations") or []
+    if not observations:
+        ctx.coverage.mark("api_passive", SKIPPED, "爬取期間沒有觀察到同網站的 API 呼叫")
+        return
+    try:
+        api_findings, surface = analyze_api(observations, ctx.scan_job.origin)
+    except Exception as exc:  # noqa: BLE001 — API 檢查失敗不影響其他資安檢查
+        _tool_failed(ctx, "api_passive", "被動 API 檢查", exc)
+        return
+    ctx.record([owasp_mapper.tag(f) for f in api_findings], check="api_passive")
+    ctx.coverage.mark("api_passive", COMPLETED)
+    scan_job = ctx.scan_job
+    warnings = dict(scan_job.warning_summary or {})
+    warnings["api_surface"] = surface
+    scan_job.warning_summary = warnings
+    scan_job.save(update_fields=["warning_summary", "updated_at"])
+    append_log(
+        ctx.scan_job_id,
+        f"被動 API 檢查：{surface['total']} 個端點，{len(api_findings)} 項發現",
     )
 
 

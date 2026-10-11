@@ -1,4 +1,11 @@
-"""Finding 對映 OWASP Top 10 (2021) 與 CWE 編號。純函式 + DB 回填；例外 silent-fail。"""
+"""Finding 對映 OWASP Top 10（2021 存 DB、2025 由對照推導）與 CWE 編號。
+
+純函式 + DB 回填；例外 silent-fail。
+
+2026-10-11：加入 OWASP Top 10:2025（https://owasp.org/Top10/2025/）。`Finding.owasp_category`
+仍存 2021 代號（既有資料與報告相容），2025 代號由 `owasp_2025()` 依官方類別調整推導，
+少數規則以 CWE 歸到 2025 新類別（例：錯誤訊息洩漏堆疊 → A10 例外狀況處理不當）。
+"""
 from apps.scans.models import Finding
 
 # rule_id → (owasp_category, cwe_id)
@@ -57,6 +64,9 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "exposure-file-devnote": ("A05", "CWE-200"),
     "exposure-dir-listing": ("A05", "CWE-548"),
     "exposure-robots-disclosure": ("A05", "CWE-200"),
+    # 被動 API 檢查（api_scanner）
+    "api-error-stack-trace": ("A05", "CWE-209"),
+    "api-cors-wildcard": ("A05", "CWE-942"),
 }
 
 
@@ -72,6 +82,45 @@ _KEYWORD_OWASP_MAP: tuple[tuple[str, str, str], ...] = (
     ("PII", "A02", "CWE-359"),
     ("HTTPS", "A02", "CWE-319"),
 )
+
+
+# OWASP Top 10:2021 → 2025 類別對照（官方調整：SSRF 併入 A01、易受攻擊元件擴大為供應鏈 A03、
+# 安全設定錯誤升到 A02、加密失誤降到 A04、注入 A05、不安全設計 A06）
+OWASP_2021_TO_2025: dict[str, str] = {
+    "A01": "A01", "A02": "A04", "A03": "A05", "A04": "A06", "A05": "A02",
+    "A06": "A03", "A07": "A07", "A08": "A08", "A09": "A09", "A10": "A01",
+}
+
+OWASP_2025_LABELS: dict[str, str] = {
+    "A01": "存取控制失效",
+    "A02": "安全設定錯誤",
+    "A03": "軟體供應鏈失誤",
+    "A04": "加密機制失效",
+    "A05": "注入攻擊",
+    "A06": "不安全設計",
+    "A07": "身分驗證失效",
+    "A08": "軟體或資料完整性失效",
+    "A09": "安全日誌與警示失效",
+    "A10": "例外狀況處理不當",
+}
+
+# 依 CWE 直接歸到 2025 類別（2021 沒有對應類別的新分類）
+_CWE_2025_OVERRIDE: dict[str, str] = {
+    "CWE-209": "A10",  # 錯誤訊息洩漏敏感資訊（堆疊追蹤）
+}
+
+
+def owasp_2025(owasp_2021: str, cwe_id: str = "") -> str:
+    """由 2021 代號（與 CWE）推導 OWASP Top 10:2025 代號；無對映回空字串。"""
+    if cwe_id in _CWE_2025_OVERRIDE:
+        return _CWE_2025_OVERRIDE[cwe_id]
+    return OWASP_2021_TO_2025.get((owasp_2021 or "").strip().upper(), "")
+
+
+def owasp_2025_text(owasp_2021: str, cwe_id: str = "") -> str:
+    """顯示用：「A02:2025 安全設定錯誤」；無對映回空字串。"""
+    code = owasp_2025(owasp_2021, cwe_id)
+    return f"{code}:2025 {OWASP_2025_LABELS[code]}" if code else ""
 
 
 def _lookup(rule_id: str) -> tuple[str, str]:

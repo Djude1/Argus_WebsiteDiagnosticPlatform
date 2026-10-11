@@ -765,6 +765,16 @@ _PAGE_RETRY_LIMIT = 1
 # 被動收集的 same-origin XHR/fetch 端點上限（去重後）；預防長輪詢/socket.io
 # 之類的高頻端點把清單撐爆
 _MAX_API_ENDPOINTS = 80
+# 被動 API 檢查（security/api_scanner）用的回應摘要：每個「方法＋路徑」只記第一次，不含查詢字串
+# （可能夾帶 token）；只有錯誤回應另讀前 _API_BODY_LIMIT 字元，判斷是否洩漏堆疊追蹤（2026-10-11）
+_MAX_API_OBSERVATIONS = 80
+_API_BODY_LIMIT = 4000
+_API_HEADER_KEYS = (
+    "content-type",
+    "access-control-allow-origin",
+    "access-control-allow-credentials",
+    "x-content-type-options",
+)
 
 
 async def _close_playwright_resources(*resources) -> None:
@@ -898,6 +908,7 @@ class _CrawlState:
     queue: deque = field(default_factory=deque)
     pages: list[dict] = field(default_factory=list)
     api_endpoints: set[str] = field(default_factory=set)
+    api_observations: dict[str, dict] = field(default_factory=dict)
     page_retry_counts: dict[str, int] = field(default_factory=dict)
     last_request_at: float = 0.0
     # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
@@ -1052,7 +1063,45 @@ async def _throttle(state: _CrawlState, min_interval: float) -> None:
     state.last_request_at = time.perf_counter()
 
 
-def _attach_page_listeners(page, origin: str, api_endpoints: set[str]) -> list[str]:
+def _observe_api_response(resp, sink: dict[str, dict], body_tasks: list) -> None:
+    """記下一個 same-origin API 回應的摘要（方法、路徑、狀態、少數標頭）；錯誤回應另讀內容。"""
+    if len(sink) >= _MAX_API_OBSERVATIONS:
+        return
+    method = (resp.request.method or "GET").upper()
+    path = urlparse(resp.url).path or "/"
+    key = f"{method} {path}"
+    if key in sink:
+        return
+    headers = resp.headers or {}
+    observation = {
+        "method": method,
+        "path": path,
+        "status": resp.status,
+        "headers": {k: str(headers[k])[:200] for k in _API_HEADER_KEYS if headers.get(k)},
+    }
+    sink[key] = observation
+    content_type = str(headers.get("content-type", "")).lower()
+    if resp.status >= 400 and any(t in content_type for t in ("json", "text", "html", "xml")):
+        body_tasks.append(asyncio.ensure_future(_read_api_error_body(resp, observation)))
+
+
+async def _read_api_error_body(resp, observation: dict) -> None:
+    try:
+        observation["error_body"] = (await resp.text())[:_API_BODY_LIMIT]
+    except Exception:
+        pass
+
+
+async def _finish_api_body_tasks(body_tasks: list) -> None:
+    """關閉分頁前等錯誤回應內容讀完（最多 2 秒，讀不到就算了）。"""
+    if body_tasks:
+        await asyncio.wait(body_tasks, timeout=2)
+
+
+def _attach_page_listeners(
+    page, origin: str, api_endpoints: set[str],
+    api_observations: dict[str, dict] | None = None, body_tasks: list | None = None,
+) -> list[str]:
     """掛上被動監聽：same-origin XHR/fetch 端點、本頁 JavaScript 執行期錯誤。回傳錯誤清單。
 
     SPA 的 API 呼叫只存在於真實瀏覽器流量：被動攔截 same-origin 端點，供 Nuclei／sqlmap／
@@ -1069,6 +1118,8 @@ def _attach_page_listeners(page, origin: str, api_endpoints: set[str]) -> list[s
                 return
             if len(_sink) < _MAX_API_ENDPOINTS:
                 _sink.add(resp.url)
+            if api_observations is not None and body_tasks is not None:
+                _observe_api_response(resp, api_observations, body_tasks)
         except Exception:
             pass
 
@@ -1269,10 +1320,13 @@ async def _visit_page(
     started_at = time.perf_counter()
     origin = state.origin
     page = None
+    body_tasks: list = []
     try:
         # new_page() 在 try 裡：context/browser 偶發損壞時只讓這一頁失敗
         page = await context.new_page()
-        js_errors = _attach_page_listeners(page, origin, state.api_endpoints)
+        js_errors = _attach_page_listeners(
+            page, origin, state.api_endpoints, state.api_observations, body_tasks
+        )
         stage.name = "navigation"
         # 不等 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠無法完全安靜；
         # 之後由 wait_for_render_ready 等 DOM 穩定（有上限），scroll_to_bottom 再觸發延遲載入。
@@ -1327,6 +1381,7 @@ async def _visit_page(
             load_time_ms=round((time.perf_counter() - started_at) * 1000) - ready_ms,
         )
     finally:
+        await _finish_api_body_tasks(body_tasks)
         await _close_playwright_resources(page)
 
 
@@ -1498,4 +1553,5 @@ async def crawl_site(
             state.warnings["crawl_budget"] = state.budget_summary(
                 stop_reason, time.perf_counter() - crawl_started
             )
+    site_signals["api_observations"] = list(state.api_observations.values())
     return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)

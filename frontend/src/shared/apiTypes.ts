@@ -3181,6 +3181,10 @@ export interface components {
             evidence: string;
             rule_id: string;
             owasp_category: string;
+            /** @description OWASP Top 10:2025 代號（由 2021 代號與 CWE 推導；DB 只存 2021 代號）。 */
+            readonly owasp_2025: string;
+            /** @description 顯示用：「A02:2025 安全設定錯誤」。 */
+            readonly owasp_2025_label: string;
             cwe_id: string;
             evidence_type: string;
             evidence_json: unknown;

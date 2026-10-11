@@ -1,0 +1,51 @@
+# 每月檢查掃描工具（Nuclei 引擎與模板）有沒有新版本，有就開 issue 提醒（2026-10-11）。
+# 模板版本鎖在 Dockerfile 的 NUCLEI_TEMPLATES_VERSION（含 sha256 驗證），升級要人工改兩個 ARG、
+# 重新量 KEV 模板集的請求量（見 backend/apps/scans/CLAUDE.md「Nuclei 模板治理」），
+# 所以這裡只提醒、不自動升級。
+name: Scanner Update Check
+
+on:
+  schedule:
+    - cron: "17 1 1 * *"  # 每月 1 日 01:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 比對 Dockerfile 鎖定版本與最新版本
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          pinned_templates=$(sed -n 's/^ARG NUCLEI_TEMPLATES_VERSION=//p' Dockerfile)
+          pinned_engine=$(sed -n 's/^ARG NUCLEI_VERSION=//p' Dockerfile)
+          latest_templates=$(gh api repos/projectdiscovery/nuclei-templates/releases/latest --jq .tag_name)
+          latest_engine=$(gh api repos/projectdiscovery/nuclei/releases/latest --jq .tag_name | sed 's/^v//')
+          {
+            echo "| 項目 | 鎖定版本 | 最新版本 |"
+            echo "|---|---|---|"
+            echo "| Nuclei 模板 | ${pinned_templates} | ${latest_templates} |"
+            echo "| Nuclei 引擎 | ${pinned_engine} | ${latest_engine} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY" > report.md
+          if [ "${pinned_templates}" = "${latest_templates}" ] && [ "${pinned_engine}" = "${latest_engine}" ]; then
+            echo "掃描工具已是最新版本"
+            exit 0
+          fi
+          title="掃描工具有新版本：Nuclei 模板 ${latest_templates}／引擎 ${latest_engine}"
+          if gh issue list --state open --search "in:title \"${title}\"" --json number --jq 'length' | grep -qv '^0$'; then
+            echo "已有相同提醒 issue，略過"
+            exit 0
+          fi
+          {
+            cat report.md
+            echo
+            echo "升級步驟：修改 Dockerfile 的 NUCLEI_TEMPLATES_VERSION／NUCLEI_VERSION 與對應 sha256，"
+            echo "重新量 KEV 模板集的模板數與請求量，並確認 backend/apps/scans/CLAUDE.md「Nuclei 模板治理」。"
+          } > body.md
+          gh issue create --title "${title}" --body-file body.md

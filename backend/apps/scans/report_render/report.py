@@ -869,10 +869,10 @@ def _appendix(doc, data, number=6):
         data_table(doc, ["名詞", "白話說明"], rows, [1800, 6300])
     if ap.get("tech_index"):
         sub("技術索引")
-        add_para(doc, [{"text": "供工程師與稽核人員對照。OWASP 為國際公認的網站安全風險分類，CWE 為通用軟體弱點編號；一般讀者可略過。",
+        add_para(doc, [{"text": "供工程師與稽核人員對照。OWASP 為國際公認的網站安全風險分類（依 2025 版，括號內為 2021 版代號），CWE 為通用軟體弱點編號；一般讀者可略過。",
                         "size": 9, "color": T.GREY}], after=5)
         rows = [[t["ref"], t["rule_id"], t.get("owasp_cwe", "— / —")] for t in ap["tech_index"]]
-        data_table(doc, ["項次", "規則 ID", "OWASP / CWE"], rows, [1200, 4400, 2500])
+        data_table(doc, ["項次", "規則 ID", "OWASP / CWE"], rows, [1000, 3700, 3400])
     sub("修補後如何驗證")
     add_para(doc, [{"text": ap.get("verify_note",
                     "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；下一份報告的摘要會列出這次解決了哪些項目。"),

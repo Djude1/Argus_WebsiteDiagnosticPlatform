@@ -973,7 +973,9 @@ function buildEvidenceCopyText(finding) {
     `Category: ${finding.category || ""}`,
     `Severity: ${finding.severity || ""}`,
     `Rule ID: ${finding.rule_id || "N/A"}`,
-    ...(finding.owasp_category ? [`OWASP: ${finding.owasp_category}`] : []),
+    ...(finding.owasp_category
+      ? [`OWASP: ${finding.owasp_2025 ? `${finding.owasp_2025}:2025（2021 ${finding.owasp_category}）` : finding.owasp_category}`]
+      : []),
     ...(finding.cwe_id ? [`CWE: ${finding.cwe_id}`] : []),
     `Evidence Source: ${finding.evidence_source || "N/A"}`,
     `Evidence Type: ${finding.evidence_type || "N/A"}`,
@@ -1036,8 +1038,10 @@ function EvidencePanel({ finding }) {
         )}
         {finding.owasp_category && (
           <div>
-            <span>OWASP</span>
-            <strong>{finding.owasp_category}</strong>
+            <span>OWASP Top 10</span>
+            <strong title={finding.owasp_2025_label || undefined}>
+              {finding.owasp_2025 ? `${finding.owasp_2025}:2025（2021 ${finding.owasp_category}）` : finding.owasp_category}
+            </strong>
           </div>
         )}
         {finding.cwe_id && (

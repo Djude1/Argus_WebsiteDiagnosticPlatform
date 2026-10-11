@@ -767,6 +767,18 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
     ]
 
 
+def _owasp_cwe_text(finding) -> str:
+    """技術索引的 OWASP／CWE 欄：2025 版為主、括號附 2021 版（2026-10-11）。"""
+    owasp = "—"
+    if finding.owasp_category:
+        code_2025 = finding.owasp_2025
+        owasp = (
+            f"{code_2025}:2025（2021 {finding.owasp_category}）"
+            if code_2025 else finding.owasp_category
+        )
+    return f"{owasp} / {finding.cwe_id or '—'}"
+
+
 _COVERAGE_STATUS_TEXT = {"partial": "部分完成", "failed": "執行失敗", "blocked": "被阻擋"}
 
 
@@ -1233,9 +1245,7 @@ def _report_appendix(
             {
                 "ref": item_ref,
                 "rule_id": item["finding"].rule_id or "—",
-                "owasp_cwe": (
-                    f"{item['finding'].owasp_category or '—'} / {item['finding'].cwe_id or '—'}"
-                ),
+                "owasp_cwe": _owasp_cwe_text(item["finding"]),
             }
             for item_ref, item in zip(
                 [f["id"] for f in findings_payload], grouped, strict=True
