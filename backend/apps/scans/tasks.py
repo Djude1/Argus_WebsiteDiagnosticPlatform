@@ -400,6 +400,8 @@ class ScanRunContext:
     execution_plan: ScanExecutionPlan
     steps: list[str]
     crawl_phase_started: str
+    # 任務起始的 monotonic 時間（計算各階段還剩多少預算用；0＝未記錄，視為剛開始）
+    started_monotonic: float = 0.0
     # 爬取階段
     crawled_pages: list[dict] = field(default_factory=list)
     warnings: dict = field(default_factory=dict)
@@ -497,6 +499,7 @@ def start_scan_run(scan_job_id: int) -> ScanRunContext | dict:
         execution_plan=execution_plan,
         steps=planned_scan_steps(scan_job, execution_plan),
         crawl_phase_started=crawl_phase_started,
+        started_monotonic=time.monotonic(),
     )
     _write_progress(
         scan_job_id, phase="crawling", done=0, total=1,
@@ -957,12 +960,60 @@ def _apply_nuclei_run(ctx: ScanRunContext, run) -> None:
     ctx.nuclei_findings = run.findings
     ctx.nuclei_template_set = run.template_set
     if run.timed_out:
+        used = run.timeout_seconds or settings.ARGUS_NUCLEI_TIMEOUT
         ctx.coverage.mark(
             "nuclei", PARTIAL,
-            f"逾時（{settings.ARGUS_NUCLEI_TIMEOUT} 秒），只有逾時前完成的模板有結果",
+            f"逾時（{used} 秒），只有逾時前完成的模板有結果",
         )
     else:
         ctx.coverage.mark("nuclei", COMPLETED)
+
+
+# Nuclei 之後各階段（深度資安、敏感路徑、SEO 連結、PageSpeed、評分與結算）的時間保留量；
+# Agent 會跑時另加（ARGUS_AGENT_MAX_STEPS 步的 LLM 呼叫與工具執行，最壞可達十餘分鐘）。
+_POST_NUCLEI_RESERVE_SECONDS = 600
+_AGENT_RESERVE_SECONDS = 900
+# 剩餘預算低於此值就不跑 Nuclei：短時間內跑不完幾個模板，還壓縮後續階段、
+# 增加 Celery soft limit 溢出（整個掃描失敗＋退款）的風險。
+_NUCLEI_MIN_RUN_SECONDS = 120
+
+
+def _nuclei_timeout_seconds(ctx: ScanRunContext) -> int:
+    """Nuclei 這次可用的逾時上限（秒）。
+
+    固定 660 秒對「全網站掃描與 Katana 分預算後只剩 1 RPS」的大型／回應慢網站不夠用
+    （KEV 模板集約 630 個請求，速率限制本身就要 630 秒起跳）。這裡在整體掃描時限
+    （Celery soft limit 扣除後續階段保留時間）允許的範圍內，把上限從
+    ARGUS_NUCLEI_TIMEOUT 放寬到 ARGUS_NUCLEI_MAX_TIMEOUT；預算不足時縮短到剩餘值。
+    """
+    elapsed = time.monotonic() - ctx.started_monotonic if ctx.started_monotonic else 0.0
+    reserve = _POST_NUCLEI_RESERVE_SECONDS
+    plan = ctx.execution_plan
+    if settings.ARGUS_AGENT_ENABLED and (plan.run_agent or plan.run_agent_ux):
+        reserve += _AGENT_RESERVE_SECONDS
+    remaining = max(settings.CELERY_TASK_SOFT_TIME_LIMIT - elapsed - reserve, 0)
+    extended = min(settings.ARGUS_NUCLEI_MAX_TIMEOUT, remaining)
+    return int(min(max(settings.ARGUS_NUCLEI_TIMEOUT, extended), remaining))
+
+
+def _run_nuclei_for_scan(ctx: ScanRunContext, target: str, rate_limit: int) -> None:
+    """依整體掃描剩餘預算執行 Nuclei 並套用結果（例外由呼叫端處理）。
+
+    剩餘時間連最低執行量都不夠時直接不跑：覆蓋紀錄標 time_budget_exhausted，
+    比把整個任務推向 Celery soft limit（掃描失敗＋退款）好。
+    """
+    timeout = _nuclei_timeout_seconds(ctx)
+    if timeout < _NUCLEI_MIN_RUN_SECONDS:
+        append_log(
+            ctx.scan_job_id,
+            f"Nuclei 略過：掃描已接近整體時限（只剩 {timeout} 秒），優先保留時間給後續分析",
+            level="warn",
+        )
+        ctx.coverage.mark("nuclei", FAILED, "time_budget_exhausted")
+        return
+    _apply_nuclei_run(
+        ctx, run_nuclei(target, ctx.scan_job_id, rate_limit=rate_limit, timeout=timeout)
+    )
 
 
 def _run_site_active_tools(ctx: ScanRunContext, target: str) -> None:
@@ -991,7 +1042,7 @@ def _run_site_active_tools(ctx: ScanRunContext, target: str) -> None:
             _tool_failed(ctx, "katana", "Katana", exc)
         raise_if_cancelled(scan_job_id)
         try:
-            _apply_nuclei_run(ctx, run_nuclei(target, scan_job_id, rate_limit=1))
+            _run_nuclei_for_scan(ctx, target, 1)
         except ScanCancelled:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -1008,7 +1059,7 @@ def _run_site_active_tools(ctx: ScanRunContext, target: str) -> None:
             rate_limit=katana_rps,
             scan_job_id=scan_job_id,
         )
-        f_nuclei = executor.submit(run_nuclei, target, scan_job_id, rate_limit=nuclei_rps)
+        f_nuclei = executor.submit(_run_nuclei_for_scan, ctx, target, nuclei_rps)
     try:
         ctx.katana_findings, ctx.katana_tech = f_katana.result()
         ctx.coverage.mark("katana", COMPLETED)
@@ -1017,7 +1068,7 @@ def _run_site_active_tools(ctx: ScanRunContext, target: str) -> None:
     except Exception as exc:  # noqa: BLE001
         _tool_failed(ctx, "katana", "Katana", exc)
     try:
-        _apply_nuclei_run(ctx, f_nuclei.result())
+        f_nuclei.result()  # 結果已在執行緒內套用；這裡只讓例外冒出
     except ScanCancelled:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -1028,9 +1079,7 @@ def _run_single_page_nuclei(ctx: ScanRunContext, target: str) -> None:
     """單頁主動掃描：不啟動 Katana 整站探索；Nuclei 與全網站相同，只掃網站根網址。"""
     append_log(ctx.scan_job_id, "單頁主動掃描：略過 Katana 整站探索")
     try:
-        _apply_nuclei_run(
-            ctx, run_nuclei(target, ctx.scan_job_id, rate_limit=settings.ARGUS_ACTIVE_MAX_RPS)
-        )
+        _run_nuclei_for_scan(ctx, target, settings.ARGUS_ACTIVE_MAX_RPS)
     except ScanCancelled:
         raise
     except Exception as exc:  # noqa: BLE001

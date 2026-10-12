@@ -224,7 +224,10 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
 
         run_scan_job.run(scan.id)
 
-        self.mocks["nuclei"].assert_called_once_with("https://example.com/", scan.id, rate_limit=2)
+        # timeout 由整體掃描剩餘預算決定（_nuclei_timeout_seconds）：時間充裕時給到上限 1800
+        self.mocks["nuclei"].assert_called_once_with(
+            "https://example.com/", scan.id, rate_limit=2, timeout=1800
+        )
         self.mocks["kali"].assert_called_once_with(scan.id, [])
         self.mocks["katana"].assert_not_called()
         self.mocks["exposure"].assert_not_called()

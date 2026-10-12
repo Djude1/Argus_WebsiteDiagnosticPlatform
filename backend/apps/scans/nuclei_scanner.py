@@ -77,6 +77,7 @@ class NucleiRun:
     findings: list[dict] = field(default_factory=list)
     timed_out: bool = False
     template_set: dict = field(default_factory=dict)
+    timeout_seconds: int = 0
 
 
 def _policy_args() -> list[str]:
@@ -177,17 +178,20 @@ def run_nuclei(
     scan_job_id: int,
     *,
     rate_limit: int | None = None,
+    timeout: int | None = None,
 ) -> NucleiRun:
     """以固定模板集掃描網站根網址，回傳結果與這次的模板集紀錄。
 
     rate_limit：整個 Nuclei process 的每秒請求上限。
+    timeout：這次執行的逾時上限（秒）。pipeline 依整體掃描剩餘預算傳入，
+    讓大型或回應慢的網站也有機會跑完；沒傳時用 settings.ARGUS_NUCLEI_TIMEOUT。
     逾時不拋例外：保留逾時前已輸出的結果並標 timed_out。
     """
     if not shutil.which("nuclei"):
         raise NucleiUnavailable("nuclei_missing")
     template_set = template_set_info(settings.ARGUS_NUCLEI_TEMPLATES_DIR)
 
-    hard_timeout = settings.ARGUS_NUCLEI_TIMEOUT
+    hard_timeout = int(timeout) if timeout is not None else settings.ARGUS_NUCLEI_TIMEOUT
     effective_rate_limit = max(int(rate_limit if rate_limit is not None else 2), 1)
     target = _root_url(url)
 
@@ -241,7 +245,10 @@ def run_nuclei(
         )
     else:
         append_log(scan_job_id, f"Nuclei 完成：{len(findings)} 項發現")
-    return NucleiRun(findings=findings, timed_out=timed_out, template_set=template_set)
+    return NucleiRun(
+        findings=findings, timed_out=timed_out,
+        template_set=template_set, timeout_seconds=int(hard_timeout),
+    )
 
 
 def _parse_jsonl(lines: list[str]) -> list[dict]:
