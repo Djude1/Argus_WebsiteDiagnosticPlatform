@@ -1,0 +1,47 @@
+@startuml
+' 系統手冊 圖 9-2-1 掃描階段流程圖（對應表 9-2-3 與附錄三；改階段時同步）
+' 灰底＝會連線受測網站；白底＝只分析已取得的資料
+skinparam defaultFontName "Noto Sans CJK TC"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam dpi 220
+skinparam ArrowColor #374151
+skinparam ActivityBorderColor #334155
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #334155
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam NoteBorderColor #94A3B8
+skinparam NoteBackgroundColor #F8FAFC
+skinparam LegendBackgroundColor #FFFFFF
+skinparam LegendBorderColor #94A3B8
+
+start
+:0 等待排程\n預扣點數、送進佇列;
+#E2E8F0:1 爬取\n真實瀏覽器逐頁抓取、截圖、記錄 API 請求;
+if (有可分析的頁面？) then (否)
+  :標示失敗並全額退點;
+  stop
+else (是)
+endif
+:2～6 逐頁檢查\nSEO／AEO／GEO／UX／資安（依勾選維度）;
+:7 AEO 問答檢測（勾 AEO）;
+#E2E8F0:8 主動探測（主動模式＋網域已驗證）\nNuclei KEV 模板、Katana 端點探索;
+#E2E8F0:9 深度資安（每次）\nTLS 憑證、DNS／郵件設定、已知漏洞比對;
+:10 OWASP ZAP 被動分析（勾資安）\n分析爬取時錄下的流量;
+#E2E8F0:11 敏感檔案探測\n（全網站＋主動模式＋網域已驗證）;
+:12 AI 爬蟲訊號（勾 GEO）;
+#E2E8F0:13 連結檢查（勾 SEO）;
+#E2E8F0:14 效能量測（勾 UX）\nGoogle PageSpeed 量測首頁，爬取後即在背景開始;
+#E2E8F0:15 AI Agent\n（全網站＋勾 UX；或全網站＋主動模式＋網域已驗證）;
+:16 彙整評分\n計分、覆蓋紀錄、依實際頁數結算點數;
+stop
+note right
+  17 AI 解讀不在流程內：
+  使用者在報告頁按下才產生
+end note
+legend right
+  灰底：會連線受測網站（或由 Google 代為量測）
+  白底：只分析已取得的資料
+  括號內為執行條件
+endlegend
+@enduml

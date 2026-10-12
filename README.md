@@ -91,49 +91,16 @@
 | **任務佇列** | Celery + Redis |
 | **爬蟲** | Playwright Python async（Chromium headless） |
 | **資料庫** | SQLite（開發）/ PostgreSQL（正式） |
-| **AI Agent** | MiniMax-M2.7 優先 → GLM glm-4.7-flash → Gemini 備援（OpenAI-compatible tool calling） |
-| **部署** | Docker Compose（web / worker / redis / db / nginx） |
+| **AI Agent** | MiniMax-M3 優先 → GLM glm-4.5-flash → Gemini gemini-2.5-flash 依序備援（OpenAI-compatible tool calling） |
+| **部署** | 正式：自架 Kubernetes（Gateway API、frontend／web／worker 各 2 副本、PostgreSQL、Redis、OWASP ZAP）＋ Argo CD GitOps；本機：Docker Compose |
 | **程式碼品質** | ruff（backend lint）、數百項後端自動化測試、GitHub Actions quality gate |
 
 ---
 
 ## 系統架構
-![alt text](Architecture.png)
-```
-使用者輸入網址
-      │
-      ▼
-┌─────────────────────────────────────────────────┐
-│  前端（React 18 + Vite）                          │
-│  /login  /scans  /scans/:id  /scans/:id/topology │
-│  /admin/*（React 管理後台）                       │
-└───────────────────┬─────────────────────────────┘
-                    │ REST API (JWT)
-                    ▼
-┌─────────────────────────────────────────────────┐
-│  後端（Django 5 + DRF）                           │
-│                                                  │
-│  accounts │ scans   │ billing  │ reviews         │
-│  agent    │ admin_api│ content │                 │
-└───────────────────┬─────────────────────────────┘
-                    │ Celery Task
-                    ▼
-┌─────────────────────────────────────────────────┐
-│  Worker（Celery + Redis）                         │
-│                                                  │
-│  1. Playwright BFS 爬蟲                           │
-│     → 截圖、HTML、DOM、拓樸連結                    │
-│  2. 四維 Scanner                                  │
-│     → Finding（severity / bounding_box / prompt）│
-│  3. Hermes-Agent（Phase 2，預設關閉）              │
-│     → LLM tool calling + UX Finding              │
-│  4. billing 結算（預扣 → 按實際頁數退差）           │
-└─────────────────────────────────────────────────┘
-                    │
-                    ▼
-        DB（SQLite / PostgreSQL）
-        Media（截圖、評論圖片）
-```
+![Argus 分層系統架構圖（Kubernetes）](Architecture.png)
+
+使用者經 Cloudflare Tunnel 進入叢集，Gateway 依路徑分給 nginx（React 靜態頁與預先產生的公開頁）或 Django API；API 透過 Redis 派工給 Celery Worker 執行掃描與 AI 分析，結果寫入 PostgreSQL 與 media 共用儲存，PDF 報告在使用者下載時由 API 產生。掃描各階段見 [`docs/scan-stage-checks.md`](docs/scan-stage-checks.md)，部署細節見 [`k8s/README.md`](k8s/README.md)。
 
 ---
 

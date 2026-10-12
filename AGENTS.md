@@ -201,6 +201,7 @@ docker compose up -d --build frontend
 - **正式 backend runtime 契約**：migrate、web、worker、initContainer 與 worker probe 一律使用 `/app/.venv/bin/...` 絕對路徑，不可改回 `uv run` 或依賴 image `PATH`；契約由 root `tests/` 鎖定。
 - **Secret 除錯不印值**：若 Django 啟動因必要設定中止，只確認 Secret 是否存在對應 key；禁止把 Secret 值、臨時登入資訊或機器專屬 SSH 金鑰路徑寫入 log／commit。
 - **本地／CI 綠燈不取代實機驗證**：部署相關修復必須持續追到正式叢集，並明列尚未完成的 CNI 封包、Celery 任務、完整掃描、密碼重設與公開網域 smoke test。完整流程與驗證矩陣見 [`k8s/README.md`](k8s/README.md)。
+- **K8s OWASP ZAP 被動分析預設啟用（2026-10-12）**：`k8s/12-zap-passive.yaml` 列入 kustomization、ConfigMap `ARGUS_ZAP_ENABLED="true"`；Argo 同步前必須先手動建 `argus-zap/zap-api` Secret，並在 `argus-secret` 加同值的 `ARGUS_ZAP_API_KEY`（不得進 Git）。worker 出站靠 `07` 的 `worker-egress-to-zap`。程式預設仍關閉（本機／CI 不需要 ZAP）。見 [`docs/zap-passive.md`](docs/zap-passive.md)。
 
 ---
 

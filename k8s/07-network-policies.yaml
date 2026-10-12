@@ -247,6 +247,32 @@ spec:
         - protocol: TCP
           port: 4096
 ---
+# worker → OWASP ZAP（argus-zap namespace，12-zap-passive.yaml）。
+# application-egress-boundary 的公網規則 except 掉了叢集內網段，沒有這條 worker 連不上 ZAP
+# （症狀是逾時，不是明確錯誤）。只放行 worker、只到 zap Pod 的 8090；ZAP 那端另有 ingress 白名單。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: worker-egress-to-zap
+  namespace: argus
+spec:
+  podSelector:
+    matchLabels:
+      app: worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argus-zap
+          podSelector:
+            matchLabels:
+              app: zap
+      ports:
+        - protocol: TCP
+          port: 8090
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

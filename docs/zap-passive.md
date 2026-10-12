@@ -46,26 +46,41 @@ docker compose up -d worker   # 重啟 worker 讀新設定
 
 `zap` 只接在 `zap_internal`（`internal: true`，沒有對外連線），worker 同時接 `default` 與 `zap_internal`。
 
-## 啟用：Kubernetes
+## Kubernetes（正式環境預設啟用，2026-10-12）
 
-`k8s/optional/zap-passive.yaml` **沒有列在 `k8s/kustomization.yaml`**，Argo CD 不會自動部署。內容：
+`k8s/12-zap-passive.yaml` 列在 `k8s/kustomization.yaml`，由 Argo CD 部署；ConfigMap（`01-namespace-config.yaml`）
+設 `ARGUS_ZAP_ENABLED="true"`、`ARGUS_ZAP_API_URL=http://zap.argus-zap.svc.cluster.local:8090`。程式預設（`settings.py`）
+仍是關閉，本機與 CI 不需要 ZAP。部署內容：
 
 - `argus-zap` namespace，套用 PSA restricted。
-- ZAP Deployment：映像以 digest 固定版本、非 root、資源上限 2Gi、工作目錄用 emptyDir。
+- ZAP Deployment：映像以 digest 固定版本、非 root、requests 1Gi／limits 2Gi 記憶體、工作目錄用 emptyDir。
 - Service。
-- NetworkPolicy：只收 `argus` namespace `app: worker` 的 8090 連線，egress 全擋。
+- NetworkPolicy：ZAP 只收 `argus` namespace `app: worker` 的 8090 連線，egress 全擋；worker 端的出站放行是
+  `07-network-policies.yaml` 的 `worker-egress-to-zap`（`application-egress-boundary` 擋掉了叢集內網段，
+  少了這條 worker 會逾時連不上 ZAP）。
 
-1. 建 Secret：`kubectl -n argus-zap create secret generic zap-api --from-literal=api-key=<隨機字串>`
-2. 同一個值放進 `argus` namespace worker 讀的 Secret（`ARGUS_ZAP_API_KEY`）。
-3. `kubectl apply -f k8s/optional/zap-passive.yaml`，等 Pod Ready。
-4. worker 設定 `ARGUS_ZAP_ENABLED=true`、`ARGUS_ZAP_API_URL=http://zap.argus-zap.svc.cluster.local:8090`，rollout worker。
-5. 驗證：對已授權的測試網站跑一次勾資安的掃描，掃描紀錄要出現「ZAP 2.16.1 被動分析：N 筆流量…」，
-   覆蓋紀錄 `zap_passive=completed`；ZAP 上 `alert/view/numberOfAlerts?baseurl=<origin>` 回 0（已清理）。
+**Argo 同步前必須先手動建金鑰**（不得寫進 Git）：
+
+1. `kubectl create namespace argus-zap`（Namespace 也在 manifest 裡，先建只是為了能放 Secret）
+2. `kubectl -n argus-zap create secret generic zap-api --from-literal=api-key=<隨機字串>`（例如 `openssl rand -hex 24`）
+3. 同一個值加進 `argus` namespace 的 `argus-secret`：`ARGUS_ZAP_API_KEY=<同一個值>`
+   （用你平常更新 argus-secret 的方式；不要另建新 Secret 名稱，worker 只讀 `argus-secret`）
+
+少了 `zap-api`，ZAP Pod 會停在 `CreateContainerConfigError`、Argo 顯示 Degraded；掃描照常完成，只是 `zap_passive` 標 failed。
+worker 的 `argus.io/config-revision` 已改為 `zap-2026-10-12`，同步時會重啟並讀到新的 ConfigMap。
+
+**驗證**：
+
+- `kubectl -n argus-zap get pods` 為 Running／Ready（第一次拉映像約 1 GB，需要幾分鐘）。
+- 對已授權的測試網站跑一次勾資安的掃描：掃描紀錄要出現「ZAP 2.16.1 被動分析：N 筆流量…」，
+  覆蓋紀錄 `zap_passive=completed`；ZAP 上 `alert/view/numberOfAlerts?baseurl=<origin>` 回 0（已清理）。
+- 觀察 ZAP 的 CPU／記憶體（`kubectl -n argus-zap top pod`）與 `zap_passive` 階段耗時，記錄到本檔。
 
 ## 回滾
 
-worker 設回 `ARGUS_ZAP_ENABLED=false` 並重啟：爬蟲不再錄 HAR、不呼叫 ZAP，掃描行為回到原本。
-之後可刪除 ZAP 資源（`kubectl delete -f k8s/optional/zap-passive.yaml`／`docker compose --profile zap down`）。
+ConfigMap 設 `ARGUS_ZAP_ENABLED: "false"`、改 worker 的 `argus.io/config-revision` 後同步：爬蟲不再錄 HAR、不呼叫 ZAP，
+掃描行為回到原本。要移除 ZAP 本身，再把 `12-zap-passive.yaml` 移出 `kustomization.yaml`
+（Argo 開 prune 時會刪除資源；本機 compose 是 `docker compose --profile zap down`）。
 
 ## 驗證紀錄（2026-10-07）
 
@@ -81,4 +96,4 @@ worker 設回 `ARGUS_ZAP_ENABLED=false` 並重啟：爬蟲不再錄 HAR、不呼
 
 - `uv run python backend/manage.py test apps.scans.tests_zap_passive`（不需要 ZAP）
 - 連真實 ZAP：`ARGUS_TEST_ZAP_URL=http://127.0.0.1:8090 ARGUS_TEST_ZAP_KEY=<key>` 再跑同一組
-- 部署契約：`uv run python -m unittest tests.test_zap_optional_contract`
+- 部署契約：`uv run python -m unittest tests.test_zap_contract`

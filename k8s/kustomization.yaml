@@ -17,6 +17,8 @@ resources:
 - 09-ngf-client-settings.yaml
 - 10-kali-runtime.yaml
 - 11-kali-admission.yaml
+# OWASP ZAP 被動分析（argus-zap namespace；2026-10-12 起預設部署，Secret zap-api 需先手動建）
+- 12-zap-passive.yaml
 
 # image 版本集中在此一處管理。
 # CI（build-*.yml）build 完會用 `kustomize edit set image` 把對應的 newTag

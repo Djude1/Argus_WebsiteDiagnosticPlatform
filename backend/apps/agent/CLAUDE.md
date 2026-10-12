@@ -30,7 +30,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 | `runner.py` | 流程編排：recon→orchestrator（首步 tool_choice 強制派工）→specialist；`SPECIALIST_ROLES` 角色目錄（desc＋when）；authenticated scan 帳密解密注入；`_merge` 結果合併 |
 | `providers.py` | `ChatProvider`／`ProviderChain`（**MiniMax-M3** 主力→GLM→Gemini 純文字 fallback）；`ProviderError` 只帶公開資訊 |
 | `loop.py` | `HermesAgent` tool-calling 迴圈；`_compact_stale_tool_results`（bulky 觀察快照壓縮）；`_inject_stall_hint`（連續 click 空轉導正）；`_inject_endgame_hint`（剩 10 步強制 report）；`forced_first_tool`（orchestrator 首步鎖定） |
-| `tools.py` | `ToolExecutor`：**26 個工具**＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；`build_tool_schemas(..., allow_form_submit=True)`——deep_only 閘＋`allow_form_submit=False` 時另隱藏 `send_message`（未驗證網域 UX 測試不得送出表單）；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
+| `tools.py` | `ToolExecutor`：**25 個工具**（`TOOL_SCHEMAS`）＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；`build_tool_schemas(..., allow_form_submit=True)`——deep_only 閘＋`allow_form_submit=False` 時另隱藏 `send_message`（未驗證網域 UX 測試不得送出表單）；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
 | `findings.py` | `persist_agent_issues`＋`persist_agent_security_findings`（description 去重；owasp tag） |
 
 ## 安全（硬規則）

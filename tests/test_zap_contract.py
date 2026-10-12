@@ -1,9 +1,10 @@
 """OWASP ZAP 被動分析的部署契約。
 
-檔案：k8s/optional/zap-passive.yaml、docker-compose.yml 的 zap service。
+檔案：k8s/12-zap-passive.yaml、docker-compose.yml 的 zap service。
 
 鎖定：
-- ZAP 預設不部署：manifest 不在 k8s/kustomization.yaml，compose 只在 profile `zap`
+- 正式環境（K8s）預設部署並啟用：manifest 列在 kustomization、ConfigMap 開啟並指向叢集內 Service、
+  worker 有到 ZAP 8090 的 egress（2026-10-12）；本機 compose 仍只在 profile `zap`
 - 映像以 digest 固定版本，兩處一致
 - 啟用檔案傳輸（HAR 上傳需要），API 金鑰來自 Secret／.env，不寫死
 - ZAP 沒有對外連線：K8s egress 全擋、只收 argus namespace worker；compose 只接 internal 網路
@@ -18,7 +19,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "k8s" / "optional" / "zap-passive.yaml"
+MANIFEST = ROOT / "k8s" / "12-zap-passive.yaml"
 IMAGE = (
     "ghcr.io/zaproxy/zaproxy:2.16.1@sha256:"
     "7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab"
@@ -30,11 +31,34 @@ def _docs() -> dict[str, dict]:
 
 
 class ZapKubernetesContractTests(unittest.TestCase):
-    def test_not_deployed_by_default(self):
+    def test_deployed_and_enabled_in_production(self):
         kustomization = yaml.safe_load((ROOT / "k8s" / "kustomization.yaml").read_text())
-        resources = " ".join(kustomization.get("resources") or [])
-        self.assertNotIn("zap", resources)
-        self.assertNotIn("optional", resources)
+        self.assertIn("12-zap-passive.yaml", kustomization["resources"])
+        config = next(
+            doc
+            for doc in yaml.safe_load_all((ROOT / "k8s" / "01-namespace-config.yaml").read_text())
+            if doc and doc.get("kind") == "ConfigMap"
+        )["data"]
+        self.assertEqual(config["ARGUS_ZAP_ENABLED"], "true")
+        self.assertEqual(config["ARGUS_ZAP_API_URL"], "http://zap.argus-zap.svc.cluster.local:8090")
+        # 金鑰只能在 Secret，不得出現在 ConfigMap
+        self.assertNotIn("ARGUS_ZAP_API_KEY", config)
+
+    def test_worker_egress_to_zap_only(self):
+        policies = {
+            doc["metadata"]["name"]: doc["spec"]
+            for doc in yaml.safe_load_all((ROOT / "k8s" / "07-network-policies.yaml").read_text())
+            if doc and doc.get("kind") == "NetworkPolicy"
+        }
+        spec = policies["worker-egress-to-zap"]
+        self.assertEqual(spec["podSelector"], {"matchLabels": {"app": "worker"}})
+        self.assertEqual(spec["policyTypes"], ["Egress"])
+        target = spec["egress"][0]["to"][0]
+        self.assertEqual(
+            target["namespaceSelector"]["matchLabels"], {"kubernetes.io/metadata.name": "argus-zap"}
+        )
+        self.assertEqual(target["podSelector"]["matchLabels"], {"app": "zap"})
+        self.assertEqual(spec["egress"][0]["ports"], [{"protocol": "TCP", "port": 8090}])
 
     def test_pinned_image_and_secret_key(self):
         container = _docs()["Deployment"]["spec"]["template"]["spec"]["containers"][0]

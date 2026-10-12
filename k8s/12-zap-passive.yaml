@@ -1,15 +1,16 @@
-# OWASP ZAP 被動分析 daemon（選用，預設不部署：本檔沒有列在 k8s/kustomization.yaml）。
+# OWASP ZAP 被動分析 daemon（2026-10-12 起正式環境預設部署，列在 k8s/kustomization.yaml）。
 #
 # 用途：worker 把爬蟲錄下的同網站 HAR 上傳給 ZAP，只跑被動規則（apps/scans/security/zap_passive.py）。
-# ZAP 不需要也不允許對外連線：NetworkPolicy 只開 argus namespace 的 worker 進來 8090，egress 全擋。
+# ZAP 不需要也不允許對外連線：NetworkPolicy 只開 argus namespace 的 worker 進來 8090，egress 全擋；
+# worker 這端的出站放行在 07-network-policies.yaml 的 worker-egress-to-zap。
 #
-# 啟用步驟（docs/zap-passive.md）：
-#   1. kubectl create namespace argus-zap（或套用本檔的 Namespace）
-#   2. 在 argus-zap 建 Secret zap-api（key: api-key）；同一個值放進 argus namespace worker 的
-#      ARGUS_ZAP_API_KEY（Secret），不得寫進 Git
-#   3. kubectl apply -f k8s/optional/zap-passive.yaml
-#   4. worker 設 ARGUS_ZAP_ENABLED=true、ARGUS_ZAP_API_URL=http://zap.argus-zap.svc.cluster.local:8090
-# 回滾：worker 設回 ARGUS_ZAP_ENABLED=false 即可（掃描不再錄 HAR、不呼叫 ZAP），再刪本檔資源。
+# 前置（Argo 同步前手動建，不得寫進 Git，docs/zap-passive.md）：
+#   - argus-zap namespace 的 Secret zap-api（key: api-key）
+#   - argus namespace 的 argus-secret 加 ARGUS_ZAP_API_KEY（與上面同一個值）
+#   少了 zap-api，ZAP Pod 會停在 CreateContainerConfigError；掃描照常完成，只是 zap_passive 標 failed。
+# 開關在 01-namespace-config.yaml 的 ARGUS_ZAP_ENABLED／ARGUS_ZAP_API_URL。
+# 回滾：ConfigMap 設 ARGUS_ZAP_ENABLED="false" 並重啟 worker（掃描不再錄 HAR、不呼叫 ZAP），
+# 再把本檔移出 kustomization。
 ---
 apiVersion: v1
 kind: Namespace
@@ -44,7 +45,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: zap
-          # 官方映像以 digest 固定版本（2.16.1）；升級時一併更新 tests/test_zap_optional_contract.py
+          # 官方映像以 digest 固定版本（2.16.1）；升級時一併更新 tests/test_zap_contract.py
           image: ghcr.io/zaproxy/zaproxy:2.16.1@sha256:7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab
           command: ["/bin/sh", "-c"]
           args:
