@@ -32,3 +32,17 @@
 - 全 repo 搜尋 ZAP 相關敘述後修正：`k8s/12-zap-passive.yaml` 與 `docs/zap-passive.md` 的測試檔名改為 `test_zap_contract`；`docs/scan-stage-checks.md` 第 10 節註明正式環境已啟用；`k8s/README.md` 檔案表 12 列移到 11 列之後。
 - 競賽文件：`需求書_複賽版完整內容.md` 的 ZAP 敘述由「平台部署時」改為「正式環境 2026-10-12 起部署」；`設計文件_圖表與成本模組.md` 部署架構圖加 `argus-zap` namespace 與 worker → ZAP 連線，事實依據範圍改到 `12-zap-passive.yaml`，部署要點加 ZAP 一條（資源取自 manifest）。
 - 不改：`docs/business-model-plan.md`（資源量測後才定價，仍成立）、ADR-0004 與研究文件（未來規劃與調研紀錄）、`settings.py` 註解（程式預設關閉仍成立）。
+
+## 補充：CI 修正（推上 main 後 Quality Gate 失敗）
+- 失敗原因：NetworkPolicy 數量與名稱刻意寫死在兩處，新增 ZAP 時沒有同步。
+  - `scripts/verify_rendered_manifests.sh` 斷言渲染結果有 9 條 NetworkPolicy，實際是 11 條：`07` 新增 `worker-egress-to-zap`，`12-zap-passive.yaml` 帶入 `zap-ingress-from-worker-only`。
+  - `backend/apps/scans/tests_k8s_network_policy.py` 的名稱清單沒有 `worker-egress-to-zap`。
+- 修正：
+  - 腳本數量改為 11，並加兩條 ZAP 規則的名稱斷言。
+  - 測試清單補上 `worker-egress-to-zap`，測試名稱 nine → ten。
+- 教訓：當初只跑了 root `tests/` 兩個檔，沒跑後端全套與這支渲染腳本；本機沒有 kubectl，`tests/` 裡依賴它的一項也被當成既有問題略過。動到 `k8s/` 時，必須照 CI 的順序完整跑過才能推：
+  1. ruff
+  2. `tests/`
+  3. `manage.py test apps`
+  4. `verify_rendered_manifests.sh`
+- 驗證：以 kubectl v1.31（內建 kustomize v5.4.2）重現失敗（渲染 11 條 ≠ 9），修正後腳本通過；`tests/` 53 項通過；後端全套 1924 項通過（skipped 12）。

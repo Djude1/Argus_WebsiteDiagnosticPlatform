@@ -14,11 +14,14 @@ trap 'rm -f "$RENDERED"' EXIT
 kubectl kustomize k8s > "$RENDERED"
 
 # NetworkPolicy 數量寫死：新增或刪除一條都必須是有意識的決定，不能悄悄發生
-test "$(grep -c '^kind: NetworkPolicy$' "$RENDERED")" -eq 9
+test "$(grep -c '^kind: NetworkPolicy$' "$RENDERED")" -eq 11
 grep -q 'name: application-egress-boundary' "$RENDERED"
 grep -q 'name: data-deny-egress' "$RENDERED"
 grep -q 'name: argus-kali-default-deny' "$RENDERED"
 grep -q 'name: argus-kali-runner-egress' "$RENDERED"
+# OWASP ZAP（12-zap-passive.yaml）：worker 只能連 ZAP 8090，ZAP 只收 worker、不得對外
+grep -q 'name: worker-egress-to-zap' "$RENDERED"
+grep -q 'name: zap-ingress-from-worker-only' "$RENDERED"
 
 # ClientSettingsPolicy：對齊 frontend nginx client_max_body_size 6m
 test "$(grep -c '^kind: ClientSettingsPolicy$' "$RENDERED")" -eq 1

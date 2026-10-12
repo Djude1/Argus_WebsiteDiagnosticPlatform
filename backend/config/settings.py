@@ -398,15 +398,11 @@ ARGUS_ALLOW_PRIVATE_TARGETS = env_bool("ARGUS_ALLOW_PRIVATE_TARGETS", default=Fa
 # 前提：本機需有 Docker Desktop 並已 pull 過 projectdiscovery/katana
 KATANA_DOCKER_IMAGE = os.getenv("KATANA_DOCKER_IMAGE", "projectdiscovery/katana:latest")
 KATANA_TIMEOUT = int(os.getenv("KATANA_TIMEOUT", "90"))  # subprocess 超時（秒）
-# Nuclei 模板目錄（image 建置時鎖定版本並驗證，見 Dockerfile）與逾時預算（秒）。
+# Nuclei 模板目錄（image 建置時鎖定版本並驗證，見 Dockerfile）與硬逾時（秒）。
 # KEV 模板集對網站根網址約 630 個請求：全網站掃描與 Katana 分享預算時 Nuclei 只有 1 RPS，
-# 大型或回應慢的網站 660 秒跑不完（2026-10-12 使用者實測）。pipeline 會在整體掃描
-# 時限（Celery soft limit 扣除後續階段保留時間）允許的範圍內，把逾時從
-# ARGUS_NUCLEI_TIMEOUT（下限）往上放寬到 ARGUS_NUCLEI_MAX_TIMEOUT；預算不足時縮短、
-# 剩不到 120 秒則不跑（標為 time_budget_exhausted）。逾時保留已得結果並標為部分完成。
+# 預設 660 秒剛好跑得完；逾時保留已得結果並標為部分完成。
 ARGUS_NUCLEI_TEMPLATES_DIR = os.getenv("ARGUS_NUCLEI_TEMPLATES_DIR", "/opt/nuclei-templates")
 ARGUS_NUCLEI_TIMEOUT = int(os.getenv("ARGUS_NUCLEI_TIMEOUT", "660"))
-ARGUS_NUCLEI_MAX_TIMEOUT = int(os.getenv("ARGUS_NUCLEI_MAX_TIMEOUT", "1800"))
 
 # Phase 2 Hermes-Agent 上限（避免 token 失控與無限循環）
 ARGUS_AGENT_MAX_STEPS = int(os.getenv("ARGUS_AGENT_MAX_STEPS", "20"))

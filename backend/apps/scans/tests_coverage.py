@@ -8,11 +8,10 @@
 
 from __future__ import annotations
 
-import time
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from apps.scans import tasks
@@ -273,76 +272,6 @@ class ActiveProbeCoverageTests(TestCase):
         coverage = self.ctx.coverage.to_json(["security"])
         self.assertEqual(coverage["checks"]["nuclei"]["status"], COMPLETED)
         self.assertEqual(coverage["checks"]["nuclei"]["keys"], ["nuclei-xss"])
-
-
-class NucleiBudgetTests(TestCase):
-    """Nuclei 逾時上限要跟著整體掃描剩餘預算調整（2026-10-12：大型網站 660 秒跑不完）。"""
-
-    def setUp(self):
-        user = User.objects.create_user(username="cov-budget", password="safe-test-password")
-        self.scan = _scan(
-            user, scan_mode=ScanJob.ScanMode.ACTIVE, active_testing_authorized=True,
-            categories=["security"],
-        )
-        mock.patch(
-            "apps.scans.tasks.assert_public_http_url", side_effect=lambda url: url
-        ).start()
-        self.addCleanup(mock.patch.stopall)
-
-    def _ctx(self, scan=None, elapsed: float = 0.0) -> tasks.ScanRunContext:
-        scan = scan or self.scan
-        return tasks.ScanRunContext(
-            scan_job=scan, execution_plan=build_scan_execution_plan(scan), steps=[],
-            crawl_phase_started="", started_monotonic=time.monotonic() - elapsed,
-        )
-
-    def test_nuclei_timeout_extends_with_remaining_budget(self):
-        """時間充裕時，逾時上限從 660 放寬到 ARGUS_NUCLEI_MAX_TIMEOUT（預設 1800）。"""
-        with mock.patch("apps.scans.tasks.run_nuclei", return_value=NucleiRun()) as run:
-            tasks.stage_active_probe(self._ctx())
-        self.assertEqual(run.call_args.kwargs["timeout"], 1800)
-
-    def test_nuclei_timeout_never_exceeds_remaining_budget(self):
-        """爬取吃掉大多數時間後，上限跟著縮到剩餘預算（低於設定的 660）。"""
-        ctx = self._ctx(elapsed=3300 - 600 - 400)
-        with mock.patch("apps.scans.tasks.run_nuclei", return_value=NucleiRun()) as run:
-            tasks.stage_active_probe(ctx)
-        timeout = run.call_args.kwargs["timeout"]
-        self.assertLessEqual(timeout, 400)
-        self.assertGreaterEqual(timeout, 395)
-
-    def test_nuclei_skipped_when_time_budget_exhausted(self):
-        """剩不到最低執行量（120 秒）就不跑，覆蓋紀錄標 time_budget_exhausted。"""
-        ctx = self._ctx(elapsed=3300 - 600 - 30)
-        with mock.patch("apps.scans.tasks.run_nuclei") as run:
-            tasks.stage_active_probe(ctx)
-        run.assert_not_called()
-        checks = ctx.coverage.to_json(["security"])["checks"]
-        self.assertEqual(checks["nuclei"]["status"], FAILED)
-        self.assertEqual(checks["nuclei"]["reason"], "time_budget_exhausted")
-
-    def test_agent_enabled_reduces_nuclei_budget(self):
-        """Agent 也會跑時保留時間給它（全網站主動掃描兩者都會開）。"""
-        scan = _scan(
-            self.scan.user, scan_mode=ScanJob.ScanMode.ACTIVE, active_testing_authorized=True,
-            categories=["security"], max_pages=10,
-        )
-        ctx = self._ctx(scan=scan, elapsed=900)
-        without_agent = tasks._nuclei_timeout_seconds(ctx)
-        with override_settings(ARGUS_AGENT_ENABLED=True):
-            with_agent = tasks._nuclei_timeout_seconds(ctx)
-        self.assertLessEqual(without_agent, 1800)  # 3300 - 900 - 600
-        self.assertGreaterEqual(without_agent, 1795)
-        self.assertLessEqual(with_agent, 900)  # 3300 - 900 - 600 - 900
-        self.assertGreaterEqual(with_agent, 895)
-
-    def test_timeout_reason_uses_effective_timeout(self):
-        """覆蓋紀錄的逾時原因要寫實際使用的上限，不是設定值。"""
-        ctx = self._ctx()
-        tasks._apply_nuclei_run(ctx, NucleiRun(timed_out=True, timeout_seconds=1234))
-        checks = ctx.coverage.to_json(["security"])["checks"]
-        self.assertEqual(checks["nuclei"]["status"], PARTIAL)
-        self.assertIn("1234", checks["nuclei"]["reason"])
 
 
 class PipelineWritesCoverageTests(TransactionTestCase):

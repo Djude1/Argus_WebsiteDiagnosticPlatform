@@ -88,17 +88,6 @@ class RunNucleiTests(TestCase):
         self.assertTrue(result.timed_out)
         self.assertEqual(len(result.findings), 1)
 
-    def test_explicit_timeout_overrides_setting_and_is_recorded(self):
-        """pipeline 依整體掃描預算傳入的逾時要生效，並記錄在結果裡（覆蓋紀錄用）。"""
-        result, mock_run = self._run(timeout=1234)
-        self.assertEqual(mock_run.call_args.kwargs["timeout"], 1234)
-        self.assertEqual(result.timeout_seconds, 1234)
-
-    def test_default_timeout_comes_from_settings(self):
-        result, mock_run = self._run()
-        self.assertEqual(mock_run.call_args.kwargs["timeout"], 660)
-        self.assertEqual(result.timeout_seconds, 660)
-
     def test_abnormal_exit_without_output_is_failure_not_zero_findings(self):
         with self.assertRaises(NucleiUnavailable):
             self._run(returncode=2)

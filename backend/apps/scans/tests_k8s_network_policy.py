@@ -38,7 +38,7 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
             {("UDP", 53), ("TCP", 53)},
         )
 
-    def test_kustomization_includes_nine_named_policies(self):
+    def test_kustomization_includes_ten_named_policies(self):
         kustomization = _documents("kustomization.yaml")[0]
         self.assertIn("07-network-policies.yaml", kustomization["resources"])
         self.assertEqual(
@@ -54,6 +54,8 @@ class KubernetesNetworkPolicyTests(SimpleTestCase):
                 # Task 7：argus-kali namespace 隔離（default-deny + runner-egress）
                 "argus-kali-default-deny",
                 "argus-kali-runner-egress",
+                # OWASP ZAP：worker 只能連 argus-zap 的 8090
+                "worker-egress-to-zap",
             },
         )
 

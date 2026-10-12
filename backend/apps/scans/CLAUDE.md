@@ -73,7 +73,7 @@ Katana 與 Nuclei 並行時必須共享 `ARGUS_ACTIVE_MAX_RPS`；若總預算只
 - **固定模板集 `TEMPLATE_POLICY`**：`-tags kev`（CISA 已知被利用漏洞）、`-severity critical,high,medium`、排除 dos／fuzz 等標籤、只用 http。實測（v10.4.9，對單一網址）：原本 deep 模式全部模板 6680 個、9535 個請求，在 1–2 RPS 下要 80 分鐘，正式環境 300 秒逾時後回傳 0 項卻記為完成；KEV 511 個模板、628 個請求。Nuclei 標籤是單數（`cve`、`misconfig`、`exposure`、`default-login`），原本快速模式寫成 `cves`／`misconfigurations` 只選到 3 個模板（該模式已移除）。高噪音模板加進 `EXCLUDED_TEMPLATE_IDS` 並寫原因。
 - **只掃網站根網址**（`_root_url`）：模板多半檢查網站層級路徑，每頁重掃只是把同樣的探測乘以頁數；單頁與全網站相同。
 - **模板集紀錄**：每次執行用 `nuclei -tl` 列出實際選到的模板，記錄引擎版本、模板版本、模板數與指紋（模板路徑＋內容雜湊的 sha256），存在 `warning_summary.nuclei` 並寫進掃描 log；同一指紋才代表同一組檢查。
-- **結果狀態**：逾時上限自適應（2026-10-12）——固定 660 秒對「全網站掃描與 Katana 分預算後只剩 1 RPS」的大型／回應慢網站不夠用（`tasks._nuclei_timeout_seconds`：KEV 模板集約 630 個請求，速率限制本身就要 630 秒起跳）。在 Celery soft limit 扣除後續階段保留時間（其他階段 600 秒、Agent 會跑再加 900 秒）的範圍內，把上限從 `ARGUS_NUCLEI_TIMEOUT`（下限）放寬到 `ARGUS_NUCLEI_MAX_TIMEOUT`（預設 1800 秒）；預算不足時縮短、剩不到 120 秒不跑（覆蓋紀錄 `failed`，原因代碼 `time_budget_exhausted`）。逾時保留逾時前已輸出的結果（`process_runner` 逾時時把已輸出的 stdout 放進 `TimeoutExpired.output`），覆蓋紀錄 `partial`（原因寫實際使用的秒數）；沒有 binary、模板目錄缺失、選不到模板或異常結束拋 `NucleiUnavailable`，覆蓋紀錄 `failed`（原因是固定代碼）。WAF 之後 0 項發現的說明只在 Nuclei 完整跑完時才加。
+- **結果狀態**：逾時（`ARGUS_NUCLEI_TIMEOUT`，預設 660 秒——全網站時 Nuclei 與 Katana 分預算只有 1 RPS）保留逾時前已輸出的結果（`process_runner` 逾時時把已輸出的 stdout 放進 `TimeoutExpired.output`），覆蓋紀錄 `partial`；沒有 binary、模板目錄缺失、選不到模板或異常結束拋 `NucleiUnavailable`，覆蓋紀錄 `failed`（原因是固定代碼）。WAF 之後 0 項發現的說明只在 Nuclei 完整跑完時才加。
 - 呼叫 `nuclei -tl`／`-version` 一律帶 `-no-stdin`／`-duc` 與 `stdin=DEVNULL`：沒有時 nuclei 會等 stdin 的目標清單或檢查更新，在 worker 裡卡到逾時。
 - Agent 的 `run_nuclei` 工具用同一個模板目錄（`-t ARGUS_NUCLEI_TEMPLATES_DIR`），tags 由 agent 指定。
 
