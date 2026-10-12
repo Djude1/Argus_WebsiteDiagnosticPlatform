@@ -61,7 +61,8 @@ export default function SiteNav({ items, actions, leading = null, className = ""
             navigate("/project");
           }}
           title={brandTo ? brandTo.label : "重播開場動畫"}
-          aria-label={brandTo ? `ARGUS：${brandTo.label}` : "重播 ARGUS 開場動畫"}
+          // 可及名稱要包含看得到的文字「AI網站健檢平台」（WCAG 2.5.3，axe label-content-name-mismatch）
+          aria-label={`ARGUS AI網站健檢平台：${brandTo ? brandTo.label : "重播開場動畫"}`}
         >
           <img src={brandLogo} className="public-brand-logo" alt="ARGUS — AI網站健檢平台" />
           <span className="public-brand-sub">AI網站健檢平台</span>

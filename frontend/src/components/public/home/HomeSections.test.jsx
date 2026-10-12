@@ -16,7 +16,7 @@ const STEPS = [
 describe("ProcessStack", () => {
   it("按步驟按鈕會把該步驟換到最前面", () => {
     render(<ProcessStack steps={STEPS} />);
-    const third = screen.getByRole("button", { name: "步驟 3：證據與優先順序" });
+    const third = screen.getByRole("button", { name: "03 排序：證據與優先順序" });
     fireEvent.click(third);
     expect(third).toHaveAttribute("aria-pressed", "true");
     // 只有最前面那張卡對輔助技術可見

@@ -345,6 +345,7 @@ function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions 
 }
 
 function ReviewsPage() {
+  const ratingDescId = useId();
   const accessToken = useArgusStore((state) => state.accessToken);
   const theme = useArgusStore((state) => state.theme);
   const [summary, setSummary] = useState({ total: 0, average: null, distribution: {} });
@@ -548,12 +549,16 @@ function ReviewsPage() {
                   type="button"
                   className={ratingFilter === item.star ? "is-active" : ""}
                   aria-pressed={ratingFilter === item.star}
-                  aria-label={`${item.star} 星，共 ${item.count} 則評論${ratingFilter === item.star ? "，目前已篩選" : ""}`}
+                  // 名稱就是看得到的「星等 數量」（WCAG 2.5.3），完整說明放在描述
+                  aria-describedby={`${ratingDescId}-${item.star}`}
                   onClick={() => selectRating(item.star)}
                 >
                   <span>{item.star}<Star aria-hidden="true" /></span>
                   <i aria-hidden="true"><b style={{ "--review-next-percent": `${item.percent}%` }} /></i>
                   <strong>{item.count}</strong>
+                  <span id={`${ratingDescId}-${item.star}`} hidden>
+                    {`${item.star} 星，共 ${item.count} 則評論${ratingFilter === item.star ? "，目前已篩選" : ""}`}
+                  </span>
                 </button>
               ))}
             </div>

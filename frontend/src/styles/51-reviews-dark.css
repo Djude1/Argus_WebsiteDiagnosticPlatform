@@ -252,7 +252,7 @@
 }
 
 .review-next-night .review-next-rating-bars button {
-  min-height: 34px;
+  min-height: 40px; /* 觸控目標至少 40px（Argus 自掃 2026-10-12） */
   color: var(--review-next-muted);
   border-radius: 8px;
 }

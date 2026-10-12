@@ -24,6 +24,7 @@ backend/staticfiles/
 .ruff_cache/
 .ms-playwright/
 frontend/dist/
+frontend/dist-ssr/
 
 # === 個人 / 工具暫存 / 大型素材（不該推上 GitHub）===
 # Playwright MCP 工具暫存

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from apps.mcp_access.urls import manage_urlpatterns as mcp_manage_urlpatterns
@@ -77,6 +78,23 @@ def _serve_immutable(request, path, document_root=None):
     )
 
     return response
+
+
+_PRERENDERED_NAME = re.compile(r"^[a-z][a-z-]*$")
+
+
+def spa_page(request, path=""):
+    """SPA fallback：公開頁有建置時預先渲染的 <路徑>.html 就回它，其餘回 index.html。
+
+    與 frontend/nginx.conf 的 try_files $uri.html 行為一致（/ 對應 root.html），
+    見 frontend/scripts/prerender.mjs。預先渲染的檔案直接讀出，不經模板引擎。
+    """
+    name = path.strip("/") or "root"
+    if _PRERENDERED_NAME.match(name):
+        page = FRONTEND_DIST / f"{name}.html"
+        if page.is_file():
+            return HttpResponse(page.read_text(encoding="utf-8"))
+    return TemplateView.as_view(template_name="index.html")(request)
 
 
 def _serve_no_cache(request, path, document_root=None):
@@ -228,9 +246,7 @@ urlpatterns = [
     # React SPA fallback
     # 不讓 API/static/media/favicon 被 index.html 吃掉
     re_path(
-        r"^(?!api/|static/|media/|favicon\.svg).*$",
-        TemplateView.as_view(
-            template_name="index.html"
-        ),
+        r"^(?!api/|static/|media/|favicon\.svg)(?P<path>.*)$",
+        spa_page,
     ),
 ]

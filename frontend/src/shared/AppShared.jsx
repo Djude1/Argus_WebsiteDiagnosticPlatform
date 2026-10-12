@@ -539,8 +539,8 @@ function isStandalone() {
   );
 }
 function useInstallPrompt() {
-  const [deferred, setDeferred] = useState(() => window.__argusInstallPrompt || null);
-  const [installed, setInstalled] = useState(() => !!window.__argusInstalled || isStandalone());
+  const [deferred, setDeferred] = useState(() => (typeof window === "undefined" ? null : window.__argusInstallPrompt || null));
+  const [installed, setInstalled] = useState(() => (typeof window !== "undefined" && !!window.__argusInstalled) || isStandalone());
   useEffect(() => {
     function onPrompt(e) {
       e.preventDefault();

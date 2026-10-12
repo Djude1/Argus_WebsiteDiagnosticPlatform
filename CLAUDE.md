@@ -101,7 +101,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ## 專案架構（非顯而易見的設計）
 
 - **整體資料流**：使用者在前端填網址 → `POST /api/scans/`（billing 預扣 coin）→ Celery worker 啟動 Playwright BFS 爬蟲 → 四維 scanner → 可選 Hermes-Agent → 結果寫 DB → 前端 polling 取 findings。
-- **Django 直接 serve 前端**：開發時不需另開 Vite dev server，`runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**改了 React code 必須重 build 才會生效**。
+- **Django 直接 serve 前端**：開發時不需另開 Vite dev server，`runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**改了 React code 必須重 build 才會生效**。公開頁（`App.jsx` 的 `PRERENDERED_ROUTES`）在 build 時預先渲染成 `dist/<路徑>.html`（`/` 是 `root.html`，`frontend/scripts/prerender.mjs`），Django fallback 與兩份 nginx 設定（`frontend/nginx.conf`、`k8s/05-frontend.yaml`）都先回這些檔案，其餘回 `index.html`。
 - **Node 22 portable（build 必用）**：系統 Node v24 + Rollup 4.x 在 Windows 會 crash，build 一律用 `frontend/build-node22.ps1`（會自動偵測 portable Node 22 位置），詳見 [`docs/node22-guide.md`](docs/node22-guide.md)。
 
 ---

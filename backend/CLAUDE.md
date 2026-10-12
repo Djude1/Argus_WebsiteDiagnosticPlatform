@@ -24,7 +24,7 @@ Claude Code 進 `backend/` 工作時，本檔在專案層 `CLAUDE.md` 之後自�
 | `/api/admin/` | `admin_api` | `me/`、`overview/`、`dashboard/`、`users/`（+ `<id>/adjust-coin/`、`<id>/login-events/`、`<id>/subscription/`）、`subscriptions/plans/`、`transactions/`、`scans/`（+ `<id>/cancel/`、`<id>/requeue/`）、`domains/`（+ `<id>/override/` 人工審核）、`reviews/`、`orders/`、`subscription-charges/`（訂閱每期扣款，人工開立發票用）、`health/`、`audit-log/`、`announcements/*`、`cms/*` |
 | `/favicon.svg` | 靜態資產 | 直接服務被 Git 追蹤的 `frontend/public/favicon.svg`，不依賴 frontend build |
 | `/django-admin/` | SPA fallback | Django Admin 已移除；唯一後台為 React `/admin/*` |
-| `/` ～ `/*` | SPA fallback | 回傳 `frontend/dist/index.html`，由 React Router 處理 |
+| `/` ～ `/*` | SPA fallback（`spa_page`） | 有預先渲染的公開頁就回 `frontend/dist/<路徑>.html`（`/` 回 `root.html`，直接讀檔不經模板引擎），其餘回 `index.html`，由 React Router 處理 |
 
 ---
 

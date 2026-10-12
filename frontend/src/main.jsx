@@ -1,9 +1,9 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter } from "react-router-dom";
 
-import App from "./App.jsx";
+import App, { preloadRoute } from "./App.jsx";
 import "./styles.css";
 // 會員區五頁的改版前樣式（只作用在 .member-legacy 內，見 styles/legacy-member/index.css）
 import "./styles/legacy-member/index.css";
@@ -28,13 +28,22 @@ const app = (
   </BrowserRouter>
 );
 
-createRoot(document.getElementById("root")).render(
+const tree = (
   <React.StrictMode>
     {googleClientId ? (
       <GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>
     ) : app}
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+// 公開頁在建置時已預先渲染成 HTML（scripts/prerender.mjs）：接手既有內容，不清空重畫；
+// 其他頁面（會員區、後台）的 root 是空的，照常 createRoot
+const rootEl = document.getElementById("root");
+if (rootEl.hasChildNodes()) {
+  // 先載入這一頁的程式碼再 hydrate，避免 hydrate 途中 lazy 區塊未就緒（見 App.jsx lazyNamed）
+  preloadRoute(window.location.pathname).catch(() => {}).finally(() => hydrateRoot(rootEl, tree));
+} else {
+  createRoot(rootEl).render(tree);
+}
 
 // 註冊 PWA Service Worker（僅 production 模式註冊，避免 dev 影響 HMR）
 if ("serviceWorker" in navigator && import.meta.env.PROD) {

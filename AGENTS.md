@@ -185,7 +185,7 @@ docker compose up -d --build frontend
 | 計費系統 | services.py 函式、冪等機制、kind 枚舉 | [`backend/apps/billing/CLAUDE.md`](backend/apps/billing/CLAUDE.md) |
 
 ### Django 直接 serve 前端
-開發時不需要另開 Vite dev server，Django `runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**必須先 build 前端**，改了 React code 要重 build 才會生效。
+開發時不需要另開 Vite dev server，Django `runserver` 透過 `config/urls.py` 的 SPA fallback 直接服務 `frontend/dist`。**必須先 build 前端**，改了 React code 要重 build 才會生效。公開頁（`App.jsx` 的 `PRERENDERED_ROUTES`）在 build 時預先渲染成 `dist/<路徑>.html`（`/` 是 `root.html`，`frontend/scripts/prerender.mjs`），Django fallback 與兩份 nginx 設定（`frontend/nginx.conf`、`k8s/05-frontend.yaml`）都先回這些檔案，其餘回 `index.html`。
 
 ### Node 22 portable（build 必用）
 ⚠ 系統 Node v24 + Rollup 4.x 在 Windows 可能 crash，build 一律用 `frontend/build-node22.ps1` 自動偵測可用的 portable Node 22。不得在團隊文件寫死單機安裝位置；詳細說明見 [`docs/node22-guide.md`](docs/node22-guide.md)。

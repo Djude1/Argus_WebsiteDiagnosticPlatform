@@ -35,6 +35,9 @@ class _SriParser(HTMLParser):
 # 回不同內容）、reCAPTCHA 備援網域、hCaptcha——Argus 自掃時對 Turnstile 提出了做不到的建議。
 _DYNAMIC_SCRIPT_HOSTS = (
     "challenges.cloudflare.com",
+    # Google 登入（Google Identity Services，/gsi/client）：
+    # Google 隨時更新、官方不支援 SRI（2026-10-12）
+    "accounts.google.com",
     "fonts.googleapis.com",
     "recaptcha.net",
     "hcaptcha.com",

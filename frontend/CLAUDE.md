@@ -29,6 +29,13 @@ cd frontend ; .\build-node22.ps1 ; cd ..
 D:\nodejs\npm.cmd install
 ```
 
+**公開頁預先渲染（2026-10-12）**：`build` 腳本是三步——`vite build`（瀏覽器端）→ `vite build --ssr src/entry-server.jsx --outDir dist-ssr`（Node 端）→ `node scripts/prerender.mjs`：把 `App.jsx` 的 `PRERENDERED_ROUTES` 每個網址用 `renderToString` 渲染成 `dist/<路徑>.html`（`/` 是 `root.html`），並換上該頁的 `<title>`、description 與 og／twitter 摘要，最後刪掉 `dist-ssr/`。原因：SPA 的 `index.html` 只有空的 `<div id="root">`，不執行 JavaScript 的爬蟲與 AI 讀不到內容（自掃「核心內容高度依賴 JavaScript 渲染」9 頁）。瀏覽器端 `main.jsx` 看到 root 有內容就先 `preloadRoute()` 再 `hydrateRoot`。規則：
+- **公開頁元件在 render 階段不能碰 `window`／`document`／`localStorage`**（Node 沒有，build 會失敗）；要用就放 `useEffect`，或先判斷 `typeof window === "undefined"`。
+- **初次 render 要與預先渲染的結果一致**：登入狀態、主題、開場動畫這類只有瀏覽器知道的東西，在掛載後才改（開場動畫看 `AppShell` 的 `mounted`）。不一致時 React 會整塊重畫並在 console 報錯，掃描會算成 JavaScript 執行期錯誤。
+- **資料靠 API 的頁面**：說明文字直接渲染，只有 API 回來的值顯示「讀取中…」（例：`ScannerInfoPage`），不要整頁包在 `{data && …}` 裡，否則預先渲染出來是空的。
+- 新增公開頁：`PRERENDERED_ROUTES` 加一列（列出該頁會渲染到的所有 lazy 元件，不在 `isPublic` 的頁面還有 `TopNav`），`documentTitle.ts` 兩張表各補一列。`prerender.mjs` 渲染結果沒有 `<main>` 或停在「正在載入頁面…」會讓 build 失敗。
+- 提供方式：`frontend/nginx.conf` 與 `k8s/05-frontend.yaml` 都是 `try_files $uri $uri.html $uri/ /index.html` ＋ `location = / { rewrite ^ /root.html last; }`（兩邊同步，root `tests/test_frontend_prerender_contract.py` 鎖定）；本機 Django 由 `config/urls.py` 的 `spa_page` 做同樣的事。
+
 Dev server（`npm.cmd run dev`）兩種 Node 都能跑，因為 dev 不走 Rollup 打包。
 
 `vite.config.js` 的 `manualChunks` 固定拆出 React、ReactFlow 與 service vendor；新增大型依賴後應先確認 production build 無單一 chunk 超過 500 kB，再決定是否調整既有分組。
@@ -214,7 +221,7 @@ npm run typecheck
 
 | 檔案 | 職責 |
 |---|---|
-| `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入 |
+| `src/App.jsx` | 根路由、權限 wrapper、lazy feature 載入。**公開頁不等登入狀態確認**（2026-10-12，`rendersWithoutAuth`：公開頁、未登入的 `/`、`/login`、`/privacy`、`/terms`、`/reviews`、`/password-reset`）：原本每頁先只顯示「正在驗證登入狀態…」，爬蟲與 AI 讀到沒有 `<main>`、H1、連結的空頁（自掃 4.16、4.19）；會員頁仍要等。`/` 與 `/project` 共用 `ProjectEntry`：`/` 先顯示產品介紹，登入狀態確認後才轉到會員區或 `/project`（同一元件，轉址時不重新掛載，否則整頁跳動）。`lazyNamed()` 回傳的元件有 `.preload()`，已載入就不經 Suspense 直接渲染（預先渲染與 hydrate 要用）；`PRERENDERED_ROUTES`／`preloadRoute()` 見上方 Build 規則。`restoreSession` 等 hydrate 完成（`mounted`，以 `startTransition` 設定）才呼叫，否則 hydrate 途中收到 store 更新會出 React #421 |
 | `src/features/auth/AuthPages.jsx` | 登入、Google 授權註冊（兩步驟）、舊帳號補設（`AccountSetupPage`）、`RequireAuth` 與密碼重設頁 |
 | `src/features/projects/ProjectWorkspace.jsx` | 網站專案工作區外框（側邊欄、`useProject`）、`ProjectScanShell`、`ProjectHomeRedirect`、所有專案與新增專案頁 |
 | `src/features/projects/ProjectPages.jsx` | 專案的總覽、掃描與報告、問題分析、頁面、AEO 問答、專案設定六個分頁（另匯出 `FilterChips`、`ScanTimeCard`、`SeverityChip`、`useProjectScans` 給 SEO 與資安分析頁） |
@@ -271,6 +278,7 @@ npm run typecheck
 | `src/components/navigation/NavActions.jsx` | 登入後導覽列右側：點數、頭像選單（帳號設定／購點與訂閱／管理後台／登出；網域驗證與 MCP 接入在頂部導覽列 `TopNav`）、`AccountAvatar`（有大頭貼顯示圖片，否則顯示縮寫）|
 | `src/shared/TurnstileWidget.jsx` | Cloudflare Turnstile：`useTurnstileConfig()`（`GET /api/auth/turnstile/`，整個分頁只抓一次）與 `TurnstileWidget`（explicit render、主題跟 `html[data-theme]`、`ref.reset()`）。token 以 `cf-turnstile-response` 欄位跟表單送出，**每次送出後都要 reset**（token 只能用一次）；用在登入、忘記密碼、商業合作洽談（註冊改由 Google 授權，不用 Turnstile） |
 | `src/shared/PageLoader.jsx` | 頁面切換與頁面資料載入的動畫：使用者提供的 Argus Minimal Loading Pack「01 · Signal Bars」**原樣使用、不可改**（數值、顏色、時間與下方「Loading」字樣都照原檔；`label` 只給螢幕閱讀器；AI 解讀用同一套的「08 · Thought Spark」＋「AI Agent 正在分析…」，2026-10-10 使用者指定）：`App.jsx` 換頁的 `Suspense` fallback、各頁 `if (!data)` 的載入狀態都用它（`<PageLoader label="載入…中…" />`），`role="status"`；樣式在 `05-brand.css`（會員區外）與 `legacy-member/92-layout.css`（會員區內，舊版範圍會重置外部規則；顏色經由自訂屬性 `--ag-pack-*` 給值，建置外掛不轉換自訂屬性，深色主題仍是原檔顏色）。新頁面的載入狀態用它，不要再寫 `<p className="hint-text">載入中…</p>` |
+| `src/shared/documentTitle.ts` | 每個網址各自的 `<title>`（`頁面主題｜Argus AI網站健檢平台`）、meta description 與 canonical（2026-10-12）：`App.jsx` 呼叫 `useDocumentTitle(location.pathname)`，對照表 `TITLES`／`DESCRIPTIONS`（依序比對，動態段用 `[^/]+`；公開頁的摘要 50–160 字、各不相同，由測試鎖定；會員頁與沒對到的用 `DEFAULT_DESCRIPTION`，與 `index.html` 相同）；canonical＝目前網域＋路徑（不含查詢字串）。原本 SPA 所有頁面同一個標題與摘要、沒有 canonical，自掃報 4.12、4.17、4.22。**新增公開路由時要在兩張表各補一列** |
 | `src/shared/CsrfField.jsx` | 登入 CSRF（2026-10-11）：`readCsrfToken`、`ensureCsrfCookie`（沒有 `csrftoken` cookie 時先 GET `/auth/turnstile/`）、`CsrfField`（登入表單的隱藏 `csrfmiddlewaretoken`）；後端 `email-login/`、`google/`、`register/`、`register/google/` 有 `csrf_protect`，前端這四個呼叫前都先 `ensureCsrfCookie()` |
 | `src/shared/clipboard.js` | `copyToClipboard`（clipboard API，失敗退回 execCommand）；網域驗證頁與 MCP 頁共用 |
 | `src/components/scans/CopyButton.tsx` | 掃描詳情的「複製 Evidence」「複製給 AI 的提示詞」：按下縮放，複製後 2 秒顯示「已複製」／「複製失敗」（`data-state`；樣式 `legacy-member/94-report-style.css` 的 `.copy-feedback-button`，深色狀態色在 `91-dark.css`，2026-10-11） |
@@ -279,7 +287,9 @@ npm run typecheck
 | `src/shared/apiTypes.ts` | **自動產生，禁止手改**：OpenAPI → TS 型別 |
 | `src/shared/apiContracts.ts` | 從 `apiTypes.ts` 取好名字的後台型別出入口 |
 | `src/store.js` | Zustand 全域狀態（user、`profile`（`/api/auth/me/`，含 `needs_setup`）、wallet、網站專案清單 `projects` 與目前專案 `currentProjectId` 等） |
-| `src/main.jsx` | React entry point，Provider 掛載 |
+| `src/main.jsx` | React entry point，Provider 掛載；root 已有預先渲染內容時先 `preloadRoute()` 再 `hydrateRoot`，否則 `createRoot` |
+| `src/entry-server.jsx` | 建置時預先渲染用（Node）：`render(url)` 先 `preloadRoute` 再 `renderToString`，樹狀結構與 `main.jsx` 相同；只給 `scripts/prerender.mjs` 用 |
+| `scripts/prerender.mjs` | build 第三步：把公開頁寫成 `dist/<路徑>.html`，見上方 Build 規則 |
 | `src/styles.css` | 樣式入口：依序 `@import` `src/styles/*.css`（順序即覆寫優先序）|
 | `src/styles/legacy-member/index.css` | 會員區舊版樣式入口（只作用在 `.member-legacy` 內；網站專案工作區在 `93-projects.css`）|
 | `postcss-member-legacy.js` | 把 `legacy-member/` 的規則限縮到 `.member-legacy` 範圍的 PostCSS 外掛 |

@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, startTransition, Suspense, useEffect, useState } from "react";
 
 import PageLoader from "./shared/PageLoader.jsx";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useArgusStore } from "./store";
+import { useDocumentTitle } from "./shared/documentTitle";
 
 // 掃描詳情的舊子網址轉到新分頁（保留已分享出去的連結）
 function ScanSubpathRedirect({ to }) {
@@ -18,7 +19,21 @@ function ShareRedirect() {
 }
 
 function lazyNamed(loader, exportName) {
-  return lazy(() => loader().then((module) => ({ default: module[exportName] })));
+  let loaded = null;
+  const load = () => loader().then((module) => {
+    loaded = module[exportName];
+    return { default: loaded };
+  });
+  const Lazy = lazy(load);
+  // 已載入（建置時預先渲染、或 hydrate 前先 preload）就直接渲染，不經過 Suspense：
+  // hydrate 時若還有沒載入的 lazy 區塊，登入狀態一更新就會出 React #421 並整塊重畫。
+  // 每個實例掛載時決定一次，之後不換元件型別（換了會整頁重掛、狀態消失）。
+  function LazyNamed(props) {
+    const [Loaded] = useState(() => loaded);
+    return Loaded ? <Loaded {...props} /> : <Lazy {...props} />;
+  }
+  LazyNamed.preload = load;
+  return LazyNamed;
 }
 
 const loadAuthPages = () => import("./features/auth/AuthPages.jsx");
@@ -112,6 +127,42 @@ const AdminPlansPage = lazyNamed(loadAdminPlans, "AdminPlansPage");
 const AdminSettingsPage = lazyNamed(loadAdminPages, "AdminSettingsPage");
 const AdminAuditLogPage = lazyNamed(loadAdminAuditLog, "AdminAuditLogPage");
 const AdminAnnouncementsPage = lazyNamed(loadAdminAnnouncements, "AdminAnnouncementsPage");
+// 建置時預先渲染的公開頁（scripts/prerender.mjs 依此表產出 HTML；main.jsx hydrate 前先載入對應元件）
+// 列出這頁會渲染到的所有 lazy 元件（不在 isPublic 的頁面還有 TopNav）；新增公開頁時加進來，
+// 也要加進 shared/documentTitle.ts 的標題與摘要表
+export const PRERENDERED_ROUTES = {
+  "/": [PublicLayout, ProjectPage],
+  "/project": [PublicLayout, ProjectPage],
+  "/free-tools": [PublicLayout, FreeToolsPage],
+  "/purchase": [PublicLayout, PurchasePage],
+  "/download": [PublicLayout, DownloadPage],
+  "/verify": [PublicLayout, VerifyReportPage],
+  "/partners": [PublicLayout, PartnersPage],
+  "/privacy": [TopNav, PublicLayout, PrivacyPolicyPage],
+  "/terms": [TopNav, PublicLayout, TermsOfServicePage],
+  "/scanner": [PublicLayout, ScannerInfoPage],
+  "/reviews": [PublicLayout, ReviewsPage],
+  "/login": [TopNav, LoginPage],
+};
+
+export function preloadRoute(pathname) {
+  const components = PRERENDERED_ROUTES[pathname.replace(/(.)\/$/, "$1")] || [];
+  return Promise.all(components.map((component) => component.preload()));
+}
+
+// 產品介紹（/ 與 /project 共用）：/ 先顯示產品介紹（與預先渲染的 HTML 一致），登入狀態確認後
+// 再轉到會員區或 /project。兩個路由用同一個元件，轉到 /project 時頁面不會重新掛載（否則整頁跳動，CLS 偏高）
+function ProjectEntry() {
+  const accessToken = useArgusStore((state) => state.accessToken);
+  const authReady = useArgusStore((state) => state.authReady);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (pathname === "/" && authReady) navigate(accessToken ? "/dashboard" : "/project", { replace: true });
+  }, [pathname, authReady, accessToken, navigate]);
+  return <ProjectPage />;
+}
+
 const IntroSequence = lazy(() => import("./components/brand/IntroSequence.jsx"));
 const NotFoundPage = lazy(() => import("./features/public/NotFoundPage.jsx"));
 
@@ -128,7 +179,7 @@ function AppShell({ googleOAuthEnabled }) {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
   // 評論頁：登入後留在會員區（會員導覽列）；未登入才走公開頁版型
-  const isPublic = [
+  const isPublic = (location.pathname === "/" && !accessToken) || [
     "/project", "/free-tools", "/purchase", "/download", "/verify", "/partners", "/scanner", "/share", "/optimized",
     ...(accessToken ? [] : ["/reviews"]),
   ].some((p) =>
@@ -139,10 +190,25 @@ function AppShell({ googleOAuthEnabled }) {
   // 首次進站才播過場動畫（旗標在 store/localStorage）；品牌 ⟡ icon 可呼叫 replayIntro 重播
   const introSeen = useArgusStore((s) => s.introSeen);
   const markIntroSeen = useArgusStore((s) => s.markIntroSeen);
+  // mounted：預先渲染的頁面 hydrate 完成後才為 true。
+  // - 開場動畫靠 JavaScript 播放與結束，只在掛載後才加上：預先渲染的 HTML 不含這層遮罩
+  //   （否則不執行 JavaScript 的訪客會卡在動畫畫面，hydrate 時也會與預先渲染的內容不一致）
+  // - 用 startTransition 設定：React 會先把頁面內容 hydrate 完才套用；登入狀態（store）的更新
+  //   也等到這之後才開始，否則 hydrate 途中收到更新會出 React #421、整頁改成重新渲染
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    restoreSession();
-  }, [restoreSession]);
-  if (!authReady) {
+    startTransition(() => setMounted(true));
+  }, []);
+  useEffect(() => {
+    if (mounted) restoreSession();
+  }, [mounted, restoreSession]);
+  useDocumentTitle(location.pathname);
+  // 公開頁不必等登入狀態確認完才顯示（2026-10-12）：原本每個頁面都先只有「正在驗證登入狀態…」，
+  // 爬蟲與 AI 讀到的是沒有 <main>、H1 與連結的空頁（Argus 自掃 4.16、4.19），訪客也要多等一次 API。
+  const rendersWithoutAuth = isPublic || ["/login", "/privacy", "/terms", "/reviews", "/password-reset"].some(
+    (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),
+  );
+  if (!authReady && !rendersWithoutAuth) {
     return <div className="argus-app"><p className="loading-state">正在驗證登入狀態…</p></div>;
   }
   function handleIntroDone() {
@@ -151,13 +217,12 @@ function AppShell({ googleOAuthEnabled }) {
   return (
     <div className={`argus-app ${isAdmin ? "is-admin-mode" : ""} ${isPublic ? "is-public-mode" : ""}`}>
       <Suspense fallback={<PageLoader label="正在載入頁面…" className="is-route" />}>
-        {!introSeen && location.pathname === "/project" && (
+        {mounted && !introSeen && location.pathname === "/project" && (
           <IntroSequence onComplete={handleIntroDone} />
         )}
         {showTopNav && <TopNav />}
         <main className={`argus-main ${accessToken && showTopNav ? "with-nav" : ""} ${isAdmin ? "is-admin" : ""} ${isPublic ? "is-public" : ""}`}>
           <Routes>
-          <Route path="/" element={<Navigate to={accessToken ? "/dashboard" : "/project"} replace />} />
           <Route path="/login" element={<LoginPage googleOAuthEnabled={googleOAuthEnabled} />} />
           <Route path="/password-reset" element={<PasswordResetRequestPage />} />
           <Route path="/password-reset/confirm" element={<PasswordResetConfirmPage />} />
@@ -166,7 +231,8 @@ function AppShell({ googleOAuthEnabled }) {
           <Route path="/optimized/:token" element={<SharedOptimizationPage />} />
           <Route path="/share/rebuilds/:token" element={<ShareRedirect />} />
           <Route element={<PublicLayout />}>
-            <Route path="/project" element={<ProjectPage />} />
+            <Route index element={<ProjectEntry />} />
+            <Route path="/project" element={<ProjectEntry />} />
             <Route path="/free-tools" element={<FreeToolsPage />} />
             <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/download" element={<DownloadPage />} />

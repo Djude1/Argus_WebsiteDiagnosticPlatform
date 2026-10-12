@@ -4,6 +4,8 @@ import { api } from "../api";
 // 由 api.js 自動放進 X-CSRFToken 標頭（2026-10-11）。
 
 export function readCsrfToken() {
+  // 建置時預先渲染（Node）沒有 document
+  if (typeof document === "undefined") return "";
   const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : "";
 }

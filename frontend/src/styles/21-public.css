@@ -971,6 +971,7 @@
     display: flex;
     gap: 0.6rem;
     align-items: flex-start;
+    min-height: 40px;
     color: #cbd5e1;
     font-size: 0.9rem;
     line-height: 1.55;

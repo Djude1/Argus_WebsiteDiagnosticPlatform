@@ -8,6 +8,8 @@ import { copyToClipboard } from "../../shared/clipboard";
 // 如何放行或封鎖（roadmap §6 第 3 項）。User-Agent、出口 IP 與速率都由後端依實際生效的設定回傳
 // （/api/content/scanner-info/），不要在這裡寫死，否則說明會和行為不一致。
 
+const LOADING = "讀取中…";
+
 function CopyLine({ label, text }) {
   const [state, setState] = useState("");
   return (
@@ -61,16 +63,18 @@ function ScannerInfoPage() {
             </button>
           </div>
         )}
-        {!info && !error && <p>讀取中…</p>}
-        {info && (
-          <>
+        {/* 說明文字直接渲染（建置時預先渲染進 HTML，不執行 JavaScript 也讀得到）；
+            只有 User-Agent、出口 IP 與速率等設定值等 API 回來才填入 */}
+        <>
             <section>
               <h2>1. 如何辨識</h2>
               <h3>User-Agent</h3>
               <p>Argus 的網頁走訪、連結檢查、弱點掃描與驗證工具都使用同一個 User-Agent：</p>
-              <CopyLine label="User-Agent" text={info.user_agent} />
+              {info ? <CopyLine label="User-Agent" text={info.user_agent} /> : <p>{LOADING}</p>}
               <h3>來源 IP</h3>
-              {info.egress_ips.length > 0 ? (
+              {!info ? (
+                <p>{LOADING}</p>
+              ) : info.egress_ips.length > 0 ? (
                 <>
                   <p>掃描流量從以下位址送出：</p>
                   <ul>
@@ -95,7 +99,7 @@ function ScannerInfoPage() {
               <p>只有在 Argus 使用者對你的網站建立檢查時才會造訪，不會自行巡航網際網路。</p>
               <h3>一般檢查（被動）</h3>
               <ul>
-                <li>以瀏覽器開啟公開頁面，像一般訪客一樣讀取內容，每秒最多 {info.passive_pages_per_second} 頁。</li>
+                <li>以瀏覽器開啟公開頁面，像一般訪客一樣讀取內容，每秒最多 {info ? info.passive_pages_per_second : "…"} 頁。</li>
                 <li>讀取 robots.txt 與 sitemap，並逐一確認頁面上的連結是否有效（連到其他網站的連結也會收到一次請求）。</li>
                 <li>不嘗試任何攻擊。</li>
                 <li>
@@ -109,7 +113,7 @@ function ScannerInfoPage() {
                   Console、DNS、首頁標籤或驗證檔）並勾選授權後才會執行。
                 </li>
                 <li>
-                  漏洞模板掃描與敏感檔案路徑探測合計每秒最多 {info.active_requests_per_second} 個請求，漏洞模板只使用已知被實際利用的漏洞檢查，不含阻斷服務、模糊測試或帳號密碼暴力破解類的模板。
+                  漏洞模板掃描與敏感檔案路徑探測合計每秒最多 {info ? info.active_requests_per_second : "…"} 個請求，漏洞模板只使用已知被實際利用的漏洞檢查，不含阻斷服務、模糊測試或帳號密碼暴力破解類的模板。
                 </li>
               </ul>
               <h3>免費快速檢查</h3>
@@ -122,13 +126,17 @@ function ScannerInfoPage() {
               <h2>3. 如何封鎖或限制</h2>
               <h3>robots.txt</h3>
               <p>在 robots.txt 加入以下規則，Argus 的網頁走訪就會略過這些路徑：</p>
-              <CopyLine label="robots.txt 規則" text={`User-agent: ${info.robots_token}\nDisallow: /`} />
+              {info ? (
+                <CopyLine label="robots.txt 規則" text={`User-agent: ${info.robots_token}\nDisallow: /`} />
+              ) : (
+                <p>{LOADING}</p>
+              )}
               <p>
                 robots.txt 只影響網頁走訪；連結有效性確認，以及網域擁有者自己授權的主動測試，不受 robots.txt 限制。
               </p>
               <h3>防火牆或 WAF</h3>
               <p>
-                依上方的 User-Agent{info.egress_ips.length > 0 ? " 或來源 IP" : ""}設定封鎖規則即可。被封鎖時，Argus
+                依上方的 User-Agent{info?.egress_ips.length > 0 ? " 或來源 IP" : ""}設定封鎖規則即可。被封鎖時，Argus
                 的報告會標示「被阻擋」，不會把它當成網站沒有問題。
               </p>
             </section>
@@ -137,7 +145,7 @@ function ScannerInfoPage() {
               <h2>4. 網站擁有者想完整檢查自己的網站</h2>
               <p>
                 如果你的網站有 WAF、機器人防護或流量限制，請暫時放行上方的 User-Agent
-                {info.egress_ips.length > 0 ? " 或來源 IP" : ""}
+                {info?.egress_ips.length > 0 ? " 或來源 IP" : ""}
                 。沒有放行時，部分頁面或檢查可能被擋下，報告會標示為部分完成。
               </p>
             </section>
@@ -148,8 +156,7 @@ function ScannerInfoPage() {
                 對 Argus 的掃描流量有任何疑問或要回報異常，請透過<NavLink to="/partners">聯絡我們</NavLink>頁面與我們聯繫。
               </p>
             </section>
-          </>
-        )}
+        </>
       </article>
     </div>
   );

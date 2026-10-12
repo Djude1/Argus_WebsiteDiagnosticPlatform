@@ -319,9 +319,13 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.5rem;
+  gap: 0;
 }
+/* 觸控目標至少 40px 高（Argus 自掃 2026-10-12：頁尾連結只有 17px 高） */
 .public-footer-group a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   color: var(--pub-muted);
   text-decoration: none;
 }
@@ -416,6 +420,9 @@
   margin-top: 1.75rem;
 }
 .public-shell .partners-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 0;
   border: 0;
   background: none;
@@ -656,6 +663,7 @@
 }
 .public-shell .scanner-copy-button {
   flex: none;
+  min-height: 40px;
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--pub-line-strong);
   border-radius: 8px;
@@ -832,7 +840,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 36px;
+  min-height: 40px;
+  min-width: 44px;
   padding: 0 0.8rem;
   border: 1px solid var(--pub-line-strong);
   border-radius: 999px;
@@ -1149,7 +1158,7 @@
 .hx-verify-placeholder { color: var(--pub-muted); letter-spacing: normal; font-family: inherit; }
 .hx-verify-result { min-height: 26px; }
 .hx-verify-again {
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 0.9rem;
   border: 1px solid var(--pub-line-strong);
   border-radius: 8px;

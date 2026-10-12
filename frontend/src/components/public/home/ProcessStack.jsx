@@ -72,7 +72,8 @@ export default function ProcessStack({ steps }) {
             type="button"
             className={`hx-stack-dot${order[0] === index ? " is-active" : ""}`}
             aria-pressed={order[0] === index}
-            aria-label={`步驟 ${index + 1}：${step.title}`}
+            // 可及名稱以看得到的文字開頭（WCAG 2.5.3，axe label-content-name-mismatch）
+            aria-label={`${String(index + 1).padStart(2, "0")} ${step.short}：${step.title}`}
             onClick={() => bringToFront(index)}
           >
             <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>

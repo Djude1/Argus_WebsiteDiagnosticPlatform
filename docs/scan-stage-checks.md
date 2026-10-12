@@ -155,7 +155,7 @@ AEO 分數主要來自後面的「AEO 問答檢測」。
 |---|---|---|
 | 行動版破版 | 手機寬度下頁面比螢幕寬超過 4px（出現水平捲動）；溢出達螢幕寬一半升為中 | 低／中 |
 | 版面跳動（CLS） | 依 Google CLS 定義：>0.1＝低、>0.25＝中；列出移動最多的元素與沒標寬高的圖片 | 低／中 |
-| 觸控目標過小 | 手機上可點的按鈕或連結寬或高小於 40px；5 個以上升為中（另註明 WCAG 2.2 的 24px／44px 標準） | 低／中 |
+| 觸控目標過小 | 手機上可點的按鈕或連結寬或高小於 40px；5 個以上升為中（另註明 WCAG 2.2 的 24px／44px 標準）。句子中的文字連結不算（WCAG 2.5.8 例外）；包在 `<label>` 裡的勾選框以整個 label 計算 | 低／中 |
 | 表單欄位缺標籤 | input、select、textarea 沒有 label、aria-label、title 或 placeholder | 中 |
 | 假按鈕（div／span 當按鈕） | 用 onclick 掛在 `<div>`／`<span>` 上當按鈕、卻沒有 role：螢幕報讀者唸不出、鍵盤 Tab 不到、AI 代理也看不到（有 role 代表作者有意識處理，不列入） | 低 |
 | JavaScript 錯誤 | 頁面有未捕捉的例外 | 中 |
@@ -258,7 +258,7 @@ Email 與手機的格式判斷與 AEO 共用同一套，兩邊結論不會互相
 | CORS | `*` 加上允許憑證＝高；只有 `*`＝中 | 高／中 |
 | CSP 品質 | 有 CSP 但含 `unsafe-inline`／`unsafe-eval` | 中 |
 | HSTS preload 不符條件 | 標了 preload 但不符瀏覽器預載清單條件 | 資訊 |
-| SRI | 跨網站載入的 script、css 沒有 `integrity`（不含官方不支援鎖雜湊的服務：Google Analytics／Tag Manager、Stripe、reCAPTCHA、Cloudflare Turnstile、Google Fonts、hCaptcha 等） | 低 |
+| SRI | 跨網站載入的 script、css 沒有 `integrity`（不含官方不支援鎖雜湊的服務：Google Analytics／Tag Manager、Stripe、reCAPTCHA、Cloudflare Turnstile、Google Fonts、hCaptcha、Google 登入等） | 低 |
 | SPF | 沒有 SPF＝中；`+all`（任何人都能冒用寄信）＝高 | 中／高 |
 | DMARC | 沒有，或 `p=none` | 低 |
 | DNSSEC | 未啟用（最佳實務建議） | 低 |

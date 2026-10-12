@@ -96,7 +96,7 @@ def analyze_sri(pages: list[dict]) -> list[dict]:
 - 解析用 stdlib `html.parser.HTMLParser`，不引入 BeautifulSoup
 - 只報**跨來源**資源（同源/相對路徑跳過，避免噪音）；已有 `integrity` 跳過
 - 依解析後資源 URL 去重，整個 scan 同一 CDN URL 只報一次 → 一律 LOW
-- **不報無法鎖雜湊的服務**（`_DYNAMIC_SCRIPT_HOSTS`）：內容會隨時更新、官方不提供 SRI 的腳本與樣式（Google Analytics／Tag Manager、Stripe、reCAPTCHA、Cloudflare Turnstile、Google Fonts、hCaptcha 等），加上 integrity 反而會在更新後被瀏覽器擋掉，改由 CSP 限制來源。2026-10-11 補 Turnstile、Google Fonts、recaptcha.net、hCaptcha
+- **不報無法鎖雜湊的服務**（`_DYNAMIC_SCRIPT_HOSTS`）：內容會隨時更新、官方不提供 SRI 的腳本與樣式（Google Analytics／Tag Manager、Stripe、reCAPTCHA、Cloudflare Turnstile、Google Fonts、hCaptcha 等），加上 integrity 反而會在更新後被瀏覽器擋掉，改由 CSP 限制來源。2026-10-11 補 Turnstile、Google Fonts、recaptcha.net、hCaptcha；2026-10-12 補 Google 登入（`accounts.google.com/gsi/client`）
 
 ## DNS Scanner 設計原則
 

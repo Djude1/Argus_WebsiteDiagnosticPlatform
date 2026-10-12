@@ -365,7 +365,9 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
 - **觸控目標過小 ＋ 表單欄位缺可及名稱**（`collect_ux_signals()` → `page["ux_signals"]`）：
   可點元素在手機寬或高 < `_MIN_TAP_TARGET_PX`（40px）列為 tap-target 問題（≥5 個升
   MEDIUM）；`<input>`/`<select>`/`<textarea>` 無 label/aria/title/placeholder 列為
-  accessibility 問題（MEDIUM）。每類上限 `_MAX_UX_OFFENDERS`（8）。
+  accessibility 問題（MEDIUM）。每類上限 `_MAX_UX_OFFENDERS`（8）。**不算觸控目標問題（2026-10-12，WCAG 2.5.8 例外）**：
+  句子中的文字連結（`display: inline` 的 `<a>`，所在父元素另有 10 字以上的文字）；包在 `<label>` 裡的
+  勾選框／選項鈕改以整個 label 的大小判斷（點文字也會勾選）。測試 `tests_tap_targets.py`（真實瀏覽器）。
 - **精準標註（2026-10-06）**：觸控目標、缺標籤欄位、破版元素都記錄行動版文件座標 `box`（`rect + scroll`）；只要有這類問題，爬蟲另拍一張行動版整頁截圖（`page-N-mobile.png`，路徑存 `layout_metrics["mobile_screenshot"]`，API `pages/<id>/screenshot/?variant=mobile`、`PageSerializer.has_mobile_screenshot`）。Finding 的 `evidence_json.annotations = {"viewport": "mobile", "boxes": [...]}`，前端在行動版截圖上逐一框住實際元素，不再框整個區塊。移出視窗左右兩側的抽屜選單不算觸控目標（`isVisible` 排除 `rect.right <= 0 || rect.left >= innerWidth`）。
 - **假按鈕（`scanners._ux_fake_buttons`，2026-10-10，借鑑 claude-seo MIT）**：原始 HTML 的
   `<div>`／`<span>`／`<li>` 掛 `onclick` 但**完全沒有 `role` 屬性**（`_FAKE_BUTTON_RE`）→

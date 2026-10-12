@@ -335,6 +335,7 @@ class TestSriScanner(TestCase):
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">'
             '<script src="https://www.recaptcha.net/recaptcha/api.js"></script>'
             '<script src="https://js.hcaptcha.com/1/api.js"></script>'
+            '<script src="https://accounts.google.com/gsi/client"></script>'
         )
         self.assertEqual(sri_scanner.analyze_sri([self._page(html)]), [])
 

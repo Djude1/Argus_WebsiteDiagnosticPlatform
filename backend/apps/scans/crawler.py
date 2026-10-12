@@ -645,9 +645,28 @@ async def collect_ux_signals(page) -> dict:
                     const tapSel = 'a[href], button, [role="button"], '
                         + 'input:not([type="hidden"]), select, textarea';
                     const tapSeen = new Set();
+                    // 句子中的文字連結（段落裡夾著其他文字）大小由行高決定，WCAG 2.5.8
+                    // 明列為例外，不算觸控目標問題（2026-10-12 Argus 自掃：「請透過聯絡我們頁面」）
+                    const inlineInSentence = (el) => {
+                        if (el.tagName !== "A") return false;
+                        if (getComputedStyle(el).display !== "inline") return false;
+                        const parent = el.parentElement;
+                        if (!parent) return false;
+                        const own = (el.textContent || "").trim().length;
+                        const around = (parent.textContent || "").trim().length;
+                        return around - own >= 10;
+                    };
+                    // 包在 <label> 裡的勾選框／選項鈕：點文字也會勾選，可點範圍是整個 label
+                    const tapRect = (el) => {
+                        const type = (el.getAttribute("type") || "").toLowerCase();
+                        const isToggle = type === "checkbox" || type === "radio";
+                        const label = isToggle && el.closest("label");
+                        return (label || el).getBoundingClientRect();
+                    };
                     for (const el of document.body.querySelectorAll(tapSel)) {
-                        const rect = el.getBoundingClientRect();
-                        if (!isVisible(el, rect)) continue;
+                        const rect = tapRect(el);
+                        if (!isVisible(el, el.getBoundingClientRect())) continue;
+                        if (inlineInSentence(el)) continue;
                         if (rect.width >= minTap && rect.height >= minTap) continue;
                         const rawLabel =
                             el.innerText || el.value || el.getAttribute("aria-label") || "";
