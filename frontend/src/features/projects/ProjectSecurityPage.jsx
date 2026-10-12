@@ -214,7 +214,7 @@ export function ProjectSecurityPage() {
         )}
       </section>
 
-      {data.api_surface && <ApiSurface surface={data.api_surface} />}
+      <ApiSurface surface={data.api_surface} check={data.api_check} />
 
       {data.observatory && (
         <section className="panel">
@@ -248,8 +248,23 @@ const API_RULE_LABELS = {
   "api-cors-wildcard": "任何網站可讀取",
 };
 
+// 沒有端點清單時的說明：依這項檢查本次的狀態（coverage.checks.api_passive）
+function apiEmptyText(check) {
+  if (check?.status === "skipped") return "這次掃描的頁面沒有呼叫同網站的 API（例如純靜態網站），所以沒有可檢查的端點。";
+  if (check?.status === "failed") return "這次的被動 API 檢查沒有完成，重新掃描後會再檢查一次。";
+  return "這次掃描在此功能上線前完成，重新掃描後會列出網站前端呼叫的 API。";
+}
+
 // 被動觀察到的 API 端點（後端 security/api_scanner.py 產生，存 warning_summary.api_surface）
-function ApiSurface({ surface }) {
+function ApiSurface({ surface, check }) {
+  if (!surface) {
+    return (
+      <section className="panel">
+        <h2 className="project-section-title">API 端點</h2>
+        <p className="hint-text">{apiEmptyText(check)}</p>
+      </section>
+    );
+  }
   return (
     <section className="panel">
       <h2 className="project-section-title">API 端點（{surface.total}）</h2>

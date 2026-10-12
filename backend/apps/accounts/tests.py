@@ -305,12 +305,16 @@ class EmailAuthTests(TestCase):
             email="csrf@example.com",
             password="MyPass999!",
         )
-        login = csrf_client.post(
+        # 登入本身也驗 CSRF：先由登入頁會呼叫的 turnstile/ 取得 cookie
+        csrf_client.get("/api/auth/turnstile/")
+        csrf_token = csrf_client.cookies["csrftoken"].value
+        csrf_client.post(
             "/api/auth/email-login/",
             {"email": "csrf@example.com", "password": "MyPass999!"},
             content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf_token,
         )
-        csrf_token = login.cookies["csrftoken"].value
+        csrf_token = csrf_client.cookies["csrftoken"].value
 
         rejected = csrf_client.post("/api/auth/refresh/", content_type="application/json")
         accepted = csrf_client.post(
@@ -521,3 +525,45 @@ class AvatarUploadTests(APITestCase):
         )
         for bad in bad_paths:
             self.assertEqual(self.client.get(bad).status_code, 404, bad)
+
+
+class LoginCsrfTests(TestCase):
+    """登入端點驗 CSRF（2026-10-11）：擋下其他網站用偽造表單讓訪客登入攻擊者帳號。"""
+
+    def setUp(self):
+        cache.clear()
+        self.client = Client(enforce_csrf_checks=True)
+        get_user_model().objects.create_user(
+            username="csrf@example.com", email="csrf@example.com", password="StrongPass123!"
+        )
+
+    def _login(self, **headers):
+        return self.client.post(
+            "/api/auth/email-login/",
+            {"email": "csrf@example.com", "password": "StrongPass123!"},
+            content_type="application/json",
+            **headers,
+        )
+
+    def test_login_without_csrf_token_is_rejected(self):
+        self.assertEqual(self._login().status_code, 403)
+
+    def test_login_page_config_sets_cookie_and_login_succeeds_with_header(self):
+        self.client.get("/api/auth/turnstile/")
+        token = self.client.cookies["csrftoken"].value
+        self.assertEqual(self._login(HTTP_X_CSRFTOKEN=token).status_code, 200)
+
+    def test_register_without_csrf_token_is_rejected(self):
+        for url, body in (
+            ("/api/auth/register/", {"signup_token": "x", "handle": "abc", "password": "x"}),
+            ("/api/auth/register/google/", {"credential": "x"}),
+        ):
+            with self.subTest(url=url):
+                resp = self.client.post(url, body, content_type="application/json")
+                self.assertEqual(resp.status_code, 403)
+
+    def test_google_login_without_csrf_token_is_rejected(self):
+        resp = self.client.post(
+            "/api/auth/google/", {"credential": "x"}, content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 403)

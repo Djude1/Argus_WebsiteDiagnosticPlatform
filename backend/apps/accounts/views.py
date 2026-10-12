@@ -118,6 +118,9 @@ def _suspended_response() -> Response:
     )
 
 
+# 登入端點要驗 CSRF（2026-10-11）：否則其他網站可用偽造表單讓訪客登入攻擊者的帳號（login CSRF）。
+# csrftoken cookie 由登入頁先呼叫的 turnstile/ 設定（ensure_csrf_cookie）。
+@method_decorator(csrf_protect, name="dispatch")
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class GoogleLoginView(views.APIView):
     """以 Google ID Token 登入既有帳號。
@@ -146,6 +149,7 @@ class GoogleLoginView(views.APIView):
         return _finish_login(request, user, LoginEvent.Method.GOOGLE)
 
 
+@method_decorator(csrf_protect, name="dispatch")
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class GoogleRegisterStartView(views.APIView):
     """註冊第一步：Google 授權確認 Email，回傳 signup_token（此時尚未建立帳號）。"""
@@ -171,8 +175,12 @@ class GoogleRegisterStartView(views.APIView):
         return Response(_registration_payload(profile))
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class TurnstileConfigView(views.APIView):
-    """公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。"""
+    """公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。
+
+    登入頁一進來就呼叫，順便設定 csrftoken cookie，登入端點的 CSRF 驗證才有 token 可比對。
+    """
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -183,6 +191,8 @@ class TurnstileConfigView(views.APIView):
         return Response({"enabled": enabled, "site_key": site_key})
 
 
+# 註冊完成即登入（發 refresh cookie），同樣要防 login CSRF
+@method_decorator(csrf_protect, name="dispatch")
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class EmailRegisterView(views.APIView):
     """註冊第二步：帶 Google 簽發的 signup_token 設定用戶名與密碼，建立帳號並登入。
@@ -238,6 +248,7 @@ class EmailRegisterView(views.APIView):
         return response
 
 
+@method_decorator(csrf_protect, name="dispatch")
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class EmailLoginView(views.APIView):
     """以 Email 或用戶名＋密碼登入，回傳 JWT（欄位沿用 email，也接受 identifier）。"""

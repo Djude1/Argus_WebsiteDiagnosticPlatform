@@ -144,7 +144,8 @@ DATABASES = {
 
 # 測試時改用快速雜湊：預設 PBKDF2（100 萬次迭代）每次約 0.6 秒，幾乎每個測試都會建立使用者，
 # 全套測試因此多花好幾分鐘。只在 `manage.py test` 生效，正式環境與本機 runserver 不受影響。
-if len(sys.argv) > 1 and sys.argv[1] == "test":
+RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == "test"
+if RUNNING_TESTS:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
     # 報告圖表在測試只需能產生、不需印刷品質（見 report_render/theme.chart_dpi）
     os.environ.setdefault("ARGUS_REPORT_CHART_DPI", "72")
@@ -695,6 +696,11 @@ SPECTACULAR_SETTINGS = {
 # 正式環境不可含 localhost（accounts.E003）。
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "").strip()
 TURNSTILE_SECRET = os.getenv("TURNSTILE_SECRET", "").strip()
+if RUNNING_TESTS:
+    # 測試不受本機 .env 影響：設了 Turnstile 金鑰時，所有登入測試都會被 siteverify 擋成 403
+    # （2026-10-12 Codex 在設了金鑰的環境跑出 7 失敗 2 錯誤）。
+    # 需要啟用的測試自行 override_settings。
+    TURNSTILE_SITE_KEY = TURNSTILE_SECRET = ""
 
 
 def _bare_hostname(value: str) -> str:

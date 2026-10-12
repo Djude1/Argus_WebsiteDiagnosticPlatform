@@ -1069,6 +1069,9 @@ def _observe_api_response(resp, sink: dict[str, dict], body_tasks: list) -> None
         return
     method = (resp.request.method or "GET").upper()
     path = urlparse(resp.url).path or "/"
+    if path.startswith("/cdn-cgi/"):
+        # Cloudflare 注入的量測／驗證端點（/cdn-cgi/rum 等），不是網站自己的 API
+        return
     key = f"{method} {path}"
     if key in sink:
         return

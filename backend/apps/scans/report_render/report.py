@@ -873,6 +873,16 @@ def _appendix(doc, data, number=6):
                         "size": 9, "color": T.GREY}], after=5)
         rows = [[t["ref"], t["rule_id"], t.get("owasp_cwe", "— / —")] for t in ap["tech_index"]]
         data_table(doc, ["項次", "規則 ID", "OWASP / CWE"], rows, [1000, 3700, 3400])
+    api = ap.get("api_surface")
+    if api:
+        sub("API 端點清單")
+        shown = len(api["rows"])
+        more = f"列出前 {shown} 個，有問題的排前面。" if api["total"] > shown else ""
+        add_para(doc, [{"text": f"掃描時網站前端自己呼叫的同網站 API 共 {api['total']} 個，其中 {api['with_issues']} 個有問題。"
+                                f"只分析這些回應，不另外發送請求，也不保存網址參數與回應內容。{more}",
+                        "size": 9, "color": T.GREY}], after=5)
+        rows = [[r["method"], r["path"], r["status"], r["content_type"], r["issues"]] for r in api["rows"]]
+        data_table(doc, ["方法", "路徑", "狀態碼", "內容類型", "發現"], rows, [900, 3300, 900, 1700, 1300])
     sub("修補後如何驗證")
     add_para(doc, [{"text": ap.get("verify_note",
                     "完成修補後，重新執行一次 Argus 掃描，確認對應項目不再出現；下一份報告的摘要會列出這次解決了哪些項目。"),

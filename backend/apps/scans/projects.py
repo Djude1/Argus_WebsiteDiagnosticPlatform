@@ -412,6 +412,11 @@ def project_issues(project: SiteProject, scan: ScanJob | None = None) -> dict:
     }
 
 
+def _api_check(scan: ScanJob) -> dict:
+    check = ((scan.coverage or {}).get("checks") or {}).get("api_passive") or {}
+    return {"status": check.get("status", ""), "reason": check.get("reason", "")}
+
+
 def project_security(project: SiteProject, scan: ScanJob | None = None) -> dict:
     """資安分析頁：指定（預設最新一次完成）掃描的資安分數、標頭等第、問題依類型、根本原因與做得好的地方。
 
@@ -446,6 +451,8 @@ def project_security(project: SiteProject, scan: ScanJob | None = None) -> dict:
         "edge": ((profile.get("infrastructure") or {}).get("edge")) or None,
         # 被動 API 檢查的端點清單（2026-10-11；較早的掃描沒有＝None）
         "api_surface": (scan.warning_summary or {}).get("api_surface") or None,
+        # 這項檢查本次的狀態：completed／skipped（沒觀察到 API）／failed；空字串＝功能上線前的掃描
+        "api_check": _api_check(scan),
         "kinds": kinds,
         "issues": issues,
         "missing": [i for i in data["missing"] if i["category"] == "security"],

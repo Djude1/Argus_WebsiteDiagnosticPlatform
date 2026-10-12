@@ -78,10 +78,7 @@ class Owasp2025DisplayTests(TestCase):
 class AnalyzeApiTests(SimpleTestCase):
     def test_stack_trace_in_error_response_is_reported_and_redacted(self):
         findings, surface = analyze_api(
-            [
-                _obs(status=500, error_body=DJANGO_TRACE),
-                _obs(path="/api/ok"),
-            ]
+            [_obs(status=500, error_body=DJANGO_TRACE), _obs(path="/api/ok")]
         )
         self.assertEqual([f["rule_id"] for f in findings], ["api-error-stack-trace"])
         self.assertEqual(findings[0]["severity"], "medium")
@@ -141,6 +138,11 @@ class CrawlerObservationTests(SimpleTestCase):
         self.assertNotIn("secret", str(obs["headers"]))
         self.assertIn("Traceback", obs["error_body"])
 
+    def test_cloudflare_endpoints_are_not_site_apis(self):
+        sink: dict = {}
+        crawler._observe_api_response(self._resp("https://example.com/cdn-cgi/rum?x"), sink, [])
+        self.assertEqual(sink, {})
+
     def test_success_response_body_is_not_read(self):
         sink: dict = {}
         tasks_list: list = []
@@ -166,6 +168,15 @@ class PassiveApiStageTests(TestCase):
         tasks._passive_api_check(self.ctx)
         self.assertEqual(self.ctx.coverage.status_of("api_passive"), SKIPPED)
 
+    def test_security_page_reports_check_status_without_surface(self):
+        self.scan.coverage = {"checks": {"api_passive": {"status": "skipped", "reason": ""}}}
+        self.scan.save(update_fields=["coverage"])
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        data = client.get(f"/api/projects/{self.scan.project_id}/security/").json()
+        self.assertIsNone(data["api_surface"])
+        self.assertEqual(data["api_check"]["status"], "skipped")
+
     def test_findings_recorded_and_surface_saved_then_shown_on_security_page(self):
         self.ctx.site_signals["api_observations"] = [_obs(status=500, error_body=DJANGO_TRACE)]
         tasks._passive_api_check(self.ctx)
@@ -180,3 +191,51 @@ class PassiveApiStageTests(TestCase):
         client.force_authenticate(user=self.user)
         data = client.get(f"/api/projects/{self.scan.project_id}/security/").json()
         self.assertEqual(data["api_surface"]["endpoints"][0]["path"], "/api/items")
+
+
+class ApiSurfaceReportTests(TestCase):
+    """PDF 報告附錄「API 端點清單」（2026-10-12）。"""
+
+    def setUp(self):
+        user = User.objects.create_user(username="api-report", password="safe-test-password")
+        self.scan = ScanJob.objects.create(
+            user=user, original_url="https://example.com/", normalized_url="https://example.com/",
+            origin="https://example.com", status=ScanJob.Status.COMPLETED, categories=["security"],
+            warning_summary={"api_surface": {"total": 2, "with_issues": 1, "endpoints": [
+                {"method": "GET", "path": "/api/a", "status": 500, "content_type": "text/plain",
+                 "rules": ["api-error-stack-trace"]},
+                {"method": "POST", "path": "/api/b", "status": 200, "content_type": "",
+                 "rules": []},
+            ]}},
+        )
+
+    def test_payload_has_rows_with_labels(self):
+        from apps.scans.reports import _report_api_surface
+
+        api = _report_api_surface(self.scan)
+        self.assertEqual(api["total"], 2)
+        self.assertEqual(api["rows"][0]["issues"], "錯誤回應洩漏堆疊")
+        self.assertEqual(api["rows"][1]["content_type"], "—")
+
+    def test_docx_contains_section(self):
+        import tempfile
+        from pathlib import Path
+
+        from docx import Document
+
+        from apps.scans.reports import render_report_docx
+
+        with tempfile.TemporaryDirectory() as workdir:
+            path = Path(workdir) / "report.docx"
+            render_report_docx(self.scan, path)
+            doc = Document(str(path))
+        text = "\n".join(p.text for p in doc.paragraphs)
+        self.assertIn("API 端點清單", text)
+        cells = {c.text for t in doc.tables for r in t.rows for c in r.cells}
+        self.assertIn("/api/a", cells)
+
+    def test_not_listed_when_security_not_checked(self):
+        from apps.scans.reports import _report_api_surface
+
+        self.scan.categories = ["seo"]
+        self.assertIsNone(_report_api_surface(self.scan))

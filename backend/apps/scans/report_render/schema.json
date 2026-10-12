@@ -189,6 +189,13 @@
                     "properties": {"ref": {"type": "string"}, "rule_id": {"type": "string"},
                                    "owasp_cwe": {"type": "string"}}}
         },
+        "api_surface": {
+          "type": "object", "description": "被動 API 檢查觀察到的同網站 API（附錄「API 端點清單」）",
+          "required": ["total", "with_issues", "rows"],
+          "properties": {"total": {"type": "integer"}, "with_issues": {"type": "integer"},
+                         "rows": {"type": "array", "items": {"type": "object",
+                                  "required": ["method", "path", "status", "content_type", "issues"]}}}
+        },
         "verify_note":   {"type": "string"},
         "verify_items":  {"type": "array",
                           "items": {"type": "object", "required": ["ref", "title", "how"],

@@ -95,3 +95,29 @@ describe("ProjectSecurityPage", () => {
     expect(screen.queryByText("資安分數")).not.toBeInTheDocument();
   });
 });
+
+describe("ProjectSecurityPage API 端點", () => {
+  beforeEach(() => api.get.mockReset());
+
+  it("有端點清單時列出路徑與問題", async () => {
+    renderPage(securityData({
+      api_surface: { total: 1, with_issues: 1, endpoints: [
+        { method: "GET", path: "/api/items", status: 500, content_type: "text/plain", rules: ["api-error-stack-trace"] },
+      ] },
+      api_check: { status: "completed", reason: "" },
+    }));
+    expect(await screen.findByText("/api/items")).toBeInTheDocument();
+    expect(screen.getByText("錯誤回應洩漏堆疊")).toBeInTheDocument();
+  });
+
+  it("沒有觀察到 API 時說明原因，不整塊消失", async () => {
+    renderPage(securityData({ api_surface: null, api_check: { status: "skipped", reason: "" } }));
+    expect(await screen.findByRole("heading", { name: "API 端點" })).toBeInTheDocument();
+    expect(screen.getByText(/沒有呼叫同網站的 API/)).toBeInTheDocument();
+  });
+
+  it("功能上線前的掃描提示重新掃描", async () => {
+    renderPage(securityData({ api_surface: null, api_check: { status: "", reason: "" } }));
+    expect(await screen.findByText(/重新掃描後會列出/)).toBeInTheDocument();
+  });
+});

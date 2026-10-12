@@ -54,6 +54,12 @@ data:
       }
       location / {
         try_files $uri $uri/ /index.html;
+        # 網頁本身的安全標頭（2026-10-11）：只加在 SPA 頁面，/api/ 由 Django 自己送，避免重複。
+        # HSTS 由這裡送：Cloudflare Tunnel 進來是 http，Django 判斷不是 HTTPS 就不送 HSTS。
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
       }
     }
 ---
@@ -75,7 +81,7 @@ spec:
         # 上面的 frontend-nginx ConfigMap 是以 subPath 掛載的，改了不會同步到既有
         # pod，也沒有 configMapGenerator 的 name hash 可觸發滾動更新。每次修改
         # default.conf 都必須把這個數字 +1，否則設定不會生效。
-        argus.io/nginx-conf-revision: "2"
+        argus.io/nginx-conf-revision: "3"
     spec:
       containers:
         - name: frontend

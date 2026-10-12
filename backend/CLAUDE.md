@@ -201,6 +201,7 @@ status（published/hidden）、experience_at（完成掃描時間）
 `manage.py test` 時 `config/settings.py` 自動：
 - 改用 `MD5PasswordHasher`：預設 PBKDF2（100 萬次）每次約 0.6 秒，幾乎每個測試都建立使用者。
 - `ARGUS_REPORT_CHART_DPI=72`：報告圖表的 PNG 編碼是產生報告最慢的一步；正式報告維持 300 dpi（`report_render/theme.chart_dpi`）。
+- 清空 `TURNSTILE_SITE_KEY`／`TURNSTILE_SECRET`（2026-10-12）：本機 `.env` 設了 Turnstile 金鑰時，所有登入測試會被 siteverify 擋成 403；需要啟用的測試自行 `override_settings`（`tests_turnstile.py`）。
 
 `apps.scans`＋`apps.agent` 全套由約 450 秒降到約 50 秒。只在測試生效，正式環境與 runserver 不受影響；不要在測試裡斷言雜湊演算法或圖表解析度。
 

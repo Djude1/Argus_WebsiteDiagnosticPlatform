@@ -1230,6 +1230,37 @@ def _report_scan_info(scan_job: ScanJob) -> dict:
     return scan_info
 
 
+_API_RULE_LABELS = {
+    "api-error-stack-trace": "錯誤回應洩漏堆疊",
+    "api-cors-wildcard": "任何網站可讀取",
+}
+
+
+def _report_api_surface(scan_job: ScanJob) -> dict | None:
+    """附錄「API 端點清單」：被動 API 檢查觀察到的同網站 API（2026-10-12）。"""
+    if "security" not in scan_job.effective_categories:
+        return None
+    surface = (scan_job.warning_summary or {}).get("api_surface")
+    if not surface or not surface.get("endpoints"):
+        return None
+    return {
+        "total": surface.get("total", 0),
+        "with_issues": surface.get("with_issues", 0),
+        "rows": [
+            {
+                "method": row.get("method", ""),
+                "path": row.get("path", ""),
+                "status": str(row.get("status") or "—"),
+                "content_type": row.get("content_type") or "—",
+                "issues": "、".join(
+                    _API_RULE_LABELS.get(r, r) for r in row.get("rules") or []
+                ) or "—",
+            }
+            for row in surface["endpoints"]
+        ],
+    }
+
+
 def _report_appendix(
     scan_job: ScanJob, grouped: list[dict], findings_payload: list[dict]
 ) -> dict:
@@ -1251,6 +1282,9 @@ def _report_appendix(
                 [f["id"] for f in findings_payload], grouped, strict=True
             )
         ]
+    api_surface = _report_api_surface(scan_job)
+    if api_surface:
+        appendix["api_surface"] = api_surface
     # 修補驗證要和原本的問題一一對應：每一項都給出手動確認方式（有 per-rule 指令用指令，
     # 沒有就用分類通用說明）。並明講「重掃後沒出現」不等於修好——也可能是這次沒爬到或被擋。
     appendix["verify_note"] = (

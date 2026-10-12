@@ -19,7 +19,7 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 | `me/avatar/` | `MeAvatarView` | POST（multipart 欄位 `avatar`）上傳大頭貼、DELETE 移除；`avatar_upload` throttle（預設 20/hour） |
 | `change-password/` | `ChangePasswordView` | 僅 email 帳號（Google 帳號無可用密碼） |
 | `password-reset/request/` / `confirm/` | Password reset views | 資料庫只保存 HMAC digest；raw token 只寄信且單次使用 |
-| `turnstile/` | `TurnstileConfigView` | 公開：`{enabled, site_key}`，前端據此決定是否顯示 Turnstile 元件（不回 secret） |
+| `turnstile/` | `TurnstileConfigView` | 公開：`{enabled, site_key}`，前端據此決定是否顯示 Turnstile 元件（不回 secret）；**同時設定 `csrftoken` cookie**（`ensure_csrf_cookie`，登入頁一進來就呼叫） |
 
 ## 重點
 - 認證用 **JWT**（`rest_framework_simplejwt`），**不是 session**。Access token 只存在前端記憶體；refresh token 只放 HttpOnly cookie，禁止寫入 localStorage。
@@ -32,6 +32,7 @@ Claude Code 進 `backend/apps/accounts/` 工作時，本檔在專案層 `CLAUDE.
 - `auth_provider` 由 `has_usable_password()` 推斷（`google` / `email`）。
 - 大頭貼（`User.avatar`）：`avatars.process_avatar` 限 JPG／PNG／WebP、≤ 2 MB、≤ 25M 像素，Pillow 解碼後重新編碼成 256×256 PNG（丟棄 EXIF／ICC／polyglot），檔名 `uuid4().hex`；換圖或移除會刪舊檔。檔案由 `config/urls.py` 的 `serve_avatar`（`/media/avatars/<32 hex>.png`，`nosniff`＋sandbox CSP）提供。`/api/admin/me/` 也回 `avatar_url`（前端導覽列頭像）。
 - **Cloudflare Turnstile（2026-10-03，`turnstile.py`）**：`email-login/`（`login`）、`password-reset/request/`（`password_reset`）與 `content` 的 `partner-inquiries/`（`contact`）在 view 開頭呼叫 `turnstile_rejection(request, action)`，未通過回 403 `{"code": "turnstile_failed"}`。伺服器端 siteverify（httpx、5 秒逾時、`remoteip` 用 `resolve_client_ip`）必須 `success is True`、`action` 相符、`hostname` 在 `TURNSTILE_HOSTNAMES` 內（設定讀取時由 `settings._bare_hostname` 正規化成純主機名：2026-10-03 正式 ConfigMap 曾誤填成 `https://xn--gst.tw`，而 siteverify 回的是 `xn--gst.tw`，會讓該網域所有驗證失敗）；任何例外都視為未通過（fail closed）。`TURNSTILE_SITE_KEY` 與 `TURNSTILE_SECRET` 都有值才啟用，未設定時完全不檢查（本機、CI）。Cloudflare 測試 secret 不回 action、hostname 固定 example.com，**只在 DEBUG** 時以 `metadata.result_with_testing_key` 放行。系統檢查（`checks.py`，一般 `manage.py check` 就跑，migrate Job／initContainer 都會執行）：W001 只設一半（警告，不擋部署——ConfigMap 先放 site key、再補 Secret 的過渡期）、E002 啟用但 hostname 清單空、E003 正式環境 hostname 含 localhost（兩者會讓所有驗證失敗，直接擋下）。只設一半時驗證是停用的，要看部署 log 的 W001。siteverify 逾時 5 秒。Google 登入不加（已有 Google 自己的驗證）。新增受保護的端點時沿用同一函式並給新的 action，前端用 `shared/TurnstileWidget.jsx`。
+- **登入端點驗 CSRF（2026-10-11；2026-10-12 補上 `register/`、`register/google/`）**：`email-login/`、`google/`、`register/`（註冊完成即登入）、`register/google/` 都加 `csrf_protect`，防止其他網站用偽造表單讓訪客登入攻擊者帳號（login CSRF）。前端 `shared/CsrfField.jsx`：送出前 `ensureCsrfCookie()`（沒有 cookie 就先 GET `turnstile/`），token 由 `api.ts` 放 `X-CSRFToken` 標頭；登入表單另有隱藏欄位 `csrfmiddlewaretoken`，讓不執行 JavaScript 的檢查工具看得出有 CSRF 防護。測試用 `Client(enforce_csrf_checks=True)` 時要先 GET `turnstile/` 取 cookie（`LoginCsrfTests`）。
 - dev-login 後門已移除，勿復活。
 - `email-login/` 的狀態碼必須分開：**帳密錯誤回 401**，**欄位缺漏回 400**。
   兩者都回 400 會與 `DisallowedHost`、CSRF 等設定層錯誤同碼，線上排查時無法從

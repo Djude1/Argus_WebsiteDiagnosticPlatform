@@ -11,6 +11,7 @@ import { ArrowLeftIcon, CheckIcon } from "../../shared/ActionIcons";
 import { LockIcon, ScoreIcon, ShieldIcon } from "../../shared/LineIcons";
 import PasswordInput from "../../shared/PasswordInput";
 import { TURNSTILE_FIELD, TurnstileWidget, useTurnstileConfig } from "../../shared/TurnstileWidget";
+import { CsrfField, ensureCsrfCookie } from "../../shared/CsrfField";
 
 function RequireAuth({ children }) {
   const accessToken = useArgusStore((state) => state.accessToken);
@@ -177,6 +178,7 @@ function RegisterDetailsForm({ signup, onDone, onRestart }) {
     }
     setLoading(true);
     try {
+      await ensureCsrfCookie();
       const res = await api.post("/auth/register/", { signup_token: signup.signup_token, handle, password });
       onDone(res.data.access);
     } catch (err) {
@@ -284,6 +286,7 @@ function LoginPage({ googleOAuthEnabled }) {
     setError("");
     setLoading(true);
     try {
+      await ensureCsrfCookie();
       const res = await api.post("/auth/email-login/", withCaptcha({ email: identifier, password }));
       handleToken(res.data.access);
     } catch (err) {
@@ -298,6 +301,7 @@ function LoginPage({ googleOAuthEnabled }) {
   async function googleLogin(credential) {
     setError("");
     try {
+      await ensureCsrfCookie();
       const res = await api.post("/auth/google/", { credential });
       handleToken(res.data.access);
     } catch (err) {
@@ -316,6 +320,7 @@ function LoginPage({ googleOAuthEnabled }) {
   async function googleRegister(credential) {
     setError("");
     try {
+      await ensureCsrfCookie();
       const res = await api.post("/auth/register/google/", { credential });
       setSignup(res.data);
       setNotice("");
@@ -382,6 +387,7 @@ function LoginPage({ googleOAuthEnabled }) {
             )}
             <AuthError>{error}</AuthError>
             <form className="auth-form" onSubmit={handleLogin}>
+              <CsrfField />
               <AuthField id={`${uid}-identifier`} label="Email 或用戶名">
                 <input
                   id={`${uid}-identifier`}
