@@ -1,0 +1,107 @@
+/* 會員工作區的行動版收斂；保留既有桌面側邊欄、卡片與主題轉換。 */
+.project-mobile-toggle { display: none; }
+.project-sidebar-content { display: contents; }
+
+@media (max-width: 1023px) {
+  .project-shell { gap: 1rem; }
+  .project-mobile-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    min-height: 48px;
+    padding: 0.6rem 0.75rem;
+    border: 0;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+  .project-mobile-toggle svg { width: 20px; height: 20px; flex: none; }
+  .project-mobile-toggle small { margin-left: auto; font-size: 0.8rem; font-weight: 500; }
+  .project-mobile-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .project-sidebar-content { display: none; }
+  .project-sidebar.is-open .project-sidebar-content { display: block; }
+  .project-sidebar-head { margin-top: 0.75rem; }
+  .project-sidebar-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    overflow: visible;
+  }
+  .project-sidebar-link { min-width: 0; min-height: 44px; padding: 0.5rem; }
+  .project-sidebar-link-text { overflow-wrap: anywhere; }
+  .project-sidebar-link-label { font-size: 0.875rem; }
+  .project-sidebar .project-plan-card { display: block; margin-top: 0.75rem; }
+  .project-sidebar-footer { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+  .project-sidebar-footer a { display: inline-flex; align-items: center; min-height: 44px; }
+  .argus-main { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (max-width: 640px) {
+  .argus-main { padding-inline: 0.75rem; }
+  .project-page,
+  .project-main,
+  .project-hero,
+  .project-hero-id,
+  .project-hero-aside,
+  .project-scan-card,
+  .project-table-wrap,
+  .panel { min-width: 0; max-width: 100%; }
+  .project-breadcrumb { flex-wrap: wrap; overflow-wrap: anywhere; }
+  .project-hero-id { align-items: flex-start; }
+  .project-hero-id .site-favicon.is-xl { width: 48px; height: 48px; }
+  .project-hero-name { font-size: 1.25rem; line-height: 1.5; overflow-wrap: anywhere; }
+  .project-hero-url { overflow-wrap: anywhere; word-break: break-word; }
+  .project-hero-aside { display: flex; flex-direction: column; align-items: stretch; width: 100%; }
+  .project-scan-card { width: 100%; }
+  .project-scan-card-select { min-width: 0; max-width: 100%; width: 100%; font-size: 16px; }
+  .project-kpis,
+  .project-grid-3,
+  .project-grid-3.is-wide-first,
+  .project-create-layout,
+  .project-choice-row,
+  .seo-trends { grid-template-columns: minmax(0, 1fr); }
+  .project-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-section-head { flex-wrap: wrap; gap: 0.5rem; }
+  .project-hero-meta { font-size: 0.8rem; }
+  .dash-cat-row { grid-template-columns: 2rem minmax(0, 1fr) 4rem 2rem; }
+  .dash-cat-trend { display: none; }
+  .dash-count-label { flex-direction: column; gap: 0.1rem; }
+  .project-list-toolbar,
+  .project-filter,
+  .issue-toolbar-group { flex-wrap: wrap; }
+  .project-table-wrap { overscroll-behavior-x: contain; }
+  .project-table { min-width: 640px; }
+  .project-registry { min-width: 760px; }
+  .project-create-aside { position: static; }
+  .category-card { grid-template-columns: minmax(0, 1fr) auto; gap: 0.3rem 0.5rem; min-height: 58px; }
+  .category-card .scope-title { grid-column: 1; }
+  .category-card .scope-desc { grid-column: 1; font-size: 0.8rem; }
+  .category-card .scope-meta { grid-column: 2; grid-row: 1 / 3; font-size: 0.8rem; }
+  .input,
+  select,
+  textarea { min-width: 0; max-width: 100%; font-size: 16px; }
+  .primary-button,
+  .secondary-button,
+  .project-chip,
+  .scan-subnav-tab { min-height: 44px; }
+  .scan-subnav { min-width: 0; }
+  .scan-subnav-tabs {
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .scan-subnav-tab { display: inline-flex; align-items: center; flex: none; white-space: nowrap; }
+  .scan-inspector { grid-template-columns: minmax(0, 1fr); }
+  .finding-group-list { max-height: 45dvh; }
+  .scan-report-download { width: 100%; justify-items: stretch; }
+  .scan-report-download-button { min-height: 44px; justify-content: center; }
+  .project-demo-banner { flex-direction: column; align-items: stretch; }
+  .project-demo-actions { flex-wrap: wrap; }
+}

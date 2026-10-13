@@ -8,13 +8,13 @@
 import { useEffect, useRef, useState } from "react";
 
 export function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
-  );
+  // 首次接手須與預先渲染相同，掛載後立即套用裝置偏好。
+  const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     if (!media) return undefined;
     const update = () => setReduced(media.matches);
+    update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);

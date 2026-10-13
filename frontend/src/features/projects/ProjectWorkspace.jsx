@@ -1,6 +1,6 @@
 // 網站專案工作區的外框：側邊欄（目前專案的功能）＋主內容，以及所有專案、新增專案與舊入口轉址。
 // 資料關係與頁面架構見 docs/adr/0003-site-project-workspace.md。
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api, fetchVerifiedDomains } from "../../api";
@@ -22,6 +22,7 @@ import {
 } from "../../shared/LineIcons";
 import { useArgusStore } from "../../store";
 import PageLoader from "../../shared/PageLoader.jsx";
+import { MenuIcon } from "../../shared/ActionIcons";
 
 // 側邊欄：圖示＋名稱＋一行說明；目前頁用淺色底（不用彩色左邊條）
 const SECTIONS = [
@@ -51,8 +52,27 @@ export function projectPath(projectId, section = "") {
 }
 
 function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuButton = useRef(null);
+  const { pathname } = useLocation();
+  const currentLabel = allProjectsActive ? "所有專案" : SECTIONS.find((item) => item.key === activeSection)?.label || "網站功能";
+  useEffect(() => setMenuOpen(false), [pathname]);
   return (
-    <aside className="project-sidebar" aria-label="網站專案功能">
+    <aside className={`project-sidebar${menuOpen ? " is-open" : ""}`} aria-label="網站專案功能" onKeyDown={(event) => {
+      if (event.key === "Escape" && menuOpen) {
+        setMenuOpen(false);
+        menuButton.current?.focus();
+      }
+    }}>
+      <button type="button" className="project-mobile-toggle" ref={menuButton}
+        aria-expanded={menuOpen} aria-controls={menuId}
+        onClick={() => setMenuOpen((value) => !value)}>
+        <MenuIcon /><span>{currentLabel}</span><small>{menuOpen ? "收合功能" : "切換分頁"}</small>
+      </button>
+      <div id={menuId} className="project-sidebar-content" onClick={(event) => {
+        if (event.target.closest("a")) setMenuOpen(false);
+      }}>
       <div className="project-sidebar-head">
         <div className="project-sidebar-title">
           <SiteFavicon project={project} />
@@ -110,6 +130,7 @@ function ProjectSidebar({ project, activeSection, allProjectsActive = false }) {
         <Link to="/partners">聯絡我們</Link>
         <Link to="/reviews">使用者評論</Link>
       </p>
+      </div>
     </aside>
   );
 }

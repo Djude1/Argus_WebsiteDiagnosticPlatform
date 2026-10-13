@@ -1,7 +1,9 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useId, useRef, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import brandLogo from "../../assets/brand-logo.webp";
 import { useArgusStore } from "../../store";
+import { MenuIcon } from "../../shared/ActionIcons";
 
 // 全站頂部導覽列：公開頁（PublicLayout）與登入後頁面（TopNav）共用同一個外殼，
 // 視覺以公開頁為準（.public-nav 系列樣式，見 21-public.css／35-public-legacy.css）。
@@ -27,13 +29,17 @@ function ThemeToggleIcon({ theme }) {
 export function SiteThemeToggle() {
   const theme = useArgusStore((s) => s.theme);
   const toggleTheme = useArgusStore((s) => s.toggleTheme);
-  const label = theme === "light" ? "切換至夜間模式" : "切換至日間模式";
+  // 預先渲染採夜間狀態；掛載後才顯示瀏覽器偏好，避免 hydrate 時重畫導覽。
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const visibleTheme = mounted ? theme : "dark";
+  const label = visibleTheme === "light" ? "切換至夜間模式" : "切換至日間模式";
   return (
     <button type="button" className="theme-toggle" onClick={toggleTheme} title={label} aria-label={label}>
       <span className="theme-toggle-icon" aria-hidden="true">
-        <ThemeToggleIcon theme={theme} />
+        <ThemeToggleIcon theme={visibleTheme} />
       </span>
-      <span>{theme === "light" ? "夜間" : "日間"}</span>
+      <span>{visibleTheme === "light" ? "夜間" : "日間"}</span>
     </button>
   );
 }
@@ -46,8 +52,18 @@ export function SiteThemeToggle() {
 export default function SiteNav({ items, actions, leading = null, className = "", brandTo = null }) {
   const replayIntro = useArgusStore((s) => s.replayIntro);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuButton = useRef(null);
+  useEffect(() => setMenuOpen(false), [pathname]);
   return (
-    <nav className={`public-nav ${className}`} aria-label="主要導覽">
+    <nav className={`public-nav ${className}`} aria-label="主要導覽" onKeyDown={(event) => {
+      if (event.key === "Escape" && menuOpen) {
+        setMenuOpen(false);
+        menuButton.current?.focus();
+      }
+    }}>
       <div className="public-nav-inner">
         <button
           type="button"
@@ -69,12 +85,13 @@ export default function SiteNav({ items, actions, leading = null, className = ""
         </button>
         {leading}
         {items.length > 0 && (
-        <div className="public-nav-links">
+        <div id={menuId} className={`public-nav-links${menuOpen ? " is-open" : ""}`}>
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
+              onClick={() => setMenuOpen(false)}
               className={({ isActive }) => `public-nav-link ${isActive ? "active" : ""}`}
             >
               {item.label}
@@ -82,7 +99,17 @@ export default function SiteNav({ items, actions, leading = null, className = ""
           ))}
         </div>
         )}
-        <div className="public-nav-cta">{actions}</div>
+        <div className="public-nav-cta">
+          {items.length > 0 && (
+            <button type="button" className="public-menu-toggle" ref={menuButton}
+              aria-expanded={menuOpen} aria-controls={menuId}
+              aria-label={menuOpen ? "收合導覽選單" : "開啟導覽選單"}
+              onClick={() => setMenuOpen((value) => !value)}>
+              <MenuIcon />
+            </button>
+          )}
+          {actions}
+        </div>
       </div>
     </nav>
   );

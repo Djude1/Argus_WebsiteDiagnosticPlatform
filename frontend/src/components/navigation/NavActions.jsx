@@ -34,7 +34,10 @@ export function useLogout() {
 export function ThemeToggle({ className = "" }) {
   const theme = useArgusStore((s) => s.theme);
   const toggleTheme = useArgusStore((s) => s.toggleTheme);
-  const isLight = theme === "light";
+  // 登入頁也會預先渲染，首次接手的圖示須與伺服器輸出一致。
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isLight = mounted && theme === "light";
   const label = isLight ? "切換為夜間主題" : "切換為日間主題";
   return (
     <button
@@ -71,6 +74,7 @@ function AccountMenu() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const menuId = useId();
+  const { canInstall, installed, trigger } = useInstallPrompt();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -128,6 +132,12 @@ function AccountMenu() {
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/billing")}>
             <CoinIcon /> 購點與訂閱
           </button>
+          {canInstall && !installed && (
+            <button type="button" role="menuitem" className="app-account-item app-mobile-install"
+              onClick={() => { setOpen(false); trigger(); }}>
+              <DownloadIcon /> 安裝 APP
+            </button>
+          )}
           {me?.is_staff && (
             <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/admin")}>
               <ShieldAdminIcon /> 管理後台

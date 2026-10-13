@@ -1,5 +1,7 @@
 # 專案記憶索引
 
+- [2026-10 行動版 RWD 與導覽](memory/mobile-rwd.md) — 公開／專案選單、手機工具列、表單與表格、PWA 安全邊界及視覺驗證範圍。
+
 - [2026-10 系統手冊第 9 章程式碼選錄](memory/system-manual-chapter9-code-selection.md) — 六段核心程式碼來源、可複製 Word 文件、原手冊第9章擷取與重排、AEO 計分新條件及最新專案路由。
 - [2026-10 系統手冊第 3 章核對](memory/system-manual-chapter3-review.md) — 五維與專案資料關聯、PDF 報告流程、前端測試的 Node 版本邊界及文件修訂依據。
 - [2026-08 日間主題光學反相重設計](memory/daylight-theme-redesign.md) — 日／夜角色對稱、Logo 呈現、公開導覽斷點、SVG 主題圖示與視覺 QA 決策。

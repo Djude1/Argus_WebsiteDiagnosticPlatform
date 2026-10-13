@@ -1,0 +1,133 @@
+/* 行動裝置的共用導覽與 PWA 安全邊界；會員內容另由 legacy-member/97-responsive.css 處理。 */
+.public-menu-toggle,
+.app-mobile-install {
+  display: none;
+}
+.public-nav {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.argus-app {
+  min-height: 100dvh;
+}
+.argus-main {
+  min-width: 0;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 920px) {
+  .public-nav:not(.is-member) .public-menu-toggle {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--ag-border-strong);
+    border-radius: var(--ag-r-md);
+    background: var(--ag-surface-2);
+    color: var(--ag-text);
+    cursor: pointer;
+  }
+  .public-menu-toggle svg { width: 22px; height: 22px; }
+  .public-menu-toggle:focus-visible { outline: 2px solid var(--ag-focus); outline-offset: 2px; }
+  .public-nav:not(.is-member) .public-nav-links { display: none; }
+  .public-nav:not(.is-member) .public-nav-links.is-open {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+    max-height: 65dvh;
+    overflow-y: auto;
+    padding-block: 0.5rem;
+  }
+  .public-nav:not(.is-member) .public-nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    white-space: normal;
+  }
+  .public-nav-inner {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  .project-switcher-menu,
+  .nav-popover,
+  .app-account-menu {
+    max-height: 65dvh;
+    overflow-y: auto;
+  }
+  .project-switcher-menu { max-width: calc(100vw - 2rem); }
+  .nav-command-backdrop { padding-top: max(1rem, env(safe-area-inset-top, 0px)); }
+  .nav-command { max-height: 85dvh; }
+}
+
+@media (max-width: 640px) {
+  /* 第一列品牌與帳號，第二列網站名稱與工具；避免切換器被餘額擠成圖示。 */
+  .public-nav.is-member .public-nav-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding: 0.5rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.5rem max(0.75rem, env(safe-area-inset-left, 0px));
+  }
+  .public-nav.is-member .public-brand { min-width: 0; }
+  .public-nav.is-member .public-brand-logo { height: 40px; }
+  .public-nav.is-member .public-nav-cta { grid-column: 1 / -1; grid-row: 1; justify-self: end; gap: 0.25rem; }
+  .public-nav.is-member .project-switcher {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+  }
+  .public-nav.is-member .project-switcher-trigger { min-height: 44px; }
+  .public-nav.is-member .project-switcher-name { font-size: 0.875rem; }
+  .public-nav.is-member .project-switcher-caret { display: block; }
+  .public-nav.is-member .nav-search-row {
+    grid-column: 2;
+    grid-row: 2;
+    gap: 0.25rem;
+  }
+  .public-nav.is-member .nav-search {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    flex: none;
+    padding: 0;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .public-nav.is-member .nav-search-text,
+  .public-nav.is-member .nav-search-kbd {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .public-nav.is-member .theme-toggle,
+  .public-nav.is-member .nav-icon-button,
+  .public-nav.is-member .nav-tool-link,
+  .public-nav.is-member .app-account-trigger {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .public-nav.is-member .app-nav-actions { gap: 0.25rem; }
+  .public-nav.is-member .app-coin-chip { height: 44px; max-width: 108px; }
+  .app-coin-chip-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .public-nav.is-member .app-install-chip { display: none; }
+  .app-mobile-install { display: flex; }
+  .public-nav.is-member .nav-popover {
+    /* 通知鈴不是最右側的按鈕，靠視窗右邊定位才不會超出左邊界。 */
+    position: fixed;
+    inset: auto 0.75rem auto;
+    top: calc(60px + env(safe-area-inset-top, 0px));
+    width: auto;
+  }
+  .project-switcher-menu { width: calc(100vw - 1.5rem); max-width: none; }
+  .project-switcher-item,
+  .project-switcher-gear,
+  .app-account-item { min-height: 44px; }
+  .argus-main input:not([type="checkbox"]):not([type="radio"]),
+  .argus-main select,
+  .argus-main textarea { font-size: 16px; }
+  .argus-main:not(.is-public):not(.is-admin) { padding-inline: 0.75rem; }
+  .public-shell .public-section-head h2 { font-size: clamp(1.6rem, 7vw, 2.25rem); }
+  .public-shell .public-hero-actions { flex-wrap: wrap; }
+}
