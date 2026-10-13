@@ -17,6 +17,7 @@ import { useArgusStore } from "../../store";
 // 產品介紹；產品介紹與評論改由側邊欄底部連結進入）。品牌標誌回到所有專案。
 // 2026-10-04：網域驗證與 MCP 接入是帳號層級工具，放在搜尋框右側的工具連結（不藏在頭像選單、
 // 也不放側邊欄——側邊欄已經夠長）；中等寬度只留圖示，窄螢幕與搜尋框同一列（.nav-search-row）。
+// 2026-10-13：頭像選單加入「首頁」，回到公開產品介紹 /project，保留登入狀態。
 const NAV_ITEMS = [];
 const NAV_TOOLS = [
   { to: "/domains", label: "網域驗證", Icon: ShieldIcon },

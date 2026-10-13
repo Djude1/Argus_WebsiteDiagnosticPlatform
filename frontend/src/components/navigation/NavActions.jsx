@@ -14,6 +14,7 @@ import {
 import {
   CoinIcon,
   GearIcon,
+  HomeIcon,
 } from "../../shared/LineIcons";
 
 /** 登出：先通知後端撤銷 refresh cookie，無論成功與否都清掉前端 token 並回登入頁。 */
@@ -126,6 +127,9 @@ function AccountMenu() {
               {me?.email && me.email !== displayName ? <small>{me.email}</small> : null}
             </span>
           </div>
+          <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/project")}>
+            <HomeIcon /> 首頁
+          </button>
           <button type="button" role="menuitem" className="app-account-item" onClick={() => go("/settings")}>
             <GearIcon /> 帳號設定
           </button>
