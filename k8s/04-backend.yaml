@@ -47,7 +47,7 @@ metadata:
   name: web
   namespace: argus
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: web
@@ -122,7 +122,7 @@ metadata:
   name: worker
   namespace: argus
 spec:
-  replicas: 2 # RWX media 已可跨節點，移除原本綁 web 同節點的 podAffinity
+  replicas: 3 # RWX media 已可跨節點，移除原本綁 web 同節點的 podAffinity
   selector:
     matchLabels:
       app: worker
