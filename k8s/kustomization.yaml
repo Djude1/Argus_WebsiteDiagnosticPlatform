@@ -26,7 +26,7 @@ resources:
 images:
 - name: shijie85/argus-backend
   newName: shijie85/argus-backend
-  newTag: sha-2e8407f
+  newTag: sha-d253ef8
 - name: shijie85/argus-frontend
   newName: shijie85/argus-frontend
   newTag: sha-b81fe6a
