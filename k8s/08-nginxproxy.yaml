@@ -15,4 +15,4 @@ metadata:
 spec:
   kubernetes:
     deployment:
-      replicas: 2
+      replicas: 3
