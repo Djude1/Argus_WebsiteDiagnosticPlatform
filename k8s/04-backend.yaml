@@ -151,7 +151,9 @@ spec:
       containers:
         - name: worker
           image: shijie85/argus-backend:latest
-          command: ["/app/.venv/bin/celery", "-A", "config", "worker", "-l", "info"]
+          # 併發數寫死：不指定時 Celery 依節點 CPU 核心數開子程序，每個子程序同時跑一個掃描（各帶一個 Chromium），
+          # 會撐爆 3Gi 記憶體上限。prefetch=1：避免一個 worker 先搶走多個掃描、其他 worker 閒置。
+          command: ["/app/.venv/bin/celery", "-A", "config", "worker", "-l", "info", "--concurrency=2", "--prefetch-multiplier=1"]
           envFrom:
             - configMapRef:
                 name: argus-config

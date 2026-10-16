@@ -61,6 +61,31 @@ class K8sRuntimeCommandsTest(unittest.TestCase):
         self.assertIsNotNone(grace, "worker 必須明確設定 terminationGracePeriodSeconds")
         self.assertGreaterEqual(grace, 600)
 
+    def test_worker_concurrency_is_bounded(self):
+        """每個子程序同時跑一個掃描（各帶一個 Chromium）。
+
+        不指定 --concurrency 時 Celery 依節點 CPU 核心數開子程序，核心多的節點會同時開很多
+        Chromium、撐爆記憶體上限；prefetch 不設 1 時，一個 worker 會先保留多個掃描，其他
+        worker 閒置。
+        """
+        import yaml
+
+        documents = [
+            d
+            for d in yaml.safe_load_all(
+                (Path(__file__).resolve().parents[1] / "k8s" / "04-backend.yaml")
+                .read_text(encoding="utf-8")
+            )
+            if d
+        ]
+        worker = next(
+            d for d in documents
+            if d["kind"] == "Deployment" and d["metadata"]["name"] == "worker"
+        )
+        command = worker["spec"]["template"]["spec"]["containers"][0]["command"]
+        self.assertIn("--concurrency=2", command)
+        self.assertIn("--prefetch-multiplier=1", command)
+
     def test_stale_scan_reaper_cronjob_exists(self):
         """grace period 擋不住 OOM 與節點故障，仍需要定期回收。"""
         import yaml
