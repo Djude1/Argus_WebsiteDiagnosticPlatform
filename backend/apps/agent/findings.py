@@ -9,9 +9,143 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable
+from difflib import SequenceMatcher
+from urllib.parse import urlsplit
 
 from apps.scans.models import Finding, Page, ScanJob
+
+# Agent 資安觀察的規則代號前綴。2026-10-16 前所有回報共用 "agent-observed-security" 這一個代號，
+# 計分、優先處理、報告與歷史比較都以代號判斷「同一個問題」，於是一次掃描只有第一筆會被計分；
+# ntubimdbirc.tw 實測「嚴重」的 Swagger 外洩因此被同主題的「中」那筆擋掉、沒進優先處理。
+AGENT_SECURITY_RULE = "agent-observed-security"
+
+# 弱點類型：同一端點、同一類型才算同一個問題（端點相同但一個是 SQL 注入、一個是缺頻率限制，
+# 修法不同，不能合併）。依序比對，第一個命中者勝出。
+_VULN_CLASSES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("sqli", ("sql injection", "sql 注入", "sqli", "sqlmap")),
+    ("xss", ("xss", "跨站腳本", "cross-site scripting")),
+    ("injection", ("注入", "injection", "ssti", "xxe", "command execution", "指令執行")),
+    ("ssrf", ("ssrf", "伺服器端請求偽造")),
+    ("redirect", ("open redirect", "開放轉址", "開放重新導向")),
+    ("upload", ("上傳", "upload")),
+    ("jwt", ("jwt", "token 偽造", "簽章")),
+    ("idor", ("idor", "越權", "水平權限", "他人資料", "broken object")),
+    ("auth", ("未授權", "未登入", "認證", "驗證繞過", "unauthorized", "unauthenticated",
+              "authentication", "暴力", "brute", "密碼重設", "帳號接管")),
+    ("csrf", ("csrf", "跨站請求偽造")),
+    ("cors", ("cors",)),
+    ("exposure", ("外洩", "洩漏", "暴露", "曝露", "公開", "exposure", "disclosure", "leak",
+                  "swagger", "openapi", "api-docs", "堆疊", "stack trace", "debug")),
+)
+
+# 公開的索引檔：本來就要給所有人讀，列出登入頁也不算弱點（登入頁本身就公開）。
+_PUBLIC_INDEX_FILE = re.compile(r"^/(robots\.txt|sitemap[\w.-]*\.xml(\.gz)?)$", re.I)
+
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+# 標題相似到這個程度、而且同一類型，就視為同一個問題換句話說
+_TITLE_SIMILARITY = 0.6
+
+
+def endpoint_path(url: str) -> str:
+    """回報網址的路徑（小寫、去掉查詢字串與結尾斜線）。
+
+    Agent 偶爾寫成「網址 (or …)」，只取第一段。
+    """
+    raw = (url or "").strip().split()[0] if (url or "").strip() else ""
+    if not raw:
+        return ""
+    path = urlsplit(raw).path if "://" in raw else raw.split("?", 1)[0]
+    path = path.lower().rstrip("/")
+    return path or "/"
+
+
+def is_public_index_file(url: str) -> bool:
+    return bool(_PUBLIC_INDEX_FILE.match(endpoint_path(url)))
+
+
+def vuln_class(title: str, description: str = "") -> str:
+    text = f"{title} {description}".lower()
+    for name, keywords in _VULN_CLASSES:
+        if any(keyword in text for keyword in keywords):
+            return name
+    return "other"
+
+
+def agent_security_rule_id(title: str, description: str, url: str) -> str:
+    """每個 Agent 資安觀察自己的規則代號：弱點類型＋端點路徑（沒有端點時用標題）。
+
+    不把標題放進有端點時的雜湊：同一個問題每次掃描的措辭都不同，換掉一個字就會變成
+    「新問題」，歷史比較就失去意義。
+    """
+    cls = vuln_class(title, description)
+    anchor = endpoint_path(url) or _normalize_title(title)
+    digest = hashlib.sha1(f"{cls}|{anchor}".encode()).hexdigest()[:10]
+    return f"{AGENT_SECURITY_RULE}-{digest}"
+
+
+def is_agent_security_rule(rule_id: str | None) -> bool:
+    return (rule_id or "").startswith(AGENT_SECURITY_RULE)
+
+
+def _normalize_title(title: str) -> str:
+    return re.sub(r"[\W_]+", "", (title or "").lower())
+
+
+def same_issue(a: dict, b: dict) -> bool:
+    if a.get("rule_id") == b.get("rule_id"):
+        return True
+    if vuln_class(a.get("title", ""), a.get("description", "")) != vuln_class(
+        b.get("title", ""), b.get("description", "")
+    ):
+        return False
+    ratio = SequenceMatcher(
+        None, _normalize_title(a.get("title", "")), _normalize_title(b.get("title", ""))
+    ).ratio()
+    return ratio >= _TITLE_SIMILARITY
+
+
+def rank(finding: dict) -> tuple[int, int]:
+    """越小越該保留：嚴重度高、已用工具驗證的優先。"""
+    evidence_json = finding.get("evidence_json") or {}
+    return (
+        _SEVERITY_ORDER.get(finding.get("severity", "low"), 9),
+        0 if evidence_json.get("tool_verified") else 1,
+    )
+
+
+def consolidate_security_findings(findings: Iterable[dict]) -> list[dict]:
+    """同一次掃描裡，不同專家對同一個問題的多次回報合併成一筆。
+
+    同一個問題＝規則代號相同（同類型＋同端點），或同類型且標題相近。保留最嚴重、
+    已驗證的那筆，其餘併入（`evidence_json.merged_reports` 記合併了幾次回報）。
+    非 Agent 觀察（例如 sqlmap 確認的注入）原樣保留。
+    """
+    kept: list[dict] = []
+    for finding in findings:
+        if not is_agent_security_rule(finding.get("rule_id")):
+            kept.append(finding)
+            continue
+        match = next(
+            (
+                idx
+                for idx, existing in enumerate(kept)
+                if is_agent_security_rule(existing.get("rule_id"))
+                and same_issue(existing, finding)
+            ),
+            None,
+        )
+        if match is None:
+            kept.append(finding)
+            continue
+        existing = kept[match]
+        merged = 1 + int((existing.get("evidence_json") or {}).get("merged_reports", 1))
+        winner = finding if rank(finding) < rank(existing) else existing
+        winner = dict(winner)
+        winner["evidence_json"] = {**(winner.get("evidence_json") or {}), "merged_reports": merged}
+        kept[match] = winner
+    return kept
 
 UX_HANDOFF_TEMPLATE = """我網站有以下 UX 問題，請協助我分析並提供修復方向：
 - 問題類型: ux
@@ -123,7 +257,8 @@ def persist_agent_security_findings(
 
     - findings 為 `scanners.make_finding` 產生的 dict（欄位對應 Finding model）。
     - 套 `owasp_mapper.tag` 補 OWASP/CWE，使與 pipeline 的 kali finding 標籤一致。
-    - 依 description 去重（description 內含具體 URL），避免 agent 多輪對同一 URL 重複記錄。
+    - 先以 `consolidate_security_findings` 合併同一個問題的多次回報；sqlmap 結果依 description
+      去重（description 內含具體 URL），避免 agent 多輪對同一 URL 重複記錄。
     - 任一筆失敗只跳過該筆，不影響其他（silent-fail），不讓 agent 例外拖垮掃描。
     """
     from apps.scans.security import owasp_mapper
@@ -134,7 +269,15 @@ def persist_agent_security_findings(
             "description", flat=True
         )
     )
-    for raw in findings:
+    # 已落地的 Agent 觀察代號：同一個問題不重複寫入（正常只會呼叫一次，防重複呼叫）
+    seen_rules = set(
+        scan_job.findings.filter(rule_id__startswith=AGENT_SECURITY_RULE).values_list(
+            "rule_id", flat=True
+        )
+    )
+    for raw in consolidate_security_findings(findings):
+        if is_agent_security_rule(raw.get("rule_id")) and raw.get("rule_id") in seen_rules:
+            continue
         try:
             tagged = owasp_mapper.tag(dict(raw))
             desc = tagged.get("description", "")
@@ -143,6 +286,7 @@ def persist_agent_security_findings(
             obj = Finding.objects.create(scan_job=scan_job, page=None, **tagged)
             created.append(obj)
             seen.add(desc)
+            seen_rules.add(obj.rule_id)
         except Exception:  # noqa: BLE001 — 單筆落地失敗不影響其他 finding 與主掃描
             continue
     return created

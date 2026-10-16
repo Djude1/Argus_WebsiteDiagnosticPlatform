@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 from asgiref.sync import sync_to_async
 from config.egress import playwright_launch_kwargs
 from django.conf import settings
+from django.db.models import Q
 from playwright.async_api import async_playwright
 
 from apps.scans.models import ScanJob
@@ -29,7 +30,12 @@ from apps.scans.services import (
     assert_public_websocket_url,
 )
 
-from .findings import persist_agent_issues, persist_agent_security_findings
+from .findings import (
+    AGENT_SECURITY_RULE,
+    consolidate_security_findings,
+    persist_agent_issues,
+    persist_agent_security_findings,
+)
 from .loop import AgentRunResult, HermesAgent
 from .providers import ProviderChain, build_default_chain
 from .tools import ToolExecutor, build_tool_schemas
@@ -675,7 +681,7 @@ async def run_agent_for_scan(
             f.title
             for f in await sync_to_async(list)(
                 scan_job.findings.filter(
-                    rule_id__in=("agent-observed-security", "kali-sqlmap-sqli")
+                    Q(rule_id__startswith=AGENT_SECURITY_RULE) | Q(rule_id="kali-sqlmap-sqli")
                 )[:20]
             )
         ]
@@ -731,6 +737,8 @@ async def run_agent_for_scan(
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)
     if result and result.security_findings:
+        # 計分（tasks.stage_agent 讀 result.security_findings）與落地用同一份合併後的清單
+        result.security_findings = consolidate_security_findings(result.security_findings)
         await sync_to_async(persist_agent_security_findings)(
             scan_job, result.security_findings
         )

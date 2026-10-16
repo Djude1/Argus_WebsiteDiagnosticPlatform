@@ -64,7 +64,7 @@ BUILTIN_SENSITIVE_PATHS: tuple[str, ...] = (
     "actuator", "actuator/env", "actuator/env.json", "actuator/health.json",
     "actuator/info.json", "actuator/heapdump", "actuator/mappings",
     # API 文件 / 端點
-    "swagger.json", "swagger.yaml", "openapi.json", "api-docs", "v2/api-docs",
+    "swagger.json", "swagger.yaml", "openapi.json", "api-docs", "v2/api-docs", "v3/api-docs",
     "api/graphql", "graphql",
     "api/debug/users.json", "api/v1/users.json", "api/v1/profile.json",
     "api/internal/config.json", "api/internal/health.json",
@@ -78,6 +78,40 @@ BUILTIN_SENSITIVE_PATHS: tuple[str, ...] = (
     ".well-known/security.txt", "humans.txt", ".claude/launch.json",
     "admin/", "administrator/", "wp-admin/", "wp-login.php",
 )
+
+
+# API 前綴底下也探測的 API 文件路徑（2026-10-16）。網站常把後端放在反向代理前綴後面
+# （ntubimdbirc.tw：Next.js 把 /api_proxy/* 轉到 Spring Boot，規格在 /api_proxy/v3/api-docs），
+# 只探測網站根目錄就找不到；這項外洩原本只有 AI Agent 偶然發現，三次掃描只找到一次。
+# 只放回傳 JSON 的規格檔：Swagger UI 是 HTML，會被 soft-404 判斷當成 SPA 預設頁。
+API_DOC_SUFFIXES: tuple[str, ...] = (
+    "v3/api-docs", "v2/api-docs", "api-docs", "swagger.json", "openapi.json",
+)
+MAX_API_PREFIXES = 5
+# 前端資源目錄，不是 API 前綴
+_NON_API_SEGMENTS = {"_next", "static", "assets", "images", "img", "css", "js", "fonts", "media"}
+
+
+def api_prefixes(paths: list[str]) -> list[str]:
+    """從爬取時觀察到的同網站 API 路徑推出前綴（第一段，接版本號時連版本一起），最多 5 個。
+
+    `/api_proxy/news/list` → `/api_proxy/`；`/api/v1/users` → `/api/`、`/api/v1/`。
+    只有一段的路徑（`/graphql`）沒有前綴可推，根目錄字典已涵蓋。
+    """
+    prefixes: list[str] = []
+    for path in paths:
+        segments = [seg for seg in (path or "").split("/") if seg]
+        if len(segments) < 2 or segments[0].lower() in _NON_API_SEGMENTS:
+            continue
+        candidates = [f"/{segments[0]}/"]
+        if re.fullmatch(r"v\d+", segments[1], re.I) and len(segments) > 2:
+            candidates.append(f"/{segments[0]}/{segments[1]}/")
+        for prefix in candidates:
+            if prefix not in prefixes:
+                prefixes.append(prefix)
+        if len(prefixes) >= MAX_API_PREFIXES:
+            break
+    return prefixes[:MAX_API_PREFIXES]
 
 
 def parse_robots_disallow(robots_text: str) -> list[str]:
@@ -102,8 +136,12 @@ def build_probe_targets(
     origin: str,
     *,
     robots_disallow: list[str] | None = None,
+    api_path_prefixes: list[str] | None = None,
 ) -> list[str]:
-    """合併內建字典 + robots Disallow，組出 same-origin 探測 URL（去重、上限）。"""
+    """合併內建字典、API 前綴底下的 API 文件與 robots Disallow，組出 same-origin 探測 URL。
+
+    去重、上限 MAX_PROBE_TARGETS。
+    """
     targets: list[str] = []
     seen: set[str] = set()
 
@@ -123,6 +161,9 @@ def build_probe_targets(
 
     for path in BUILTIN_SENSITIVE_PATHS:
         _add(path)
+    for prefix in (api_path_prefixes or [])[:MAX_API_PREFIXES]:
+        for suffix in API_DOC_SUFFIXES:
+            _add(prefix.rstrip("/") + "/" + suffix)
     for path in robots_disallow or []:
         _add(path)
     return targets[:MAX_PROBE_TARGETS]
@@ -475,6 +516,7 @@ async def probe_paths(
     scan_job_id: int,
     *,
     robots_disallow: list[str] | None = None,
+    api_path_prefixes: list[str] | None = None,
 ) -> list[dict]:
     """重用 Playwright（繞 CF）探測敏感路徑，回傳 raw 結果。任何例外回 []（不影響主掃描）。
 
@@ -504,6 +546,7 @@ async def probe_paths(
                 targets = build_probe_targets(
                     origin,
                     robots_disallow=effective_robots_disallow,
+                    api_path_prefixes=api_path_prefixes,
                 )
                 baselines = await _soft_404_baselines(requester, origin)
                 for url in targets:

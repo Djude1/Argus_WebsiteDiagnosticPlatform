@@ -380,14 +380,63 @@ class ToolExecutorTests(TestCase):
         self.assertEqual(outcome.security_finding["severity"], "medium")
 
     def test_security_issue_verified_with_tool_keeps_critical(self):
-        # 真的用主動工具確認過 + verified=true → 保留 critical
+        # 真的用主動工具確認過同一個端點 + verified=true → 保留 critical
         executor, _ = self._make_executor()
-        executor._active_confirmations.add("replay_request")
+        executor._track_verification(
+            "replay_request", ToolOutcome(ok=True, result={}),
+            "https://example.com/rest/user/login?x=1",
+        )
         outcome = asyncio.run(
             executor.run("report_security_issue", self._security_args(verified=True))
         )
         self.assertEqual(outcome.security_finding["severity"], "critical")
         self.assertTrue(outcome.security_finding["evidence_json"]["tool_verified"])
+
+    def test_security_issue_verified_on_other_endpoint_still_capped(self):
+        # 2026-10-16：工具成功打過的是別的端點，不能拿來證明這一筆
+        executor, _ = self._make_executor()
+        executor._track_verification(
+            "replay_request", ToolOutcome(ok=True, result={}), "https://example.com/sitemap.xml"
+        )
+        outcome = asyncio.run(
+            executor.run("report_security_issue", self._security_args(verified=True))
+        )
+        self.assertEqual(outcome.security_finding["severity"], "medium")
+        self.assertFalse(outcome.security_finding["evidence_json"]["tool_verified"])
+        self.assertIn("未經工具或人工驗證", outcome.security_finding["description"])
+
+    def test_security_issue_on_public_index_file_rejected(self):
+        # robots.txt／sitemap 是公開索引，列出登入頁不算資安問題
+        executor, _ = self._make_executor()
+        for url in ("https://example.com/sitemap.xml", "https://example.com/sitemap-0.xml",
+                    "https://example.com/robots.txt"):
+            with self.subTest(url=url):
+                outcome = asyncio.run(executor.run(
+                    "report_security_issue",
+                    self._security_args(severity="medium", title="sitemap 洩漏後台登入路徑",
+                                        url=url),
+                ))
+                self.assertFalse(outcome.ok)
+                self.assertIsNone(outcome.security_finding)
+                self.assertEqual(outcome.result["error"], "not_a_security_issue")
+
+    def test_security_issue_rule_id_is_per_issue(self):
+        # 每個問題自己的代號：同類型＋同端點相同，換端點或換類型就不同
+        executor, _ = self._make_executor()
+
+        def rule(**kw):
+            return asyncio.run(
+                executor.run("report_security_issue", self._security_args(**kw))
+            ).security_finding["rule_id"]
+
+        base = rule()
+        self.assertTrue(base.startswith("agent-observed-security-"))
+        self.assertEqual(base, rule(title="登入頁可用 SQL 注入繞過密碼"))
+        self.assertNotEqual(base, rule(url="https://example.com/rest/products/search"))
+        self.assertNotEqual(
+            base,
+            rule(title="登入 API 公開完整錯誤堆疊", description="回應含 stack trace"),
+        )
 
 
 class RedactToolDataTests(TestCase):
@@ -1141,6 +1190,59 @@ class PersistAgentSecurityFindingsTests(TestCase):
         obj = Finding.objects.get(scan_job=self.scan_job, rule_id="kali-sqlmap-sqli")
         self.assertEqual(obj.category, "security")
         self.assertEqual(obj.owasp_category, "A03")  # owasp_mapper 對 kali-sqlmap-sqli 的對映
+
+    def _observed(self, title, url, severity="medium", verified=False, description="外洩"):
+        from apps.agent.findings import agent_security_rule_id
+        from apps.scans.scanners import make_finding
+
+        return make_finding(
+            category="security", severity=severity,
+            rule_id=agent_security_rule_id(title, description, url),
+            title=title, description=f"AI Agent 在實際操作網站時觀察到：{description}",
+            remediation="", evidence="200 OK", impact_area="vulnerability",
+            evidence_json={"tool_verified": verified},
+        )
+
+    def test_same_issue_reported_by_several_specialists_is_merged(self):
+        # ntubimdbirc.tw 2026-10-16：偵察與資訊洩漏專家各回報一次 Swagger 外洩，
+        # 一筆嚴重（已驗證）、一筆中（端點寫成「/swagger (or …)」），清單列兩次
+        critical = self._observed(
+            "完整 OpenAPI / Swagger 規格公開暴露（含內部 IP）",
+            "https://ntubimdbirc.tw/api_proxy/v3/api-docs", severity="critical", verified=True,
+        )
+        medium = self._observed(
+            "完整 OpenAPI/Swagger 規格公開暴露（含內部 IP 位址）",
+            "https://ntubimdbirc.tw/swagger (or /openapi.json / /v3/api-docs)",
+        )
+        created = persist_agent_security_findings(self.scan_job, [medium, critical])
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0].severity, "critical")
+        self.assertEqual(created[0].evidence_json["merged_reports"], 2)
+
+    def test_different_issues_keep_their_own_rule_ids(self):
+        swagger = self._observed("API 文件公開", "https://example.com/v3/api-docs")
+        upload = self._observed(
+            "上傳檔案可直接執行", "https://example.com/upload", description="上傳 .php 可執行"
+        )
+        created = persist_agent_security_findings(self.scan_job, [swagger, upload])
+        self.assertEqual(len(created), 2)
+        self.assertEqual(len({f.rule_id for f in created}), 2)
+
+    def test_scoring_and_top_actions_count_every_agent_issue(self):
+        # 舊版所有 Agent 觀察共用一個代號，計分只留第一筆：嚴重那筆不扣分也不進優先處理
+        from apps.agent.findings import consolidate_security_findings
+        from apps.scans.scanners import calculate_scores
+
+        findings = consolidate_security_findings([
+            self._observed("sitemap 以外的小問題", "https://example.com/a", severity="low"),
+            self._observed(
+                "完整 OpenAPI 規格公開暴露", "https://example.com/v3/api-docs",
+                severity="critical", verified=True,
+            ),
+        ])
+        _, _, top_actions = calculate_scores(findings, tested_categories={"security"})
+        self.assertEqual(top_actions[0]["severity"], "critical")
+        self.assertEqual(len(top_actions), 2)
 
 
 # ---------------- loop ----------------

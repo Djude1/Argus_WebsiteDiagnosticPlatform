@@ -67,6 +67,8 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     # 被動 API 檢查（api_scanner）
     "api-error-stack-trace": ("A05", "CWE-209"),
     "api-cors-wildcard": ("A05", "CWE-942"),
+    # 表單欄位（form_scanner）
+    "form-password-unmasked": ("A04", "CWE-549"),
 }
 
 

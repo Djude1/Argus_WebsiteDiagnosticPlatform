@@ -61,6 +61,7 @@ from apps.scans.security.content_injection import (
 )
 from apps.scans.security.cookie_scanner import analyze_cookies
 from apps.scans.security.dns_scanner import analyze_dns
+from apps.scans.security.form_scanner import analyze_password_fields
 from apps.scans.security.header_scanner import analyze_headers
 from apps.scans.security.js_library_scanner import analyze_js_libraries
 from apps.scans.security.kali_tools import validate_findings_with_kali
@@ -789,7 +790,7 @@ def _analyze_one_page(page: Page, page_data: dict, category: str) -> list[dict]:
         ),
         categories={category},
     )
-    # Inline/HTML 硬編碼秘鑰偵測＋AI 提示詞注入（被動：只解析已抓到的 HTML，不發額外請求）
+    # Inline/HTML 硬編碼秘鑰偵測＋AI 提示詞注入＋密碼欄位未遮蔽（被動：只解析已抓到的 HTML）
     if category == "security":
         secrets = detect_secrets_in_text(page.html)
         location = page.final_url or page.url
@@ -801,6 +802,9 @@ def _analyze_one_page(page: Page, page_data: dict, category: str) -> list[dict]:
         ):
             if secret_finding:
                 page_findings.append(owasp_mapper.tag(secret_finding))
+        page_findings.extend(
+            owasp_mapper.tag(f) for f in analyze_password_fields(page.html, location)
+        )
     return page_findings
 
 
@@ -1307,6 +1311,17 @@ def stage_zap_passive(ctx: ScanRunContext) -> None:
     )
 
 
+def _observed_api_paths(ctx: ScanRunContext) -> list[str]:
+    """爬取時觀察到的同網站 API 路徑：被動 API 檢查的回應摘要＋攔截到的 XHR／fetch 端點。"""
+    paths = [
+        str(item.get("path") or "")
+        for item in ctx.site_signals.get("api_observations") or []
+        if isinstance(item, dict)
+    ]
+    paths += [urlparse(url).path for url in ctx.discovered_endpoints or []]
+    return paths
+
+
 def stage_exposure(ctx: ScanRunContext) -> None:
     """敏感資訊外洩：robots.txt 敏感路徑（被動，任何模式）＋敏感檔案主動探測（全網站 active）。"""
     scan_job = ctx.scan_job
@@ -1331,6 +1346,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                     scan_job.origin,
                     scan_job_id,
                     robots_disallow=robots_disallow,
+                    api_path_prefixes=exposure_scanner.api_prefixes(_observed_api_paths(ctx)),
                 )
             )
             exposure_findings = [

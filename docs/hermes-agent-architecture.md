@@ -112,7 +112,7 @@ Excalibur 檢索增強知識；網路搜尋裁定不做（黑箱抄答案＋目�
 「攻擊者現在能做到嗎？證據能重現嗎？」。**2026-10-10 放寬**：帶 `verified=true` 且 agent 真的成功呼叫過
 主動工具（`ToolExecutor._active_confirmations` 非空：replay_request／probe_payload_injection／
 probe_unauthorized_access／probe_sql_injection／run_nuclei）時才保留 high／critical，不需 Kali sqlmap；
-兩道關卡缺一就降 medium，`evidence_json.tool_verified` 記錄，報告層 `_report_severity` 據此不封頂）／`report_ux_issue`／
+兩道關卡缺一就降 medium，`evidence_json.tool_verified` 記錄，報告層 `_report_severity` 據此不封頂。**2026-10-16**：已驗證必須是主動工具打過的同一個端點路徑（`_confirmed_paths`）；robots.txt／sitemap 拒收；代號依弱點類型＋端點各自不同（`agent-observed-security-<雜湊>`），同次掃描相近的回報由 `findings.consolidate_security_findings` 合併）／`report_ux_issue`／
 `dispatch_specialist`（僅 orchestrator）／`decode_jwt`（不驗簽）／
 `finish`（summary 必含「未能完成的測試與原因」→ `warning_summary.agent.feedback`）
 

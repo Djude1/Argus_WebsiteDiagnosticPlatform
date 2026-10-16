@@ -66,6 +66,54 @@ class RenormalizeFindingsTests(TestCase):
         self.assertIn("10.0.0.8", finding.description)
         self.assertIn("未經工具或人工驗證", finding.description)
 
+    def test_legacy_agent_rule_rekeyed_and_rescored(self):
+        # 2026-10-16（migration 0035）：舊版所有 Agent 觀察共用代號，優先處理只留第一筆
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        migration = importlib.import_module(
+            "apps.scans.migrations.0035_rekey_agent_security_findings"
+        )
+        self.scan.top_actions = [{"title": "API 規格公開（中）", "severity": "medium"}]
+        self.scan.save(update_fields=["top_actions"])
+        legacy = dict(rule_id="agent-observed-security", evidence_json={})
+        self._finding(
+            **legacy, severity="medium", priority_score=55.0,
+            title="完整 OpenAPI/Swagger 規格公開暴露（含內部 IP 位址）",
+            description="AI Agent 在實際操作網站時觀察到：規格公開"
+            "（觀察端點：https://example.com/swagger (or /openapi.json)）",
+        )
+        self._finding(
+            rule_id="agent-observed-security", severity="critical", priority_score=90.0,
+            evidence_json={"tool_verified": True},
+            title="完整 OpenAPI / Swagger 規格公開暴露（含內部 IP）",
+            description="AI Agent 在實際操作網站時觀察到：規格公開"
+            "（觀察端點：https://example.com/api_proxy/v3/api-docs）",
+        )
+        self._finding(
+            **legacy, severity="low", title="上傳的檔案可被直接讀取",
+            description="AI Agent 在實際操作網站時觀察到：上傳後可讀（觀察端點：https://example.com/upload）",
+        )
+
+        migration.rekey(django_apps, None)
+
+        rules = dict(self.scan.findings.values_list("title", "rule_id"))
+        self.assertFalse(any(rule == "agent-observed-security" for rule in rules.values()))
+        swagger_rules = {r for t, r in rules.items() if "Swagger" in t}
+        self.assertEqual(len(swagger_rules), 1, "同一個問題的兩次回報要共用代號")
+        self.assertNotIn(rules["上傳的檔案可被直接讀取"], swagger_rules)
+        self.assertEqual(self.scan.findings.count(), 3, "只改代號，不刪發現")
+        self.scan.refresh_from_db()
+        self.assertEqual(self.scan.top_actions[0]["severity"], "critical")
+        self.assertEqual(
+            [a["severity"] for a in self.scan.top_actions].count("critical"), 1
+        )
+        self.assertIn("low", [a["severity"] for a in self.scan.top_actions])
+        # 再跑一次沒有東西可改
+        migration.rekey(django_apps, None)
+        self.assertEqual(dict(self.scan.findings.values_list("title", "rule_id")), rules)
+
     def test_cookie_value_is_masked(self):
         self._finding(
             rule_id="cookie-no-secure", severity="medium",
@@ -79,7 +127,9 @@ class RenormalizeFindingsTests(TestCase):
     def test_second_run_changes_nothing(self):
         self._finding(page=self.page, rule_id=LEGACY_PII_RULE)
         renormalize_scan(self.scan)
-        self.assertEqual(renormalize_scan(self.scan), {"pii": 0, "agent": 0, "cookie": 0})
+        self.assertEqual(
+            renormalize_scan(self.scan), {"pii": 0, "agent": 0, "agent_rule": 0, "cookie": 0}
+        )
 
     def test_command_reports_changed_scan(self):
         out = StringIO()

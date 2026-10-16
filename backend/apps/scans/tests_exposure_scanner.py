@@ -54,6 +54,26 @@ class TestBuildTargets(SimpleTestCase):
         # .env 同時在內建字典與 robots，不應重複
         self.assertEqual(targets.count("https://htb.example/.env"), 1)
 
+    def test_api_docs_probed_under_observed_api_prefixes(self):
+        # ntubimdbirc.tw 2026-10-16：規格在 /api_proxy/v3/api-docs，只探根目錄找不到
+        prefixes = exp.api_prefixes(
+            ["/api_proxy/news/list", "/api_proxy/member", "/api/v1/users/me", "/_next/data/x.json",
+             "/graphql"]
+        )
+        self.assertEqual(prefixes, ["/api_proxy/", "/api/", "/api/v1/"])
+        targets = exp.build_probe_targets("https://htb.example", api_path_prefixes=prefixes)
+        self.assertIn("https://htb.example/api_proxy/v3/api-docs", targets)
+        self.assertIn("https://htb.example/api/v1/openapi.json", targets)
+        self.assertIn("https://htb.example/v3/api-docs", targets)
+        self.assertEqual(
+            exp.classify_exposure("https://htb.example/api_proxy/v3/api-docs")["rule_id"],
+            "exposure-file-apidoc",
+        )
+
+    def test_api_prefixes_capped(self):
+        paths = [f"/svc{i}/x" for i in range(20)]
+        self.assertEqual(len(exp.api_prefixes(paths)), exp.MAX_API_PREFIXES)
+
     def test_capped(self):
         big = [f"/x{i}" for i in range(500)]
         targets = exp.build_probe_targets("https://htb.example", robots_disallow=big)

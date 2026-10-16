@@ -31,7 +31,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 | `providers.py` | `ChatProvider`／`ProviderChain`（**MiniMax-M3** 主力→GLM→Gemini 純文字 fallback）；`ProviderError` 只帶公開資訊 |
 | `loop.py` | `HermesAgent` tool-calling 迴圈；`_compact_stale_tool_results`（bulky 觀察快照壓縮）；`_inject_stall_hint`（連續 click 空轉導正）；`_inject_endgame_hint`（剩 10 步強制 report）；`forced_first_tool`（orchestrator 首步鎖定） |
 | `tools.py` | `ToolExecutor`：**25 個工具**（`TOOL_SCHEMAS`）＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；`build_tool_schemas(..., allow_form_submit=True)`——deep_only 閘＋`allow_form_submit=False` 時另隱藏 `send_message`（未驗證網域 UX 測試不得送出表單）；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |
-| `findings.py` | `persist_agent_issues`＋`persist_agent_security_findings`（description 去重；owasp tag） |
+| `findings.py` | `persist_agent_issues`＋`persist_agent_security_findings`（owasp tag）；`consolidate_security_findings`：同一次掃描裡不同專家對同一個問題的回報（代號相同，或同類型且標題相似度 ≥ 0.6）合併成一筆，保留最嚴重、已驗證的，`evidence_json.merged_reports` 記次數；runner 合併後計分與落地共用同一份；sqlmap 結果仍依 description 去重 |
 
 ## 安全（硬規則）
 
@@ -39,7 +39,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 - Playwright context 套 public target policy＋same-origin 主文件/WebSocket 攔截；`navigate_and_observe` 是唯一導覽工具，**runtime 同源再驗＋deep_mode 再驗**（不繞過 context route 邊界）；不得新增其他可跨源導覽的能力。
 - 主動工具（`probe_sql_injection`／`probe_unauthorized_access`／`replay_request`／`run_nuclei`／`navigate_and_observe`／`probe_payload_injection`）＝deep_mode schema 隔離＋runtime 再驗＋同源閘三層；任何新主動工具必須接同邊界。
 - `replay_request`：method 限 GET/POST/PUT/PATCH（禁 DELETE）；不跟隨 redirect；`store_token_key` 只寫 agent 自己的 browser context。
-- `report_security_issue` severity 預設封頂 **medium**（2026-09-28 起；AI 觀察未經工具或人工驗證可被利用）。**2026-10-10 放寬**：agent 真的用自己的主動工具確認過（`ToolExecutor._active_confirmations` 非空：`replay_request`／`probe_payload_injection`／`probe_unauthorized_access`／`probe_sql_injection`／`run_nuclei` 任一成功）**且**本次回報帶 `verified=true` 時，才保留 high／critical（不需 Kali sqlmap）；缺任一條件一律降 medium——兩道關卡擋 AI 純臆測自評高風險，`evidence_json.tool_verified` 記錄是否通過。evidence 必填、經遮罩。description 開頭固定「AI Agent 在實際操作網站時觀察到：」、附證據中 IP 的自動核對（`security/ip_context.describe_ips`：私有 IP／本站公開 IP／不明，WAF 攔截頁常回顯的是掃描器自己的 IP），`evidence_json.assessment` 寫成立條件／實際觀察／尚缺證據／驗證方法。
+- `report_security_issue` severity 預設封頂 **medium**（2026-09-28 起；AI 觀察未經工具或人工驗證可被利用）。**2026-10-10 放寬**：agent 真的用自己的主動工具確認過（`ToolExecutor._active_confirmations` 非空：`replay_request`／`probe_payload_injection`／`probe_unauthorized_access`／`probe_sql_injection`／`run_nuclei` 任一成功）**且**本次回報帶 `verified=true` 時，才保留 high／critical（不需 Kali sqlmap）；缺任一條件一律降 medium——兩道關卡擋 AI 純臆測自評高風險，`evidence_json.tool_verified` 記錄是否通過。**2026-10-16 收緊**：主動工具成功打過的端點路徑記在 `_confirmed_paths`，回報的 `url` 路徑必須在裡面才算已驗證（原本任一工具成功過，之後每筆回報都算已驗證——讀取公開 sitemap 也被寫成「以主動工具重現並確認可被利用」）；`url` 是 robots.txt 或 sitemap 時拒收（`not_a_security_issue`：公開索引列出登入頁不是弱點）。**規則代號每個問題各自不同**：`agent-observed-security-<雜湊>`（`findings.agent_security_rule_id`：弱點類型＋端點路徑，沒有端點時用標題；不把標題放進有端點的雜湊，措辭每次不同會讓歷史比較失效）。2026-10-16 前全部共用 `agent-observed-security`，計分與優先處理只留第一筆、報告併成一張卡；判斷 Agent 觀察一律用前綴。evidence 必填、經遮罩。description 開頭固定「AI Agent 在實際操作網站時觀察到：」、附證據中 IP 的自動核對（`security/ip_context.describe_ips`：私有 IP／本站公開 IP／不明，WAF 攔截頁常回顯的是掃描器自己的 IP），`evidence_json.assessment` 寫成立條件／實際觀察／尚缺證據／驗證方法。
 - specialist 不掛 `dispatch_specialist`（防遞迴）；orchestrator 只掛 dispatch/finish/report。
 - Kali 攻擊鏈正式環境 disabled；啟用 runbook 見 `docs/runbooks/kali-sqlmap-rollout.md`。
 

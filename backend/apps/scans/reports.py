@@ -506,6 +506,9 @@ def _assessment_for(finding) -> dict | None:
     if isinstance(evidence_json.get("assessment"), dict):
         return evidence_json["assessment"]
     rule = finding.rule_id or ""
+    # Agent 觀察的代號依問題各自不同（agent-observed-security-<雜湊>，2026-10-16）
+    if rule.startswith("agent-observed-security"):
+        rule = "agent-observed-security"
     if rule in DEFAULT_ASSESSMENT:
         return DEFAULT_ASSESSMENT[rule]
     if finding.severity in (Finding.Severity.HIGH, Finding.Severity.CRITICAL):

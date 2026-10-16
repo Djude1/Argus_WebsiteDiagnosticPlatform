@@ -25,6 +25,8 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from apps.scans.security.kali_contracts import redact_url_query_values
 
+from .findings import agent_security_rule_id, endpoint_path, is_public_index_file
+
 DEFAULT_ACTION_TIMEOUT_MS = 5000
 MAX_TEXT_BYTES = 4000
 MAX_DOM_NODES = 80
@@ -545,6 +547,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "（replay_request／probe_payload_injection／probe_unauthorized_access／"
                 "probe_sql_injection）重現確認可被利用；只是觀察、沒實際驗證就維持 medium 以下，"
                 "系統會自動把未驗證的 high／critical 降為 medium。"
+                "verified 只認你用主動工具打過的同一個 url；robots.txt 與 sitemap 是公開索引檔，"
+                "不要回報。"
             ),
             "parameters": {
                 "type": "object",
@@ -569,7 +573,12 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "description": "實際觀察到的證據（回應片段、截圖內容等）",
                     },
                     "remediation": {"type": "string"},
-                    "url": {"type": "string", "description": "發現問題的端點 URL（選填）"},
+                    "url": {
+                        "type": "string",
+                        "description": (
+                            "發現問題的端點 URL（verified=true 時必填，且要是你驗證過的那個）"
+                        ),
+                    },
                 },
                 "required": ["severity", "title", "description", "evidence"],
             },
@@ -1013,6 +1022,10 @@ class ToolExecutor:
         # report_security_issue 的 high／critical 只有在這裡非空（agent 真的用工具驗證過）
         # 且 verified=true 時才保留，否則降 medium——不需 Kali，但擋 AI 純臆測自評高風險。
         self._active_confirmations: set[str] = set()
+        # 主動工具成功打過的端點路徑：回報的端點必須在這裡才算「已驗證」（2026-10-16）。
+        # 原本只看上面的集合非空，任何一個工具成功過，之後每一筆回報都算已驗證——
+        # ntubimdbirc.tw 實測只是讀取公開 sitemap 也被寫成「以主動工具重現並確認可被利用」。
+        self._confirmed_paths: set[str] = set()
         if scan_job is not None:
             self.page.on("response", self._on_network_response)
 
@@ -1037,10 +1050,16 @@ class ToolExecutor:
         except Exception:
             pass
 
-    def _track_verification(self, name: str, outcome: ToolOutcome) -> ToolOutcome:
-        """主動工具成功時記錄：之後 report_security_issue 才可破 medium 封頂。"""
+    def _track_verification(self, name: str, outcome: ToolOutcome, url: str = "") -> ToolOutcome:
+        """主動工具成功時記錄工具與端點。
+
+        之後對同一端點的 report_security_issue 才可破 medium 封頂。
+        """
         if outcome.ok:
             self._active_confirmations.add(name)
+            path = endpoint_path(url)
+            if path:
+                self._confirmed_paths.add(path)
         return outcome
 
     async def run(self, name: str, args: dict[str, Any]) -> ToolOutcome:
@@ -1083,7 +1102,9 @@ class ToolExecutor:
                 )
             if name == "run_nuclei":
                 return self._track_verification(
-                    name, await self._run_nuclei(args.get("url", ""), args.get("tags", ""))
+                    name,
+                    await self._run_nuclei(args.get("url", ""), args.get("tags", "")),
+                    args.get("url", ""),
                 )
             if name == "take_screenshot":
                 return await self._take_screenshot()
@@ -1106,16 +1127,18 @@ class ToolExecutor:
                     str(args.get("query_param", "")),
                     args.get("body"),
                     str(args.get("inject_field", "")),
-                ))
+                ), args.get("url", ""))
             if name == "report_ux_issue":
                 return self._report_ux_issue(args)
             if name == "probe_sql_injection":
                 return self._track_verification(
-                    name, await self._probe_sql_injection(args.get("url", ""))
+                    name, await self._probe_sql_injection(args.get("url", "")), args.get("url", "")
                 )
             if name == "probe_unauthorized_access":
                 return self._track_verification(
-                    name, await self._probe_unauthorized_access(args.get("url", ""))
+                    name,
+                    await self._probe_unauthorized_access(args.get("url", "")),
+                    args.get("url", ""),
                 )
             if name == "replay_request":
                 return self._track_verification(name, await self._replay_request(
@@ -1124,7 +1147,7 @@ class ToolExecutor:
                     args.get("body"),
                     args.get("store_token_key", ""),
                     args.get("files"),
-                ))
+                ), args.get("url", ""))
             if name == "report_security_issue":
                 return self._report_security_issue(args)
             if name == "dispatch_specialist":
@@ -2108,6 +2131,8 @@ class ToolExecutor:
         replay_request／probe_payload_injection／probe_unauthorized_access／probe_sql_injection／
         run_nuclei 任一成功）且本次回報帶 verified=true 時才保留**（2026-10-10 放寬：不需 Kali
         sqlmap，用 agent 自己的工具驗證即可，但「有驗證」這道關卡保留，擋純臆測自評高風險）。
+        2026-10-16 起驗證必須對得上端點：主動工具成功打過的路徑要和回報的 url 相同。
+        規則代號依弱點類型＋端點各自不同（findings.agent_security_rule_id）。
         2026-09-28 報告審查時 agent 把 WAF 攔截頁回顯的來源 IP 判成高風險，即為缺驗證之例。
         """
         from urllib.parse import urlparse
@@ -2116,8 +2141,24 @@ class ToolExecutor:
         from apps.scans.security.ip_context import describe_ips
 
         severity = str(args.get("severity", "low")).lower()
-        # verified 需 agent 自己宣告，且必須真的呼叫過主動工具才算數（防純自評）
-        tool_verified = bool(args.get("verified")) and bool(self._active_confirmations)
+        url = (args.get("url") or "").strip()
+        # robots.txt／sitemap 本來就是給所有人讀的公開索引，列出登入頁也不構成弱點
+        # （ntubimdbirc.tw 實測：三位專家各回報一次「sitemap 洩漏後台登入路徑」）
+        if url and is_public_index_file(url):
+            return ToolOutcome(
+                ok=False,
+                result={
+                    "error": "not_a_security_issue",
+                    "reason": "robots.txt／sitemap 是公開索引檔，列出公開頁面不是資安問題",
+                },
+            )
+        # verified 需 agent 自己宣告，且必須真的用主動工具打過「這個」端點才算數（防純自評）
+        tool_verified = (
+            bool(args.get("verified"))
+            and bool(self._active_confirmations)
+            and bool(url)
+            and endpoint_path(url) in self._confirmed_paths
+        )
         if severity in {"critical", "high"} and not tool_verified:
             severity = "medium"
         if severity not in {"critical", "high", "medium", "low", "info"}:
@@ -2126,7 +2167,6 @@ class ToolExecutor:
         description = (args.get("description") or "").strip()[:5000]
         evidence = (args.get("evidence") or "").strip()[:5000]
         remediation = (args.get("remediation") or "").strip()[:5000]
-        url = (args.get("url") or "").strip()
         if not title or not description or not evidence:
             return ToolOutcome(
                 ok=False, result={"error": "missing_required_fields"}
@@ -2140,7 +2180,7 @@ class ToolExecutor:
         finding = make_finding(
             category="security",
             severity=severity,
-            rule_id="agent-observed-security",
+            rule_id=agent_security_rule_id(title, description, url),
             title=title,
             description=(
                 f"AI Agent 在實際操作網站時觀察到：{full_description}{ip_text}\n"

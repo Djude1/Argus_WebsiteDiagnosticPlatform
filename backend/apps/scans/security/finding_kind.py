@@ -38,7 +38,6 @@ _EXACT = {
     "service-known-cve": SUSPECTED,
     "js-lib-known-vuln": SUSPECTED,
     "exposure-hardcoded-secret": SUSPECTED,
-    "agent-observed-security": SUSPECTED,
     "security-ai-prompt-injection": SUSPECTED,
     "security-ai-suspicious-markup": EXPOSURE,
     "header-cors-credentials": SUSPECTED,
@@ -56,6 +55,7 @@ _EXACT = {
     "SECURITY_PII_8B24BB8B28": EXPOSURE,
     "api-error-stack-trace": EXPOSURE,
     "api-cors-wildcard": CONFIG,
+    "form-password-unmasked": CONFIG,
 }
 _PREFIXES = (
     ("header-", CONFIG),
@@ -95,6 +95,9 @@ def security_kind(
     if category != "security":
         return None
     rule_id = rule_id or ""
+    if rule_id.startswith("agent-observed-security"):
+        # Agent 觀察：已用主動工具驗證的也只是 AI 判讀，仍歸疑似（代號依問題各自不同）
+        return SUSPECTED
     if rule_id in _EXACT:
         return _EXACT[rule_id]
     # 主動探測確實取得的敏感檔案：高風險（.env、.git、備份、憑證）＝已驗證，其餘是曝露面

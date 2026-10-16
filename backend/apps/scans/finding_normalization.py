@@ -5,6 +5,8 @@
   以資料庫裡保存的頁面 HTML 重跑同一支 analyze_data_exposure()，結果與新掃描一致。
 - AI Agent 觀察型回報：舊版可到高風險；現在上限中風險，並補上判定依據與 IP 核對。
 - Cookie 證據：舊版存了完整 Cookie 值；現在只留頭尾。
+- AI Agent 資安觀察的代號（2026-10-16）：舊版全部共用 agent-observed-security，
+  改為每個問題自己的代號。
 
 改完後以 calculate_scores() 重算分數與優先清單，網頁與報告才會一致；快取的報告檔刪除，
 下次下載時重新產生（報告編號不變）。
@@ -12,6 +14,7 @@
 
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
 
 from django.db import transaction
@@ -61,9 +64,13 @@ def _renormalize_pii(scan_job: ScanJob) -> int:
 def _renormalize_agent(scan_job: ScanJob) -> int:
     hostname = urlparse(scan_job.normalized_url or "").hostname or ""
     changed = 0
-    for finding in scan_job.findings.filter(rule_id="agent-observed-security"):
+    for finding in scan_job.findings.filter(rule_id__startswith="agent-observed-security"):
         updates = []
-        if finding.severity in (Finding.Severity.HIGH, Finding.Severity.CRITICAL):
+        evidence_json = finding.evidence_json if isinstance(finding.evidence_json, dict) else {}
+        # 以主動工具驗證過的回報（2026-10-10 起）本來就允許高風險，不降級
+        if finding.severity in (
+            Finding.Severity.HIGH, Finding.Severity.CRITICAL
+        ) and not evidence_json.get("tool_verified"):
             finding.severity = Finding.Severity.MEDIUM
             updates.append("severity")
         if _AGENT_PREFIX_OLD in (finding.description or ""):
@@ -81,6 +88,63 @@ def _renormalize_agent(scan_job: ScanJob) -> int:
         if updates:
             finding.save(update_fields=updates)
             changed += 1
+    return changed
+
+
+_OBSERVED_ENDPOINT = re.compile(r"（觀察端點：(.*?)）")
+
+
+def _rekey_agent_security(scan_job: ScanJob) -> int:
+    """舊的 Agent 資安觀察共用代號 agent-observed-security，改成每個問題自己的代號（2026-10-16）。
+
+    共用代號讓計分與優先處理只留第一筆、報告把所有 Agent 觀察併成一張卡、歷史比較把不同問題
+    當成同一個。新代號與新掃描同一套規則（類型＋端點）；同一次掃描裡同類型、標題相近的回報
+    給同一個代號，畫面與報告會合併顯示——只改代號，不刪任何發現。端點從描述裡的
+    「（觀察端點：…）」取回。
+    """
+    from apps.agent.findings import AGENT_SECURITY_RULE, agent_security_rule_id, rank, same_issue
+
+    rows = list(scan_job.findings.filter(rule_id=AGENT_SECURITY_RULE))
+    if not rows:
+        return 0
+    items = []
+    for finding in rows:
+        match = _OBSERVED_ENDPOINT.search(finding.description or "")
+        items.append({
+            "finding": finding,
+            "title": finding.title,
+            "description": finding.description,
+            "severity": finding.severity,
+            "evidence_json": (
+                finding.evidence_json if isinstance(finding.evidence_json, dict) else {}
+            ),
+            "rule_id": agent_security_rule_id(
+                finding.title, finding.description, match.group(1) if match else ""
+            ),
+        })
+    items.sort(key=rank)
+    assigned: list[dict] = []
+    for item in items:
+        group = next((kept for kept in assigned if same_issue(kept, item)), None)
+        item["finding"].rule_id = group["rule_id"] if group else item["rule_id"]
+        item["finding"].save(update_fields=["rule_id"])
+        if group is None:
+            assigned.append(item)
+    return len(rows)
+
+
+def rekey_agent_findings_and_rescore(scan_job) -> int:
+    """migration 0035 用：只做代號回填與重算分數（不重跑 PII 等其他重新判定）。
+
+    migration 傳入的是歷史 model：只用欄位、`findings` 關聯與 save(update_fields)，
+    不碰 model 上的方法或 TextChoices（歷史 model 沒有），狀態直接比字串。
+    """
+    with transaction.atomic():
+        changed = _rekey_agent_security(scan_job)
+        if changed and scan_job.status == "completed":
+            _rescore(scan_job)
+            path = report_output_path(scan_job)
+            transaction.on_commit(lambda: path.unlink(missing_ok=True))
     return changed
 
 
@@ -144,6 +208,7 @@ def renormalize_scan(scan_job: ScanJob) -> dict[str, int]:
     counts = {
         "pii": _renormalize_pii(scan_job),
         "agent": _renormalize_agent(scan_job),
+        "agent_rule": _rekey_agent_security(scan_job),
         "cookie": _renormalize_cookies(scan_job),
     }
     if any(counts.values()) and scan_job.status == ScanJob.Status.COMPLETED:
