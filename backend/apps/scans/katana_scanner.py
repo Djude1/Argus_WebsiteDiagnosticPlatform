@@ -46,6 +46,13 @@ _VITE_DEV_SIGNATURES = (
 # 原始碼路徑特徵：.jsx/.tsx/.vue 暴露代表 dev server 在 production
 _SOURCE_EXT_SIGNATURES = (".jsx", ".tsx", ".vue", ".svelte")
 
+# 看起來像 API／後端的路徑（取代原本寫死的 `/api/`）：含這些段才回報為隱藏端點
+_API_ENDPOINT_HINT = re.compile(
+    r"(?:^|/)(?:api|api[_-]?proxy|backend|rest|graphql|gateway|rpc|ajax|"
+    r"v[0-9]+|api-docs|openapi|swagger|internal)(?:/|$)",
+    re.IGNORECASE,
+)
+
 # 秘鑰類型嚴重度映射
 _SECRET_SEVERITY: dict[str, str] = {
     "aws": "critical",
@@ -408,8 +415,9 @@ def _extract_endpoint_finding(record: dict[str, Any]) -> dict | None:
     if any(p in low for p in skip_prefixes):
         return None
 
-    # 只回報 /api/ 路徑（明確的 API 端點）
-    if "/api/" not in low and not low.endswith("/api"):
+    # 只回報看起來像 API／後端的路徑。原本寫死 `/api/`，會漏掉 `/api_proxy`、`/backend`、
+    # `/rest`、`/graphql`、`/v3/api-docs` 這類（2026-10-16）。
+    if not _API_ENDPOINT_HINT.search(low):
         return None
 
     safe_endpoint = redact_pii_in_text(redact_url_query_values(str(endpoint)))

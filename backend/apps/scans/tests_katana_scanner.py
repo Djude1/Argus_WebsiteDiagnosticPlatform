@@ -77,3 +77,37 @@ class KatanaEvidenceRedactionTests(SimpleTestCase):
         self.assertNotIn("abc123", serialized)
         self.assertNotIn("endpoint-secret", serialized)
         self.assertIn("REDACTED", serialized)
+
+
+class KatanaEndpointFilterTests(SimpleTestCase):
+    """隱藏 API 端點偵測的路徑過濾（2026-10-16 放寬寫死的 /api/）。"""
+
+    def _finding(self, endpoint):
+        from apps.scans.katana_scanner import _extract_endpoint_finding
+
+        return _extract_endpoint_finding({
+            "request": {"endpoint": endpoint, "source": "https://ex.test/app.js"},
+            "response": {"status_code": 200},
+        })
+
+    def test_api_proxy_and_backend_now_reported(self):
+        # 原本寫死 `/api/`，/api_proxy、/backend、/v3/api-docs 都被漏掉
+        for endpoint in (
+            "https://ex.test/api_proxy/news/list",
+            "https://ex.test/backend/report",
+            "https://ex.test/v3/api-docs",
+            "https://ex.test/graphql",
+            "https://ex.test/api/v1/users",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertIsNotNone(self._finding(endpoint))
+
+    def test_pages_and_static_still_skipped(self):
+        for endpoint in (
+            "https://ex.test/about",
+            "https://ex.test/member/profile",
+            "https://ex.test/_next/static/chunks/main.js",
+            "https://ex.test/logo.svg",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertIsNone(self._finding(endpoint))

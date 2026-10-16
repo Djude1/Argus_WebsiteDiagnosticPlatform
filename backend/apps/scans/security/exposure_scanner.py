@@ -90,21 +90,30 @@ API_DOC_SUFFIXES: tuple[str, ...] = (
 MAX_API_PREFIXES = 5
 # 前端資源目錄，不是 API 前綴
 _NON_API_SEGMENTS = {"_next", "static", "assets", "images", "img", "css", "js", "fonts", "media"}
+# 單段路徑時，第一段本身就是 API 基底才算前綴（rewrite base 在 JS 裡常是裸字串 `/api_proxy`）
+_API_BASE_SEGMENT = re.compile(
+    r"^(?:api|api[_-]?proxy|backend|rest|graphql|gateway|rpc|v[0-9]+|api-docs|openapi|swagger)$",
+    re.IGNORECASE,
+)
 
 
 def api_prefixes(paths: list[str]) -> list[str]:
-    """從爬取時觀察到的同網站 API 路徑推出前綴（第一段，接版本號時連版本一起），最多 5 個。
+    """從觀察到或 JS 抽出的同網站 API 路徑推出前綴（第一段，接版本號時連版本一起），最多 5 個。
 
     `/api_proxy/news/list` → `/api_proxy/`；`/api/v1/users` → `/api/`、`/api/v1/`。
-    只有一段的路徑（`/graphql`）沒有前綴可推，根目錄字典已涵蓋。
+    只有一段時，只有該段本身就是 API 基底（`/api_proxy`、`/graphql`）才當前綴——
+    JS 裡 rewrite base 常寫成裸字串 `/api_proxy`，拼接後的路徑才在別處。
     """
     prefixes: list[str] = []
     for path in paths:
         segments = [seg for seg in (path or "").split("/") if seg]
-        if len(segments) < 2 or segments[0].lower() in _NON_API_SEGMENTS:
+        if not segments or segments[0].lower() in _NON_API_SEGMENTS:
             continue
+        if len(segments) < 2:
+            if not _API_BASE_SEGMENT.match(segments[0]):
+                continue
         candidates = [f"/{segments[0]}/"]
-        if re.fullmatch(r"v\d+", segments[1], re.I) and len(segments) > 2:
+        if len(segments) > 2 and re.fullmatch(r"v\d+", segments[1], re.I):
             candidates.append(f"/{segments[0]}/{segments[1]}/")
         for prefix in candidates:
             if prefix not in prefixes:

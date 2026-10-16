@@ -60,7 +60,7 @@ class TestBuildTargets(SimpleTestCase):
             ["/api_proxy/news/list", "/api_proxy/member", "/api/v1/users/me", "/_next/data/x.json",
              "/graphql"]
         )
-        self.assertEqual(prefixes, ["/api_proxy/", "/api/", "/api/v1/"])
+        self.assertEqual(prefixes, ["/api_proxy/", "/api/", "/api/v1/", "/graphql/"])
         targets = exp.build_probe_targets("https://htb.example", api_path_prefixes=prefixes)
         self.assertIn("https://htb.example/api_proxy/v3/api-docs", targets)
         self.assertIn("https://htb.example/api/v1/openapi.json", targets)
@@ -69,6 +69,13 @@ class TestBuildTargets(SimpleTestCase):
             exp.classify_exposure("https://htb.example/api_proxy/v3/api-docs")["rule_id"],
             "exposure-file-apidoc",
         )
+
+    def test_single_segment_api_base_becomes_prefix(self):
+        # JS 裡 rewrite base 常是裸字串 /api_proxy（拼接後的路徑在別處），單段也要當前綴；
+        # 一般單段頁面路徑（/about）不當前綴
+        self.assertEqual(exp.api_prefixes(["/api_proxy"]), ["/api_proxy/"])
+        self.assertEqual(exp.api_prefixes(["/graphql"]), ["/graphql/"])
+        self.assertEqual(exp.api_prefixes(["/about", "/member", "/course"]), [])
 
     def test_api_prefixes_capped(self):
         paths = [f"/svc{i}/x" for i in range(20)]

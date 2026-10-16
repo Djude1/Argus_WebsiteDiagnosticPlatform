@@ -1319,6 +1319,8 @@ def _observed_api_paths(ctx: ScanRunContext) -> list[str]:
         if isinstance(item, dict)
     ]
     paths += [urlparse(url).path for url in ctx.discovered_endpoints or []]
+    # 爬蟲從同源 JS bundle 靜態抽出的 API 路徑（繞過 Cloudflare 的確定性發現，2026-10-16）
+    paths += list(ctx.site_signals.get("js_api_paths") or [])
     return paths
 
 

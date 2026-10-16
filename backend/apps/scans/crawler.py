@@ -795,6 +795,77 @@ _API_HEADER_KEYS = (
     "x-content-type-options",
 )
 
+# 靜態資源：不是 API 呼叫，不該進 api_observations／api_endpoints（否則 Next.js 用 fetch
+# 預取的 /_next/static/*.css 會被列進「API 端點清單」，前綴推導也會拿它去推，2026-10-16）。
+_STATIC_ASSET_EXTS = (
+    ".css", ".js", ".mjs", ".map", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".avif",
+    ".mp4", ".webm", ".mp3", ".wav", ".pdf",
+)
+_STATIC_ASSET_PREFIXES = ("/_next/static/", "/static/", "/assets/", "/_nuxt/")
+
+
+def is_static_asset_path(path: str) -> bool:
+    """路徑看起來是靜態資源（JS／CSS／字型／圖片／打包產物目錄）就回 True。
+
+    只看路徑本身（已去查詢字串）：副檔名或已知打包目錄前綴命中即算。
+    """
+    low = (path or "").split("?", 1)[0].lower()
+    if any(low.startswith(prefix) for prefix in _STATIC_ASSET_PREFIXES):
+        return True
+    return any(low.endswith(ext) for ext in _STATIC_ASSET_EXTS)
+
+
+# JS bundle 靜態端點發現（2026-10-16）：爬蟲載入頁面時瀏覽器已抓下同源 JS chunk，
+# 直接讀內容用 regex 抽出網站自己寫死的 API 路徑／rewrite 前綴——繞得過 Cloudflare
+# （主動重抓會被 challenge 擋），補上 Katana／被動攔截都看不到的登入後端點。
+# ntubimdbirc.tw 的 /api_proxy 就明文寫在 _buildManifest.js。
+_MAX_JS_BODIES = 40  # 每次掃描最多讀幾個 JS 檔的內容
+_MAX_JS_BODY_BYTES = 2 * 1024 * 1024
+_MAX_JS_API_PATHS = 60
+# 絕對路徑字串：以 / 開頭、只含路徑安全字元（含 Next.js rewrite 的 :param／* 動態段，
+# 下面會截到第一個動態段之前）。原本字元類不含 : *，碰到 "/api_proxy/:path*" 整段比對失敗、
+# 抽不到 /api_proxy——這是 2026-10-16 實站漏抓的直接原因。
+_JS_PATH_RE = re.compile(r"""['"`](/[A-Za-z0-9_][A-Za-z0-9._~:*\-/]{1,120})['"`]""")
+
+
+def _static_prefix_of(path: str) -> str:
+    """截到第一個含動態參數（`:` 或 `*`，Next.js rewrite 語法）的路徑段之前。
+
+    `/api_proxy/:path*` → `/api_proxy`；`/api/v1/users` → 原樣；`/:locale/x` → ``（整段動態）。
+    """
+    kept: list[str] = []
+    for seg in path.split("/"):
+        if not seg:
+            continue
+        if ":" in seg or "*" in seg:
+            break
+        kept.append(seg)
+    return "/" + "/".join(kept) if kept else ""
+# 看起來像 API／後端的路徑才留（避免把 /about、/_next 這類頁面與資源路徑灌進來）
+_API_PATH_HINT = re.compile(
+    r"(?:^|/)(?:api|api[_-]?proxy|backend|rest|graphql|gateway|service|services|"
+    r"v[0-9]+|api-docs|openapi|swagger|rpc|ajax|internal)(?:/|$)",
+    re.IGNORECASE,
+)
+
+
+def extract_api_paths_from_js(text: str) -> set[str]:
+    """從一段 JS 原始碼抽出看起來像 API 的絕對路徑（去查詢字串、去重）。純解析、不連線。"""
+    found: set[str] = set()
+    for match in _JS_PATH_RE.finditer(text or ""):
+        # 先截到動態段之前：Next.js rewrite 寫成 /api_proxy/:path*，要的是 /api_proxy
+        path = _static_prefix_of(match.group(1).split("?", 1)[0])
+        if not path or path == "/":
+            continue
+        if is_static_asset_path(path) or path.startswith("/_next/"):
+            continue
+        if _API_PATH_HINT.search(path):
+            found.add(path)
+            if len(found) >= _MAX_JS_API_PATHS:
+                break
+    return found
+
 
 async def _close_playwright_resources(*resources) -> None:
     """盡力關閉故障的 Playwright 資源，不讓 cleanup 蓋掉原本狀態或重試。"""
@@ -928,6 +999,9 @@ class _CrawlState:
     pages: list[dict] = field(default_factory=list)
     api_endpoints: set[str] = field(default_factory=set)
     api_observations: dict[str, dict] = field(default_factory=dict)
+    # 同源 JS bundle 靜態抽出的 API 路徑（_buildManifest.js、chunks），2026-10-16
+    js_api_paths: set[str] = field(default_factory=set)
+    js_bodies_read: int = 0
     page_retry_counts: dict[str, int] = field(default_factory=dict)
     last_request_at: float = 0.0
     # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
@@ -1120,9 +1194,37 @@ async def _finish_api_body_tasks(body_tasks: list) -> None:
         await asyncio.wait(body_tasks, timeout=2)
 
 
+def _collect_js_api_paths(resp, sink: set[str], body_tasks: list, state=None) -> None:
+    """同源 JS 回應：讀內容抽 API 路徑進 sink（繞過 Cloudflare 的確定性端點發現）。
+
+    只讀 script 資源、同源、數量與大小有上限；body 讀完即丟，只留抽出的路徑。
+    """
+    if state is not None:
+        if state.js_bodies_read >= _MAX_JS_BODIES or len(sink) >= _MAX_JS_API_PATHS:
+            return
+        state.js_bodies_read += 1
+
+    async def _read() -> None:
+        try:
+            headers = resp.headers or {}
+            length = headers.get("content-length")
+            if length and int(length) > _MAX_JS_BODY_BYTES:
+                return
+            body = (await resp.text())[:_MAX_JS_BODY_BYTES]
+            for path in extract_api_paths_from_js(body):
+                if len(sink) >= _MAX_JS_API_PATHS:
+                    break
+                sink.add(path)
+        except Exception:
+            pass
+
+    body_tasks.append(asyncio.ensure_future(_read()))
+
+
 def _attach_page_listeners(
     page, origin: str, api_endpoints: set[str],
     api_observations: dict[str, dict] | None = None, body_tasks: list | None = None,
+    js_api_paths: set[str] | None = None, state=None,
 ) -> list[str]:
     """掛上被動監聽：same-origin XHR/fetch 端點、本頁 JavaScript 執行期錯誤。回傳錯誤清單。
 
@@ -1134,9 +1236,21 @@ def _attach_page_listeners(
 
     def _on_response(resp, _origin=origin, _sink=api_endpoints):
         try:
-            if resp.request.resource_type not in {"xhr", "fetch"}:
-                return
+            rtype = resp.request.resource_type
             if url_origin(resp.url) != _origin:
+                return
+            # 同源 JS：讀內容抽 API 路徑（確定性端點發現；瀏覽器已載入，不另發請求）
+            if (
+                js_api_paths is not None
+                and body_tasks is not None
+                and (rtype == "script" or urlparse(resp.url).path.lower().endswith(".js"))
+            ):
+                _collect_js_api_paths(resp, js_api_paths, body_tasks, state)
+                return
+            if rtype not in {"xhr", "fetch"}:
+                return
+            # 靜態資源（Next.js 用 fetch 預取的 CSS 等）不是 API 呼叫，不收進端點清單
+            if is_static_asset_path(urlparse(resp.url).path):
                 return
             if len(_sink) < _MAX_API_ENDPOINTS:
                 _sink.add(resp.url)
@@ -1347,7 +1461,8 @@ async def _visit_page(
         # new_page() 在 try 裡：context/browser 偶發損壞時只讓這一頁失敗
         page = await context.new_page()
         js_errors = _attach_page_listeners(
-            page, origin, state.api_endpoints, state.api_observations, body_tasks
+            page, origin, state.api_endpoints, state.api_observations, body_tasks,
+            state.js_api_paths, state,
         )
         stage.name = "navigation"
         # 不等 networkidle：分析工具、客服 widget、長輪詢常讓網路永遠無法完全安靜；
@@ -1576,4 +1691,6 @@ async def crawl_site(
                 stop_reason, time.perf_counter() - crawl_started
             )
     site_signals["api_observations"] = list(state.api_observations.values())
+    # JS bundle 靜態抽出的 API 路徑（供敏感檔案探測推 API 前綴；繞過 Cloudflare）
+    site_signals["js_api_paths"] = sorted(state.js_api_paths)
     return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)
