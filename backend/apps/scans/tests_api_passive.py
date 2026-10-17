@@ -192,6 +192,29 @@ class PassiveApiStageTests(TestCase):
         data = client.get(f"/api/projects/{self.scan.project_id}/security/").json()
         self.assertEqual(data["api_surface"]["endpoints"][0]["path"], "/api/items")
 
+    def test_static_js_paths_surface_without_runtime_calls(self):
+        # 公開頁不呼叫後端 API（無觀察），但前端 JS 靜態抽出端點 → 仍要列出、不判 skipped
+        self.ctx.site_signals["js_api_paths"] = ["/gateway", "/api/v1/users"]
+        tasks._passive_api_check(self.ctx)
+        self.assertEqual(self.ctx.coverage.status_of("api_passive"), COMPLETED)
+        self.scan.refresh_from_db()
+        surface = self.scan.warning_summary["api_surface"]
+        self.assertEqual(surface["total"], 0)
+        self.assertEqual(surface["static_discovered"], 2)
+        rows = surface["endpoints"]
+        self.assertTrue(all(r["source"] == "js_static" and r["method"] == "靜態" for r in rows))
+        self.assertEqual({r["path"] for r in rows}, {"/gateway", "/api/v1/users"})
+
+    def test_static_paths_do_not_duplicate_observed(self):
+        self.ctx.site_signals["api_observations"] = [_obs(path="/api/items")]
+        self.ctx.site_signals["js_api_paths"] = ["/api/items", "/gateway"]
+        tasks._passive_api_check(self.ctx)
+        self.scan.refresh_from_db()
+        surface = self.scan.warning_summary["api_surface"]
+        # /api/items 已被觀察到，不再以靜態重複列入
+        static_rows = [r for r in surface["endpoints"] if r.get("source") == "js_static"]
+        self.assertEqual([r["path"] for r in static_rows], ["/gateway"])
+
 
 class ApiSurfaceReportTests(TestCase):
     """PDF 報告附錄「API 端點清單」（2026-10-12）。"""
@@ -216,6 +239,19 @@ class ApiSurfaceReportTests(TestCase):
         self.assertEqual(api["total"], 2)
         self.assertEqual(api["rows"][0]["issues"], "錯誤回應洩漏堆疊")
         self.assertEqual(api["rows"][1]["content_type"], "—")
+
+    def test_static_discovered_row_labelled_in_report(self):
+        from apps.scans.reports import _report_api_surface
+
+        self.scan.warning_summary = {"api_surface": {
+            "total": 0, "with_issues": 0, "static_discovered": 1,
+            "endpoints": [{"method": "靜態", "path": "/gateway", "status": None,
+                           "content_type": "", "rules": [], "source": "js_static"}],
+        }}
+        api = _report_api_surface(self.scan)
+        self.assertEqual(api["static_discovered"], 1)
+        self.assertEqual(api["rows"][0]["issues"], "前端 JS 靜態發現，執行期未呼叫")
+        self.assertEqual(api["rows"][0]["status"], "—")
 
     def test_docx_contains_section(self):
         import tempfile

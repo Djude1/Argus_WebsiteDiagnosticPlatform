@@ -132,6 +132,27 @@ class TestAnalyzeProbeResults(SimpleTestCase):
         self.assertNotIn("0912-345-678", findings[0]["evidence"])
         self.assertNotIn("A123456789", findings[0]["evidence"])
 
+    def test_apidoc_with_internal_ip_bumps_to_high(self):
+        # OpenAPI 規格的 servers 寫內網位址（虛構值）→ 內部網路拓樸外洩，中→高
+        body = ('{"openapi":"3.0","servers":[{"url":"http://10.1.2.3:8080"}],'
+                '"paths":{"/x":{}}}')
+        results = [{"url": "https://htb.example/gateway/v3/api-docs", "status": 200,
+                    "content_type": "application/json", "body": body}]
+        findings = exp.analyze_probe_results(results)
+        self.assertEqual(len(findings), 1)
+        f = findings[0]
+        self.assertEqual(f["severity"], "high")  # 基礎 medium 被內網 IP 提升
+        self.assertIn("內部網路位址外洩", f["evidence"])
+        self.assertIn("10.1.2.3", f["description"])
+
+    def test_apidoc_with_public_ip_stays_medium(self):
+        # 公網 IP 不是內網外洩，維持基礎 medium
+        body = '{"openapi":"3.0","servers":[{"url":"https://8.8.8.8"}],"paths":{}}'
+        results = [{"url": "https://htb.example/gateway/v3/api-docs", "status": 200,
+                    "content_type": "application/json", "body": body}]
+        findings = exp.analyze_probe_results(results)
+        self.assertEqual(findings[0]["severity"], "medium")
+
     def test_404_ignored(self):
         results = [{"url": "https://htb.example/.env", "status": 404, "body": ""}]
         self.assertEqual(exp.analyze_probe_results(results), [])

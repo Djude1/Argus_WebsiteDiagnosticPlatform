@@ -23,6 +23,7 @@ from django.conf import settings
 
 from apps.scans.cancellation import ScanCancelled, is_cancelled
 from apps.scans.scanners import detect_pii_in_text, make_finding
+from apps.scans.security.ip_context import describe_ips, private_ips
 from apps.scans.security.redaction import redact_pii_in_text, redact_url_query_values
 from apps.scans.security.secret_scanner import (
     detect_secrets_in_text,
@@ -351,6 +352,11 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
                 severity = top
         if pii_total > 0 and _SEVERITY_ORDER[severity] < _SEVERITY_ORDER["high"]:
             severity = "high"
+        # 對外回應夾帶私有／內部網段 IP（例：OpenAPI 規格的 servers 寫內網位址）＝內部網路
+        # 拓樸外洩，是比「只是文件公開」更實質的風險；至少提升到 high。
+        internal_ips = private_ips(body)
+        if internal_ips and _SEVERITY_ORDER[severity] < _SEVERITY_ORDER["high"]:
+            severity = "high"
 
         # 證據：命中位置 + body 片段 + 秘鑰摘要 + PII 摘要
         evidence_parts = [f"命中：GET {safe_url} → HTTP {status}"]
@@ -367,6 +373,16 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
         if pii_total > 0:
             pii_bits = [f"{k}×{len(v)}" for k, v in pii.items() if v]
             evidence_parts.append(f"偵測到疑似個資：{', '.join(pii_bits)}")
+        if internal_ips:
+            host = urlparse(url).hostname or ""
+            ip_set = set(internal_ips)
+            ip_lines = [
+                line for line in describe_ips(body, host)
+                if line.split("：", 1)[0] in ip_set
+            ]
+            evidence_parts.append(
+                "內部網路位址外洩（出現在對外回應中）：\n" + "\n".join(ip_lines)
+            )
 
         description = (
             f"發現可公開存取的{info['label']}：{safe_url}。{info['why']}"
@@ -375,6 +391,11 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             description += f"\n⚠️ 此檔內含 {len(secrets)} 筆疑似秘鑰，風險已提升。"
         if pii_total > 0:
             description += f"\n⚠️ 此檔含 {pii_total} 筆疑似個資，請依個資法妥善處理本報告。"
+        if internal_ips:
+            description += (
+                f"\n⚠️ 回應內容夾帶 {len(internal_ips)} 個私有／內部網段 IP"
+                f"（{', '.join(internal_ips[:5])}），等同內部網路拓樸外洩，風險已提升。"
+            )
 
         findings.append(make_finding(
             category="security",

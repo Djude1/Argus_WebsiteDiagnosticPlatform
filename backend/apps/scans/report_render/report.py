@@ -877,9 +877,15 @@ def _appendix(doc, data, number=6):
     if api:
         sub("API 端點清單")
         shown = len(api["rows"])
-        more = f"列出前 {shown} 個，有問題的排前面。" if api["total"] > shown else ""
+        static_n = api.get("static_discovered", 0)
+        total_all = api["total"] + static_n
+        more = f"列出前 {shown} 個，有問題的排前面。" if total_all > shown else ""
+        static_txt = (
+            f"另有 {static_n} 個端點由前端 JS 靜態發現、執行期未實際呼叫（標示「靜態」，僅供參考）。"
+            if static_n else ""
+        )
         add_para(doc, [{"text": f"掃描時網站前端自己呼叫的同網站 API 共 {api['total']} 個，其中 {api['with_issues']} 個有問題。"
-                                f"只分析這些回應，不另外發送請求，也不保存網址參數與回應內容。{more}",
+                                f"只分析這些回應，不另外發送請求，也不保存網址參數與回應內容。{static_txt}{more}",
                         "size": 9, "color": T.GREY}], after=5)
         rows = [[r["method"], r["path"], r["status"], r["content_type"], r["issues"]] for r in api["rows"]]
         data_table(doc, ["方法", "路徑", "狀態碼", "內容類型", "發現"], rows, [900, 3300, 900, 1700, 1300])

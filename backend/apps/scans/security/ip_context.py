@@ -18,6 +18,22 @@ def _resolve(hostname: str) -> set[str]:
         return set()
 
 
+def private_ips(text: str) -> list[str]:
+    """回傳文字中屬於私有／內部網段（含 loopback、link-local）的 IP，去重保序；無則空 list。
+
+    純位址判斷、不做 DNS 解析；給敏感檔案探測判斷「對外回應是否夾帶內網拓樸」用。
+    """
+    found: list[str] = []
+    for raw in dict.fromkeys(_IPV4.findall(text or "")):
+        try:
+            addr = ipaddress.ip_address(raw)
+        except ValueError:
+            continue
+        if addr.is_private or addr.is_loopback or addr.is_link_local:
+            found.append(str(addr))
+    return found
+
+
 def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
     """回傳每個 IP 的判讀句；沒有 IP 時回空 list。"""
     found = []

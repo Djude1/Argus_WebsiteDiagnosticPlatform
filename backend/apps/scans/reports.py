@@ -1246,18 +1246,26 @@ def _report_api_surface(scan_job: ScanJob) -> dict | None:
     surface = (scan_job.warning_summary or {}).get("api_surface")
     if not surface or not surface.get("endpoints"):
         return None
+    def _issues(row: dict) -> str:
+        labels = "、".join(_API_RULE_LABELS.get(r, r) for r in row.get("rules") or [])
+        if labels:
+            return labels
+        # 靜態發現、執行期未呼叫的端點：在「發現」欄註明來源，而非留白
+        if row.get("source") == "js_static":
+            return "前端 JS 靜態發現，執行期未呼叫"
+        return "—"
+
     return {
         "total": surface.get("total", 0),
         "with_issues": surface.get("with_issues", 0),
+        "static_discovered": surface.get("static_discovered", 0),
         "rows": [
             {
                 "method": row.get("method", ""),
                 "path": row.get("path", ""),
                 "status": str(row.get("status") or "—"),
                 "content_type": row.get("content_type") or "—",
-                "issues": "、".join(
-                    _API_RULE_LABELS.get(r, r) for r in row.get("rules") or []
-                ) or "—",
+                "issues": _issues(row),
             }
             for row in surface["endpoints"]
         ],

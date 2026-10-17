@@ -265,12 +265,15 @@ function ApiSurface({ surface, check }) {
       </section>
     );
   }
+  const staticCount = surface.static_discovered || 0;
+  const totalAll = surface.total + staticCount;
   return (
     <section className="panel">
-      <h2 className="project-section-title">API 端點（{surface.total}）</h2>
+      <h2 className="project-section-title">API 端點（{totalAll}）</h2>
       <p className="hint-text">
         網站前端在瀏覽過程中自己呼叫的 API；只分析這些回應，不另外發送請求。
-        {surface.total > surface.endpoints.length && `列出前 ${surface.endpoints.length} 個，有問題的排前面。`}
+        {staticCount > 0 && `另有 ${staticCount} 個端點由前端 JS 靜態發現、執行期未實際呼叫（標「靜態」，僅供參考）。`}
+        {totalAll > surface.endpoints.length && `列出前 ${surface.endpoints.length} 個，有問題的排前面。`}
       </p>
       <div className="security-api-wrap">
         <table className="security-api-table">
@@ -285,11 +288,13 @@ function ApiSurface({ surface, check }) {
                 <td>{row.status ?? "—"}</td>
                 <td>{row.content_type || "—"}</td>
                 <td>
-                  {row.rules.length === 0
-                    ? <span className="security-api-ok">無</span>
-                    : row.rules.map((rule) => (
+                  {row.rules.length > 0
+                    ? row.rules.map((rule) => (
                       <span key={rule} className="security-api-chip">{API_RULE_LABELS[rule] || rule}</span>
-                    ))}
+                    ))
+                    : row.source === "js_static"
+                      ? <span className="hint-text">前端 JS 靜態發現，執行期未呼叫</span>
+                      : <span className="security-api-ok">無</span>}
                 </td>
               </tr>
             ))}

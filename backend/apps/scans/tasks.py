@@ -54,7 +54,7 @@ from apps.scans.scanners import (
     calculate_scores,
 )
 from apps.scans.security import exposure_scanner, owasp_mapper
-from apps.scans.security.api_scanner import analyze_api
+from apps.scans.security.api_scanner import MAX_SURFACE_ENDPOINTS, analyze_api
 from apps.scans.security.content_injection import (
     build_injection_finding,
     detect_content_injection,
@@ -1240,9 +1240,12 @@ def _passive_api_check(ctx: ScanRunContext) -> None:
     """被動 API 檢查：爬取期間前端自己呼叫的同網站 API 回應（不發新請求）。
 
     API 端點清單存 `warning_summary["api_surface"]`（方法、路徑、狀態碼，不含查詢字串與回應內容）。
+    另併入前端 JS bundle 靜態抽出、但頁面執行期未實際呼叫的端點（`site_signals.js_api_paths`），
+    標為 `source="js_static"`，避免「公開頁不呼叫後端 API」時附錄誤報成「沒有可檢查的端點」。
     """
     observations = ctx.site_signals.get("api_observations") or []
-    if not observations:
+    static_paths = sorted(ctx.site_signals.get("js_api_paths") or [])
+    if not observations and not static_paths:
         ctx.coverage.mark("api_passive", SKIPPED, "爬取期間沒有觀察到同網站的 API 呼叫")
         return
     try:
@@ -1250,6 +1253,16 @@ def _passive_api_check(ctx: ScanRunContext) -> None:
     except Exception as exc:  # noqa: BLE001 — API 檢查失敗不影響其他資安檢查
         _tool_failed(ctx, "api_passive", "被動 API 檢查", exc)
         return
+    # 靜態發現的端點（執行期沒被呼叫的才補上，避免與觀察到的重複）
+    observed_paths = {row["path"] for row in surface["endpoints"]}
+    static_rows = [
+        {"method": "靜態", "path": p, "status": None, "content_type": "",
+         "rules": [], "source": "js_static"}
+        for p in static_paths if p not in observed_paths
+    ]
+    if static_rows:
+        surface["endpoints"] = (surface["endpoints"] + static_rows)[:MAX_SURFACE_ENDPOINTS]
+        surface["static_discovered"] = len(static_rows)
     ctx.record([owasp_mapper.tag(f) for f in api_findings], check="api_passive")
     ctx.coverage.mark("api_passive", COMPLETED)
     scan_job = ctx.scan_job
@@ -1259,7 +1272,8 @@ def _passive_api_check(ctx: ScanRunContext) -> None:
     scan_job.save(update_fields=["warning_summary", "updated_at"])
     append_log(
         ctx.scan_job_id,
-        f"被動 API 檢查：{surface['total']} 個端點，{len(api_findings)} 項發現",
+        f"被動 API 檢查：執行期 {surface['total']} 個、靜態 {len(static_rows)} 個端點，"
+        f"{len(api_findings)} 項發現",
     )
 
 

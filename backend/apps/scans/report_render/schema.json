@@ -193,6 +193,7 @@
           "type": "object", "description": "被動 API 檢查觀察到的同網站 API（附錄「API 端點清單」）",
           "required": ["total", "with_issues", "rows"],
           "properties": {"total": {"type": "integer"}, "with_issues": {"type": "integer"},
+                         "static_discovered": {"type": "integer", "description": "前端 JS 靜態發現、執行期未呼叫的端點數"},
                          "rows": {"type": "array", "items": {"type": "object",
                                   "required": ["method", "path", "status", "content_type", "issues"]}}}
         },
