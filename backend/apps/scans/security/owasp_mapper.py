@@ -20,6 +20,7 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "cookie-no-secure": ("A05", "CWE-614"),
     "cookie-no-httponly": ("A05", "CWE-1004"),
     "cookie-samesite-none": ("A05", "CWE-1275"),
+    "cookie-no-samesite": ("A05", "CWE-1275"),
     # Header / CORS / CSP（本套件新 scanner）
     "header-x-powered-by": ("A05", "CWE-200"),
     "header-cors-wildcard": ("A05", "CWE-942"),
@@ -52,6 +53,12 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "exposure-file-backup": ("A05", "CWE-530"),
     "exposure-file-actuator": ("A05", "CWE-200"),
     "exposure-file-data": ("A01", "CWE-200"),
+    "security-unauth-api-records": ("A01", "CWE-862"),
+    # ADR-0005 §2：移植自 ZAP 被動的自家檢查
+    "security-mixed-content": ("A02", "CWE-319"),
+    "header-permissions-policy": ("A05", "CWE-693"),
+    "security-sensitive-url-param": ("A05", "CWE-598"),
+    "security-error-disclosure": ("A05", "CWE-209"),
     "exposure-file-phpinfo": ("A05", "CWE-200"),
     "exposure-file-server-status": ("A05", "CWE-200"),
     "exposure-file-apidoc": ("A05", "CWE-200"),

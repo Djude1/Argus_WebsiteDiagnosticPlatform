@@ -166,6 +166,49 @@ class ActiveGateTests(TestCase):
         self.assertFalse(zap_active.active_enabled())
 
 
+class ActiveSkipReasonTests(TestCase):
+    """主動沒跑時留下可讀原因（觀測性）。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="zap-skip", password="safe-test-password")
+
+    def _scan(self, *, mode, authorized, pages, categories=("security",)):
+        return ScanJob.objects.create(
+            user=self.user, original_url=f"{ORIGIN}/", normalized_url=f"{ORIGIN}/",
+            origin=ORIGIN, status=ScanJob.Status.COMPLETED, categories=list(categories),
+            scan_mode=mode, active_testing_authorized=authorized, max_pages=pages,
+        )
+
+    @override_settings(ARGUS_ZAP_ACTIVE_ENABLED=False, ARGUS_ZAP_ENABLED=True,
+                       ARGUS_ZAP_API_URL="http://zap", ARGUS_ZAP_API_KEY="k")
+    def test_flag_off_on_qualifying_scan_reports_flag(self):
+        scan = self._scan(mode=ScanJob.ScanMode.ACTIVE, authorized=True, pages=50)
+        reason = tasks._zap_active_skip_reason(scan)
+        self.assertIsNotNone(reason)
+        self.assertIn("ARGUS_ZAP_ACTIVE_ENABLED", reason)
+
+    @override_settings(ARGUS_ZAP_ACTIVE_ENABLED=True, ARGUS_ZAP_ENABLED=True,
+                       ARGUS_ZAP_API_URL="http://zap", ARGUS_ZAP_API_KEY="k")
+    def test_passive_scan_reports_authorization_requirement(self):
+        scan = self._scan(mode=ScanJob.ScanMode.PASSIVE, authorized=False, pages=50)
+        reason = tasks._zap_active_skip_reason(scan)
+        self.assertIn("全站", reason)
+        self.assertIn("網域已驗證", reason)
+
+    @override_settings(ARGUS_ZAP_ACTIVE_ENABLED=True, ARGUS_ZAP_ENABLED=False,
+                       ARGUS_ZAP_API_URL="", ARGUS_ZAP_API_KEY="")
+    def test_zap_not_deployed_reported(self):
+        scan = self._scan(mode=ScanJob.ScanMode.ACTIVE, authorized=True, pages=50)
+        reason = tasks._zap_active_skip_reason(scan)
+        self.assertIn("ZAP", reason)
+
+    def test_no_security_category_not_marked(self):
+        scan = self._scan(
+            mode=ScanJob.ScanMode.ACTIVE, authorized=True, pages=50, categories=("seo",)
+        )
+        self.assertIsNone(tasks._zap_active_skip_reason(scan))
+
+
 class ActiveFindingSourceTests(SimpleTestCase):
     def test_alerts_to_findings_marks_active_source(self):
         from apps.scans.security.zap_passive import alerts_to_findings

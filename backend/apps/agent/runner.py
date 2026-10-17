@@ -414,6 +414,9 @@ ORCHESTRATOR_PROMPT = """你是滲透測試指揮官。先遣偵察 agent 已完
 【偵察已回報的發現】
 {findings_list}
 
+【確定性工具已找到的問題——不要重報】
+{deterministic_findings}
+
 【掃描期間被動觀察到的同源 API 端點（部分）】
 {endpoints}
 
@@ -421,6 +424,10 @@ ORCHESTRATOR_PROMPT = """你是滲透測試指揮官。先遣偵察 agent 已完
 {roles_desc}
 
 規則：
+- 上面「確定性工具已找到的問題」是 Nuclei／被動分析／敏感檔探測／未授權存取探測等**已找到並會列入
+  報告**的項目：**不要派專家去重複確認或重報這些**，那是浪費步數。你的價值在於找出「這些以外、
+  需要推理或串接才會發現」的問題——例如相鄰端點要登入、某端點卻漏授權的**差異**；多步驟商業邏輯
+  濫用；跨端點串接——以及對上述已知發現做工具驗證／升級。
 - 依情報派真正需要的角色；brief 指向你觀察到的具體線索（可疑端點、
   未覆蓋的面相），一到三句，讓專家不用從零探索；不指定攻擊細節。
 - 每位專家的結果摘要會回報給你；發現不足或面相未覆蓋時可追加派工。
@@ -481,12 +488,38 @@ async def _make_agent_context(browser, origin: str):
     return context
 
 
+def _summarize_known_findings(known: list[dict] | None) -> str:
+    """確定性工具已找到的資安問題摘要（給 orchestrator，叫它別重報）。
+
+    只給標題、端點、嚴重度——**不送 evidence**（避免把遮罩過的證據再攤進 prompt），
+    依 (rule_id 或 title) 去重，最多 20 筆。
+    """
+    rows: list[str] = []
+    seen: set[str] = set()
+    for finding in known or []:
+        if finding.get("category") != "security":
+            continue
+        key = str(finding.get("rule_id") or finding.get("title") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        evidence_json = finding.get("evidence_json") or {}
+        endpoint = evidence_json.get("endpoint") or evidence_json.get("observed_endpoint") or ""
+        severity = finding.get("severity", "")
+        title = finding.get("title", "")
+        rows.append(f"- [{severity}] {title}" + (f"（{endpoint}）" if endpoint else ""))
+        if len(rows) >= 20:
+            break
+    return "\n".join(rows) or "（無）"
+
+
 async def run_agent_for_scan(
     scan_job: ScanJob,
     chain: ProviderChain | None = None,
     task_prompt: str | None = None,
     recon_intel: list[str] | None = None,
     may_submit_forms: bool = False,
+    known_findings: list[dict] | None = None,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
 
@@ -689,6 +722,7 @@ async def run_agent_for_scan(
             origin=scan_job.origin,
             recon_summary=(recon_result.final_summary or "（無）")[:1500],
             findings_list=("\n".join(f"- {t}" for t in findings_titles) or "（無）"),
+            deterministic_findings=_summarize_known_findings(known_findings),
             endpoints=(
                 "\n".join(f"- {u}" for u in (recon_intel or [])[:15]) or "（無）"
             ),

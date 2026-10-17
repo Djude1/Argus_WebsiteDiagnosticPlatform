@@ -820,9 +820,10 @@ def is_static_asset_path(path: str) -> bool:
 # 直接讀內容用 regex 抽出網站自己寫死的 API 路徑／rewrite 前綴——繞得過 Cloudflare
 # （主動重抓會被 challenge 擋），補上 Katana／被動攔截都看不到的登入後端點。
 # 實測站台的代理前綴就明文寫在 _buildManifest.js。
-_MAX_JS_BODIES = 40  # 每次掃描最多讀幾個 JS 檔的內容
+_MAX_JS_BODIES = 80  # 每次掃描最多讀幾個 JS 檔的內容（不限重抓，放寬以提高涵蓋）
 _MAX_JS_BODY_BYTES = 2 * 1024 * 1024
 _MAX_JS_API_PATHS = 60
+_MAX_JS_SECRETS = 40  # 外部 JS bundle 累積的秘鑰筆數上限
 # 絕對路徑字串：以 / 開頭、只含路徑安全字元（含 Next.js rewrite 的 :param／* 動態段，
 # 下面會截到第一個動態段之前）。原本字元類不含 : *，碰到 "/api_proxy/:path*" 整段比對失敗、
 # 抽不到 /api_proxy——這是 2026-10-16 實站漏抓的直接原因。
@@ -1002,6 +1003,10 @@ class _CrawlState:
     # 同源 JS bundle 靜態抽出的 API 路徑（_buildManifest.js、chunks），2026-10-16
     js_api_paths: set[str] = field(default_factory=set)
     js_bodies_read: int = 0
+    # 同源 JS bundle 偵測到的秘鑰（每筆 {kind,label,severity,masked,source}），2026-10-17
+    # ADR-0005 §1：外部 .js 的秘鑰原本沒人掃（只有 Katana，CF 後歸零）；crawler 已握有 bytes
+    js_secrets: list[dict] = field(default_factory=list)
+    js_secret_keys: set[tuple[str, str]] = field(default_factory=set)
     page_retry_counts: dict[str, int] = field(default_factory=dict)
     last_request_at: float = 0.0
     # axe-core 無障礙檢查：勾 UX 才開；最多檢查 ARGUS_AXE_MAX_PAGES 頁
@@ -1215,10 +1220,32 @@ def _collect_js_api_paths(resp, sink: set[str], body_tasks: list, state=None) ->
                 if len(sink) >= _MAX_JS_API_PATHS:
                     break
                 sink.add(path)
+            if state is not None:
+                _collect_js_secrets(body, resp.url, state)
         except Exception:
             pass
 
     body_tasks.append(asyncio.ensure_future(_read()))
+
+
+def _collect_js_secrets(body: str, url: str, state) -> None:
+    """外部 JS bundle 的秘鑰偵測（ADR-0005 §1）：crawler 已把 bytes 讀進來，順手掃。
+
+    與 Argus 既有「HTML／inline script 秘鑰」互補——那只掃頁面本身，不掃外部 .js。
+    跨檔以 (kind, masked) 去重（同一把金鑰出現在多個 chunk 只記一次）。
+    """
+    from apps.scans.security.secret_scanner import detect_secrets_in_text
+
+    if len(state.js_secrets) >= _MAX_JS_SECRETS:
+        return
+    for secret in detect_secrets_in_text(body):
+        dedupe_key = (secret.get("kind", ""), secret.get("masked", ""))
+        if dedupe_key in state.js_secret_keys:
+            continue
+        state.js_secret_keys.add(dedupe_key)
+        state.js_secrets.append({**secret, "source": url})
+        if len(state.js_secrets) >= _MAX_JS_SECRETS:
+            break
 
 
 def _attach_page_listeners(
@@ -1693,4 +1720,5 @@ async def crawl_site(
     site_signals["api_observations"] = list(state.api_observations.values())
     # JS bundle 靜態抽出的 API 路徑（供敏感檔案探測推 API 前綴；繞過 Cloudflare）
     site_signals["js_api_paths"] = sorted(state.js_api_paths)
+    site_signals["js_secrets"] = state.js_secrets
     return state.pages, state.warnings, site_signals, sorted(state.api_endpoints)

@@ -42,7 +42,7 @@ class PipelineShapeTests(TestCase):
             [
                 "target_validation", "crawl", "enter_scanning", "pagespeed_start", "fingerprint",
                 "page_analysis", "aeo_answers", "site_security", "active_probe", "deep_security",
-                "zap_passive", "zap_active", "exposure", "geo_site", "seo_links", "pagespeed",
+                "zap_active", "exposure", "geo_site", "seo_links", "pagespeed",
                 "favicon", "agent",
                 "kali", "site_profile", "scoring",
             ],

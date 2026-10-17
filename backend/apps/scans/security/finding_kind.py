@@ -56,6 +56,12 @@ _EXACT = {
     "api-error-stack-trace": EXPOSURE,
     "api-cors-wildcard": CONFIG,
     "form-password-unmasked": CONFIG,
+    # 主動以未登入請求實際取得成批記錄＝已驗證的存取控制失效
+    "security-unauth-api-records": VERIFIED,
+    # ADR-0005 §2：移植自 ZAP 被動（header- 前綴者由 _PREFIXES 歸 CONFIG）
+    "security-mixed-content": CONFIG,
+    "security-sensitive-url-param": EXPOSURE,
+    "security-error-disclosure": EXPOSURE,
 }
 _PREFIXES = (
     ("header-", CONFIG),

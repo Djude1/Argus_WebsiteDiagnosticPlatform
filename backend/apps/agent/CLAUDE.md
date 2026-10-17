@@ -27,7 +27,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 
 | 檔案 | 職責 |
 |---|---|
-| `runner.py` | 流程編排：recon→orchestrator（首步 tool_choice 強制派工）→specialist；`SPECIALIST_ROLES` 角色目錄（desc＋when）；authenticated scan 帳密解密注入；`_merge` 結果合併 |
+| `runner.py` | 流程編排：recon→orchestrator（首步 tool_choice 強制派工）→specialist；`SPECIALIST_ROLES` 角色目錄（desc＋when）；authenticated scan 帳密解密注入；`_merge` 結果合併。**吃確定性發現不重報**（ADR-0005 §5，2026-10-17）：`run_agent_for_scan(known_findings=...)` 由 `tasks.stage_agent` 傳入本次確定性工具已找到的資安發現；`_summarize_known_findings` 組成摘要（只給標題／端點／嚴重度，**不送 evidence**，去重上限 20）放進 `ORCHESTRATOR_PROMPT` 的「確定性工具已找到的問題——不要重報」段，叫 orchestrator 別派專家重複確認、把步數花在要推理才找得到的（差異式未授權、串接）與驗證升級既有發現 |
 | `providers.py` | `ChatProvider`／`ProviderChain`（**MiniMax-M3** 主力→GLM→Gemini 純文字 fallback）；`ProviderError` 只帶公開資訊 |
 | `loop.py` | `HermesAgent` tool-calling 迴圈；`_compact_stale_tool_results`（bulky 觀察快照壓縮）；`_inject_stall_hint`（連續 click 空轉導正）；`_inject_endgame_hint`（剩 10 步強制 report）；`forced_first_tool`（orchestrator 首步鎖定） |
 | `tools.py` | `ToolExecutor`：**25 個工具**（`TOOL_SCHEMAS`）＋離線知識庫 `knowledge/*.md`（search_knowledge 檢索；內容限通用方法論，禁目標特定）；`build_tool_schemas(..., allow_form_submit=True)`——deep_only 閘＋`allow_form_submit=False` 時另隱藏 `send_message`（未驗證網域 UX 測試不得送出表單）；`redact_tool_arguments/result` 持久化遮罩；JWT 於 snippet 壓縮 |

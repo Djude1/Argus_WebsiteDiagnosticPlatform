@@ -55,16 +55,22 @@ from apps.scans.scanners import (
 )
 from apps.scans.security import exposure_scanner, owasp_mapper
 from apps.scans.security.api_scanner import MAX_SURFACE_ENDPOINTS, analyze_api
+from apps.scans.security.authz_probe import (
+    analyze_unauthorized_results,
+    probe_unauthorized_endpoints,
+)
 from apps.scans.security.content_injection import (
     build_injection_finding,
     detect_content_injection,
 )
 from apps.scans.security.cookie_scanner import analyze_cookies
+from apps.scans.security.cross_layer import consolidate_cross_layer
 from apps.scans.security.dns_scanner import analyze_dns
 from apps.scans.security.form_scanner import analyze_password_fields
 from apps.scans.security.header_scanner import analyze_headers
 from apps.scans.security.js_library_scanner import analyze_js_libraries
 from apps.scans.security.kali_tools import validate_findings_with_kali
+from apps.scans.security.passive_checks import analyze_passive_html
 from apps.scans.security.redaction import (
     redact_pii_in_text,
     redact_url_query_values,
@@ -84,7 +90,6 @@ from apps.scans.security.zap_active import active_enabled as zap_active_enabled
 from apps.scans.security.zap_active import run_active as run_zap_active
 from apps.scans.security.zap_passive import ZapBusy, ZapError, alerts_to_findings
 from apps.scans.security.zap_passive import enabled as zap_enabled
-from apps.scans.security.zap_passive import run_passive as run_zap_passive
 from apps.scans.seo.collect import build_link_report
 from apps.scans.seo.link_trend import (
     coverage_text,
@@ -142,8 +147,6 @@ def planned_scan_steps(scan_job, execution_plan) -> list[str]:
     if execution_plan.run_nuclei:
         steps.append("active_probe")
     steps.append("deep_security")
-    if _runs_zap_passive(scan_job):
-        steps.append("zap_passive")
     if _runs_zap_active(scan_job):
         steps.append("zap_active")
     if execution_plan.run_exposure:
@@ -436,7 +439,7 @@ class ScanRunContext:
     runtime_stage: str = "target_validation"
     # 覆蓋紀錄（coverage.py）：各項檢查是否完整跑完、產生了哪些問題
     coverage: ScanCoverage = field(default_factory=ScanCoverage)
-    # ZAP 被動分析用的 HAR 暫存目錄（爬取時錄、stage_zap_passive 用完即刪）
+    # ZAP 主動掃描用的 HAR 暫存目錄（爬取時錄、stage_zap_active 用完即刪；被動已退役）
     har_dir: Path | None = None
 
     @property
@@ -545,7 +548,7 @@ def stage_crawl(ctx: ScanRunContext) -> None:
         scan_job_id,
         f"開始爬取，最大深度 {scan_job.max_depth}，最大頁數 {scan_job.max_pages}",
     )
-    if _runs_zap_passive(scan_job) or _runs_zap_active(scan_job):
+    if _runs_zap_active(scan_job):
         ctx.har_dir = Path(tempfile.mkdtemp(prefix=f"argus-har-{scan_job_id}-"))
     crawled_pages, warnings, site_signals, discovered_endpoints = _run_async(
         lambda: crawl_site(
@@ -593,16 +596,28 @@ def stage_crawl(ctx: ScanRunContext) -> None:
         )
 
 
-def _runs_zap_passive(scan_job: ScanJob) -> bool:
-    """ZAP 被動分析：勾資安且已部署 ZAP 才跑（只分析已爬到的流量，被動模式也可以）。"""
-    return "security" in scan_job.effective_categories and zap_enabled()
-
-
 def _runs_zap_active(scan_job: ScanJob) -> bool:
     """ZAP 主動掃描：勾資安＋已開啟主動 ZAP＋全站主動已授權才跑（會送攻擊 payload）。"""
     if "security" not in scan_job.effective_categories or not zap_active_enabled():
         return False
     return build_scan_execution_plan(scan_job).run_zap_active
+
+
+def _zap_active_skip_reason(scan_job: ScanJob) -> str | None:
+    """沒跑主動掃描時的原因（覆蓋說明用）；回 None 代表這次本來就與主動掃描無關、不標。
+
+    主動沒跑時原本完全不留痕跡，判讀報告的人分不清是「旗標沒開」「沒授權」還是「跑了沒發現」
+    （某授權掃描實測：覆蓋只見 zap_passive，看不出主動為何缺席）。只有勾了資安才標。
+    """
+    if "security" not in scan_job.effective_categories:
+        return None
+    if not build_scan_execution_plan(scan_job).run_zap_active:
+        return "僅「全站＋主動模式＋網域已驗證」的掃描會執行主動掃描"
+    if not zap_enabled():
+        return "平台未部署或未啟用 ZAP"
+    if not zap_active_enabled():
+        return "平台未開啟 ZAP 主動掃描（ARGUS_ZAP_ACTIVE_ENABLED）"
+    return None
 
 
 def _discard_har(ctx: ScanRunContext) -> None:
@@ -1031,12 +1046,33 @@ def _run_nuclei_for_scan(ctx: ScanRunContext, target: str, rate_limit: int) -> N
     )
 
 
-def _run_site_active_tools(ctx: ScanRunContext, target: str) -> None:
-    """全網站主動掃描：Katana 與 Nuclei 共享 ARGUS_ACTIVE_MAX_RPS 預算。"""
+def _run_site_active_tools(
+    ctx: ScanRunContext, target: str, skip_nuclei: bool = False
+) -> None:
+    """全網站主動掃描：Katana 與 Nuclei 共享 ARGUS_ACTIVE_MAX_RPS 預算。
+
+    `skip_nuclei`（目標位於全代理 CDN 後）時只跑 Katana，並讓它獨佔整個 RPS 預算；
+    Nuclei 的覆蓋紀錄與說明由呼叫端 `stage_active_probe` 處理。
+    """
     scan_job = ctx.scan_job
     scan_job_id = ctx.scan_job_id
-    append_log(scan_job_id, "全網站主動掃描：Katana 與 Nuclei 執行受控探測")
     active_rps = max(int(settings.ARGUS_ACTIVE_MAX_RPS), 1)
+
+    if skip_nuclei:
+        append_log(scan_job_id, "全網站主動掃描：略過 Nuclei（位於 CDN 後），Katana 獨佔 RPS 預算")
+        try:
+            ctx.katana_findings, ctx.katana_tech = run_katana(
+                target, scan_job.max_depth, scan_job.max_pages,
+                rate_limit=active_rps, scan_job_id=scan_job_id,
+            )
+            ctx.coverage.mark("katana", COMPLETED)
+        except ScanCancelled:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _tool_failed(ctx, "katana", "Katana", exc)
+        return
+
+    append_log(scan_job_id, "全網站主動掃描：Katana 與 Nuclei 執行受控探測")
     katana_rps = max(active_rps // 2, 1)
     nuclei_rps = max(active_rps - katana_rps, 1)
 
@@ -1159,25 +1195,85 @@ def _waf_blocked_nuclei_note(ctx: ScanRunContext) -> list[dict]:
     }]
 
 
+def _behind_waf_cdn(ctx: ScanRunContext) -> str:
+    """目標前方若是全代理型 WAF／CDN（會過濾 root-URL KEV 探測）就回供應商名稱，否則回 ""。
+
+    用爬蟲已抓到的首頁回應標頭判定（cf-ray、x-amz-cf-id…，`infra_scanner.detect_edge`），
+    退而求其次用 fingerprint 階段記的 edge 供應商字串；只認 `_WAF_CAPABLE`（Cloudflare 等
+    會把流量停在邊緣的服務，不含 Vercel／Netlify 這種直接代管應用的平台）。
+    """
+    from apps.scans.security.infra_scanner import _WAF_CAPABLE, detect_edge
+
+    root = next((p for p in ctx.crawled_pages if p.get("headers")), None)
+    edge = detect_edge((root or {}).get("headers") or {}, [], [])
+    if edge and edge.get("waf_capable"):
+        return str(edge["provider"])
+    provider = str((ctx.scan_job.fingerprint or {}).get("edge") or "")
+    return provider if provider in _WAF_CAPABLE else ""
+
+
+def _nuclei_skipped_cdn_note(ctx: ScanRunContext, provider: str) -> list[dict]:
+    """目標位於全代理 CDN 後、刻意略過 Nuclei 時補的 info 說明（0 項不等於沒弱點）。"""
+    append_log(
+        ctx.scan_job_id,
+        f"目標位於 {provider} 之後，已略過 root-URL KEV Nuclei 掃描（會被邊緣過濾），節省掃描時間",
+    )
+    return [{
+        "category": "security",
+        "severity": "info",
+        "title": f"已略過主動弱點掃描：目標位於 {provider} 之後",
+        "description": (
+            f"目標流量先經過 {provider}（全代理型 CDN／WAF），Nuclei 的已知被利用漏洞（KEV）模板"
+            "探測網站根網址時會停在邊緣節點、幾乎到不了原始主機，實測一律 0 項發現卻耗時十餘分鐘。"
+            "為縮短掃描時間已略過。這不代表網站沒有弱點，也不能證明防護規則有在運作。"
+        ),
+        "remediation": (
+            "此為資訊性提示，不需要修復。如需完整的已知漏洞掃描，可在沒有 CDN／WAF 的測試環境、"
+            "或在邊緣規則暫時放行授權掃描來源後執行。"
+        ),
+        "evidence": f"偵測到前端邊緣：{provider}；已略過網站根網址的 KEV Nuclei 掃描",
+        "selector": "",
+        "bounding_box": None,
+        "impact_area": "vulnerability",
+        "confidence": 0.5,
+        "priority_score": 10.0,
+        "ai_handoff_prompt": (
+            f"網站位於 {provider} 之後，Argus 已略過 Nuclei root-URL 主動掃描（會被邊緣過濾）。"
+            "請建議如何在授權環境下完成更完整的已知漏洞掃描。"
+        ),
+    }]
+
+
 def stage_active_probe(ctx: ScanRunContext) -> None:
     """主動探測（Nuclei／Katana），同時遵守「單頁／全網站」範圍與 active 授權。
 
-    被動模式不發任何探針；單頁主動只讓 Nuclei 掃輸入頁。
+    被動模式不發任何探針；單頁主動只讓 Nuclei 掃輸入頁。目標位於全代理型 CDN／WAF 後時，
+    root-URL KEV Nuclei 會被邊緣過濾（實測 0 發現卻耗十餘分鐘），略過並改出一筆說明。
     """
     plan = ctx.execution_plan
     raise_if_cancelled(ctx.scan_job_id)
     _collect_probe_targets(ctx)
     target = assert_public_http_url(ctx.scan_job.normalized_url)
 
-    if plan.run_nuclei:
+    behind_cdn = _behind_waf_cdn(ctx) if plan.run_nuclei else ""
+    skip_nuclei = bool(behind_cdn) and settings.ARGUS_NUCLEI_SKIP_BEHIND_CDN
+    run_nuclei_now = plan.run_nuclei and not skip_nuclei
+
+    if run_nuclei_now:
         ctx.scanning_progress(ctx.scanning_total, "active_probe")
     if plan.run_katana:
-        _run_site_active_tools(ctx, target)
-    elif plan.run_nuclei:
+        _run_site_active_tools(ctx, target, skip_nuclei=skip_nuclei)
+    elif run_nuclei_now:
         _run_single_page_nuclei(ctx, target)
-    else:
+    elif not plan.run_nuclei:
         append_log(ctx.scan_job_id, "被動模式：略過 Nuclei、Katana 與其他主動探測工具")
-    if not plan.run_nuclei:
+    if skip_nuclei:
+        ctx.nuclei_findings = _nuclei_skipped_cdn_note(ctx, behind_cdn)
+        ctx.coverage.mark(
+            "nuclei", SKIPPED,
+            f"位於 {behind_cdn} 等全代理 CDN 之後，root-URL KEV 探測會被邊緣過濾，已略過",
+        )
+    elif not plan.run_nuclei:
         ctx.coverage.mark("nuclei", SKIPPED, "未授權主動測試")
     if not plan.run_katana:
         ctx.coverage.mark("katana", SKIPPED, "單頁或未授權主動測試")
@@ -1223,6 +1319,9 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
         + analyze_dns(host)
         + analyze_js_libraries(ctx.crawled_pages)
         + analyze_services(ctx.crawled_pages)
+        + _js_secret_findings(ctx)
+        # ADR-0005 §2：移植自 ZAP 被動的自家檢查（混合內容／URL 敏感參數／頁面錯誤洩漏）
+        + analyze_passive_html(ctx.crawled_pages)
     )
     # WAF／防護機制封鎖偵測（被動：統計已落地 Page 的 403/429 與 challenge 特徵，
     # 達閾值才產出單一 info finding，未達閾值回 None 不打擾使用者）
@@ -1241,10 +1340,30 @@ def stage_deep_security(ctx: ScanRunContext) -> None:
     ctx.scanning_progress(
         ctx.scanning_total + 3,
         _first_step(
-            ctx.steps, "zap_passive", "exposure_probe", "geo_site", "seo_links", "agent",
+            ctx.steps, "zap_active", "exposure_probe", "geo_site", "seo_links", "agent",
             "scoring",
         ),
     )
+
+
+def _js_secret_findings(ctx: ScanRunContext) -> list[dict]:
+    """外部 JS bundle 的秘鑰 finding（ADR-0005 §1）：crawler 已掃好，這裡按來源檔分組成 finding。
+
+    與逐頁的 HTML／inline script 秘鑰（`_analyze_one_page`）互補——那只看頁面本身，不看外部 .js。
+    """
+    by_source: dict[str, list[dict]] = {}
+    for secret in ctx.site_signals.get("js_secrets") or []:
+        by_source.setdefault(secret.get("source") or "JavaScript 檔案", []).append(secret)
+    findings: list[dict] = []
+    for source, secrets in by_source.items():
+        location = redact_url_query_values(source)
+        secret_finding = build_secret_finding(secrets, location, source="js_bundle")
+        if secret_finding:
+            findings.append(secret_finding)
+        browser_key_finding = build_browser_key_finding(secrets, location, source="js_bundle")
+        if browser_key_finding:
+            findings.append(browser_key_finding)
+    return findings
 
 
 def _passive_api_check(ctx: ScanRunContext) -> None:
@@ -1288,56 +1407,6 @@ def _passive_api_check(ctx: ScanRunContext) -> None:
     )
 
 
-def stage_zap_passive(ctx: ScanRunContext) -> None:
-    """OWASP ZAP 被動分析：把爬到的同網站流量交給 ZAP，只跑被動規則，對目標零新增請求。
-
-    與 Argus 既有檢查重複的規則不另外產生問題；ZAP 無法使用時只標覆蓋 failed，掃描照常完成。
-    """
-    scan_job = ctx.scan_job
-    if not _runs_zap_passive(scan_job):
-        _discard_har(ctx)
-        return
-    raise_if_cancelled(ctx.scan_job_id)
-    ctx.scanning_progress(ctx.scanning_total + 3, "zap_passive")
-    har_files = sorted(ctx.har_dir.glob("*.har")) if ctx.har_dir else []
-    try:
-        result = run_zap_passive(
-            har_files, scan_job.origin, scan_job.id,
-            cancel_check=lambda: raise_if_cancelled(ctx.scan_job_id),
-        )
-    except ZapBusy as exc:
-        append_log(ctx.scan_job_id, f"ZAP 被動分析略過：{exc}", level="warn")
-        ctx.coverage.mark("zap_passive", SKIPPED, str(exc))
-        return
-    except ZapError as exc:
-        append_log(ctx.scan_job_id, f"ZAP 被動分析失敗：{exc}", level="warn")
-        ctx.coverage.mark("zap_passive", FAILED, str(exc))
-        return
-    finally:
-        # 主動 ZAP 也要用這份 HAR 建站台樹，留到 stage_zap_active 跑完才刪
-        if not _runs_zap_active(scan_job):
-            _discard_har(ctx)
-    if not result.entries:
-        ctx.coverage.mark("zap_passive", SKIPPED, "沒有錄到可分析的流量")
-        return
-    findings, overlap = alerts_to_findings(result.alerts, result.version)
-    if result.version:
-        warnings = dict(scan_job.warning_summary or {})
-        warnings["tools"] = {**(warnings.get("tools") or {}), "OWASP ZAP": result.version}
-        scan_job.warning_summary = warnings
-        scan_job.save(update_fields=["warning_summary", "updated_at"])
-    ctx.record(findings, check="zap_passive")
-    if result.queue_drained:
-        ctx.coverage.mark("zap_passive", COMPLETED)
-    else:
-        ctx.coverage.mark("zap_passive", PARTIAL, "ZAP 被動規則在時限內沒有跑完")
-    append_log(
-        ctx.scan_job_id,
-        f"ZAP {result.version} 被動分析：{result.entries} 筆流量、{len(result.alerts)} 則告警，"
-        f"新增 {len(findings)} 項問題；另有 {sum(overlap.values())} 則與既有檢查相同、不重複列出",
-    )
-
-
 def stage_zap_active(ctx: ScanRunContext) -> None:
     """OWASP ZAP 主動掃描：先用爬蟲 HAR 建站台樹，再對目標送攻擊 payload 找弱點。
 
@@ -1346,6 +1415,9 @@ def stage_zap_active(ctx: ScanRunContext) -> None:
     """
     scan_job = ctx.scan_job
     if not _runs_zap_active(scan_job):
+        reason = _zap_active_skip_reason(scan_job)
+        if reason:
+            ctx.coverage.mark("zap_active", SKIPPED, reason)
         return
     raise_if_cancelled(ctx.scan_job_id)
     ctx.scanning_progress(ctx.scanning_total + 3, "zap_active")
@@ -1465,10 +1537,13 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                 f"敏感檔案外洩探測略過（{exc.__class__.__name__}）",
                 level="warn",
             )
+        _run_authz_probe(ctx)
     else:
         ctx.coverage.mark("exposure_probe", SKIPPED, "單頁或未授權主動測試")
+        ctx.coverage.mark("authz_probe", SKIPPED, "單頁或未授權主動測試")
         if ctx.execution_plan.active_authorized:
             append_log(scan_job_id, "單頁範圍：略過整站敏感檔案路徑探測")
+
 
     if ctx.katana_tech:
         updated_warnings = dict(scan_job.warning_summary or {})
@@ -1484,6 +1559,48 @@ def stage_exposure(ctx: ScanRunContext) -> None:
         f"Nuclei {len(ctx.nuclei_findings)} 項"
         + (f"，技術棧：{', '.join(ctx.katana_tech)}" if ctx.katana_tech else ""),
     )
+
+
+def _run_authz_probe(ctx: ScanRunContext) -> None:
+    """未授權存取探測：對發現的 API 端點做無憑證 GET，成批帳號／成員記錄匿名可讀即報。
+
+    把 Agent 偶然打到的未授權個資 API 沉澱成確定性檢查；失敗不影響主掃描。
+    """
+    scan_job_id = ctx.scan_job_id
+    origin = ctx.scan_job.origin
+    candidates = [
+        f"{origin}/{path.lstrip('/')}"
+        for path in dict.fromkeys(_observed_api_paths(ctx))  # 去重保序
+        if path
+    ]
+    if not candidates:
+        ctx.coverage.mark("authz_probe", SKIPPED, "沒有發現可探測的 API 端點")
+        return
+    raise_if_cancelled(scan_job_id)
+    try:
+        results = _run_async(
+            lambda: probe_unauthorized_endpoints(candidates, scan_job_id)
+        )
+        findings = [
+            owasp_mapper.tag(f) for f in analyze_unauthorized_results(results)
+        ]
+        ctx.record(findings, check="authz_probe")
+        ctx.coverage.mark("authz_probe", COMPLETED)
+        append_log(
+            scan_job_id,
+            f"未授權存取探測完成：探測 {len(results)} 個 API 端點，"
+            f"發現 {len(findings)} 項未授權記錄外洩",
+        )
+    except ScanCancelled:
+        raise
+    except Exception as exc:  # noqa: BLE001 — 探測失敗不影響主掃描
+        logger.exception("掃描子步驟失敗 scan_job_id=%s", scan_job_id)
+        ctx.coverage.mark("authz_probe", FAILED, exc.__class__.__name__)
+        append_log(
+            scan_job_id,
+            f"未授權存取探測略過（{exc.__class__.__name__}）",
+            level="warn",
+        )
 
 
 def stage_geo_site(ctx: ScanRunContext) -> None:
@@ -1709,11 +1826,15 @@ def stage_agent(ctx: ScanRunContext) -> None:
     try:
         from apps.agent.runner import run_agent_for_scan
 
+        # 把確定性工具這次已找到的資安問題餵給 agent，叫它別重報（ADR-0005 §5）——
+        # 消掉「agent 盲跑 → 撞一堆重複 → 事後去重」的浪費
+        known_findings = [f for f in ctx.all_findings if f.get("category") == "security"]
         agent_result = _run_async(
             lambda: run_agent_for_scan(
                 scan_job,
                 recon_intel=ctx.discovered_endpoints,
                 may_submit_forms=may_submit_forms,
+                known_findings=known_findings,
             )
         )
         ctx.agent_result = agent_result
@@ -1921,6 +2042,19 @@ def stage_scoring(ctx: ScanRunContext) -> None:
             "SEO/AEO 未評估，總分僅反映站台層級檢查，不應解讀為網站安全。",
             level="warn",
         )
+    # 跨層去重：確定性探測與 Agent 打到同一端點＋同類型時只留確定性那筆，否則計分扣兩次、
+    # 報告列兩次（實測某授權掃描的 API 規格端點同時出現確定性 high 與 Agent high）
+    ctx.all_findings, dropped = consolidate_cross_layer(ctx.all_findings)
+    if dropped:
+        Finding.objects.filter(
+            scan_job=scan_job,
+            rule_id__in=[str(f.get("rule_id") or "") for f in dropped],
+        ).delete()
+        append_log(
+            scan_job_id,
+            f"跨層去重：{len(dropped)} 筆 Agent 觀察與確定性探測指向同一端點，"
+            "已合併，保留可重現的確定性發現",
+        )
     overall_score, category_scores, top_actions = calculate_scores(
         ctx.all_findings,
         tested_categories=tested_categories,
@@ -2024,7 +2158,6 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("site_security", stage_site_security),
     ("active_probe", stage_active_probe),
     ("deep_security", stage_deep_security),
-    ("zap_passive", stage_zap_passive),
     ("zap_active", stage_zap_active),
     ("exposure", stage_exposure),
     ("geo_site", stage_geo_site),

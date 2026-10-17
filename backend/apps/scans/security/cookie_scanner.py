@@ -67,6 +67,20 @@ def _eval_cookie(set_cookie_line: str, is_https: bool) -> list[dict]:
             remediation="SameSite=None 時務必同時設定 Secure，或改用 Lax/Strict。",
             evidence=evidence, impact_area="vulnerability",
         ))
+    elif not samesite:
+        # SameSite 屬性完全未設定（ZAP 10054 移植；退 ZAP 被動後補回，見 ADR-0005 §2）。
+        # 瀏覽器雖多半預設 Lax，但明確設定才可靠、跨瀏覽器一致，屬縱深防禦。
+        out.append(make_finding(
+            category="security", severity="low", rule_id="cookie-no-samesite",
+            title=f"Cookie 未設定 SameSite 屬性：{name}",
+            description=(
+                "Cookie 沒有 SameSite 屬性。SameSite 控制 Cookie 是否隨跨站請求送出，少了它"
+                "就少一層 CSRF 防護；雖然新版瀏覽器多半預設 Lax，但不是所有瀏覽器都一致，"
+                "明確設定才可靠。"
+            ),
+            remediation="為 Cookie 明確設定 SameSite=Lax（或視需求 Strict）。",
+            evidence=evidence, impact_area="vulnerability",
+        ))
     return out
 
 

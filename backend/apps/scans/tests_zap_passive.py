@@ -15,17 +15,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, override_settings
 
-from apps.scans import tasks
-from apps.scans.coverage import COMPLETED, FAILED, SKIPPED
 from apps.scans.crawler import _make_context
-from apps.scans.models import Finding, ScanJob
+from apps.scans.models import Finding
 from apps.scans.reports import _source_label
-from apps.scans.scan_plan import build_scan_execution_plan
-from apps.scans.security import zap_passive
 from apps.scans.security.zap_passive import (
     ZapBusy,
     ZapClient,
@@ -277,64 +272,6 @@ class CrawlerHarTests(SimpleTestCase):
         browser.new_context.reset_mock()
         asyncio.run(_make_context(browser, ORIGIN))
         self.assertNotIn("record_har_path", browser.new_context.await_args.kwargs)
-
-
-@override_settings(ARGUS_ZAP_ENABLED=True, ARGUS_ZAP_API_URL="http://zap:8090",
-                   ARGUS_ZAP_API_KEY="k")
-class StageTests(TestCase):
-    def setUp(self):
-        cache.clear()
-        user = get_user_model().objects.create_user(username="zap", password="safe-test-password")
-        self.scan = ScanJob.objects.create(
-            user=user, original_url=f"{ORIGIN}/", normalized_url=f"{ORIGIN}/", origin=ORIGIN,
-            categories=["security"],
-        )
-        self.ctx = tasks.ScanRunContext(
-            scan_job=self.scan, execution_plan=build_scan_execution_plan(self.scan), steps=[],
-            crawl_phase_started="",
-        )
-        self.ctx.har_dir = Path(tempfile.mkdtemp())
-        _write_har(self.ctx.har_dir, "context-1.har", [_entry(f"{ORIGIN}/")])
-
-    def test_records_findings_and_removes_har(self):
-        har_dir = self.ctx.har_dir
-        fake = _FakeClient(alerts=[_alert("10017"), _alert("10038", risk="Medium")])
-        with mock.patch.object(zap_passive, "ZapClient", return_value=fake):
-            tasks.stage_zap_passive(self.ctx)
-        self.assertFalse(har_dir.exists())
-        self.assertIsNone(self.ctx.har_dir)
-        rules = list(Finding.objects.filter(scan_job=self.scan).values_list("rule_id", flat=True))
-        self.assertEqual(rules, ["zap-10017"])
-        self.assertEqual(self.ctx.coverage.status_of("zap_passive"), COMPLETED)
-        self.assertIn("zap_passive", tasks.planned_scan_steps(self.scan, self.ctx.execution_plan))
-
-    def test_zap_down_marks_failed_and_scan_continues(self):
-        har_dir = self.ctx.har_dir
-        with mock.patch.object(zap_passive, "ZapClient",
-                               return_value=_FakeClient(fail_import=True)):
-            tasks.stage_zap_passive(self.ctx)
-        self.assertFalse(har_dir.exists())
-        self.assertEqual(self.ctx.coverage.status_of("zap_passive"), FAILED)
-        self.assertFalse(Finding.objects.filter(scan_job=self.scan).exists())
-
-    def test_busy_is_skipped(self):
-        cache.add(f"argus-zap:{ORIGIN}", 1, timeout=60)
-        tasks.stage_zap_passive(self.ctx)
-        self.assertEqual(self.ctx.coverage.status_of("zap_passive"), SKIPPED)
-
-    @override_settings(ARGUS_ZAP_ENABLED=False)
-    def test_disabled_is_noop_and_discards_har(self):
-        har_dir = self.ctx.har_dir
-        tasks.stage_zap_passive(self.ctx)
-        self.assertFalse(har_dir.exists())
-        self.assertIsNone(self.ctx.coverage.status_of("zap_passive"))
-        steps = tasks.planned_scan_steps(self.scan, self.ctx.execution_plan)
-        self.assertNotIn("zap_passive", steps)
-
-    def test_security_not_selected_skips(self):
-        ScanJob.objects.filter(id=self.scan.id).update(categories=["seo"])
-        self.scan.refresh_from_db()
-        self.assertFalse(tasks._runs_zap_passive(self.scan))
 
 
 @unittest.skipUnless(ZAP_URL and ZAP_KEY, "需要 ZAP（ARGUS_TEST_ZAP_URL、ARGUS_TEST_ZAP_KEY）")

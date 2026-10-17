@@ -53,6 +53,23 @@ def _eval_headers(headers: dict, url: str) -> list[dict]:
                 evidence="ACAO: *", impact_area="vulnerability",
             ))
     out.extend(_eval_hsts(headers.get("strict-transport-security", "")))
+    # Permissions-Policy 缺失（縱深防禦，ZAP 10063 移植；低風險，同 CSP 等級）
+    if not headers.get("permissions-policy") and not headers.get("feature-policy"):
+        out.append(make_finding(
+            category="security", severity="low", rule_id="header-permissions-policy",
+            title="缺少 Permissions-Policy 標頭",
+            description=(
+                "回應沒有 Permissions-Policy 標頭。此標頭用來關閉網站用不到的瀏覽器功能"
+                "（相機、麥克風、定位、付款等），少了它等於放任第三方內嵌內容或被注入的腳本"
+                "存取這些敏感功能，是縱深防禦的一環。"
+            ),
+            remediation=(
+                "加上 Permissions-Policy，明確關閉用不到的功能，例如："
+                "Permissions-Policy: camera=(), microphone=(), geolocation=()。"
+            ),
+            evidence="回應標頭未出現 Permissions-Policy（或舊名 Feature-Policy）",
+            impact_area="vulnerability",
+        ))
     csp = headers.get("content-security-policy", "")
     if csp and ("unsafe-inline" in csp or "unsafe-eval" in csp):
         out.append(make_finding(

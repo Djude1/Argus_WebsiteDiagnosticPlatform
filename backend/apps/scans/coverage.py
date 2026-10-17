@@ -49,6 +49,7 @@ CHECK_CATEGORIES: dict[str, str | None] = {
     "deep_security": "security",
     "exposure_robots": "security",
     "exposure_probe": "security",
+    "authz_probe": "security",
     "geo_site": "geo",
     "seo_links": "seo",
     "agent": "security",
@@ -76,6 +77,7 @@ CHECK_LABELS: dict[str, str] = {
     "deep_security": "深度被動資安檢查",
     "exposure_robots": "robots.txt 敏感路徑",
     "exposure_probe": "敏感檔案主動探測",
+    "authz_probe": "未授權存取探測",
     "geo_site": "站台 GEO 訊號",
     "seo_links": "SEO 連結與網址檢查",
     "agent": "AI 深度資安測試",
@@ -200,6 +202,10 @@ NOT_OBSERVED = "not_observed"
 NOT_TESTED = "not_tested"
 INCONCLUSIVE = "inconclusive"
 
+# AI Agent 觀察發現的 rule_id 前綴（findings.AGENT_SECURITY_RULE）；其鍵隨措辭／端點微調而變，
+# 歷史比較不可把「鍵消失」當成已修好。
+_AGENT_SECURITY_PREFIX = "agent-observed-security"
+
 ABSENT_STATUS_LABELS = {
     RESOLVED: "已修好",
     NOT_OBSERVED: "本次未觀察到",
@@ -233,6 +239,11 @@ def absent_issue_status(
     只有「產生它的同一項檢查本次完整跑完」且「受影響頁面本次有完整分析到」才是 resolved。
     舊掃描沒有覆蓋紀錄時無從判斷，一律 not_observed（不能冒稱已修好）。
     """
+    # AI Agent 觀察的 rule_id 是「弱點類＋端點」的雜湊，描述或觀察端點一有微調就換成新鍵
+    # （弱點類由 LLM 措辭推得、端點也可能是別名）。鍵消失＝換了鍵，不代表問題修好，不可冒稱
+    # resolved（實測：重掃描述微調→舊鍵被誤判「已修好」，可是問題仍在）。一律回本次未確認。
+    if (key or "").startswith(_AGENT_SECURITY_PREFIX):
+        return NOT_OBSERVED
     current_checks = (current_coverage or {}).get("checks")
     if not current_checks:
         return NOT_OBSERVED

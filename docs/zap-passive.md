@@ -1,8 +1,13 @@
-# OWASP ZAP 被動分析與主動掃描（啟用與回滾）
+# OWASP ZAP 主動掃描（啟用與回滾）
 
-Argus 把爬蟲已經取得的同網站流量（HAR）交給獨立的 OWASP ZAP daemon，只跑 ZAP 的**被動規則**，
-補上 Argus 自建規則沒有的檢查（混合內容、引用外站腳本、原始碼註解、除錯訊息、內部 IP、網址含敏感資訊等）。
-被動分析階段**ZAP 不會對目標網站發出任何請求**。
+> **被動分析階段已於 2026-10-17（ADR-0005 §2）退役**：原本只有 ZAP 被動會報的獨有檢查（混合內容、
+> Permissions-Policy、網址含敏感資訊、頁面除錯訊息）已移植成 Argus 自家被動檢查
+> （`security/passive_checks.py` 與 `header_scanner`，在 `deep_security` 階段跑），不再並存兩個被動引擎
+> ＋手動抑制表。`zap_passive.py` 模組保留為 ZAP 共用元件（HAR 整理、ZapClient、告警轉換），只供下方的
+> **主動掃描**使用。以下只談主動掃描。
+
+主動掃描把爬蟲已經取得的同網站網址匯進獨立的 OWASP ZAP daemon 建站台樹（繞過 Cloudflare），
+再對這些網址做 spider ＋ active scan，**會對目標送出攻擊 payload**。
 
 程式：`backend/apps/scans/security/zap_passive.py`、`tasks.stage_zap_passive`、`crawler.crawl_site(har_dir=...)`。
 

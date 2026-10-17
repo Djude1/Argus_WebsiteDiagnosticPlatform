@@ -131,6 +131,17 @@ class TestCookieScanner(TestCase):
         rules = {f["rule_id"] for f in findings}
         self.assertIn("cookie-samesite-none", rules)
 
+    def test_missing_samesite_attribute_is_low(self):
+        # SameSite 屬性完全缺失（ZAP 10054 移植，退 ZAP 被動後補回）
+        headers = {"set-cookie": "sid=abc; Secure; HttpOnly"}
+        rules = {f["rule_id"] for f in cookie_scanner.analyze_cookies(headers, "https://example.com")}
+        self.assertIn("cookie-no-samesite", rules)
+
+    def test_samesite_present_no_samesite_finding(self):
+        headers = {"set-cookie": "sid=abc; Secure; HttpOnly; SameSite=Lax"}
+        rules = {f["rule_id"] for f in cookie_scanner.analyze_cookies(headers, "https://example.com")}
+        self.assertNotIn("cookie-no-samesite", rules)
+
     def test_secure_httponly_strict_no_findings(self):
         headers = {"set-cookie": "sid=abc; Secure; HttpOnly; SameSite=Strict"}
         self.assertEqual(cookie_scanner.analyze_cookies(headers, "https://example.com"), [])
@@ -188,11 +199,14 @@ class TestHeaderScanner(TestCase):
         self.assertEqual(rules["header-hsts-preload-ineligible"]["severity"], "info")
         eligible = header_scanner.analyze_headers(self._page({
             "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+            "permissions-policy": "geolocation=()",
         }))
         self.assertEqual(eligible, [])
 
     def test_clean_headers_no_findings(self):
-        findings = header_scanner.analyze_headers(self._page({"server": "cloudflare"}))
+        findings = header_scanner.analyze_headers(self._page({
+            "server": "cloudflare", "permissions-policy": "geolocation=()",
+        }))
         self.assertEqual(findings, [])
 
     def test_no_pages_returns_empty(self):

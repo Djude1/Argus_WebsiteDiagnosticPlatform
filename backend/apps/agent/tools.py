@@ -2198,6 +2198,8 @@ class ToolExecutor:
                 "type": "text",
                 "source": "hermes_agent",
                 "tool_verified": tool_verified,
+                # 觀察端點供跨層去重用（與確定性 exposure 的 endpoint 比對）
+                "observed_endpoint": endpoint_path(url) if url else "",
                 "excerpt": evidence[:1000],
                 "assessment": {
                     "condition": "攻擊者能利用這項觀察，取得原本拿不到的資訊、權限或繞過既有防護。",

@@ -376,13 +376,24 @@ ARGUS_ZAP_ACTIVE_ENABLED = env_bool("ARGUS_ZAP_ACTIVE_ENABLED", default=False)
 ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS", "600"))
 # spider 階段的時間上限（秒，含在上面的總上限內）；CF 後面 spider 幾乎無效，主要靠 HAR 建樹
 ARGUS_ZAP_ACTIVE_SPIDER_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_SPIDER_SECONDS", "120"))
+# 未授權存取探測（authz_probe）每次掃描最多探測幾個 API 端點（ADR-0005 §3：不限重抓，放寬以提高
+# BOLA 涵蓋率；仍受 ARGUS_ACTIVE_MAX_RPS 速率限制）。
+ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS = int(os.getenv("ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS", "60"))
 # 已知漏洞優先序補強（apps/scans/security/vuln_intel.py）：EPSS 被利用機率＋OSV.dev 修補版本。
 # 只送出函式庫名稱、版本與 CVE 編號（不含受測網址）；查不到時原樣保留問題。
 ARGUS_VULN_INTEL_ENABLED = env_bool("ARGUS_VULN_INTEL_ENABLED", default=True)
 ARGUS_VULN_INTEL_TIMEOUT_SECONDS = float(os.getenv("ARGUS_VULN_INTEL_TIMEOUT_SECONDS", "10"))
 ARGUS_VULN_INTEL_CACHE_SECONDS = int(os.getenv("ARGUS_VULN_INTEL_CACHE_SECONDS", "86400"))
-ARGUS_ACTIVE_MAX_RPS = 2
-ARGUS_PASSIVE_MAX_RPS = 5
+# 主動工具（Nuclei／Katana／敏感檔探測／未授權探測）共用的每秒請求上限。授權掃描的目標是
+# 使用者自己擁有／已授權的網站，過去 2 RPS 太保守——Nuclei 與 Katana 對半分後各剩 1 RPS，
+# KEV 628 個請求光速率下限就 ~630 秒，是掃描變慢的主因之一。提高到 6（兩工具各 3）兼顧禮貌與速度；
+# 可用環境變數下修。敏感檔探測與未授權探測吃全額，一併加速（2026-10-17）。
+ARGUS_ACTIVE_MAX_RPS = int(os.getenv("ARGUS_ACTIVE_MAX_RPS", "6"))
+ARGUS_PASSIVE_MAX_RPS = int(os.getenv("ARGUS_PASSIVE_MAX_RPS", "5"))
+# 目標位於全代理型 CDN／WAF（Cloudflare、Akamai、Fastly、CloudFront、Imperva、Sucuri、
+# Azure Front Door）之後時，略過 root-URL KEV Nuclei：這類邊緣會過濾探測、流量到不了原始主機，
+# 實測一律 0 發現卻耗時十餘分鐘。略過改出一筆 info 說明。預設開、可關（2026-10-17）。
+ARGUS_NUCLEI_SKIP_BEHIND_CDN = env_bool("ARGUS_NUCLEI_SKIP_BEHIND_CDN", default=True)
 ARGUS_SCANNER_USER_AGENT = "SiteSense-AI-Scanner/1.0 (authorized-audit)"
 # 掃描流量的出口 IP（逗號分隔，可寫 CIDR），公布在公開頁「掃描來源說明」（/scanner），
 # 讓目標網站管理者放行或封鎖。依部署而定、沒有固定出口時留空，頁面改請對方以 User-Agent 辨識。

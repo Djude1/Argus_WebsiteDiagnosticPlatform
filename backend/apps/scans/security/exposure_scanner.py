@@ -417,7 +417,11 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             title=f"敏感檔案外洩：{info['label']}",
             description=description,
             remediation=remediation,
-            evidence_json={"assessment": _probe_assessment(info, internal_ips)},
+            evidence_json={
+                "assessment": _probe_assessment(info, internal_ips),
+                # 端點路徑供跨層去重用（與 Agent 的 endpoint_path 正規化一致：小寫、去結尾斜線）
+                "endpoint": (urlparse(url).path.rstrip("/").lower() or "/"),
+            },
             evidence="\n\n".join(evidence_parts),
             evidence_source="exposure_probe",
             impact_area="information_exposure",
