@@ -23,6 +23,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk 
     && rm -rf /var/lib/apt/lists/* \
     && soffice --version
 
+# 預建 matplotlib 字型快取並烤進 image：首次 import matplotlib 會掃描所有系統字型
+# （noto-cjk／emoji／unifont 等大檔），正式機實測約 25 秒。不預建的話每個新 pod 首啟都要現掃，
+# 期間處理該 import 的 gunicorn worker 被卡住；readiness probe（預設 1 秒逾時）打在這段就
+# context deadline exceeded、pod 被標 Unhealthy 直到快取建好。固定 MPLCONFIGDIR，build 時建、
+# runtime 直接讀同一份，不再現掃（report_render/theme.py 的字型選擇在快取就緒後是毫秒級）。
+ENV MPLCONFIGDIR=/app/.matplotlib
+RUN mkdir -p "$MPLCONFIGDIR" && python -c "import matplotlib.pyplot"
+
 # 安裝 ProjectDiscovery 資安工具（Nuclei + Katana）
 ARG NUCLEI_VERSION=3.8.0
 ARG KATANA_VERSION=1.1.2

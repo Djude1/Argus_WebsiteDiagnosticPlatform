@@ -95,6 +95,10 @@ spec:
                   value: localhost
             initialDelaySeconds: 15
             periodSeconds: 10
+            # 預設 timeoutSeconds 只有 1 秒：單核＋2 worker 下，一個報告 PDF 轉檔（LibreOffice，吃 CPU）
+            # 就可能讓 SELECT 1 的健康檢查擠不進 1 秒而逾時、pod 被踢出 Service。放寬到 5 秒、連 3 次才判不健康。
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /api/health/live/
@@ -103,7 +107,10 @@ spec:
                 - name: Host
                   value: localhost
             initialDelaySeconds: 40
-            periodSeconds: 20
+            periodSeconds: 30
+            # liveness 失敗會「重啟整個 pod」，1 秒逾時太敏感——報告轉檔那幾秒就可能誤殺正在服務的 pod。
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               cpu: 250m
