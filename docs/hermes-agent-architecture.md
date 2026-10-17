@@ -42,7 +42,8 @@ ScanJob(scope=site 且 categories 含 ux)         # 不需 active/authorized
 - **表單送出閘門（`may_submit_forms`）**：`tasks.py` 算 `may_submit_forms = run_agent(deep_mode) or user_owns_domain(user, hostname)`，傳入 `run_agent_for_scan`。`runner` 的 passive 分支據此組 `submit_clause`（送出 vs 只填不送）並傳 `_run_session(..., allow_form_submit=...)` → `build_tool_schemas` 在不允許時隱藏 `send_message`。未驗證他站只做「填入示意資料觀察欄位／驗證提示」，不留測試資料。
 - **計費**：固定附加費 `ARGUS_COIN_AGENT_UX`（見 billing `agent_ux_fee`），與 `run_agent_ux` 收費條件對齊。
 - **嚴重度封頂中風險（2026-10-10）**：`report_ux_issue` 的 severity 只開放 medium／low／info，`findings.cap_ux_severity` 在工具與落庫兩處把 critical／high 降為 medium、未知值當 low。實測 Agent 把「加入購物車導向聯絡表單」自評 critical，單一觀察讓 UX 從 41 分掉到 23 分；AI 觀察沒有規則依據，不應比規則式檢查扣得更重。
-- **token 預算（2026-10-10）**：UX session 用 `ARGUS_AGENT_UX_MAX_TOKENS`（預設 120000），資安各角色仍用 `ARGUS_AGENT_MAX_TOKENS`。實測 6 萬約 14 步就用完。預算用完前回報的問題照樣保存，覆蓋紀錄標 partial（「token 預算內未完成」），不再標 failed。
+- **token 預算（2026-10-10）**：UX session 用 `ARGUS_AGENT_UX_MAX_TOKENS`（預設 120000），資安各角色仍用 `ARGUS_AGENT_MAX_TOKENS`。預算用完前回報的問題照樣保存，覆蓋紀錄標 partial（「token 預算內未完成」），不再標 failed。
+- **token 計帳修正（2026-10-17，Codex 指出）**：`loop._accumulate_tokens` 以「累計 completion ＋ 最新一輪 prompt（已含整段歷史）」衡量，**不再每輪 `+= total_tokens`**。原本每輪把成長中的歷史重送當 prompt、又整筆累加，等於把舊 context 重複計好幾次，6 萬預算 ~7 輪就假性爆表，資安專家常在走到回報 finding 前就被砍 → `_security_findings` 空、回報 0。改後 6 萬才是真的 ~6 萬有效量；provider 沒給 prompt/completion 細項時用 `total−completion` 回推、無細項則取最新一輪整筆（不累加）。
 - **與規則式 UX 的分工**：規則式檢查（tap target/未標記欄位/JS 例外，見 `scans/CLAUDE.md`）每頁都跑、不需 LLM，是 UX 的地板；Agent UX 是需要 LLM 的擬真流程測試，兩者都產 `category=UX` finding。
 
 ## 2. Specialist 角色目錄（SPECIALIST_ROLES）

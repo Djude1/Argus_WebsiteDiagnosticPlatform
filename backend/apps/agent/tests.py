@@ -171,7 +171,8 @@ def _chat_response_finish(content: str = "done") -> ChatResponse:
 
 
 def _chat_response_tool(
-    tool_name: str, args: dict[str, Any], total_tokens: int = 5
+    tool_name: str, args: dict[str, Any], total_tokens: int = 5,
+    prompt_tokens: int = 0, completion_tokens: int = 0,
 ) -> ChatResponse:
     return ChatResponse(
         provider="fake",
@@ -179,6 +180,8 @@ def _chat_response_tool(
         content="",
         tool_calls=[ToolCall(id=f"call_{tool_name}", name=tool_name, arguments=args)],
         total_tokens=total_tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
         finish_reason="tool_calls",
     )
 
@@ -1284,7 +1287,8 @@ class HermesAgentLoopTests(TransactionTestCase):
         result = self._run(agent)
         self.assertEqual(result.status, AgentSession.Status.COMPLETED)
         self.assertEqual(result.final_summary, "done")
-        self.assertEqual(result.total_tokens, 50)
+        # 沒有 prompt/completion 細項時，有效量＝最新一輪 prompt（已含前文），不重複累加舊 context
+        self.assertEqual(result.total_tokens, 30)
         # 2 個 step：get_visible_text + finish
         self.assertEqual(AgentStep.objects.filter(session_id=result.session_id).count(), 2)
 
@@ -1297,8 +1301,11 @@ class HermesAgentLoopTests(TransactionTestCase):
         self.assertIn("max_steps_reached", result.error)
 
     def test_max_tokens_triggers_failure(self):
+        # 累計 completion 真的超過上限才算爆表（prompt 穩定不重複計）
         responses = [
-            _chat_response_tool("get_visible_text", {}, total_tokens=8000) for _ in range(4)
+            _chat_response_tool("get_visible_text", {}, prompt_tokens=2000,
+                                completion_tokens=4000)
+            for _ in range(4)
         ]
         chain = ProviderChain(providers=[FakeProvider(responses)])
         agent = HermesAgent(
@@ -1310,6 +1317,25 @@ class HermesAgentLoopTests(TransactionTestCase):
         result = self._run(agent)
         self.assertEqual(result.status, AgentSession.Status.FAILED)
         self.assertIn("token_budget_exceeded", result.error)
+
+    def test_stable_context_does_not_exhaust_budget(self):
+        # 回歸（Codex 2026-10-17）：prompt 每輪都含整段歷史（穩定 ~8000），completion 很小。
+        # 舊計帳每輪 += 8500，~7 輪就假性爆表；新計帳＝累計 completion ＋ 最新 prompt，不重複計。
+        responses = [
+            _chat_response_tool("get_visible_text", {}, prompt_tokens=8000,
+                                completion_tokens=500)
+            for _ in range(12)
+        ]
+        responses.append(_chat_response_finish("done"))
+        chain = ProviderChain(providers=[FakeProvider(responses)])
+        agent = HermesAgent(
+            self.scan_job, executor=FakeExecutor(), chain=chain,
+            max_tokens=60_000, max_steps=20,
+        )
+        result = self._run(agent)
+        self.assertNotIn("token_budget_exceeded", result.error or "")
+        # 有效量 ≈ 累計 completion（12×500＝6000，finish 另計）＋ 最新 prompt（8000），遠低於 60k
+        self.assertLess(result.total_tokens, 20_000)
 
     def test_issue_collected_via_tool(self):
         # 一個 round 內 LLM 一次回兩個 tool_calls：report_ux_issue + finish

@@ -109,6 +109,12 @@ class HermesAgent:
         self._messages: list[dict[str, Any]] = []
         self._issues: list[dict[str, Any]] = []
         self._security_findings: list[dict[str, Any]] = []
+        # token 預算衡量「不重複計 context」的有效量：累計 completion ＋ 最新一輪 prompt
+        # （prompt 已含整段對話歷史）。原本每輪 += total_tokens（prompt+completion），而每輪
+        # 都把成長中的歷史重送當 prompt，等於把舊 context 重複計好幾次，預算 ~7 輪就假性爆表、
+        # 專家還沒走到回報 finding 就被砍（Codex 2026-10-17 指出）。
+        self._completion_tokens = 0
+        self._last_prompt_tokens = 0
         self._total_tokens = 0
         self._step_counter = 0  # AgentStep DB 流水號，與 LLM round 解耦
         # 空轉偵測（PentAGI Reflector 概念的輕量版）：連續同名工具呼叫計數
@@ -203,6 +209,18 @@ class HermesAgent:
             self._stall_hint_given = True
             self._consecutive_same_tool = 0
 
+    def _accumulate_tokens(self, response) -> None:
+        """累計「不重複計 context」的有效 token 量。
+
+        completion 逐輪累加（每輪都是新產出）；prompt 只取最新一輪（它已含整段歷史），
+        不把成長中的歷史重複累加。provider 沒給細項時，用 total−completion 回推 prompt。
+        """
+        completion = response.completion_tokens or 0
+        prompt = response.prompt_tokens or max((response.total_tokens or 0) - completion, 0)
+        self._completion_tokens += completion
+        self._last_prompt_tokens = prompt
+        self._total_tokens = self._completion_tokens + self._last_prompt_tokens
+
     async def run(self, task_prompt: str) -> AgentRunResult:
         from asgiref.sync import sync_to_async
 
@@ -226,7 +244,7 @@ class HermesAgent:
                 self._inject_endgame_hint_if_needed(_round_no)
 
                 response = await sync_to_async(self._call_provider)()
-                self._total_tokens += response.total_tokens
+                self._accumulate_tokens(response)
 
                 if not response.tool_calls:
                     # Agent 自然語言收尾
