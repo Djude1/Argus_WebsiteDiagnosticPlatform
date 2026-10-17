@@ -179,6 +179,7 @@ def _write_progress(
     steps: list[str] | None = None,
     step_done: int | None = None,
     step_total: int | None = None,
+    detail: str = "",
 ) -> None:
     """寫 ScanJob.progress；用 filter().update() 避免覆蓋其他欄位且 race-safe。
 
@@ -209,6 +210,8 @@ def _write_progress(
             progress["step_started_at"] = timezone.now().isoformat()
     if steps:
         progress["steps"] = steps
+    if detail:
+        progress["step_detail"] = detail  # 前端在 agent 階段顯示「目前在跑哪個專家」
     ScanJob.objects.filter(id=scan_job_id).update(progress=progress)
 
 
@@ -1790,6 +1793,35 @@ def stage_favicon(ctx: ScanRunContext) -> None:
         logger.warning("網站圖示更新失敗 scan_job_id=%s", ctx.scan_job_id, exc_info=True)
 
 
+# Hermes-Agent 子代理角色 → 前端顯示的中文名（讓使用者看得出「現在在跑哪個專家」）。
+# role_label 由 runner._run_session 帶入：recon／orchestrator／ux／specialist／specialist:<role>。
+_AGENT_ROLE_LABELS = {
+    "recon": "偵察目標",
+    "orchestrator": "指揮調度",
+    "ux": "擬真使用者體驗測試",
+    "specialist": "資安專家測試",
+}
+# specialist:<role> 的 8 種專家角色（對應 runner.SPECIALIST_ROLES）。
+_AGENT_SPECIALIST_LABELS = {
+    "auth_idor": "認證與越權（IDOR）專家",
+    "injection": "注入攻擊專家",
+    "logic_abuse": "商業邏輯濫用專家",
+    "info_leak": "資訊洩漏專家",
+    "xss_hunter": "跨站腳本（XSS）專家",
+    "jwt_token_abuse": "JWT／Token 濫用專家",
+    "file_upload": "檔案上傳專家",
+    "crypto": "加密弱點專家",
+}
+
+
+def _agent_role_label(role_label: str) -> str:
+    """把 runner 傳來的 role_label 轉成前端顯示用中文；未知角色給通用字樣。"""
+    if role_label.startswith("specialist:"):
+        role = role_label.split(":", 1)[1]
+        return _AGENT_SPECIALIST_LABELS.get(role, f"{role} 專家")
+    return _AGENT_ROLE_LABELS.get(role_label, "資安測試")
+
+
 def stage_agent(ctx: ScanRunContext) -> None:
     """可選的 Hermes-Agent（資安 deep_mode 與／或擬真使用者 UX 測試）。
 
@@ -1811,23 +1843,42 @@ def stage_agent(ctx: ScanRunContext) -> None:
 
     scan_hostname = get_hostname(scan_job.normalized_url or scan_job.original_url or "")
     may_submit_forms = bool(plan.run_agent) or user_owns_domain(scan_job.user, scan_hostname)
+    from apps.agent.runner import max_total_steps_estimate, run_agent_for_scan
+
     agent_phase_started = timezone.now().isoformat()
+    # agent 跑十餘分鐘，過去進度一路停在 0／20（那 20 還只是單一子代理的上限），看起來像卡住。
+    # 以最壞情況總步數當分母，再由 runner 每步回報累計步數，進度條才會動、看得出活著（2026-10-18）。
+    agent_total = max(max_total_steps_estimate(), 1)
+    agent_steps_seen = {"n": 0}
+
+    def _report_agent_step(role_label: str, round_no: int) -> None:
+        """runner 每個子代理每步回呼：累加全域步數並回寫進度（fail-safe，不影響掃描）。"""
+        try:
+            agent_steps_seen["n"] += 1
+            done = min(agent_steps_seen["n"], agent_total)
+            _write_progress(
+                scan_job_id, phase="agent_testing", done=done, total=agent_total,
+                phase_started_at=agent_phase_started, step="agent", steps=ctx.steps,
+                step_done=done, step_total=agent_total,
+                detail=_agent_role_label(role_label),
+            )
+        except Exception:  # noqa: BLE001 — 進度回報失敗不得影響 agent 與掃描
+            pass
+
     scan_job.status = ScanJob.Status.AGENT_TESTING
     scan_job.progress = {
         "pages_done": 0,
-        "pages_total": settings.ARGUS_AGENT_MAX_STEPS,
+        "pages_total": agent_total,
         "phase": "agent_testing",
         "phase_started_at": agent_phase_started,
         "step": "agent",
         "step_done": 0,
-        "step_total": settings.ARGUS_AGENT_MAX_STEPS,
+        "step_total": agent_total,
         "step_started_at": agent_phase_started,
         "steps": ctx.steps,
     }
     scan_job.save(update_fields=["status", "progress", "updated_at"])
     try:
-        from apps.agent.runner import run_agent_for_scan
-
         # 把確定性工具這次已找到的資安問題餵給 agent，叫它別重報（ADR-0005 §5）——
         # 消掉「agent 盲跑 → 撞一堆重複 → 事後去重」的浪費
         known_findings = [f for f in ctx.all_findings if f.get("category") == "security"]
@@ -1837,6 +1888,7 @@ def stage_agent(ctx: ScanRunContext) -> None:
                 recon_intel=ctx.discovered_endpoints,
                 may_submit_forms=may_submit_forms,
                 known_findings=known_findings,
+                progress_cb=_report_agent_step,
             )
         )
         ctx.agent_result = agent_result
@@ -1853,8 +1905,8 @@ def stage_agent(ctx: ScanRunContext) -> None:
             _write_progress(
                 scan_job_id,
                 phase="agent_testing",
-                done=agent_result.steps,
-                total=settings.ARGUS_AGENT_MAX_STEPS,
+                done=min(max(agent_result.steps, agent_steps_seen["n"]), agent_total),
+                total=agent_total,
                 phase_started_at=agent_phase_started,
                 step="agent",
                 steps=ctx.steps,

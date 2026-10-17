@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -96,10 +97,14 @@ class HermesAgent:
         system_prompt: str | None = None,
         tool_schemas: list[dict[str, Any]] | None = None,
         forced_first_tool: str | None = None,
+        step_callback: Callable[[int], None] | None = None,
     ):
         self.scan_job = scan_job
         self.executor = executor
         self.chain = chain
+        # 每個 round 開始時呼叫（傳本 session 的 round 編號），讓外層即時回報掃描進度；
+        # 失敗一律吞掉，不得影響 agent 迴圈。
+        self.step_callback = step_callback
         self.max_steps = max_steps or settings.ARGUS_AGENT_MAX_STEPS
         self.max_tokens = max_tokens or settings.ARGUS_AGENT_MAX_TOKENS
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
@@ -236,6 +241,11 @@ class HermesAgent:
 
         try:
             for _round_no in range(1, self.max_steps + 1):
+                if self.step_callback is not None:
+                    try:
+                        await sync_to_async(self.step_callback)(_round_no)
+                    except Exception:  # noqa: BLE001 — 進度回報失敗不得中斷測試迴圈
+                        pass
                 if self._total_tokens > self.max_tokens:
                     error = f"token_budget_exceeded({self._total_tokens}>{self.max_tokens})"
                     break

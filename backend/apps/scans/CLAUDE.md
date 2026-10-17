@@ -472,7 +472,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 `active_probe`（`run_nuclei`）、`deep_security`、`zap_active`（需 `ARGUS_ZAP_ACTIVE_ENABLED` 且全站＋主動＋已授權；ZAP **被動**階段已於 ADR-0005 §2 退役，改由 `deep_security` 內的自家被動檢查取代）、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`seo_links`（勾 SEO）、`pagespeed`（勾 UX 且已設定 PSI 金鑰）、`agent`（Agent 啟用且可執行）、`scoring`。
 頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；各維度實際檢查項目與「為什麼幾秒就跑完」的說明見 [`docs/scan-stage-checks.md`](../../../docs/scan-stage-checks.md)（改規則時同步）；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
 
-`step_done`／`step_total` 是**本階段**內的進度（爬取＝頁、逐維度分析＝該維度已分析頁數、Agent＝步數；其他子步驟 0/0＝不定進度），`step_started_at` 在同一步內保留不變（供前端估算本階段剩餘時間）。前端整體百分比由階段序號加上本階段比例算出，進度條才會和階段一起走（2026-09-28 前整體進度只看頁數，爬完就 100%、後面十個階段進度條不動）。
+`step_done`／`step_total` 是**本階段**內的進度（爬取＝頁、逐維度分析＝該維度已分析頁數、Agent＝步數；其他子步驟 0/0＝不定進度）。**Agent 即時回報**（2026-10-18）：`stage_agent` 傳 `progress_cb` 給 `run_agent_for_scan`，agent 每個子代理（recon／orchestrator／各專家）每一步回寫累計步數，`step_total` 用 `runner.max_total_steps_estimate()`；原本整段停在 `0／ARGUS_AGENT_MAX_STEPS`（20）像卡住十餘分鐘，現在進度條會動。`step_started_at` 在同一步內保留不變（供前端估算本階段剩餘時間）。前端整體百分比由階段序號加上本階段比例算出，進度條才會和階段一起走（2026-09-28 前整體進度只看頁數，爬完就 100%、後面十個階段進度條不動）。
 
 ---
 

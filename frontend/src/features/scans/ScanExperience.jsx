@@ -167,6 +167,8 @@ function CrawlingAnimation({
     percent: pct,
   } = scanProgress(status, progress);
   const stepUnit = current?.key === "agent" ? "步" : "頁";
+  // agent 階段後端回報目前在跑哪個子代理（偵察／指揮調度／各專家），讓使用者看得出活著在做什麼
+  const agentDetail = current?.key === "agent" ? progress?.step_detail : null;
 
   // 已執行時間（從整個 scan 的 started_at 起算）
   const scanStart = startedAt ? new Date(startedAt).getTime() : null;
@@ -201,7 +203,9 @@ function CrawlingAnimation({
         </picture>
         <div className="crawl-anim-text">
           <div className="crawl-anim-title">{detailed ? current.title : current.label}中...</div>
-          {detailed ? <div className="crawl-anim-step-hint">{current.hint}</div> : null}
+          {detailed ? (
+            <div className="crawl-anim-step-hint">{agentDetail || current.hint}</div>
+          ) : null}
           {hint ? <div className="crawl-anim-hint">{hint}</div> : null}
         </div>
         <span className="crawl-anim-spinner" aria-hidden="true" />

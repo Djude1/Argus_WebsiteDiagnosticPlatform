@@ -240,3 +240,39 @@ class StepProgressTests(TestCase):
         )
         scan.refresh_from_db()
         self.assertEqual((scan.progress["step_done"], scan.progress["step_total"]), (0, 0))
+
+
+class AgentStepDetailTests(TestCase):
+    """step_detail：agent 階段把「目前在跑哪個子代理」的中文名寫進進度，前端顯示（2026-10-18）。"""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="agent_detail_user", password="safe-test-password"
+        )
+
+    def test_detail_written_only_when_provided(self):
+        scan = _make_scan(self.user)
+        _write_progress(
+            scan.id, phase="agent_testing", done=1, total=5, phase_started_at="t",
+            step="agent", detail="指揮調度",
+        )
+        scan.refresh_from_db()
+        self.assertEqual(scan.progress["step_detail"], "指揮調度")
+        # 不給 detail 的步驟不應留下 step_detail 鍵
+        _write_progress(
+            scan.id, phase="crawling", done=1, total=5, phase_started_at="t", step="crawl",
+        )
+        scan.refresh_from_db()
+        self.assertNotIn("step_detail", scan.progress)
+
+    def test_role_label_maps_roles_and_specialists(self):
+        from apps.scans.tasks import _agent_role_label
+
+        self.assertEqual(_agent_role_label("recon"), "偵察目標")
+        self.assertEqual(_agent_role_label("orchestrator"), "指揮調度")
+        self.assertEqual(_agent_role_label("ux"), "擬真使用者體驗測試")
+        self.assertEqual(_agent_role_label("specialist:injection"), "注入攻擊專家")
+        self.assertEqual(_agent_role_label("specialist:auth_idor"), "認證與越權（IDOR）專家")
+        # 未知角色給通用字樣、未知專家沿用角色代號，不致空白
+        self.assertEqual(_agent_role_label("unknown"), "資安測試")
+        self.assertEqual(_agent_role_label("specialist:future_role"), "future_role 專家")

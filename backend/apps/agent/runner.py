@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -338,6 +339,16 @@ FILE_UPLOAD_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
 # findings 流失主因，token 上限加多大都會爆）
 _SPECIALIST_MAX_STEPS = 60
 
+
+def max_total_steps_estimate() -> int:
+    """agent 這一階段最壞情況的總步數估計，給進度條當分母用（只求讓進度條會動、
+    不是精確值）：recon ＋ orchestrator 各一個子 session（各 ARGUS_AGENT_MAX_STEPS 步）
+    ＋ 最多派 ARGUS_AGENT_MAX_SPECIALIST_DISPATCH 位專家，每位最多 _SPECIALIST_MAX_STEPS 步。"""
+    return (
+        settings.ARGUS_AGENT_MAX_STEPS * 2
+        + settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH * _SPECIALIST_MAX_STEPS
+    )
+
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
@@ -520,6 +531,7 @@ async def run_agent_for_scan(
     recon_intel: list[str] | None = None,
     may_submit_forms: bool = False,
     known_findings: list[dict] | None = None,
+    progress_cb: Callable[[str, int], None] | None = None,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
 
@@ -554,6 +566,7 @@ async def run_agent_for_scan(
     async def _run_session(
         role_prompt: str,
         *,
+        role_label: str = "agent",
         orchestrator: bool = False,
         specialist_dispatcher=None,
         allow_form_submit: bool = True,
@@ -599,6 +612,10 @@ async def run_agent_for_scan(
                         "dispatch_specialist" if orchestrator else None
                     ),
                     max_tokens=max_tokens,
+                    step_callback=(
+                        (lambda rnd: progress_cb(role_label, rnd))
+                        if progress_cb else None
+                    ),
                 )
                 return await agent.run(task_prompt=role_prompt)
             finally:
@@ -630,7 +647,7 @@ async def run_agent_for_scan(
 
     if task_prompt is not None:
         prompts: list[str] = [task_prompt]
-        results = [await _run_session(p) for p in prompts]
+        results = [await _run_session(p, role_label="ux") for p in prompts]
         result = _merge(results)
     elif deep_mode:
         # 真·subagent 指揮官模式：recon 固定先跑 → orchestrator 是一個
@@ -640,7 +657,7 @@ async def run_agent_for_scan(
         recon_prompt = RECON_AGENT_PROMPT.format(
             origin=scan_job.origin, url=target_url
         )
-        recon_result = await _run_session(recon_prompt)
+        recon_result = await _run_session(recon_prompt, role_label="recon")
         specialist_results: list[AgentRunResult] = []
 
         dispatch_limit = settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH
@@ -695,7 +712,7 @@ async def run_agent_for_scan(
                 "發新請求前先交叉比對你已收集的觀察（回應內容、欄位值、洩漏"
                 "文字、公開資料）——組合既有線索常比新探測更快形成攻擊鏈。"
             )
-            specialist_result = await _run_session(prompt)
+            specialist_result = await _run_session(prompt, role_label=f"specialist:{role}")
             specialist_results.append(specialist_result)
             titles = [
                 f.get("title", "")[:80]
@@ -733,6 +750,7 @@ async def run_agent_for_scan(
         )
         orchestrator_result = await _run_session(
             orchestrator_prompt,
+            role_label="orchestrator",
             orchestrator=True,
             specialist_dispatcher=_dispatcher,
         )
@@ -745,7 +763,8 @@ async def run_agent_for_scan(
                     await _run_session(
                         role_def["prompt"].format(
                             origin=scan_job.origin, url=target_url
-                        )
+                        ),
+                        role_label="specialist",
                     )
                 )
 
@@ -764,6 +783,7 @@ async def run_agent_for_scan(
         )
         result = await _run_session(
             prompt,
+            role_label="ux",
             allow_form_submit=allow_form_submit,
             max_tokens=settings.ARGUS_AGENT_UX_MAX_TOKENS,
         )
