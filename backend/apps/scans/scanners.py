@@ -1909,16 +1909,21 @@ def _dedupe_findings_for_scoring(findings: list[dict]) -> list[dict]:
     reports._group_findings_for_report() 把它們合併成一筆顯示，計分卻沒有，於是
     使用者看到報告只列一項 PII，分數卻是被扣三次的結果。rule_id 缺漏時（例如
     agent 直接組出的 UX finding）退回 title 當鍵。
+
+    同一個鍵在不同頁的嚴重度可能不同，一律保留**最嚴重**的那筆（2026-10-17）：原本保留第一筆，
+    掃描當下（記憶體中的順序）與事後重算（資料庫依 priority 排序）挑到的不同，分數就跟著順序變，
+    報告的「各分類扣分明細」因此對不上、誤顯示成「舊版計分公式」。
     """
-    seen: set[tuple[str, str]] = set()
-    deduped: list[dict] = []
+    best: dict[tuple[str, str], dict] = {}
     for finding in findings:
         key = _finding_key(finding)
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(finding)
-    return deduped
+        current = best.get(key)
+        if current is None or (
+            SEVERITY_PENALTY.get(finding["severity"], 0)
+            > SEVERITY_PENALTY.get(current["severity"], 0)
+        ):
+            best[key] = finding
+    return list(best.values())
 
 
 # 這些 rule 的結果已經反映在分類的「基準分」裡（base_scores），不再另外扣分

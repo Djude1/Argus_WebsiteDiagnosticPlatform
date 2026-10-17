@@ -16,7 +16,7 @@ STRONG = {
     "referrer-policy": "strict-origin-when-cross-origin",
     "set-cookie": "sessionid=abc; Path=/; Secure; HttpOnly; SameSite=Lax",
 }
-SEO_OK = {"site_checks": [{"key": "http_to_https", "verdict": "pass"}]}
+SEO_OK = {"site_checks": [{"key": "http_to_https", "level": "pass"}]}
 
 
 def _page(headers, html="<html><body>ok</body></html>", url=URL, status=200):
@@ -101,8 +101,16 @@ class ObservatoryTests(SimpleTestCase):
         tests = _tests(evaluate(_page(STRONG), {}))
         self.assertFalse(tests["redirection"]["evaluated"])
         self.assertEqual(tests["redirection"]["modifier"], 0)
-        failing = {"site_checks": [{"key": "http_to_https", "verdict": "warning"}]}
+        failing = {"site_checks": [{"key": "http_to_https", "level": "warning"}]}
         self.assertEqual(_tests(evaluate(_page(STRONG), failing))["redirection"]["modifier"], -20)
+
+    def test_redirection_reads_real_site_check_shape(self):
+        # 契約：用 SEO 連結檢查真正產生的 site_checks 格式（欄位是 level，不是 verdict）。
+        # 2026-10-17 前 fixture 寫成 verdict，測試綠燈但正式環境每個網站都被誤扣 20 分
+        from apps.scans.seo.link_check import _site_check
+
+        real = {"site_checks": [_site_check("http_to_https", "HTTP → HTTPS", "pass", "")]}
+        self.assertEqual(_tests(evaluate(_page(STRONG), real))["redirection"]["modifier"], 0)
 
     def test_http_site(self):
         tests = _tests(evaluate(_page({}, url="http://example.com/"), {}))

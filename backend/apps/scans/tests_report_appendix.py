@@ -101,6 +101,13 @@ class ReportAppendixTests(TestCase):
             "status": "completed", "category": "security",
             "keys": ["header-csp-missing"]}}}
         self.scan_job.save(update_fields=["coverage"])
+        # 兩次評分版本相同才能說「新出現」；版本不同時改寫成「可能來自規則更新」
+        from apps.scans import versions
+
+        for scan in (previous, self.scan_job):
+            scan.scoring_version = versions.SCORING_VERSION
+            scan.ruleset_version = versions.RULESET_VERSION
+            scan.save(update_fields=["scoring_version", "ruleset_version"])
 
         text = self._text()
 

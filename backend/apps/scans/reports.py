@@ -1165,6 +1165,8 @@ def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
             # 與本次的 scan_date 同一個格式（舊版只印月日，與「2026-10-09」並列像兩種日期）
             "date": timezone.localtime(previous.completed_at).strftime("%Y-%m-%d"),
             "score": previous.overall_score,
+            # 評分版本不同時，分數差與「新出現」都可能只是規則改了（導讀句已說明，圖表也要一致）
+            "comparable": versions.comparable(scan_job, previous),
         }
         previous_rules = {
             rule for rule in previous.findings.values_list("rule_id", flat=True) if rule
@@ -1364,9 +1366,14 @@ def _report_score_items(
     if not explanation["available"]:
         return {}
     if not explanation["matches"]:
-        return {
-            "note": "這次掃描的分數以舊版計分公式算出，依目前公式無法逐項還原，因此不列扣分明細。"
-        }
+        if explanation["scoring_version"] != explanation["current_scoring_version"]:
+            note = "這次掃描的分數以舊版計分公式算出，依目前公式無法逐項還原，因此不列扣分明細。"
+        else:
+            note = (
+                "這次掃描的發現在計分後有被重新判定，依目前資料無法逐項還原分數，"
+                "因此不列扣分明細。"
+            )
+        return {"note": note}
     refs = {
         item["finding"].rule_id: f["id"]
         for f, item in zip(findings_payload, grouped, strict=True)

@@ -6,7 +6,12 @@ import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.scans.evidence.contacts import EMAIL_PATTERN, TW_MOBILE_PATTERN
-from apps.scans.scanners import CREDIT_CARD_PATTERN, TW_NATIONAL_ID_PATTERN
+from apps.scans.scanners import (
+    CREDIT_CARD_PATTERN,
+    TW_NATIONAL_ID_PATTERN,
+    _card_issuer_ok,
+    is_valid_luhn,
+)
 
 
 def _mask_email(match: re.Match) -> str:
@@ -34,7 +39,20 @@ def redact_pii_in_text(text: str) -> str:
     masked = EMAIL_PATTERN.sub(_mask_email, text)
     masked = TW_MOBILE_PATTERN.sub(lambda m: _mask_digits(m, 2, 2), masked)
     masked = TW_NATIONAL_ID_PATTERN.sub(lambda m: m.group(0)[0] + "*" * 8, masked)
-    return CREDIT_CARD_PATTERN.sub(lambda m: _mask_digits(m, 4, 4), masked)
+    return CREDIT_CARD_PATTERN.sub(_mask_card, masked)
+
+
+def _mask_card(match: re.Match) -> str:
+    """只遮罩通過 Luhn 且開頭與位數符合卡組織的數字串（真卡號一定符合）。
+
+    原本任何 13–19 位數字都遮：網址裡的頁面編號 `/p/404-1043-117736.php` 被遮成
+    `4041*****7736`，報告上的失效連結點不開也找不到（2026-10-17 實掃）。比偵測寬鬆
+    （不要求卡片分組或關鍵字），寧可多遮一點也不漏遮真卡號。
+    """
+    digits = re.sub(r"\D", "", match.group(0))
+    if not (is_valid_luhn(match.group(0)) and _card_issuer_ok(digits)):
+        return match.group(0)
+    return _mask_digits(match, 4, 4)
 
 
 def redact_url_query_values(url: str) -> str:

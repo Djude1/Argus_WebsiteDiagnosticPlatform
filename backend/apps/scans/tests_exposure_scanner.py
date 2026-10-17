@@ -55,7 +55,7 @@ class TestBuildTargets(SimpleTestCase):
         self.assertEqual(targets.count("https://htb.example/.env"), 1)
 
     def test_api_docs_probed_under_observed_api_prefixes(self):
-        # ntubimdbirc.tw 2026-10-16：規格在 /api_proxy/v3/api-docs，只探根目錄找不到
+        # 實測站台 2026-10-16：規格在代理前綴底下的 v3/api-docs，只探根目錄找不到
         prefixes = exp.api_prefixes(
             ["/api_proxy/news/list", "/api_proxy/member", "/api/v1/users/me", "/_next/data/x.json",
              "/graphql"]
@@ -144,6 +144,14 @@ class TestAnalyzeProbeResults(SimpleTestCase):
         self.assertEqual(f["severity"], "high")  # 基礎 medium 被內網 IP 提升
         self.assertIn("內部網路位址外洩", f["evidence"])
         self.assertIn("10.1.2.3", f["description"])
+        # 報告只取證據前 300 字：內網位址判讀要排在內容片段之前
+        ev = f["evidence"]
+        self.assertLess(ev.index("內部網路位址外洩"), ev.index("檔案內容片段"))
+        self.assertLess(f["evidence"].index("內部網路位址外洩"), 300)
+        # 主動探測已實際取得檔案：判定依據不能沿用「範本比對未經重現」
+        assessment = f["evidence_json"]["assessment"]
+        self.assertIn("未測試文件列出的 API 是否缺乏授權", assessment["missing"])
+        self.assertIn("servers", f["remediation"])
 
     def test_apidoc_with_public_ip_stays_medium(self):
         # 公網 IP 不是內網外洩，維持基礎 medium

@@ -1244,7 +1244,7 @@ def _passive_api_check(ctx: ScanRunContext) -> None:
     標為 `source="js_static"`，避免「公開頁不呼叫後端 API」時附錄誤報成「沒有可檢查的端點」。
     """
     observations = ctx.site_signals.get("api_observations") or []
-    static_paths = sorted(ctx.site_signals.get("js_api_paths") or [])
+    static_paths = sorted(_static_api_paths(ctx))
     if not observations and not static_paths:
         ctx.coverage.mark("api_passive", SKIPPED, "爬取期間沒有觀察到同網站的 API 呼叫")
         return
@@ -1334,8 +1334,26 @@ def _observed_api_paths(ctx: ScanRunContext) -> list[str]:
     ]
     paths += [urlparse(url).path for url in ctx.discovered_endpoints or []]
     # 爬蟲從同源 JS bundle 靜態抽出的 API 路徑（繞過 Cloudflare 的確定性發現，2026-10-16）
-    paths += list(ctx.site_signals.get("js_api_paths") or [])
+    paths += _static_api_paths(ctx)
     return paths
+
+
+def _static_api_paths(ctx: ScanRunContext) -> list[str]:
+    """JS 靜態抽出的 API 路徑，排除爬蟲當成網頁造訪過的路徑。
+
+    `service`、`v1` 這類提示字也會出現在一般頁面網址（2026-10-17 實掃：`/service/1` 是導覽列
+    連到的頁面，卻被列進 API 端點清單）；爬蟲實際造訪過的就是頁面，不是 API。
+    """
+    page_paths = {
+        urlparse(page.get(key) or "").path.rstrip("/") or "/"
+        for page in ctx.crawled_pages or []
+        for key in ("url", "final_url")
+        if page.get(key)
+    }
+    return [
+        path for path in ctx.site_signals.get("js_api_paths") or []
+        if (path.rstrip("/") or "/") not in page_paths
+    ]
 
 
 def stage_exposure(ctx: ScanRunContext) -> None:

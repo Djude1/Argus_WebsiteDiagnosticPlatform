@@ -8,14 +8,14 @@
 - 文件：`backend/apps/scans/CLAUDE.md` crawler 列補一句 rewrite `/x/:path*` 形式的處理。
 
 ## 原因
-15c2a620 的發現層已部署到正式 K8s（PR #2），但對 ntubimdbirc.tw 重掃仍 0 偵測。逐段驗證後定位到精確 bug：該站的 API 前綴在 JS 裡只以 Next.js rewrite 規則出現（`source:"/<前綴>/:path*"`），而 `_JS_PATH_RE` 的路徑字元類不含 `:` `*`、又要求路徑後緊接引號，碰到 `:path*` 整個 token 比對失敗 → 前綴完全抽不到 → `api_prefixes` 拿不到 → 不會探 API 文件 → 0 發現。原本新增的測試用裸字串前綴，沒涵蓋 rewrite 形式，所以測試綠燈卻實站漏抓。
+15c2a620 的發現層已部署到正式 K8s（PR #2），但對 實測站台 重掃仍 0 偵測。逐段驗證後定位到精確 bug：該站的 API 前綴在 JS 裡只以 Next.js rewrite 規則出現（`source:"/<前綴>/:path*"`），而 `_JS_PATH_RE` 的路徑字元類不含 `:` `*`、又要求路徑後緊接引號，碰到 `:path*` 整個 token 比對失敗 → 前綴完全抽不到 → `api_prefixes` 拿不到 → 不會探 API 文件 → 0 發現。原本新增的測試用裸字串前綴，沒涵蓋 rewrite 形式，所以測試綠燈卻實站漏抓。
 
 ## 影響範圍
 - JS 端點發現現在涵蓋 Next.js（與類似）rewrite 的動態參數寫法，這是實務上前綴最常出現的形式。
 - 不改其他行為；純擴大抽取涵蓋面。
 
 ## 驗證方式
-- 以真實 rewrite 形式字串驗證整條鏈：`/api_proxy/:path*` → 抽出 `/api_proxy` → `api_prefixes` → `/api_proxy/v3/api-docs` 等探測目標。
+- 以真實 rewrite 形式字串驗證整條鏈：`/api_proxy/:path*` → 抽出 `/api_proxy` → `api_prefixes` → `<代理前綴>/v3/api-docs` 等探測目標。
 - 新增測試 `tests_js_discovery.py`：rewrite `:param` 形式、`/api/*` 萬用字元、整段動態不產生路徑。
 - CI 順序：ruff、`tests/` 36 項、`manage.py check`、makemigrations 無變更皆通過；後端全套 1953 項通過（skipped 12）。沒有改 `k8s/`。
 

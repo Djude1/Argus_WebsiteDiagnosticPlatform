@@ -54,3 +54,16 @@ class SecurityRedactionTests(SimpleTestCase):
         self.assertNotIn("person@example.com", rendered)
         self.assertNotIn("#private", rendered)
         self.assertIn("%5BREDACTED%5D", redacted["failed_urls"][0]["url"])
+
+
+class CardRedactionPrecisionTests(SimpleTestCase):
+    """卡號遮罩只遮通過 Luhn 與卡組織規則的數字串（2026-10-17 實掃：網址頁面編號被遮掉）。"""
+
+    def test_page_number_in_url_is_not_masked(self):
+        url = "https://example.com/p/404-1043-117736.php?Lang=zh-tw"
+        self.assertEqual(redact_pii_in_text(f"失效連結：{url}"), f"失效連結：{url}")
+
+    def test_real_card_number_still_masked(self):
+        masked = redact_pii_in_text("卡號 4111 1111 1111 1111")
+        self.assertNotIn("4111 1111 1111 1111", masked)
+        self.assertIn("4111********1111", masked)

@@ -567,6 +567,11 @@ def _trend_block(doc, s, ch):
     delta = curr_score - prev["score"]
     delta_str = f"+{delta} 分" if delta >= 0 else f"{delta} 分"
     delta_color = "15803D" if delta >= 0 else "B91C1C"
+    comparable = prev.get("comparable", True)
+    if not comparable:
+        # 評分規則不同：不用綠／紅暗示進步或退步，與導讀句「不宜直接比較」一致
+        delta_str += "（評分規則不同，僅供參考）"
+        delta_color = T.GREY
     right.text = ""
     _r0 = right.paragraphs[0]
     add_run(_r0, "前次掃描　", size=10, color=T.GREY)
@@ -579,7 +584,8 @@ def _trend_block(doc, s, ch):
     add_run(p3, delta_str, size=11, color=delta_color, bold=True)
     if s.get("new_findings"):
         p4 = right.add_paragraph()
-        add_run(p4, f'新出現 {len(s["new_findings"])} 項：{"、".join(s["new_findings"])}',
+        label = "新出現" if comparable else "本次有、前次沒有（可能來自規則更新）"
+        add_run(p4, f'{label} {len(s["new_findings"])} 項：{"、".join(s["new_findings"])}',
                 size=9, color=T.GREY)
     _clear_table_borders(table)
 
@@ -711,6 +717,9 @@ def _performance_section(doc, perf, ch):
         data_table(doc, ["實驗室指標", "數值", "評等"],
                    [[m["label"], m["value"] or "—", _rating_cell(m["rating"])]
                     for m in perf["metrics"]], [3800, 2400, 1900])
+    if perf.get("lab_note"):
+        add_para(doc, [{"text": perf["lab_note"], "size": 9, "color": T.GREY}],
+                 before=3, after=4, line=1.4)
     if perf.get("field"):
         add_para(doc, [{"text": f"真實使用者體驗（CrUX，過去 28 天，{perf['field_scope']}）",
                         "size": T.TYPE["label"], "color": T.NAVY, "bold": True}],
@@ -788,8 +797,13 @@ def _topology_section(doc, topo, ch):
         return
     shown = len(topo["nodes"])
     extra = f"，圖中顯示前 {shown} 頁" if topo.get("total", shown) > shown else ""
+    first_layer = sum(1 for n in topo["nodes"] if n.get("depth") == 1)
+    labels = (
+        "標籤只列入口頁與第一層頁面的路徑。" if first_layer <= C.TOPOLOGY_MAX_LABELS
+        else f"第一層有 {first_layer} 頁，標籤太多會重疊，圖中只標入口頁；各頁網址見網頁版「網站拓撲」。"
+    )
     _note(doc, f"入口頁在中央，越外圈離首頁越多次點擊；節點顏色是該頁最嚴重的問題等級。"
-               f"本次共 {topo.get('total', shown)} 頁{extra}，標籤只列入口頁與第一層頁面的路徑。",
+               f"本次共 {topo.get('total', shown)} 頁{extra}，{labels}",
           keep_next=True)
     add_image(doc, ch["topology"], 5.0)
 

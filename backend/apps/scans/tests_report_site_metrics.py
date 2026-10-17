@@ -107,6 +107,29 @@ class ReportSiteMetricsTests(TestCase):
         self.assertIn("減少未使用的 JavaScript", text)
         self.assertIn("只看首頁的基本項目；本章開頭的 Argus 分數檢查", text)
 
+    def test_absurd_lab_lcp_gets_note(self):
+        # 2026-10-17 實掃：實驗室 LCP 240.8 秒，真實使用者 1.7 秒
+        import copy
+
+        report = copy.deepcopy(PERFORMANCE)
+        report["lab"]["metrics"]["largest-contentful-paint"].update(
+            {"value": 240_800, "display": "240.8 s"})
+        self.scan_job.performance_report = report
+        self.scan_job.save()
+        perf = site_metrics(self.scan_job)["performance"]
+        self.assertIn("240.8 s", perf["lab_note"])
+        self.assertIn(perf["lab_note"], self._text())
+        # 一般慢（4.1 秒）不加說明
+        self.scan_job.performance_report = PERFORMANCE
+        self.scan_job.save()
+        self.assertNotIn("lab_note", site_metrics(self.scan_job)["performance"])
+
+    def test_topology_label_keeps_query_string(self):
+        from apps.scans.report_site_metrics import _path
+
+        self.assertEqual(_path("https://example.com/p/1.php?Lang=en"), "/p/1.php?Lang=en")
+        self.assertEqual(_path("https://example.com"), "/")
+
     def test_search_console_queries_are_included_and_masked(self):
         connection = SearchConsoleConnection.objects.create(
             project=self.scan_job.project, user=self.user, property_url="sc-domain:example.com",

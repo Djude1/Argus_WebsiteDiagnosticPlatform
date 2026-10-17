@@ -1204,15 +1204,15 @@ class PersistAgentSecurityFindingsTests(TestCase):
         )
 
     def test_same_issue_reported_by_several_specialists_is_merged(self):
-        # ntubimdbirc.tw 2026-10-16：偵察與資訊洩漏專家各回報一次 Swagger 外洩，
+        # 實測站台 2026-10-16：偵察與資訊洩漏專家各回報一次 Swagger 外洩，
         # 一筆嚴重（已驗證）、一筆中（端點寫成「/swagger (or …)」），清單列兩次
         critical = self._observed(
             "完整 OpenAPI / Swagger 規格公開暴露（含內部 IP）",
-            "https://ntubimdbirc.tw/api_proxy/v3/api-docs", severity="critical", verified=True,
+            "https://site.example/api_proxy/v3/api-docs", severity="critical", verified=True,
         )
         medium = self._observed(
             "完整 OpenAPI/Swagger 規格公開暴露（含內部 IP 位址）",
-            "https://ntubimdbirc.tw/swagger (or /openapi.json / /v3/api-docs)",
+            "https://site.example/swagger (or /openapi.json / /v3/api-docs)",
         )
         created = persist_agent_security_findings(self.scan_job, [medium, critical])
         self.assertEqual(len(created), 1)

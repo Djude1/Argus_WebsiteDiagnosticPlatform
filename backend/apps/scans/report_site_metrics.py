@@ -25,6 +25,8 @@ MAX_EXTERNAL_LINKS = 10
 MAX_QUERIES = 15
 MAX_TOPOLOGY_NODES = 60
 GSC_DAYS = 28
+# 實驗室 LCP 超過 60 秒視為量測異常（Lighthouse 單次量測，一般網頁數秒內完成）
+LAB_LCP_ANOMALY_MS = 60_000
 
 REPORT_SCORE_LABELS = {"accessibility": "無障礙基本檢查", "seo": "SEO 基本檢查"}
 LINK_TYPE_LABELS = {"internal": "站內", "subdomain": "子網域", "external": "站外"}
@@ -81,6 +83,15 @@ def _performance(scan_job: ScanJob) -> dict:
             for o in lab.get("opportunities") or []
         ],
     }
+    lab_lcp = ((lab.get("metrics") or {}).get("largest-contentful-paint") or {}).get("value")
+    if isinstance(lab_lcp, (int, float)) and lab_lcp > LAB_LCP_ANOMALY_MS:
+        # 2026-10-17 實掃：實驗室 LCP 240.8 秒，同一網址 CrUX 真實使用者 1.7 秒。
+        # 單次量測裡輪播／動畫讓「最大元素」一直換，Lighthouse 會記到最後一次變化
+        out["lab_note"] = (
+            f"實驗室 LCP {lab['metrics']['largest-contentful-paint'].get('display', '')} "
+            "遠超過一般網頁的載入時間，多半是輪播或動畫讓「最大的畫面元素」持續更換，"
+            "單次量測記到最後一次變化，不代表訪客要等這麼久；有真實使用者資料時請以下方 CrUX 為準。"
+        )
     field = report.get("field") or {}
     if field.get("metrics"):
         out["field_scope"] = (
@@ -160,8 +171,10 @@ def _link_entry(row: dict) -> dict:
 
 
 def _path(url: str) -> str:
+    # 保留查詢字串：同一路徑的語系版本（?Lang=en／?Lang=zh-tw）是不同頁，
+    # 只留路徑時圖上出現兩個一模一樣的標籤（2026-10-17 實掃）
     parts = urlsplit(url)
-    return parts.path or "/"
+    return (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
 
 
 def _local(value) -> str:

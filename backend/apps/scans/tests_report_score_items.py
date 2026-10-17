@@ -85,6 +85,17 @@ class ReportScoreItemsTests(TestCase):
         self.assertNotIn("categories", score_items)
         self.assertIn("舊版計分公式", score_items["note"])
 
+    def test_same_version_mismatch_is_not_called_old_formula(self):
+        # 目前公式算的掃描，若分數對不上，不能說成「舊版計分公式」（2026-10-17 實掃誤導）
+        from apps.scans.versions import SCORING_VERSION
+
+        self.scan_job.scoring_version = SCORING_VERSION
+        self.scan_job.category_scores = {"seo": 70, "security": 100}
+        self.scan_job.save()
+        note = build_report_payload(self.scan_job)["appendix"]["score_items"]["note"]
+        self.assertNotIn("舊版計分公式", note)
+        self.assertIn("重新判定", note)
+
     def test_unscored_scan_has_no_section(self):
         self.scan_job.category_scores = {}
         self.scan_job.save()

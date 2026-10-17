@@ -18,7 +18,7 @@ from apps.scans.models import Finding, Page, ScanJob
 
 # Agent 資安觀察的規則代號前綴。2026-10-16 前所有回報共用 "agent-observed-security" 這一個代號，
 # 計分、優先處理、報告與歷史比較都以代號判斷「同一個問題」，於是一次掃描只有第一筆會被計分；
-# ntubimdbirc.tw 實測「嚴重」的 Swagger 外洩因此被同主題的「中」那筆擋掉、沒進優先處理。
+# 實測站台 實測「嚴重」的 Swagger 外洩因此被同主題的「中」那筆擋掉、沒進優先處理。
 AGENT_SECURITY_RULE = "agent-observed-security"
 
 # 弱點類型：同一端點、同一類型才算同一個問題（端點相同但一個是 SQL 注入、一個是缺頻率限制，

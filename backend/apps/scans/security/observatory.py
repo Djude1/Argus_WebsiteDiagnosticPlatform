@@ -123,7 +123,7 @@ def _redirection(url: str, seo_report: dict) -> dict:
     if not check:
         return _test("redirection", label, 0, "這次沒有檢查（勾選 SEO 時才會檢查轉址）",
                      evaluated=False)
-    if check.get("verdict") == "pass":
+    if check.get("level") == "pass":
         return _test("redirection", label, 0, "http:// 會轉到 https://")
     return _test("redirection", label, -20, "http:// 沒有轉到 https://")
 

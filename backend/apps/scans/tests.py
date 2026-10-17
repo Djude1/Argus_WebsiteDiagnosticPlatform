@@ -295,7 +295,17 @@ class StaticScannerTests(APITestCase):
             origin="https://example.com",
             status=ScanJob.Status.COMPLETED,
         )
-        card_numbers = [f"41111111{i:08d}" for i in range(60)]
+        def with_check_digit(body: str) -> str:
+            # 真卡號一定通過 Luhn；遮罩只遮通過 Luhn 的數字串（2026-10-17）
+            total = 0
+            for idx, ch in enumerate(reversed(body)):
+                d = int(ch)
+                if idx % 2 == 0:
+                    d = d * 2 - 9 if d * 2 > 9 else d * 2
+                total += d
+            return body + str((10 - total % 10) % 10)
+
+        card_numbers = [with_check_digit(f"4111111{i:08d}") for i in range(60)]
         evidence = "信用卡號（60 筆）：" + ", ".join(card_numbers)
         finding_payload = make_finding(
             category=Finding.Category.SECURITY,

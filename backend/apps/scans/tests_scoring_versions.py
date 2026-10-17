@@ -94,3 +94,23 @@ class ReportHeadlineTests(SimpleTestCase):
             ScanJob(overall_score=80, **CURRENT), ScanJob(overall_score=60, **CURRENT), {}
         )
         self.assertIn("較前次進步 20 分", text)
+
+
+class ReportComparisonBlockTests(TestCase):
+    """導讀句說「不宜直接比較」時，比較區塊也不能用綠／紅標進步或退步（2026-10-17 實掃）。"""
+
+    def test_previous_summary_carries_comparability(self):
+        from apps.scans.reports import _report_summary
+
+        user = get_user_model().objects.create_user(username="cmp", password="safe-test-password")
+        kwargs = {"user": user, "original_url": "https://example.com/",
+                  "normalized_url": "https://example.com/", "origin": "https://example.com",
+                  "status": ScanJob.Status.COMPLETED, "category_scores": {"seo": 70}}
+        previous = ScanJob.objects.create(overall_score=60, completed_at=timezone.now(),
+                                          **OLD_RULES, **kwargs)
+        current = ScanJob.objects.create(overall_score=70, completed_at=timezone.now(),
+                                         **CURRENT, **kwargs)
+        self.assertFalse(_report_summary(current, previous, [])["previous"]["comparable"])
+        previous.ruleset_version = versions.RULESET_VERSION
+        self.assertTrue(_report_summary(current, previous, [])["previous"]["comparable"])
+

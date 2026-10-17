@@ -16,8 +16,8 @@ OWASP ZAP），重現或比較結果時對照；工具版本不同不影響 `com
 
 from __future__ import annotations
 
-SCORING_VERSION = "3"
-RULESET_VERSION = "2026.10.16"
+SCORING_VERSION = "4"
+RULESET_VERSION = "2026.10.17"
 
 
 def comparable(scan, other) -> bool:

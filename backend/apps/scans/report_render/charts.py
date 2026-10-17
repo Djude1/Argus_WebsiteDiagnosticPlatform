@@ -317,6 +317,11 @@ def _tree(nodes, edges):
     return root, parent, children
 
 
+# 第一層頁面超過這個數量時不標路徑：圍成一圈的標籤會互相重疊、完全讀不出來
+# （2026-10-17 實掃 50 頁全在第一層，50 個標籤疊成一團）
+TOPOLOGY_MAX_LABELS = 16
+
+
 def topology_map(nodes, edges, out):
     """放射狀樹：入口頁在中央，依連結層級往外；節點顏色＝該頁最高嚴重度。"""
     by_id = {n["id"]: n for n in nodes}
@@ -353,12 +358,13 @@ def topology_map(nodes, edges, out):
         (x1, y1), (x2, y2) = pos[p], pos[c]
         ax.plot([x1, x2], [y1, y2], color=_hex(T.BORD), lw=1.0, zorder=2)
     many = len(nodes) > 24
+    label_first_layer = sum(1 for lv in level.values() if lv == 1) <= TOPOLOGY_MAX_LABELS
     for node_id, (x, y) in pos.items():
         n = by_id[node_id]
         size = 260 if node_id == root else 90
         ax.scatter(x, y, s=size, color=_hex(_TONE_COLORS.get(n["tone"], MUTED)),
                    edgecolors="white", linewidths=1.6, zorder=3)
-        if node_id == root or level[node_id] == 1 or not many:
+        if node_id == root or (label_first_layer and (level[node_id] == 1 or not many)):
             label = n["label"] if len(n["label"]) <= 20 else n["label"][:19] + "…"
             ax.text(x, y - (0.16 if node_id == root else 0.12), label, ha="center", va="top",
                     fontproperties=_reg, fontsize=7.5 if many else 8, color=_hex(T.SLATE),

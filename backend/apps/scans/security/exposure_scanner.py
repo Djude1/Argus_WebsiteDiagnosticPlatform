@@ -82,7 +82,7 @@ BUILTIN_SENSITIVE_PATHS: tuple[str, ...] = (
 
 
 # API 前綴底下也探測的 API 文件路徑（2026-10-16）。網站常把後端放在反向代理前綴後面
-# （ntubimdbirc.tw：Next.js 把 /api_proxy/* 轉到 Spring Boot，規格在 /api_proxy/v3/api-docs），
+# （實測站台：Next.js 把代理前綴轉到 Spring Boot，規格在代理前綴底下的 v3/api-docs），
 # 只探測網站根目錄就找不到；這項外洩原本只有 AI Agent 偶然發現，三次掃描只找到一次。
 # 只放回傳 JSON 的規格檔：Swagger UI 是 HTML，會被 soft-404 判斷當成 SPA 預設頁。
 API_DOC_SUFFIXES: tuple[str, ...] = (
@@ -358,21 +358,9 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
         if internal_ips and _SEVERITY_ORDER[severity] < _SEVERITY_ORDER["high"]:
             severity = "high"
 
-        # 證據：命中位置 + body 片段 + 秘鑰摘要 + PII 摘要
+        # 證據順序：命中 → 內網位址 → 秘鑰 → 個資 → 內容片段。報告的檢測依據只取前 300 字，
+        # 重點摘要放在片段之前，否則會被截掉（2026-10-17 實掃：內網 IP 判讀沒出現在報告）。
         evidence_parts = [f"命中：GET {safe_url} → HTTP {status}"]
-        # 片段在寫 DB 前同時遮罩秘鑰與 PII，避免證據本身造成二次外洩。
-        excerpt = redact_pii_in_text(redact_secrets_in_text(body)).strip().replace(
-            "\r",
-            "",
-        )
-        if excerpt:
-            evidence_parts.append("檔案內容片段：\n" + excerpt[:400])
-        if secrets:
-            sec_lines = "\n".join(f"• {s['label']}：{s['masked']}" for s in secrets[:15])
-            evidence_parts.append(f"偵測到 {len(secrets)} 筆疑似秘鑰：\n{sec_lines}")
-        if pii_total > 0:
-            pii_bits = [f"{k}×{len(v)}" for k, v in pii.items() if v]
-            evidence_parts.append(f"偵測到疑似個資：{', '.join(pii_bits)}")
         if internal_ips:
             host = urlparse(url).hostname or ""
             ip_set = set(internal_ips)
@@ -383,6 +371,19 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             evidence_parts.append(
                 "內部網路位址外洩（出現在對外回應中）：\n" + "\n".join(ip_lines)
             )
+        if secrets:
+            sec_lines = "\n".join(f"• {s['label']}：{s['masked']}" for s in secrets[:15])
+            evidence_parts.append(f"偵測到 {len(secrets)} 筆疑似秘鑰：\n{sec_lines}")
+        if pii_total > 0:
+            pii_bits = [f"{k}×{len(v)}" for k, v in pii.items() if v]
+            evidence_parts.append(f"偵測到疑似個資：{', '.join(pii_bits)}")
+        # 片段在寫 DB 前同時遮罩秘鑰與 PII，避免證據本身造成二次外洩。
+        excerpt = redact_pii_in_text(redact_secrets_in_text(body)).strip().replace(
+            "\r",
+            "",
+        )
+        if excerpt:
+            evidence_parts.append("檔案內容片段：\n" + excerpt[:400])
 
         description = (
             f"發現可公開存取的{info['label']}：{safe_url}。{info['why']}"
@@ -397,13 +398,26 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
                 f"（{', '.join(internal_ips[:5])}），等同內部網路拓樸外洩，風險已提升。"
             )
 
+        remediation = info["fix"]
+        if info["file_type"] == "apidoc":
+            remediation += (
+                "正式環境若不需要公開，關閉 API 文件與 Swagger UI（例如 springdoc／springfox 的"
+                " api-docs、swagger-ui），或在反向代理擋下這些路徑。"
+            )
+        if internal_ips:
+            remediation += (
+                "另外移除回應中的內網位址（Swagger 2.0 的 host、OpenAPI 3 的 servers"
+                " 改填對外網址或省略）。"
+            )
+
         findings.append(make_finding(
             category="security",
             severity=severity,
             rule_id=info["rule_id"],
             title=f"敏感檔案外洩：{info['label']}",
             description=description,
-            remediation=info["fix"],
+            remediation=remediation,
+            evidence_json={"assessment": _probe_assessment(info, internal_ips)},
             evidence="\n\n".join(evidence_parts),
             evidence_source="exposure_probe",
             impact_area="information_exposure",
@@ -411,6 +425,21 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             priority_score=_PRIORITY.get(severity, 50.0),
         ))
     return findings
+
+
+def _probe_assessment(info: dict, internal_ips: list[str]) -> dict:
+    """報告「判定依據」：主動探測已實際取得檔案，不能套用「範本比對未經重現」的預設說法。"""
+    if info["file_type"] == "apidoc":
+        missing = "只確認規格文件可公開讀取，未測試文件列出的 API 是否缺乏授權"
+        missing += "；內網位址能否從外部連線也未驗證。" if internal_ips else "。"
+    else:
+        missing = "已實際取得檔案；內容的實際影響（例如金鑰是否仍有效）未進一步驗證。"
+    return {
+        "condition": "這個檔案不需登入，就能從網際網路直接取得。",
+        "observed": "主動探測實際下載到檔案內容（見檢測依據；金鑰與個資已遮罩）。",
+        "missing": missing,
+        "verify": "用未登入的瀏覽器直接開啟該網址；修補後應回 401、403 或 404。",
+    }
 
 
 def analyze_robots_disclosure(disallow: list[str]) -> list[dict]:

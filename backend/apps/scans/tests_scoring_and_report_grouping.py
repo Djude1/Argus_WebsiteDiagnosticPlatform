@@ -52,6 +52,18 @@ class CalculateScoresTests(TestCase):
 
         self.assertEqual(once, thrice)
 
+    def test_dedupe_keeps_most_severe_regardless_of_order(self):
+        """同一規則在不同頁嚴重度不同時，取最嚴重的；分數不隨順序改變（2026-10-17）。
+
+        原本保留第一筆：掃描當下與事後重算的順序不同，挑到的嚴重度不同，報告扣分明細對不上。
+        """
+        info_first = [_finding("seo", "info", "SEO_X"), _finding("seo", "low", "SEO_X")]
+        low_first = list(reversed(info_first))
+        a = calculate_scores(info_first, tested_categories={"seo"})[1]["seo"]
+        b = calculate_scores(low_first, tested_categories={"seo"})[1]["seo"]
+        self.assertEqual(a, b)
+        self.assertLess(a, 100)
+
     def test_different_rules_still_accumulate(self):
         """去重只針對同一個 rule_id；不同問題仍必須各自扣分。"""
         one = calculate_scores(

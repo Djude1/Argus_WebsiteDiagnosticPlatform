@@ -87,6 +87,7 @@
           "scores": {"type": "array", "items": {"type": "object", "required": ["label", "score"],
                      "properties": {"label": {"type": "string"}, "score": {"type": "integer"}}}},
           "metrics": {"type": "array", "items": {"type": "object", "required": ["label", "value", "rating"]}},
+          "lab_note": {"type": "string", "description": "實驗室指標明顯異常時的說明（例如 LCP 超過 60 秒）"},
           "field": {"type": "array", "items": {"type": "object", "required": ["label", "value", "rating"]}},
           "field_scope": {"type": "string"}, "field_note": {"type": "string"},
           "opportunities": {"type": "array", "items": {"type": "object", "required": ["title"]}}}},

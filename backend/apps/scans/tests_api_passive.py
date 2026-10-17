@@ -205,6 +205,17 @@ class PassiveApiStageTests(TestCase):
         self.assertTrue(all(r["source"] == "js_static" and r["method"] == "靜態" for r in rows))
         self.assertEqual({r["path"] for r in rows}, {"/gateway", "/api/v1/users"})
 
+    def test_static_paths_exclude_crawled_pages(self):
+        # 爬蟲當網頁造訪過的路徑不是 API（2026-10-17 實掃：/service/1 被列進 API 清單）
+        self.ctx.crawled_pages = [{"url": "https://example.com/service/1",
+                                   "final_url": "https://example.com/service/1"}]
+        self.ctx.site_signals["js_api_paths"] = ["/gateway", "/service/1"]
+        tasks._passive_api_check(self.ctx)
+        self.scan.refresh_from_db()
+        paths = [r["path"] for r in self.scan.warning_summary["api_surface"]["endpoints"]]
+        self.assertEqual(paths, ["/gateway"])
+        self.assertEqual(tasks._observed_api_paths(self.ctx), ["/gateway"])
+
     def test_static_paths_do_not_duplicate_observed(self):
         self.ctx.site_signals["api_observations"] = [_obs(path="/api/items")]
         self.ctx.site_signals["js_api_paths"] = ["/api/items", "/gateway"]

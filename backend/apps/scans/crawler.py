@@ -50,7 +50,7 @@ CF_TURNSTILE_WIDGET_MARKERS = (
 # 不收錄「Just a moment」短語，避免正常網站文章正文恰好出現該短語的 false positive。
 # 不收錄裸字串 "challenge-platform"：開啟 Bot 偵測的站，CF 會在「每一個正常頁面」尾端插入
 # /cdn-cgi/challenge-platform/scripts/（jsd、precursor）背景腳本；攔截頁才會載入 /h/ 下的
-# orchestrate 並帶 _cf_chl_opt。2026-10-02 ntubimdbirc.tw 首頁因此被誤判、整站只爬到 1 頁。
+# orchestrate 並帶 _cf_chl_opt。2026-10-02 實測站台 首頁因此被誤判、整站只爬到 1 頁。
 CF_JS_CHALLENGE_MARKERS = (
     "/cdn-cgi/challenge-platform/h/",
     "_cf_chl_opt",
@@ -819,7 +819,7 @@ def is_static_asset_path(path: str) -> bool:
 # JS bundle 靜態端點發現（2026-10-16）：爬蟲載入頁面時瀏覽器已抓下同源 JS chunk，
 # 直接讀內容用 regex 抽出網站自己寫死的 API 路徑／rewrite 前綴——繞得過 Cloudflare
 # （主動重抓會被 challenge 擋），補上 Katana／被動攔截都看不到的登入後端點。
-# ntubimdbirc.tw 的 /api_proxy 就明文寫在 _buildManifest.js。
+# 實測站台的代理前綴就明文寫在 _buildManifest.js。
 _MAX_JS_BODIES = 40  # 每次掃描最多讀幾個 JS 檔的內容
 _MAX_JS_BODY_BYTES = 2 * 1024 * 1024
 _MAX_JS_API_PATHS = 60
