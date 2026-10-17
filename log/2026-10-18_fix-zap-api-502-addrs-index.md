@@ -33,9 +33,11 @@ worker 用服務 FQDN `zap.argus-zap.svc.cluster.local` 連進來，Host 不在�
 ## 走過的彎路（保留紀錄）
 一開始誤判成 `api.addrs` 缺索引（`12-zap-passive.yaml` 的 `api.addrs.addr.name=.*` 沒有 `(0)`），
 改成 `api.addrs.addr(0).name=.*` 並 live patch + rollout restart，實測**仍 502**，ZAP 仍 passive-scan
-version URL。結論：`api.addrs` 只是「允許哪些來源 IP 呼叫 API」的白名單，**不決定 Host 歸屬**。
-帶索引的寫法仍保留（讓 worker 來源 IP 被允許、語法也正確），`tests/test_zap_contract.py` 已鎖定，
-但它不是本問題的解。
+version URL。更糟的是，啟動參數是 `/bin/sh -c "exec zap.sh … -config api.addrs.addr(0).name=.* …"`，
+`(` 在 sh 裡未加引號 → `Syntax error: "(" unexpected`，ZAP 直接 **CrashLoopBackOff** 起不來。
+結論：`api.addrs` 只是「允許哪些來源 IP 呼叫 API」的白名單，**不決定 Host 歸屬**；索引寫法既不是解、
+又會讓容器無法啟動。已**還原**成原本的 `api.addrs.addr.name=.*`（能開機、作為來源 IP 白名單），
+`tests/test_zap_contract.py` 改為斷言啟動字串不含未引號的 `(`。真正的解是 client 端 `Host: zap`。
 
 ## 驗證
 - `apps.scans.tests_zap_passive.ZapClientHostHeaderTests` 通過；`tests/test_zap_contract.py` 7 項通過。

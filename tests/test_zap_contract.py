@@ -67,10 +67,9 @@ class ZapKubernetesContractTests(unittest.TestCase):
         self.assertIn("api.filexfer=true", args)
         self.assertIn('api.key="$ZAP_API_KEY"', args)
         self.assertIn("start.checkForUpdates=false", args)
-        # api.addrs 是清單，-config 必須帶索引 addr(0)；少了 (0) ZAP 不會註冊這條，
-        # 預設只認 localhost，worker 用 FQDN 連進來會被當成 proxy 流量並回 502（2026-10-18）
-        self.assertIn("api.addrs.addr(0).name=.*", args)
-        self.assertIn("api.addrs.addr(0).regex=true", args)
+        # args 經 /bin/sh -c 執行，不可含未引號的 shell 特殊字元（例如 api.addrs 的
+        # 索引寫法 addr(0) 會讓 sh 噴 "(" unexpected、ZAP 開不起來，2026-10-18）
+        self.assertNotIn("(", args)
         key_env = next(e for e in container["env"] if e["name"] == "ZAP_API_KEY")
         self.assertEqual(
             key_env["valueFrom"]["secretKeyRef"], {"name": "zap-api", "key": "api-key"}
@@ -120,7 +119,8 @@ class ZapComposeContractTests(unittest.TestCase):
         script = zap["command"][-1]
         self.assertIn('test -n "$$ZAP_API_KEY"', script)
         self.assertIn("api.filexfer=true", script)
-        self.assertIn("api.addrs.addr(0).name=.*", script)
+        # exec zap.sh 前的字串經 sh 執行，不可含未引號的 shell 特殊字元（見 K8s 契約註解）
+        self.assertNotIn("(0)", script)
 
 
 if __name__ == "__main__":

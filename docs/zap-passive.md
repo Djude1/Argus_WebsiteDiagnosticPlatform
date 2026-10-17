@@ -118,8 +118,9 @@ ZAP 把請求當成要轉發的流量 → forward-proxy 失敗回 502（zaproxy 
 `curl --noproxy "*" -H "Host: zap" .../JSON/core/view/version/` 驗證回 200（不帶 Host 回 502）。
 
 > 註：`api.addrs` **只是「允許哪些來源 IP 呼叫 API」的白名單，不決定 Host 歸屬**；曾誤以為把它改成帶索引
-> 的 `api.addrs.addr(0).name=.*` 可解，實測 ZAP 仍把 version URL 當流量去 passive-scan。該設定仍保留（讓
-> worker 來源 IP 被允許），但真正的修法是 client 端的 Host 標頭。
+> 的 `api.addrs.addr(0).name=.*` 可解，實測 ZAP 仍把 version URL 當流量去 passive-scan，**而且 `(` 在
+> `/bin/sh -c` 的啟動字串裡未加引號會讓 ZAP 直接 `Syntax error: "(" unexpected` 開不起來（CrashLoopBackOff）**。
+> 已還原成原本的 `api.addrs.addr.name=.*`（讓 worker 來源 IP 被允許），真正的修法是 client 端的 Host 標頭。
 
 ## 回滾
 

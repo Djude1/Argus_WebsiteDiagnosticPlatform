@@ -129,8 +129,8 @@ services:
         exec zap.sh -daemon -host 0.0.0.0 -port 8090
         -config api.key="$$ZAP_API_KEY"
         -config api.filexfer=true
-        -config api.addrs.addr(0).name=.*
-        -config api.addrs.addr(0).regex=true
+        -config api.addrs.addr.name=.*
+        -config api.addrs.addr.regex=true
         -config start.checkForUpdates=false
         -config start.checkAddonUpdates=false
     mem_limit: 2g
