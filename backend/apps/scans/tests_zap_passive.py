@@ -297,3 +297,13 @@ class RealZapTests(SimpleTestCase):
         self.assertEqual(client.alerts(ORIGIN), [])
         messages = client.view("core", "numberOfMessages", baseurl=ORIGIN)
         self.assertEqual(messages["numberOfMessages"], "0")
+
+
+class ZapClientHostHeaderTests(SimpleTestCase):
+    """ZapClient 一律送 Host: zap——ZAP 用 Host 判斷是不是呼叫自己的 API，只認內建
+    別名 zap／localhost；用服務 FQDN 連進去時會被當成要轉發的流量並回 502（實機確認）。"""
+
+    def test_host_header_is_zap(self):
+        client = ZapClient("http://zap.argus-zap.svc.cluster.local:8090", "secret-key")
+        self.assertEqual(client.http.headers.get("host"), "zap")
+        self.assertEqual(client.http.headers.get("x-zap-api-key"), "secret-key")

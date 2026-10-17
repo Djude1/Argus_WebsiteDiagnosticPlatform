@@ -67,6 +67,10 @@ class ZapKubernetesContractTests(unittest.TestCase):
         self.assertIn("api.filexfer=true", args)
         self.assertIn('api.key="$ZAP_API_KEY"', args)
         self.assertIn("start.checkForUpdates=false", args)
+        # api.addrs 是清單，-config 必須帶索引 addr(0)；少了 (0) ZAP 不會註冊這條，
+        # 預設只認 localhost，worker 用 FQDN 連進來會被當成 proxy 流量並回 502（2026-10-18）
+        self.assertIn("api.addrs.addr(0).name=.*", args)
+        self.assertIn("api.addrs.addr(0).regex=true", args)
         key_env = next(e for e in container["env"] if e["name"] == "ZAP_API_KEY")
         self.assertEqual(
             key_env["valueFrom"]["secretKeyRef"], {"name": "zap-api", "key": "api-key"}
@@ -116,6 +120,7 @@ class ZapComposeContractTests(unittest.TestCase):
         script = zap["command"][-1]
         self.assertIn('test -n "$$ZAP_API_KEY"', script)
         self.assertIn("api.filexfer=true", script)
+        self.assertIn("api.addrs.addr(0).name=.*", script)
 
 
 if __name__ == "__main__":

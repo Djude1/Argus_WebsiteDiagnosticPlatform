@@ -103,6 +103,24 @@ worker 的 `argus.io/config-revision` 已改為 `zap-2026-10-12`，同步時會�
   覆蓋紀錄 `zap_passive=completed`；ZAP 上 `alert/view/numberOfAlerts?baseurl=<origin>` 回 0（已清理）。
 - 觀察 ZAP 的 CPU／記憶體（`kubectl -n argus-zap top pod`）與 `zap_passive` 階段耗時，記錄到本檔。
 
+## 疑難排解：ZAP API 回 HTTP 502（2026-10-18）
+
+症狀：worker 呼叫 ZAP（例如 `GET /JSON/core/view/version/`）回 **502**，ZAP log 同時出現
+`PassiveScanTask - ... took N seconds to scan http://zap.argus-zap.svc.cluster.local:8090/JSON/core/view/version/`
+——ZAP 把 worker 的 API 請求當成「要轉發／掃描的流量」。
+
+根因（實機確認）：ZAP 用請求的 **Host** 判斷「這是不是呼叫我自己的 API」，只認內建別名
+`zap`／`localhost`；worker 用服務 FQDN（`zap.argus-zap.svc.cluster.local`）連進來時 Host 不在別名內，
+ZAP 把請求當成要轉發的流量 → forward-proxy 失敗回 502（zaproxy 官方 client 同樣固定用 `http://zap/`）。
+
+修法：`ZapClient`（`security/zap_passive.py`）建立 httpx client 時固定送 `Host: zap`，不論 `ARGUS_ZAP_API_URL`
+是 FQDN 還是 IP 都被 ZAP 當成自己的 API。實機以 `kubectl exec` 在 worker 內
+`curl --noproxy "*" -H "Host: zap" .../JSON/core/view/version/` 驗證回 200（不帶 Host 回 502）。
+
+> 註：`api.addrs` **只是「允許哪些來源 IP 呼叫 API」的白名單，不決定 Host 歸屬**；曾誤以為把它改成帶索引
+> 的 `api.addrs.addr(0).name=.*` 可解，實測 ZAP 仍把 version URL 當流量去 passive-scan。該設定仍保留（讓
+> worker 來源 IP 被允許），但真正的修法是 client 端的 Host 標頭。
+
 ## 回滾
 
 ConfigMap 設 `ARGUS_ZAP_ENABLED: "false"`、改 worker 的 `argus.io/config-revision` 後同步：爬蟲不再錄 HAR、不呼叫 ZAP，

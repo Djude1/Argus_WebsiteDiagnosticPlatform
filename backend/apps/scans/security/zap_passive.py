@@ -229,9 +229,14 @@ def build_har(har_paths: list[Path], origin: str) -> tuple[str, int]:
 class ZapClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0) -> None:
         self.base = base_url.rstrip("/")
-        # trust_env=False：ZAP 在叢集內部，不走對外代理
+        # trust_env=False：ZAP 在叢集內部，不走對外代理。
+        # Host 一律送 "zap"：ZAP 用請求的 Host 判斷「這是不是我自己的 API」，只認內建別名
+        # zap／localhost；用服務 FQDN（zap.argus-zap.svc.cluster.local）連進去時 Host 不在別名內，
+        # ZAP 會把請求當成要轉發的流量 → 502（zaproxy 官方 client 同樣固定用 http://zap/）。
         self.http = httpx.Client(
-            timeout=timeout, trust_env=False, headers={"X-ZAP-API-Key": api_key}
+            timeout=timeout,
+            trust_env=False,
+            headers={"X-ZAP-API-Key": api_key, "Host": "zap"},
         )
 
     def _call(self, method: str, path: str, **kwargs) -> dict:
