@@ -50,6 +50,27 @@ class TestDetectSecrets(SimpleTestCase):
         kinds = {s["kind"] for s in secret_scanner.detect_secrets_in_text(ENV_SNIPPET)}
         self.assertIn("credential_assignment", kinds)
 
+    def test_js_code_assignment_is_not_a_plaintext_secret(self):
+        # 登入頁常見：讀欄位、取值、jQuery、函式呼叫——是程式碼不是硬編碼密碼
+        # （2026-10-17 實掃登入頁 pwd=document... 被誤報為明文密碼）
+        for code in (
+            'var pwd=document.getElementById("pwd").value;',
+            "password=req.body.password",
+            "pwd=$('#pwd').val()",
+            "secret=process.env.SECRET",
+            "var pwd=document;",
+            "password=form.value",
+        ):
+            with self.subTest(code=code):
+                kinds = {s["kind"] for s in secret_scanner.detect_secrets_in_text(code)}
+                self.assertNotIn("credential_assignment", kinds)
+
+    def test_literal_password_assignment_still_reported(self):
+        for literal in ('password="S3cr3t!StaticValue"', "pwd=hunter2hunter2"):
+            with self.subTest(literal=literal):
+                kinds = {s["kind"] for s in secret_scanner.detect_secrets_in_text(literal)}
+                self.assertIn("credential_assignment", kinds)
+
     def test_detects_github_pat_in_git_config(self):
         kinds = {s["kind"] for s in secret_scanner.detect_secrets_in_text(GIT_CONFIG_SNIPPET)}
         self.assertIn("github_pat", kinds)

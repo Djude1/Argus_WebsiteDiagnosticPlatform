@@ -27,6 +27,30 @@ def _is_placeholder(value: str) -> bool:
     return any(tok in low for tok in _PLACEHOLDER_TOKENS)
 
 
+# 賦值型的值若是程式運算式（讀欄位、取值、函式呼叫、jQuery／範本），不是硬編碼明文密碼。
+# 登入頁常見 `pwd=document.getElementById(...)`、`password=req.body.password`、
+# `pwd=$('#pwd').val()`，原本被當成「明文機密賦值」誤報（2026-10-17 實掃登入頁）。
+_CODE_KEYWORDS = frozenset((
+    "document", "window", "location", "navigator", "console", "process",
+    "require", "module", "exports", "function", "return", "await", "async",
+    "new", "typeof", "void", "null", "undefined", "true", "false", "this",
+    "event", "self", "parent", "top", "form", "req", "res", "ctx", "state",
+    "props", "data", "value", "target", "params", "query", "body",
+))
+# 開頭是 識別字 後面緊接 . [ ( （成員存取／索引／呼叫），或 jQuery/範本符號
+_CODE_EXPR = re.compile(r"^(?:[A-Za-z_$][\w$]*[.\[(]|\$\(|\{\{|\$\{)")
+
+
+def _looks_like_code(value: str) -> bool:
+    """值像程式運算式而非字面密碼時回 True。"""
+    if "(" in value or ")" in value or "`" in value:
+        return True
+    if _CODE_EXPR.match(value):
+        return True
+    head = re.match(r"[A-Za-z_$][\w$]*", value)
+    return bool(head) and head.group(0).lower() in _CODE_KEYWORDS
+
+
 def _mask(value: str, keep: int = 6) -> str:
     """遮罩秘鑰值，只保留前 keep 字元。"""
     value = value.strip()
@@ -107,7 +131,7 @@ def detect_secrets_in_text(text: str) -> list[dict]:
 
         for m in _GENERIC_ASSIGN.finditer(text):
             val = m.group("val")
-            if _is_placeholder(val):
+            if _is_placeholder(val) or _looks_like_code(val):
                 continue
             # 值本身已由特定格式抓到（例：Firebase 設定 apiKey: "AIza…"），不重複列
             if any(p.fullmatch(val) for _k, _l, _s, p, _g in _SECRET_PATTERNS):
