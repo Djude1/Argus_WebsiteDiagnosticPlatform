@@ -259,7 +259,7 @@ XSS_HUNTER_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
    <img src=x onerror=alert(1)>、<iframe src=javascript:alert(1)>
    的 URL 編碼——業界 XSS 驗證標準 payload），用 navigate_and_observe 導航過去：
    - dialogs 出現 alert／confirm／prompt ＝ payload 已執行（金證據）
-   - rendered_html／visible_text 出現未跳脫的探測字串形成新標籤結構
+   - rendered_html／visible_text 出現未跳脫的探測字串形成新的標籤結構
      ＝ DOM 注入成立
    - **多載體紀律**：每個輸入點至少測兩大類載體——事件屬性類
      （img onerror）與 URL 載入類（iframe src="javascript:…"）。
