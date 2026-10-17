@@ -1259,7 +1259,9 @@ def stage_active_probe(ctx: ScanRunContext) -> None:
     skip_nuclei = bool(behind_cdn) and settings.ARGUS_NUCLEI_SKIP_BEHIND_CDN
     run_nuclei_now = plan.run_nuclei and not skip_nuclei
 
-    if run_nuclei_now:
+    # active_probe 只要是本次計畫的步驟就標記為進行中：CDN 短路跳過 Nuclei 時 Katana 仍在這一步跑，
+    # 進度條才不會停在上一步、再跳到 deep_security（步數清單與總進度不受影響，純視覺一致性）。
+    if plan.run_nuclei:
         ctx.scanning_progress(ctx.scanning_total, "active_probe")
     if plan.run_katana:
         _run_site_active_tools(ctx, target, skip_nuclei=skip_nuclei)

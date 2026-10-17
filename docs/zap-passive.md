@@ -16,9 +16,11 @@
 另有一個**主動掃描**階段（`zap_active.py`、`tasks.stage_zap_active`），會對目標實際送出攻擊
 payload 找可被利用的弱點，與被動分析互補。**與 Kali／Hermes agent 同模式，攻擊型能力預設關閉**：
 
-- 要跑必須 `ARGUS_ZAP_ACTIVE_ENABLED=true`（預設 false），**且**只在「全站＋主動模式＋網域已驗證」的
-  授權掃描執行（`scan_plan.run_zap_active`＝`site_active`，與 Nuclei／Kali 同一組閘門）。被動模式、
-  單頁、未驗證網域一律不送主動流量——這是平台授權邊界，不是可調的偏好。被動分析仍是所有資安掃描的地板。
+- 要跑必須 `ARGUS_ZAP_ACTIVE_ENABLED=true`（**程式預設 false，給本機／CI；正式 K8s 已於 2026-10-17 在
+  ConfigMap `01` 設為 `"true"`**，沿用被動同一個 ZAP 服務／Secret／`07` 網路政策，無新增前置），**且**只在
+  「全站＋主動模式＋網域已驗證」的授權掃描執行（`scan_plan.run_zap_active`＝`site_active`，與 Nuclei／Kali
+  同一組閘門）。被動模式、單頁、未驗證網域一律不送主動流量——這是平台授權邊界，不是可調的偏好。被動分析
+  仍是所有資安掃描的地板。回滾：ConfigMap 設 `"false"` 並重啟 worker。
 - **繞過 Cloudflare**：先把爬蟲的 HAR 匯進 ZAP 建站台樹（Playwright 已繞過 CF 抓到真實 URL），再對
   這些節點做 active scan；不完全依賴 ZAP 自己的 spider（CF 後面 spider 幾乎抓不到）。
 - 時間預算 `ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS`（預設 600，含 spider 的 `ARGUS_ZAP_ACTIVE_SPIDER_SECONDS`

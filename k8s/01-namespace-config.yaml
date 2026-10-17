@@ -91,6 +91,11 @@ data:
   # 對目標網站零新增請求）。金鑰 ARGUS_ZAP_API_KEY 在 argus-secret。ZAP 不可用時掃描照常完成，只標覆蓋 failed。
   ARGUS_ZAP_ENABLED: "true"
   ARGUS_ZAP_API_URL: "http://zap.argus-zap.svc.cluster.local:8090"
+  # OWASP ZAP 主動掃描（送攻擊 payload）：只對「全站＋主動＋網域已驗證」的授權掃描執行
+  # （scan_plan.run_zap_active 三重閘＋程式 active_enabled）。先用爬蟲 HAR 建站台樹繞過 CF 再攻擊。
+  # 會為授權主動掃描額外增加約 spider 120s＋active 600s 的時間（ARGUS_ZAP_ACTIVE_*）。
+  # 程式預設仍關（本機／CI 不需 ZAP）；此處為正式環境開啟。回滾：設 "false" 並重啟 worker。
+  ARGUS_ZAP_ACTIVE_ENABLED: "true"
   ARGUS_KALI_ENABLED: "false"
   ARGUS_KALI_BACKEND: "disabled"
   ARGUS_KALI_NAMESPACE: "argus-kali"
