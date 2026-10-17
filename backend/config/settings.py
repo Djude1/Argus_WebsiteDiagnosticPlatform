@@ -368,6 +368,14 @@ ARGUS_ZAP_API_KEY = os.getenv("ARGUS_ZAP_API_KEY", "")
 ARGUS_ZAP_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_TIMEOUT_SECONDS", "120"))
 ARGUS_ZAP_MAX_ENTRIES = int(os.getenv("ARGUS_ZAP_MAX_ENTRIES", "2000"))
 ARGUS_ZAP_MAX_BODY_CHARS = int(os.getenv("ARGUS_ZAP_MAX_BODY_CHARS", "500000"))
+# ZAP 主動掃描（spider＋active scan，會對目標送攻擊 payload）：與 Kali／agent 同模式，
+# 預設關閉，正式環境明確開啟才跑；且只在「全站＋主動模式＋網域已驗證」的授權掃描執行
+# （由 scan_plan.run_zap_active 把關）。見 docs/zap-passive.md。
+ARGUS_ZAP_ACTIVE_ENABLED = env_bool("ARGUS_ZAP_ACTIVE_ENABLED", default=False)
+# 主動掃描（spider＋active scan 合計）的時間上限（秒）；逾時停掉掃描、已得的告警照常回報（partial）
+ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS", "600"))
+# spider 階段的時間上限（秒，含在上面的總上限內）；CF 後面 spider 幾乎無效，主要靠 HAR 建樹
+ARGUS_ZAP_ACTIVE_SPIDER_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_SPIDER_SECONDS", "120"))
 # 已知漏洞優先序補強（apps/scans/security/vuln_intel.py）：EPSS 被利用機率＋OSV.dev 修補版本。
 # 只送出函式庫名稱、版本與 CVE 編號（不含受測網址）；查不到時原樣保留問題。
 ARGUS_VULN_INTEL_ENABLED = env_bool("ARGUS_VULN_INTEL_ENABLED", default=True)

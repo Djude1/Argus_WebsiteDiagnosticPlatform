@@ -16,6 +16,7 @@ class ScanExecutionPlan:
     run_agent: bool
     run_agent_ux: bool
     run_kali: bool
+    run_zap_active: bool
 
 
 def build_scan_execution_plan(scan_job: ScanJob) -> ScanExecutionPlan:
@@ -46,4 +47,6 @@ def build_scan_execution_plan(scan_job: ScanJob) -> ScanExecutionPlan:
         run_agent=site_active,
         run_agent_ux=run_agent_ux,
         run_kali=active_authorized,
+        # ZAP 主動掃描會送攻擊 payload，與其他主動工具同閘：全站＋主動＋已授權
+        run_zap_active=site_active,
     )

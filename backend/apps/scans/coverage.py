@@ -58,6 +58,7 @@ CHECK_CATEGORIES: dict[str, str | None] = {
     # 外部指標不併入 Argus 分數，也不影響維度的覆蓋狀態；失敗時仍列在「未完整完成的檢查」
     "pagespeed": None,
     "zap_passive": "security",
+    "zap_active": "security",
     "api_passive": "security",
 }
 
@@ -82,6 +83,7 @@ CHECK_LABELS: dict[str, str] = {
     "axe": "axe-core 無障礙檢查",
     "pagespeed": "PageSpeed Insights（Lighthouse／CrUX）",
     "zap_passive": "OWASP ZAP 被動分析",
+    "zap_active": "OWASP ZAP 主動掃描",
     "api_passive": "被動 API 檢查",
     "kali": "Kali 主動驗證",
 }

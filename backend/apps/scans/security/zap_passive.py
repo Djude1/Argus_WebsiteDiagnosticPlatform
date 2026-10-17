@@ -294,6 +294,35 @@ class ZapClient:
         except ZapError:
             pass
 
+    # --- 主動掃描（spider＋active scan）：只給 zap_active 用，被動流程不呼叫 ---
+    def spider_scan(self, url: str) -> str:
+        return str(self.action("spider", "scan", url=url, recurse="true").get("scan", ""))
+
+    def spider_status(self, scan_id: str) -> int:
+        return int(self.view("spider", "status", scanId=scan_id).get("status", 0))
+
+    def spider_stop(self, scan_id: str) -> None:
+        try:
+            self.action("spider", "stop", scanId=scan_id)
+        except ZapError:
+            pass
+
+    def ascan_scan(self, url: str, *, policy: str = "") -> str:
+        """對站台樹中 url 底下（recurse）、且在範圍內的節點做 active scan，回傳 scanId。"""
+        params = {"url": url, "recurse": "true", "inScopeOnly": "false"}
+        if policy:
+            params["scanPolicyName"] = policy
+        return str(self.action("ascan", "scan", **params).get("scan", ""))
+
+    def ascan_status(self, scan_id: str) -> int:
+        return int(self.view("ascan", "status", scanId=scan_id).get("status", 0))
+
+    def ascan_stop(self, scan_id: str) -> None:
+        try:
+            self.action("ascan", "stop", scanId=scan_id)
+        except ZapError:
+            pass
+
 
 @dataclass
 class ZapResult:
@@ -351,8 +380,17 @@ def _severity(alert: dict) -> str:
     return severity
 
 
-def alerts_to_findings(alerts: list[dict], version: str) -> tuple[list[dict], dict[str, int]]:
-    """ZAP 告警 → Argus finding（每條規則一筆）；回傳 (findings, 與既有檢查重複的規則與筆數)。"""
+def alerts_to_findings(
+    alerts: list[dict], version: str, *, active: bool = False,
+) -> tuple[list[dict], dict[str, int]]:
+    """ZAP 告警 → Argus finding（每條規則一筆）；回傳 (findings, 與既有檢查重複的規則與筆數)。
+
+    active=True 代表來自主動掃描（spider＋active scan 實際送攻擊 payload）：來源標示與
+    evidence_json.source 改為 zap_active；嚴重度仍沿用 ZAP 的 risk（ZAP 最高只到 high，
+    不會出現 critical），低信心一樣降一級。
+    """
+    scan_label = "主動掃描" if active else "被動分析"
+    source_tag = "zap_active" if active else "zap_passive"
     grouped: dict[str, list[dict]] = {}
     overlap: dict[str, int] = {}
     for alert in alerts:
@@ -383,7 +421,7 @@ def alerts_to_findings(alerts: list[dict], version: str) -> tuple[list[dict], di
             severity=severity,
             title=title,
             description=(
-                f"OWASP ZAP 被動分析在 {len(urls)} 個網址發現「{first.get('alert', '')}」。"
+                f"OWASP ZAP {scan_label}在 {len(urls)} 個網址發現「{first.get('alert', '')}」。"
                 + str(first.get("description", "")).strip()[:600]
             ),
             remediation=remediation or "依 ZAP 說明確認並修正。",
@@ -393,9 +431,9 @@ def alerts_to_findings(alerts: list[dict], version: str) -> tuple[list[dict], di
             ),
             rule_id=f"zap-{plugin}",
             evidence_type="zap_alert",
-            evidence_source=f"OWASP ZAP {version}（被動分析）".replace("  ", " "),
+            evidence_source=f"OWASP ZAP {version}（{scan_label}）".replace("  ", " "),
             evidence_json={
-                "source": "zap_passive",
+                "source": source_tag,
                 "plugin_id": plugin,
                 "zap_alert": first.get("alert", ""),
                 "zap_risk": first.get("risk", ""),

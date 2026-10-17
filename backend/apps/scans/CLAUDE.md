@@ -468,7 +468,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 `step`／`steps` 是 phase 之下的細分階段（前端掃描進度條據此顯示「正在分析 GEO／UX／資安…」）：
 `steps` 由 `tasks.planned_scan_steps()` 依勾選維度與範圍／授權算出本次實際會跑的子步驟，`step` 是目前這一步。
 可能值：`crawl`、`analyze_seo`／`analyze_aeo`／`analyze_geo`／`analyze_ux`／`analyze_security`（只列勾選維度；2026-10-10 曾合併成一步 `analyze_pages`，使用者要求恢復五個階段）、`aeo_answers`（勾 AEO，接在逐維度分析之後）、
-`active_probe`（`run_nuclei`）、`deep_security`、`zap_passive`（勾資安且已啟用 ZAP）、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`seo_links`（勾 SEO）、`pagespeed`（勾 UX 且已設定 PSI 金鑰）、`agent`（Agent 啟用且可執行）、`scoring`。
+`active_probe`（`run_nuclei`）、`deep_security`、`zap_passive`（勾資安且已啟用 ZAP）、`zap_active`（另需 `ARGUS_ZAP_ACTIVE_ENABLED` 且全站＋主動＋已授權）、`exposure_probe`（`run_exposure`）、`geo_site`（勾 GEO）、`seo_links`（勾 SEO）、`pagespeed`（勾 UX 且已設定 PSI 金鑰）、`agent`（Agent 啟用且可執行）、`scoring`。
 頁面分析改為**逐維度、逐頁**執行（`analyze_page(categories={單一維度})`），結果與一次跑全部維度相同；各維度實際檢查項目與「為什麼幾秒就跑完」的說明見 [`docs/scan-stage-checks.md`](../../../docs/scan-stage-checks.md)（改規則時同步）；新增子步驟時要同步前端 `ScanExperience.jsx` 的 `SCAN_STEP_META`。
 
 `step_done`／`step_total` 是**本階段**內的進度（爬取＝頁、逐維度分析＝該維度已分析頁數、Agent＝步數；其他子步驟 0/0＝不定進度），`step_started_at` 在同一步內保留不變（供前端估算本階段剩餘時間）。前端整體百分比由階段序號加上本階段比例算出，進度條才會和階段一起走（2026-09-28 前整體進度只看頁數，爬完就 100%、後面十個階段進度條不動）。
@@ -492,6 +492,7 @@ Worker 每完成一頁需更新此 JSON 欄位，前端輪詢後顯示進度條�
 | `active_probe` | `stage_active_probe`（`_collect_probe_targets`、`_run_site_active_tools`、`_run_single_page_nuclei`、`_waf_blocked_nuclei_note`） | Nuclei／Katana，遵守範圍與授權矩陣 |
 | `deep_security` | `stage_deep_security` | security/ 子套件被動深度檢查＋WAF 封鎖偵測＋被動 API 檢查（`_passive_api_check`，覆蓋檢查 `api_passive`：爬蟲 `_observe_api_response` 記下同網站 XHR／fetch 回應摘要放 `site_signals.api_observations`（方法＋路徑去重、不含查詢字串，錯誤回應另讀前 4000 字元；Cloudflare 的 `/cdn-cgi/` 不算），交給 `security/api_scanner.py`；觀察到的 API 與**前端 JS 靜態發現、執行期未呼叫的端點**（`site_signals.js_api_paths`，經 `tasks._static_api_paths` 排除爬蟲當網頁造訪過的路徑——`/service/1` 這類頁面網址也會命中 API 提示字；`source="js_static"`、`static_discovered` 計數）一起存 `warning_summary.api_surface`，兩者皆空才標 skipped；資安分析頁（`project_security` 另回 `api_check`＝這項檢查的狀態）與 PDF 附錄「API 端點清單」（`reports._report_api_surface`，勾資安才有）顯示，2026-10-11、靜態併入 2026-10-16）；已知 CVE 由 `security/vuln_intel.py` 補 EPSS 被利用機率與 OSV 修補版本（只影響排序與說明，不改嚴重度） |
 | `zap_passive` | `stage_zap_passive` | 勾資安且 `ARGUS_ZAP_ENABLED` 才跑：爬取時錄的同網站 HAR 交給 OWASP ZAP 只跑被動規則（零新增請求），重複既有檢查的告警不列；ZAP 不可用只標覆蓋 failed，HAR 用完即刪（`security/zap_passive.py`，見 `docs/zap-passive.md`） |
+| `zap_active` | `stage_zap_active` | 勾資安＋`ARGUS_ZAP_ACTIVE_ENABLED`＋全站主動已授權才跑：先用爬蟲 HAR 建 ZAP 站台樹（繞過 CF）再送攻擊 payload 做 active scan；送攻擊流量只對已驗證網域（同 Nuclei／Kali 閘）；逾時／被停標 partial、無可掃節點標 skipped；HAR 留到此階段跑完才刪（`security/zap_active.py`，見 `docs/zap-passive.md`） |
 | `exposure` | `stage_exposure` | robots 敏感路徑（被動）＋敏感檔案主動探測（全網站 active；`_observed_api_paths` 推出的 API 前綴底下另探 API 文件——前綴來源＝被動攔截的 API 回應＋**爬蟲從同源 JS bundle 靜態抽出的路徑** `site_signals.js_api_paths`，2026-10-16） |
 | `geo_site` | `stage_geo_site` | llms.txt、AI 爬蟲政策（`ai_bots.py`：只有封鎖 AI 搜尋／使用者觸發的爬蟲才列問題）、組織實體、文章作者與日期（`geo_entity.py`） |
 | `seo_links` | `stage_seo_links` | 勾 SEO 才跑：連結狀態與跳轉鏈、robots.txt／sitemap／HTTPS／www／404／結尾斜線檢查，寫 `ScanJob.seo_report`，並由 `seo/site_findings.py` 轉出站台層級 SEO Finding；失敗只記 log（`seo/collect.py`） |

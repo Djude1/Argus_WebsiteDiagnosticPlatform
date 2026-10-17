@@ -80,6 +80,8 @@ from apps.scans.security.sri_scanner import analyze_sri
 from apps.scans.security.ssl_scanner import analyze_ssl
 from apps.scans.security.vuln_intel import enrich_findings as enrich_vuln_intel
 from apps.scans.security.waf_scanner import detect_waf_block
+from apps.scans.security.zap_active import active_enabled as zap_active_enabled
+from apps.scans.security.zap_active import run_active as run_zap_active
 from apps.scans.security.zap_passive import ZapBusy, ZapError, alerts_to_findings
 from apps.scans.security.zap_passive import enabled as zap_enabled
 from apps.scans.security.zap_passive import run_passive as run_zap_passive
@@ -142,6 +144,8 @@ def planned_scan_steps(scan_job, execution_plan) -> list[str]:
     steps.append("deep_security")
     if _runs_zap_passive(scan_job):
         steps.append("zap_passive")
+    if _runs_zap_active(scan_job):
+        steps.append("zap_active")
     if execution_plan.run_exposure:
         steps.append("exposure_probe")
     if "geo" in cats:
@@ -541,7 +545,7 @@ def stage_crawl(ctx: ScanRunContext) -> None:
         scan_job_id,
         f"開始爬取，最大深度 {scan_job.max_depth}，最大頁數 {scan_job.max_pages}",
     )
-    if _runs_zap_passive(scan_job):
+    if _runs_zap_passive(scan_job) or _runs_zap_active(scan_job):
         ctx.har_dir = Path(tempfile.mkdtemp(prefix=f"argus-har-{scan_job_id}-"))
     crawled_pages, warnings, site_signals, discovered_endpoints = _run_async(
         lambda: crawl_site(
@@ -592,6 +596,13 @@ def stage_crawl(ctx: ScanRunContext) -> None:
 def _runs_zap_passive(scan_job: ScanJob) -> bool:
     """ZAP 被動分析：勾資安且已部署 ZAP 才跑（只分析已爬到的流量，被動模式也可以）。"""
     return "security" in scan_job.effective_categories and zap_enabled()
+
+
+def _runs_zap_active(scan_job: ScanJob) -> bool:
+    """ZAP 主動掃描：勾資安＋已開啟主動 ZAP＋全站主動已授權才跑（會送攻擊 payload）。"""
+    if "security" not in scan_job.effective_categories or not zap_active_enabled():
+        return False
+    return build_scan_execution_plan(scan_job).run_zap_active
 
 
 def _discard_har(ctx: ScanRunContext) -> None:
@@ -1303,7 +1314,9 @@ def stage_zap_passive(ctx: ScanRunContext) -> None:
         ctx.coverage.mark("zap_passive", FAILED, str(exc))
         return
     finally:
-        _discard_har(ctx)
+        # 主動 ZAP 也要用這份 HAR 建站台樹，留到 stage_zap_active 跑完才刪
+        if not _runs_zap_active(scan_job):
+            _discard_har(ctx)
     if not result.entries:
         ctx.coverage.mark("zap_passive", SKIPPED, "沒有錄到可分析的流量")
         return
@@ -1322,6 +1335,54 @@ def stage_zap_passive(ctx: ScanRunContext) -> None:
         ctx.scan_job_id,
         f"ZAP {result.version} 被動分析：{result.entries} 筆流量、{len(result.alerts)} 則告警，"
         f"新增 {len(findings)} 項問題；另有 {sum(overlap.values())} 則與既有檢查相同、不重複列出",
+    )
+
+
+def stage_zap_active(ctx: ScanRunContext) -> None:
+    """OWASP ZAP 主動掃描：先用爬蟲 HAR 建站台樹，再對目標送攻擊 payload 找弱點。
+
+    只在「全站＋主動模式＋網域已驗證」且開啟 `ARGUS_ZAP_ACTIVE_ENABLED` 時跑；與被動分析互補。
+    ZAP 無法使用或無可掃描節點時只標覆蓋 skipped／failed，掃描照常完成。
+    """
+    scan_job = ctx.scan_job
+    if not _runs_zap_active(scan_job):
+        return
+    raise_if_cancelled(ctx.scan_job_id)
+    ctx.scanning_progress(ctx.scanning_total + 3, "zap_active")
+    har_files = sorted(ctx.har_dir.glob("*.har")) if ctx.har_dir else []
+    try:
+        result = run_zap_active(
+            har_files, scan_job.origin, scan_job.id,
+            cancel_check=lambda: raise_if_cancelled(ctx.scan_job_id),
+        )
+    except ZapBusy as exc:
+        append_log(ctx.scan_job_id, f"ZAP 主動掃描略過：{exc}", level="warn")
+        ctx.coverage.mark("zap_active", SKIPPED, str(exc))
+        return
+    except ZapError as exc:
+        append_log(ctx.scan_job_id, f"ZAP 主動掃描失敗：{exc}", level="warn")
+        ctx.coverage.mark("zap_active", FAILED, str(exc))
+        return
+    finally:
+        _discard_har(ctx)
+    if not result.scanned:
+        ctx.coverage.mark("zap_active", SKIPPED, result.reason or "沒有可主動掃描的節點")
+        return
+    findings, overlap = alerts_to_findings(result.alerts, result.version, active=True)
+    if result.version:
+        warnings = dict(scan_job.warning_summary or {})
+        warnings["tools"] = {**(warnings.get("tools") or {}), "OWASP ZAP": result.version}
+        scan_job.warning_summary = warnings
+        scan_job.save(update_fields=["warning_summary", "updated_at"])
+    ctx.record(findings, check="zap_active")
+    if result.completed:
+        ctx.coverage.mark("zap_active", COMPLETED)
+    else:
+        ctx.coverage.mark("zap_active", PARTIAL, "ZAP 主動掃描在時限內沒有跑完")
+    append_log(
+        ctx.scan_job_id,
+        f"ZAP {result.version} 主動掃描：{len(result.alerts)} 則告警，新增 {len(findings)} 項問題；"
+        f"另有 {sum(overlap.values())} 則與既有檢查相同、不重複列出",
     )
 
 
@@ -1964,6 +2025,7 @@ SCAN_PIPELINE: tuple[tuple[str, Callable[[ScanRunContext], None]], ...] = (
     ("active_probe", stage_active_probe),
     ("deep_security", stage_deep_security),
     ("zap_passive", stage_zap_passive),
+    ("zap_active", stage_zap_active),
     ("exposure", stage_exposure),
     ("geo_site", stage_geo_site),
     ("seo_links", stage_seo_links),

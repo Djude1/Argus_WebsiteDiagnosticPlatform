@@ -1,10 +1,30 @@
-# OWASP ZAP 被動分析（啟用與回滾）
+# OWASP ZAP 被動分析與主動掃描（啟用與回滾）
 
 Argus 把爬蟲已經取得的同網站流量（HAR）交給獨立的 OWASP ZAP daemon，只跑 ZAP 的**被動規則**，
 補上 Argus 自建規則沒有的檢查（混合內容、引用外站腳本、原始碼註解、除錯訊息、內部 IP、網址含敏感資訊等）。
-**ZAP 不會對目標網站發出任何請求**；Spider、AJAX Spider 與 Active Scan 不在這個階段的範圍（roadmap §7）。
+被動分析階段**ZAP 不會對目標網站發出任何請求**。
 
 程式：`backend/apps/scans/security/zap_passive.py`、`tasks.stage_zap_passive`、`crawler.crawl_site(har_dir=...)`。
+
+## 主動掃描（ZAP spider＋active scan，2026-10-17）
+
+另有一個**主動掃描**階段（`zap_active.py`、`tasks.stage_zap_active`），會對目標實際送出攻擊
+payload 找可被利用的弱點，與被動分析互補。**與 Kali／Hermes agent 同模式，攻擊型能力預設關閉**：
+
+- 要跑必須 `ARGUS_ZAP_ACTIVE_ENABLED=true`（預設 false），**且**只在「全站＋主動模式＋網域已驗證」的
+  授權掃描執行（`scan_plan.run_zap_active`＝`site_active`，與 Nuclei／Kali 同一組閘門）。被動模式、
+  單頁、未驗證網域一律不送主動流量——這是平台授權邊界，不是可調的偏好。被動分析仍是所有資安掃描的地板。
+- **繞過 Cloudflare**：先把爬蟲的 HAR 匯進 ZAP 建站台樹（Playwright 已繞過 CF 抓到真實 URL），再對
+  這些節點做 active scan；不完全依賴 ZAP 自己的 spider（CF 後面 spider 幾乎抓不到）。
+- 時間預算 `ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS`（預設 600，含 spider 的 `ARGUS_ZAP_ACTIVE_SPIDER_SECONDS`
+  預設 120）；逾時停掉掃描、已得告警照常回報（覆蓋標 partial）。支援取消；結束一律清掉 ZAP 上這個
+  網站的告警、節點，並把上傳的 HAR 覆寫成 `{}`。
+- 告警轉 finding 共用 `alerts_to_findings(..., active=True)`：來源標「主動掃描」、`evidence_json.source=zap_active`；
+  嚴重度沿用 ZAP 的 risk（ZAP 最高只到 high，不會有 critical），低信心降一級；與 Argus 既有檢查重複的
+  規則（`OVERLAP_RULES`）仍不重複列。
+- 本機 Docker Compose 可用同一個 ZAP daemon；正式 K8s 需確認 worker 出站到 ZAP 的 NetworkPolicy，
+  且 ZAP 能連到目標（主動掃描要真的送請求）。**無法在 CI／無 ZAP 環境實測**，單元測試以假 client 驗流程
+  （`tests_zap_active.py`）。
 
 ## 流程
 
