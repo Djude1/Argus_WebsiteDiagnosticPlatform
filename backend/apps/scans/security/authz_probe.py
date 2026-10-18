@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import urlparse, urlunparse
 
 from config.egress import playwright_launch_kwargs
 from django.conf import settings
@@ -60,6 +61,39 @@ _INTERNAL_KEYS = re.compile(
 _SENSITIVE_KEYS = re.compile(r"(password|passwd|pwd|token|secret|身分證|idcard|id_card|ssn)", re.I)
 
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+
+# IDOR／BOLA 枚舉：路徑最後一段是純數字 id 的端點（/api/Users/29、/rest/basket/1…），
+# 換個 id 看能不能未授權取得別人的物件。鄰近 id 與每次掃描最多探幾個模板。
+_ID_SEGMENT = re.compile(r"^\d{1,9}$")
+_IDOR_PROBE_IDS = (1, 2, 3)
+MAX_IDOR_TEMPLATES = 5
+
+
+def _id_template(path: str) -> tuple[str, int] | None:
+    """路徑最後一段是純數字 id → 回 (模板, id)，否則 None。
+
+    `/api/Users/29` → (`/api/users/#`, 29)。只認純數字結尾（避免把 UUID／slug 當 id 枚舉，
+    控制誤報與請求量）。
+    """
+    parts = [p for p in (path or "").split("/") if p]
+    if len(parts) < 2 or not _ID_SEGMENT.match(parts[-1]):
+        return None
+    template = "/" + "/".join([*parts[:-1], "#"])
+    return template.lower(), int(parts[-1])
+
+
+def _sensitivity(keys_blob: str, pii: dict) -> tuple[bool, bool, bool]:
+    """共用判定門檻（成批名單與單筆 IDOR 共用）：回 (是否成立, 有敏感欄位名, 有強個資)。
+
+    成立＝身分欄位＋內部帳號欄位（後台名單）／敏感欄位名／強個資（身分證／信用卡）任一。
+    email／手機屬弱個資，不在此單獨成立（由呼叫端另計 pii_total 升嚴重度）。
+    """
+    strong_pii = bool(pii.get("national_id") or pii.get("credit_card"))
+    has_identity = bool(_IDENTITY_KEYS.search(keys_blob))
+    has_internal = bool(_INTERNAL_KEYS.search(keys_blob))
+    has_sensitive = bool(_SENSITIVE_KEYS.search(keys_blob))
+    qualifies = (has_identity and has_internal) or has_sensitive or strong_pii
+    return qualifies, has_sensitive, strong_pii
 
 
 def _record_objects(parsed: object) -> list[dict]:
@@ -109,17 +143,10 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
         keys_blob = " ".join(keys)
         pii = detect_pii_in_text(body)
         pii_total = sum(len(v) for v in pii.values())
-        # 身分證／信用卡＝絕不可能刻意公開的強個資；email／手機是公開聯絡清單也會有的弱個資
-        strong_pii = bool(pii.get("national_id") or pii.get("credit_card"))
-        has_identity = bool(_IDENTITY_KEYS.search(keys_blob))
-        has_internal = bool(_INTERNAL_KEYS.search(keys_blob))
-        has_sensitive_keys = bool(_SENSITIVE_KEYS.search(keys_blob))
-        # 成立條件（任一）：
-        #   1. 身分欄位＋內部帳號欄位——後台帳號／成員名單（公開目錄沒有內部欄位，用這條區隔）
-        #   2. 敏感欄位名（password／token／身分證…）——這些欄位絕不可能刻意成批公開
-        #   3. 強個資（身分證／信用卡）出現在回應——同上，不需再要求欄位名
-        # email／手機這類弱個資不單獨成立（公開聯絡清單也有），要配合第 1 條的內部欄位。
-        if not ((has_identity and has_internal) or has_sensitive_keys or strong_pii):
+        # 成立條件（任一，見 _sensitivity）：身分欄位＋內部帳號欄位／敏感欄位名／強個資。
+        # email／手機這類弱個資不單獨成立（公開聯絡清單也有），要配合內部欄位。
+        qualifies, has_sensitive_keys, strong_pii = _sensitivity(keys_blob, pii)
+        if not qualifies:
             continue
 
         url = r.get("url") or ""
@@ -179,9 +206,163 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
 
 
 def _path_of(url: str) -> str:
-    from urllib.parse import urlparse
-
     return urlparse(url).path.rstrip("/").lower() or "/"
+
+
+def expand_idor_candidates(urls: list[str]) -> list[str]:
+    """對結尾是數字 id 的端點，補上「父集合」與「鄰近 id」當額外探測目標（通用、不寫死路徑）。
+
+    - 父集合（去掉結尾 id）：淺爬只觀察到 `/x/2`，成批外洩其實在父集合 `/x`。
+    - 鄰近 id（1／2／3 ＋觀察到的那個）：給 IDOR 枚舉用——同模板不同 id 都能未授權取得就是 BOLA。
+
+    每個模板只展開一次、最多 MAX_IDOR_TEMPLATES 個模板，避免請求量爆開；回傳的額外 URL 由
+    呼叫端併進既有候選後統一去重與套用 MAX_ENDPOINTS 上限。
+    """
+    extra: list[str] = []
+    seen_templates: set[str] = set()
+    for raw in urls:
+        parsed = urlparse(raw)
+        info = _id_template(parsed.path)
+        if not info:
+            continue
+        template, observed_id = info
+        if template in seen_templates:
+            continue
+        seen_templates.add(template)
+        if len(seen_templates) > MAX_IDOR_TEMPLATES:
+            break
+        parent_path = template[: -len("/#")]  # 去掉結尾 "/#"
+        id_prefix = template[:-1]  # 結尾 "#" 之前（含斜線）
+        paths = [parent_path] + [
+            f"{id_prefix}{i}" for i in sorted(set(_IDOR_PROBE_IDS) | {observed_id})
+        ]
+        for path in paths:
+            extra.append(urlunparse((parsed.scheme, parsed.netloc, path, "", "", "")))
+    return extra
+
+
+def analyze_idor_results(results: list[dict]) -> list[dict]:
+    """單筆物件型 IDOR／BOLA：同一 `/:id` 模板下，未授權換 id 取得不同使用者的物件即報。
+
+    保守判定：同一模板要有 ≥2 個不同 id 都回 200、內容是**不同的**單一物件（排除所有 id 回同一頁
+    的 SPA／靜態頁），且物件帶身分／內部／個資欄位（_sensitivity，排除公開的 /產品/:id 目錄）。
+    """
+    groups: dict[str, dict[int, tuple[dict, str, str]]] = {}
+    for r in results or []:
+        try:
+            status = int(r.get("status") or 0)
+        except (TypeError, ValueError):
+            continue
+        if status != 200:
+            continue
+        url = r.get("url") or ""
+        info = _id_template(urlparse(url).path)
+        if not info:
+            continue
+        template, ident = info
+        body = r.get("body") or ""
+        ctype = str(r.get("content_type") or "").lower()
+        if "json" not in ctype and not body.lstrip().startswith("{"):
+            continue
+        try:
+            parsed = json.loads(body)
+        except (ValueError, TypeError):
+            continue
+        record = _single_record(parsed)
+        if record is None:
+            continue
+        groups.setdefault(template, {}).setdefault(ident, (record, body, url))
+
+    findings: list[dict] = []
+    for template, by_id in groups.items():
+        # 需要 ≥2 個不同 id、且回應內容互異（全一樣＝靜態頁，不是逐物件資料）
+        qualifying: list[tuple[int, dict, str, str]] = []
+        seen_bodies: set[str] = set()
+        for ident, (record, body, url) in sorted(by_id.items()):
+            keys_blob = " ".join(str(k) for k in record.keys())
+            pii = detect_pii_in_text(body)
+            qualifies, has_sensitive, strong_pii = _sensitivity(keys_blob, pii)
+            norm = " ".join(body.split())
+            if qualifies and norm not in seen_bodies:
+                seen_bodies.add(norm)
+                qualifying.append((ident, record, body, url))
+        if len(qualifying) < 2:
+            continue
+
+        sample = qualifying[0]
+        all_pii = detect_pii_in_text("\n".join(q[2] for q in qualifying))
+        pii_total = sum(len(v) for v in all_pii.values())
+        keys_blob = " ".join(str(k) for q in qualifying for k in q[1].keys())
+        _, has_sensitive, strong_pii = _sensitivity(keys_blob, all_pii)
+        severity = "high" if (pii_total > 0 or has_sensitive or strong_pii) else "medium"
+
+        ids_hit = [q[0] for q in qualifying]
+        template_display = template  # 已含 # 佔位，無查詢字串、無個資
+        sample_keys = sorted({str(k) for q in qualifying for k in q[1].keys()})[:15]
+        excerpt = redact_pii_in_text(redact_secrets_in_text(sample[2])).strip()[:400]
+        evidence_parts = [
+            f"命中（無登入憑證）：{template_display} 換 id 皆回 HTTP 200",
+            f"至少 {len(ids_hit)} 個不同 id（例：{', '.join(str(i) for i in ids_hit[:5])}）"
+            f"回傳內容互異的單筆物件，欄位含 {', '.join(sample_keys)}",
+        ]
+        if pii_total > 0:
+            evidence_parts.append(
+                "偵測到疑似個資：" + ", ".join(f"{k}×{len(v)}" for k, v in all_pii.items() if v)
+            )
+        if excerpt:
+            evidence_parts.append("回應片段（個資與秘鑰已遮罩）：\n" + excerpt)
+
+        description = (
+            f"物件端點 {template_display} 不需任何登入憑證，只要改網址裡的數字 id 就能取得"
+            "不同使用者／物件的完整資料（典型的 IDOR／BOLA 存取控制缺失）。"
+            "攻擊者可直接枚舉 id 一筆一筆撈走所有人的資料。"
+        )
+        if pii_total > 0:
+            description += f"\n⚠️ 回傳內容含 {pii_total} 筆疑似個資，請依個資法妥善處理本報告。"
+
+        findings.append(make_finding(
+            category="security",
+            severity=severity,
+            rule_id="security-idor-enumerable-object",
+            title="改網址 id 即可取得他人物件（未授權 IDOR）",
+            description=description,
+            remediation=(
+                "在該端點加上物件層級授權檢查：確認目前登入者有權存取這筆 id 的資料"
+                "（owner 或具權限角色），否則回 401／403；不要只靠「知道 id」當保護。"
+            ),
+            evidence="\n\n".join(evidence_parts),
+            evidence_source="authz_probe",
+            evidence_json={
+                "endpoint": template,
+                "ids_observed": ids_hit[:10],
+                "assessment": {
+                    "condition": "這個端點不需登入，改 id 就能取得不同人的物件。",
+                    "observed": "主動探測以未登入請求對多個 id 取得內容互異的物件（見檢測依據）。",
+                    "missing": "未進一步確認資料敏感度，也未測寫入型越權（改／刪他人物件）。",
+                    "verify": "用未登入的瀏覽器開啟兩個不同 id；修補後非本人資料應回 401 或 403。",
+                },
+            },
+            impact_area="broken_access_control",
+            confidence=0.9,
+            priority_score=70.0 if severity == "high" else 50.0,
+        ))
+    return findings
+
+
+def _single_record(parsed: object) -> dict | None:
+    """單一物件（IDOR 回傳一筆）：dict 本身，或 {data:{...}}／{result:{...}} 包一層的非空物件。
+
+    頂層是陣列（成批名單）回 None——那是 analyze_unauthorized_results 的範圍，不在這裡重複處理。
+    """
+    if not isinstance(parsed, dict) or not parsed:
+        return None
+    for key in _LIST_KEYS:
+        inner = parsed.get(key)
+        if isinstance(inner, dict) and inner:
+            return inner
+        if isinstance(inner, list):
+            return None  # 包一層的其實是清單，交給成批檢查
+    return parsed
 
 
 async def probe_unauthorized_endpoints(

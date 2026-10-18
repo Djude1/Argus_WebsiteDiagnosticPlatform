@@ -9,7 +9,11 @@ import json
 
 from django.test import SimpleTestCase
 
-from apps.scans.security.authz_probe import analyze_unauthorized_results
+from apps.scans.security.authz_probe import (
+    analyze_idor_results,
+    analyze_unauthorized_results,
+    expand_idor_candidates,
+)
 
 
 def _result(body, *, status=200, ctype="application/json", url="https://site.example.test/svc/members/all"):
@@ -106,6 +110,103 @@ class AnalyzeUnauthorizedResultsTests(SimpleTestCase):
 
     def test_empty_results(self):
         self.assertEqual(analyze_unauthorized_results([]), [])
+
+
+def _obj(body, *, status=200, ctype="application/json", url=""):
+    return {"url": url, "status": status, "content_type": ctype,
+            "body": body if isinstance(body, str) else json.dumps(body)}
+
+
+class ExpandIdorCandidatesTests(SimpleTestCase):
+    def test_parent_collection_and_neighbor_ids(self):
+        extra = expand_idor_candidates(["https://site.example.test/svc/users/29"])
+        # 父集合（成批外洩）
+        self.assertIn("https://site.example.test/svc/users", extra)
+        # 鄰近 id（IDOR 枚舉）＋觀察到的 29
+        for i in (1, 2, 3, 29):
+            self.assertIn(f"https://site.example.test/svc/users/{i}", extra)
+
+    def test_non_numeric_tail_ignored(self):
+        # 結尾非純數字（slug／uuid）不展開，避免誤報與請求量爆開
+        self.assertEqual(expand_idor_candidates(["https://site.example.test/svc/about"]), [])
+        self.assertEqual(expand_idor_candidates(["https://site.example.test/svc/u/abc-def"]), [])
+
+    def test_each_template_expanded_once(self):
+        extra = expand_idor_candidates([
+            "https://site.example.test/svc/users/1",
+            "https://site.example.test/svc/users/2",  # 同模板，不重複展開
+        ])
+        self.assertEqual(extra.count("https://site.example.test/svc/users"), 1)
+
+
+class AnalyzeIdorResultsTests(SimpleTestCase):
+    def _id(self, ident, body):
+        return _obj(body, url=f"https://site.example.test/svc/users/{ident}")
+
+    def test_enumerable_user_objects_flagged(self):
+        # 兩個不同 id 未授權都回內容互異、帶身分＋內部欄位的單筆物件 → IDOR
+        results = [
+            self._id(1, {"id": 1, "username": "a", "roleId": 1, "isActive": True}),
+            self._id(2, {"id": 2, "username": "b", "roleId": 2, "isActive": False}),
+        ]
+        findings = analyze_idor_results(results)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["rule_id"], "security-idor-enumerable-object")
+
+    def test_pii_escalates_to_high(self):
+        results = [
+            self._id(1, {"id": 1, "name": "甲", "roleName": "師", "email": "a@x.example.test"}),
+            self._id(2, {"id": 2, "name": "乙", "roleName": "師", "email": "b@x.example.test"}),
+        ]
+        self.assertEqual(analyze_idor_results(results)[0]["severity"], "high")
+
+    def test_wrapped_single_object(self):
+        # {data:{...}} 包一層的單筆物件也算
+        results = [
+            self._id(1, {"data": {"id": 1, "account": "a", "memberId": "M1", "status": "on"}}),
+            self._id(2, {"data": {"id": 2, "account": "b", "memberId": "M2", "status": "off"}}),
+        ]
+        self.assertEqual(len(analyze_idor_results(results)), 1)
+
+    # —— 誤報防線 ——
+    def test_public_product_by_id_not_flagged(self):
+        # 公開 /產品/:id 目錄：無身分／內部／個資欄位 → 不報
+        results = [
+            self._id(1, {"id": 1, "name": "蘋果", "price": 100}),
+            self._id(2, {"id": 2, "name": "香蕉", "price": 50}),
+        ]
+        self.assertEqual(analyze_idor_results(results), [])
+
+    def test_same_body_for_all_ids_not_flagged(self):
+        # 所有 id 回同一頁（SPA／靜態）→ 不是逐物件資料，不報
+        same = {"id": 0, "username": "x", "roleId": 1, "isActive": True}
+        results = [self._id(1, same), self._id(2, same)]
+        self.assertEqual(analyze_idor_results(results), [])
+
+    def test_single_id_not_flagged(self):
+        # 只有一個 id 回 200 → 無法證明可枚舉
+        results = [
+            self._id(1, {"id": 1, "username": "a", "roleId": 1, "isActive": True}),
+            self._id(2, {"x": 1}, ),
+        ]
+        results[1]["status"] = 401
+        self.assertEqual(analyze_idor_results(results), [])
+
+    def test_top_level_list_left_to_batch_check(self):
+        # 頂層陣列（成批名單）不在 IDOR 範圍，交給 analyze_unauthorized_results
+        results = [
+            self._id(1, [{"username": "a", "roleId": 1}, {"username": "b", "roleId": 2}]),
+            self._id(2, [{"username": "c", "roleId": 3}, {"username": "d", "roleId": 4}]),
+        ]
+        self.assertEqual(analyze_idor_results(results), [])
+
+    def test_non_200_ignored(self):
+        results = [
+            self._id(1, {"id": 1, "username": "a", "roleId": 1}),
+            _obj({"id": 2, "username": "b", "roleId": 2}, status=403,
+                 url="https://site.example.test/svc/users/2"),
+        ]
+        self.assertEqual(analyze_idor_results(results), [])
 
 
 class MaxEndpointsSettingTests(SimpleTestCase):

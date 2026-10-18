@@ -543,7 +543,6 @@ async def run_agent_for_scan(
     recon_intel: list[str] | None = None,
     may_submit_forms: bool = False,
     known_findings: list[dict] | None = None,
-    coverage_summary: str = "",
     progress_cb: Callable[[str, int], None] | None = None,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
@@ -667,18 +666,9 @@ async def run_agent_for_scan(
         # 「只帶 dispatch_specialist 工具」的 agent session——它在對話中
         # 自行派 specialist、看結果摘要、可再追加，直到滿意才 finish。
         # specialist 結果即時回指揮官 context（多輪調度，非一次性派工）。
-        # 確定性主動層這次已做過哪些「無腦全掃」——告訴 recon／orchestrator 別重做，把步數花在
-        # 需要推理／串接／差異式的部分（告知式，不硬跳過角色）。沒有就空字串、不加這段。
-        coverage_block = (
-            "\n\n【確定性主動層這次已經做過（以下這些『逐一端點無腦重掃』不要重做）】\n"
-            f"{coverage_summary}\n"
-            "把步數花在它們做不到的地方：差異式未授權（相鄰端點要登入、某端點卻漏授權）、"
-            "多步驟商業邏輯濫用、跨端點串接，以及對已知發現做工具驗證／升級。"
-        ) if coverage_summary.strip() else ""
-
         recon_prompt = RECON_AGENT_PROMPT.format(
             origin=scan_job.origin, url=target_url
-        ) + coverage_block
+        )
         recon_result = await _run_session(recon_prompt, role_label="recon")
         specialist_results: list[AgentRunResult] = []
 
@@ -769,7 +759,7 @@ async def run_agent_for_scan(
                 f"- {name}: {defn['desc']}\n  派用時機：{defn['when']}"
                 for name, defn in SPECIALIST_ROLES.items()
             ),
-        ) + coverage_block
+        )
         orchestrator_result = await _run_session(
             orchestrator_prompt,
             role_label="orchestrator",

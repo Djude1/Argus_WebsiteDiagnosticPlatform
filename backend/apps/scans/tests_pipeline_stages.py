@@ -153,33 +153,3 @@ class NoUsablePagesTests(TransactionTestCase):
     def test_one_usable_page_passes_the_guard(self):
         ok = {"url": "https://example.com/", "status_code": 200, "blocked_reason": ""}
         tasks._ensure_usable_pages([ok], {})  # 不拋例外
-
-
-class ActiveCoverageSummaryTests(TestCase):
-    """_active_coverage_summary：把確定性主動層這次做過的事摘要給 agent，叫它別重做。"""
-
-    def _ctx(self, cov):
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            coverage=cov, site_signals={}, discovered_endpoints=[], crawled_pages=[]
-        )
-
-    def test_summarizes_run_checks_and_omits_not_run(self):
-        from apps.scans.coverage import COMPLETED, SKIPPED, ScanCoverage
-
-        cov = ScanCoverage()
-        cov.mark("nuclei", SKIPPED, "cdn")
-        cov.mark("exposure", COMPLETED)
-        cov.mark("authz_probe", COMPLETED)
-        # zap_active 沒 mark → 不應出現在摘要
-        summary = tasks._active_coverage_summary(self._ctx(cov))
-        self.assertIn("Nuclei", summary)
-        self.assertIn("本次略過", summary)
-        self.assertIn("敏感檔案外洩探測", summary)
-        self.assertIn("已完整執行", summary)
-        self.assertNotIn("ZAP", summary)
-
-    def test_empty_when_nothing_ran(self):
-        from apps.scans.coverage import ScanCoverage
-
-        self.assertEqual(tasks._active_coverage_summary(self._ctx(ScanCoverage())), "")

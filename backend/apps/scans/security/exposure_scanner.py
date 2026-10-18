@@ -285,6 +285,24 @@ def _norm_body(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
 
 
+def _starts_html_document(body: str) -> bool:
+    """body 去掉前導空白與 HTML 註解後，是不是一份 HTML 文件的開頭。
+
+    SPA 的 index.html 常以授權條款註解開頭（juice-shop：`<!-- Copyright… -->` 之後
+    才接 `<!doctype html>`），原本只看最前面是不是 doctype／`<html` 會漏判，讓
+    `/actuator/env.json`、`/bundle.js.map` 等回同一份 SPA 首頁的 soft-404 被當成真檔案外洩。
+    """
+    head = body.lstrip()
+    # 去掉開頭連續的 HTML 註解（可能有多段）再判斷
+    while head.startswith("<!--"):
+        end = head.find("-->")
+        if end == -1:
+            break
+        head = head[end + 3:].lstrip()
+    low = head[:200].lower()
+    return low.startswith("<!doctype html") or low.startswith("<html")
+
+
 def _is_soft_404(body: str, baselines: list[str]) -> bool:
     """body 與『保證不存在路徑』的 baseline 回應相符 → 視為 SPA / catch-all soft-404。"""
     n = _norm_body(body)
@@ -335,10 +353,8 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
                 continue
 
         # 非 HTML 型態卻回 HTML body → 多半是 SPA soft-404 fallback（baseline 沒抓到時的保險）
-        if info["file_type"] not in _HTML_EXPECTED_TYPES:
-            head = body.lstrip()[:200].lower()
-            if head.startswith("<!doctype html") or head.startswith("<html"):
-                continue
+        if info["file_type"] not in _HTML_EXPECTED_TYPES and _starts_html_document(body):
+            continue
 
         secrets = detect_secrets_in_text(body)
         pii = detect_pii_in_text(body)

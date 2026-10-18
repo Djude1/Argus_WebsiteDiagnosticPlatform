@@ -56,7 +56,9 @@ from apps.scans.scanners import (
 from apps.scans.security import exposure_scanner, owasp_mapper
 from apps.scans.security.api_scanner import MAX_SURFACE_ENDPOINTS, analyze_api
 from apps.scans.security.authz_probe import (
+    analyze_idor_results,
     analyze_unauthorized_results,
+    expand_idor_candidates,
     probe_unauthorized_endpoints,
 )
 from apps.scans.security.content_injection import (
@@ -1581,20 +1583,24 @@ def _run_authz_probe(ctx: ScanRunContext) -> None:
     if not candidates:
         ctx.coverage.mark("authz_probe", SKIPPED, "沒有發現可探測的 API 端點")
         return
+    # 從觀察到的 /集合/:id 反推父集合（成批外洩）與鄰近 id（IDOR 枚舉）一起探；
+    # 併進候選後統一去重、套 MAX_ENDPOINTS 上限（通用、不寫死路徑）。
+    candidates = list(dict.fromkeys(candidates + expand_idor_candidates(candidates)))
     raise_if_cancelled(scan_job_id)
     try:
         results = _run_async(
             lambda: probe_unauthorized_endpoints(candidates, scan_job_id)
         )
         findings = [
-            owasp_mapper.tag(f) for f in analyze_unauthorized_results(results)
+            owasp_mapper.tag(f)
+            for f in analyze_unauthorized_results(results) + analyze_idor_results(results)
         ]
         ctx.record(findings, check="authz_probe")
         ctx.coverage.mark("authz_probe", COMPLETED)
         append_log(
             scan_job_id,
             f"未授權存取探測完成：探測 {len(results)} 個 API 端點，"
-            f"發現 {len(findings)} 項未授權記錄外洩",
+            f"發現 {len(findings)} 項未授權記錄外洩／IDOR",
         )
     except ScanCancelled:
         raise
@@ -1822,37 +1828,6 @@ def _agent_role_label(role_label: str) -> str:
     return _AGENT_ROLE_LABELS.get(role_label, "資安測試")
 
 
-# 主動層覆蓋摘要（2026-10-18）：agent 之前已跑完 Nuclei／ZAP 主動／敏感檔探測／未授權探測
-# （都在 SCAN_PIPELINE 排在 agent 前），把「已經做過哪些『無腦全掃』」告訴 recon／orchestrator，
-# 叫專家別重做、把步數花在要推理／串接／差異式的部分（告知式，不硬跳過角色）。
-_COVERAGE_STATUS_ZH = {
-    COMPLETED: "已完整執行", PARTIAL: "部分執行（可能不完整）",
-    SKIPPED: "本次略過", FAILED: "執行失敗",
-}
-
-
-def _active_coverage_summary(ctx: ScanRunContext) -> str:
-    """組一段「確定性主動層這次已做過什麼」給 agent 參考；沒有任何主動檢查跑過時回空字串。"""
-    cov = ctx.coverage
-    api_count = len({p for p in _observed_api_paths(ctx) if p})
-    rows: list[tuple[str, str | None, str]] = [
-        ("Nuclei 已知漏洞（KEV）掃描", cov.status_of("nuclei"), ""),
-        ("OWASP ZAP 主動掃描（spider＋active）", cov.status_of("zap_active"), ""),
-        ("敏感檔案外洩探測（內建字典主動探隱藏檔）", cov.status_of("exposure"), ""),
-        (
-            "未授權存取探測（對同源 API 端點做無憑證 GET）",
-            cov.status_of("authz_probe"),
-            f"；已涵蓋約 {api_count} 個被觀察到的 API 端點" if api_count else "",
-        ),
-    ]
-    lines = [
-        f"- {label}：{_COVERAGE_STATUS_ZH.get(status, '')}{extra}"
-        for label, status, extra in rows
-        if status and status in _COVERAGE_STATUS_ZH
-    ]
-    return "\n".join(lines)
-
-
 def stage_agent(ctx: ScanRunContext) -> None:
     """可選的 Hermes-Agent（資安 deep_mode 與／或擬真使用者 UX 測試）。
 
@@ -1919,7 +1894,6 @@ def stage_agent(ctx: ScanRunContext) -> None:
                 recon_intel=ctx.discovered_endpoints,
                 may_submit_forms=may_submit_forms,
                 known_findings=known_findings,
-                coverage_summary=_active_coverage_summary(ctx),
                 progress_cb=_report_agent_step,
             )
         )

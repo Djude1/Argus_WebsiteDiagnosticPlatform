@@ -197,6 +197,14 @@ SPA_SHELL = (
     "<title>CEKB</title></head><body><div id=\"root\"></div></body></html>"
 )
 
+# juice-shop 風格：授權條款註解在 <!doctype> 之前（實測 8AC2 的 8 筆誤報來源）
+COMMENTED_SPA_SHELL = (
+    "<!--\n  ~ Copyright (c) 2014-2026 the OWASP Juice Shop contributors.\n"
+    "  ~ SPDX-License-Identifier: MIT\n  -->\n\n"
+    "<!doctype html>\n<html lang=\"en\" data-beasties-container>\n<head>"
+    "<meta charset=\"utf-8\"></head><body></body></html>"
+)
+
 
 class TestSoft404(SimpleTestCase):
     def test_is_soft_404_matches_baseline(self):
@@ -215,6 +223,28 @@ class TestSoft404(SimpleTestCase):
         # /.env 回 SPA HTML（soft-404 fallback，baseline 沒抓到時的內容啟發式保險）
         results = [{"url": "https://htb.example/.env", "status": 200, "body": SPA_SHELL}]
         self.assertEqual(exp.analyze_probe_results(results), [])
+
+    def test_commented_spa_shell_skipped(self):
+        # juice-shop 的 index.html 以授權註解開頭，<!doctype> 在註解之後；
+        # 多個非 HTML 型態路徑回同一份 SPA 首頁都要被濾掉（8AC2 的 actuator/env.json、
+        # bundle.js.map、wp-content/debug.log 等 8 筆誤報）
+        for path in ("actuator/env.json", "bundle.js.map", "wp-content/debug.log",
+                     "plans.json", ".claude/launch.json"):
+            results = [{"url": f"https://htb.example/{path}", "status": 200,
+                        "body": COMMENTED_SPA_SHELL}]
+            self.assertEqual(
+                exp.analyze_probe_results(results), [], f"{path} 應被當成 SPA soft-404 濾掉"
+            )
+
+    def test_starts_html_document_helper(self):
+        self.assertTrue(exp._starts_html_document(COMMENTED_SPA_SHELL))
+        self.assertTrue(exp._starts_html_document(SPA_SHELL))
+        self.assertTrue(exp._starts_html_document("  \n<!doctype html><html></html>"))
+        # 真檔案不是 HTML 文件開頭
+        self.assertFalse(exp._starts_html_document('{"openapi":"3.0"}'))
+        self.assertFalse(exp._starts_html_document("DATABASE_URL=mongodb://u:p@h/db"))
+        # 註解沒收尾不應誤判成 HTML（避免把註解內容當文件開頭）
+        self.assertFalse(exp._starts_html_document("<!-- unterminated comment"))
 
     def test_admin_html_still_reported(self):
         # admin 屬 HTML-expected 型態，回 HTML 不應被內容啟發式誤殺（只靠 baseline 濾 soft-404）
