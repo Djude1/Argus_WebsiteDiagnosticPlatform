@@ -772,14 +772,8 @@ def _collect_glossary_terms(grouped_findings) -> list[tuple[str, str]]:
 
 
 def _owasp_cwe_text(finding) -> str:
-    """技術索引的 OWASP／CWE 欄：2025 版為主、括號附 2021 版（2026-10-11）。"""
-    owasp = "—"
-    if finding.owasp_category:
-        code_2025 = finding.owasp_2025
-        owasp = (
-            f"{code_2025}:2025（2021 {finding.owasp_category}）"
-            if code_2025 else finding.owasp_category
-        )
+    """技術索引的 OWASP／CWE 欄：OWASP Top 10:2025 代號（2026-10-18 起原生 2025）。"""
+    owasp = f"{finding.owasp_category}:2025" if finding.owasp_category else "—"
     return f"{owasp} / {finding.cwe_id or '—'}"
 
 
@@ -990,7 +984,10 @@ def _headline(
     score = scan_job.overall_score
     parts = []
     if isinstance(score, int):
-        parts.append(f"分數落在「{_score_band_label(score)}」區間")
+        parts.append(
+            f"分數落在「{_score_band_label(score)}」區間"
+            "（確定性檢查基準分，不含 AI 深度測試）"
+        )
     if previous is not None and isinstance(score, int) and not versions.comparable(
         scan_job, previous
     ):
@@ -1010,6 +1007,11 @@ def _headline(
         parts.append(f"已解決 {len(resolved)} 項")
     if unconfirmed:
         parts.append(f"另有 {unconfirmed} 項本次未出現，但檢查不完整、無法確認已修好")
+    agent_count = (scan_job.agent_findings_summary or {}).get("count") or 0
+    if agent_count:
+        parts.append(
+            f"另有 AI 深度測試發現 {agent_count} 項（獨立呈現、不計入基準分，詳見資安章節）"
+        )
     weakest = sorted(
         ((name, value) for name, value in category_scores.items() if isinstance(value, int)),
         key=lambda item: item[1],

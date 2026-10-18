@@ -86,6 +86,13 @@ class TestBuildTargets(SimpleTestCase):
         targets = exp.build_probe_targets("https://htb.example", robots_disallow=big)
         self.assertLessEqual(len(targets), exp.MAX_PROBE_TARGETS)
 
+    def test_extra_paths_included_first_and_same_origin(self):
+        # ADR-0006 第 3 刀：上次掃描的 exposure 端點排最前面（不被上限截掉），仍強制 same-origin
+        extra = ["https://htb.example/actuator/env.json", "https://evil.test/leak"]
+        targets = exp.build_probe_targets("https://htb.example", extra_paths=extra)
+        self.assertEqual(targets[0], "https://htb.example/actuator/env.json")
+        self.assertNotIn("https://evil.test/leak", targets)
+
 
 class TestClassify(SimpleTestCase):
     def test_env_is_critical(self):

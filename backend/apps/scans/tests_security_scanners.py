@@ -220,7 +220,7 @@ class TestOwaspMapper(TestCase):
     def test_tag_security_finding_fills_fields(self):
         finding = {"category": "security", "rule_id": "ssl-weak-cipher"}
         tagged = owasp_mapper.tag(finding)
-        self.assertEqual(tagged["owasp_category"], "A02")
+        self.assertEqual(tagged["owasp_category"], "A04")
         self.assertEqual(tagged["cwe_id"], "CWE-327")
 
     def test_tag_unknown_rule_empty_strings(self):
@@ -243,7 +243,7 @@ class TestOwaspMapper(TestCase):
         )
         owasp_mapper.backfill(scan)
         f.refresh_from_db()
-        self.assertEqual(f.owasp_category, "A05")
+        self.assertEqual(f.owasp_category, "A02")
         self.assertEqual(f.cwe_id, "CWE-614")
 
     def test_backfill_skips_non_security(self):
@@ -277,12 +277,12 @@ class TestOwaspMapperExistingFindings(TestCase):
 
     def test_keyword_lookup_covers_passive_security_rule_ids(self):
         cases = {
-            "SECURITY_HSTS_6A08D9EE20": ("A05", "CWE-319"),
-            "SECURITY_CSP_BD010B5BE0": ("A05", "CWE-693"),
-            "SECURITY_X_FRAME_OPTIONS_A7A326FEA9": ("A05", "CWE-1021"),
-            "SECURITY_X_CONTENT_TYPE_OPTIONS_89053405E6": ("A05", "CWE-693"),
-            "SECURITY_HTTPS_1234567890": ("A02", "CWE-319"),
-            "SECURITY_PII_8B24BB8B28": ("A02", "CWE-359"),
+            "SECURITY_HSTS_6A08D9EE20": ("A02", "CWE-319"),
+            "SECURITY_CSP_BD010B5BE0": ("A02", "CWE-693"),
+            "SECURITY_X_FRAME_OPTIONS_A7A326FEA9": ("A02", "CWE-1021"),
+            "SECURITY_X_CONTENT_TYPE_OPTIONS_89053405E6": ("A02", "CWE-693"),
+            "SECURITY_HTTPS_1234567890": ("A04", "CWE-319"),
+            "SECURITY_PII_8B24BB8B28": ("A04", "CWE-359"),
             "SECURITY_CSRF_TOKEN_DEADBEEF12": ("A01", "CWE-352"),
         }
         for rule_id, expected in cases.items():
@@ -290,7 +290,7 @@ class TestOwaspMapperExistingFindings(TestCase):
 
     def test_exact_match_takes_priority_over_keyword(self):
         # 新 scanner 的乾淨 rule_id 走精確比對
-        self.assertEqual(owasp_mapper._lookup("header-csp-unsafe"), ("A05", "CWE-1021"))
+        self.assertEqual(owasp_mapper._lookup("header-csp-unsafe"), ("A02", "CWE-1021"))
 
     def test_backfill_tags_existing_passive_security_finding(self):
         scan = _make_scan()
@@ -301,7 +301,7 @@ class TestOwaspMapperExistingFindings(TestCase):
         )
         owasp_mapper.backfill(scan)
         f.refresh_from_db()
-        self.assertEqual(f.owasp_category, "A05")
+        self.assertEqual(f.owasp_category, "A02")
         self.assertEqual(f.cwe_id, "CWE-319")
 
     def test_unmappable_rule_id_stays_empty(self):
@@ -439,7 +439,7 @@ class TestOwaspMappingNew(TestCase):
             "dns-spf-permissive": ("A07", "CWE-290"),
             "dns-dmarc-missing": ("A07", "CWE-290"),
             "dns-dmarc-policy-weak": ("A07", "CWE-290"),
-            "dns-dnssec-missing": ("A05", "CWE-345"),
+            "dns-dnssec-missing": ("A02", "CWE-345"),
         }
         for rule_id, (owasp, cwe) in cases.items():
             tagged = owasp_mapper.tag({"category": "security", "rule_id": rule_id})

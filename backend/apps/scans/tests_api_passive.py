@@ -34,23 +34,30 @@ def _obs(path="/api/items", method="GET", status=200, content_type="application/
 
 
 class Owasp2025MappingTests(SimpleTestCase):
-    def test_2021_codes_map_to_2025(self):
-        self.assertEqual(owasp_mapper.owasp_2025("A05"), "A02")  # 安全設定錯誤
-        self.assertEqual(owasp_mapper.owasp_2025("A06"), "A03")  # 供應鏈
-        self.assertEqual(owasp_mapper.owasp_2025("A03"), "A05")  # 注入
-        self.assertEqual(owasp_mapper.owasp_2025("A10"), "A01")  # SSRF 併入存取控制
-        self.assertEqual(owasp_mapper.owasp_2025(""), "")
+    """2026-10-18 起對映表直接是 OWASP Top 10:2025 代號（不再存 2021、不再推導）。"""
 
-    def test_cwe_209_goes_to_exceptional_conditions(self):
-        self.assertEqual(owasp_mapper.owasp_2025("A05", "CWE-209"), "A10")
+    def _owasp(self, rule):
+        return owasp_mapper.tag({"category": "security", "rule_id": rule})["owasp_category"]
 
-    def test_every_2021_code_has_a_2025_label(self):
-        for code in owasp_mapper.OWASP_2021_TO_2025.values():
+    def test_rules_map_to_native_2025_codes(self):
+        self.assertEqual(self._owasp("cookie-no-secure"), "A02")   # 安全設定錯誤（原 2021 A05）
+        self.assertEqual(self._owasp("js-lib-known-vuln"), "A03")  # 軟體供應鏈失誤（原 A06）
+        self.assertEqual(self._owasp("kali-sqlmap-sqli"), "A05")   # 注入攻擊（原 A03）
+        self.assertEqual(self._owasp("ssl-cert-expired"), "A04")   # 加密機制失效（原 A02）
+        self.assertEqual(self._owasp("exposure-file-data"), "A01")  # 存取控制失效（不變）
+        self.assertEqual(self._owasp("form-password-unmasked"), "A06")  # 不安全設計（原 A04）
+
+    def test_error_disclosure_is_exceptional_conditions_a10(self):
+        tagged = owasp_mapper.tag({"category": "security", "rule_id": "api-error-stack-trace"})
+        self.assertEqual((tagged["owasp_category"], tagged["cwe_id"]), ("A10", "CWE-209"))
+
+    def test_every_mapped_code_has_a_2025_label(self):
+        codes = [c for c, _ in owasp_mapper._RULE_OWASP_MAP.values()]
+        codes += [c for _, c, _ in owasp_mapper._KEYWORD_OWASP_MAP]
+        for code in codes:
             self.assertIn(code, owasp_mapper.OWASP_2025_LABELS)
 
-    def test_api_rules_are_mapped(self):
-        tagged = owasp_mapper.tag({"category": "security", "rule_id": "api-error-stack-trace"})
-        self.assertEqual((tagged["owasp_category"], tagged["cwe_id"]), ("A05", "CWE-209"))
+    def test_api_rules_kind(self):
         kind = lambda rule: security_kind(category="security", rule_id=rule)  # noqa: E731
         self.assertEqual(kind("api-error-stack-trace"), "exposure")
         self.assertEqual(kind("api-cors-wildcard"), "config")
@@ -63,16 +70,17 @@ class Owasp2025DisplayTests(TestCase):
             user=user, original_url="https://example.com/", normalized_url="https://example.com/",
             origin="https://example.com",
         )
+        # owasp_category 直接存 2025 代號（A02 安全設定錯誤）
         self.finding = Finding.objects.create(
             scan_job=scan, category="security", severity="medium", title="缺少 HSTS",
-            description="d", remediation="r", rule_id="x", owasp_category="A05", cwe_id="CWE-319",
+            description="d", remediation="r", rule_id="x", owasp_category="A02", cwe_id="CWE-319",
         )
 
-    def test_serializer_and_report_show_2025_with_2021(self):
+    def test_serializer_and_report_show_2025(self):
         data = FindingSerializer(self.finding).data
-        self.assertEqual(data["owasp_2025"], "A02")
-        self.assertIn("安全設定錯誤", data["owasp_2025_label"])
-        self.assertEqual(_owasp_cwe_text(self.finding), "A02:2025（2021 A05） / CWE-319")
+        self.assertEqual(data["owasp_category"], "A02")
+        self.assertIn("安全設定錯誤", data["owasp_label"])
+        self.assertEqual(_owasp_cwe_text(self.finding), "A02:2025 / CWE-319")
 
 
 class AnalyzeApiTests(SimpleTestCase):
@@ -183,7 +191,7 @@ class PassiveApiStageTests(TestCase):
         self.assertEqual(self.ctx.coverage.status_of("api_passive"), COMPLETED)
         finding = Finding.objects.get(scan_job=self.scan, rule_id="api-error-stack-trace")
         self.assertEqual(finding.cwe_id, "CWE-209")
-        self.assertEqual(finding.owasp_2025, "A10")
+        self.assertEqual(finding.owasp_category, "A10")
         self.scan.refresh_from_db()
         self.assertEqual(self.scan.warning_summary["api_surface"]["total"], 1)
 

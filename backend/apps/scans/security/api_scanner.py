@@ -3,7 +3,7 @@
 只分析爬取期間瀏覽器**自己發出**的同網站 XHR／fetch 回應摘要（crawler `_observe_api_response`），
 不發任何新請求、不讀後端原始碼：
 - `api-error-stack-trace`（中）：API 錯誤回應洩漏堆疊追蹤或框架除錯資訊（CWE-209，
-  OWASP 2021 A05／2025 A10 例外狀況處理不當）
+  OWASP Top 10:2025 A10 例外狀況處理不當）
 - `api-cors-wildcard`（低）：回傳 JSON 的 API 允許任何網站跨域讀取（Access-Control-Allow-Origin: *）
 
 另整理「API 端點清單」（只存方法、路徑、狀態碼、內容類型與命中的規則，不存查詢字串與回應內容），

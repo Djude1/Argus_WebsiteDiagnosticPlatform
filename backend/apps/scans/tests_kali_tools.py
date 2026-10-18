@@ -600,4 +600,4 @@ class TestValidateFindingsWithKali(TestCase):
 # ---------------------------------------------------------------------------
 class TestKaliOwaspMapping(TestCase):
     def test_sqlmap_finding_maps_to_a03(self):
-        self.assertEqual(owasp_mapper._lookup("kali-sqlmap-sqli"), ("A03", "CWE-89"))
+        self.assertEqual(owasp_mapper._lookup("kali-sqlmap-sqli"), ("A05", "CWE-89"))

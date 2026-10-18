@@ -14,12 +14,14 @@ from apps.scans.scan_plan import build_scan_execution_plan
 from apps.scans.tasks import run_scan_job
 
 
-def _job(*, single_page: bool, active: bool, categories=None) -> SimpleNamespace:
+def _job(*, single_page: bool, active: bool, categories=None, deep_agent=True) -> SimpleNamespace:
     return SimpleNamespace(
         max_pages=1 if single_page else 50,
         max_depth=1 if single_page else 3,
         scan_mode=ScanJob.ScanMode.ACTIVE if active else ScanJob.ScanMode.PASSIVE,
         active_testing_authorized=active,
+        # 深度資安 agent 預設勾選（保留既有 run_agent 判斷），另有專門測試驗證沒勾時不跑
+        deep_agent_requested=deep_agent,
         # effective_categories 在 model 上是 property；此處以固定屬性替身，
         # 預設五維全選（含 ux），run_agent_ux 判斷需要它。
         effective_categories=(
@@ -92,6 +94,17 @@ class ScanExecutionPlanTests(SimpleTestCase):
         self.assertTrue(plan.run_exposure)
         self.assertTrue(plan.run_agent)
         self.assertTrue(plan.run_kali)
+
+    def test_deep_agent_requires_opt_in(self):
+        # 沒勾深度 agent：主動掃描照跑確定性層，但不跑 LLM pentest agent（2026-10-18 opt-in）
+        plan = build_scan_execution_plan(
+            _job(single_page=False, active=True, deep_agent=False)
+        )
+        self.assertTrue(plan.run_nuclei)
+        self.assertTrue(plan.run_exposure)
+        self.assertFalse(plan.run_agent)
+        # UX agent 不受此旗標影響（綁 UX 維度）
+        self.assertTrue(plan.run_agent_ux)
 
     def test_active_without_authorization_runs_no_active_tools(self):
         job = _job(single_page=False, active=True)

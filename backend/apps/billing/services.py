@@ -136,6 +136,7 @@ def _scan_is_deep(scan_job) -> bool:
     return (
         scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
         and bool(scan_job.active_testing_authorized)
+        and bool(scan_job.deep_agent_requested)
     )
 
 

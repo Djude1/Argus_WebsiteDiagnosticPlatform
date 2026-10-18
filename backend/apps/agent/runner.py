@@ -349,6 +349,14 @@ def max_total_steps_estimate() -> int:
         + settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH * _SPECIALIST_MAX_STEPS
     )
 
+
+def ux_steps_estimate() -> int:
+    """擬真使用者 UX 測試的步數估計（給進度條分母用）：單一 session，上限 _SPECIALIST_MAX_STEPS。
+
+    UX 只跑一個 session，不做 recon／orchestrator／specialist 派工，所以分母不是資安滲透的最壞估計
+    （max_total_steps_estimate），否則沒勾深度資安的掃描會顯示像在跑 400 步的資安 agent。"""
+    return _SPECIALIST_MAX_STEPS
+
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
         "prompt": AUTH_AGENT_PROMPT,
@@ -536,6 +544,21 @@ _LANGUAGE_RULE = (
 )
 
 
+def is_deep_security_mode(scan_job) -> bool:
+    """是否跑深度資安滲透（recon→orchestrator→specialist 的 pentest 鏈）。
+
+    只在使用者**明確勾選並付費**的深度 AI Agent（`deep_agent_requested`）時才為 True——與
+    `scan_plan.run_agent` 同一道閘。沒勾時即使全站＋主動＋已授權，`run_agent_for_scan` 也只走
+    擬真使用者 UX 測試分支，不派資安專家、不開 SQLi 等主動工具、不收深度費。授權鎖最終仍由
+    `kali_tools.run_sqlmap` 的三重鎖把關，此處只影響 agent 的分支與工具提示。
+    """
+    return (
+        scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
+        and scan_job.active_testing_authorized
+        and bool(scan_job.deep_agent_requested)
+    )
+
+
 async def run_agent_for_scan(
     scan_job: ScanJob,
     chain: ProviderChain | None = None,
@@ -566,12 +589,7 @@ async def run_agent_for_scan(
     media_dir = Path(settings.MEDIA_ROOT) / "agent" / f"scan_{scan_job.id}"
     media_dir.mkdir(parents=True, exist_ok=True)
 
-    # 僅在授權的主動掃描（deep_mode）才把 SQLi 主動驗證能力交給 agent 並列為第一優先；
-    # 授權鎖最終仍由 kali_tools.run_sqlmap 的三重鎖把關，此處只影響提示。
-    deep_mode = (
-        scan_job.scan_mode == ScanJob.ScanMode.ACTIVE
-        and scan_job.active_testing_authorized
-    )
+    deep_mode = is_deep_security_mode(scan_job)
     # deep_mode 目標已通過授權，送出表單本就允許；被動 UX 測試依 may_submit_forms。
     allow_form_submit = deep_mode or may_submit_forms
 

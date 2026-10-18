@@ -44,7 +44,10 @@ def build_scan_execution_plan(scan_job: ScanJob) -> ScanExecutionPlan:
         run_nuclei=active_authorized,
         run_katana=site_active,
         run_exposure=site_active,
-        run_agent=site_active,
+        # 深度資安 AI Agent 是使用者可選的付費加項（2026-10-18）：全站＋主動＋已授權
+        # 之外還要明確勾選 deep_agent_requested 才跑；沒勾時主動掃描照跑確定性層
+        # （Nuclei／Katana／敏感檔／未授權探測），只是不跑 LLM pentest agent。
+        run_agent=site_active and bool(scan_job.deep_agent_requested),
         run_agent_ux=run_agent_ux,
         run_kali=active_authorized,
         # ZAP 主動掃描會送攻擊 payload，與其他主動工具同閘：全站＋主動＋已授權

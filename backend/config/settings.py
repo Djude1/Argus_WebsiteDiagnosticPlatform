@@ -349,6 +349,9 @@ ARGUS_AXE_ENABLED = env_bool("ARGUS_AXE_ENABLED", default=True)
 ARGUS_AXE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_AXE_TIMEOUT_SECONDS", "15"))
 # 爬蟲每頁等內容穩定（渲染就緒）的上限秒數；逾時照樣擷取，只記錄（roadmap「爬取」第 1 項）
 ARGUS_RENDER_READY_MAX_SECONDS = float(os.getenv("ARGUS_RENDER_READY_MAX_SECONDS", "5"))
+# 截圖前再等「已在 DOM 的圖片與 web font」載入完成的上限（秒）；只等已存在的資源、
+# 不等 networkidle，逾時就直接截圖。避免截到圖片／字型還沒載完的半成品畫面。
+ARGUS_SCREENSHOT_SETTLE_SECONDS = float(os.getenv("ARGUS_SCREENSHOT_SETTLE_SECONDS", "3"))
 ARGUS_AXE_MAX_PAGES = int(os.getenv("ARGUS_AXE_MAX_PAGES", "50"))
 # Google PageSpeed Insights（apps/scans/pagespeed.py）：Lighthouse 實驗室分數＋CrUX 真實使用者資料，
 # 勾 UX 時只測首頁。金鑰放 .env／Secret；沒設金鑰就不執行（匿名配額幾乎都被用完）。

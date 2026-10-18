@@ -11,7 +11,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 掃描後的動態測試，兩種角色共用 `runner.run_agent_for_scan`（都受 `ARGUS_AGENT_ENABLED`
 總開關控制，預設 `false` 時直接 `return None`）：
 
-- **資安（deep_mode＝active＋authorized 才全開）**：recon agent → orchestrator agent
+- **資安（deep_mode＝active＋authorized＋`deep_agent_requested` 才全開；2026-10-18 起加上 opt-in 閘）**：recon agent → orchestrator agent
   （subagent 派工）→ specialist subagent（8 角色：auth_idor/injection/logic_abuse/
   info_leak/xss_hunter/jwt_token_abuse/file_upload/crypto）。
 - **擬真使用者 UX 測試（passive 也跑）**：全網站掃描且勾選 `ux` 維度時（`scan_plan.run_agent_ux`）

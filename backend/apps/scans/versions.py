@@ -16,7 +16,9 @@ OWASP ZAP），重現或比較結果時對照；工具版本不同不影響 `com
 
 from __future__ import annotations
 
-SCORING_VERSION = "4"
+# v5（ADR-0006 第 4 刀，2026-10-18）：headline／category_scores／overall_score 改為只由確定性層
+# 計算，AI Agent 觀察不再進衰減（另以 agent_findings_summary 獨立呈現）。計分公式改了故 +1。
+SCORING_VERSION = "5"
 RULESET_VERSION = "2026.10.17"
 
 

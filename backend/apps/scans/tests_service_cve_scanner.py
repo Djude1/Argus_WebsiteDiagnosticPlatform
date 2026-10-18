@@ -184,12 +184,12 @@ class TestRealSeedDb(TestCase):
 
 
 class TestServiceCveOwaspMapping(TestCase):
-    def test_known_cve_maps_to_a06_cwe1104(self):
+    def test_known_cve_maps_to_a03_cwe1104(self):
         tagged = owasp_mapper.tag({"category": "security", "rule_id": "service-known-cve"})
-        self.assertEqual(tagged["owasp_category"], "A06")
+        self.assertEqual(tagged["owasp_category"], "A03")  # 2025 軟體供應鏈失誤
         self.assertEqual(tagged["cwe_id"], "CWE-1104")
 
-    def test_version_exposed_maps_to_a05_cwe200(self):
+    def test_version_exposed_maps_to_a02_cwe200(self):
         tagged = owasp_mapper.tag({"category": "security", "rule_id": "service-version-exposed"})
-        self.assertEqual(tagged["owasp_category"], "A05")
+        self.assertEqual(tagged["owasp_category"], "A02")  # 2025 安全設定錯誤
         self.assertEqual(tagged["cwe_id"], "CWE-200")

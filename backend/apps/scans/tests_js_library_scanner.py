@@ -226,5 +226,5 @@ class TestAnalyzeJsLibraries(TestCase):
 class TestJsLibOwaspMapping(TestCase):
     def test_rule_id_maps_to_a06_cwe1104(self):
         tagged = owasp_mapper.tag({"category": "security", "rule_id": "js-lib-known-vuln"})
-        self.assertEqual(tagged["owasp_category"], "A06")
+        self.assertEqual(tagged["owasp_category"], "A03")
         self.assertEqual(tagged["cwe_id"], "CWE-1104")

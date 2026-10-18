@@ -10,14 +10,17 @@ from html.parser import HTMLParser
 
 from django.db.models import Count, Q
 
+from apps.agent.findings import is_agent_security_rule
 from apps.scans import versions
 from apps.scans.coverage import (
     ABSENT_STATUS_LABELS,
     CHECK_CATEGORIES,
+    NOT_OBSERVED,
     absent_issue_status,
     incomplete_checks,
     issue_key,
 )
+from apps.scans.finding_identity import finding_identity
 from apps.scans.models import ALL_CATEGORIES, Finding, ScanJob, SiteProject
 from apps.scans.pagespeed import FIELD_CATEGORY_LABELS
 from apps.scans.root_causes import annotate_root_causes
@@ -76,6 +79,9 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
             "description",
             "remediation",
             "evidence",
+            "owasp_category",
+            "cwe_id",
+            "evidence_json",
             "page__final_url",
             "page__url",
         )
@@ -97,6 +103,8 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
                 "remediation": row["remediation"],
                 "occurrences": 0,
                 "_urls": [],
+                # 跨掃描正典身分集合（ADR-0006 第 2 刀，compare_issues 比較用；回傳前清掉）
+                "_identities": set(),
                 # 資安問題的類型（設定建議／曝露面／疑似弱點／已驗證弱點），只是標示、不影響排序
                 **kind_payload(
                     category=row["category"], rule_id=row["rule_id"], title=row["title"],
@@ -104,6 +112,7 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
                 ),
             }
         group["occurrences"] += 1
+        group["_identities"].add(finding_identity(row))
         if url and url not in group["_urls"]:
             group["_urls"].append(url)
         if _SEVERITY_RANK.get(row["severity"], 9) < _SEVERITY_RANK.get(group["severity"], 9):
@@ -120,6 +129,11 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
     return groups
 
 
+def _identity_ready(scan: ScanJob) -> bool:
+    """掃描的 coverage 是否為 v2（帶跨掃描正典身分）；舊掃描回 False → 回退 issue_key 比較。"""
+    return (scan.coverage or {}).get("version", 1) >= 2
+
+
 def compare_issues(scan: ScanJob, previous: ScanJob | None) -> tuple[list[dict], list[dict]]:
     """回傳 (本次問題附 status＝new／persisting, 本次未出現的上次問題)。
 
@@ -127,33 +141,67 @@ def compare_issues(scan: ScanJob, previous: ScanJob | None) -> tuple[list[dict],
     （coverage.absent_issue_status）：只有產生它的檢查本次完整跑完、受影響頁面也有重新分析，
     才是 resolved；其餘是本次未觀察到／未檢查／被阻擋／無法判定。
     沒有前次掃描時，status 為 None（無從比較）。
+
+    比較單位（ADR-0006 第 2 刀）：兩次掃描的 coverage 都是 v2 時，以跨掃描正典身分
+    （finding_identity，正規化資源＋穩定弱點類別＋OWASP／CWE）判斷同一個問題是否持續／消失，
+    Agent 觀察的雜湊 rule_id 漂移不再被誤判成新／已修好；任一方非 v2（舊掃描）就回退 issue_key。
+    問題分組與顯示鍵（group["key"]）仍是 issue_key，不動前端與報告。
     """
     current = issue_groups(scan)
     previous_groups = issue_groups(previous) if previous is not None else {}
+    use_identity = (
+        previous is not None and _identity_ready(scan) and _identity_ready(previous)
+    )
+    prev_ids: set[str] = set()
+    cur_ids: set[str] = set()
+    if use_identity:
+        for group in previous_groups.values():
+            prev_ids |= group["_identities"]
+        for group in current.values():
+            cur_ids |= group["_identities"]
     for key, group in current.items():
         if previous is None:
             group["status"] = None
+        elif use_identity:
+            group["status"] = "persisting" if (group["_identities"] & prev_ids) else "new"
         else:
             group["status"] = "persisting" if key in previous_groups else "new"
     checked = scan.effective_categories
     analysed_urls = _analysed_urls(scan) if previous is not None else set()
     missing = []
     for key, group in previous_groups.items():
-        if key in current or group["category"] not in checked:
+        if group["category"] not in checked:
             continue
-        status = absent_issue_status(
-            previous_coverage=previous.coverage,
-            current_coverage=scan.coverage,
-            key=key,
-            category=group["category"],
-            urls=group["urls"],
-            analysed_urls=analysed_urls,
-        )
+        if use_identity:
+            if group["_identities"] & cur_ids:
+                continue
+            probe_key = next(iter(group["_identities"]), key)
+        else:
+            if key in current:
+                continue
+            probe_key = key
+        # AI Agent 觀察（雜湊 rule_id）由 runner 直接落 DB、不進 coverage，正典鍵也查不回產生它
+        # 的檢查；「身分消失」不足以判已修好（正向重探在第 3 刀），一律本次未觀察到。
+        if is_agent_security_rule(group["rule_id"]):
+            status = NOT_OBSERVED
+        else:
+            status = absent_issue_status(
+                previous_coverage=previous.coverage,
+                current_coverage=scan.coverage,
+                key=probe_key,
+                category=group["category"],
+                urls=group["urls"],
+                analysed_urls=analysed_urls,
+                by_identity=use_identity,
+            )
         missing.append({
             **{k: group[k] for k in ("key", "rule_id", "title", "category", "severity")},
             "status": status,
             "status_label": ABSENT_STATUS_LABELS[status],
         })
+    # 內部欄位（set）不可進序列化輸出
+    for group in current.values():
+        group.pop("_identities", None)
     issues = sorted(
         current.values(),
         key=lambda g: (_SEVERITY_RANK.get(g["severity"], 9), -g["pages"], g["title"]),
@@ -460,6 +508,8 @@ def project_security(project: SiteProject, scan: ScanJob | None = None) -> dict:
         "strengths": [
             s for s in profile.get("strengths") or [] if s.get("category") == "security"
         ],
+        # AI 深度測試（Agent 觀察）摘要：獨立呈現、不計入上面的 score（ADR-0006 決策 C）
+        "agent_findings_summary": scan.agent_findings_summary or {},
     }
 
 

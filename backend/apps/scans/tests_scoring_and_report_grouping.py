@@ -19,9 +19,48 @@ from django.test import TestCase
 
 from apps.scans.models import Finding, Page, ScanJob
 from apps.scans.reports import _group_findings_for_report
-from apps.scans.scanners import calculate_scores, make_finding
+from apps.scans.scanners import (
+    calculate_scores,
+    is_agent_observation,
+    make_finding,
+    summarize_agent_security,
+)
 
 User = get_user_model()
+
+
+class AgentScoreSeparationTests(TestCase):
+    """ADR-0006 決策 C：AI Agent 觀察不進 headline，另出摘要。"""
+
+    def test_is_agent_observation_only_matches_agent_prefix(self):
+        self.assertTrue(is_agent_observation({"rule_id": "agent-observed-security-abc"}))
+        self.assertFalse(is_agent_observation({"rule_id": "kali-sqlmap-sqli"}))
+        self.assertFalse(is_agent_observation({"rule_id": "security-unauth-api-records"}))
+
+    def test_summary_counts_and_max_severity(self):
+        findings = [
+            {"rule_id": "agent-observed-security-a", "severity": "high"},
+            {"rule_id": "agent-observed-security-b", "severity": "medium"},
+            {"rule_id": "security-unauth-api-records", "severity": "critical"},  # 確定性，不計入
+        ]
+        summary = summarize_agent_security(findings)
+        self.assertEqual(summary["count"], 2)
+        self.assertEqual(summary["max_severity"], "high")
+        self.assertEqual(summary["severity_counts"], {"high": 1, "medium": 1})
+
+    def test_agent_findings_excluded_from_headline(self):
+        # 同是 security high：確定性那筆扣分，agent 觀察那筆不扣（呼叫端已先濾掉）
+        deterministic = [make_finding(category="security", severity="high",
+                                      rule_id="security-unauth-api-records", title="外洩",
+                                      description="", remediation="", evidence="")]
+        agent = deterministic + [make_finding(category="security", severity="critical",
+                                              rule_id="agent-observed-security-x", title="觀察",
+                                              description="", remediation="", evidence="")]
+        det_only = calculate_scores(deterministic, tested_categories={"security"})[1]["security"]
+        # stage_scoring 會先濾掉 agent；這裡示範濾掉後分數＝只算確定性
+        filtered = [f for f in agent if not is_agent_observation(f)]
+        after = calculate_scores(filtered, tested_categories={"security"})[1]["security"]
+        self.assertEqual(det_only, after)
 
 
 def _finding(category: str, severity: str, rule_id: str, title: str = "") -> dict:

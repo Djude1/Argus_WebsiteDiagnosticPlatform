@@ -95,6 +95,9 @@ class ScanJobCreateSerializer(serializers.Serializer):
                                             write_only=True, max_length=255)
     test_auth_password = serializers.CharField(required=False, allow_blank=True,
                                                write_only=True, max_length=255)
+    # AI Agent 深度資安測試（選填，2026-10-18）：勾選才跑、才加收 agent_deep_fee。只有全站＋主動
+    # ＋已授權才有意義；其他組合即使帶 True 也不跑、不收（scan_plan／_scan_is_deep 再閘）。
+    deep_agent_requested = serializers.BooleanField(default=False)
     # 網站專案（選填）：沒帶時 ScanJob.save() 依 origin 自動歸入
     project = serializers.IntegerField(required=False, allow_null=True)
 
@@ -118,7 +121,9 @@ class ScanJobCreateSerializer(serializers.Serializer):
             attrs["max_pages"], attrs["categories"], attrs["scan_mode"]
         ) and free_trial_available(request.user)
         deep_agent = (
-            attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE and attrs["active_testing_authorized"]
+            attrs["scan_mode"] == ScanJob.ScanMode.ACTIVE
+            and attrs["active_testing_authorized"]
+            and attrs["deep_agent_requested"]
         )
         estimated = 0 if attrs["is_trial"] else estimate_scan_cost(
             attrs["max_pages"], attrs["categories"], deep_agent=deep_agent
@@ -227,6 +232,7 @@ class ScanJobCreateSerializer(serializers.Serializer):
             max_pages=validated_data["max_pages"],
             respect_robots=validated_data["respect_robots"],
             active_testing_authorized=validated_data["active_testing_authorized"],
+            deep_agent_requested=validated_data.get("deep_agent_requested", False),
             is_trial=validated_data.get("is_trial", False),
             test_auth_email_encrypted=encrypt_test_auth(
                 validated_data.get("test_auth_email", "")
@@ -279,6 +285,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "overall_score",
             "category_scores",
             "top_actions",
+            "agent_findings_summary",
             "warning_summary",
             "aeo_report",
             "site_profile",
@@ -377,8 +384,7 @@ class FindingSerializer(serializers.ModelSerializer):
             "evidence",
             "rule_id",
             "owasp_category",
-            "owasp_2025",
-            "owasp_2025_label",
+            "owasp_label",
             "cwe_id",
             "evidence_type",
             "evidence_json",

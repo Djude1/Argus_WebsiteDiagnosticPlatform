@@ -2020,6 +2020,35 @@ def score_breakdown(
     return result
 
 
+_AGENT_OBSERVATION_PREFIX = "agent-observed-security"
+_SUMMARY_SEVERITY_ORDER = ("critical", "high", "medium", "low", "info")
+
+
+def is_agent_observation(finding: dict) -> bool:
+    """AI Agent 資安觀察（非確定性層）：rule_id 以 agent-observed-security 開頭（ADR-0006 決策 C）。
+
+    這類觀察是非確定性深測，有無隨 agent 運氣跳動；不計入可比較的 headline 分數。
+    Kali 已驗證（kali-*）與其他確定性規則不在此列、照常計分。
+    """
+    return str(finding.get("rule_id") or "").startswith(_AGENT_OBSERVATION_PREFIX)
+
+
+def summarize_agent_security(findings: list[dict]) -> dict:
+    """AI 深度資安測試（Agent 觀察）摘要：{count, severity_counts, max_severity}。
+
+    供 ScanJob.agent_findings_summary 持久化與報告／前端獨立呈現；不影響分數。
+    """
+    counts: dict[str, int] = {}
+    for finding in findings:
+        if not is_agent_observation(finding):
+            continue
+        severity = finding.get("severity") or "info"
+        counts[severity] = counts.get(severity, 0) + 1
+    total = sum(counts.values())
+    max_severity = next((s for s in _SUMMARY_SEVERITY_ORDER if counts.get(s)), "")
+    return {"count": total, "severity_counts": counts, "max_severity": max_severity}
+
+
 def calculate_scores(
     findings: list[dict],
     *,

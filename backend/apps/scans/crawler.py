@@ -962,6 +962,40 @@ def _prepare_screenshot_dir(screenshot_dir: Path, warnings: dict) -> Path | None
         return None
 
 
+async def wait_for_images_settled(page, max_seconds: float) -> None:
+    """截圖前等「目前 DOM 裡尚未載完的 <img> 與 web font」完成（有上限，不等 networkidle）。
+
+    `wait_for_render_ready` 只看文字／元素數穩定，圖片與字型可能還在載就截圖，使用者會看到
+    半成品畫面（圖片空白、字型跳動）。這裡只等已經存在於 DOM 的資源，上限 max_seconds
+    （分析工具／長輪詢不影響），逾時或出錯就直接截圖、不卡住掃描。scroll_to_bottom 已先觸發
+    延遲載入的圖片，這一步確保它們在整頁截圖前畫出來。
+    """
+    if max_seconds <= 0:
+        return
+    try:
+        await asyncio.wait_for(
+            page.evaluate(
+                """
+                async () => {
+                    const pending = Array.from(document.images || [])
+                        .filter((img) => !img.complete)
+                        .map((img) => new Promise((res) => {
+                            img.addEventListener('load', res, { once: true });
+                            img.addEventListener('error', res, { once: true });
+                        }));
+                    if (document.fonts && document.fonts.ready) {
+                        pending.push(Promise.resolve(document.fonts.ready).catch(() => {}));
+                    }
+                    await Promise.all(pending);
+                }
+                """
+            ),
+            timeout=max_seconds,
+        )
+    except Exception:  # noqa: BLE001 — 截圖是盡力而為，等不到就直接拍
+        pass
+
+
 async def _capture_screenshot(page, target: Path, url: str, warnings: dict) -> Path | None:
     """拍頁面截圖；失敗回 None 而不是往上拋。
 
@@ -974,6 +1008,8 @@ async def _capture_screenshot(page, target: Path, url: str, warnings: dict) -> P
     記進 failed_urls 會讓報告誤報成「頁面擷取失敗」。
     """
     try:
+        # 先等已在 DOM 的圖片／字型載完（有上限），避免截到半成品畫面
+        await wait_for_images_settled(page, settings.ARGUS_SCREENSHOT_SETTLE_SECONDS)
         await page.screenshot(path=str(target), full_page=True)
         return target
     except Exception as exc:  # noqa: BLE001

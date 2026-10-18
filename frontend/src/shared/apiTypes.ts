@@ -1069,7 +1069,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description 公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。 */
+        /**
+         * @description 公開：前端是否要顯示 Turnstile 元件，以及要用的 site key（公開值）。
+         *
+         *     登入頁一進來就呼叫，順便設定 csrftoken cookie，登入端點的 CSRF 驗證才有 token 可比對。
+         */
         get: operations["auth_turnstile_retrieve"];
         put?: never;
         post?: never;
@@ -3181,10 +3185,8 @@ export interface components {
             evidence: string;
             rule_id: string;
             owasp_category: string;
-            /** @description OWASP Top 10:2025 代號（由 2021 代號與 CWE 推導；DB 只存 2021 代號）。 */
-            readonly owasp_2025: string;
-            /** @description 顯示用：「A02:2025 安全設定錯誤」。 */
-            readonly owasp_2025_label: string;
+            /** @description 顯示用：「A02:2025 安全設定錯誤」。owasp_category 已直接存 2025 代號。 */
+            readonly owasp_label: string;
             cwe_id: string;
             evidence_type: string;
             evidence_json: unknown;
@@ -3593,6 +3595,7 @@ export interface components {
             readonly overall_score: number | null;
             readonly category_scores: unknown;
             readonly top_actions: unknown;
+            readonly agent_findings_summary: unknown;
             readonly warning_summary: unknown;
             readonly aeo_report: unknown;
             readonly site_profile: unknown;
@@ -3642,6 +3645,8 @@ export interface components {
             max_pages: number;
             /** @default true */
             respect_robots: boolean;
+            /** @default false */
+            deep_agent_requested: boolean;
             project: number | null;
         };
         ScanJobCreateRequest: {
@@ -3671,6 +3676,8 @@ export interface components {
             respect_robots: boolean;
             test_auth_email?: string;
             test_auth_password?: string;
+            /** @default false */
+            deep_agent_requested: boolean;
             project?: number | null;
         };
         ScanJobStatus: {

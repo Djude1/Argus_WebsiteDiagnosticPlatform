@@ -30,6 +30,7 @@ from apps.agent.runner import (
     _enforce_agent_request,
     _enforce_agent_websocket,
     _make_agent_context,
+    is_deep_security_mode,
 )
 from apps.agent.tools import (
     TOOL_SCHEMAS,
@@ -55,6 +56,49 @@ def _make_scan_job(user) -> ScanJob:
         normalized_url="https://example.com/",
         origin="https://example.com",
     )
+
+
+class DeepSecurityModeTests(TestCase):
+    """深度資安滲透分支只在使用者勾選付費深度 AI Agent 時啟動（2026-10-18）。
+
+    回報：沒勾「加做 AI Agent 深度資安測試」卻跑了資安專家（資訊洩漏專家…）；
+    根因是 deep_mode 只看 active＋authorized、漏了 deep_agent_requested。
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="deep_mode", password="safe-test-password")
+
+    def _scan(self, **kw):
+        job = _make_scan_job(self.user)
+        for key, value in kw.items():
+            setattr(job, key, value)
+        return job
+
+    def test_active_authorized_without_opt_in_is_not_deep(self):
+        # 全站＋主動＋已授權，但沒勾深度 → 只跑 UX，不進資安 pentest 分支
+        job = self._scan(
+            scan_mode=ScanJob.ScanMode.ACTIVE,
+            active_testing_authorized=True,
+            deep_agent_requested=False,
+        )
+        self.assertFalse(is_deep_security_mode(job))
+
+    def test_opt_in_active_authorized_is_deep(self):
+        job = self._scan(
+            scan_mode=ScanJob.ScanMode.ACTIVE,
+            active_testing_authorized=True,
+            deep_agent_requested=True,
+        )
+        self.assertTrue(is_deep_security_mode(job))
+
+    def test_opt_in_without_authorization_is_not_deep(self):
+        # 勾了但沒授權／非主動 → 仍不跑（授權仍是硬閘）
+        job = self._scan(
+            scan_mode=ScanJob.ScanMode.PASSIVE,
+            active_testing_authorized=False,
+            deep_agent_requested=True,
+        )
+        self.assertFalse(is_deep_security_mode(job))
 
 
 class AgentBrowserBoundaryTests(TestCase):
@@ -1192,7 +1236,7 @@ class PersistAgentSecurityFindingsTests(TestCase):
         self.assertEqual(len(created), 1)
         obj = Finding.objects.get(scan_job=self.scan_job, rule_id="kali-sqlmap-sqli")
         self.assertEqual(obj.category, "security")
-        self.assertEqual(obj.owasp_category, "A03")  # owasp_mapper 對 kali-sqlmap-sqli 的對映
+        self.assertEqual(obj.owasp_category, "A05")  # kali-sqlmap-sqli → 2025 A05 注入攻擊
 
     def _observed(self, title, url, severity="medium", verified=False, description="外洩"):
         from apps.agent.findings import agent_security_rule_id

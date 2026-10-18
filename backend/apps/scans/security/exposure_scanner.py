@@ -147,10 +147,12 @@ def build_probe_targets(
     *,
     robots_disallow: list[str] | None = None,
     api_path_prefixes: list[str] | None = None,
+    extra_paths: list[str] | None = None,
 ) -> list[str]:
     """合併內建字典、API 前綴底下的 API 文件與 robots Disallow，組出 same-origin 探測 URL。
 
-    去重、上限 MAX_PROBE_TARGETS。
+    去重、上限 MAX_PROBE_TARGETS。`extra_paths`（ADR-0006 第 3 刀）是上一次掃描的敏感檔案外洩
+    端點，排在最前面確保不被上限截掉——用來重探「是否已修好／仍可讀」。
     """
     targets: list[str] = []
     seen: set[str] = set()
@@ -169,6 +171,8 @@ def build_probe_targets(
             seen.add(full)
             targets.append(full)
 
+    for path in extra_paths or []:
+        _add(path)
     for path in BUILTIN_SENSITIVE_PATHS:
         _add(path)
     for prefix in (api_path_prefixes or [])[:MAX_API_PREFIXES]:
@@ -601,6 +605,7 @@ async def probe_paths(
     *,
     robots_disallow: list[str] | None = None,
     api_path_prefixes: list[str] | None = None,
+    extra_paths: list[str] | None = None,
 ) -> list[dict]:
     """重用 Playwright（繞 CF）探測敏感路徑，回傳 raw 結果。任何例外回 []（不影響主掃描）。
 
@@ -631,6 +636,7 @@ async def probe_paths(
                     origin,
                     robots_disallow=effective_robots_disallow,
                     api_path_prefixes=api_path_prefixes,
+                    extra_paths=extra_paths,
                 )
                 baselines = await _soft_404_baselines(requester, origin)
                 for url in targets:

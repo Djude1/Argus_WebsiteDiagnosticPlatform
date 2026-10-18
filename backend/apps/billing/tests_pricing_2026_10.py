@@ -175,7 +175,7 @@ class DeepAgentFeeTests(TestCase):
             user=self.user, original_url="https://example.com/",
             normalized_url="https://example.com/", origin="https://example.com",
             max_pages=max_pages, scan_mode=ScanJob.ScanMode.ACTIVE,
-            active_testing_authorized=True,
+            active_testing_authorized=True, deep_agent_requested=True,
         )
 
     def test_estimate_includes_deep_fee(self):

@@ -25,7 +25,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-COVERAGE_VERSION = 1
+# v2（ADR-0006 第 1 刀）：每項檢查除了舊的 issue_key，另存一份跨掃描正典身分（identities），
+# 為第 2 刀把歷史比較切換到正典鍵鋪路；v1 的 checks/keys 結構不動，identities 為新增欄位。
+COVERAGE_VERSION = 2
 
 COMPLETED = "completed"
 PARTIAL = "partial"
@@ -116,31 +118,50 @@ class ScanCoverage:
 
     def __init__(self) -> None:
         self._checks: dict[str, dict] = {}
+        # ADR-0006 第 3 刀：收尾重探對「上次有、本次確定性檢查沒再產生」的端點正向確認已修好
+        # （回 401/403/404）的正典身分集合；歷史比較據此才標 resolved（而非靠「身分消失」推斷）。
+        self._reverify_resolved: set[str] = set()
 
     def mark(self, check: str, status: str, reason: str = "") -> None:
         """記錄某項檢查的結果；同一項檢查以最後一次為準，但已記錄的問題代號保留。"""
         entry = self._checks.setdefault(
-            check, {"category": CHECK_CATEGORIES.get(check), "keys": set()}
+            check, {"category": CHECK_CATEGORIES.get(check), "keys": set(), "identities": set()}
         )
         entry["status"] = status
         entry["reason"] = reason
 
     def add_findings(self, check: str, findings: Iterable[dict]) -> None:
-        """記下這項檢查產生了哪些問題（歷史比較時用來找回「是誰產生的」）。"""
+        """記下這項檢查產生了哪些問題（歷史比較時用來找回「是誰產生的」）。
+
+        同時記舊的 issue_key 與跨掃描正典身分（ADR-0006 第 1 刀，兩種鍵並存）。
+        """
+        from apps.scans.finding_identity import finding_identity
+
         entry = self._checks.setdefault(
             check,
-            {"category": CHECK_CATEGORIES.get(check), "keys": set(), "status": COMPLETED,
-             "reason": ""},
+            {"category": CHECK_CATEGORIES.get(check), "keys": set(), "identities": set(),
+             "status": COMPLETED, "reason": ""},
         )
         for finding in findings:
             entry["keys"].add(
                 issue_key(finding.get("rule_id"), finding.get("category", ""),
                           finding.get("title", ""))
             )
+            entry["identities"].add(finding_identity(finding))
+
+    def mark_resolved(self, identity: str) -> None:
+        """記下「收尾重探已正向確認已修好」的正典身分（ADR-0006 第 3 刀）。"""
+        if identity:
+            self._reverify_resolved.add(identity)
 
     def status_of(self, check: str) -> str | None:
         entry = self._checks.get(check)
         return entry.get("status") if entry else None
+
+    def identities_of(self, check: str) -> set[str]:
+        """某項檢查本次產生的正典身分集合（收尾重探用來排除「本次仍存在」的發現）。"""
+        entry = self._checks.get(check)
+        return set(entry.get("identities", set())) if entry else set()
 
     def to_json(self, categories: Iterable[str]) -> dict:
         checks = {
@@ -149,6 +170,7 @@ class ScanCoverage:
                 "category": entry["category"],
                 "reason": entry.get("reason", ""),
                 "keys": sorted(entry["keys"]),
+                "identities": sorted(entry.get("identities", set())),
             }
             for name, entry in sorted(self._checks.items())
         }
@@ -158,6 +180,7 @@ class ScanCoverage:
             "categories": {
                 category: category_status(checks, category) for category in sorted(categories)
             },
+            "reverify_resolved": sorted(self._reverify_resolved),
         }
 
 
@@ -225,6 +248,15 @@ def _check_for_key(coverage: dict | None, key: str) -> str | None:
     return None
 
 
+def _check_for_identity(coverage: dict | None, identity: str) -> str | None:
+    """正典身分（v2）找回「是哪一項檢查產生的」：只查 identities，不做前綴 fallback
+    （正典身分不帶 rule 前綴）。"""
+    for name, entry in ((coverage or {}).get("checks") or {}).items():
+        if identity in (entry.get("identities") or []):
+            return name
+    return None
+
+
 def absent_issue_status(
     *,
     previous_coverage: dict | None,
@@ -233,21 +265,35 @@ def absent_issue_status(
     category: str,
     urls: Iterable[str],
     analysed_urls: set[str],
+    by_identity: bool = False,
 ) -> str:
     """前次有、本次沒出現的問題屬於哪一種狀態。
 
     只有「產生它的同一項檢查本次完整跑完」且「受影響頁面本次有完整分析到」才是 resolved。
     舊掃描沒有覆蓋紀錄時無從判斷，一律 not_observed（不能冒稱已修好）。
+
+    `by_identity`（ADR-0006 第 2 刀）：`key` 是跨掃描正典身分而非 issue_key，改查 coverage 的
+    identities 找產生它的檢查；AI Agent 觀察（檢查 `agent`）一律不靠「身分消失」判已修好
+    （正向重探在第 3 刀），回 not_observed。
     """
-    # AI Agent 觀察的 rule_id 是「弱點類＋端點」的雜湊，描述或觀察端點一有微調就換成新鍵
-    # （弱點類由 LLM 措辭推得、端點也可能是別名）。鍵消失＝換了鍵，不代表問題修好，不可冒稱
-    # resolved（實測：重掃描述微調→舊鍵被誤判「已修好」，可是問題仍在）。一律回本次未確認。
-    if (key or "").startswith(_AGENT_SECURITY_PREFIX):
-        return NOT_OBSERVED
+    if by_identity:
+        # 收尾重探已正向確認已修好（回 401/403/404）→ resolved（ADR-0006 決策 B）
+        if key in ((current_coverage or {}).get("reverify_resolved") or []):
+            return RESOLVED
+        check = _check_for_identity(previous_coverage, key)
+        if check == "agent":
+            return NOT_OBSERVED
+    else:
+        # AI Agent 觀察的 rule_id 是「弱點類＋端點」的雜湊，描述或觀察端點一有微調就換成新鍵
+        # （弱點類由 LLM 措辭推得、端點也可能是別名）。鍵消失＝換了鍵，不代表問題修好，不可冒稱
+        # resolved（實測：重掃描述微調→舊鍵被誤判「已修好」，可是問題仍在）。一律回本次未確認。
+        if (key or "").startswith(_AGENT_SECURITY_PREFIX):
+            return NOT_OBSERVED
     current_checks = (current_coverage or {}).get("checks")
     if not current_checks:
         return NOT_OBSERVED
-    check = _check_for_key(previous_coverage, key)
+    if not by_identity:
+        check = _check_for_key(previous_coverage, key)
     if check is not None:
         status = (current_checks.get(check) or {}).get("status")
         if status is None or status in _NOT_RUN:

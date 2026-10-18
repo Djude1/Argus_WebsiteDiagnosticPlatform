@@ -195,6 +195,40 @@ class PlannedScanStepsTests(TestCase):
         self.assertNotIn("active_probe", steps)  # 被動模式不跑主動探測
         self.assertEqual(steps[-1], "scoring")
 
+    def test_ux_only_site_scan_shows_agent_ux_not_agent(self):
+        # 沒勾深度資安 AI Agent 時，全站＋UX 仍跑擬真使用者 agent，步驟應是 agent_ux 不是 agent
+        from django.test import override_settings
+
+        from apps.scans.scan_plan import build_scan_execution_plan
+        from apps.scans.tasks import planned_scan_steps
+
+        scan = _make_scan(self.user)
+        scan.categories = ["ux", "seo"]
+        scan.max_pages = 10  # 全站
+        with override_settings(ARGUS_AGENT_ENABLED=True):
+            steps = planned_scan_steps(scan, build_scan_execution_plan(scan))
+        self.assertIn("agent_ux", steps)
+        self.assertNotIn("agent", steps)
+
+    def test_deep_agent_scan_shows_agent(self):
+        # 勾了深度資安（全站＋主動＋已授權＋deep_agent_requested）才是 agent 步驟
+        from django.test import override_settings
+
+        from apps.scans.models import ScanJob
+        from apps.scans.scan_plan import build_scan_execution_plan
+        from apps.scans.tasks import planned_scan_steps
+
+        scan = _make_scan(self.user)
+        scan.categories = ["security", "ux"]
+        scan.max_pages = 10
+        scan.scan_mode = ScanJob.ScanMode.ACTIVE
+        scan.active_testing_authorized = True
+        scan.deep_agent_requested = True
+        with override_settings(ARGUS_AGENT_ENABLED=True):
+            steps = planned_scan_steps(scan, build_scan_execution_plan(scan))
+        self.assertIn("agent", steps)
+        self.assertNotIn("agent_ux", steps)
+
     def test_write_progress_keeps_step_fields(self):
         scan = _make_scan(self.user)
         _write_progress(

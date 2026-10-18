@@ -95,6 +95,8 @@ export function ProjectSecurityPage() {
   }
 
   const kinds = KIND_ORDER.map((kind) => data.kinds.find((item) => item.kind === kind)).filter(Boolean);
+  const agentSummary = data.agent_findings_summary || {};
+  const agentSeverityText = { critical: "最高嚴重", high: "最高高風險", medium: "最高中風險", low: "最高低風險", info: "資訊" };
   const issues = kindFilter ? data.issues.filter((issue) => issue.security_kind === kindFilter) : data.issues;
   const titleByKey = Object.fromEntries(data.issues.map((issue) => [issue.key, issue.title]));
   const scanId = scanParam || data.scan.id;
@@ -123,7 +125,7 @@ export function ProjectSecurityPage() {
               <span className={`project-grade tone-${scoreTone(data.score)}`}>{scoreGrade(data.score)}</span>
             </p>
           )}
-          <p className="project-kpi-hint">Argus 依資安問題的嚴重度計算</p>
+          <p className="project-kpi-hint">Argus 依確定性檢查的資安問題嚴重度計算；不含 AI 深度測試</p>
         </section>
         <section className="project-kpi">
           <p className="project-kpi-label">安全標頭參考等第</p>
@@ -150,6 +152,14 @@ export function ProjectSecurityPage() {
           </p>
         </section>
       </div>
+
+      {agentSummary.count > 0 && (
+        <p className="security-notice" role="note">
+          本次另有 AI 深度測試（AI Agent 實際操作網站）發現 {agentSummary.count} 項
+          {agentSummary.max_severity && `（${agentSeverityText[agentSummary.max_severity] || agentSummary.max_severity}）`}
+          。AI 深度測試是非確定性的補充檢查，<strong>獨立列於下方問題清單、不計入上方資安基準分</strong>，用來比較趨勢時請以基準分為準。
+        </p>
+      )}
 
       <section className="panel">
         <h2 className="project-section-title">問題類型</h2>

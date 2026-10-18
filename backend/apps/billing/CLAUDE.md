@@ -81,7 +81,7 @@ from apps.billing.services import grant_monthly_bonus_if_needed, refund_full_for
 
 - **首次免費完整掃描**：`ScanJob.is_trial`（scans migration 0027）。Standard Full Scan（被動＋全網站＋五維全選，上限 50 頁含 UX agent）第一次不扣點；失敗或取消的試用掃描不算用掉。同時送出兩筆時，第二筆在 `hold_for_scan` 的錢包鎖內改回付費。開關 `ARGUS_FREE_TRIAL_SCAN_ENABLED`（預設開），wallet API 暴露 `free_trial_available`。既有帳號只要沒用過也適用。
 - **Partial Scan**：餘額不足時 `ScanJobCreateSerializer` 回 400，附 `affordable_pages`（`affordable_site_pages`）；前端讓使用者確認改成 N 頁後重新送出，**後端絕不自動縮小範圍**。
-- **深度資安附加費**：主動＋已授權＋全網站＋agent 開啟時預扣 `ARGUS_COIN_AGENT_DEEP`（50）；agent 沒跑就在結算時退回。wallet API 暴露 `agent_deep_fee`。專家派工上限 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`（6）。
+- **深度資安附加費**：主動＋已授權＋全網站＋agent 開啟**且使用者勾選 `deep_agent_requested`**（2026-10-18 改為 opt-in，scans migration 0036）時預扣 `ARGUS_COIN_AGENT_DEEP`（50）；agent 沒跑就在結算時退回。`_scan_is_deep` 多判 `deep_agent_requested`（預扣／結算／`scan_plan.run_agent` 一致）；沒勾時主動掃描照跑確定性層，只是不跑 LLM pentest agent、不收此費。wallet API 暴露 `agent_deep_fee`。專家派工上限 `ARGUS_AGENT_MAX_SPECIALIST_DISPATCH`（6）。
 - **免費贈點上限**：從未付費帳號的月贈點只補到 `ARGUS_FREE_BONUS_BALANCE_CAP`（600）。
 - **訂閱配點**：billing migration 0011 把 sub-lite／pro／team 的 `monthly_coins` 改為 600／1,800／4,000（舊值 300／900／2,000）。`settle_subscription` 即時讀 `plan.monthly_coins`，所以**既有訂閱者從下一期起也拿新點數**（刻意決策：老客戶不應比新客戶少）。
 - **網頁複刻預扣上限**：`ARGUS_COIN_REBUILD_HOLD` 預設 30 → 50（K8s ConfigMap 同步）。

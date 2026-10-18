@@ -62,7 +62,7 @@ class UnmaskedPasswordFieldTests(SimpleTestCase):
         self.assertEqual(finding["rule_id"], RULE_ID)
         self.assertEqual(finding["category"], "security")
         self.assertEqual(finding["severity"], "medium")
-        self.assertEqual((finding["owasp_category"], finding["cwe_id"]), ("A04", "CWE-549"))
+        self.assertEqual((finding["owasp_category"], finding["cwe_id"]), ("A06", "CWE-549"))
         self.assertIn("欄位標題：密碼", finding["evidence"])
         self.assertEqual(security_kind(category="security", rule_id=RULE_ID), "config")
         self.assertEqual(analyze_password_fields("<input type='password'>", "u"), [])
