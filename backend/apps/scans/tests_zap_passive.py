@@ -103,6 +103,38 @@ class BuildHarTests(SimpleTestCase):
         # 圖片只留標頭，不送內容
         self.assertNotIn("text", entries[1]["response"]["content"])
 
+    def test_representative_collapses_templated_pages(self):
+        # 大站同模板的近似頁（/p/#.php）在 active scan 只留代表性的一筆
+        _write_har(self.dir, "b.har", [
+            _entry(f"{ORIGIN}/p/412-1043-1.php"),
+            _entry(f"{ORIGIN}/p/412-1043-6298.php"),
+            _entry(f"{ORIGIN}/p/412-1043-72.php"),
+            _entry(f"{ORIGIN}/about"),
+        ])
+        # 被動（預設）不去重：四筆都在
+        _, passive_count = build_har([self.dir / "b.har"], ORIGIN)
+        self.assertEqual(passive_count, 4)
+        # 代表性去重：/p/#.php 收斂成 1 筆 ＋ /about ＝ 2
+        _, active_count = build_har(
+            [self.dir / "b.har"], ORIGIN, representative=True, max_entries=40
+        )
+        self.assertEqual(active_count, 2)
+
+    def test_representative_respects_max_entries(self):
+        _write_har(self.dir, "c.har", [_entry(f"{ORIGIN}/a/{i}") for i in range(10)])
+        # 10 個不同模板段（/a/#），模板相同 → 去重後只剩 1
+        _, count = build_har(
+            [self.dir / "c.har"], ORIGIN, representative=True, max_entries=5
+        )
+        self.assertEqual(count, 1)
+        # 不同模板（非數字區段不同）也受 max_entries 上限限制
+        letters = "abcdefghij"
+        _write_har(self.dir, "d.har", [_entry(f"{ORIGIN}/{c}/1") for c in letters])
+        _, capped = build_har(
+            [self.dir / "d.har"], ORIGIN, representative=True, max_entries=3
+        )
+        self.assertEqual(capped, 3)
+
     @override_settings(ARGUS_ZAP_MAX_ENTRIES=3, ARGUS_ZAP_MAX_BODY_CHARS=10)
     def test_limits(self):
         _write_har(self.dir, "a.har", [_entry(f"{ORIGIN}/{i}", body="x" * 50) for i in range(5)])
@@ -297,6 +329,33 @@ class RealZapTests(SimpleTestCase):
         self.assertEqual(client.alerts(ORIGIN), [])
         messages = client.view("core", "numberOfMessages", baseurl=ORIGIN)
         self.assertEqual(messages["numberOfMessages"], "0")
+
+
+class ZapAlertTranslationTests(SimpleTestCase):
+    """ZAP 告警的中文化與英文截斷（2026-10-18）：全繁中報告不該夾大段英文原文或半個字殘字。"""
+
+    def test_off_site_redirect_has_chinese_title_no_english_body(self):
+        # 10028 Off-site Redirect 現在有中文對照 → 標題中文、不再附 ZAP 英文原文
+        english = ("Open redirects are one of the OWASP 2010 Top Ten. NOTE: this is a long "
+                   "English description that used to be appended verbatim. " * 5)
+        findings, _ = alerts_to_findings(
+            [_alert("10028", risk="High", name="Off-site Redirect", description=english)], "2.16.1",
+            active=True,
+        )
+        f = findings[0]
+        self.assertIn("開放重新導向", f["title"])
+        self.assertNotIn("Open redirects are one of", f["description"])
+
+    def test_untranslated_rule_trims_at_sentence_no_broken_word(self):
+        # 沒有中文對照的規則仍附英文，但在句尾截斷、不留半個字（原本硬切會留下「NO」殘字）
+        english = "First sentence ends here. " + ("word " * 300) + "NOTE: trailing note"
+        findings, _ = alerts_to_findings(
+            [_alert("99999", risk="Low", name="Some Rare Rule", description=english)], "2.16.1",
+        )
+        desc = findings[0]["description"]
+        self.assertTrue(desc.endswith("…") or desc.endswith("here."))
+        self.assertNotIn(" NO\n", desc)
+        self.assertFalse(desc.rstrip().endswith("NO"))
 
 
 class ZapClientHostHeaderTests(SimpleTestCase):

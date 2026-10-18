@@ -58,12 +58,21 @@ def run_active(
     *, cancel_check: Callable[[], None] = lambda: None, client: ZapClient | None = None,
 ) -> ZapActiveResult:
     """對 origin 做 ZAP 主動掃描；先用爬蟲 HAR 建站台樹再 active scan。結束後清乾淨。"""
-    payload, count = build_har(har_paths, origin)
+    # 代表性去重＋節點上限：大站同模板的近似頁不重複送進 active scan（否則節點暴增、掃不完、
+    # 還容易讓 importHar／讀告警這類重呼叫塞爆 HTTP 逾時）。
+    payload, count = build_har(
+        har_paths, origin,
+        max_entries=settings.ARGUS_ZAP_ACTIVE_MAX_NODES, representative=True,
+    )
     lock_key = f"argus-zap:{origin.lower()}"
     lock_ttl = int(settings.ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS) + 180
     if not cache.add(lock_key, scan_id, timeout=lock_ttl):
         raise ZapBusy("同一個網站的另一次掃描正在使用 ZAP")
-    client = client or ZapClient(settings.ARGUS_ZAP_API_URL, settings.ARGUS_ZAP_API_KEY)
+    # 單次 HTTP 逾時拉長：大站 importHar／讀告警會塞超過預設 30s，被 httpx 砍斷會讓整段失敗。
+    client = client or ZapClient(
+        settings.ARGUS_ZAP_API_URL, settings.ARGUS_ZAP_API_KEY,
+        timeout=settings.ARGUS_ZAP_HTTP_TIMEOUT_SECONDS,
+    )
     file_name = f"argus-active-{scan_id}.har"
     uploaded = False
     spider_id = ""

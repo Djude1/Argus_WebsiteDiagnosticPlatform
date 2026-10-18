@@ -376,6 +376,12 @@ ARGUS_ZAP_ACTIVE_ENABLED = env_bool("ARGUS_ZAP_ACTIVE_ENABLED", default=False)
 ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS", "600"))
 # spider 階段的時間上限（秒，含在上面的總上限內）；CF 後面 spider 幾乎無效，主要靠 HAR 建樹
 ARGUS_ZAP_ACTIVE_SPIDER_SECONDS = float(os.getenv("ARGUS_ZAP_ACTIVE_SPIDER_SECONDS", "120"))
+# 呼叫 ZAP API 的單次 HTTP 逾時（秒）：大站 importHar／讀告警這類重呼叫會塞超過預設 30s，
+# 被 httpx 砍斷後整段 zap_active 以「ZAP 逾時」失敗（實測 imd.ntub 50 頁即如此）。
+ARGUS_ZAP_HTTP_TIMEOUT_SECONDS = float(os.getenv("ARGUS_ZAP_HTTP_TIMEOUT_SECONDS", "120"))
+# 主動掃描建站台樹時，HAR 節點（代表性去重後）的上限：大站 50＋頁多為同一模板的近似頁，
+# 全送進 active scan 會讓節點數暴增、掃不完也更容易觸發上面的 HTTP 逾時。去重＋設上限從源頭收斂。
+ARGUS_ZAP_ACTIVE_MAX_NODES = int(os.getenv("ARGUS_ZAP_ACTIVE_MAX_NODES", "40"))
 # 未授權存取探測（authz_probe）每次掃描最多探測幾個 API 端點（ADR-0005 §3：不限重抓，放寬以提高
 # BOLA 涵蓋率；仍受 ARGUS_ACTIVE_MAX_RPS 速率限制）。
 ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS = int(os.getenv("ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS", "60"))

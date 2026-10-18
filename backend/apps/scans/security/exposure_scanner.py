@@ -350,7 +350,12 @@ def analyze_probe_results(results: list[dict]) -> list[dict]:
             top = max((s["severity"] for s in secrets), key=lambda x: _SEVERITY_ORDER.get(x, 0))
             if _SEVERITY_ORDER[top] > _SEVERITY_ORDER[severity]:
                 severity = top
-        if pii_total > 0 and _SEVERITY_ORDER[severity] < _SEVERITY_ORDER["high"]:
+        # security.txt 的聯絡 email 是這個檔案刻意公開的回報窗口（.well-known/security.txt 的用途
+        # 就是放 Contact），不因它升到 high；裡頭若有手機／身分證／卡號等其他個資才升級。
+        pii_for_upgrade = pii_total
+        if info["file_type"] == "securitytxt":
+            pii_for_upgrade -= len(pii.get("email", []))
+        if pii_for_upgrade > 0 and _SEVERITY_ORDER[severity] < _SEVERITY_ORDER["high"]:
             severity = "high"
         # 對外回應夾帶私有／內部網段 IP（例：OpenAPI 規格的 servers 寫內網位址）＝內部網路
         # 拓樸外洩，是比「只是文件公開」更實質的風險；至少提升到 high。

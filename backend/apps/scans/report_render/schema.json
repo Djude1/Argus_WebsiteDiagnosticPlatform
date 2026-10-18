@@ -41,6 +41,7 @@
           }
         },
         "new_findings":  {"type": "array", "items": {"type": "string"}},
+        "new_findings_total": {"type": "integer", "description": "新出現項目總數（new_findings 只列前幾項）"},
         "priority_note": {"type": "string"},
         "score_note":    {"type": "string", "description": "分數算法說明"},
         "root_causes":   {"type": "array", "description": "改一處就能一起解決的問題（root_causes.py）",

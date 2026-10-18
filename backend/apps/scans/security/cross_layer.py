@@ -18,6 +18,14 @@
    嚴重度還互相打架）。把反向代理／BFF 的掛載前綴剝掉正規化成同一個資源鍵，**同資源＋同弱點
    類型**的 Agent 發現只留最嚴重那筆（同 `findings.consolidate_security_findings` 的原則：端點相同
    但類型不同＝不同問題、修法不同，不能併）。只併 Agent 層（確定性層身分不動）。
+
+3. **確定性規則 ↔ Agent（跨類別、同一頁同一件事）**：少數問題確定性規則（可重現、綁定頁面）與
+   Agent 文字觀察各報一次，但 rule_id 與弱點類型不同，Pass 2 的「同資源＋同 vuln_class」配不起來
+   （實測 `/management/login` 密碼欄 `type="text"`：form_scanner 報 `form-password-unmasked`、Agent
+   另報一筆，Agent 的 vuln_class 落在 other）。以 `_BRIDGE_CONCEPTS` 列舉實際會重疊的少數組合
+   （確定性 rule_id → 能認出等義 Agent 觀察的關鍵字群，每群任一命中、各群都要命中才算），同一頁
+   （canonical resource）同時出現時**保留確定性那筆、丟掉 Agent**（確定性可重現、措辭穩定）。
+   只丟 Agent，且必須有對應的確定性發現在同一頁，才會併——避免誤丟 Agent 獨有的觀察。
 """
 
 from __future__ import annotations
@@ -27,6 +35,20 @@ from __future__ import annotations
 # 都是同一個後端資源 `/x`。只剝開頭一段、且後面要還有資源，裸 `/api` 不剝。
 _MOUNT_SEGMENTS = frozenset(
     {"api", "api_proxy", "apiproxy", "backend", "bff", "gateway", "proxy", "rest"}
+)
+
+# Pass 3 跨類別橋接：確定性 rule_id → 能認出等義 Agent 觀察的關鍵字群。每個元組是一群
+# 同義詞（任一命中即算這群命中），一筆 Agent 發現要「每一群都命中」才視為同一件事。
+# 只列實際會重疊的少數組合，刻意保守避免誤丟 Agent 獨有觀察。
+_BRIDGE_CONCEPTS: tuple[tuple[str, tuple[tuple[str, ...], ...]], ...] = (
+    # 密碼欄位明文：form_scanner 的 form-password-unmasked ↔ Agent 觀察到密碼欄 type="text"
+    (
+        "form-password-unmasked",
+        (
+            ("密碼", "password"),  # 是密碼欄
+            ('type="text"', "type=text", "明碼", "明文", "遮蔽", "遮罩", "mask", "plaintext"),
+        ),
+    ),
 )
 
 
@@ -44,6 +66,15 @@ def _endpoint_of(finding: dict) -> str:
     """發現對應的端點路徑：exposure 存在 `endpoint`、Agent 存在 `observed_endpoint`。"""
     evidence_json = finding.get("evidence_json") or {}
     return str(evidence_json.get("endpoint") or evidence_json.get("observed_endpoint") or "")
+
+
+def _resource_of(finding: dict) -> str:
+    """資源路徑：優先 endpoint／observed_endpoint，其次 `evidence_json.url`（頁面類確定性
+    規則如 form-password-unmasked 把頁面網址存在 url）。"""
+    endpoint = _endpoint_of(finding)
+    if endpoint:
+        return endpoint
+    return str((finding.get("evidence_json") or {}).get("url") or "")
 
 
 def _canonical_resource(path: str) -> str:
@@ -119,4 +150,36 @@ def consolidate_cross_layer(findings: list[dict]) -> tuple[list[dict], list[dict
             kept[incumbent] = finding
         else:
             dropped.append(finding)
-    return kept, dropped
+
+    # Pass 3：確定性規則 ↔ Agent 跨類別橋接 → 保留確定性、丟 Agent
+    # 先找出每個橋接概念在確定性層已覆蓋的資源（canonical）
+    bridged: dict[str, set[str]] = {}
+    for finding in kept:
+        if finding.get("category") != "security":
+            continue
+        rule_id = str(finding.get("rule_id") or "")
+        for det_rule, _groups in _BRIDGE_CONCEPTS:
+            if rule_id == det_rule:
+                resource = _canonical_resource(_resource_of(finding))
+                if resource and resource != "/":
+                    bridged.setdefault(det_rule, set()).add(resource)
+    if not bridged:
+        return kept, dropped
+
+    final: list[dict] = []
+    for finding in kept:
+        if finding.get("category") == "security" and is_agent_security_rule(
+            finding.get("rule_id")
+        ):
+            resource = _canonical_resource(_resource_of(finding))
+            text = f"{finding.get('title', '')} {finding.get('description', '')}".lower()
+            bridged_away = any(
+                resource in bridged.get(det_rule, ())
+                and all(any(kw in text for kw in group) for group in groups)
+                for det_rule, groups in _BRIDGE_CONCEPTS
+            )
+            if bridged_away:
+                dropped.append(finding)
+                continue
+        final.append(finding)
+    return final, dropped

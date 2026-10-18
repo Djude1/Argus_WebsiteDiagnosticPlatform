@@ -69,3 +69,45 @@ class AgentStepCallbackTests(TestCase):
 class MaxTotalStepsEstimateTests(TestCase):
     def test_estimate_is_positive(self):
         self.assertGreater(max_total_steps_estimate(), 0)
+
+
+class _RecordingChain:
+    """記下送進模型的 messages，驗證 task_prompt 確實傳達給模型。"""
+
+    providers: list = []
+
+    def __init__(self):
+        self.seen_messages = None
+
+    def chat_with_tools(self, **kwargs) -> ChatResponse:
+        self.seen_messages = kwargs.get("messages")
+        return ChatResponse(provider="fake", model="fake", content="done")
+
+
+class AgentLanguageRuleTests(TestCase):
+    """一律繁中回報（2026-10-18）：_LANGUAGE_RULE 會接在每個 session 的 task_prompt 尾端。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="agent-lang", password="safe-test-password"
+        )
+        self.scan = ScanJob.objects.create(
+            user=self.user, original_url="https://site.example.test/"
+        )
+
+    def test_language_rule_mandates_traditional_chinese(self):
+        from apps.agent.runner import _LANGUAGE_RULE
+
+        self.assertIn("繁體中文", _LANGUAGE_RULE)
+        self.assertIn("report_security_issue", _LANGUAGE_RULE)
+
+    def test_task_prompt_reaches_model_messages(self):
+        # HermesAgent.run 把 task_prompt（_run_session 會在尾端接上 _LANGUAGE_RULE）放進第一個
+        # user message → 模型一定看得到這條語言鐵律
+        from apps.agent.runner import _LANGUAGE_RULE
+
+        chain = _RecordingChain()
+        agent = HermesAgent(scan_job=self.scan, executor=mock.Mock(), chain=chain)
+        async_to_sync(agent.run)("role prompt" + _LANGUAGE_RULE)
+        joined = " ".join(m.get("content", "") for m in (chain.seen_messages or []))
+        self.assertIn("繁體中文", joined)

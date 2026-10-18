@@ -88,6 +88,35 @@ class ReportPayloadSchemaTests(TestCase):
         self._assert_valid(payload)
         self.assertEqual(payload["summary"]["previous"]["score"], 39)
 
+    def test_new_findings_list_is_capped_with_total(self):
+        """juice-shop 這類一次多出數十項時，new_findings 只列前幾項、另記總數，避免整段傾倒。"""
+        from apps.scans.reports import _MAX_NEW_FINDINGS
+
+        # 前次掃描（沒有任何與本次相同的 rule_id）→ 本次的 findings 全算「新出現」
+        ScanJob.objects.create(
+            user=self.user, original_url="https://example.com/",
+            normalized_url="https://example.com/", origin="example.com",
+            status=ScanJob.Status.COMPLETED, overall_score=39,
+            scoring_version=self.scan_job.scoring_version,
+            ruleset_version=self.scan_job.ruleset_version,
+            completed_at=timezone.now() - timezone.timedelta(days=7),
+        )
+        page = self.scan_job.pages.first()
+        for i in range(20):
+            Finding.objects.create(
+                scan_job=self.scan_job, page=page, severity="low",
+                category=Finding.Category.SEO, title=f"SEO 問題 {i}",
+                description="d", remediation="r", evidence="e",
+                rule_id=f"seo-new-{i}", ai_handoff_prompt="p", priority_score=10.0,
+            )
+
+        payload = self._payload()
+        self._assert_valid(payload)
+        summary = payload["summary"]
+        # 列出的項目被壓到上限，但總數仍反映全部新出現項目
+        self.assertEqual(len(summary["new_findings"]), _MAX_NEW_FINDINGS)
+        self.assertGreaterEqual(summary["new_findings_total"], 20)
+
     def test_unevaluated_category_is_null_not_missing(self):
         """未評估要送 null——report_render 才會標「未評估」且不計顏色。
 

@@ -161,6 +161,25 @@ class TestAnalyzeProbeResults(SimpleTestCase):
         findings = exp.analyze_probe_results(results)
         self.assertEqual(findings[0]["severity"], "medium")
 
+    def test_securitytxt_contact_email_stays_info(self):
+        # security.txt 的聯絡 email 是檔案刻意公開的回報窗口，不因它升到 high（維持基礎 info）
+        body = ("Contact: mailto:security@htb.example\n"
+                "Encryption: https://htb.example/pgp.asc\nPreferred-Languages: en\n")
+        results = [{"url": "https://htb.example/.well-known/security.txt", "status": 200,
+                    "content_type": "text/plain", "body": body}]
+        findings = exp.analyze_probe_results(results)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["severity"], "info")
+
+    def test_securitytxt_with_other_pii_still_bumps(self):
+        # 但 security.txt 裡出現手機／身分證等「非 email」個資，仍要升級
+        body = ("Contact: mailto:security@htb.example\n"
+                "# 測試帳號聯絡 0912-345-678 身分證 A123456789\n")
+        results = [{"url": "https://htb.example/.well-known/security.txt", "status": 200,
+                    "content_type": "text/plain", "body": body}]
+        findings = exp.analyze_probe_results(results)
+        self.assertEqual(findings[0]["severity"], "high")
+
     def test_404_ignored(self):
         results = [{"url": "https://htb.example/.env", "status": 404, "body": ""}]
         self.assertEqual(exp.analyze_probe_results(results), [])

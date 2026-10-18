@@ -1822,6 +1822,37 @@ def _agent_role_label(role_label: str) -> str:
     return _AGENT_ROLE_LABELS.get(role_label, "資安測試")
 
 
+# 主動層覆蓋摘要（2026-10-18）：agent 之前已跑完 Nuclei／ZAP 主動／敏感檔探測／未授權探測
+# （都在 SCAN_PIPELINE 排在 agent 前），把「已經做過哪些『無腦全掃』」告訴 recon／orchestrator，
+# 叫專家別重做、把步數花在要推理／串接／差異式的部分（告知式，不硬跳過角色）。
+_COVERAGE_STATUS_ZH = {
+    COMPLETED: "已完整執行", PARTIAL: "部分執行（可能不完整）",
+    SKIPPED: "本次略過", FAILED: "執行失敗",
+}
+
+
+def _active_coverage_summary(ctx: ScanRunContext) -> str:
+    """組一段「確定性主動層這次已做過什麼」給 agent 參考；沒有任何主動檢查跑過時回空字串。"""
+    cov = ctx.coverage
+    api_count = len({p for p in _observed_api_paths(ctx) if p})
+    rows: list[tuple[str, str | None, str]] = [
+        ("Nuclei 已知漏洞（KEV）掃描", cov.status_of("nuclei"), ""),
+        ("OWASP ZAP 主動掃描（spider＋active）", cov.status_of("zap_active"), ""),
+        ("敏感檔案外洩探測（內建字典主動探隱藏檔）", cov.status_of("exposure"), ""),
+        (
+            "未授權存取探測（對同源 API 端點做無憑證 GET）",
+            cov.status_of("authz_probe"),
+            f"；已涵蓋約 {api_count} 個被觀察到的 API 端點" if api_count else "",
+        ),
+    ]
+    lines = [
+        f"- {label}：{_COVERAGE_STATUS_ZH.get(status, '')}{extra}"
+        for label, status, extra in rows
+        if status and status in _COVERAGE_STATUS_ZH
+    ]
+    return "\n".join(lines)
+
+
 def stage_agent(ctx: ScanRunContext) -> None:
     """可選的 Hermes-Agent（資安 deep_mode 與／或擬真使用者 UX 測試）。
 
@@ -1888,6 +1919,7 @@ def stage_agent(ctx: ScanRunContext) -> None:
                 recon_intel=ctx.discovered_endpoints,
                 may_submit_forms=may_submit_forms,
                 known_findings=known_findings,
+                coverage_summary=_active_coverage_summary(ctx),
                 progress_cb=_report_agent_step,
             )
         )

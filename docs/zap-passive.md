@@ -122,6 +122,17 @@ ZAP 把請求當成要轉發的流量 → forward-proxy 失敗回 502（zaproxy 
 > `/bin/sh -c` 的啟動字串裡未加引號會讓 ZAP 直接 `Syntax error: "(" unexpected` 開不起來（CrashLoopBackOff）**。
 > 已還原成原本的 `api.addrs.addr.name=.*`（讓 worker 來源 IP 被允許），真正的修法是 client 端的 Host 標頭。
 
+## 疑難排解：ZAP 主動掃描「ZAP 逾時」失敗（大站，2026-10-18）
+
+症狀：`zap_active` 在掃描 deadline（`ARGUS_ZAP_ACTIVE_TIMEOUT_SECONDS`，預設 600s）還沒到就以
+`WRN ZAP 主動掃描失敗：ZAP 逾時` 收場（實測 imd.ntub 50 頁約 6 分鐘即失敗）。
+
+根因：不是掃描 deadline，是呼叫 ZAP API 的**單次 HTTP 請求**逾時。大站 `importHar`（HAR 很大）／讀告警
+塞超過 httpx 預設 30s 被砍斷。修法：`ARGUS_ZAP_HTTP_TIMEOUT_SECONDS`（預設 120）拉長單次逾時；
+`ARGUS_ZAP_ACTIVE_MAX_NODES`（預設 40）＋路徑模板去重，把大站同模板的近似頁收斂成代表節點，從源頭
+縮小 import 與掃描範圍。兩者都是 `backend/**` 改動，要 rebuild backend image 才生效。CDN 後的站不略過
+主動掃描（實測 Cloudflare 後 ZAP 主動仍能完成，與 Nuclei 不同）。
+
 ## 回滾
 
 ConfigMap 設 `ARGUS_ZAP_ENABLED: "false"`、改 worker 的 `argus.io/config-revision` 後同步：爬蟲不再錄 HAR、不呼叫 ZAP，

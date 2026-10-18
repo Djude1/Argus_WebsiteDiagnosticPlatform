@@ -166,3 +166,68 @@ class AgentCrossPathMergeTests(SimpleTestCase):
         self.assertIn(det, kept)
         self.assertIn(agent_a, kept)
         self.assertEqual(dropped, [agent_b])
+
+
+def _password_det(url: str = "/management/login") -> dict:
+    """form_scanner 的確定性密碼明文發現：頁面網址存在 evidence_json.url。"""
+    return {
+        "category": "security",
+        "severity": "medium",
+        "rule_id": "form-password-unmasked",
+        "title": "密碼欄位沒有遮蔽，輸入時明碼顯示",
+        "description": "這一頁有 1 個密碼欄位沒有設成 type=\"password\"。",
+        "evidence_source": "rule_engine",
+        "impact_area": "vulnerability",
+        "evidence_json": {"type": "html", "url": url, "fields": []},
+    }
+
+
+def _password_agent(url: str = "/management/login") -> dict:
+    title = '登入密碼欄位使用 type="text" 而非 type="password"（密碼明文顯示）'
+    return {
+        "category": "security",
+        "severity": "medium",
+        "rule_id": agent_security_rule_id(title, "", f"https://site.example.test{url}"),
+        "title": title,
+        "description": "AI Agent 觀察到密碼欄明文顯示",
+        "evidence_source": "hermes_agent",
+        "evidence_json": {"source": "hermes_agent", "observed_endpoint": url},
+    }
+
+
+class BridgeConceptMergeTests(SimpleTestCase):
+    """Pass 3：確定性規則 ↔ Agent 跨類別橋接（同一頁同一件事，保留確定性）。"""
+
+    def test_password_mask_same_page_drops_agent(self):
+        det = _password_det()
+        agent = _password_agent()
+        kept, dropped = consolidate_cross_layer([det, agent])
+        self.assertIn(det, kept)
+        self.assertEqual(dropped, [agent])
+
+    def test_different_page_keeps_both(self):
+        det = _password_det("/management/login")
+        agent = _password_agent("/other/login")
+        kept, dropped = consolidate_cross_layer([det, agent])
+        self.assertEqual(dropped, [])
+        self.assertEqual(len(kept), 2)
+
+    def test_agent_kept_when_no_deterministic_counterpart(self):
+        # 沒有對應的確定性 form-password-unmasked，Agent 獨有觀察不得被誤丟
+        agent = _password_agent()
+        kept, dropped = consolidate_cross_layer([agent])
+        self.assertEqual(dropped, [])
+        self.assertEqual(kept, [agent])
+
+    def test_unrelated_agent_finding_on_same_page_kept(self):
+        # 同一頁但 Agent 講的是別的問題（非密碼明文），不得被橋接誤丟
+        det = _password_det()
+        other = _password_agent()
+        other["title"] = "登入頁有反射型 XSS"
+        other["description"] = "參數未過濾"
+        other["rule_id"] = agent_security_rule_id(
+            other["title"], other["description"], "https://site.example.test/management/login"
+        )
+        kept, dropped = consolidate_cross_layer([det, other])
+        self.assertIn(other, kept)
+        self.assertEqual(dropped, [])

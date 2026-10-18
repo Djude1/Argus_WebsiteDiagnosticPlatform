@@ -29,9 +29,17 @@ def private_ips(text: str) -> list[str]:
             addr = ipaddress.ip_address(raw)
         except ValueError:
             continue
-        if addr.is_private or addr.is_loopback or addr.is_link_local:
+        if _is_internal(addr):
             found.append(str(addr))
     return found
+
+
+def _is_internal(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """私有／內部網段，但排除 0.0.0.0 這類「未指定」哨兵——它是空值預設（例如 lastLoginIp
+    從未登入），不是內網拓樸外洩（0.0.0.0/8 在 ipaddress 會被 is_private 判為 True）。"""
+    if addr.is_unspecified:
+        return False
+    return addr.is_private or addr.is_loopback or addr.is_link_local
 
 
 def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
@@ -47,7 +55,9 @@ def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
     resolved = _resolve(hostname) if hostname else set()
     lines = []
     for addr in found[:limit]:
-        if addr.is_private or addr.is_loopback or addr.is_link_local:
+        if addr.is_unspecified:
+            verdict = "未指定位址（0.0.0.0／::），通常是空值預設，不是內部 IP 外洩"
+        elif _is_internal(addr):
             verdict = "私有／內部網段位址，出現在對外回應中屬於內部網路資訊外洩"
         elif str(addr) in resolved:
             verdict = "與網站公開 DNS 解析結果相同，本來就是公開位址，不構成內部 IP 外洩"

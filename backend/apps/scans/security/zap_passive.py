@@ -142,6 +142,10 @@ _ZH = {
         "回應洩漏原始碼",
         "確認伺服器沒有把程式原始碼當成文字回傳。",
     ),
+    "10028": (
+        "網站有開放重新導向（Open Redirect）風險",
+        "轉址目標不要直接吃使用者輸入；只允許相對路徑或白名單網域，再送出 301／302。",
+    ),
 }
 # ZAP 告警的 risk 是文字（alert/view/alerts 不回傳數字代碼）
 _RISK = {"high": "high", "medium": "medium", "low": "low", "informational": "info"}
@@ -204,11 +208,33 @@ def _clean_entry(entry: dict, max_body_chars: int) -> dict:
     return {**entry, "request": request, "response": response}
 
 
-def build_har(har_paths: list[Path], origin: str) -> tuple[str, int]:
-    """合併爬蟲錄下的 HAR，只留同 origin 並去除機密；回傳 (JSON 字串, 筆數)。"""
+def _template_key(url: str) -> str:
+    """把網址正規化成「路徑模板」當去重鍵：去查詢字串、數字段換成 #。
+
+    `/p/412-1043-6298.php` 與 `/p/412-1043-72.php`、`/rest/products/1` 與 `/rest/products/2`
+    會收斂成同一個模板——大站常見的「同一支模板吃不同 id」的近似頁，對 active scan 是重複節點。
+    """
+    parts = urlsplit(url)
+    method_path = parts.path or "/"
+    segments = [re.sub(r"\d+", "#", seg) for seg in method_path.split("/")]
+    return f"{parts.scheme}://{parts.netloc}" + "/".join(segments)
+
+
+def build_har(
+    har_paths: list[Path], origin: str, *, max_entries: int | None = None,
+    representative: bool = False,
+) -> tuple[str, int]:
+    """合併爬蟲錄下的 HAR，只留同 origin 並去除機密；回傳 (JSON 字串, 筆數)。
+
+    `representative=True`（主動掃描用）：同一個路徑模板（`_template_key`）只留第一筆，避免大站
+    幾十頁同模板把 active scan 的節點數灌爆；`max_entries` 另給一個比 ARGUS_ZAP_MAX_ENTRIES 更小的
+    上限（被動分析不傳、沿用原行為）。
+    """
+    cap = max_entries if max_entries is not None else settings.ARGUS_ZAP_MAX_ENTRIES
     entries: list[dict] = []
+    seen_templates: set[str] = set()
     for path in har_paths:
-        if len(entries) >= settings.ARGUS_ZAP_MAX_ENTRIES:
+        if len(entries) >= cap:
             break
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -218,8 +244,13 @@ def build_har(har_paths: list[Path], origin: str) -> tuple[str, int]:
             url = str((entry.get("request") or {}).get("url", ""))
             if not _same_origin(url, origin):
                 continue
+            if representative:
+                key = f"{(entry.get('request') or {}).get('method', '')} {_template_key(url)}"
+                if key in seen_templates:
+                    continue
+                seen_templates.add(key)
             entries.append(_clean_entry(entry, settings.ARGUS_ZAP_MAX_BODY_CHARS))
-            if len(entries) >= settings.ARGUS_ZAP_MAX_ENTRIES:
+            if len(entries) >= cap:
                 break
     har = {"log": {"version": "1.2", "creator": {"name": "Argus", "version": "1"},
                    "entries": entries}}
@@ -385,6 +416,19 @@ def _severity(alert: dict) -> str:
     return severity
 
 
+def _trim_sentence(text: str, limit: int) -> str:
+    """截斷長文但不切半個字／半個句子：超過上限時退到最後一個句末標點，沒有就整段捨去。
+
+    原本硬切 `[:600]` 會在字中切斷（實測把 ZAP 的 "NOTE:…" 切成孤立的「NO」）。
+    """
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = max(head.rfind(ch) for ch in "。.!?！？；;\n")
+    return (head[: cut + 1] if cut >= limit // 2 else head.rstrip()) + "…"
+
+
 def alerts_to_findings(
     alerts: list[dict], version: str, *, active: bool = False,
 ) -> tuple[list[dict], dict[str, int]]:
@@ -412,9 +456,13 @@ def alerts_to_findings(
     for plugin, items in grouped.items():
         first = items[0]
         severity = max((_severity(a) for a in items), key=["info", "low", "medium", "high"].index)
+        has_zh = plugin in _ZH
         title, remediation = _ZH.get(
             plugin, (f"ZAP：{first.get('alert', plugin)}", str(first.get("solution", "")).strip())
         )
+        # 有中文對照時標題與修法已說明清楚，不再附 ZAP 的英文原文（全繁中報告裡是雜訊）；
+        # 沒有對照時才附英文說明，並在句尾截斷、不留半個字（原本硬切 [:600] 會留下「NO」殘字）。
+        desc_tail = "" if has_zh else _trim_sentence(str(first.get("description", "")).strip(), 600)
         urls = list(dict.fromkeys(a.get("url", "") for a in items))
         locations = [
             {"url": a.get("url", ""), "param": a.get("param", ""),
@@ -427,7 +475,7 @@ def alerts_to_findings(
             title=title,
             description=(
                 f"OWASP ZAP {scan_label}在 {len(urls)} 個網址發現「{first.get('alert', '')}」。"
-                + str(first.get("description", "")).strip()[:600]
+                + desc_tail
             ),
             remediation=remediation or "依 ZAP 說明確認並修正。",
             evidence="\n".join(

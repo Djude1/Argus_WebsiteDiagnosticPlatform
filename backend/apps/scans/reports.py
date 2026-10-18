@@ -715,6 +715,7 @@ def _previous_completed_scan(scan_job: ScanJob):
 
 # 受影響頁面最多列這麼多個，其餘收成「等，另 N 處」。完整清單見掃描頁面清單。
 _MAX_LISTED_PAGES = 5
+_MAX_NEW_FINDINGS = 8  # 「與前次比較」最多列幾個新出現項目，其餘收成「另 N 項」
 # 證據顯示上限。放寬的話單一項目就能吃掉大半頁。
 _MAX_EVIDENCE_CHARS = 300
 
@@ -1177,7 +1178,9 @@ def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
             if item["finding"].rule_id and item["finding"].rule_id not in previous_rules
         ]
         if appeared:
-            summary["new_findings"] = appeared
+            # 只列前 N 項、另記總數：juice-shop 這類一次多出 ~30 項時，整段傾倒會變成一大坨
+            summary["new_findings"] = appeared[:_MAX_NEW_FINDINGS]
+            summary["new_findings_total"] = len(appeared)
     return summary
 
 

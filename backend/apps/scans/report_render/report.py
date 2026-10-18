@@ -585,8 +585,11 @@ def _trend_block(doc, s, ch):
     if s.get("new_findings"):
         p4 = right.add_paragraph()
         label = "新出現" if comparable else "本次有、前次沒有（可能來自規則更新）"
-        add_run(p4, f'{label} {len(s["new_findings"])} 項：{"、".join(s["new_findings"])}',
-                size=9, color=T.GREY)
+        listed = s["new_findings"]
+        total = s.get("new_findings_total", len(listed))
+        more = total - len(listed)
+        suffix = f"…等，另 {more} 項" if more > 0 else ""
+        add_run(p4, f'{label} {total} 項：{"、".join(listed)}{suffix}', size=9, color=T.GREY)
     _clear_table_borders(table)
 
 
