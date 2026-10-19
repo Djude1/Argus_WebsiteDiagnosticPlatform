@@ -221,6 +221,13 @@
   display: grid;
   gap: 0.5rem;
 }
+.scan-report-notices {
+  display: grid;
+  gap: 0.5rem;
+}
+.scan-report-notices:empty {
+  display: none;
+}
 .scan-report-alert {
   padding: 0.75rem 1rem;
   border: 1px solid #cbd5e1;
@@ -433,6 +440,13 @@
 .scan-log-body {
   border-top-color: #e2e8f0;
   color: #334155;
+}
+/* 進行中：放在進度條下方，與進度區塊同寬、上方留一點距離 */
+.scan-report-progress .scan-log-panel.is-live {
+  margin-top: 0.75rem;
+}
+.scan-log-panel.is-live .scan-log-body {
+  max-height: 220px;
 }
 
 /* 修正產出分頁：沒有側欄，區塊不需要上邊距 */

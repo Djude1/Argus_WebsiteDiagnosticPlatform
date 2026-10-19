@@ -95,8 +95,8 @@ export function AdminDomainsPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1 className="admin-page-title">網域管理</h1>
-        <p>所有使用者的網域所有權驗證清單；無法自行驗證的網域可人工核准（同等於驗證通過）或否決。</p>
+        <h1 className="admin-page-title">網域驗證</h1>
+        <p>所有使用者的網域所有權驗證；無法自行驗證的網域可人工核准（同等於驗證通過），已生效的可否決。</p>
       </header>
 
       <div className="admin-filter-bar">
@@ -136,20 +136,23 @@ export function AdminDomainsPage() {
               <thead>
                 <tr>
                   <th>網域</th>
-                  <th>使用者</th>
                   <th>狀態</th>
                   <th>驗證方法</th>
                   <th>到期日</th>
-                  <th>人工核准</th>
-                  <th>最後錯誤</th>
                   <th>審核</th>
                 </tr>
               </thead>
               <tbody>
-                {data.domains.map((domain) => (
+                {data.domains.map((domain) => {
+                  // 只給當下有意義的動作：生效中只能否決、已否決只能核准、其餘兩者皆可
+                  const canApprove = !domain.is_effectively_verified;
+                  const canReject = domain.status !== "rejected";
+                  return (
                   <tr key={domain.id}>
-                    <td className="admin-cell-mono">{domain.domain}</td>
-                    <td>{domain.username}</td>
+                    <td>
+                      <div className="admin-cell-primary admin-cell-mono">{domain.domain}</div>
+                      <div className="admin-cell-secondary">{domain.username}</div>
+                    </td>
                     <td>
                       <span
                         className={`admin-domain-status is-${domain.status}${domain.is_effectively_verified ? " is-effective" : ""}`}
@@ -159,15 +162,22 @@ export function AdminDomainsPage() {
                       {domain.is_effectively_verified && (
                         <span className="admin-domain-effective" title="掃描閘門判定：生效中">生效中</span>
                       )}
+                      {domain.admin_override && (
+                        <div className="admin-cell-secondary">
+                          人工核准{domain.admin_actor_username ? `：${domain.admin_actor_username}` : ""}
+                          {domain.admin_note ? ` · ${domain.admin_note}` : ""}
+                        </div>
+                      )}
                     </td>
-                    <td>{domain.method ? domain.method_label : "—"}</td>
+                    <td>
+                      {domain.method ? domain.method_label : "—"}
+                      {domain.last_error && (
+                        <div className="admin-cell-secondary admin-domain-error" title={domain.last_error}>
+                          上次未通過：{domain.last_error}
+                        </div>
+                      )}
+                    </td>
                     <td>{formatDateTime(domain.expires_at)}</td>
-                    <td className="admin-cell-secondary">
-                      {domain.admin_override
-                        ? `${domain.admin_actor_username ? `by ${domain.admin_actor_username}` : "是"}${domain.admin_note ? ` · ${domain.admin_note}` : ""}`
-                        : "—"}
-                    </td>
-                    <td className="admin-cell-secondary admin-domain-error">{domain.last_error || "—"}</td>
                     <td>
                       <div className="admin-domain-review">
                         <input
@@ -179,28 +189,33 @@ export function AdminDomainsPage() {
                           }
                           aria-label={`${domain.domain} 審核備註`}
                         />
-                        <button
-                          className="admin-btn small"
-                          type="button"
-                          disabled={busyId === domain.id}
-                          onClick={() => handleOverride(domain, true)}
-                        >
-                          {busyId === domain.id ? "…" : "人工核准"}
-                        </button>
-                        <button
-                          className="admin-btn small danger"
-                          type="button"
-                          disabled={busyId === domain.id}
-                          onClick={() => handleOverride(domain, false)}
-                        >
-                          否決
-                        </button>
+                        {canApprove && (
+                          <button
+                            className="admin-btn small"
+                            type="button"
+                            disabled={busyId === domain.id}
+                            onClick={() => handleOverride(domain, true)}
+                          >
+                            {busyId === domain.id ? "…" : "人工核准"}
+                          </button>
+                        )}
+                        {canReject && (
+                          <button
+                            className="admin-btn small danger"
+                            type="button"
+                            disabled={busyId === domain.id}
+                            onClick={() => handleOverride(domain, false)}
+                          >
+                            否決
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {data.domains.length === 0 && (
-                  <tr><td colSpan={8} className="admin-empty">
+                  <tr><td colSpan={5} className="admin-empty">
                     {hasFilters ? "沒有符合條件的網域" : "尚無任何網域驗證申請"}
                   </td></tr>
                 )}

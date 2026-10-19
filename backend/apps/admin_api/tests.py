@@ -1070,7 +1070,8 @@ class SystemHealthTests(APITestCase):
     def test_returns_all_four_checks_with_basis(self):
         data = self._health()
         keys = [c["key"] for c in data["checks"]]
-        self.assertEqual(keys, ["database", "celery", "redis", "queue", "success_rate"])
+        # cluster：Kubernetes 叢集（本機／CI 不在叢集內時 status=unknown，仍要列出）
+        self.assertEqual(keys, ["database", "celery", "redis", "queue", "success_rate", "cluster"])
         for check in data["checks"]:
             # 沒有判定依據的綠燈是不可信的綠燈
             self.assertTrue(check["basis"], f"{check['key']} 缺少判定依據")

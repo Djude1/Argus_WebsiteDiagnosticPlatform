@@ -116,7 +116,7 @@
   font-size: 0.78rem;
 }
 .admin-domain-error {
-  max-width: 180px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

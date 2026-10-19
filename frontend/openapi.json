@@ -4086,6 +4086,12 @@ components:
         id:
           type: integer
           readOnly: true
+        user_id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
         amount:
           type: integer
           maximum: 9223372036854775807
@@ -4139,6 +4145,8 @@ components:
       - plan_name
       - scan_job
       - scan_origin
+      - user_id
+      - username
     AdminDeleteUserRequest:
       type: object
       properties:

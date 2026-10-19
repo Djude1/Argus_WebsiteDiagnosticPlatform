@@ -18,7 +18,11 @@ import {
 import { AdminPagination } from "../../components/admin/AdminPagination";
 import { AdminSortableTh } from "../../components/admin/AdminSortableTh";
 import { AdminErrorState, AdminSkeleton } from "../../components/admin/AdminStates";
-import { useConfirmDialogs } from "../../shared/AppShared.jsx";
+import { CATEGORY_LABELS, SEVERITY_LABEL, useConfirmDialogs } from "../../shared/AppShared.jsx";
+
+// AppShared 的標籤表是 JS 物件字面值，TS 推成固定鍵；這裡的 category／severity 是後端字串，統一經 helper 查表
+const categoryLabel = (c: string) => (CATEGORY_LABELS as Record<string, string>)[c] || c.toUpperCase();
+const severityLabel = (s: string) => (SEVERITY_LABEL as Record<string, string>)[s] || s;
 import type {
   AdminScanDetailResponse,
   AdminScanListParams,
@@ -88,8 +92,8 @@ export function AdminScansPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1>掃描</h1>
-        <p>所有使用者的掃描任務</p>
+        <h1>掃描任務</h1>
+        <p>所有使用者的掃描任務；點一列看詳情、終止或重排</p>
       </header>
 
       <form className="admin-search-bar" onSubmit={handleSearchSubmit}>
@@ -436,6 +440,14 @@ export function AdminScanDetailPage() {
         <div className={`admin-feedback tone-${feedback.tone}`}>{feedback.message}</div>
       )}
 
+      {/* 失敗原因放最前面：失敗的掃描最重要的就是為什麼失敗 */}
+      {data.error_message && (
+        <section className="admin-panel admin-panel-danger">
+          <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>錯誤訊息</h3>
+          <pre className="admin-error-pre">{data.error_message}</pre>
+        </section>
+      )}
+
       <div className="admin-grid-2col">
         <section className="admin-panel">
           <h3><span className="admin-panel-icon-chip"><AdminScansIcon /></span>狀態</h3>
@@ -465,7 +477,7 @@ export function AdminScanDetailPage() {
           <div className="admin-cat-scores">
             {Object.entries(categoryScores).map(([cat, score]) => (
               <div key={cat} className={`admin-cat-score-item cat-${cat}`}>
-                <div className="admin-cat-score-label">{cat.toUpperCase()}</div>
+                <div className="admin-cat-score-label">{categoryLabel(cat)}</div>
                 <div className="admin-cat-score-value">{Math.round(score)}</div>
               </div>
             ))}
@@ -484,9 +496,9 @@ export function AdminScanDetailPage() {
                 <div className="admin-top-action-body">
                   <div className="admin-top-action-title">{action.title}</div>
                   <div className="admin-top-action-meta">
-                    <span className={`severity ${action.severity}`}>{action.severity}</span>
+                    <span className={`severity ${action.severity}`}>{severityLabel(action.severity)}</span>
                     <span className={`category-pill cat-${action.category}`}>
-                      {String(action.category || "").toUpperCase()}
+                      {categoryLabel(String(action.category || ""))}
                     </span>
                     <span className="admin-cell-secondary">
                       priority {Math.round(action.priority_score || 0)}
@@ -502,13 +514,6 @@ export function AdminScanDetailPage() {
       {/* 爬取警告：被 robots/403/429 擋掉與抓取失敗的 URL。
           分數偏低時多半能在這裡找到原因（爬不到頁就評不了分）。 */}
       <AdminScanWarnings summary={data.warning_summary as WarningSummary | null} />
-
-      {data.error_message && (
-        <section className="admin-panel admin-panel-danger">
-          <h3><span className="admin-panel-icon-chip"><AdminAlertIcon /></span>錯誤訊息</h3>
-          <pre className="admin-error-pre">{data.error_message}</pre>
-        </section>
-      )}
 
       <div className="admin-link-row">
         <NavLink to={`/scans/${s.id}`} className="admin-btn">

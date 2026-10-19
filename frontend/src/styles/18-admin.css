@@ -228,22 +228,11 @@
     outline: 2px solid var(--admin-sidebar-accent);
     outline-offset: -2px;
   }
-  /* 選取：柔青底 + 左側虹膜指示條（不再用青→青漸層大色塊） */
+  /* 選取：柔青底＋細框，圖示轉虹膜青（全站規則：選中不用彩色左邊條） */
   .admin-nav-link.active{
     background: var(--admin-sidebar-active);
     color: var(--admin-sidebar-text-strong);
     box-shadow: inset 0 0 0 1px rgba(63, 220, 238, 0.22);
-  }
-  .admin-nav-link.active::before{
-    content: "";
-    position: absolute;
-    left: -12px;
-    top: 9px;
-    bottom: 9px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--admin-sidebar-accent);
-    box-shadow: 0 0 12px rgba(63, 220, 238, 0.6);
   }
   .admin-nav-icon{
     flex-shrink: 0;
@@ -555,12 +544,6 @@
   .admin-table tbody tr:hover td{ background: color-mix(in srgb, var(--admin-surface-sunken) 60%, transparent); }
   .admin-table tbody tr.clickable{ cursor: pointer; }
   .admin-table tbody tr.clickable:hover td{ background: var(--admin-surface-hover); }
-  /* 可點列：hover 時左緣出現虹膜指示條 */
-  .admin-table tbody tr.clickable td:first-child{ box-shadow: inset 0 0 0 transparent; }
-  .admin-table tbody tr.clickable:hover td:first-child,
-  .admin-table tbody tr.clickable:focus-visible td:first-child{
-    box-shadow: inset 3px 0 0 var(--admin-accent);
-  }
   .admin-table tbody tr.clickable:focus-visible{
     outline: 2px solid var(--admin-accent);
     outline-offset: -2px;
@@ -847,7 +830,11 @@
   }
   .admin-review:hover{ border-color: var(--admin-border-strong); }
   .admin-review.is-pending{ border-color: var(--admin-tone-warn-border); }
-  .admin-review.is-reported{ box-shadow: inset 3px 0 0 var(--admin-tone-bad), var(--admin-shadow-card); }
+  /* 被檢舉：整圈紅框＋淡底（不用左邊條），狀態列另有徽章文字 */
+  .admin-review.is-reported{
+    border-color: var(--admin-tone-bad-border);
+    background: color-mix(in srgb, var(--ag-bad) 5%, var(--admin-surface));
+  }
   .admin-review.is-hidden{ background: var(--admin-surface-sunken); opacity: 0.88; }
   .admin-review-head{ @apply mb-2 flex flex-wrap items-start justify-between gap-2; }
   .admin-review-user{ @apply font-semibold; color: var(--admin-text); }
@@ -892,7 +879,7 @@
   .admin-review-existing-reply{ @apply mt-2 text-xs; color: var(--admin-tone-good-text); }
 
   /* ============================================================
-     掃描詳情：維度分數（左側色條＝維度色）
+     掃描詳情：維度分數（維度色用在標籤徽章，不用左側色條）
      ============================================================ */
   .admin-cat-scores{
     @apply grid gap-3;
@@ -900,31 +887,27 @@
   }
   .admin-cat-score-item{
     @apply p-3;
-    position: relative;
-    overflow: hidden;
     border-radius: var(--ag-r-md);
     background: var(--admin-surface-sunken);
     border: 1px solid var(--admin-border);
-  }
-  .admin-cat-score-item::before{
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: var(--admin-cat, var(--admin-accent));
   }
   .admin-cat-score-item.cat-seo{ --admin-cat: var(--ag-cat-seo); }
   .admin-cat-score-item.cat-aeo{ --admin-cat: var(--ag-cat-aeo); }
   .admin-cat-score-item.cat-geo{ --admin-cat: var(--ag-cat-geo); }
   .admin-cat-score-item.cat-security{ --admin-cat: var(--ag-cat-security); }
   .admin-cat-score-item.cat-ux{ --admin-cat: var(--ag-cat-ux); }
+  /* 文字與主文字色混合（同 --admin-tone-*-text 做法），日間主題也能讀 */
   .admin-cat-score-label{
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--ag-r-pill);
     font-family: var(--ag-font-mono);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--admin-text-muted);
+    background: color-mix(in srgb, var(--admin-cat, var(--admin-accent)) 14%, transparent);
+    color: color-mix(in srgb, var(--admin-cat, var(--admin-accent)) 72%, var(--ag-text));
   }
   .admin-cat-score-value{
     @apply mt-1 text-2xl font-bold;

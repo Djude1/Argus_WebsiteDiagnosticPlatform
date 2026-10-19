@@ -14,6 +14,7 @@ import {
 } from "../../api";
 import { apiErrorMessage, useConfirmDialogs } from "../../shared/AppShared.jsx";
 import { copyToClipboard } from "../../shared/clipboard";
+import PageLoader from "../../shared/PageLoader.jsx";
 import { CheckCircleIcon, ClockIcon, GlobeIcon, LockIcon, SearchIcon, ShieldIcon } from "../../shared/LineIcons.jsx";
 
 // ============================================================
@@ -137,7 +138,7 @@ function ManualMethods({ detail, method, onMethod, onVerify, busy, copiedKey, on
 // Search Console 連線卡：這頁唯一的主要動作
 function SearchConsoleCard({ status, busy, onConnect, onSync, onDisconnect }) {
   if (!status) {
-    return <section className="panel domain-gsc-card" aria-busy="true"><p className="domain-ins-hint">載入 Search Console 狀態中…</p></section>;
+    return <section className="panel domain-gsc-card" aria-busy="true"><PageLoader label="載入 Search Console 狀態中…" /></section>;
   }
   const connected = status.connected && !status.needs_reconnect;
   return (
@@ -413,6 +414,14 @@ export function DomainVerifyPage() {
         </p>
       </header>
 
+      {/* Google 導回、同步或中斷的結果：放頁首正下方，回到本頁第一眼就看到 */}
+      {banner && (
+        <div className={`domain-banner is-${banner.tone}`} role="status">
+          <span>{banner.text}</span>
+          <button type="button" className="domain-text-btn" onClick={() => setBanner(null)}>知道了</button>
+        </div>
+      )}
+
       <SearchConsoleCard
         status={gscStatus}
         busy={gscBusy}
@@ -420,13 +429,6 @@ export function DomainVerifyPage() {
         onSync={handleSync}
         onDisconnect={handleDisconnect}
       />
-
-      {banner && (
-        <div className={`domain-banner is-${banner.tone}`} role="status">
-          <span>{banner.text}</span>
-          <button type="button" className="domain-text-btn" onClick={() => setBanner(null)}>知道了</button>
-        </div>
-      )}
 
       <section className="panel domain-list-panel" aria-labelledby="domain-list-title">
         <div className="domain-list-head">
@@ -466,7 +468,7 @@ export function DomainVerifyPage() {
         )}
 
         {listError && <p className="error-text">{listError}</p>}
-        {domains === null && <p className="domain-empty">載入中…</p>}
+        {domains === null && <PageLoader label="載入網域中…" />}
         {domains !== null && domains.length === 0 && !listError && (
           <div className="domain-empty">
             <GlobeIcon aria-hidden="true" />

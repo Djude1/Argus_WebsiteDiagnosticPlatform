@@ -146,7 +146,7 @@
   }
 }
 
-/* --- 系統資源卡片 --- */
+/* --- 資源卡片（節點卡沿用：卡片、數字、進度條） --- */
 .admin-sys-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -247,3 +247,75 @@
   outline-offset: 1px;
 }
 .admin-theme-toggle svg { width: 16px; height: 16px; color: var(--ag-signal-400); flex-shrink: 0; }
+
+/* --- 叢集節點卡（2026-10-19）：master 排第一，每張卡兩條資源 + 事實列 --- */
+.admin-node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.admin-node-card { gap: 10px; }
+.admin-node-card.tone-bad { border-color: var(--admin-tone-bad-border); box-shadow: 0 0 0 3px var(--admin-tone-bad-bg); }
+.admin-node-card.tone-warn { border-color: var(--admin-tone-warn-border); }
+.admin-node-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-node-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-node-name { font-family: var(--ag-font-mono); font-size: 0.9rem; color: var(--admin-text); overflow-wrap: anywhere; }
+/* 角色徽章：master 守望琥珀、worker 虹膜青（都附文字，不只靠顏色） */
+.admin-node-role {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--ag-r-pill);
+  font-family: var(--ag-font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.admin-node-role.is-master { background: var(--admin-highlight-soft); color: var(--admin-tone-warn-text); }
+.admin-node-role.is-worker { background: var(--admin-accent-soft-bg); color: var(--admin-accent-strong); }
+.admin-node-state.is-ok { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+.admin-node-state.is-bad { background: var(--admin-tone-bad-bg); color: var(--admin-tone-bad-text); }
+.admin-node-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-node-chip {
+  padding: 2px 8px;
+  border-radius: var(--ag-r-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.admin-node-chip.is-warn { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }
+.admin-node-resource { display: grid; gap: 4px; }
+.admin-node-resource-head { display: flex; align-items: center; gap: 6px; }
+.admin-node-resource-pct {
+  margin-left: auto;
+  font-family: var(--ag-font-display);
+  font-weight: 700;
+  color: var(--admin-text);
+  font-variant-numeric: tabular-nums;
+}
+.admin-node-resource.tone-warn .admin-sys-bar-fill { background: var(--admin-tone-warn); }
+.admin-node-resource.tone-bad .admin-sys-bar-fill { background: var(--admin-tone-bad); }
+.admin-node-resource.tone-idle .admin-sys-bar-fill { background: var(--admin-border-strong); }
+.admin-node-facts {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--admin-border);
+  font-size: 0.75rem;
+}
+.admin-node-facts div { display: flex; justify-content: space-between; gap: 8px; }
+.admin-node-facts dt { color: var(--admin-text-muted); }
+.admin-node-facts dd { margin: 0; color: var(--admin-text-secondary); font-variant-numeric: tabular-nums; }
+.admin-mono { font-family: var(--ag-font-mono); }
+
+/* --- Argus 工作負載表：分組列是元件名＋就緒數，底下是各 pod --- */
+.admin-workload-group td {
+  background: var(--admin-surface-sunken);
+  font-weight: 600;
+  color: var(--admin-text);
+}
+.admin-workload-group.is-degraded td { background: var(--admin-tone-warn-bg); }
+.admin-workload-app { font-family: var(--ag-font-mono); }
+.admin-workload-ready { margin-left: 10px; }
+.admin-workload-ready.is-ok { background: var(--admin-tone-good-bg); color: var(--admin-tone-good-text); }
+.admin-workload-ready.is-warn { background: var(--admin-tone-warn-bg); color: var(--admin-tone-warn-text); }

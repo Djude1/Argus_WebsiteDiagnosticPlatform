@@ -421,7 +421,8 @@
     border-color: #6ee7b7;
     box-shadow: 0 4px 18px -6px rgba(16, 185, 129, 0.25);
   }
-  .wizard-success-emoji { @apply text-5xl mb-2; }
+  .wizard-success-icon { @apply mb-2 inline-flex text-emerald-600; }
+  .wizard-success-icon svg { width: 3rem; height: 3rem; }
   .wizard-success-title { @apply text-2xl font-bold text-emerald-700; }
   .wizard-success-sub { @apply mt-1 text-sm text-slate-600; }
   .wizard-success-dl {

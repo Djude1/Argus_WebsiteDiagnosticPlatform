@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -282,6 +282,32 @@ describe("ProjectScansPage 掃描紀錄（原歷史報告）", () => {
     // 完成的掃描可直接下載報告與看問題分析
     expect(screen.getAllByRole("button", { name: "下載報告" })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "問題分析" })[0]).toHaveAttribute("href", "/projects/7/issues?scan=3");
+    // 分數概況在表格上方：最新完成分數附等級文字
+    expect(screen.getByText("最新分數")).toBeInTheDocument();
+    expect(screen.getByText("良好")).toBeInTheDocument();
+  });
+
+  it("掃描超過 8 次只先列最近 8 次，按鈕展開更早的", async () => {
+    const results = Array.from({ length: 11 }, (_, i) => ({
+      id: 11 - i, status: "completed", overall_score: 70, pages_count: 1, findings_count: 1,
+      created_at: `2026-10-${String(18 - i).padStart(2, "0")}T01:00:00Z`, completed_at: `2026-10-${String(18 - i).padStart(2, "0")}T01:10:00Z`,
+      coins_charged: 10, is_trial: false, scoring_version: "1", ruleset_version: "1",
+    }));
+    api.get.mockImplementation(async (url: string) => (url === "/scans/" ? { data: { results } } : { data: { results: [] } }));
+    render(
+      <MemoryRouter initialEntries={["/projects/7/scans"]}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<Outlet context={{ project: { ...PROJECT, is_demo: true, summary: {} } }} />}>
+            <Route path="scans" element={<ProjectScansPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    const more = await screen.findByRole("button", { name: "顯示更早的 3 次掃描" });
+    expect(screen.getAllByRole("button", { name: "下載報告" })).toHaveLength(8);
+    fireEvent.click(more);
+    expect(screen.getAllByRole("button", { name: "下載報告" })).toHaveLength(11);
+    expect(screen.queryByRole("button", { name: /顯示更早的/ })).not.toBeInTheDocument();
   });
 });
 

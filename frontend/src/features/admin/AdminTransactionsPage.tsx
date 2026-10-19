@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { NavLink } from "react-router-dom";
 
 import { fetchAdminTransactions } from "../../api";
 import { AdminPagination } from "../../components/admin/AdminPagination";
@@ -11,7 +12,7 @@ import type {
 } from "../../shared/apiContracts";
 import { formatDateTime } from "../../shared/formatters.js";
 import { useListQuery } from "../../shared/useListQuery";
-import { errorDetail, toAllowed } from "./adminHelpers";
+import { errorDetail, toAllowed, toPositiveInt } from "./adminHelpers";
 
 // 後台交易紀錄。從 AdminPages.jsx 拆出並轉成 TypeScript。
 //
@@ -41,11 +42,12 @@ const TRANSACTION_ORDERINGS = [
   "balance_after", "-balance_after",
 ] as const satisfies readonly TransactionOrdering[];
 
-const TRANSACTIONS_QUERY_DEFAULTS = { page: 1, kind: "", ordering: "-created_at" };
+// user：從使用者詳情「查看全部交易」帶進來的篩選（後端 ?user_id=），與掃描頁的 ?user= 同一條路
+const TRANSACTIONS_QUERY_DEFAULTS = { page: 1, kind: "", user: "", ordering: "-created_at" };
 
 export function AdminTransactionsPage() {
   const { params, setParam, resetFilters, hasFilters } = useListQuery(TRANSACTIONS_QUERY_DEFAULTS);
-  const { page, kind, ordering } = params;
+  const { page, kind, user: userFilter, ordering } = params;
   const [data, setData] = useState<AdminTransactionListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export function AdminTransactionsPage() {
       setData(await fetchAdminTransactions({
         page,
         kind: toAllowed(kind, KINDS),
+        user_id: toPositiveInt(userFilter),
         ordering: toAllowed(ordering, TRANSACTION_ORDERINGS),
       }));
     } catch (err) {
@@ -64,7 +67,7 @@ export function AdminTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, kind, ordering]);
+  }, [page, kind, userFilter, ordering]);
   useEffect(() => { load(); }, [load]);
 
   const setOrdering = (o: string) => setParam("ordering", o);
@@ -72,8 +75,8 @@ export function AdminTransactionsPage() {
   return (
     <div className="admin-page">
       <header className="admin-page-head">
-        <h1>交易紀錄</h1>
-        <p>所有 coin 異動的審計紀錄</p>
+        <h1>點數交易</h1>
+        <p>所有使用者 coin 異動的帳本；紀錄不可修改，補正用「管理員調整」新增一筆</p>
       </header>
 
       <div className="admin-filter-bar">
@@ -93,6 +96,15 @@ export function AdminTransactionsPage() {
         )}
       </div>
 
+      {userFilter && (
+        <div className="admin-scope-note">
+          <span>目前只顯示單一使用者的交易</span>
+          <button type="button" className="admin-btn ghost" onClick={() => setParam("user", "")}>
+            顯示全部使用者
+          </button>
+        </div>
+      )}
+
       {error && <AdminErrorState message="無法載入交易紀錄" detail={error} onRetry={load} />}
       {!error && loading && <AdminSkeleton variant="table" rows={8} label="載入交易中" />}
       {!error && !loading && data && (
@@ -102,28 +114,32 @@ export function AdminTransactionsPage() {
             <thead>
               <tr>
                 <AdminSortableTh field="created_at" ordering={ordering} onChange={setOrdering}>時間</AdminSortableTh>
-                {/* 這欄實際顯示交易對象（掃描網址或方案名），原欄名「使用者」與內容不符 */}
-                <th>來源對象</th>
+                <th>使用者</th>
                 <th>類型</th>
+                {/* 對象＝這筆交易是為了哪個掃描或方案；操作者只在管理員調整時有值 */}
+                <th>對象</th>
                 <AdminSortableTh field="amount" ordering={ordering} onChange={setOrdering} numeric>變動</AdminSortableTh>
                 <AdminSortableTh field="balance_after" ordering={ordering} onChange={setOrdering} numeric>餘額</AdminSortableTh>
-                <th>操作者 / 方案</th><th>備註</th>
+                <th>操作者</th><th>備註</th>
               </tr>
             </thead>
             <tbody>
               {data.transactions.map((tx) => (
                 <tr key={tx.id}>
                   <td>{formatDateTime(tx.created_at)}</td>
-                  <td>{tx.scan_origin || (tx.plan_name ? `購買 ${tx.plan_name}` : "—")}</td>
+                  <td><NavLink className="admin-cell-primary" to={`/admin/users/${tx.user_id}`}>{tx.username}</NavLink></td>
                   <td>{tx.kind_label}</td>
+                  <td className="truncate" title={tx.scan_origin || tx.plan_name || undefined}>
+                    {tx.scan_origin || tx.plan_name || "—"}
+                  </td>
                   <td className={`num ${tx.amount > 0 ? "tx-pos" : "tx-neg"}`}>{tx.amount > 0 ? "+" : ""}{tx.amount}</td>
                   <td className="num">{tx.balance_after}</td>
-                  <td>{tx.admin_actor_username ? `admin: ${tx.admin_actor_username}` : (tx.plan_name || tx.scan_origin || "—")}</td>
+                  <td>{tx.admin_actor_username || "—"}</td>
                   <td className="admin-cell-secondary">{tx.note}</td>
                 </tr>
               ))}
               {data.transactions.length === 0 && (
-                <tr><td colSpan={7} className="admin-empty">沒有符合的交易</td></tr>
+                <tr><td colSpan={8} className="admin-empty">沒有符合的交易</td></tr>
               )}
             </tbody>
             </table>

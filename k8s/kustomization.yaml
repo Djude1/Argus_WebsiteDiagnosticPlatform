@@ -19,6 +19,7 @@ resources:
 - 10-kali-runtime.yaml
 - 11-kali-admission.yaml
 - 12-zap-passive.yaml
+- 13-cluster-status-rbac.yaml
 
 # image 版本集中在此一處管理。
 # CI（build-*.yml）build 完會用 `kustomize edit set image` 把對應的 newTag

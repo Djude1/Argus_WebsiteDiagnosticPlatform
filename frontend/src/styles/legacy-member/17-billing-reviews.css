@@ -250,6 +250,10 @@
     display: grid;
     gap: 1.5rem;
   }
+  /* 頁首右側的餘額磚（與各分頁數字磚同款）：固定寬度，不跟著標題撐開 */
+  .billing-balance-tile {
+    min-width: 13rem;
+  }
   .billing-sub-body {
     display: grid;
     gap: 1.25rem;

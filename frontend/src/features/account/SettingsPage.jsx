@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { api, deleteAvatar, fetchMySubscription, uploadAvatar } from "../../api";
 import { AccountAvatar } from "../../components/navigation/NavActions";
@@ -265,6 +265,43 @@ function SettingsPage() {
             </form>
           </section>
 
+          <section className="set-section" aria-labelledby="set-auth-title">
+            <header className="set-section-head">
+              <h2 id="set-auth-title">登入方式</h2>
+              <p>Email 或用戶名＋密碼，也可以用 Google 帳號登入。</p>
+            </header>
+            {!hasPassword && (
+              <p className="set-hint">
+                這個帳號目前只用 Google 登入，還沒有設定密碼。
+                <Link className="set-link-btn" to="/account/setup">設定用戶名與密碼 →</Link>
+              </p>
+            )}
+            {hasPassword && (
+              <form className="set-form" onSubmit={handleChangePassword} aria-label="更改密碼">
+                <h3 className="set-subtitle set-field-full">更改密碼</h3>
+                <div className="set-field set-field-full">
+                  <label className="set-label" htmlFor="set-old-pwd">目前密碼</label>
+                  <PasswordInput id="set-old-pwd" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} autoComplete="current-password" />
+                </div>
+                <div className="set-field">
+                  <label className="set-label" htmlFor="set-new-pwd">新密碼</label>
+                  <PasswordInput id="set-new-pwd" placeholder="至少 10 字元，含英文與數字" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
+                </div>
+                <div className="set-field">
+                  <label className="set-label" htmlFor="set-confirm-pwd">確認新密碼</label>
+                  <PasswordInput id="set-confirm-pwd" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
+                </div>
+                {pwdError && <p className="set-msg tone-bad set-field-full" role="alert">{pwdError}</p>}
+                <div className="set-form-actions">
+                  <button className="primary-button" type="submit" disabled={pwdBusy}>
+                    {pwdBusy ? "更新中…" : "更新密碼"}
+                  </button>
+                  <span className="set-hint">更新後需重新登入。</span>
+                </div>
+              </form>
+            )}
+          </section>
+
           <section className="set-section" aria-labelledby="set-theme-title">
             <header className="set-section-head">
               <h2 id="set-theme-title">外觀</h2>
@@ -291,37 +328,6 @@ function SettingsPage() {
                 </label>
               ))}
             </div>
-          </section>
-
-          <section className="set-section" aria-labelledby="set-auth-title">
-            <header className="set-section-head">
-              <h2 id="set-auth-title">登入方式</h2>
-              <p>Email 或用戶名＋密碼，也可以用 Google 帳號登入。</p>
-            </header>
-            {hasPassword && (
-              <form className="set-form" onSubmit={handleChangePassword} aria-label="更改密碼">
-                <h3 className="set-subtitle set-field-full">更改密碼</h3>
-                <div className="set-field set-field-full">
-                  <label className="set-label" htmlFor="set-old-pwd">目前密碼</label>
-                  <PasswordInput id="set-old-pwd" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} autoComplete="current-password" />
-                </div>
-                <div className="set-field">
-                  <label className="set-label" htmlFor="set-new-pwd">新密碼</label>
-                  <PasswordInput id="set-new-pwd" placeholder="至少 10 字元，含英文與數字" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
-                </div>
-                <div className="set-field">
-                  <label className="set-label" htmlFor="set-confirm-pwd">確認新密碼</label>
-                  <PasswordInput id="set-confirm-pwd" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} autoComplete="new-password" invalid={Boolean(pwdError)} />
-                </div>
-                {pwdError && <p className="set-msg tone-bad set-field-full" role="alert">{pwdError}</p>}
-                <div className="set-form-actions">
-                  <button className="primary-button" type="submit" disabled={pwdBusy}>
-                    {pwdBusy ? "更新中…" : "更新密碼"}
-                  </button>
-                  <span className="set-hint">更新後需重新登入。</span>
-                </div>
-              </form>
-            )}
           </section>
 
           <section className="set-section set-danger" aria-labelledby="set-danger-title">

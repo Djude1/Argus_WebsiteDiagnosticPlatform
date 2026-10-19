@@ -4,7 +4,11 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { api, fetchVerifiedDomains } from "../../api";
-import { CATEGORY_ORDER, Sparkline } from "../../components/projects/DashboardWidgets.jsx";
+import {
+  CATEGORY_ORDER,
+  scoreGrade,
+  Sparkline,
+} from "../../components/projects/DashboardWidgets.jsx";
 import ScanDefaultsFields, { DEFAULT_SCAN_SETTINGS } from "../../components/projects/ScanDefaultsFields.jsx";
 import SiteFavicon from "../../components/projects/SiteFavicon.jsx";
 import { CATEGORY_LABELS, apiErrorMessage, isInProgress } from "../../shared/AppShared.jsx";
@@ -384,7 +388,7 @@ function scoreDelta(summary) {
   return summary.latest_score - summary.previous_score;
 }
 
-/** 跨網站的總覽（取代原本的 Dashboard 全帳號統計）：一列數字，不做成四張卡片。 */
+/** 跨網站的總覽（取代原本的 Dashboard 全帳號統計）：數字磚與各分頁同款（.project-site-tile）。 */
 function PortfolioSummary({ projects }) {
   const scored = projects.map((p) => p.summary.latest_score).filter((score) => score != null);
   const average = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
@@ -394,23 +398,32 @@ function PortfolioSummary({ projects }) {
     (sum, p) => sum + Object.values(p.summary.issue_counts || {}).reduce((a, b) => a + b, 0),
     0,
   );
+  const unscored = projects.length - scored.length;
   const items = [
-    { label: "網站", value: projects.length },
-    { label: "平均分數", value: average ?? "—", hint: scored.length < projects.length ? `${projects.length - scored.length} 個尚未完成掃描` : "" },
-    { label: "低於 60 分", value: attention, tone: attention ? "is-bad" : "" },
-    { label: "目前問題", value: openIssues, hint: "各網站最新一次完成掃描" },
-    { label: "掃描進行中", value: running },
+    { label: "網站", value: projects.length, unit: "個", hint: unscored ? `${unscored} 個尚未完成掃描` : "全部都有完成的掃描" },
+    {
+      label: "平均分數",
+      value: average ?? "—",
+      unit: average == null ? "" : scoreGrade(average),
+      tone: average == null ? "is-muted" : `tone-${scoreTone(average)}`,
+      hint: "各網站最新一次完成掃描的平均",
+    },
+    { label: "低於 60 分", value: attention, unit: "個", tone: attention ? "tone-bad" : "tone-good", hint: attention ? "先處理這些網站" : "沒有待加強的網站" },
+    { label: "目前問題", value: openIssues, unit: "個", hint: "各網站最新一次完成掃描" },
+    { label: "掃描進行中", value: running, unit: "次", tone: running ? "" : "is-muted", hint: running ? "完成後會自動更新" : "沒有進行中的掃描" },
   ];
   return (
-    <dl className="project-portfolio">
+    <div className="project-site-summary projects-summary">
       {items.map((item) => (
-        <div key={item.label} className={`project-portfolio-item ${item.tone || ""}`}>
-          <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
-          {item.hint && <p>{item.hint}</p>}
+        <div key={item.label} className="project-site-tile">
+          <span className="project-site-tile-label">{item.label}</span>
+          <span className={`project-site-tile-value ${item.tone || ""}`}>
+            {item.value}{item.unit && <small> {item.unit}</small>}
+          </span>
+          <span className="project-site-tile-hint">{item.hint}</span>
         </div>
       ))}
-    </dl>
+    </div>
   );
 }
 
@@ -526,9 +539,11 @@ function ProjectRow({ project, onRestore, restoring }) {
   );
 }
 
-function ProjectTable({ projects, caption, onRestore, restoringId }) {
+function ProjectTable({ projects, caption, tools, children, onRestore, restoringId }) {
   return (
-    <div className="panel project-table-wrap">
+    <section className="panel">
+      {tools}
+      <div className="project-table-wrap">
       <table className="project-registry">
         <caption className="project-sr-only">{caption}</caption>
         <thead>
@@ -553,7 +568,9 @@ function ProjectTable({ projects, caption, onRestore, restoringId }) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -607,6 +624,10 @@ function ProjectsListPage() {
           <h1 className="project-page-title">所有專案</h1>
           <p className="project-page-sub">一個專案對應一個網站；掃描、問題分析與歷史報告都以網站為單位保存。</p>
         </div>
+        {/* 頁面唯一的主要動作放頁首右側，與其他分頁的 ProjectHeader 一致 */}
+        {projects && projects.length > 0 && (
+          <Link className="primary-button" to="/projects/new">新增網站專案</Link>
+        )}
       </header>
       {projects === null && <PageLoader label="載入中…" />}
       {projects && projects.length === 0 && (
@@ -619,35 +640,50 @@ function ProjectsListPage() {
       {projects && projects.length > 0 && (
         <>
           <PortfolioSummary projects={projects} />
-          <div className="project-list-toolbar">
-            <Link className="primary-button" to="/projects/new">新增網站專案</Link>
-            <div className="project-filter" role="group" aria-label="排序">
-              <span className="project-filter-label">排序</span>
-              {Object.entries(PROJECT_SORTS).map(([key, option]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`project-chip ${sort === key ? "active" : ""}`}
-                  aria-pressed={sort === key}
-                  onClick={() => setSort(key)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {projects.length > 4 && (
-              <input
-                type="search"
-                className="input project-list-search"
-                placeholder="搜尋網站名稱或網址"
-                aria-label="搜尋網站專案"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
+          <ProjectTable
+            projects={visible}
+            caption="網站專案"
+            tools={(
+              <div className="projects-list-head">
+                <div className="project-section-head">
+                  <h2 className="project-section-title">網站清單（{visible.length}{keyword ? ` / ${projects.length}` : ""}）</h2>
+                  {projects.length > 4 && (
+                    <label className="project-search">
+                      <span className="project-sr-only">搜尋網站專案</span>
+                      <input
+                        type="search"
+                        className="input"
+                        placeholder="搜尋網站名稱或網址"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                    </label>
+                  )}
+                </div>
+                <div className="project-filter" role="group" aria-label="排序">
+                  <span className="project-filter-label">排序</span>
+                  {Object.entries(PROJECT_SORTS).map(([key, option]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`project-chip ${sort === key ? "active" : ""}`}
+                      aria-pressed={sort === key}
+                      onClick={() => setSort(key)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-          <ProjectTable projects={visible} caption="網站專案" />
-          {!visible.length && <p className="hint-text">找不到符合「{query}」的網站。</p>}
+          >
+            {!visible.length && (
+              <div className="issue-table-empty">
+                <p className="hint-text">找不到符合「{query}」的網站。</p>
+                <button type="button" className="secondary-button" onClick={() => setQuery("")}>清除搜尋</button>
+              </div>
+            )}
+          </ProjectTable>
         </>
       )}
       <section className="project-archived">

@@ -56,11 +56,14 @@ class AdminCoinTransactionSerializer(serializers.ModelSerializer):
     admin_actor_username = serializers.CharField(
         source="admin_actor.username", read_only=True, allow_null=True, default=None,
     )
+    # 帳本是跨使用者的：少了這兩欄，後台看到「+500 管理員調整」卻不知道是誰的錢包
+    user_id = serializers.IntegerField(source="wallet.user_id", read_only=True)
+    username = serializers.CharField(source="wallet.user.username", read_only=True)
 
     class Meta:
         model = CoinTransaction
         fields = [
-            "id", "amount", "kind", "kind_label", "balance_after",
+            "id", "user_id", "username", "amount", "kind", "kind_label", "balance_after",
             "scan_job", "scan_origin", "plan", "plan_name",
             "admin_actor_username", "note", "created_at",
         ]

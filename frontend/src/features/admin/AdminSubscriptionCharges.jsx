@@ -80,7 +80,16 @@ export function AdminSubscriptionCharges() {
                       <div className="admin-cell-secondary">第 {charge.sequence} 期・{charge.order_status_label}</div>
                     </td>
                     <td className="num">{formatNtd(charge.amount)}</td>
-                    <td>{charge.succeeded ? "成功" : `失敗（${charge.rtn_code} ${charge.rtn_msg}）`}</td>
+                    <td>
+                      {/* 與購點訂單表同款的狀態徽章：色＋圓點＋文字 */}
+                      <span className={`admin-order-status ${charge.succeeded ? "tone-good" : "tone-bad"}`}>
+                        <span className="admin-order-status-dot" aria-hidden="true" />
+                        {charge.succeeded ? "成功" : "失敗"}
+                      </span>
+                      {!charge.succeeded && (
+                        <div className="admin-cell-secondary">{charge.rtn_code} {charge.rtn_msg}</div>
+                      )}
+                    </td>
                     <td>
                       {charge.invoice_type_label}
                       {charge.invoice_type === "company" && (

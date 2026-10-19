@@ -197,9 +197,16 @@ export function ProjectSecurityPage() {
       )}
 
       <section className="panel">
-        <h2 className="project-section-title">
-          資安問題{kindFilter && `：${data.kinds.find((item) => item.kind === kindFilter)?.label}`}（{issues.length}）
-        </h2>
+        <div className="project-section-head">
+          <h2 className="project-section-title">
+            資安問題{kindFilter && `：${data.kinds.find((item) => item.kind === kindFilter)?.label}`}（{issues.length}）
+          </h2>
+          {kindFilter && (
+            <button type="button" className="project-text-link" onClick={() => setParam("kind", "")}>
+              顯示全部類型（{data.issues.length}）
+            </button>
+          )}
+        </div>
         {issues.length === 0 ? (
           <p className="hint-text">{data.issues.length ? "這個類型沒有問題。" : "這次掃描沒有發現資安問題。"}</p>
         ) : (

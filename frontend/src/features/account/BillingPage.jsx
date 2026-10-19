@@ -12,6 +12,7 @@ import {
   validateBuyer,
 } from "../../components/billing/BuyerInvoiceFields";
 import { CoinHistory } from "../../components/billing/CoinHistory";
+import { CheckCircleIcon } from "../../shared/LineIcons";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 
 // ============================================================
@@ -184,7 +185,7 @@ function BillingPage() {
     return (
       <section className="panel space-y-4">
         <div className="wizard-success">
-          <div className="wizard-success-emoji" aria-hidden="true">🎉</div>
+          <div className="wizard-success-icon" aria-hidden="true"><CheckCircleIcon /></div>
           <h2 className="wizard-success-title">訂購完成</h2>
           <p className="wizard-success-sub">已成功購買 {completedOrder.plan_name}</p>
           <dl className="wizard-success-dl">
@@ -217,6 +218,22 @@ function BillingPage() {
 
   return (
     <div className="billing-page">
+    <header className="project-page-head billing-page-head">
+      <div>
+        <p className="eyebrow">點數</p>
+        <h1 className="project-page-title">購點與訂閱</h1>
+        <p className="project-page-sub">
+          掃描按維度計費（每頁每維度 {wallet?.coin_per_category ?? 2} coin）。月訂閱每月自動發點、長期最划算；臨時需要可單次購買。
+        </p>
+      </div>
+      <div className="project-site-tile billing-balance-tile" aria-label={`目前可用 ${wallet?.balance?.toLocaleString() ?? "載入中"} coin`}>
+        <span className="project-site-tile-label">目前可用</span>
+        <span className="project-site-tile-value">{wallet?.balance?.toLocaleString() ?? "—"}<small> coin</small></span>
+        <span className="project-site-tile-hint">
+          {wallet ? `累計購買 NT$ ${(wallet.total_purchased_ntd ?? 0).toLocaleString()} · ${wallet.total_scans_used ?? 0} 次掃描` : "載入中…"}
+        </span>
+      </div>
+    </header>
     <SubscriptionPanel purchasePlans={plans} />
     <section className="panel billing-checkout">
       <header className="billing-checkout-header">
@@ -226,11 +243,6 @@ function BillingPage() {
           <p className="billing-checkout-subtitle">
             單次加值、立即入點；掃描按維度計費（每頁每維度 {wallet?.coin_per_category ?? 2} coin），依序完成方案、資料與訂單確認。
           </p>
-        </div>
-        <div className="billing-wallet-summary" aria-label={`目前餘額 ${wallet?.balance?.toLocaleString() ?? "載入中"} coin`}>
-          <span>目前可用</span>
-          <strong>{wallet?.balance?.toLocaleString() ?? "—"}</strong>
-          <span>coin</span>
         </div>
       </header>
 

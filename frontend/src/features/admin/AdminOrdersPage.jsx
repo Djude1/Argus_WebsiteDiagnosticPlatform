@@ -115,6 +115,11 @@ export function AdminOrdersPage() {
         </div>
       </header>
 
+      {/* 這頁是兩份獨立資料（購點訂單、訂閱每期扣款），各自包成有標題的面板，
+          不然上面這張表沒有名字，讀起來像整頁都是訂單 */}
+      <section className="admin-panel" aria-labelledby="orders-title">
+      <div className="admin-panel-head-row">
+        <h3 id="orders-title">購點訂單{data && !loading && !error ? `（${formatNumber(data.total)}）` : ""}</h3>
       <div className="admin-segmented" role="tablist" aria-label="訂單狀態">
         {STATUS_TABS.map((tab) => (
           <button
@@ -128,6 +133,7 @@ export function AdminOrdersPage() {
             {tab.label}
           </button>
         ))}
+      </div>
       </div>
 
       <form className="admin-search-bar" onSubmit={handleSearchSubmit}>
@@ -229,6 +235,7 @@ export function AdminOrdersPage() {
           />
         </>
       )}
+      </section>
 
       {/* 明細用 modal 就地展開，不跳頁——客服多半在對照列表與單筆之間來回 */}
       <AdminModal

@@ -2679,6 +2679,8 @@ export interface components {
         };
         AdminCoinTransaction: {
             readonly id: number;
+            readonly user_id: number;
+            readonly username: string;
             /** Format: int64 */
             amount: number;
             kind: components["schemas"]["KindEnum"];

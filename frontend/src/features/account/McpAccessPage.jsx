@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import PageLoader from "../../shared/PageLoader.jsx";
 
 import {
   checkMcpConnection,
@@ -261,7 +262,7 @@ function McpAccessPage() {
     );
   }
   if (!data) {
-    return <div className="acct-page"><p className="set-hint">載入中…</p></div>;
+    return <div className="acct-page"><PageLoader label="載入 MCP 接入資訊中…" /></div>;
   }
 
   const ent = data.entitlement;
@@ -337,7 +338,7 @@ function McpAccessPage() {
           <section className="set-section" aria-labelledby="mcp-steps-title">
             <div className="set-section-head">
               <h2 id="mcp-steps-title">三步驟接上 Argus</h2>
-              <p>選擇你使用的工具，複製設定，然後讓工具連一次，確認連線成功。</p>
+              <p>選擇你使用的工具，建立憑證並複製設定，然後讓工具連一次，確認連線成功。</p>
             </div>
 
             <ol className="mcp-steps">
@@ -360,7 +361,7 @@ function McpAccessPage() {
               </li>
 
               <li className="mcp-step">
-                <h3 className="mcp-step-title"><span className="mcp-step-no">2</span>複製設定</h3>
+                <h3 className="mcp-step-title"><span className="mcp-step-no">2</span>建立憑證、複製設定</h3>
                 {newKey ? (
                   <div className="mcp-secret" role="status">
                     <p>

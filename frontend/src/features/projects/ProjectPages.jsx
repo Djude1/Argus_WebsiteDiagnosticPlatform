@@ -35,10 +35,8 @@ import {
   BrowserIcon,
   BulbIcon,
   CalendarIcon,
-  CheckCircleIcon,
   ClockIcon,
   DownloadIcon,
-  FlagIcon,
   LayersIcon,
   ListIcon,
   PlayIcon,
@@ -263,15 +261,6 @@ function ProjectOverviewPage() {
               </p>
             </section>
             <section className="project-kpi">
-              <p className="project-kpi-label">掃描狀態</p>
-              <p className="project-kpi-status"><CheckCircleIcon /> 掃描完成</p>
-              <dl className="project-kpi-facts">
-                <div><dt><BrowserIcon /> 掃描頁數</dt><dd>{latest.stats.pages} 頁</dd></div>
-                <div><dt><FlagIcon /> 發現問題</dt><dd>{latest.issues_count} 個</dd></div>
-                <div><dt><ClockIcon /> 掃描時間</dt><dd>{formatDuration(latest.stats.duration_seconds)}</dd></div>
-              </dl>
-            </section>
-            <section className="project-kpi">
               <p className="project-kpi-label">最近一次掃描</p>
               <p className="project-kpi-date">
                 <span className="project-kpi-date-icon" aria-hidden="true"><CalendarIcon /></span>
@@ -280,10 +269,10 @@ function ProjectOverviewPage() {
                   <small>{formatRelative(latest.completed_at)}</small>
                 </span>
               </p>
-              <p className="project-kpi-sub">與上次相比</p>
-              <p className="project-kpi-change">
-                分數變化 <b>{delta === null ? deltaText : delta > 0 ? `+${delta}` : delta}</b>
-              </p>
+              <dl className="project-kpi-facts">
+                <div><dt><BrowserIcon /> 掃描頁數</dt><dd>{latest.stats.pages} 頁</dd></div>
+                <div><dt><ClockIcon /> 掃描時間</dt><dd>{formatDuration(latest.stats.duration_seconds)}</dd></div>
+              </dl>
               <Link className="project-text-link" to={`/scans/${latest.id}`}>查看這次結果 →</Link>
             </section>
           </div>
@@ -302,6 +291,49 @@ function ProjectOverviewPage() {
                 <span className="project-section-hint">共 {latest.issues_count} 個問題</span>
               </div>
               <SeverityDonut counts={data.severity_counts} />
+            </section>
+            <section className="panel">
+              <div className="project-section-head">
+                <h2 className="project-section-title">優先改善建議</h2>
+                <Link className="project-text-link" to={issuesPath}>查看全部 →</Link>
+              </div>
+              {latest.top_actions.length ? (
+                <ol className="project-priority-list">
+                  {latest.top_actions.map((action, index) => (
+                    <li key={`${action.category}-${action.title}`}>
+                      <span className="project-priority-num">{index + 1}</span>
+                      <Link
+                        className="project-priority-title"
+                        to={`${issuesPath}?q=${encodeURIComponent(action.title)}`}
+                      >
+                        {action.title}
+                      </Link>
+                      <SeverityChip severity={action.severity} />
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="hint-text">這次沒有需要優先處理的項目。</p>
+              )}
+            </section>
+          </div>
+
+          <div className="project-grid-3">
+            <section className="panel">
+              <div className="project-section-head">
+                <h2 className="project-section-title">各維度問題的數量</h2>
+              </div>
+              <CountBars
+                items={CATEGORY_ORDER.filter((c) => latest.categories.includes(c)).map((c) => ({
+                  key: c,
+                  label: CATEGORY_META[c].label,
+                  desc: CATEGORY_META[c].desc,
+                  value: latest.category_counts[c] || 0,
+                  tone: scoreTone(latest.category_scores?.[c]),
+                }))}
+                emptyText="這次掃描沒有發現問題。"
+                linkFor={(item) => `${issuesPath}?category=${item.key}`}
+              />
             </section>
             <section className="panel">
               <div className="project-section-head">
@@ -328,9 +360,6 @@ function ProjectOverviewPage() {
                 </p>
               )}
             </section>
-          </div>
-
-          <div className="project-grid-3">
             <section className="panel">
               <div className="project-section-head">
                 <h2 className="project-section-title">AEO 問答檢測</h2>
@@ -338,46 +367,6 @@ function ProjectOverviewPage() {
               <AeoTiles aeo={latest.aeo} />
               {latest.aeo && (
                 <Link className="secondary-button project-panel-cta" to={projectPath(project.id, "aeo")}>查看詳細結果 →</Link>
-              )}
-            </section>
-            <section className="panel">
-              <div className="project-section-head">
-                <h2 className="project-section-title">各維度問題的數量</h2>
-              </div>
-              <CountBars
-                items={CATEGORY_ORDER.filter((c) => latest.categories.includes(c)).map((c) => ({
-                  key: c,
-                  label: CATEGORY_META[c].label,
-                  desc: CATEGORY_META[c].desc,
-                  value: latest.category_counts[c] || 0,
-                  tone: scoreTone(latest.category_scores?.[c]),
-                }))}
-                emptyText="這次掃描沒有發現問題。"
-                linkFor={(item) => `${issuesPath}?category=${item.key}`}
-              />
-            </section>
-            <section className="panel">
-              <div className="project-section-head">
-                <h2 className="project-section-title">優先改善建議</h2>
-                <Link className="project-text-link" to={issuesPath}>查看全部 →</Link>
-              </div>
-              {latest.top_actions.length ? (
-                <ol className="project-priority-list">
-                  {latest.top_actions.map((action, index) => (
-                    <li key={`${action.category}-${action.title}`}>
-                      <span className="project-priority-num">{index + 1}</span>
-                      <Link
-                        className="project-priority-title"
-                        to={`${issuesPath}?q=${encodeURIComponent(action.title)}`}
-                      >
-                        {action.title}
-                      </Link>
-                      <SeverityChip severity={action.severity} />
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="hint-text">這次沒有需要優先處理的項目。</p>
               )}
             </section>
           </div>
@@ -748,6 +737,12 @@ function ProjectIssuesPage() {
       (!keyword || `${issue.title} ${issue.remediation || ""}`.toLowerCase().includes(keyword)),
   );
   const countBy = (key, value) => issues.filter((issue) => issue[key] === value).length;
+  const hasFilter = category !== "all" || severity !== "all" || change !== "all" || Boolean(keyword);
+  function clearFilters() {
+    const params = new URLSearchParams(searchParams);
+    ["category", "severity", "change", "q"].forEach((key) => params.delete(key));
+    setSearchParams(params, { replace: true });
+  }
   const header = (aside) => (
     <ProjectHeader
       project={project}
@@ -843,76 +838,85 @@ function ProjectIssuesPage() {
             ))}
           </div>
         </div>
-        <p className="issue-summary-note">
-          {data.compared_with
-            ? `與 ${formatDateTime(data.compared_with.completed_at)} 的掃描比較：新增 ${countBy("status", "new")}、持續 ${countBy("status", "persisting")}、本次未出現 ${data.missing.length}。`
-            : "這是此網站第一次完成的掃描，下次掃描起會標示新增與持續的問題。"}
-          {issues.some((issue) => issue.streak >= 3) &&
-            ` 有 ${issues.filter((issue) => issue.streak >= 3).length} 個問題已連續 3 次以上出現，建議優先處理。`}
-        </p>
-      </section>
-
-      <section className="panel issue-toolbar">
-        <div className="issue-toolbar-group">
-          <span className="issue-toolbar-label">顯示模式</span>
-          <div className="issue-segmented" role="group" aria-label="顯示模式">
-            <button type="button" className={groupMode === "all" ? "active" : ""} aria-pressed={groupMode === "all"} onClick={() => setParam("group", "all")}>
-              <ListIcon aria-hidden="true" /> 列表模式
-            </button>
-            <button type="button" className={groupMode === "severity" ? "active" : ""} aria-pressed={groupMode === "severity"} onClick={() => setParam("group", "severity")}>
-              <BarsIcon aria-hidden="true" /> 依嚴重度分組
-            </button>
-            {rootCauses.length > 0 && (
-              <button type="button" className={groupMode === "cause" ? "active" : ""} aria-pressed={groupMode === "cause"} onClick={() => setParam("group", "cause")}>
-                <LayersIcon aria-hidden="true" /> 依根本原因
+        <div className="issue-summary-note">
+          {data.compared_with ? (
+            <span className="issue-compare" role="group" aria-label="與上一次掃描比較">
+              <span>與 {formatDateTime(data.compared_with.completed_at)} 的掃描比較：</span>
+              <button
+                type="button"
+                className={`project-change-chip is-new is-button ${change === "new" ? "active" : ""}`}
+                aria-pressed={change === "new"}
+                onClick={() => setParam("change", change === "new" ? "all" : "new")}
+              >
+                新增 {countBy("status", "new")}
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                className={`project-change-chip is-persisting is-button ${change === "persisting" ? "active" : ""}`}
+                aria-pressed={change === "persisting"}
+                onClick={() => setParam("change", change === "persisting" ? "all" : "persisting")}
+              >
+                持續 {countBy("status", "persisting")}
+              </button>
+              {data.missing.length > 0 && (
+                <a className="project-change-chip is-resolved" href="#missing">本次未出現 {data.missing.length}</a>
+              )}
+            </span>
+          ) : (
+            <span>這是此網站第一次完成的掃描，下次掃描起會標示新增與持續的問題。</span>
+          )}
+          {issues.some((issue) => issue.streak >= 3) && (
+            <span>有 {issues.filter((issue) => issue.streak >= 3).length} 個問題已連續 3 次以上出現，建議優先處理。</span>
+          )}
+          {hasFilter && (
+            <button type="button" className="project-text-link" onClick={clearFilters}>清除篩選</button>
+          )}
         </div>
-        <label className="issue-toolbar-group">
-          <span className="issue-toolbar-label">維度</span>
-          <select className="input" value={category} onChange={(event) => setParam("category", event.target.value)}>
-            <option value="all">全部維度</option>
-            {checkedCategories.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-          </select>
-        </label>
-        <label className="issue-toolbar-group">
-          <span className="issue-toolbar-label">嚴重度</span>
-          <select className="input" value={severity} onChange={(event) => setParam("severity", event.target.value)}>
-            <option value="all">全部嚴重度</option>
-            {SEVERITY_ORDER.map((s) => <option key={s} value={s}>{SEVERITY_LABEL[s]}</option>)}
-          </select>
-        </label>
-        {data.compared_with && (
-          <label className="issue-toolbar-group">
-            <span className="issue-toolbar-label">變化</span>
-            <select className="input" value={change} onChange={(event) => setParam("change", event.target.value)}>
-              <option value="all">全部</option>
-              <option value="new">新增</option>
-              <option value="persisting">持續</option>
-            </select>
-          </label>
-        )}
-        <button
-          type="button"
-          className="secondary-button issue-export"
-          onClick={() => downloadCsv(`${project.hostname}-issues-scan-${data.scan.id}.csv`, issuesToCsv(filtered))}
-          disabled={!filtered.length}
-        >
-          <DownloadIcon aria-hidden="true" /> 匯出 CSV（{filtered.length}）
-        </button>
       </section>
-
-      {query && (
-        <p className="issue-query">
-          搜尋「{query}」：{filtered.length} 個問題
-          <button type="button" className="project-text-link" onClick={() => setParam("q", "")}>清除搜尋</button>
-        </p>
-      )}
 
       <section className="panel issue-table-card">
+        {/* 顯示模式與匯出放在表格自己的標題列，不再是夾在中間的獨立工具列；維度／嚴重度篩選只在上方摘要卡 */}
+        <div className="issue-table-head">
+          <div>
+            <h2 className="project-section-title">
+              {listMode ? `需要處理的問題（${problems.length}）` : `問題清單（${filtered.length}）`}
+            </h2>
+            {query && (
+              <p className="issue-query">
+                搜尋「{query}」：{filtered.length} 個問題
+                <button type="button" className="project-text-link" onClick={() => setParam("q", "")}>清除搜尋</button>
+              </p>
+            )}
+          </div>
+          <div className="issue-table-tools">
+            <div className="issue-segmented" role="group" aria-label="顯示模式">
+              <button type="button" className={groupMode === "all" ? "active" : ""} aria-pressed={groupMode === "all"} onClick={() => setParam("group", "all")}>
+                <ListIcon aria-hidden="true" /> 列表
+              </button>
+              <button type="button" className={groupMode === "severity" ? "active" : ""} aria-pressed={groupMode === "severity"} onClick={() => setParam("group", "severity")}>
+                <BarsIcon aria-hidden="true" /> 依嚴重度分組
+              </button>
+              {rootCauses.length > 0 && (
+                <button type="button" className={groupMode === "cause" ? "active" : ""} aria-pressed={groupMode === "cause"} onClick={() => setParam("group", "cause")}>
+                  <LayersIcon aria-hidden="true" /> 依根本原因
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              className="secondary-button issue-export"
+              onClick={() => downloadCsv(`${project.hostname}-issues-scan-${data.scan.id}.csv`, issuesToCsv(filtered))}
+              disabled={!filtered.length}
+            >
+              <DownloadIcon aria-hidden="true" /> 匯出 CSV（{filtered.length}）
+            </button>
+          </div>
+        </div>
         {filtered.length === 0 ? (
-          <p className="hint-text">{issues.length ? "沒有符合篩選條件的問題。" : "這次掃描沒有發現問題。"}</p>
+          <div className="issue-table-empty">
+            <p className="hint-text">{issues.length ? "沒有符合篩選條件的問題。" : "這次掃描沒有發現問題。"}</p>
+            {hasFilter && <button type="button" className="secondary-button" onClick={clearFilters}>清除篩選</button>}
+          </div>
         ) : listMode && problems.length === 0 ? (
           <p className="hint-text">沒有需要處理的問題，只有下方的建議項目。</p>
         ) : (
@@ -1140,47 +1144,58 @@ function ProjectAeoPage() {
       ) : (
         <>
           {report.status === "evaluated" && (
-            <dl className="project-portfolio">
-              <div className="project-portfolio-item">
-                <dt>AEO 分數</dt>
-                <dd className={scoreToneClass(aeoScore)}>{aeoScore == null ? "—" : Math.round(aeoScore)}</dd>
+            <div className="project-site-summary aeo-summary">
+              <div className="project-site-tile">
+                <span className="project-site-tile-label">AEO 分數</span>
+                <span className={`project-site-tile-value ${aeoScore == null ? "is-muted" : `tone-${scoreTone(aeoScore)}`}`}>
+                  {aeoScore == null ? "—" : Math.round(aeoScore)}
+                  {aeoScore != null && <small> {scoreGrade(aeoScore)}</small>}
+                </span>
+                <span className="project-site-tile-hint">依可回答性計算，逐題結果不再重複扣分</span>
               </div>
-              <div className="project-portfolio-item">
-                <dt>題目</dt>
-                <dd>{report.questions_total}</dd>
+              <div className="project-site-tile">
+                <span className="project-site-tile-label">題目</span>
+                <span className="project-site-tile-value">{report.questions_total}<small> 題</small></span>
+                <span className="project-site-tile-hint">
+                  {report.not_scored ? `其中 ${report.not_scored} 題不計分（網站沒談到該主題）` : "依網站內容與固定意圖出題"}
+                </span>
               </div>
-              <div className="project-portfolio-item">
-                <dt>可從網站找到答案</dt>
-                <dd>{report.answered_ratio == null ? "—" : `${Math.round(report.answered_ratio * 100)}%`}</dd>
+              <div className="project-site-tile">
+                <span className="project-site-tile-label">可從網站找到答案</span>
+                <span className="project-site-tile-value">
+                  {report.answered_ratio == null ? "—" : Math.round(report.answered_ratio * 100)}<small> %</small>
+                </span>
+                <span className="project-site-tile-hint">可回答 {report.counts?.answered ?? 0} 題</span>
               </div>
-              <div className="project-portfolio-item">
-                <dt>答案附有原文</dt>
-                <dd>{report.evidence_ratio == null ? "—" : `${Math.round(report.evidence_ratio * 100)}%`}</dd>
+              <div className="project-site-tile">
+                <span className="project-site-tile-label">答案附有原文</span>
+                <span className="project-site-tile-value">
+                  {report.evidence_ratio == null ? "—" : Math.round(report.evidence_ratio * 100)}<small> %</small>
+                </span>
+                <span className="project-site-tile-hint">能指出答案出自哪一段</span>
               </div>
               {report.citation && (
-                <div className="project-portfolio-item">
-                  <dt>答案可被引用</dt>
-                  <dd>{`${Math.round(report.citation.citable_ratio * 100)}%`}</dd>
+                <div className="project-site-tile">
+                  <span className="project-site-tile-label">答案可被引用</span>
+                  <span className="project-site-tile-value">{Math.round(report.citation.citable_ratio * 100)}<small> %</small></span>
+                  <span className="project-site-tile-hint">沒被 noindex／nosnippet 擋住、原始 HTML 就有</span>
                 </div>
               )}
-            </dl>
+            </div>
           )}
-          <section className="panel">
-            <AeoAnswerPanel report={report} withFilter />
-          </section>
+          {/* 判讀注意事項放在逐題結果之前，看結果時才知道「無答案」的意思 */}
           <p className="project-note">
             「無答案」與「資訊不足」代表在這次已掃描的頁面中找不到明確答案；答案若在沒被掃到的頁面，
             請確認該頁可從首頁或選單連到，或已列在 sitemap。
           </p>
+          <section className="panel">
+            <h2 className="project-section-title">逐題結果{report.status === "evaluated" && `（${report.questions_total} 題）`}</h2>
+            <AeoAnswerPanel report={report} withFilter />
+          </section>
         </>
       )}
     </div>
   );
-}
-
-function scoreToneClass(score) {
-  if (score === null || score === undefined) return "";
-  return score >= 80 ? "is-good" : score >= 60 ? "is-medium" : "is-bad";
 }
 
 function ProjectPagesPage() {
@@ -1260,42 +1275,91 @@ function ProjectPagesPage() {
     const loads = pages.map((page) => page.load_time_ms).filter((ms) => typeof ms === "number");
     return loads.length ? Math.round(loads.reduce((a, b) => a + b, 0) / loads.length) : null;
   })();
+  const issuePages = pages.filter(PAGE_FILTERS.issues.test).length;
+  const errorPages = pages.filter(PAGE_FILTERS.errors.test).length;
+  const hasFilter = filter !== "all" || Boolean(keyword);
+  function clearFilters() {
+    setQuery("");
+    setParam("filter", "all");
+  }
 
   return (
     <div className="project-page">
       <ProjectHeader
         project={project}
         section="頁面"
-        description={`這次掃描實際檢查的 ${pages.length} 個頁面，平均載入 ${avgLoad == null ? "—" : `${(avgLoad / 1000).toFixed(1)} 秒`}${data.site_level_findings ? `；另有 ${data.site_level_findings} 個站台層級的發現（不屬於特定頁面，見問題分析）` : ""}。按「優化此頁」可依診斷產生優化版，並分享連結給設計或工程師。`}
+        description="這次掃描實際檢查的每個頁面：狀態碼、載入時間與問題數。按「優化此頁」可依診斷產生優化版，並分享連結給設計或工程師。"
         aside={<ScanTimeCard completed={completed} current={data.scan} value={scanParam} onChange={(value) => setParam("scan", value)} />}
       />
 
-      <section className="panel project-filters">
-        <FilterChips
-          label="篩選"
-          value={filter}
-          onChange={(value) => setParam("filter", value)}
-          options={Object.entries(PAGE_FILTERS).map(([value, item]) => ({
-            value,
-            label: item.label,
-            count: pages.filter(item.test).length,
-          }))}
-        />
-        <label className="project-search">
-          <span className="project-sr-only">搜尋頁面</span>
-          <input
-            type="search"
-            className="input"
-            placeholder="搜尋網址或頁面標題"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-      </section>
+      {/* 數字磚沿用總覽的 .project-site-tile；原本這些數字全塞在頁首說明的一句話裡 */}
+      <div className="project-site-summary pages-summary">
+        <div className="project-site-tile">
+          <span className="project-site-tile-label">檢查頁數</span>
+          <span className="project-site-tile-value">{pages.length}<small> 頁</small></span>
+          <span className="project-site-tile-hint">
+            {data.site_level_findings ? (
+              <Link className="project-text-link" to={projectPath(project.id, "issues")}>
+                另有 {data.site_level_findings} 個站台層級的發現 →
+              </Link>
+            ) : "沒有站台層級的發現"}
+          </span>
+        </div>
+        <div className="project-site-tile">
+          <span className="project-site-tile-label">平均載入</span>
+          <span className={`project-site-tile-value ${avgLoad == null ? "is-muted" : avgLoad > SLOW_PAGE_MS ? "tone-bad" : "tone-good"}`}>
+            {avgLoad == null ? "—" : (avgLoad / 1000).toFixed(1)}<small> 秒</small>
+          </span>
+          <span className="project-site-tile-hint">超過 {SLOW_PAGE_MS / 1000} 秒算載入慢</span>
+        </div>
+        <div className="project-site-tile">
+          <span className="project-site-tile-label">有問題的頁面</span>
+          <span className={`project-site-tile-value ${issuePages ? "tone-medium" : "tone-good"}`}>
+            {issuePages}<small> / {pages.length} 頁</small>
+          </span>
+          <span className="project-site-tile-hint">問題數最多的排最前面</span>
+        </div>
+        <div className="project-site-tile">
+          <span className="project-site-tile-label">錯誤或被阻擋</span>
+          <span className={`project-site-tile-value ${errorPages ? "tone-bad" : "tone-good"}`}>
+            {errorPages}<small> 頁</small>
+          </span>
+          <span className="project-site-tile-hint">4xx／5xx 或 robots、WAF 擋下</span>
+        </div>
+      </div>
 
       <section className="panel">
+        {/* 篩選與搜尋併進頁面清單自己的標題列，不再是獨立一張卡 */}
+        <div className="project-section-head">
+          <h2 className="project-section-title">頁面清單（{visible.length}{hasFilter ? ` / ${pages.length}` : ""}）</h2>
+          <label className="project-search">
+            <span className="project-sr-only">搜尋頁面</span>
+            <input
+              type="search"
+              className="input"
+              placeholder="搜尋網址或頁面標題"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="pages-filter-row">
+          <FilterChips
+            label="篩選"
+            value={filter}
+            onChange={(value) => setParam("filter", value)}
+            options={Object.entries(PAGE_FILTERS).map(([value, item]) => ({
+              value,
+              label: item.label,
+              count: pages.filter(item.test).length,
+            }))}
+          />
+        </div>
         {visible.length === 0 ? (
-          <p className="hint-text">沒有符合條件的頁面。</p>
+          <div className="issue-table-empty">
+            <p className="hint-text">沒有符合條件的頁面。</p>
+            {hasFilter && <button type="button" className="secondary-button" onClick={clearFilters}>清除篩選</button>}
+          </div>
         ) : (
           <div className="project-table-wrap">
             <table className="project-table project-pages-table">
@@ -1407,10 +1471,14 @@ function coinsChargedText(scan) {
   return `${coins} 點`;
 }
 
-/** 掃描紀錄（2026-10-08 合併原「歷史報告」分頁）：歷次掃描、分數變化、扣點、問題分析與 PDF 報告。 */
+/** 掃描紀錄（2026-10-08 合併原「歷史報告」分頁；2026-10-19 分數概況與趨勢移到表格上方）：
+ *  歷次掃描、分數變化、扣點、問題分析與 PDF 報告。 */
+const HISTORY_PREVIEW = 8;
+
 function ScanHistoryPanel({ project, scans, onRefresh }) {
   const [downloading, setDownloading] = useState(null);
   const [error, setError] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   async function downloadReport(scan) {
     setDownloading(scan.id);
@@ -1442,8 +1510,68 @@ function ScanHistoryPanel({ project, scans, onRefresh }) {
     else modelChangedIds.add(scan.id);
   });
 
+  // 預設只列最近 HISTORY_PREVIEW 筆：掃描越多表格越長，概況與趨勢不該被推到看不見的地方
+  const visibleScans = showAll ? scans : scans.slice(0, HISTORY_PREVIEW);
+  const hiddenCount = scans.length - visibleScans.length;
+  const latest = completed[0] || null;
+
   return (
     <div className="project-scans-side">
+      <section className="panel">
+        <h2 className="project-section-title">分數概況</h2>
+        <div className="project-site-summary scan-overview-tiles">
+          <div className="project-site-tile">
+            <span className="project-site-tile-label">最新分數</span>
+            <span className={`project-site-tile-value ${latest ? `tone-${scoreTone(latest.overall_score)}` : "is-muted"}`}>
+              {latest ? latest.overall_score : "—"}
+              {latest && <small> {scoreGrade(latest.overall_score)}</small>}
+            </span>
+            <span className="project-site-tile-hint">
+              {latest ? formatDateTime(latest.completed_at) : "還沒有完成的掃描"}
+            </span>
+          </div>
+          <div className="project-site-tile">
+            <span className="project-site-tile-label">與上一次相比</span>
+            <span className="project-site-tile-value is-text">
+              {latest && deltaById.has(latest.id) ? (
+                <DeltaText delta={deltaById.get(latest.id)} />
+              ) : latest && modelChangedIds.has(latest.id) ? "規則已更新" : "—"}
+            </span>
+            <span className="project-site-tile-hint">
+              {latest && modelChangedIds.has(latest.id)
+                ? "評分規則與前一次不同，分數不宜直接比較"
+                : "只比較評分規則相同的兩次完成掃描"}
+            </span>
+          </div>
+          <div className="project-site-tile">
+            <span className="project-site-tile-label">完成掃描</span>
+            <span className="project-site-tile-value">
+              {completed.length}<small> / {scans.length} 次</small>
+            </span>
+            <span className="project-site-tile-hint">失敗或取消的掃描全額退回點數</span>
+          </div>
+          <div className="project-site-tile">
+            <span className="project-site-tile-label">進行中</span>
+            <span className={`project-site-tile-value${running === 0 ? " is-muted" : ""}`}>
+              {running}<small> 次</small>
+            </span>
+            <span className="project-site-tile-hint">
+              {running > 0 ? "進行中的掃描會自動更新" : "沒有進行中的掃描"}
+            </span>
+          </div>
+        </div>
+        {completed.length > 1 && (
+          <div className="scan-overview-trend">
+            <h3 className="scan-overview-trend-title">分數趨勢（{completed.length} 次完成）</h3>
+            <LineChart
+              width={640}
+              height={150}
+              data={completed.slice().reverse().map((scan) => ({ label: formatDate(scan.completed_at).slice(5), value: scan.overall_score }))}
+              ariaLabel={`${project.name} 歷次分數`}
+            />
+          </div>
+        )}
+      </section>
       <section className="panel">
         <div className="scan-list-head">
           <div>
@@ -1474,7 +1602,7 @@ function ScanHistoryPanel({ project, scans, onRefresh }) {
                 </tr>
               </thead>
               <tbody>
-                {scans.map((scan) => {
+                {visibleScans.map((scan) => {
                   const done = scan.status === "completed";
                   return (
                     <tr key={scan.id}>
@@ -1518,16 +1646,14 @@ function ScanHistoryPanel({ project, scans, onRefresh }) {
             </table>
           </div>
         )}
+        {hiddenCount > 0 && (
+          <div className="scan-history-more">
+            <button type="button" className="secondary-button" onClick={() => setShowAll(true)}>
+              顯示更早的 {hiddenCount} 次掃描
+            </button>
+          </div>
+        )}
       </section>
-      {completed.length > 1 && (
-        <section className="panel">
-          <h2 className="project-section-title">分數趨勢</h2>
-          <LineChart
-            data={completed.slice().reverse().map((scan) => ({ label: formatDate(scan.completed_at).slice(5), value: scan.overall_score }))}
-            ariaLabel={`${project.name} 歷次分數`}
-          />
-        </section>
-      )}
     </div>
   );
 }

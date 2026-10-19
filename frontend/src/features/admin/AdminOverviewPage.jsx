@@ -18,7 +18,9 @@ import { formatDateTime, formatNtd, formatNumber } from "../../shared/formatters
 
 // 後台首頁：概覽。
 //
-// 資訊順序：今日脈搏 → 14 天趨勢 → 總量統計 → 成本與明細。
+// 資訊順序：今日與本月 → 總量統計 → 14 天趨勢 → 成本與明細。
+// 2026-10-19 把總量統計移到趨勢圖之前：兩排數字先聚在一起（卡片本身帶 14 天 sparkline），
+// 再看完整趨勢；原本 200px 高的趨勢圖把兩排數字隔開。
 //
 // 註：曾短暫改建為「待辦中心」（第一屏為四張可點的待辦卡片），依使用者
 // 2026-09-25 的要求移除，頁面回到概覽形式。後端 overview 的 triage 區塊仍
@@ -84,10 +86,10 @@ export function AdminOverviewPage() {
         </button>
       </header>
 
-      {/* ---- 今日脈搏：正在發生的事 ---- */}
+      {/* ---- 今日與本月：正在發生的事（今日掃描、進行中）與本月累計（訂單、掃描） ---- */}
       <section className="admin-panel">
         <div className="admin-panel-head-row">
-          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>今日</h3>
+          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>今日與本月</h3>
           <NavLink to="/admin/scans" className="admin-panel-more">掃描任務 →</NavLink>
         </div>
         <div className="admin-pulse-row">
@@ -108,23 +110,6 @@ export function AdminOverviewPage() {
             <div className="admin-pulse-label">本月掃描</div>
           </div>
         </div>
-      </section>
-
-      {/* ---- 趨勢 ---- */}
-      <section className="admin-panel">
-        <div className="admin-panel-head-row">
-          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>最近 14 天活動</h3>
-          <span className="admin-panel-hint">滑過圖表可看單日數值；各列縱軸獨立</span>
-        </div>
-        <AdminMiniChart
-          series={dash.series}
-          keys={[
-            { key: "ai_tokens", label: "AI tokens" },
-            { key: "revenue_ntd", label: "訂單金額", format: (v) => formatNtd(v) },
-            { key: "scans", label: "掃描數" },
-          ]}
-          height={200}
-        />
       </section>
 
       {/* ---- 總量統計 ---- */}
@@ -159,6 +144,23 @@ export function AdminOverviewPage() {
           icon={AdminTokensIcon}
         />
       </div>
+
+      {/* ---- 趨勢 ---- */}
+      <section className="admin-panel">
+        <div className="admin-panel-head-row">
+          <h3><span className="admin-panel-icon-chip"><AdminTrendIcon /></span>最近 14 天活動</h3>
+          <span className="admin-panel-hint">滑過圖表可看單日數值；各列縱軸獨立</span>
+        </div>
+        <AdminMiniChart
+          series={dash.series}
+          keys={[
+            { key: "ai_tokens", label: "AI tokens" },
+            { key: "revenue_ntd", label: "訂單金額", format: (v) => formatNtd(v) },
+            { key: "scans", label: "掃描數" },
+          ]}
+          height={200}
+        />
+      </section>
 
       {/* ---- 成本與明細 ---- */}
       <div className="admin-grid-2col">

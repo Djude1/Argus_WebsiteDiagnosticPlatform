@@ -29,7 +29,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 
 from apps.accounts.avatars import avatar_url
 from apps.accounts.deletion import delete_account
-from apps.admin_api import system_metrics
+from apps.admin_api import cluster_status, system_metrics
 from apps.admin_api.models import AdminAuditLog, Announcement, log_admin_action
 from apps.admin_api.permissions import IsSuperuser
 from apps.admin_api.schema import (
@@ -1464,6 +1464,10 @@ def system_health(request):
         "basis": "ScanJob 近 1 小時的 completed vs failed",
     })
 
+    # Kubernetes 叢集：節點 Ready、Argus 工作負載就緒（本機／CI 不在叢集內 → unknown，不影響整體）
+    cluster = cluster_status.collect()
+    checks.append(cluster_status.health_check(cluster))
+
     # 整體狀態取最壞的一項；unknown 不影響整體判定
     severity = {"ok": 0, "unknown": 0, "warn": 1, "bad": 2}
     overall = max(checks, key=lambda c: severity[c["status"]])["status"]
@@ -1487,6 +1491,7 @@ def system_health(request):
             for c in chain
         ],
         "system": system_metrics.collect(),
+        "cluster": cluster,
     })
 
 

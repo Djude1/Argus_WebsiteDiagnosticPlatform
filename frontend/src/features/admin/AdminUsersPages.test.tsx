@@ -195,7 +195,7 @@ describe("AdminUserDetailPage", () => {
   it("調整點數：快捷鍵帶入金額，送出後顯示結果並重新載入", async () => {
     const user = userEvent.setup();
     api.adminAdjustCoin.mockResolvedValue({
-      transaction: {
+      transaction: { user_id: 7, username: "alice",
         id: 1, amount: -100, kind: "admin_adjust", kind_label: "管理員調整", balance_after: 1100,
         scan_job: null, scan_origin: null, plan: null, plan_name: null,
         admin_actor_username: "root", note: "退費", created_at: "2026-09-26T00:00:00Z",

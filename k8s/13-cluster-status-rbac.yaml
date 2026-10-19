@@ -1,0 +1,38 @@
+# 後台「系統健康」的叢集視角：web pod 用這個 ServiceAccount 唯讀 nodes、pods 與 metrics.k8s.io。
+#
+# 範圍（2026-10-19 決策）：全叢集 pods 唯讀——每個節點才算得出實際的 requests 佔比與 pod 數，
+# 看得到非 Argus 的負載擠在哪。只有 get/list，沒有 watch、沒有任何寫入、不讀 secrets／configmaps。
+# metrics.k8s.io 沒裝 metrics-server 時後端會退回 requests 佔比並明講，不需要為它裝東西。
+#
+# web 對 API Server 的 egress 已由 07-network-policies.yaml 的 application-egress-boundary
+#（web、worker 共用）放行，不需另加 NetworkPolicy。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argus-web
+  namespace: argus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argus-cluster-status-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argus-cluster-status-reader
+subjects:
+  - kind: ServiceAccount
+    name: argus-web
+    namespace: argus
+roleRef:
+  kind: ClusterRole
+  name: argus-cluster-status-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -65,13 +65,12 @@
   .project-create-layout,
   .project-choice-row,
   .seo-trends { grid-template-columns: minmax(0, 1fr); }
-  .project-portfolio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .projects-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-section-head { flex-wrap: wrap; gap: 0.5rem; }
   .project-hero-meta { font-size: 0.8rem; }
   .dash-cat-row { grid-template-columns: 2rem minmax(0, 1fr) 4rem 2rem; }
   .dash-cat-trend { display: none; }
   .dash-count-label { flex-direction: column; gap: 0.1rem; }
-  .project-list-toolbar,
   .project-filter,
   .issue-toolbar-group { flex-wrap: wrap; }
   .project-table-wrap { overscroll-behavior-x: contain; }
