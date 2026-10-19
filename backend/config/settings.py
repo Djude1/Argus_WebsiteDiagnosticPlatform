@@ -463,7 +463,9 @@ ARGUS_FIXGEN_TIMEOUT = int(os.getenv("ARGUS_FIXGEN_TIMEOUT", "180"))
 # 只送問題標題、說明與遮罩後的證據，不送頁面原文。不影響分數與嚴重度。
 ARGUS_AI_INSIGHT_ENABLED = env_bool("ARGUS_AI_INSIGHT_ENABLED", default=False)
 ARGUS_AI_INSIGHT_MODEL = os.getenv("ARGUS_AI_INSIGHT_MODEL", "").strip()
-ARGUS_AI_INSIGHT_MAX_TOKENS = int(os.getenv("ARGUS_AI_INSIGHT_MAX_TOKENS", "3000"))
+# 推理型模型（MiniMax M 系列）會先輸出 <think>，3000 常常只夠思考、正式 JSON 還沒開始就被截斷
+# （2026-10-19 正式站實例：「AI 回應中找不到結果」）；被截斷時程式會放寬一倍重試一次
+ARGUS_AI_INSIGHT_MAX_TOKENS = int(os.getenv("ARGUS_AI_INSIGHT_MAX_TOKENS", "8000"))
 ARGUS_AI_INSIGHT_TIMEOUT = int(os.getenv("ARGUS_AI_INSIGHT_TIMEOUT", "180"))
 
 # 網頁複刻與優化（OpenCode agent server）

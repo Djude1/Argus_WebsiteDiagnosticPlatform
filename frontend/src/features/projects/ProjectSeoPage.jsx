@@ -1222,6 +1222,13 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
     [data.keyword_report, queries],
   );
   const opportunities = useMemo(() => untargetedQueries(keywords, queries), [keywords, queries]);
+  // 網站自己在 <meta name="keywords"> 宣告的關鍵字：對 Google 排名無效，但代表網站主的意圖；
+  // 後端已附內容比對，這裡再補 Search Console 落差，讓「想被搜的字」和「真正被搜的字」並排。
+  const declared = useMemo(() => data.declared_keywords || [], [data.declared_keywords]);
+  const declaredGap = useMemo(
+    () => new Map(keywordGap(declared, queries).map((gap) => [gap.keyword, gap])),
+    [declared, queries],
+  );
 
   async function save(next) {
     setSaving(true);
@@ -1320,6 +1327,70 @@ function TargetKeywords({ project, data, performance, onChanged, onOpenPage }) {
         依掃描當時保存的頁面內容比對；修改網站後重新掃描才會更新。Search Console 欄位統計包含這個關鍵字的
         搜尋詞（期間內點擊最多的前 200 個），排名是期間平均。
       </p>
+      {declared.length > 0 && (
+        <>
+          <h3 className="seo-subtitle">網站自己宣告的關鍵字（meta keywords）</h3>
+          <p className="seo-muted">
+            從頁面 <code>&lt;meta name=&quot;keywords&quot;&gt;</code> 讀到的字詞。這個標籤對 Google 排名沒有影響，但它是網站主
+            親手寫下的意圖；對照頁面內容{performance.data ? "與 Search Console 的實際搜尋詞" : ""}，可以看出
+            想被搜到的字有沒有真的做進標題與內容。
+          </p>
+          <div className="project-table-wrap">
+            <table className="project-table seo-keyword-table">
+              <thead>
+                <tr>
+                  <th scope="col">宣告的關鍵字</th>
+                  <th scope="col">宣告頁數</th>
+                  <th scope="col">頁面內容</th>
+                  {performance.data && <th scope="col">Search Console</th>}
+                  <th scope="col">建議</th>
+                  <th scope="col"><span className="project-sr-only">動作</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {declared.map((row) => {
+                  const gap = performance.data ? declaredGap.get(row.keyword) : null;
+                  return (
+                    <tr key={row.keyword}>
+                      <td>{row.keyword}</td>
+                      <td>{row.declared_pages}</td>
+                      <td>
+                        {row.best_page ? (
+                          <>
+                            <button type="button" className="project-text-link seo-url" onClick={() => onOpenPage(row.best_page.page_id)}>{row.best_page.url}</button>
+                            <span className="seo-muted seo-block">{row.best_page.places.join("、")}</span>
+                          </>
+                        ) : (
+                          <span className="seo-chip is-warn">沒有頁面提到</span>
+                        )}
+                      </td>
+                      {performance.data && <td>{gap ? <KeywordGapCell gap={gap} /> : "—"}</td>}
+                      <td className="seo-muted">
+                        {[row.advice, gap?.advice].filter(Boolean).join(" ") || "已出現在重要位置"}
+                      </td>
+                      <td>
+                        {row.is_target ? (
+                          <span className="seo-chip is-info">已是目標</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={saving || keywords.length >= MAX_KEYWORDS}
+                            title={keywords.length >= MAX_KEYWORDS ? `最多 ${MAX_KEYWORDS} 個目標關鍵字` : undefined}
+                            onClick={() => save([...keywords, row.keyword])}
+                          >
+                            設為目標
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       {performance.data && opportunities.length > 0 && (
         <>
           <h3 className="seo-subtitle">有曝光但還不是目標的搜尋詞</h3>

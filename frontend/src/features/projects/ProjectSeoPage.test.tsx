@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,6 +70,12 @@ describe("搜尋關鍵字：目標關鍵字與 Search Console 的落差", () => 
         keyword: "咖啡豆", pages_found: 1, advice: "", pages: [],
         best_page: { page_id: 3, url: "https://example.test/beans", title: "豆子", places: ["Title"], body_count: 4 },
       }],
+      declared_keywords: [
+        { keyword: "咖啡豆", declared_pages: 2, pages_found: 1, advice: "", pages: [], is_target: true,
+          best_page: { page_id: 3, url: "https://example.test/beans", title: "豆子", places: ["Title"], body_count: 4 } },
+        { keyword: "冷萃", declared_pages: 1, pages_found: 0, pages: [], is_target: false, best_page: null,
+          advice: "沒有任何頁面提到這個關鍵字；若是重要主題，建立專門的頁面。" },
+      ],
     };
     const performance = {
       property: "https://example.test/", start: "2026-09-07", end: "2026-10-04", days: 28,
@@ -90,11 +96,24 @@ describe("搜尋關鍵字：目標關鍵字與 Search Console 的落差", () => 
 
   it("顯示排名分段、Google 帶到的頁面，並可把有曝光的搜尋詞設為目標", async () => {
     renderPage("?tab=keywords");
-    expect(await screen.findByText("第 2 頁")).toBeInTheDocument();
-    expect(screen.getByText(/1 個相關搜尋詞・曝光 400・點擊 6/)).toBeInTheDocument();
-    expect(screen.getByText(/Google 帶到：/)).toBeInTheDocument();
+    expect((await screen.findAllByText("第 2 頁")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/1 個相關搜尋詞・曝光 400・點擊 6/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Google 帶到：/).length).toBeGreaterThan(0);
     expect(screen.getByText("有曝光但還不是目標的搜尋詞")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "設為目標" }));
+    // 搜尋詞也出現在 Search Console 表與宣告關鍵字表，取最後一個（機會表）
+    const row = screen.getAllByText("耳掛咖啡").at(-1)!.closest("tr") as HTMLElement;
+    await userEvent.click(within(row).getByRole("button", { name: "設為目標" }));
     expect(api.post).toHaveBeenCalledWith("/projects/7/seo/keywords/", { keywords: ["咖啡豆", "耳掛咖啡"] });
+  });
+
+  it("列出網站自己宣告的 meta keywords，對照內容與 Search Console，未設為目標的可一鍵加入", async () => {
+    renderPage("?tab=keywords");
+    expect(await screen.findByText("網站自己宣告的關鍵字（meta keywords）")).toBeInTheDocument();
+    expect(screen.getByText("已是目標")).toBeInTheDocument();
+    expect(screen.getByText("沒有頁面提到")).toBeInTheDocument();
+    const row = screen.getByText("冷萃").closest("tr") as HTMLElement;
+    expect(within(row).getByText("沒有曝光")).toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("button", { name: "設為目標" }));
+    expect(api.post).toHaveBeenCalledWith("/projects/7/seo/keywords/", { keywords: ["咖啡豆", "冷萃"] });
   });
 });

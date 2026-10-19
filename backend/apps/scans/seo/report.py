@@ -13,12 +13,12 @@ from urllib.parse import urlsplit
 from django.core.cache import cache
 
 from apps.scans.models import Page, ScanJob, SiteProject
-from apps.scans.seo.keywords import keyword_report
+from apps.scans.seo.keywords import declared_keywords, keyword_report
 from apps.scans.seo.link_check import classify_link, robots_blocks
 from apps.scans.seo.link_trend import link_coverage
 from apps.scans.seo.page_audit import GENERIC_ANCHORS, audit_page
 
-CACHE_VERSION = 2
+CACHE_VERSION = 3  # 3：keyword_index 加 meta_keywords
 CACHE_SECONDS = 3600
 LEVEL_ORDER = {"critical": 0, "warning": 1, "notice": 2, "pass": 3}
 MAX_ISSUE_PAGES = 100
@@ -278,7 +278,7 @@ def _analysis(scan: ScanJob) -> dict:
         "pages": [_lean_page(audit, page_meta) for audit in audits],
         "keyword_index": [
             {k: audit[k] for k in ("page_id", "final_url", "status_code", "title",
-                                   "description", "h1", "headings")}
+                                   "description", "h1", "headings", "meta_keywords")}
             | {"main_text": audit["main_text"][:50_000]}
             for audit in audits
         ],
@@ -367,6 +367,10 @@ def project_seo(project: SiteProject, scan: ScanJob | None) -> dict:
         "site_checks": analysis["site_checks"],
         "robots": analysis["robots"],
         "keyword_report": keyword_report(project.target_keywords or [], analysis["keyword_index"]),
+        # 網站自己在 meta keywords 宣告的關鍵字：對排名無效，但是網站主的意圖，拿來和內容、GSC 對照
+        "declared_keywords": declared_keywords(
+            project.target_keywords or [], analysis["keyword_index"]
+        ),
     }
 
 

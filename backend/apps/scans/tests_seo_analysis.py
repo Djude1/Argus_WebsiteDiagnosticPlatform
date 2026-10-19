@@ -22,7 +22,7 @@ from apps.scans.models import (
     VerifiedDomain,
 )
 from apps.scans.seo import gsc, link_check
-from apps.scans.seo.keywords import keyword_report, normalize_keywords
+from apps.scans.seo.keywords import declared_keywords, keyword_report, normalize_keywords
 from apps.scans.seo.page_audit import audit_page, content_size, display_width
 from apps.scans.seo.report import project_seo
 from apps.scans.seo.site_findings import seo_site_findings
@@ -360,6 +360,10 @@ class SeoReportTests(TestCase):
             f"/api/projects/{self.project.id}/seo/").data["keyword_report"]}
         self.assertIn("Title", report["手沖課程"]["best_page"]["places"])
         self.assertEqual(report["外送"]["pages_found"], 0)
+        # 沒有 meta keywords 的網站：宣告清單是空的，不是缺鍵
+        self.assertEqual(
+            client.get(f"/api/projects/{self.project.id}/seo/").data["declared_keywords"], []
+        )
 
     def test_normalize_keywords_rejects_long_items(self):
         with self.assertRaises(ValueError):
@@ -897,3 +901,37 @@ class DemoSearchConsoleTests(TestCase):
         response = self.client.post(f"{self.base}/inspect/",
                                     {"url": "http://www.morninglight-coffee.example/menu"})
         self.assertEqual(response.data["verdict"], "PASS")
+
+
+class DeclaredKeywordsTests(SimpleTestCase):
+    """網站自己宣告的 meta keywords：解析、跨頁去重、與目標關鍵字／頁面內容對照。"""
+
+    def test_meta_keywords_are_split_and_deduped(self):
+        head = ("<meta name='keywords' "
+                "content='NTUB-BIRC,商業智慧研究中心, 北商課程,,ntub-birc；臺北商業大學'>")
+        audit = audit_page(FakePage(_html(head=head)))
+        self.assertEqual(
+            audit["meta_keywords"], ["NTUB-BIRC", "商業智慧研究中心", "北商課程", "臺北商業大學"]
+        )
+        self.assertEqual(audit_page(FakePage(_html()))["meta_keywords"], [])
+
+    def test_declared_keywords_merge_pages_and_mark_targets(self):
+        home = audit_page(FakePage(_html(head="<meta name='keywords' content='咖啡豆,手沖課程'>")))
+        about = audit_page(FakePage(
+            _html(title="關於我們", head="<meta name='keywords' content='手沖課程,外送'>"),
+            url=f"{ORIGIN}/about", pid=2,
+        ))
+        gone = audit_page(FakePage(
+            _html(head="<meta name='keywords' content='下架'>"),
+            url=f"{ORIGIN}/gone", status=404, pid=3,
+        ))
+        rows = declared_keywords(["咖啡豆"], [home, about, gone])
+        self.assertEqual([r["keyword"] for r in rows], ["手沖課程", "咖啡豆", "外送"])
+        by_key = {r["keyword"]: r for r in rows}
+        self.assertEqual(by_key["手沖課程"]["declared_pages"], 2)
+        self.assertFalse(by_key["手沖課程"]["is_target"])
+        self.assertTrue(by_key["咖啡豆"]["is_target"])
+        # 內容比對與目標關鍵字同一套：宣告了「外送」但沒有頁面提到
+        self.assertEqual(by_key["外送"]["pages_found"], 0)
+        self.assertIn("沒有任何頁面提到", by_key["外送"]["advice"])
+        self.assertIn("Title", by_key["咖啡豆"]["best_page"]["places"])

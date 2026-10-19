@@ -187,6 +187,44 @@ class AiInsightGenerateTests(TestCase):
         insight = ai_insight.generate_ai_insight(self.scan.id, chain=FakeChain(content))
         self.assertEqual(insight["status"], "ready")
 
+    def test_truncated_think_is_retried_with_larger_budget(self):
+        """推理型模型把 token 花在 <think>、finish_reason=length：放寬一倍重試一次。"""
+        payload = json.dumps(self._payload())
+
+        class Truncated:
+            def __init__(self):
+                self.calls: list[int] = []
+
+            def chat_text(self, prompt, **kwargs):
+                self.calls.append(kwargs["max_tokens"])
+                if len(self.calls) == 1:
+                    return SimpleNamespace(
+                        content="<think>先看問題清單，第一項是 {\"rule\": \"csp\"}……",
+                        provider="fake", model="fake-1", finish_reason="length",
+                    )
+                return SimpleNamespace(
+                    content=payload, provider="fake", model="fake-1", finish_reason="stop",
+                )
+
+        chain = Truncated()
+        with override_settings(ARGUS_AI_INSIGHT_MAX_TOKENS=3000):
+            insight = ai_insight.generate_ai_insight(self.scan.id, chain=chain)
+        self.assertEqual(insight["status"], "ready")
+        self.assertEqual(chain.calls, [3000, 6000])
+
+    def test_still_truncated_after_retry_reports_token_limit(self):
+        class AlwaysTruncated:
+            def chat_text(self, prompt, **kwargs):
+                return SimpleNamespace(
+                    content="<think>還在想", provider="fake", model="fake-1",
+                    finish_reason="length",
+                )
+
+        with override_settings(ARGUS_AI_INSIGHT_MAX_TOKENS=3000):
+            insight = ai_insight.generate_ai_insight(self.scan.id, chain=AlwaysTruncated())
+        self.assertEqual(insight["status"], "failed")
+        self.assertIn("ARGUS_AI_INSIGHT_MAX_TOKENS", insight["reason"])
+
     def test_provider_error_records_public_reason(self):
         class Broken:
             def chat_text(self, prompt, **kwargs):

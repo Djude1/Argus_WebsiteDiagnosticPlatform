@@ -99,7 +99,7 @@ class _SeoParser(HTMLParser):
         elif tag == "meta":
             name = (a.get("name") or "").lower()
             prop = (a.get("property") or "").lower()
-            if name in {"description", "robots", "googlebot"} and name not in self.meta:
+            if name in {"description", "keywords", "robots", "googlebot"} and name not in self.meta:
                 self.meta[name] = a.get("content", "")
             if name == "viewport":
                 self.has_viewport = True
@@ -343,6 +343,26 @@ def _open_graph_check(og: dict) -> dict:
     return _check("open_graph", "Open Graph", "pass", "已設定 og:title、og:description、og:image")
 
 
+def split_meta_keywords(raw: str, limit: int = 30) -> list[str]:
+    """`<meta name="keywords">` 以半形／全形逗號或分號分隔；去空白、去重、最多 limit 個。
+
+    這個標籤對 Google 排名無效，只當「網站主自己宣告的關鍵字」線索用
+    （seo/keywords.declared_keywords）。"""
+    seen: set[str] = set()
+    keywords: list[str] = []
+    for item in re.split(r"[,，;；]", raw or ""):
+        keyword = _clean(item)
+        if not keyword or len(keyword) > 60:
+            continue
+        key = keyword.casefold()
+        if key not in seen:
+            seen.add(key)
+            keywords.append(keyword)
+        if len(keywords) >= limit:
+            break
+    return keywords
+
+
 def audit_page(page) -> dict:
     """單頁 SEO 檢查。page 為 apps.scans.models.Page（或欄位相同的物件）。"""
     html = page.rendered_dom or page.html or ""
@@ -403,6 +423,7 @@ def audit_page(page) -> dict:
         "images": parser.images,
         "image_total": parser.image_total,
         "open_graph": parser.og,
+        "meta_keywords": split_meta_keywords(parser.meta.get("keywords", "")),
         "hreflang": parser.hreflang,
         "has_favicon": parser.has_favicon,
         "has_viewport": parser.has_viewport,

@@ -98,3 +98,27 @@ def keyword_report(keywords: list[str], audits: list[dict]) -> list[dict]:
             "advice": advice,
         })
     return report
+
+
+def declared_keywords(targets: list[str], audits: list[dict]) -> list[dict]:
+    """網站自己在 `<meta name="keywords">` 宣告的關鍵字（網站主的意圖，對 Google 排名無效）。
+
+    跨頁去重（不分大小寫），依宣告頁數、首次出現排序；每個附上與目標關鍵字一樣的內容比對
+    （出現頁數、最相關頁面、建議）與 `is_target`（已在目標關鍵字裡），讓使用者把宣告、實際內容、
+    Search Console 搜尋詞三者對照。最多 30 個。"""
+    counts: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    for audit in audits:
+        if audit.get("status_code") != 200:
+            continue
+        for keyword in audit.get("meta_keywords") or []:
+            key = keyword.casefold()
+            counts[key] = counts.get(key, 0) + 1
+            labels.setdefault(key, keyword)
+    ordered = sorted(counts, key=lambda k: (-counts[k], list(counts).index(k)))[:30]
+    target_keys = {_norm(t) for t in targets}
+    report = keyword_report([labels[k] for k in ordered], audits)
+    return [
+        {**row, "declared_pages": counts[key], "is_target": _norm(row["keyword"]) in target_keys}
+        for key, row in zip(ordered, report, strict=True)
+    ]

@@ -184,11 +184,19 @@ def build_prompt(scan: ScanJob, groups: list[dict], candidates: list[dict]) -> s
     )
 
 
-def parse_response(content: str) -> dict:
+class AiInsightTruncated(AiInsightError):
+    """回應被 token 上限截斷（推理型模型把預算花在 <think>，正式輸出還沒開始或沒寫完）。"""
+
+
+def parse_response(content: str, finish_reason: str = "") -> dict:
     text = re.sub(r"<think>.*?</think>", " ", content or "", flags=re.DOTALL | re.IGNORECASE)
+    # 未閉合的 <think>（被截斷）：整段都是思考，裡面的大括號不是結果
+    text = re.sub(r"<think>.*$", " ", text, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text.strip())
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
+        if finish_reason == "length":
+            raise AiInsightTruncated("AI 回應被 token 上限截斷")
         raise AiInsightError("AI 回應中找不到結果")
     try:
         data = json.loads(text[start : end + 1])
@@ -307,13 +315,13 @@ def can_regenerate(insight: dict) -> bool:
 _NOT_RETRYABLE = {400, 401, 403, 404}
 
 
-def _chat_with_retry(chain, prompt: str):
+def _chat_with_retry(chain, prompt: str, max_tokens: int | None = None):
     from apps.agent.providers import ProviderError
 
     kwargs = {
         "model": settings.ARGUS_AI_INSIGHT_MODEL or None,
         "temperature": 0.2,
-        "max_tokens": settings.ARGUS_AI_INSIGHT_MAX_TOKENS,
+        "max_tokens": max_tokens or settings.ARGUS_AI_INSIGHT_MAX_TOKENS,
         "timeout": settings.ARGUS_AI_INSIGHT_TIMEOUT,
     }
     try:
@@ -348,12 +356,37 @@ def generate_ai_insight(scan_id: int, chain=None) -> dict:
             from apps.agent.providers import build_default_chain
 
             chain = build_default_chain()
-        response = _chat_with_retry(chain, build_prompt(scan, groups, candidates))
+        prompt = build_prompt(scan, groups, candidates)
+        response = _chat_with_retry(chain, prompt)
+        try:
+            data = parse_response(response.content, getattr(response, "finish_reason", ""))
+        except AiInsightTruncated:
+            # 推理型模型（MiniMax M 系列）會先寫一大段 <think>，預設上限不夠時正式輸出還沒開始
+            # 就被截斷；放寬一倍再試一次（只多一次，避免 token 失控）
+            logger.info(
+                "AI 解讀被截斷 scan_id=%s（max_tokens=%s，content=%s 字），放寬重試",
+                scan_id, settings.ARGUS_AI_INSIGHT_MAX_TOKENS, len(response.content or ""),
+            )
+            response = _chat_with_retry(
+                chain, prompt, max_tokens=settings.ARGUS_AI_INSIGHT_MAX_TOKENS * 2,
+            )
+            try:
+                data = parse_response(response.content, getattr(response, "finish_reason", ""))
+            except AiInsightTruncated as exc:
+                raise AiInsightError(
+                    "AI 回應被 token 上限截斷，請提高 ARGUS_AI_INSIGHT_MAX_TOKENS"
+                    f"（目前 {settings.ARGUS_AI_INSIGHT_MAX_TOKENS}）"
+                ) from exc
         result = validate(
-            parse_response(response.content), groups, candidates,
-            scan.normalized_url or scan.original_url,
+            data, groups, candidates, scan.normalized_url or scan.original_url,
         )
     except AiInsightError as exc:
+        logger.warning(
+            "AI 解讀解析失敗 scan_id=%s：%s（finish_reason=%s，content=%s 字）",
+            scan_id, exc,
+            getattr(response, "finish_reason", "?") if "response" in locals() else "?",
+            len(getattr(response, "content", "") or "") if "response" in locals() else 0,
+        )
         insight = {"status": "failed", "reason": str(exc)}
     except Exception as exc:  # noqa: BLE001 — provider 錯誤只記類別，不外洩回應內容
         logger.warning("AI 解讀失敗 scan_id=%s：%s", scan_id, exc.__class__.__name__)
