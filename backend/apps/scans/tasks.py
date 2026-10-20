@@ -1577,7 +1577,11 @@ def stage_exposure(ctx: ScanRunContext) -> None:
             )
             exposure_findings = [
                 owasp_mapper.tag(f)
-                for f in exposure_scanner.analyze_probe_results(probe_results)
+                for f in (
+                    exposure_scanner.analyze_probe_results(probe_results)
+                    + exposure_scanner.analyze_swagger_ui(probe_results)
+                    + exposure_scanner.analyze_server_banner(probe_results)
+                )
             ]
             ctx.record(exposure_findings, check="exposure_probe")
             # 探到的 OpenAPI／Swagger 規格列出全部端點，餵進未授權探測（讀取＋寫入授權）——

@@ -201,6 +201,170 @@ def extract_openapi_operations(results: list[dict]) -> list[dict]:
     return operations
 
 
+# 技術棧暴露探測（2026-10-20）：Swagger UI HTML 與預設錯誤頁版本號。原本只有 AI Agent 偶然發現，
+# 代號會隨措辭漂移、進不了計分與優先處理；沉澱成每次都跑得到的確定性檢查。
+SWAGGER_UI_SUFFIXES: tuple[str, ...] = (
+    "swagger-ui/index.html", "swagger-ui.html", "swagger-ui/",
+)
+# 觸發後端預設錯誤頁（Tomcat whitelabel／status report 常把版本號印在頁尾）的探測路徑
+ERROR_PAGE_SUFFIXES: tuple[str, ...] = ("WEB-INF/web.xml",)
+# Swagger UI HTML 專屬標記（SPA catch-all 回首頁不會有這些字，避免誤報）
+_SWAGGER_UI_MARKERS = ("swaggeruibundle", "swagger-ui", "<title>swagger ui")
+# 預設錯誤頁頁尾的伺服器版本橫幅（精確到小版本才算——代表預設頁未自訂）
+_SERVER_BANNER_RE = re.compile(
+    r"(Apache Tomcat|Jetty\(?|Apache|nginx|Microsoft-IIS|GlassFish[\w ]*Server)/(\d+\.\d[\w.]*)",
+    re.I,
+)
+MAX_TECH_PREFIXES = 4
+
+
+def _endpoint_path(url: str) -> str:
+    """網址路徑（小寫、去結尾斜線），與 apidoc finding 的 endpoint 正規化一致（跨層去重用）。"""
+    return urlparse(url or "").path.rstrip("/").lower() or "/"
+
+
+async def _probe_tech_disclosure(requester, origin: str, api_path_prefixes) -> list[dict]:
+    """在敏感檔探測之外，另探 Swagger UI HTML 與會觸發預設錯誤頁的路徑（確定性技術棧暴露）。
+
+    回傳帶 `kind`（swagger_ui／error_page）的 raw 結果；錯誤頁無論狀態碼都讀 body（版本號印在
+    4xx／5xx 頁上）。同源、受同一個 RPS 時鐘限制、數量有上限。
+    """
+    out: list[dict] = []
+    prefixes = [""]
+    for p in (api_path_prefixes or [])[:MAX_TECH_PREFIXES]:
+        seg = p.strip("/")
+        if seg and seg not in prefixes:
+            prefixes.append(seg)
+    seen: set[str] = set()
+
+    async def _fetch(url: str, kind: str, read_non_2xx: bool) -> None:
+        if url in seen:
+            return
+        seen.add(url)
+        try:
+            resp = await requester.get(url, timeout=12000)
+        except ScanCancelled:
+            raise
+        except Exception:
+            return
+        body = ""
+        try:
+            if resp.status == 200 or (read_non_2xx and resp.status < 600):
+                body = (await resp.text())[:8000]
+        except Exception:
+            body = ""
+        out.append({
+            "url": url,
+            "status": resp.status,
+            "content_type": (resp.headers or {}).get("content-type", ""),
+            "body": body,
+            "kind": kind,
+        })
+
+    for seg in prefixes:
+        base = f"{origin}/{seg}".rstrip("/") if seg else origin
+        for suf in SWAGGER_UI_SUFFIXES:
+            await _fetch(f"{base}/{suf}", "swagger_ui", read_non_2xx=False)
+        for suf in ERROR_PAGE_SUFFIXES:
+            await _fetch(f"{base}/{suf}", "error_page", read_non_2xx=True)
+    return out
+
+
+def analyze_swagger_ui(results: list[dict]) -> list[dict]:
+    """Swagger UI HTML 公開可瀏覽（純函式）。body 需帶 Swagger UI 專屬標記，排除 SPA catch-all。"""
+    urls: list[str] = []
+    for r in results or []:
+        if r.get("kind") != "swagger_ui" or int(r.get("status") or 0) != 200:
+            continue
+        low = (r.get("body") or "").lower()
+        if any(marker in low for marker in _SWAGGER_UI_MARKERS):
+            safe = redact_pii_in_text(redact_url_query_values(str(r.get("url") or "")))
+            if safe not in urls:
+                urls.append(safe)
+    if not urls:
+        return []
+    listed = "\n".join(f"• {u}" for u in urls[:5])
+    return [make_finding(
+        category="security",
+        severity="low",
+        rule_id="exposure-swagger-ui",
+        title="Swagger UI 互動式 API 瀏覽器對外公開",
+        description=(
+            "後端的 Swagger UI 頁面未設存取保護，任何人都能從瀏覽器開啟、互動式瀏覽與測試所有 API"
+            "（含參數與 request/response 結構），等同把後端介面地圖與測試台公開給外部。"
+            "API 規格本身的外洩另列（敏感檔案外洩：API 文件／端點）；此項是互動式 UI 介面。"
+        ),
+        remediation=(
+            "正式環境關閉 Swagger UI（springdoc.swagger-ui.enabled=false，或 springfox 對應設定），"
+            "或在反向代理僅允許內網／管理員 IP 存取 swagger-ui 路徑。"
+        ),
+        evidence="命中（無登入憑證）：\n" + listed,
+        evidence_source="exposure_probe",
+        evidence_json={
+            "endpoint": _endpoint_path(urls[0]),
+            "assessment": {
+                "condition": "Swagger UI 不需登入就能從瀏覽器開啟。",
+                "observed": "主動探測取得 Swagger UI 頁面（內容含 Swagger UI 專屬標記）。",
+                "missing": "未逐一測試 UI 列出的端點是否缺乏授權。",
+                "verify": "用未登入的瀏覽器開啟該網址；修補後應回 401／403／404。",
+            },
+        },
+        impact_area="information_exposure",
+        confidence=0.9,
+        priority_score=30.0,
+    )]
+
+
+def analyze_server_banner(results: list[dict]) -> list[dict]:
+    """預設錯誤頁洩漏伺服器產品與精確版本號（純函式）。只看錯誤頁探測結果，避免誤報。"""
+    hits: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for r in results or []:
+        if r.get("kind") != "error_page":
+            continue
+        match = _SERVER_BANNER_RE.search(r.get("body") or "")
+        if not match:
+            continue
+        banner = match.group(0)
+        if banner not in seen:
+            seen.add(banner)
+            safe = redact_pii_in_text(redact_url_query_values(str(r.get("url") or "")))
+            hits.append((safe, banner))
+    if not hits:
+        return []
+    listed = "\n".join(f"• {banner}（{url}）" for url, banner in hits[:5])
+    banners = "、".join(b for _, b in hits)
+    return [make_finding(
+        category="security",
+        severity="low",
+        rule_id="exposure-server-error-banner",
+        title="預設錯誤頁洩漏伺服器版本號",
+        description=(
+            f"後端的預設錯誤頁未自訂，頁面直接印出精確到小版本的伺服器版本（{banners}）。"
+            "攻擊者無需工具即可取得技術棧指紋，直接比對該版本的已知 CVE 挑漏洞，降低攻擊成本。"
+        ),
+        remediation=(
+            "自訂錯誤頁（web.xml 的 error-page 或 Spring Boot ErrorController），移除版本字串；"
+            "在反向代理層過濾回應中的版本橫幅；並將該伺服器升級到仍受支援的修補版。"
+        ),
+        evidence="命中（預設錯誤頁內容）：\n" + listed,
+        evidence_source="exposure_probe",
+        evidence_json={
+            "endpoint": _endpoint_path(hits[0][0]),
+            "banners": banners,
+            "assessment": {
+                "condition": "未命中路由的請求回傳未自訂的預設錯誤頁，頁尾含精確版本號。",
+                "observed": "主動探測取得預設錯誤頁內容，比對到伺服器版本橫幅。",
+                "missing": "未驗證該版本是否真的存在可被利用的 CVE。",
+                "verify": "用未登入的瀏覽器開啟一個不存在的路徑；修補後錯誤頁不應顯示版本號。",
+            },
+        },
+        impact_area="information_exposure",
+        confidence=0.9,
+        priority_score=28.0,
+    )]
+
+
 def parse_robots_disallow(robots_text: str) -> list[str]:
     """從 robots.txt 抽出所有 Disallow 路徑（去重保序）。空 / 例外回 []。"""
     paths: list[str] = []
@@ -744,6 +908,8 @@ async def probe_paths(
                         results.append(result)
                     else:
                         stats["unreachable"] += 1
+                # 技術棧暴露：Swagger UI HTML 與預設錯誤頁版本號（確定性補位）
+                results.extend(await _probe_tech_disclosure(requester, origin, api_path_prefixes))
             finally:
                 await context.close()
                 await browser.close()

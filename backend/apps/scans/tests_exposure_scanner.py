@@ -313,8 +313,9 @@ class TestProbePacing(SimpleTestCase):
                 robots_disallow=[],
             )
 
-        self.assertEqual(request.get.await_count, 3)
-        self.assertEqual(sleep.await_count, 2)
+        # 2 個 soft-404 基準 + 1 個探測目標 + 技術棧暴露（根前綴：3 個 Swagger UI + 1 個錯誤頁）
+        self.assertEqual(request.get.await_count, 7)
+        self.assertEqual(sleep.await_count, 6)
 
 
 class ExposureProbeStatusTests(SimpleTestCase):
@@ -414,3 +415,49 @@ class ExtractOpenapiOperationsTests(_SimpleTestCase):
         spec = {"paths": {"/x": {"get": {}, "parameters": [], "summary": "y"}}}
         ops = exp.extract_openapi_operations([_apidoc(spec)])
         self.assertEqual([o["method"] for o in ops], ["GET"])
+
+
+# ── 技術棧暴露：Swagger UI HTML 與預設錯誤頁版本號（2026-10-20）──────────
+class AnalyzeSwaggerUiTests(_SimpleTestCase):
+    def _r(self, body, *, status=200, url="https://site.test/api_proxy/swagger-ui/index.html"):
+        return {"kind": "swagger_ui", "status": status,
+                "content_type": "text/html", "body": body, "url": url}
+
+    def test_swagger_ui_markers_flagged(self):
+        f = exp.analyze_swagger_ui([self._r("<title>Swagger UI</title><div id=swagger-ui>")])
+        self.assertEqual(len(f), 1)
+        self.assertEqual(f[0]["rule_id"], "exposure-swagger-ui")
+        self.assertEqual(f[0]["severity"], "low")
+
+    def test_spa_catchall_not_flagged(self):
+        # SPA 回首頁（沒有 Swagger UI 專屬標記）不算
+        self.assertEqual(exp.analyze_swagger_ui([self._r("<html><div id=root></div></html>")]), [])
+
+    def test_non_200_not_flagged(self):
+        self.assertEqual(exp.analyze_swagger_ui([self._r("SwaggerUIBundle", status=404)]), [])
+
+    def test_multiple_prefixes_merge_one_finding(self):
+        rs = [
+            self._r("SwaggerUIBundle(", url="https://site.test/api_proxy/swagger-ui/index.html"),
+            self._r("SwaggerUIBundle(", url="https://site.test/backend/swagger-ui/index.html"),
+        ]
+        self.assertEqual(len(exp.analyze_swagger_ui(rs)), 1)
+
+
+class AnalyzeServerBannerTests(_SimpleTestCase):
+    def _r(self, body, *, kind="error_page", url="https://site.test/api_proxy/WEB-INF/web.xml"):
+        return {"kind": kind, "status": 404, "content_type": "text/html", "body": body, "url": url}
+
+    def test_tomcat_version_flagged(self):
+        f = exp.analyze_server_banner([self._r("<h3>Apache Tomcat/9.0.102</h3>")])
+        self.assertEqual(len(f), 1)
+        self.assertEqual(f[0]["rule_id"], "exposure-server-error-banner")
+        self.assertIn("Apache Tomcat/9.0.102", f[0]["evidence_json"]["banners"])
+
+    def test_only_error_page_kind_scanned(self):
+        # 2xx 檔案內容剛好提到 nginx 不算（只看 error_page）
+        self.assertEqual(
+            exp.analyze_server_banner([self._r("nginx/1.25.3", kind="swagger_ui")]), [])
+
+    def test_no_banner_not_flagged(self):
+        self.assertEqual(exp.analyze_server_banner([self._r("<html>404 Not Found</html>")]), [])

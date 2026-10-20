@@ -54,6 +54,8 @@ _RULE_OWASP_MAP: dict[str, tuple[str, str]] = {
     "exposure-file-data": ("A01", "CWE-200"),
     "security-unauth-api-records": ("A01", "CWE-862"),
     "security-unauth-api-write": ("A01", "CWE-862"),
+    "exposure-swagger-ui": ("A05", "CWE-200"),
+    "exposure-server-error-banner": ("A05", "CWE-200"),
     # ADR-0005 §2：移植自 ZAP 被動的自家檢查
     "security-mixed-content": ("A04", "CWE-319"),
     "header-permissions-policy": ("A02", "CWE-693"),
