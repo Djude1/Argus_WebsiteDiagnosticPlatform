@@ -362,3 +362,55 @@ class ExposureProbeStatusTests(SimpleTestCase):
             )
         self.assertEqual(results, [])
         self.assertEqual((stats["targets"], stats["unreachable"], stats["error"]), (2, 2, ""))
+
+
+# ── OpenAPI／Swagger 規格解析（寫入授權探測用，2026-10-20）──────────────
+import json as _json  # noqa: E402
+
+from django.test import SimpleTestCase as _SimpleTestCase  # noqa: E402
+
+
+def _apidoc(spec, *, url="https://site.test/api_proxy/v3/api-docs", status=200):
+    return {"url": url, "status": status, "content_type": "application/json",
+            "body": _json.dumps(spec)}
+
+
+class ExtractOpenapiOperationsTests(_SimpleTestCase):
+    def test_openapi3_paths_prefixed_by_doc_location(self):
+        spec = {
+            "openapi": "3.0.1",
+            "servers": [{"url": "http://172.17.202.182:8080"}],  # 內網，不用來組外部網址
+            "paths": {
+                "/members/all": {"get": {}},
+                "/members/{id}": {"put": {}, "delete": {}},
+            },
+        }
+        ops = exp.extract_openapi_operations([_apidoc(spec)])
+        got = {(o["path"], o["method"]) for o in ops}
+        # 規格所在前綴 /api_proxy 套到每條 path
+        self.assertIn(("/api_proxy/members/all", "GET"), got)
+        self.assertIn(("/api_proxy/members/{id}", "PUT"), got)
+        self.assertIn(("/api_proxy/members/{id}", "DELETE"), got)
+
+    def test_swagger2_basepath_applied(self):
+        spec = {
+            "swagger": "2.0",
+            "basePath": "/v1",
+            "paths": {"/users": {"get": {}, "post": {}}},
+        }
+        ops = exp.extract_openapi_operations([_apidoc(spec, url="https://site.test/api-docs")])
+        got = {(o["path"], o["method"]) for o in ops}
+        self.assertIn(("/v1/users", "GET"), got)
+        self.assertIn(("/v1/users", "POST"), got)
+
+    def test_non_apidoc_and_non_json_ignored(self):
+        self.assertEqual(exp.extract_openapi_operations([
+            {"url": "https://site.test/x", "status": 200,
+             "content_type": "text/html", "body": "<html></html>"},
+        ]), [])
+        self.assertEqual(exp.extract_openapi_operations([_apidoc({"paths": {}}, status=404)]), [])
+
+    def test_unknown_method_keys_skipped(self):
+        spec = {"paths": {"/x": {"get": {}, "parameters": [], "summary": "y"}}}
+        ops = exp.extract_openapi_operations([_apidoc(spec)])
+        self.assertEqual([o["method"] for o in ops], ["GET"])

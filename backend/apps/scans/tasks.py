@@ -61,8 +61,11 @@ from apps.scans.security.api_scanner import MAX_SURFACE_ENDPOINTS, analyze_api
 from apps.scans.security.authz_probe import (
     analyze_idor_results,
     analyze_unauthorized_results,
+    analyze_write_probe_results,
     expand_idor_candidates,
+    openapi_probe_plan,
     probe_unauthorized_endpoints,
+    probe_write_endpoints,
 )
 from apps.scans.security.content_injection import (
     build_injection_finding,
@@ -1534,6 +1537,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
         }
         extra_paths = [f"{scan_job.origin}/{path.lstrip('/')}" for path in exposure_prev.values()]
         probe_stats: dict = {}
+        openapi_operations: list[dict] = []
         try:
             probe_results = _run_async(
                 lambda: exposure_scanner.probe_paths(
@@ -1551,6 +1555,9 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                 for f in exposure_scanner.analyze_probe_results(probe_results)
             ]
             ctx.record(exposure_findings, check="exposure_probe")
+            # 探到的 OpenAPI／Swagger 規格列出全部端點，餵進未授權探測（讀取＋寫入授權）——
+            # 前端不呼叫的後台端點（如 /members/all）原本只有 AI Agent 偶然發現，現在變確定性項目
+            openapi_operations = exposure_scanner.extract_openapi_operations(probe_results)
             status, reason = _exposure_probe_status(probe_stats, len(probe_results))
             ctx.coverage.mark("exposure_probe", status, reason)
             _mark_reverify_resolved(ctx, exposure_prev, probe_results)
@@ -1571,7 +1578,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                 f"敏感檔案外洩探測略過（{exc.__class__.__name__}）",
                 level="warn",
             )
-        _run_authz_probe(ctx)
+        _run_authz_probe(ctx, openapi_operations)
     else:
         ctx.coverage.mark("exposure_probe", SKIPPED, "單頁或未授權主動測試")
         ctx.coverage.mark("authz_probe", SKIPPED, "單頁或未授權主動測試")
@@ -1679,18 +1686,24 @@ def _mark_reverify_resolved(
             ctx.coverage.mark_resolved(identity)
 
 
-def _run_authz_probe(ctx: ScanRunContext) -> None:
+def _run_authz_probe(
+    ctx: ScanRunContext, openapi_operations: list[dict] | None = None,
+) -> None:
     """未授權存取探測：對發現的 API 端點做無憑證 GET，成批帳號／成員記錄匿名可讀即報。
 
     把 Agent 偶然打到的未授權個資 API 沉澱成確定性檢查；失敗不影響主掃描。
+    `openapi_operations`（2026-10-20）是本次 exposure 探測解析到的 OpenAPI／Swagger 規格端點，
+    規格列出的 GET 併入讀取探測、寫入方法（POST／PUT／PATCH／DELETE）另做授權探測（不送有效資料）。
     """
     scan_job_id = ctx.scan_job_id
     origin = ctx.scan_job.origin
+    spec_get_urls, write_targets = openapi_probe_plan(openapi_operations or [], origin)
     candidates = [
         f"{origin}/{path.lstrip('/')}"
         for path in dict.fromkeys(_observed_api_paths(ctx))  # 去重保序
         if path
     ]
+    candidates.extend(spec_get_urls)
     # ADR-0006 第 3 刀：把上一次完成掃描的 authz 端點也納入本次無憑證探測，讓「仍存在」的
     # 問題被 authz 分析器重新找到（漏報自癒）、「已修好」的能正向重探（回 401/403/404）。
     # exposure 檔案端點改走 exposure 探測（stage_exposure），由 exposure 分析器重報仍可讀的檔案。
@@ -1700,7 +1713,7 @@ def _run_authz_probe(ctx: ScanRunContext) -> None:
         if source == "authz_probe" and "#" not in path  # IDOR 模板（含 #）無法直接重探
     }
     candidates.extend(f"{origin}/{path.lstrip('/')}" for path in authz_prev.values())
-    if not candidates:
+    if not candidates and not write_targets:
         ctx.coverage.mark("authz_probe", SKIPPED, "沒有發現可探測的 API 端點")
         return
     # 從觀察到的 /集合/:id 反推父集合（成批外洩）與鄰近 id（IDOR 枚舉）一起探；
@@ -1710,18 +1723,28 @@ def _run_authz_probe(ctx: ScanRunContext) -> None:
     try:
         results = _run_async(
             lambda: probe_unauthorized_endpoints(candidates, scan_job_id)
-        )
+        ) if candidates else []
         findings = [
             owasp_mapper.tag(f)
             for f in analyze_unauthorized_results(results) + analyze_idor_results(results)
         ]
+        # 寫入型端點授權探測（BFLA，不送有效資料；見 authz_probe 模組 docstring 的安全界線）
+        write_results: list[dict] = []
+        if write_targets:
+            raise_if_cancelled(scan_job_id)
+            write_results = _run_async(
+                lambda: probe_write_endpoints(write_targets, scan_job_id)
+            )
+            findings += [
+                owasp_mapper.tag(f) for f in analyze_write_probe_results(write_results)
+            ]
         ctx.record(findings, check="authz_probe")
         ctx.coverage.mark("authz_probe", COMPLETED)
         _mark_reverify_resolved(ctx, authz_prev, results)
         append_log(
             scan_job_id,
-            f"未授權存取探測完成：探測 {len(results)} 個 API 端點，"
-            f"發現 {len(findings)} 項未授權記錄外洩／IDOR",
+            f"未授權存取探測完成：讀取 {len(results)} 個、寫入 {len(write_results)} 個 API 端點，"
+            f"發現 {len(findings)} 項未授權記錄外洩／IDOR／寫入授權缺失",
         )
     except ScanCancelled:
         raise

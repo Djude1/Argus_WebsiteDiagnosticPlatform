@@ -349,6 +349,219 @@ def analyze_idor_results(results: list[dict]) -> list[dict]:
     return findings
 
 
+# ── 寫入型端點授權探測（BFLA，2026-10-20）────────────────────────────────
+# OpenAPI／Swagger 規格列出的 POST／PUT／PATCH／DELETE 端點，以「未登入＋不送有效 body」送一次，
+# 從回應狀態判斷是否缺少授權閘門。**安全界線（硬性）：絕不送有效資料、不做真正的新增／修改／刪除。**
+# DELETE 一律只對不存在的 id 試、裸集合（沒有 path 參數）的 DELETE 直接跳過，確保即使缺授權也
+# 打不到真實資料。判定只看「未登入請求有沒有被授權閘門擋在前面」。
+WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+_PARAM_RE = re.compile(r"\{[^}/]+\}")
+# 寫入／刪除探測一律代入這個「不存在」的 id：即使端點缺授權，也只會打到「查無此物」而非真實資料
+_NONEXISTENT_ID = "987654321"
+# 未登入請求「到達處理邏輯」的狀態（代表沒有授權閘門把它擋在前面）：
+#   2xx＝真的執行了（最嚴重）；400／415／422／500＝進了 handler 才因空 body 被擋（缺授權閘門）
+_WRITE_REACHED = frozenset({200, 201, 202, 204, 400, 415, 422, 500})
+# 這些狀態代表「有被擋下或方法不適用」，不算缺授權：401／403 授權閘門、405 方法不允許、
+# 404 查無路徑或物件、429 速率限制
+_WRITE_PROTECTED = frozenset({401, 403, 404, 405, 429})
+
+
+def _fill_params(path: str, value: str) -> str:
+    """把 OpenAPI path 參數（`{id}`）換成具體探測值。"""
+    return _PARAM_RE.sub(value, path or "")
+
+
+def openapi_probe_plan(
+    operations: list[dict], origin: str,
+) -> tuple[list[str], list[dict]]:
+    """把規格 operation 拆成（GET 讀取候選 URL, 寫入授權探測目標）。純函式。
+
+    - GET：path 參數代入 `1`，併入無憑證讀取探測（成批外洩／IDOR 由既有分析器判定）。
+    - POST／PUT／PATCH／DELETE：path 參數一律代入不存在的 id；**裸集合的 DELETE 跳過**
+      （沒有 id 可代、直接打集合太危險）。寫入探測不送任何 body。
+    """
+    get_urls: list[str] = []
+    write_targets: list[dict] = []
+    for op in operations or []:
+        path = str(op.get("path") or "")
+        method = str(op.get("method") or "").upper()
+        if not path.startswith("/"):
+            continue
+        has_param = bool(_PARAM_RE.search(path))
+        if method == "GET":
+            get_urls.append(origin + _fill_params(path, "1"))
+        elif method in WRITE_METHODS:
+            if method == "DELETE" and not has_param:
+                continue  # 裸集合 DELETE：無法代入不存在 id，太危險，跳過
+            write_targets.append({
+                "url": origin + _fill_params(path, _NONEXISTENT_ID),
+                "method": method,
+            })
+    return get_urls, write_targets
+
+
+async def probe_write_endpoints(
+    write_targets: list[dict], scan_job_id: int,
+) -> list[dict]:
+    """對寫入型端點送「未登入＋無 body」請求，回傳 raw 結果。任何例外回已收集結果。
+
+    **不送任何有效資料**：POST／PUT／PATCH 送空 body，DELETE 只對不存在 id——即使端點缺授權也
+    不會真的改動資料。只為了從回應狀態判斷有沒有授權閘門。
+    """
+    from playwright.async_api import async_playwright  # 延遲匯入
+
+    if not getattr(settings, "ARGUS_AUTHZ_PROBE_WRITE_ENABLED", True):
+        return []
+    max_write = max(int(getattr(settings, "ARGUS_AUTHZ_PROBE_MAX_WRITE", 40)), 0)
+    if max_write == 0:
+        return []
+
+    targets: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in write_targets or []:
+        method = str(item.get("method") or "").upper()
+        if method not in WRITE_METHODS:
+            continue
+        try:
+            safe = assert_public_http_url(item.get("url") or "")
+        except Exception:
+            continue
+        key = (safe, method)
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append((safe, method))
+        if len(targets) >= max_write:
+            break
+
+    results: list[dict] = []
+    if not targets:
+        return results
+    rps = max(getattr(settings, "ARGUS_ACTIVE_MAX_RPS", 2), 1)
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True, **playwright_launch_kwargs())
+            context = await browser.new_context(user_agent=settings.ARGUS_SCANNER_USER_AGENT)
+            try:
+                requester = _PacedRequester(context, scan_job_id, 1.0 / rps)
+                for url, method in targets:
+                    try:
+                        resp = await requester.fetch(url, method=method, timeout=12000)
+                    except ScanCancelled:
+                        raise
+                    except Exception:
+                        continue
+                    body = ""
+                    try:
+                        if 200 <= resp.status < 300:
+                            body = (await resp.text())[:2000]
+                    except Exception:
+                        body = ""
+                    results.append({
+                        "url": url,
+                        "method": method,
+                        "status": resp.status,
+                        "content_type": (resp.headers or {}).get("content-type", ""),
+                        "body": body,
+                    })
+            finally:
+                await context.close()
+                await browser.close()
+    except ScanCancelled:
+        raise
+    except Exception:
+        return results
+    return results
+
+
+def analyze_write_probe_results(results: list[dict]) -> list[dict]:
+    """把寫入授權探測的 raw 結果轉成 Finding（純函式）。每個端點一筆，合併多個方法。
+
+    只在未登入請求「到達處理邏輯」（沒有被 401／403／404／405 擋下）時才算缺授權閘門：
+    2xx＝真的執行了寫入動作（high）；4xx／5xx 的 body 驗證錯誤＝進了 handler 但因空 body 被擋
+    （缺授權閘門，medium，我們刻意沒送有效資料所以沒有真的寫入）。
+    """
+    by_path: dict[str, dict] = {}
+    for r in results or []:
+        try:
+            status = int(r.get("status") or 0)
+        except (TypeError, ValueError):
+            continue
+        method = str(r.get("method") or "").upper()
+        if method not in WRITE_METHODS:
+            continue
+        if status in _WRITE_PROTECTED or 300 <= status < 400:
+            continue
+        if status not in _WRITE_REACHED:
+            continue
+        url = r.get("url") or ""
+        path = _path_of(url)
+        entry = by_path.setdefault(path, {"methods": {}, "url": url})
+        entry["methods"][method] = status
+
+    findings: list[dict] = []
+    for path, entry in by_path.items():
+        methods: dict[str, int] = entry["methods"]
+        executed = any(200 <= s < 300 for s in methods.values())
+        severity = "high" if executed else "medium"
+        safe_path = redact_pii_in_text(redact_url_query_values(path))
+        method_lines = [
+            f"{m} {safe_path} → HTTP {s}"
+            + ("（已實際執行，無授權攔截）" if 200 <= s < 300 else "（進入處理邏輯，無授權攔截）")
+            for m, s in sorted(methods.items())
+        ]
+        if executed:
+            description = (
+                f"寫入型 API 端點 {safe_path} 在未登入、未授權的情況下即可呼叫，"
+                "且伺服器實際受理了請求（回 2xx）。代表這些新增／修改／刪除動作缺少授權閘門，"
+                "攻擊者無需任何帳號就能改動後台資料。"
+            )
+        else:
+            description = (
+                f"寫入型 API 端點 {safe_path} 在未登入、未授權的情況下即可送達後端處理邏輯"
+                "（回應是資料格式／欄位驗證錯誤，而不是 401／403）。代表請求沒有被授權閘門擋下，"
+                "一旦帶上正確的欄位就可能未授權新增／修改／刪除資料。"
+            )
+        findings.append(make_finding(
+            category="security",
+            severity=severity,
+            rule_id="security-unauth-api-write",
+            title="寫入型 API 端點未驗證授權（可未登入新增／修改／刪除）",
+            description=description,
+            remediation=(
+                "在這些寫入端點（POST／PUT／PATCH／DELETE）前加上身份驗證與授權中介層，"
+                "未登入或權限不足一律回 401／403，不要只靠前端隱藏操作入口；"
+                "並確認每個寫入動作都檢查操作者是否有權變更該筆資源。"
+            ),
+            evidence="\n".join([
+                "以未登入請求對規格列出的寫入端點各送一次（不帶任何有效資料）：",
+                *method_lines,
+            ]),
+            evidence_source="authz_probe",
+            evidence_json={
+                "endpoint": path,
+                "methods": {m: s for m, s in sorted(methods.items())},
+                "assessment": {
+                    "condition": "這些寫入端點不需登入就能送達後端，缺少授權閘門。",
+                    "observed": (
+                        "以未登入請求送出；POST／PUT／PATCH 送空內容、DELETE 只對不存在的 id，"
+                        "刻意不送任何有效資料，因此不會真的新增／修改／刪除資料。"
+                    ),
+                    "missing": (
+                        "刻意沒有送有效欄位，未進一步驗證帶正確資料時是否真的寫入成功。"
+                    ),
+                    "verify": (
+                        "用未登入的工具對這些端點送對應方法；修補後應回 401 或 403。"
+                    ),
+                },
+            },
+            impact_area="broken_access_control",
+            confidence=0.9,
+            priority_score=72.0 if executed else 52.0,
+        ))
+    return findings
+
+
 def _single_record(parsed: object) -> dict | None:
     """單一物件（IDOR 回傳一筆）：dict 本身，或 {data:{...}}／{result:{...}} 包一層的非空物件。
 

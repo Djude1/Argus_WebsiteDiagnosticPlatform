@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 import uuid
@@ -122,6 +123,82 @@ def api_prefixes(paths: list[str]) -> list[str]:
         if len(prefixes) >= MAX_API_PREFIXES:
             break
     return prefixes[:MAX_API_PREFIXES]
+
+
+# 寫入型 HTTP 方法（BFLA 授權探測對象）。
+_OPENAPI_METHODS = ("get", "post", "put", "patch", "delete")
+# 一次掃描最多從規格取出幾個 operation（避免大型 API 規格灌爆探測量；仍受端點上限再截一次）。
+MAX_OPENAPI_OPERATIONS = 120
+
+
+def _apidoc_base_prefix(url: str) -> str:
+    """從 api-docs 的網址推出外部前綴：`/api_proxy/v3/api-docs` → `/api_proxy`。
+
+    規格與它底下的端點由同一個反向代理前綴服務，所以規格所在前綴就是端點的外部前綴。
+    比對 API_DOC_SUFFIXES 去掉尾段；去不掉時回空字串（端點直接掛在根目錄）。
+    """
+    path = urlparse(url or "").path
+    low = path.lower()
+    for suffix in API_DOC_SUFFIXES:
+        marker = "/" + suffix.lower()
+        idx = low.rfind(marker)
+        if idx >= 0:
+            return path[:idx].rstrip("/")
+    return path.rstrip("/")
+
+
+def extract_openapi_operations(results: list[dict]) -> list[dict]:
+    """從 api-docs 命中結果解析出 operation 清單（純函式，供 authz 讀／寫授權探測用）。
+
+    回傳 `[{"path": 外部路徑, "method": "GET"/"POST"/...}, ...]`（去重保序）。外部路徑＝規格所在
+    前綴（`_apidoc_base_prefix`）＋ OpenAPI 2.0 的 `basePath` ＋ 規格 `paths` 的鍵；OpenAPI 3.x 的
+    `servers` 多半是內網位址，不用來組外部網址。path 參數（`{id}`）原樣保留，由呼叫端換成探測值。
+    """
+    operations: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for r in results or []:
+        try:
+            status = int(r.get("status") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not 200 <= status < 300:
+            continue
+        body = r.get("body") or ""
+        ctype = str(r.get("content_type") or "").lower()
+        if "json" not in ctype and not body.lstrip().startswith("{"):
+            continue
+        try:
+            spec = json.loads(body)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(spec, dict):
+            continue
+        paths = spec.get("paths")
+        if not isinstance(paths, dict):
+            continue
+        base = _apidoc_base_prefix(r.get("url") or "")
+        base_path = spec.get("basePath") if isinstance(spec.get("basePath"), str) else ""
+        base_path = (base_path or "").rstrip("/")
+        for spec_path, methods in paths.items():
+            if not isinstance(spec_path, str) or not spec_path.startswith("/"):
+                continue
+            if not isinstance(methods, dict):
+                continue
+            external = base + base_path + spec_path
+            if not external.startswith("/"):
+                external = "/" + external
+            for method in methods:
+                m = str(method).lower()
+                if m not in _OPENAPI_METHODS:
+                    continue
+                key = (external, m.upper())
+                if key in seen:
+                    continue
+                seen.add(key)
+                operations.append({"path": external, "method": m.upper()})
+                if len(operations) >= MAX_OPENAPI_OPERATIONS:
+                    return operations
+    return operations
 
 
 def parse_robots_disallow(robots_text: str) -> list[str]:
@@ -521,7 +598,7 @@ class _PacedRequester:
         self._min_interval = min_interval
         self._last_at = 0.0
 
-    async def get(self, raw_url: str, *, timeout: int):
+    async def _before(self) -> None:
         cancelled = await sync_to_async(
             is_cancelled,
             thread_sensitive=True,
@@ -532,10 +609,23 @@ class _PacedRequester:
         if wait > 0:
             await asyncio.sleep(wait)
         self._last_at = time.perf_counter()
+
+    async def get(self, raw_url: str, *, timeout: int):
+        await self._before()
         # max_redirects=0：不跟隨重定向，避免目標站的 open redirect
         # 把探針導向雲端 metadata / 外站（任何重定向會丟例外 → 跳過該路徑）
         return await self._context.request.get(
             assert_public_http_url(raw_url),
+            timeout=timeout,
+            max_redirects=0,
+        )
+
+    async def fetch(self, raw_url: str, *, method: str, timeout: int):
+        """非 GET 方法的授權探測：不帶任何 body（不送有效資料，絕不真的寫入資料）。"""
+        await self._before()
+        return await self._context.request.fetch(
+            assert_public_http_url(raw_url),
+            method=method,
             timeout=timeout,
             max_redirects=0,
         )

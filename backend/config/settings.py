@@ -388,6 +388,13 @@ ARGUS_ZAP_ACTIVE_MAX_NODES = int(os.getenv("ARGUS_ZAP_ACTIVE_MAX_NODES", "40"))
 # 未授權存取探測（authz_probe）每次掃描最多探測幾個 API 端點（ADR-0005 §3：不限重抓，放寬以提高
 # BOLA 涵蓋率；仍受 ARGUS_ACTIVE_MAX_RPS 速率限制）。
 ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS = int(os.getenv("ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS", "60"))
+# 寫入型 API 授權探測（BFLA）：把 OpenAPI／Swagger 規格列出的 POST／PUT／PATCH／DELETE 端點，
+# 以「未登入＋不送有效資料」送一次，從回應狀態判斷是否缺少授權閘門（絕不送有效 body、不做真正
+# 的新增／修改／刪除；DELETE 只對不存在的 id 試、裸集合一律跳過）。全站＋主動＋已授權才跑。
+ARGUS_AUTHZ_PROBE_WRITE_ENABLED = (
+    os.getenv("ARGUS_AUTHZ_PROBE_WRITE_ENABLED", "true").lower() == "true"
+)
+ARGUS_AUTHZ_PROBE_MAX_WRITE = int(os.getenv("ARGUS_AUTHZ_PROBE_MAX_WRITE", "40"))
 # 已知漏洞優先序補強（apps/scans/security/vuln_intel.py）：EPSS 被利用機率＋OSV.dev 修補版本。
 # 只送出函式庫名稱、版本與 CVE 編號（不含受測網址）；查不到時原樣保留問題。
 ARGUS_VULN_INTEL_ENABLED = env_bool("ARGUS_VULN_INTEL_ENABLED", default=True)

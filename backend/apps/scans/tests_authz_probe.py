@@ -220,3 +220,88 @@ class MaxEndpointsSettingTests(SimpleTestCase):
             self.assertEqual(_max_endpoints(), 10)
         with override_settings(ARGUS_AUTHZ_PROBE_MAX_ENDPOINTS=0):
             self.assertEqual(_max_endpoints(), 1)  # 下限 1
+
+
+# ── 寫入型端點授權探測（BFLA，2026-10-20）──────────────────────────────
+from apps.scans.security.authz_probe import (  # noqa: E402
+    analyze_write_probe_results,
+    openapi_probe_plan,
+)
+
+
+class OpenapiProbePlanTests(SimpleTestCase):
+    ORIGIN = "https://site.example.test"
+
+    def test_get_goes_to_read_candidates_with_param_filled(self):
+        ops = [{"path": "/api/members/{id}", "method": "GET"}]
+        gets, writes = openapi_probe_plan(ops, self.ORIGIN)
+        self.assertEqual(gets, ["https://site.example.test/api/members/1"])
+        self.assertEqual(writes, [])
+
+    def test_write_uses_nonexistent_id(self):
+        ops = [{"path": "/api/members/{id}", "method": "PUT"}]
+        _, writes = openapi_probe_plan(ops, self.ORIGIN)
+        self.assertEqual(writes, [{
+            "url": "https://site.example.test/api/members/987654321", "method": "PUT",
+        }])
+
+    def test_bare_collection_delete_skipped(self):
+        # 沒有 path 參數的 DELETE（裸集合）太危險，直接跳過
+        ops = [{"path": "/api/members/all", "method": "DELETE"}]
+        _, writes = openapi_probe_plan(ops, self.ORIGIN)
+        self.assertEqual(writes, [])
+
+    def test_delete_with_param_kept_as_nonexistent(self):
+        ops = [{"path": "/api/members/{id}", "method": "DELETE"}]
+        _, writes = openapi_probe_plan(ops, self.ORIGIN)
+        self.assertEqual(writes[0]["url"], "https://site.example.test/api/members/987654321")
+
+    def test_post_to_collection_allowed(self):
+        ops = [{"path": "/api/members", "method": "POST"}]
+        _, writes = openapi_probe_plan(ops, self.ORIGIN)
+        self.assertEqual(writes, [
+            {"url": "https://site.example.test/api/members", "method": "POST"},
+        ])
+
+
+def _wr(method, status, *, path="/api/members/987654321"):
+    return {"url": f"https://site.example.test{path}", "method": method,
+            "status": status, "content_type": "application/json", "body": ""}
+
+
+class AnalyzeWriteProbeResultsTests(SimpleTestCase):
+    def test_401_403_405_404_protected_not_flagged(self):
+        for status in (401, 403, 404, 405, 429):
+            self.assertEqual(analyze_write_probe_results([_wr("POST", status)]), [])
+
+    def test_redirect_not_flagged(self):
+        self.assertEqual(analyze_write_probe_results([_wr("POST", 302)]), [])
+
+    def test_validation_error_is_suspected_medium(self):
+        findings = analyze_write_probe_results([_wr("POST", 400)])
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["rule_id"], "security-unauth-api-write")
+        self.assertEqual(findings[0]["severity"], "medium")
+
+    def test_2xx_execution_is_high(self):
+        findings = analyze_write_probe_results([_wr("DELETE", 204)])
+        self.assertEqual(findings[0]["severity"], "high")
+
+    def test_methods_on_same_path_merged_into_one_finding(self):
+        findings = analyze_write_probe_results([
+            _wr("PUT", 400), _wr("DELETE", 204),
+        ])
+        self.assertEqual(len(findings), 1)
+        # 任一方法真的執行 → high
+        self.assertEqual(findings[0]["severity"], "high")
+        self.assertEqual(
+            findings[0]["evidence_json"]["methods"], {"DELETE": 204, "PUT": 400}
+        )
+
+    def test_endpoint_recorded_for_cross_layer(self):
+        findings = analyze_write_probe_results([_wr("POST", 200, path="/api/orders")])
+        self.assertEqual(findings[0]["evidence_json"]["endpoint"], "/api/orders")
+        self.assertEqual(findings[0]["impact_area"], "broken_access_control")
+
+    def test_empty(self):
+        self.assertEqual(analyze_write_probe_results([]), [])

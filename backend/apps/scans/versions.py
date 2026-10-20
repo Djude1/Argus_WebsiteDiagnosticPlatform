@@ -19,7 +19,7 @@ from __future__ import annotations
 # v5（ADR-0006 第 4 刀，2026-10-18）：headline／category_scores／overall_score 改為只由確定性層
 # 計算，AI Agent 觀察不再進衰減（另以 agent_findings_summary 獨立呈現）。計分公式改了故 +1。
 SCORING_VERSION = "5"
-RULESET_VERSION = "2026.10.17"
+RULESET_VERSION = "2026.10.20"
 
 
 def comparable(scan, other) -> bool:
