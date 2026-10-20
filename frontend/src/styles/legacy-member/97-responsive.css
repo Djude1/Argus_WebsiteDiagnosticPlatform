@@ -61,7 +61,6 @@
   .project-scan-card-select { min-width: 0; max-width: 100%; width: 100%; font-size: 16px; }
   .project-kpis,
   .project-grid-3,
-  .project-grid-3.is-wide-first,
   .project-create-layout,
   .project-choice-row,
   .seo-trends { grid-template-columns: minmax(0, 1fr); }

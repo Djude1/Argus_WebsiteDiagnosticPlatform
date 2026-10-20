@@ -152,8 +152,9 @@ export function CategoryScoreList({ latest, trend }) {
 const DONUT_ORDER = ["critical", "high", "medium", "low", "info"];
 const DONUT_LABELS = { critical: "嚴重", high: "高", medium: "中", low: "低", info: "資訊" };
 
-/** 問題嚴重程度分布：甜甜圈圖＋圖例（數量與百分比）；每段可滑過看數字。 */
-export function SeverityDonut({ counts }) {
+/** 問題嚴重程度分布：甜甜圈圖＋圖例（數量與百分比）；每段可滑過看數字。
+ *  傳入 issuesPath 時，圖例每列可點，連到依該嚴重度篩選的問題分析。 */
+export function SeverityDonut({ counts, issuesPath = null }) {
   const total = DONUT_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
@@ -187,14 +188,27 @@ export function SeverityDonut({ counts }) {
         <text x="70" y="88" textAnchor="middle" className="dash-donut-unit">個問題</text>
       </svg>
       <ul className="dash-donut-legend">
-        {DONUT_ORDER.map((key) => (
-          <li key={key}>
-            <span className={`dash-donut-dot sev-${key}`} aria-hidden="true" />
-            <span className="dash-donut-name">{DONUT_LABELS[key]}</span>
-            <span className="dash-donut-count">{counts[key] || 0}</span>
-            <span className="dash-donut-pct">{total ? Math.round(((counts[key] || 0) / total) * 100) : 0}%</span>
-          </li>
-        ))}
+        {DONUT_ORDER.map((key) => {
+          const row = (
+            <>
+              <span className={`dash-donut-dot sev-${key}`} aria-hidden="true" />
+              <span className="dash-donut-name">{DONUT_LABELS[key]}</span>
+              <span className="dash-donut-count">{counts[key] || 0}</span>
+              <span className="dash-donut-pct">
+                {total ? Math.round(((counts[key] || 0) / total) * 100) : 0}%
+              </span>
+            </>
+          );
+          return (
+            <li key={key}>
+              {issuesPath ? (
+                <Link className="dash-donut-row" to={`${issuesPath}?severity=${key}`}>{row}</Link>
+              ) : (
+                <span className="dash-donut-row">{row}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

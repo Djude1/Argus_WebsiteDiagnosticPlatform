@@ -1,6 +1,6 @@
 // 網站專案的分頁：總覽、掃描、問題分析、頁面、AEO 問答、歷史報告、專案設定（外框見 ProjectWorkspace.jsx）。
 // 後端：/api/projects/<id>/（overview／issues）與 /api/scans/?project=<id>。
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 
 import { api } from "../../api";
@@ -144,6 +144,18 @@ function CoverageNotice({ coverage }) {
 function ProjectOverviewPage() {
   const { project } = useOutletContext();
   const [data, setData] = useState(null);
+  // 右上角「優先改善建議」要與「問題概況」等高，但兩者不在同一 grid 列，純 CSS 無法互相參照；
+  // 量問題概況面板的高度寫進 CSS 變數，寬螢幕時右欄據此定高，剩餘空間給下方的評分趨勢
+  const problemsRef = useRef(null);
+  const [problemsHeight, setProblemsHeight] = useState(0);
+  useLayoutEffect(() => {
+    const node = problemsRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return undefined;
+    // 量 border box（含內距），右欄面板以 border-box 定高才會與問題概況外框等高
+    const observer = new ResizeObserver(() => setProblemsHeight(Math.round(node.getBoundingClientRect().height)));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [data]);
   const [error, setError] = useState("");
   const [trendRange, setTrendRange] = useState(5);
 
@@ -221,7 +233,12 @@ function ProjectOverviewPage() {
       ) : (
         <>
           <CoverageNotice coverage={latest.coverage} />
-          <div className="project-kpis">
+          {/* 總覽版面（2026-10-20）：一張 3 欄 grid，用 grid-template-areas 固定位置——
+              第一欄（寬）：綜合評分＋行動版效能｜各維度評分與趨勢；第二欄：最近一次掃描｜問題概況；
+              第三欄 `.ov-right`：優先改善建議（高度＝問題概況，量測後以 CSS 變數定高）｜網站評分趨勢（吃剩餘高度、壓在下方）；
+              最後一列：各維度問題數量｜AEO｜網站架構。第一列三張卡維持內容高度；窄螢幕退回單欄 */}
+          <div className="project-overview-grid" style={problemsHeight ? { "--ov-prio-h": `${problemsHeight}px` } : undefined}>
+            <div className="ov-head">
             <section className="project-kpi is-score">
               <p className="project-kpi-label">網站綜合評分</p>
               <div className="project-kpi-score">
@@ -236,31 +253,9 @@ function ProjectOverviewPage() {
                 {previous ? `上次 ${formatDate(previous.completed_at)}：${previous.overall_score ?? "—"} 分` : "第一次完成的掃描結果"}
               </p>
             </section>
-            <section className="project-kpi">
-              <p className="project-kpi-label">發現問題總數</p>
-              <p className="project-kpi-value">{latest.issues_count}<small>個問題</small></p>
-              <p className="project-sev-row">
-                {["high", "medium", "low", "info"].map((sev) => (
-                  <Link key={sev} to={`${issuesPath}?severity=${sev}`} className={`project-sev-count sev-${sev}`}>
-                    {SEVERITY_LABEL[sev]} <b>{data.severity_counts[sev] || 0}</b>
-                  </Link>
-                ))}
-              </p>
-              <p className="project-kpi-hint">
-                {data.changes ? (
-                  <>
-                    較上次掃描：
-                    <Link to={`${issuesPath}?change=new`}>新增 {data.changes.new}</Link>、
-                    <Link to={`${issuesPath}?change=persisting`}>持續 {data.changes.persisting}</Link>、
-                    <Link to={`${issuesPath}#missing`}>
-                      未出現 {data.changes.missing}
-                      {data.changes.resolved ? `（已修好 ${data.changes.resolved}）` : ""}
-                    </Link>
-                  </>
-                ) : "再掃描一次後會標示新增、持續與未出現的問題"}
-              </p>
-            </section>
-            <section className="project-kpi">
+            <PerformanceKpi scan={latest} />
+            </div>
+            <section className="project-kpi ov-scan">
               <p className="project-kpi-label">最近一次掃描</p>
               <p className="project-kpi-date">
                 <span className="project-kpi-date-icon" aria-hidden="true"><CalendarIcon /></span>
@@ -275,24 +270,35 @@ function ProjectOverviewPage() {
               </dl>
               <Link className="project-text-link" to={`/scans/${latest.id}`}>查看這次結果 →</Link>
             </section>
-          </div>
-
-          <div className="project-grid-3 is-wide-first">
-            <section className="panel">
+            <section className="panel ov-cats">
               <div className="project-section-head">
                 <h2 className="project-section-title">各維度評分與趨勢</h2>
                 <span className="project-section-hint">最近 {data.trend.length} 次完成的掃描</span>
               </div>
               <CategoryScoreList latest={latest} trend={data.trend} />
             </section>
-            <section className="panel">
+            <section className="panel project-problems ov-probs" ref={problemsRef}>
               <div className="project-section-head">
-                <h2 className="project-section-title">問題嚴重程度分布</h2>
-                <span className="project-section-hint">共 {latest.issues_count} 個問題</span>
+                <h2 className="project-section-title">問題概況</h2>
+                <Link className="project-text-link" to={issuesPath}>查看問題分析 →</Link>
               </div>
-              <SeverityDonut counts={data.severity_counts} />
+              <SeverityDonut counts={data.severity_counts} issuesPath={issuesPath} />
+              <p className="project-problems-changes">
+                {data.changes ? (
+                  <>
+                    較上次掃描：
+                    <Link to={`${issuesPath}?change=new`}>新增 {data.changes.new}</Link>、
+                    <Link to={`${issuesPath}?change=persisting`}>持續 {data.changes.persisting}</Link>、
+                    <Link to={`${issuesPath}#missing`}>
+                      未出現 {data.changes.missing}
+                      {data.changes.resolved ? `（已修好 ${data.changes.resolved}）` : ""}
+                    </Link>
+                  </>
+                ) : "再掃描一次後會標示新增、持續與未出現的問題"}
+              </p>
             </section>
-            <section className="panel">
+            <div className="ov-right">
+            <section className="panel ov-prio">
               <div className="project-section-head">
                 <h2 className="project-section-title">優先改善建議</h2>
                 <Link className="project-text-link" to={issuesPath}>查看全部 →</Link>
@@ -316,26 +322,7 @@ function ProjectOverviewPage() {
                 <p className="hint-text">這次沒有需要優先處理的項目。</p>
               )}
             </section>
-          </div>
-
-          <div className="project-grid-3">
-            <section className="panel">
-              <div className="project-section-head">
-                <h2 className="project-section-title">各維度問題的數量</h2>
-              </div>
-              <CountBars
-                items={CATEGORY_ORDER.filter((c) => latest.categories.includes(c)).map((c) => ({
-                  key: c,
-                  label: CATEGORY_META[c].label,
-                  desc: CATEGORY_META[c].desc,
-                  value: latest.category_counts[c] || 0,
-                  tone: scoreTone(latest.category_scores?.[c]),
-                }))}
-                emptyText="這次掃描沒有發現問題。"
-                linkFor={(item) => `${issuesPath}?category=${item.key}`}
-              />
-            </section>
-            <section className="panel">
+            <section className="panel ov-trend">
               <div className="project-section-head">
                 <h2 className="project-section-title">網站評分趨勢</h2>
                 <select
@@ -360,7 +347,24 @@ function ProjectOverviewPage() {
                 </p>
               )}
             </section>
-            <section className="panel">
+            </div>
+            <section className="panel ov-counts">
+              <div className="project-section-head">
+                <h2 className="project-section-title">各維度問題的數量</h2>
+              </div>
+              <CountBars
+                items={CATEGORY_ORDER.filter((c) => latest.categories.includes(c)).map((c) => ({
+                  key: c,
+                  label: CATEGORY_META[c].label,
+                  desc: CATEGORY_META[c].desc,
+                  value: latest.category_counts[c] || 0,
+                  tone: scoreTone(latest.category_scores?.[c]),
+                }))}
+                emptyText="這次掃描沒有發現問題。"
+                linkFor={(item) => `${issuesPath}?category=${item.key}`}
+              />
+            </section>
+            <section className="panel ov-aeo">
               <div className="project-section-head">
                 <h2 className="project-section-title">AEO 問答檢測</h2>
               </div>
@@ -369,9 +373,8 @@ function ProjectOverviewPage() {
                 <Link className="secondary-button project-panel-cta" to={projectPath(project.id, "aeo")}>查看詳細結果 →</Link>
               )}
             </section>
+            {latest.site_summary && <SiteSummaryPanel scan={latest} className="ov-arch" />}
           </div>
-
-          {latest.site_summary && <SiteSummaryPanel project={project} scan={latest} />}
         </>
       )}
 
@@ -439,42 +442,40 @@ function performanceNote(scan) {
 }
 
 /** 總覽的效能與網站架構摘要（2026-10-08）：原本只在單次掃描的效能／網站架構分頁看得到。 */
-function SiteSummaryPanel({ project, scan }) {
+/** 頭條卡：行動版效能（Lighthouse）。資料 `scan.site_summary.performance`，舊掃描沒有 site_summary 時寫原因。 */
+function PerformanceKpi({ scan }) {
+  const perf = scan.site_summary?.performance;
+  const hasPerf = perf && perf.score !== null && perf.score !== undefined;
+  const tone = hasPerf ? (perf.score >= 90 ? "good" : perf.score >= 50 ? "medium" : "bad") : "none";
+  return (
+    <section className="project-kpi">
+      <p className="project-kpi-label">行動版效能（Lighthouse）</p>
+      {hasPerf ? (
+        <p className={`project-kpi-value tone-${tone}`}>{perf.score}<small>分</small></p>
+      ) : (
+        <p className="project-kpi-value is-small">—</p>
+      )}
+      <p className="project-kpi-hint">
+        {hasPerf
+          ? perf.field_overall_label ? `真實使用者體驗：${perf.field_overall_label}` : "沒有足夠的真實使用者資料"
+          : scan.site_summary ? performanceNote(scan) : "較早的掃描沒有這項資料"}
+      </p>
+      <Link className="project-text-link" to={`/scans/${scan.id}/performance`}>查看效能 →</Link>
+    </section>
+  );
+}
+
+/** 頁尾：網站架構（CDN／反向代理、使用的技術）。效能 2026-10-20 上移到頭條列。 */
+function SiteSummaryPanel({ scan, className = "" }) {
   const summary = scan.site_summary;
-  const perf = summary.performance;
-  const hasPerf = perf.score !== null && perf.score !== undefined;
   const more = summary.technologies_total - summary.technologies.length;
   return (
-    <section className="panel">
+    <section className={`panel ${className}`}>
       <div className="project-section-head">
-        <h2 className="project-section-title">效能與網站架構</h2>
+        <h2 className="project-section-title">網站架構</h2>
         <span className="project-section-hint">最新一次完成的掃描</span>
       </div>
       <div className="project-site-summary">
-        <Link className="project-site-tile" to={`/scans/${scan.id}/performance`}>
-          <span className="project-site-tile-label">行動版效能（Lighthouse）</span>
-          {hasPerf ? (
-            <strong className={`project-site-tile-value tone-${perf.score >= 90 ? "good" : perf.score >= 50 ? "medium" : "bad"}`}>
-              {perf.score}<small> 分</small>
-            </strong>
-          ) : (
-            <strong className="project-site-tile-value is-muted">—</strong>
-          )}
-          <span className="project-site-tile-hint">
-            {hasPerf
-              ? perf.field_overall_label ? `真實使用者體驗：${perf.field_overall_label}` : "沒有足夠的真實使用者資料"
-              : performanceNote(scan)}
-          </span>
-        </Link>
-        <Link className="project-site-tile" to={projectPath(project.id, "security")}>
-          <span className="project-site-tile-label">安全標頭參考等第</span>
-          <strong className={`project-site-tile-value ${summary.observatory_grade ? "" : "is-muted"}`}>
-            {summary.observatory_grade || "—"}
-          </strong>
-          <span className="project-site-tile-hint">
-            {summary.observatory_grade ? "非官方、不計入分數" : "這次沒有檢查資安或較早的掃描"}
-          </span>
-        </Link>
         <Link className="project-site-tile" to={`/scans/${scan.id}/architecture`}>
           <span className="project-site-tile-label">CDN／反向代理</span>
           {summary.profile_available ? (
@@ -1856,6 +1857,7 @@ export {
   ScanTimeCard,
   SeverityChip,
   SiteSummaryPanel,
+  PerformanceKpi,
   useProjectScans,
   ProjectIssuesPage,
   ProjectOverviewPage,

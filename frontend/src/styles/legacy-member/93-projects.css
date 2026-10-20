@@ -773,6 +773,9 @@
   .project-grid-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .project-grid-3.is-wide-first {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 .project-section-hint {
   @apply text-xs text-slate-500;
@@ -1030,9 +1033,70 @@
 .project-kpis {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
+/* ── 總覽版面：一張 grid 用 areas 固定每個面板的位置（2026-10-20） ── */
+.project-overview-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "head" "scan" "right" "cats" "probs" "counts" "aeo" "arch";
+}
+.ov-head {
+  grid-area: head;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.ov-scan { grid-area: scan; }
+.ov-right {
+  grid-area: right;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+.ov-cats { grid-area: cats; }
+.ov-probs { grid-area: probs; }
+.ov-counts { grid-area: counts; }
+.ov-aeo { grid-area: aeo; }
+.ov-arch { grid-area: arch; }
+@media (min-width: 1100px) {
+  .project-overview-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "head   scan   right"
+      "cats   probs  right"
+      "counts aeo    arch";
+  }
+  /* 右欄跨前兩列：優先改善建議定高＝問題概況（--ov-prio-h 由頁面量測寫入），
+     評分趨勢吃剩下的高度（＝第一列高度），圖面壓在下方 */
+  .ov-right .ov-prio {
+    /* 比問題概況矮 30px，讓下方的評分趨勢往上長 30px（使用者指定） */
+    flex: 0 0 calc(var(--ov-prio-h, auto) - 30px);
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  /* 五個建議項目平均撐開填滿面板，不堆在上面留白 */
+  .ov-right .ov-prio .project-priority-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+  }
+  .ov-right .ov-trend {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
 .project-kpi {
   @apply grid content-start gap-2;
 }
+.project-kpi-value.tone-good { @apply text-blue-700; }
+.project-kpi-value.tone-medium { @apply text-amber-700; }
+.project-kpi-value.tone-bad { @apply text-rose-700; }
 .project-kpi-label {
   @apply text-sm font-semibold text-slate-700;
 }
@@ -1060,8 +1124,11 @@
 .project-kpi-delta {
   @apply text-sm font-semibold text-slate-800;
 }
-.project-sev-row {
-  @apply mt-0 flex flex-wrap gap-2;
+.project-kpi-sub {
+  @apply mt-0 flex flex-wrap items-baseline gap-x-3 gap-y-1;
+}
+.project-kpi-sub a {
+  @apply font-semibold text-blue-700 hover:underline;
 }
 .project-sev-count {
   @apply inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1 text-sm font-semibold transition;
@@ -1119,11 +1186,18 @@
   @apply text-xs text-slate-500;
 }
 
-/* ── 總覽：第二、三排 ── */
-@media (min-width: 1100px) {
-  .project-grid-3.is-wide-first {
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
-  }
+/* ── 總覽：問題概況面板（嚴重度環圖的總數＝唯一問題總數來源） ── */
+.project-problems {
+  @apply flex flex-col gap-4;
+}
+.project-problems .dash-donut {
+  @apply flex-1;
+}
+.project-problems-changes {
+  @apply m-0 border-t border-slate-100 pt-3 text-xs text-slate-600;
+}
+.project-problems-changes a {
+  @apply font-semibold text-blue-700 hover:underline;
 }
 .project-range-select {
   @apply w-auto py-1 text-xs;
@@ -1224,10 +1298,28 @@
   min-width: 9rem;
 }
 .dash-donut-legend li {
+  margin: 0;
+}
+.dash-donut-row {
   display: grid;
   grid-template-columns: 0.8rem 1fr 2rem 2.6rem;
   align-items: center;
   gap: 0.6rem;
+  border-radius: 0.5rem;
+  padding: 0.15rem 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+a.dash-donut-row {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+a.dash-donut-row:hover {
+  @apply bg-slate-100;
+}
+a.dash-donut-row:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 .dash-donut-dot {
   @apply block h-3 w-3 rounded-full;
