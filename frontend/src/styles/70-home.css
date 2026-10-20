@@ -73,7 +73,7 @@
 /* 藝術字：海報的 ARGUS 字標（透明 PNG），依高度縮放、整體浮起 */
 .public-hero-wordmark{
   display: block;
-  height: clamp(2.3rem, 5.6vw, 4.4rem);
+  height: clamp(1.6rem, 4vw, 3rem);
   width: auto;
   margin-top: -.18em;          /* 讓字稍微托住眼睛下緣 */
   filter: drop-shadow(0 0 30px rgba(56, 189, 248, .35));
