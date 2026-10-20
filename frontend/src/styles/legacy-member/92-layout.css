@@ -283,6 +283,12 @@
 .aeo-evidence-list a {
   @apply break-all text-cyan-700 underline;
 }
+.aeo-evidence-links {
+  @apply flex flex-wrap items-baseline gap-x-2 gap-y-1;
+}
+.aeo-evidence-ext {
+  @apply shrink-0 whitespace-nowrap text-xs no-underline;
+}
 .aeo-evidence-loc {
   @apply text-slate-500;
 }

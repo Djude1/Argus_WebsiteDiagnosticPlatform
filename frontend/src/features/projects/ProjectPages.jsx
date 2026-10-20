@@ -1079,6 +1079,7 @@ function ProjectAeoPage() {
   const scanParam = searchParams.get("scan") || "";
   const { scans } = useProjectScans(project.id);
   const [scan, setScan] = useState(null);
+  const [pageIndex, setPageIndex] = useState(null);
   const [error, setError] = useState("");
   const completed = (scans || []).filter((item) => item.status === "completed");
   const targetId = scanParam || (completed[0] ? String(completed[0].id) : "");
@@ -1087,15 +1088,28 @@ function ProjectAeoPage() {
     if (!targetId) return undefined;
     let cancelled = false;
     setScan(null);
+    setPageIndex(null);
     setError("");
     api
       .get(`/scans/${targetId}/`)
       .then((response) => !cancelled && setScan(response.data))
       .catch(() => !cancelled && setError("無法載入這次掃描的 AEO 結果。"));
+    // 另取這次掃描的頁面清單，建立「頁面網址 → 頁面 id」對照，讓證據的頁面連結能在站內跳轉
+    api
+      .get(`/projects/${project.id}/pages/`, { params: { scan: targetId } })
+      .then((response) => {
+        if (cancelled) return;
+        const map = {};
+        for (const page of response.data?.pages || []) {
+          if (page.url && page.id != null) map[page.url] = page.id;
+        }
+        setPageIndex(map);
+      })
+      .catch(() => !cancelled && setPageIndex({}));
     return () => {
       cancelled = true;
     };
-  }, [targetId]);
+  }, [targetId, project.id]);
 
   if (scans === null) return <section className="panel"><PageLoader label="載入中…" /></section>;
   if (!completed.length) {
@@ -1190,7 +1204,7 @@ function ProjectAeoPage() {
           </p>
           <section className="panel">
             <h2 className="project-section-title">逐題結果{report.status === "evaluated" && `（${report.questions_total} 題）`}</h2>
-            <AeoAnswerPanel report={report} withFilter />
+            <AeoAnswerPanel report={report} withFilter scanId={scan?.id} pageIndex={pageIndex} />
           </section>
         </>
       )}

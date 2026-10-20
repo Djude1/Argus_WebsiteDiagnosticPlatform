@@ -1586,7 +1586,10 @@ def stage_exposure(ctx: ScanRunContext) -> None:
             ctx.record(exposure_findings, check="exposure_probe")
             # 探到的 OpenAPI／Swagger 規格列出全部端點，餵進未授權探測（讀取＋寫入授權）——
             # 前端不呼叫的後台端點（如 /members/all）原本只有 AI Agent 偶然發現，現在變確定性項目
-            openapi_operations = exposure_scanner.extract_openapi_operations(probe_results)
+            openapi_operations = exposure_scanner.extract_openapi_operations(
+                probe_results,
+                extra_prefixes=exposure_scanner.api_prefixes(_observed_api_paths(ctx)),
+            )
             status, reason = _exposure_probe_status(probe_stats, len(probe_results))
             ctx.coverage.mark("exposure_probe", status, reason)
             _mark_reverify_resolved(ctx, exposure_prev, probe_results)

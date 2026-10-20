@@ -147,15 +147,20 @@ def _apidoc_base_prefix(url: str) -> str:
     return path.rstrip("/")
 
 
-def extract_openapi_operations(results: list[dict]) -> list[dict]:
+def extract_openapi_operations(
+    results: list[dict], extra_prefixes: list[str] | None = None,
+) -> list[dict]:
     """從 api-docs 命中結果解析出 operation 清單（純函式，供 authz 讀／寫授權探測用）。
 
-    回傳 `[{"path": 外部路徑, "method": "GET"/"POST"/...}, ...]`（去重保序）。外部路徑＝規格所在
-    前綴（`_apidoc_base_prefix`）＋ OpenAPI 2.0 的 `basePath` ＋ 規格 `paths` 的鍵；OpenAPI 3.x 的
-    `servers` 多半是內網位址，不用來組外部網址。path 參數（`{id}`）原樣保留，由呼叫端換成探測值。
+    回傳 `[{"path": 外部路徑, "method": "GET"/"POST"/...}, ...]`（去重保序）。相對路徑＝OpenAPI 2.0
+    的 `basePath` ＋ 規格 `paths` 的鍵；OpenAPI 3.x 的 `servers` 多半是內網位址，不用來組外部網址。
+    **每條相對路徑會在規格所在前綴（`_apidoc_base_prefix`）與 `extra_prefixes`（觀察到的 API
+    前綴）底下各組一次**（2026-10-20）：規格常掛在某個代理前綴（如 `/api_proxy`），但同一後端
+    也可能從另一個前綴（如 `/backend`）未授權暴露——只探規格所在前綴會漏掉。path 參數原樣保留。
     """
     operations: list[dict] = []
     seen: set[tuple[str, str]] = set()
+    extras = [("/" + p.strip("/")) for p in (extra_prefixes or []) if p.strip("/")]
     for r in results or []:
         try:
             status = int(r.get("status") or 0)
@@ -179,23 +184,28 @@ def extract_openapi_operations(results: list[dict]) -> list[dict]:
         base = _apidoc_base_prefix(r.get("url") or "")
         base_path = spec.get("basePath") if isinstance(spec.get("basePath"), str) else ""
         base_path = (base_path or "").rstrip("/")
+        # 規格所在前綴 + 觀察到的 API 前綴（去重保序），每條路徑都在這些前綴底下各探一次
+        prefixes: list[str] = []
+        for pre in [base, *extras]:
+            if pre not in prefixes:
+                prefixes.append(pre)
         for spec_path, methods in paths.items():
             if not isinstance(spec_path, str) or not spec_path.startswith("/"):
                 continue
             if not isinstance(methods, dict):
                 continue
-            external = base + base_path + spec_path
-            if not external.startswith("/"):
-                external = "/" + external
-            for method in methods:
-                m = str(method).lower()
-                if m not in _OPENAPI_METHODS:
-                    continue
-                key = (external, m.upper())
-                if key in seen:
-                    continue
-                seen.add(key)
-                operations.append({"path": external, "method": m.upper()})
+            relpath = base_path + spec_path
+            valid_methods = [str(m).lower() for m in methods if str(m).lower() in _OPENAPI_METHODS]
+            for pre in prefixes:
+                external = pre + relpath
+                if not external.startswith("/"):
+                    external = "/" + external
+                for m in valid_methods:
+                    key = (external, m.upper())
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    operations.append({"path": external, "method": m.upper()})
                 if len(operations) >= MAX_OPENAPI_OPERATIONS:
                     return operations
     return operations

@@ -29,6 +29,7 @@ from django.conf import settings
 from apps.scans.cancellation import ScanCancelled
 from apps.scans.scanners import detect_pii_in_text, make_finding
 from apps.scans.security.exposure_scanner import _PacedRequester
+from apps.scans.security.ip_context import private_ips
 from apps.scans.security.redaction import redact_pii_in_text, redact_url_query_values
 from apps.scans.security.secret_scanner import redact_secrets_in_text
 from apps.scans.services import assert_public_http_url
@@ -59,6 +60,18 @@ _INTERNAL_KEYS = re.compile(
 )
 # 一定敏感的欄位：出現就直接 high
 _SENSITIVE_KEYS = re.compile(r"(password|passwd|pwd|token|secret|身分證|idcard|id_card|ssn)", re.I)
+# 內部檔案路徑：受保護資源或伺服器檔案系統絕對路徑（公開圖片 /images/x.png 不算）
+_INTERNAL_PATH_RE = re.compile(
+    r"(/file/protected/|/(?:home|var|usr|opt|srv|root|app|www|data|storage|uploads?)/[\w./-]+"
+    r"|[a-zA-Z]:\\\\[\w./\\-]+|file://)",
+)
+
+
+def _internal_infra(body: str) -> tuple[list[str], bool]:
+    """回應是否夾帶內部基礎設施訊號：回 (私有／內部 IP 清單, 是否含內部檔案路徑)。"""
+    ips = private_ips(body or "")
+    has_path = bool(_INTERNAL_PATH_RE.search(body or ""))
+    return ips, has_path
 
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
@@ -146,12 +159,19 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
         # 成立條件（任一，見 _sensitivity）：身分欄位＋內部帳號欄位／敏感欄位名／強個資。
         # email／手機這類弱個資不單獨成立（公開聯絡清單也有），要配合內部欄位。
         qualifies, has_sensitive_keys, strong_pii = _sensitivity(keys_blob, pii)
-        if not qualifies:
+        # 另一成立條件（2026-10-20）：成批資料裡夾帶內部基礎設施訊號——私有／內部 IP 或內部檔案
+        # 路徑。即使不是帳號／成員名單（例如產學課程、校園專案），匿名可讀整批含內部拓樸／檔案路徑
+        # 的資料仍是存取控制缺失。公開清單通常只有公開網址，不會有內網 IP 或 /file/protected 路徑。
+        infra_ips, infra_path = _internal_infra(body)
+        has_infra = bool(infra_ips or infra_path)
+        if not qualifies and not has_infra:
             continue
 
         url = r.get("url") or ""
         safe_url = redact_pii_in_text(redact_url_query_values(str(url)))
-        severity = "high" if (pii_total > 0 or has_sensitive_keys or strong_pii) else "medium"
+        severity = (
+            "high" if (pii_total > 0 or has_sensitive_keys or strong_pii or has_infra) else "medium"
+        )
 
         sample_keys = sorted(keys)[:15]
         excerpt = redact_pii_in_text(redact_secrets_in_text(body)).strip()[:400]
@@ -163,15 +183,29 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
             evidence_parts.append(
                 "偵測到疑似個資：" + ", ".join(f"{k}×{len(v)}" for k, v in pii.items() if v)
             )
+        if infra_ips:
+            evidence_parts.append(
+                "回應夾帶私有／內部網段 IP：" + "、".join(infra_ips[:5])
+            )
+        if infra_path:
+            evidence_parts.append("回應夾帶內部檔案路徑（見回應片段）。")
         if excerpt:
             evidence_parts.append("回應片段（個資與秘鑰已遮罩）：\n" + excerpt)
 
-        description = (
-            f"API 端點 {safe_url} 無需任何登入憑證即回傳成批記錄"
-            f"（約 {len(objects)} 筆，含個資或內部帳號資料）。"
-            "這類後台資料應只開放給已驗證的管理員，匿名可讀代表存取控制缺失，"
-            "攻擊者可一次撈走整份名單。"
-        )
+        if qualifies:
+            description = (
+                f"API 端點 {safe_url} 無需任何登入憑證即回傳成批記錄"
+                f"（約 {len(objects)} 筆，含個資或內部帳號資料）。"
+                "這類後台資料應只開放給已驗證的管理員，匿名可讀代表存取控制缺失，"
+                "攻擊者可一次撈走整份名單。"
+            )
+        else:
+            description = (
+                f"API 端點 {safe_url} 無需任何登入憑證即回傳成批完整資料"
+                f"（約 {len(objects)} 筆），且內容夾帶內部基礎設施資訊"
+                "（內網 IP 或內部檔案路徑）。匿名可讀代表存取控制缺失，"
+                "同時洩漏內部拓樸／檔案位置，利於攻擊者進一步橫向移動。"
+            )
         if pii_total > 0:
             description += f"\n⚠️ 回傳內容含 {pii_total} 筆疑似個資，請依個資法妥善處理本報告。"
 

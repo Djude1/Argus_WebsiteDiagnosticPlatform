@@ -241,6 +241,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "回報一個 UX 問題；不要回報修復程式碼，只描述問題與方向。"
                 "嚴重度：medium＝會讓使用者卡住或完成不了主要任務；low＝造成困惑但繞得過去；"
                 "info＝只是建議。"
+                "blocking＝核心任務被完全卡死、根本無法完成（例如登入頁的輸入框打不了字、"
+                "登入／送出按鈕點了毫無反應、結帳送不出去），不是繞得過去的困擾；"
+                "只有真的完全無法完成時才設 true，一般不順不要設。"
             ),
             "parameters": {
                 "type": "object",
@@ -248,6 +251,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "severity": {
                         "type": "string",
                         "enum": ["medium", "low", "info"],
+                    },
+                    "blocking": {
+                        "type": "boolean",
+                        "description": "核心任務完全無法完成（非繞得過去）才設 true",
                     },
                     "title": {"type": "string"},
                     "description": {"type": "string"},
@@ -1867,8 +1874,10 @@ class ToolExecutor:
         if not title or not description:
             return ToolOutcome(ok=False, result={"error": "missing_title_or_description"})
 
+        blocking = bool(args.get("blocking"))
         payload = {
-            "severity": cap_ux_severity(severity),
+            "severity": cap_ux_severity(severity, blocking=blocking),
+            "blocking": blocking,
             "title": title,
             "description": description,
             "remediation": remediation or "請檢視該流程的可用性並對齊使用者預期。",

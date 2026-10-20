@@ -305,3 +305,36 @@ class AnalyzeWriteProbeResultsTests(SimpleTestCase):
 
     def test_empty(self):
         self.assertEqual(analyze_write_probe_results([]), [])
+
+
+# ── 未授權端點夾帶內部基礎設施訊號也成立（2026-10-20）──────────────────
+class InternalInfraUnauthorizedTests(SimpleTestCase):
+    def test_internal_file_path_qualifies_without_account_fields(self):
+        # 課程／校園類資料（非帳號名單），但夾帶內部檔案路徑 → 成立、high
+        body = {"data": [
+            {"sno": "20260918I001", "title": "AI 實戰班",
+             "images": [{"filePath": "/file/protected/0a1b686d-c0d8-4140.jpg"}]},
+            {"sno": "20260918I002", "title": "資料分析班",
+             "images": [{"filePath": "/file/protected/zz.jpg"}]},
+        ]}
+        findings = analyze_unauthorized_results([_result(body)])
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["severity"], "high")
+        self.assertIn("內部基礎設施", findings[0]["description"])
+
+    def test_private_ip_in_body_qualifies(self):
+        body = {"data": [
+            {"cSno": "20260525C001", "title": "智慧校園", "host": "http://172.17.202.181:3000"},
+            {"cSno": "20260525C002", "title": "物聯網"},
+        ]}
+        findings = analyze_unauthorized_results([_result(body)])
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["severity"], "high")
+
+    def test_public_list_with_public_image_urls_not_flagged(self):
+        # 公開清單只有公開圖片網址、沒有內網 IP／內部路徑 → 不成立
+        body = [
+            {"id": 1, "title": "商品 A", "image": "https://cdn.example.test/a.png"},
+            {"id": 2, "title": "商品 B", "image": "/images/b.png"},
+        ]
+        self.assertEqual(analyze_unauthorized_results([_result(body)]), [])

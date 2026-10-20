@@ -1603,3 +1603,37 @@ class PersistAgentIssuesTests(TestCase):
         ]
         created = persist_agent_issues(self.scan_job, issues)
         self.assertEqual(created, [])
+
+
+class CapUxSeverityTests(TestCase):
+    """Agent UX 嚴重度封頂：一般 high/critical 降 medium；blocking 可到 high（2026-10-20）。"""
+
+    def test_high_capped_to_medium_without_blocking(self):
+        from apps.agent.findings import cap_ux_severity
+
+        self.assertEqual(cap_ux_severity("high"), "medium")
+        self.assertEqual(cap_ux_severity("critical"), "medium")
+        self.assertEqual(cap_ux_severity("low"), "low")
+        self.assertEqual(cap_ux_severity("weird"), "low")
+
+    def test_blocking_promotes_to_high(self):
+        from apps.agent.findings import cap_ux_severity
+
+        # 登入頁完全壞掉這類核心任務卡死：medium→high，但不給 critical
+        self.assertEqual(cap_ux_severity("medium", blocking=True), "high")
+        self.assertEqual(cap_ux_severity("critical", blocking=True), "high")
+        # blocking 但 agent 標 low：尊重 agent，不硬升
+        self.assertEqual(cap_ux_severity("low", blocking=True), "low")
+
+    def test_persist_blocking_issue_is_high(self):
+        User = get_user_model()
+        user = User.objects.create_user(username="uxcap", email="uxcap@x.test", password="p")
+        scan = ScanJob.objects.create(user=user, original_url="https://site.test/")
+        created = persist_agent_issues(scan, [{
+            "severity": "medium", "blocking": True,
+            "title": "登入頁完全無作用：輸入框無法輸入、登入按鈕點了沒反應",
+            "description": "在 /management/login 無法輸入帳密，按鈕點擊無回饋，無法登入。",
+            "url": "https://site.test/management/login",
+        }])
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0].severity, "high")

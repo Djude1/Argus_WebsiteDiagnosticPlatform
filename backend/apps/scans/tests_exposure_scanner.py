@@ -461,3 +461,18 @@ class AnalyzeServerBannerTests(_SimpleTestCase):
 
     def test_no_banner_not_flagged(self):
         self.assertEqual(exp.analyze_server_banner([self._r("<html>404 Not Found</html>")]), [])
+
+
+class ExtractOpenapiExtraPrefixesTests(_SimpleTestCase):
+    def test_paths_emitted_under_doc_prefix_and_extra_prefixes(self):
+        spec = {"openapi": "3.0.1", "paths": {"/members/all": {"get": {}}}}
+        # 規格在 /api_proxy 底下被探到，但實際未授權暴露在 /backend
+        ops = exp.extract_openapi_operations([_apidoc(spec)], extra_prefixes=["/backend/"])
+        paths = {o["path"] for o in ops if o["method"] == "GET"}
+        self.assertIn("/api_proxy/members/all", paths)
+        self.assertIn("/backend/members/all", paths)
+
+    def test_no_extra_prefixes_keeps_single(self):
+        spec = {"openapi": "3.0.1", "paths": {"/members/all": {"get": {}}}}
+        ops = exp.extract_openapi_operations([_apidoc(spec)])
+        self.assertEqual([o["path"] for o in ops], ["/api_proxy/members/all"])

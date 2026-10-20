@@ -183,10 +183,17 @@ VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 UX_SEVERITY_CAP = "medium"
 
 
-def cap_ux_severity(severity: str | None) -> str:
-    """Agent UX 問題的嚴重度：未知值當 low，critical／high 降為 medium。"""
+def cap_ux_severity(severity: str | None, blocking: bool = False) -> str:
+    """Agent UX 問題的嚴重度：未知值當 low，critical／high 降為 medium。
+
+    `blocking`＝核心任務被完全卡死、根本無法完成（例如登入頁無法輸入或送出、結帳送不出去），
+    不是繞得過去的困擾：允許升到 **high**（仍封頂 high，不給 critical——UX 觀察不應到最高級）。
+    一般卡住、流程不順仍維持 medium 上限（2026-10-20，1D47 報告「登入頁完全壞掉」只給中風險偏輕）。
+    """
     if severity not in VALID_SEVERITIES:
         return "low"
+    if blocking and severity in ("critical", "high", "medium"):
+        return "high"
     return UX_SEVERITY_CAP if severity in ("critical", "high") else severity
 
 
@@ -210,7 +217,7 @@ def persist_agent_issues(
         if not title or title in existing_titles:
             continue
 
-        severity = cap_ux_severity(issue.get("severity"))
+        severity = cap_ux_severity(issue.get("severity"), blocking=bool(issue.get("blocking")))
 
         description = (issue.get("description") or "").strip()
         if not description:

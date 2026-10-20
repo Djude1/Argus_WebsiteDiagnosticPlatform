@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 // AEO 問答檢測逐題結果（scan.aeo_report，後端 apps/scans/aeo/evaluate.py）。
 // 每一題顯示判定與證據：可回答的題目附原文與位置；其他題目附理由與相關段落。
@@ -27,7 +28,7 @@ function percent(ratio) {
   return ratio == null ? "—" : `${Math.round(ratio * 100)}%`;
 }
 
-function AeoAnswerPanel({ report, withFilter = false }) {
+function AeoAnswerPanel({ report, withFilter = false, scanId = null, pageIndex = null }) {
   const [openKey, setOpenKey] = useState(null);
   const [verdict, setVerdict] = useState("all");
   if (!report || !report.status) return null;
@@ -116,13 +117,31 @@ function AeoAnswerPanel({ report, withFilter = false }) {
                   )}
                   {(q.evidence || []).length > 0 ? (
                     <ul className="aeo-evidence-list">
-                      {q.evidence.map((e, i) => (
-                        <li key={`${e.url}-${i}`}>
-                          <a href={e.url} target="_blank" rel="noopener noreferrer">{e.url}</a>
-                          <span className="aeo-evidence-loc">{e.location}</span>
-                          <blockquote>{e.quote}</blockquote>
-                        </li>
-                      ))}
+                      {q.evidence.map((e, i) => {
+                        const pageId = pageIndex ? pageIndex[e.url] : null;
+                        return (
+                          <li key={`${e.url}-${i}`}>
+                            {scanId && pageId ? (
+                              <span className="aeo-evidence-links">
+                                <Link to={`/scans/${scanId}?page=${pageId}`}>{e.url}</Link>
+                                <a
+                                  className="aeo-evidence-ext"
+                                  href={e.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label="在新分頁開啟原始頁面"
+                                >
+                                  原頁 ↗
+                                </a>
+                              </span>
+                            ) : (
+                              <a href={e.url} target="_blank" rel="noopener noreferrer">{e.url}</a>
+                            )}
+                            <span className="aeo-evidence-loc">{e.location}</span>
+                            <blockquote>{e.quote}</blockquote>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="aeo-panel-note">已掃描的頁面中沒有相關段落。</p>
