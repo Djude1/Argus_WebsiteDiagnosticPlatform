@@ -113,6 +113,21 @@ class ScoreBreakdownEndpointTests(TestCase):
         self.assertEqual(security["incomplete_checks"], ["Nuclei 主動弱點掃描"])
         self.assertEqual(seo["incomplete_checks"], [])
 
+    def test_agent_observations_are_not_part_of_the_explanation(self):
+        """Agent 觀察不進基準分（ADR-0006 決策 C）：分數說明重算也要排除，否則永遠不符。"""
+        self._finding("security", "high", "sec-a")
+        self._finding("security", "medium", "agent-observed-security-abc123")
+        _, category_scores, _ = calculate_scores(
+            [{"category": "security", "severity": "high", "rule_id": "sec-a", "title": "sec-a"}],
+            tested_categories={"security"},
+        )
+        self.scan_job.category_scores = {"security": category_scores["security"]}
+        self.scan_job.save()
+        data = self._get()
+        self.assertTrue(data["matches"])
+        rules = [d["rule_id"] for d in data["categories"][0]["deductions"]]
+        self.assertEqual(rules, ["sec-a"])
+
     def test_flags_scores_computed_by_an_older_formula(self):
         self._finding("seo", "low", "seo-a")
         self.scan_job.category_scores = {"seo": 94}  # 舊公式算出的數字

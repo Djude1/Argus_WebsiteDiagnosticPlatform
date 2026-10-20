@@ -16,6 +16,17 @@ from django.utils import timezone
 MAX_LOG_ENTRIES = 200
 
 
+def already_logged(scan_job_id: int, msg: str) -> bool:
+    """同一則訊息這次掃描是否已記過（Kali 略過在 agent 工具、批次驗證、stage_kali 各記一次）。"""
+    from apps.scans.models import ScanJob
+
+    try:
+        job = ScanJob.objects.only("scan_log").get(pk=scan_job_id)
+    except Exception:  # noqa: BLE001
+        return False
+    return any(entry.get("msg") == msg for entry in (job.scan_log or []))
+
+
 def append_log(scan_job_id: int, msg: str, level: str = "info") -> None:
     """在 ScanJob.scan_log 末尾追加一筆記錄。"""
     from apps.scans.models import ScanJob

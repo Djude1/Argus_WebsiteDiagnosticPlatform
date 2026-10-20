@@ -159,3 +159,34 @@ class RenderReadinessRealBrowserTests(SimpleTestCase):
         result, _ = self._ready(self.NEVER_STABLE, max_seconds=1.5)
         self.assertEqual(result["status"], "timeout")
         self.assertLess(result["ms"], 2500)
+
+
+class LanguageVariantDeferralTests(SimpleTestCase):
+    """同一篇內容的其他語言版（只差 Lang 參數）排在所有新內容之後（2026-10-20）。"""
+
+    def test_language_variants_go_after_new_content(self):
+        state = _CrawlState(f"{ORIGIN}/", ORIGIN, max_depth=3, max_pages=50)
+        state.next_target(_allow_all(), respect_robots=False)
+        state.enqueue_links([
+            f"{ORIGIN}/p/1.php?Lang=zh-tw", f"{ORIGIN}/p/1.php?Lang=en",
+            f"{ORIGIN}/p/2.php?Lang=zh-tw", f"{ORIGIN}/about",
+        ], 0)
+        order = []
+        while (target := state.next_target(_allow_all(), respect_robots=False)):
+            order.append(target[0])
+            state.pages.append({"url": target[0]})
+        self.assertEqual(order, [
+            f"{ORIGIN}/p/1.php?Lang=zh-tw", f"{ORIGIN}/p/2.php?Lang=zh-tw", f"{ORIGIN}/about",
+            f"{ORIGIN}/p/1.php?Lang=en",
+        ])
+
+    def test_deferred_variants_are_counted_when_budget_runs_out(self):
+        state = _CrawlState(f"{ORIGIN}/", ORIGIN, max_depth=3, max_pages=2)
+        state.next_target(_allow_all(), respect_robots=False)
+        state.pages.append({"url": f"{ORIGIN}/"})
+        state.enqueue_links([f"{ORIGIN}/p?lang=en", f"{ORIGIN}/p?lang=ja"], 0)
+        while state.next_target(_allow_all(), respect_robots=False):
+            state.pages.append({"url": "x"})
+        self.assertEqual(state.budget_summary("max_pages", 1.0)["language_variants_deferred"], 1)
+        text = crawl_budget_text(state.budget_summary("max_pages", 1.0))
+        self.assertIn("其他語言版延後未排到 1", text)

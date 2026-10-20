@@ -35,9 +35,10 @@ ROOT_CAUSES: tuple[RootCause, ...] = (
         "網站伺服器（Nginx、Apache、IIS）、反向代理或 CDN 的回應標頭設定",
         "這些問題都是在網站回應中加上或移除標頭，修法在同一個設定檔：改一次，所有頁面同時生效。",
         # 逐頁檢查的標頭規則名稱由標題產生（SECURITY_CSP_…），站台層級的是 header-…
+        # service-version-exposed 是 Server／X-Powered-By 的版本字串，也在同一處修
         re.compile(
             r"^(SECURITY_(CSP|HSTS|X_FRAME_OPTIONS|X_CONTENT_TYPE_OPTIONS|REFERRER_POLICY|"
-            r"PERMISSIONS_POLICY)_|header-)"
+            r"PERMISSIONS_POLICY)_|header-|service-version-exposed$)"
         ),
     ),
     RootCause(

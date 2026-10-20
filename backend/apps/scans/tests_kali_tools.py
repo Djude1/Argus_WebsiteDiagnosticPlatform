@@ -234,6 +234,18 @@ class TestRunSqlmap(TestCase):
         self.assertEqual(result["blocked_reason"], "kali_disabled")
         self._assert_safe_audit(log_mock, "kali_disabled")
 
+    def test_same_skip_reason_is_logged_once_per_scan(self):
+        # agent 工具、批次驗證、stage_kali 各呼叫一次，log 原本連出三行一樣的「已略過」
+        with mock.patch.object(
+            kali_tools, "reserve_sqlmap_targets",
+            return_value=ReservationOutcome(blocked_reason="kali_disabled"),
+        ):
+            for _ in range(3):
+                kali_tools.run_sqlmap("https://target.local/?id=x", self.scan.id)
+        self.scan.refresh_from_db()
+        skipped = [e for e in self.scan.scan_log if "已略過（kali_disabled）" in e["msg"]]
+        self.assertEqual(len(skipped), 1)
+
     def test_backend_misconfigured_writes_safe_audit_log(self):
         """reserve 通過但 backend 未知時，也必須留下 audit log（level=warn）。"""
         with mock.patch.object(

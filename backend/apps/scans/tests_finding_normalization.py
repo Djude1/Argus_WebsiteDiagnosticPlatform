@@ -66,6 +66,25 @@ class RenormalizeFindingsTests(TestCase):
         self.assertIn("10.0.0.8", finding.description)
         self.assertIn("未經工具或人工驗證", finding.description)
 
+    def test_scanner_egress_ip_observation_downgraded_on_renormalize(self):
+        # 部署後設定 ARGUS_SCANNER_EGRESS_IPS，重算既有掃描就能把誤報降為資訊提示
+        self._finding(
+            rule_id="agent-observed-security-a76d654edb", severity="medium",
+            title="WAF 攔截頁面洩漏後端伺服器內部 IP 與時間戳記",
+            description="AI Agent 在實際操作網站時觀察到：攔截頁內嵌 IP 211.75.1.199",
+            evidence="<div class=\"waferr\">211.75.1.199<br>2026-10-19 18:42:26</div>",
+        )
+        with self.settings(ARGUS_SCANNER_EGRESS_IPS=["211.75.1.199"]):
+            counts = renormalize_scan(self.scan)
+        self.assertEqual(counts["agent"], 1)
+        finding = self.scan.findings.get()
+        self.assertEqual(finding.severity, "info")
+        self.assertIn("掃描器自己的出口位址", finding.description)
+        # 再跑一次不重複附註
+        with self.settings(ARGUS_SCANNER_EGRESS_IPS=["211.75.1.199"]):
+            renormalize_scan(self.scan)
+        self.assertEqual(self.scan.findings.get().description.count("掃描器自己的出口位址"), 1)
+
     def test_legacy_agent_rule_rekeyed_and_rescored(self):
         # 2026-10-16（migration 0035）：舊版所有 Agent 觀察共用代號，優先處理只留第一筆
         import importlib
@@ -105,11 +124,11 @@ class RenormalizeFindingsTests(TestCase):
         self.assertNotIn(rules["上傳的檔案可被直接讀取"], swagger_rules)
         self.assertEqual(self.scan.findings.count(), 3, "只改代號，不刪發現")
         self.scan.refresh_from_db()
-        self.assertEqual(self.scan.top_actions[0]["severity"], "critical")
-        self.assertEqual(
-            [a["severity"] for a in self.scan.top_actions].count("critical"), 1
-        )
-        self.assertIn("low", [a["severity"] for a in self.scan.top_actions])
+        # ADR-0006 決策 C：Agent 觀察不進基準分與優先處理，改以 agent_findings_summary 獨立呈現
+        self.assertEqual(self.scan.top_actions, [])
+        self.assertEqual(self.scan.agent_findings_summary["count"], 3)
+        self.assertEqual(self.scan.agent_findings_summary["max_severity"], "critical")
+        self.assertEqual(self.scan.agent_findings_summary["severity_counts"]["critical"], 1)
         # 再跑一次沒有東西可改
         migration.rekey(django_apps, None)
         self.assertEqual(dict(self.scan.findings.values_list("title", "rule_id")), rules)

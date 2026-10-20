@@ -152,6 +152,20 @@ class OutboundLinkBudgetTests(SimpleTestCase):
         self.assertEqual(sum(1 for u in checked if targets[u] == "external"), 25)
         self.assertEqual(len(ordered), 330)
 
+    def test_reserve_is_split_between_subdomain_and_external(self):
+        # 2026-10-19 實掃：子網域 35 個把 25% 額度吃光，6 個站外一個都沒檢查
+        internal = [f"{ORIGIN}/p/{i}" for i in range(242)]
+        subdomain = [f"https://sub{i}.example.tw/" for i in range(35)]
+        external = [f"https://other{i}.org/" for i in range(6)]
+        targets = {
+            **dict.fromkeys(internal, "internal"), **dict.fromkeys(subdomain, "subdomain"),
+            **dict.fromkeys(external, "external"),
+        }
+        checked = collect._reserve_outbound(internal + subdomain + external, targets, 150)[:150]
+        self.assertEqual(sum(1 for u in checked if targets[u] == "external"), 6)
+        self.assertEqual(sum(1 for u in checked if targets[u] == "subdomain"), 31)
+        self.assertEqual(sum(1 for u in checked if targets[u] == "internal"), 113)
+
     def test_few_outbound_leaves_rest_to_internal(self):
         internal = [f"{ORIGIN}/p/{i}" for i in range(300)]
         outbound = ["https://other.org/"]
@@ -159,3 +173,26 @@ class OutboundLinkBudgetTests(SimpleTestCase):
         checked = collect._reserve_outbound(internal + outbound, targets, 100)[:100]
         self.assertIn("https://other.org/", checked)
         self.assertEqual(sum(1 for u in checked if targets[u] == "internal"), 99)
+
+
+class UnconfirmedCaveatTests(SimpleTestCase):
+    """站內連結多數無法確認＝WAF／速率限制擋檢查，報告與 SEO 頁要說明（2026-10-19 實掃）。"""
+
+    def _rows(self, unconfirmed, ok, status=406):
+        from apps.scans.seo.link_trend import unconfirmed_caveat
+
+        rows = [{"type": "internal", "verdict": "restricted", "status": status}] * unconfirmed
+        rows += [{"type": "internal", "verdict": "ok", "status": 200}] * ok
+        rows += [{"type": "internal", "verdict": "unchecked", "status": None}] * 80
+        rows += [{"type": "external", "verdict": "restricted", "status": 403}] * 20
+        return unconfirmed_caveat(rows)
+
+    def test_majority_unconfirmed_internal_links_get_caveat(self):
+        text = self._rows(113, 47)
+        self.assertIn("113 個（71%）無法確認", text)
+        self.assertIn("HTTP 406 113 個", text)
+        self.assertIn("WAF", text)
+
+    def test_minority_or_too_few_is_silent(self):
+        self.assertEqual(self._rows(20, 100), "")
+        self.assertEqual(self._rows(5, 3), "")

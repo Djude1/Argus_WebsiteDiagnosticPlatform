@@ -103,12 +103,13 @@ function TrendChip({ trend }) {
 }
 
 // 連結檢查覆蓋（哪些連結沒有明確結果與原因）與上一次掃描比較的失效連結趨勢
-function LinkCoverageNote({ coverage, trend }) {
+function LinkCoverageNote({ coverage, trend, caveat }) {
   const gaps = Object.entries(COVERAGE_LABELS).filter(([key]) => coverage?.[key]);
   const changes = trend ? Object.entries(TREND_META).filter(([key]) => trend.counts?.[key]) : [];
   if (!gaps.length && !trend) return null;
   return (
     <p className="seo-muted seo-legend">
+      {caveat && `${caveat} `}
       {coverage && `已確認 ${coverage.checked} 個連結`}
       {gaps.length > 0 && `；沒有明確結果：${gaps.map(([key, label]) => `${label} ${coverage[key]}`).join("、")}`}
       {coverage && "。"}
@@ -838,7 +839,7 @@ function LinksTab({ data, keyword, onOpenPage }) {
             : "這次掃描沒有連結狀態檢查；站內已爬到的頁面以爬蟲結果顯示。"}
           302 → 200 這類「轉址後正常」不算失效；401／403／429 代表對方拒絕自動檢查，標為無法確認。
         </p>
-        <LinkCoverageNote coverage={links.coverage} trend={links.trend} />
+        <LinkCoverageNote coverage={links.coverage} trend={links.trend} caveat={links.caveat} />
         {visible.length === 0 ? (
           <p className="hint-text">沒有符合條件的連結。</p>
         ) : (

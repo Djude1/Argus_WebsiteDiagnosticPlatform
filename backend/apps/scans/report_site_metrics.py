@@ -152,6 +152,7 @@ def _links(scan_job: ScanJob) -> dict:
         "external": [_link_entry(r) for r in external[:MAX_EXTERNAL_LINKS]],
         "external_total": len(external),
         "unchecked": links.get("unchecked") or 0,
+        "caveat": links.get("caveat") or "",
     }
 
 

@@ -15,6 +15,7 @@
 """
 
 import hmac
+import html
 import re
 import tempfile
 from collections import OrderedDict
@@ -532,9 +533,20 @@ def _report_severity(finding) -> str:
     return finding.severity
 
 
+def _clip(text: str, limit: int) -> str:
+    """截斷加省略號：硬切會停在半句（「with a stat」），讀者不知道後面還有（2026-10-19 審查）。"""
+    text = text or ""
+    return text if len(text) <= limit else text[: max(0, limit - 1)].rstrip() + "…"
+
+
 def _report_evidence(finding, evidence: str) -> str:
-    """報告用證據：遮罩個資；Cookie 值只留頭尾（舊紀錄可能存了完整值）。"""
+    """報告用證據：遮罩個資；Cookie 值只留頭尾（舊紀錄可能存了完整值）。
+
+    Agent 有時把回應 HTML 以實體（`&lt;html&gt;`）貼進證據，同一份報告裡另一筆是原始標籤，
+    讀起來像兩種東西；只有實體、沒有任何原始 `<` 時還原成標籤（2026-10-19 報告審查 4.2）。"""
     text = mask_pii_evidence(evidence or "")
+    if "&lt;" in text and "<" not in text:
+        text = html.unescape(text)
     if (finding.rule_id or "").startswith("cookie-"):
         from apps.scans.security.cookie_scanner import mask_cookie_line
 
@@ -939,9 +951,8 @@ def _scan_warning_lines(scan_job: ScanJob) -> list[str]:
         value = warnings.get(key) or []
         if isinstance(value, list) and value:
             lines.append(template.format(n=len(value)))
-    tech_stack = warnings.get("tech_stack") or []
-    if isinstance(tech_stack, list) and tech_stack:
-        lines.append(f"偵測到的技術棧：{'、'.join(str(item) for item in tech_stack)}")
+    # Katana 辨識的技術棧（warning_summary["tech_stack"]）不是警示，且版本已由
+    # service-version-exposed、HSTS 已由網站優勢各自呈現，這裡不再列（2026-10-19 報告審查）
     return lines
 
 
@@ -1063,7 +1074,7 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         "fix": _compress_cve_lists(finding.remediation or "（無）"),
         # 先遮罩再截斷：反過來做的話 PII 數值可能剛好被截斷點切一半，
         # 殘缺數字命不中 regex，反而以明文殘留。
-        "evidence": _report_evidence(finding, finding.evidence)[:_MAX_EVIDENCE_CHARS],
+        "evidence": _clip(_report_evidence(finding, finding.evidence), _MAX_EVIDENCE_CHARS),
         # 讓每筆結果都能被重新核對：規則、觀測時間與來源（規則／工具／AI）
         "trace": (
             f"規則 {finding.rule_id or '—'}　·　觀測 {observed_at}"
@@ -1076,7 +1087,7 @@ def _report_finding_entry(scan_job: ScanJob, ref: str, item: dict) -> dict:
         # 每一頁的證據都一樣＝同一個全站共用元件（導覽列、頁尾），改一處就全部解決；
         # 寫「影響 N 個頁面」會讓讀者以為要改 N 次（2026-10-11 報告審查）
         entry["scope"] = f"全站共用元件（{len(pages)} 個頁面出現同一處）"
-        entry["evidence"] = _report_evidence(finding, shared)[:_MAX_EVIDENCE_CHARS]
+        entry["evidence"] = _clip(_report_evidence(finding, shared), _MAX_EVIDENCE_CHARS)
     elif len(pages) > 1:
         locations = item.get("locations") or []
         entry["locations"] = [
@@ -1122,23 +1133,36 @@ def _compress_cve_lists(text: str) -> str:
 
 # 證據指向具體頁面元素的規則：多頁證據完全相同才是「同一個元件」。其他規則的證據多半是
 # 計數（json_ld_blocks=0），每頁相同只代表每頁都有同一種問題，要逐頁修。
-_ELEMENT_RULE_PREFIXES = ("axe-", "ux-fake-button")
+# UX_JAVASCRIPT_：同一支壞掉的腳本在每頁拋同一句錯誤，也是「同一處」
+_ELEMENT_RULE_PREFIXES = ("axe-", "ux-fake-button", "UX_JAVASCRIPT_")
 _ELEMENT_EVIDENCE_PREFIXES = ("過小的觸控目標：", "缺標籤的欄位：")
 
 
 def _shared_component(item: dict) -> str:
-    """多頁的元件證據完全相同時回傳該證據，否則回空字串。"""
+    """多頁的元件證據相同時回傳該證據，否則回空字串。
+
+    元件型規則（axe、觸控目標、JS 錯誤…）只比**第一個元素／第一行**：同一個輪播或導覽列在
+    各頁被 axe 列出的元素數可能差一兩個（有的頁多一張輪播圖），逐字比對整段證據會配不起來，
+    47 頁的同一顆 `.owl-dot` 就被印成 47 處（2026-10-19 實掃報告 4.12）。
+    非元件型規則仍要整段相同。"""
     locations = item.get("locations") or []
     if len(locations) < 2:
         return ""
-    evidence = {(text or "").strip() for _url, text in locations}
+    rule = item["finding"].rule_id or ""
+    texts = [(text or "").strip() for _url, text in locations]
+    element_rule = rule.startswith(_ELEMENT_RULE_PREFIXES) or any(
+        text.startswith(_ELEMENT_EVIDENCE_PREFIXES) for text in texts[:1]
+    )
+    if element_rule:
+        first_lines = {text.splitlines()[0] if text else "" for text in texts}
+        if len(first_lines) == 1 and texts[0]:
+            return texts[0]
+        return ""
+    evidence = set(texts)
     if len(evidence) != 1:
         return ""
     only = evidence.pop()
-    rule = item["finding"].rule_id or ""
-    if rule.startswith(_ELEMENT_RULE_PREFIXES) or only.startswith(_ELEMENT_EVIDENCE_PREFIXES):
-        return only
-    return ""
+    return only if only.startswith(_ELEMENT_EVIDENCE_PREFIXES) else ""
 
 
 def _report_summary(scan_job: ScanJob, previous, grouped: list[dict]) -> dict:
@@ -1217,9 +1241,17 @@ def _report_why_matters(grouped: list[dict]) -> list[dict]:
         if finding.severity == Finding.Severity.INFO or finding.category in seen_categories:
             continue
         seen_categories.add(finding.category)
+        # 該分類最嚴重的一筆是中風險以上時，用它的規則專屬文案（個資外洩講個資法）；只有低風險時
+        # 用分類層級的後果——第一筆是「title 太短」時整個 SEO 的「為什麼重要」曾變成 title 長度
+        # 說明（2026-10-19 報告審查）
+        leading_is_notable = finding.severity in (
+            Finding.Severity.MEDIUM, Finding.Severity.HIGH, Finding.Severity.CRITICAL
+        )
         why_matters.append({
             "category": CATEGORY_DISPLAY.get(finding.category, finding.category.upper()),
-            "consequence": _impact_for(finding),
+            "consequence": _impact_for(finding) if leading_is_notable else CATEGORY_IMPACT.get(
+                (finding.category or "").lower(), "請依你的業務情境評估影響。"
+            ),
         })
     return why_matters
 

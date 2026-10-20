@@ -65,12 +65,15 @@ def evaluate(
     # 技術層：直接沿用 observatory 分數（已涵蓋 HTTPS／HSTS／CSP 等）
     obs_score = (observatory or {}).get("score")
     tech_evaluated = "security" in categories and isinstance(obs_score, int)
+    # 等第沿用 observatory 自己的（A+…F，55 分是 C）；用本模組的五段等第會把同一個 55 分
+    # 在報告「網站架構」上一列寫 C、下一列寫 F（2026-10-19 實掃報告審查）
+    obs_grade = (observatory or {}).get("grade") or (_grade(obs_score) if tech_evaluated else "")
     layers.append({
         "key": "technical",
         "label": "技術信任",
         "evaluated": tech_evaluated,
         "score": obs_score if tech_evaluated else None,
-        "grade": _grade(obs_score) if tech_evaluated else "",
+        "grade": obs_grade if tech_evaluated else "",
         "reasons": ["沿用安全標頭參考等第（observatory）"] if tech_evaluated else [],
     })
 

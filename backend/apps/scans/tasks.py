@@ -27,6 +27,7 @@ from apps.billing.services import (
 from apps.scans.aeo.evaluate import SitePage, evaluate_site
 from apps.scans.cancellation import ScanCancelled, is_cancelled, raise_if_cancelled
 from apps.scans.coverage import (
+    BLOCKED,
     COMPLETED,
     FAILED,
     PARTIAL,
@@ -720,6 +721,7 @@ def crawl_budget_text(budget: dict) -> str:
         f"{label} {budget[key]}"
         for key, label in (
             ("links_dropped_limit", "超過頁數上限未排入"),
+            ("language_variants_deferred", "其他語言版延後未排到"),
             ("skipped_depth", "超過深度"),
             ("skipped_robots", "robots.txt 禁止"),
             ("failed", "擷取失敗"),
@@ -1531,6 +1533,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
             if source == "exposure_probe" and "#" not in path
         }
         extra_paths = [f"{scan_job.origin}/{path.lstrip('/')}" for path in exposure_prev.values()]
+        probe_stats: dict = {}
         try:
             probe_results = _run_async(
                 lambda: exposure_scanner.probe_paths(
@@ -1540,6 +1543,7 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                     robots_disallow=robots_disallow,
                     api_path_prefixes=exposure_scanner.api_prefixes(_observed_api_paths(ctx)),
                     extra_paths=extra_paths,
+                    stats=probe_stats,
                 )
             )
             exposure_findings = [
@@ -1547,12 +1551,15 @@ def stage_exposure(ctx: ScanRunContext) -> None:
                 for f in exposure_scanner.analyze_probe_results(probe_results)
             ]
             ctx.record(exposure_findings, check="exposure_probe")
-            ctx.coverage.mark("exposure_probe", COMPLETED)
+            status, reason = _exposure_probe_status(probe_stats, len(probe_results))
+            ctx.coverage.mark("exposure_probe", status, reason)
             _mark_reverify_resolved(ctx, exposure_prev, probe_results)
             append_log(
                 scan_job_id,
                 f"敏感檔案外洩探測完成：探測 {len(probe_results)} 路徑，"
-                f"發現 {len(exposure_findings)} 項外洩",
+                f"發現 {len(exposure_findings)} 項外洩"
+                + (f"（{reason}）" if reason else ""),
+                level="warn" if status != COMPLETED else "info",
             )
         except ScanCancelled:
             raise
@@ -1587,6 +1594,23 @@ def stage_exposure(ctx: ScanRunContext) -> None:
         f"Nuclei {len(ctx.nuclei_findings)} 項"
         + (f"，技術棧：{', '.join(ctx.katana_tech)}" if ctx.katana_tech else ""),
     )
+
+
+def _exposure_probe_status(stats: dict, probed: int) -> tuple[str, str]:
+    """敏感檔探測的覆蓋狀態：探針全部打不到＝被擋（blocked），一半以上打不到＝部分（partial）。
+
+    2026-10-19 cs.ntust.edu.tw 實掃：WAF 對探針全回連線失敗，「探測 0 路徑」卻標 completed、
+    報告寫「本次未執行的檢查：無」——0 項發現被讀成沒有外洩。
+    """
+    targets = int(stats.get("targets") or 0)
+    unreachable = int(stats.get("unreachable") or 0)
+    if stats.get("error"):
+        return FAILED, str(stats["error"])
+    if targets and probed == 0:
+        return BLOCKED, f"{targets} 條探測路徑全部連線失敗或被轉址，可能是 WAF 擋下探針"
+    if targets and unreachable * 2 >= targets:
+        return PARTIAL, f"{unreachable}／{targets} 條探測路徑連線失敗或被轉址"
+    return COMPLETED, ""
 
 
 def _previous_deterministic_endpoints(scan_job) -> dict[str, tuple[str, str]]:

@@ -418,6 +418,20 @@ class ToolExecutorTests(TestCase):
         self.assertEqual(outcome.security_finding["severity"], "medium")
         self.assertFalse(outcome.security_finding["evidence_json"]["tool_verified"])
 
+    def test_ip_disclosure_of_scanner_own_egress_ip_becomes_info(self):
+        # 2026-10-19 實掃：WAF 406 頁回顯掃描器自己的出口 IP，Agent 報成「後端內部 IP 外洩」（中）
+        executor, _ = self._make_executor()
+        with override_settings(ARGUS_SCANNER_EGRESS_IPS=["211.75.1.199"]):
+            outcome = asyncio.run(executor.run("report_security_issue", self._security_args(
+                severity="medium", title="WAF 攔截頁面洩漏後端伺服器內部 IP 與時間戳記",
+                description="攔截頁內嵌了真實 IP 位址 211.75.1.199",
+                evidence="<div class=\"waferr\">211.75.1.199<br>2026-10-19 18:42:26</div>",
+                url="https://example.com/.git/HEAD",
+            )))
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.security_finding["severity"], "info")
+        self.assertIn("掃描器自己的出口位址", outcome.security_finding["description"])
+
     def test_security_issue_verified_claim_without_tool_still_capped(self):
         # verified=true 但從沒成功呼叫過主動工具（_active_confirmations 空）→ 仍降 medium
         executor, _ = self._make_executor()
@@ -1264,6 +1278,22 @@ class PersistAgentSecurityFindingsTests(TestCase):
         created = persist_agent_security_findings(self.scan_job, [medium, critical])
         self.assertEqual(len(created), 1)
         self.assertEqual(created[0].severity, "critical")
+        self.assertEqual(created[0].evidence_json["merged_reports"], 2)
+
+    def test_same_block_page_from_two_paths_is_one_issue(self):
+        # 2026-10-19 實掃：同一個 WAF 攔截頁從 /.git/HEAD 與 /.env 各報一次，只差時間戳
+        page = ("<div class=\"waferr\"><h1>WAF 攔截到異常</h1><h3>請聯繫系統管理員</h3>"
+                "<br>211.75.1.199<br>")
+        first = self._observed(
+            "WAF 攔截頁面洩漏後端伺服器內部 IP 與時間戳記", "https://example.com/.git/HEAD",
+        )
+        second = self._observed(
+            "WAF 阻擋頁面洩漏伺服器真實內部 IP 與時間戳", "https://example.com/.env",
+        )
+        first["evidence_json"]["excerpt"] = page + "2026-10-19 18:42:26</div>"
+        second["evidence_json"]["excerpt"] = page + "2026-10-19 18:31:59</div>"
+        created = persist_agent_security_findings(self.scan_job, [first, second])
+        self.assertEqual(len(created), 1)
         self.assertEqual(created[0].evidence_json["merged_reports"], 2)
 
     def test_different_issues_keep_their_own_rule_ids(self):

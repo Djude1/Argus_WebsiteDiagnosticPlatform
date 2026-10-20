@@ -33,6 +33,7 @@ image 由 GitHub Actions build 後推到 Docker Hub：`shijie85/argus-backend`�
 | `10-kali-runtime.yaml` | `argus-kali` 受限 runtime namespace（PSA restricted:v1.35）、worker orchestrator SA + tokenless runner SA、least-privilege Role/RoleBinding、單 runner ResourceQuota + LimitRange |
 | `11-kali-admission.yaml` | cluster-scoped `ValidatingAdmissionPolicy`（CEL，`failurePolicy: Fail`）：13 條契約比對 Job 形狀、image、securityContext、resources、volumes；namespaceSelector 綁 `argus.io/kali-runner=true` |
 | `12-zap-passive.yaml` | OWASP ZAP 被動分析 daemon（2026-10-12 起列入 kustomization、ConfigMap 預設啟用；`argus-zap` namespace、digest 固定、只收 worker 8090、egress 全擋；worker 出站放行在 `07` 的 `worker-egress-to-zap`）。**同步前要先手動建 `argus-zap/zap-api` Secret 並在 `argus-secret` 加 `ARGUS_ZAP_API_KEY`**，見 [`../docs/zap-passive.md`](../docs/zap-passive.md) |
+| `01-namespace-config.yaml` 的 `ARGUS_SCANNER_EGRESS_IPS` | 掃描流量出口 IP（2026-10-20 填入正式出口）：公開頁 `/scanner` 列給目標放行；Agent 的 IP 核對據此把 WAF 攔截頁回顯的來源 IP 判成「掃描器自己的位址」而不是內部 IP 外洩。換出口（cloudflared／節點對外 IP 變動）時要同步改，否則誤報回來 |
 | `13-cluster-status-rbac.yaml` | 後台「系統健康」用的 ServiceAccount `argus-web`＋ClusterRole（唯讀 nodes／pods 全叢集與 metrics.k8s.io），web Deployment 以此 SA 執行；egress 沿用 `application-egress-boundary`（web、worker 共用）對 API Server 的放行，不需另加 NetworkPolicy。沒裝 metrics-server 時節點卡顯示 pod requests 佔比並明講（2026-10-19） |
 
 ## 前置（已就緒）

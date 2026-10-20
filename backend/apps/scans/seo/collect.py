@@ -28,16 +28,24 @@ OUTBOUND_SHARE = 0.25
 
 
 def _reserve_outbound(ordered: list[str], targets: dict[str, str], limit: int) -> list[str]:
-    """超過上限時，讓子網域／站外連結至少佔 OUTBOUND_SHARE 的額度（不足就全給站內）。"""
+    """超過上限時，讓子網域／站外連結至少佔 OUTBOUND_SHARE 的額度（不足就全給站內）。
+
+    保留額度在子網域與站外之間對半分、互補不足（2026-10-20）：原本子網域排在站外前面，
+    子網域一多（cs.ntust.edu.tw 35 個）就把保留額度吃光，6 個站外連結又一個都沒檢查。
+    """
     if len(ordered) <= limit:
         return ordered
     internal = [url for url in ordered if targets[url] == "internal"]
-    outbound = [url for url in ordered if targets[url] != "internal"]
-    keep_out = min(len(outbound), int(limit * OUTBOUND_SHARE))
-    keep_in = min(len(internal), limit - keep_out)
-    keep_out = min(len(outbound), limit - keep_in)
+    subdomain = [url for url in ordered if targets[url] == "subdomain"]
+    external = [url for url in ordered if targets[url] not in {"internal", "subdomain"}]
+    reserve = min(len(subdomain) + len(external), int(limit * OUTBOUND_SHARE))
+    keep_ext = min(len(external), (reserve + 1) // 2)
+    keep_sub = min(len(subdomain), reserve - keep_ext)
+    keep_ext = min(len(external), reserve - keep_sub)
+    keep_in = min(len(internal), limit - keep_sub - keep_ext)
     return (
-        internal[:keep_in] + outbound[:keep_out] + internal[keep_in:] + outbound[keep_out:]
+        internal[:keep_in] + subdomain[:keep_sub] + external[:keep_ext]
+        + internal[keep_in:] + subdomain[keep_sub:] + external[keep_ext:]
     )
 
 

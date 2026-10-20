@@ -47,6 +47,9 @@ data:
   # 對外換新網域時這裡與 Cloudflare widget 的網域都要加。
   TURNSTILE_SITE_KEY: "0x4AAAAAAFML-ooGY_tDnVk8"
   TURNSTILE_HOSTNAMES: "xn--gst.tw,www.xn--gst.tw,argus6.qzz.io,argus.clouda.dpdns.org"
+  # 掃描流量的出口 IP：公開頁「掃描來源說明」（/scanner）列給目標網站放行用，也讓 Agent 的 IP 核對
+  # 認得「WAF 攔截頁回顯的是我們自己的 IP」（2026-10-19 實掃誤報成內部 IP 外洩）。換出口時同步改。
+  ARGUS_SCANNER_EGRESS_IPS: "211.75.1.199"
   # Hermes-Agent 預設關閉
   ARGUS_AGENT_ENABLED: "true"
   # 修正產出（Fix Output）：啟用才花 token（觸發時計費，失敗全額退點）。

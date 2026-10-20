@@ -1,13 +1,17 @@
 """資訊洩露標頭 + CORS + CSP 品質分析。讀既有 response headers，任何例外回 []。"""
 from apps.scans.scanners import make_finding
+from apps.scans.security.service_cve_scanner import _parse_server
 
 
 def _eval_headers(headers: dict, url: str) -> list[dict]:
     out: list[dict] = []
     # Server 版本洩露已由 service_cve_scanner 接手（service-version-exposed /
     # service-known-cve）；此處不再重複開 header-server-version。
+    # 帶版本的 X-Powered-By（PHP/8.1.34）由 service_cve_scanner 報 service-version-exposed
+    # （含 CVE 比對）；這裡只報沒有版本的技術棧洩露（Express、ASP.NET），否則同一個標頭列兩項、
+    # 同一個修法寫兩次（2026-10-19 實掃報告 4.3 與 4.6）。
     xpb = headers.get("x-powered-by", "")
-    if xpb:
+    if xpb and not _parse_server(xpb):
         out.append(make_finding(
             category="security", severity="low", rule_id="header-x-powered-by",
             title="X-Powered-By 標頭洩露技術資訊",

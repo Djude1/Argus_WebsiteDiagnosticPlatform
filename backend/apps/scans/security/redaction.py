@@ -55,11 +55,30 @@ def _mask_card(match: re.Match) -> str:
     return _mask_digits(match, 4, 4)
 
 
+# 明顯是路由／語系／分頁而非機密的查詢參數：值是短而規則的字詞時保留，log 才讀得出是哪一頁
+# （2026-10-19 實掃：50 頁的網址全成了 index.php?Lang=[REDACTED]，看不出 zh-tw 還是 en）。
+# token／key／session／email 這類名稱一律遮罩，不在此列。
+_SAFE_QUERY_KEYS = frozenset({
+    "lang", "language", "locale", "hl", "lng", "l",
+    "page", "p", "pg", "tab", "view", "sort", "order", "orderby", "dir",
+    "type", "category", "cat", "plugin", "action", "module", "controller", "mode", "ad",
+})
+_SAFE_QUERY_VALUE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_-]{0,23}$|^[0-9]{1,6}$|^[a-z]{2}(-[A-Za-z]{2,4})?$"
+)
+
+
+def _safe_query_value(key: str, value: str) -> bool:
+    return key.lower() in _SAFE_QUERY_KEYS and bool(_SAFE_QUERY_VALUE.match(value or ""))
+
+
 def redact_url_query_values(url: str) -> str:
-    """保留 URL query key、遮罩所有 value，並移除 fragment。"""
+    """保留 URL query key、遮罩 value（明顯無害的路由／語系值除外），並移除 fragment。"""
     parsed = urlsplit(url or "")
     pairs = parse_qsl(parsed.query, keep_blank_values=True)
-    query = urlencode([(key, "[REDACTED]") for key, _value in pairs])
+    query = urlencode([
+        (key, value if _safe_query_value(key, value) else "[REDACTED]") for key, value in pairs
+    ])
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, ""))
 
 

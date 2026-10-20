@@ -167,9 +167,14 @@ class TestHeaderScanner(TestCase):
         findings = header_scanner.analyze_headers(self._page({"server": "Apache/2.4.49"}))
         self.assertNotIn("header-server-version", {f["rule_id"] for f in findings})
 
-    def test_x_powered_by_is_low(self):
-        findings = header_scanner.analyze_headers(self._page({"x-powered-by": "PHP/7.4.3"}))
+    def test_x_powered_by_without_version_is_low(self):
+        findings = header_scanner.analyze_headers(self._page({"x-powered-by": "Express"}))
         self.assertIn("header-x-powered-by", {f["rule_id"] for f in findings})
+
+    def test_versioned_x_powered_by_is_left_to_service_scanner(self):
+        # PHP/7.4.3 由 service_cve_scanner 報 service-version-exposed，這裡不再重複一項
+        findings = header_scanner.analyze_headers(self._page({"x-powered-by": "PHP/7.4.3"}))
+        self.assertNotIn("header-x-powered-by", {f["rule_id"] for f in findings})
 
     def test_cors_wildcard_is_medium(self):
         findings = header_scanner.analyze_headers(self._page({"access-control-allow-origin": "*"}))

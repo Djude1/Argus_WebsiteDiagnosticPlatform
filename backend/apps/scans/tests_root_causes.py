@@ -26,6 +26,7 @@ class CauseForTests(SimpleTestCase):
             "SECURITY_X_FRAME_OPTIONS_A7A326FEA9": "server-headers",
             "SECURITY_X_CONTENT_TYPE_OPTIONS_89053405E6": "server-headers",
             "header-x-powered-by": "server-headers",
+            "service-version-exposed": "server-headers",
             "header-hsts-missing": "server-headers",
             "cookie-no-httponly": "cookie-attributes",
             "ssl-weak-protocol": "tls",

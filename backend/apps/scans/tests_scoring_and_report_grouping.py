@@ -200,6 +200,17 @@ class CalculateScoresTests(TestCase):
         self.assertEqual(set(titles), {"PII", "JS_RENDER"})
 
 
+    def test_top_actions_rank_severity_then_breadth(self):
+        """同嚴重度時影響頁數多的排前面；priority_score 只是最後的決勝（2026-10-19 實掃）。"""
+        findings = (
+            [{**_finding("geo", "medium", "JS_RENDER"), "priority_score": 60}] * 2
+            + [{**_finding("ux", "medium", "ARIA"), "priority_score": 40}] * 47
+            + [{**_finding("seo", "low", "TITLE"), "priority_score": 99}] * 50
+        )
+        _, _, top_actions = calculate_scores(findings, tested_categories={"geo", "ux", "seo"})
+        self.assertEqual([a["title"] for a in top_actions], ["ARIA", "JS_RENDER", "TITLE"])
+        self.assertEqual(top_actions[0]["pages"], 47)
+
     def test_info_findings_never_enter_top_actions(self):
         """「優先改善建議」不該列出不需要動作的項目。
 

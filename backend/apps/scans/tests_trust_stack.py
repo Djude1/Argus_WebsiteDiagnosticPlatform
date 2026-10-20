@@ -29,6 +29,12 @@ class TrustStackTests(SimpleTestCase):
         self.assertTrue(tech["evaluated"])
         self.assertEqual(tech["score"], 55)
 
+    def test_technical_grade_follows_observatory_grade(self):
+        # 同一個 55 分：observatory 是 C，五段等第會變 F，報告上下兩列要一致
+        r = evaluate(findings_rules=set(), observatory={"score": 55, "grade": "C"},
+                     categories={"security"})
+        self.assertEqual(self._layer(r, "technical")["grade"], "C")
+
     def test_academic_penalised_by_citability_rules(self):
         r = evaluate(
             findings_rules={"geo-citability-no-sources", "geo-citability-no-statistics"},

@@ -89,8 +89,18 @@ def is_agent_security_rule(rule_id: str | None) -> bool:
     return (rule_id or "").startswith(AGENT_SECURITY_RULE)
 
 
+_EXCERPT_SIMILARITY = 0.9
+
+
 def _normalize_title(title: str) -> str:
     return re.sub(r"[\W_]+", "", (title or "").lower())
+
+
+def _normalize_excerpt(finding: dict) -> str:
+    """證據片段去掉數字（時間戳、流水號）與空白，留下回應的「形狀」。"""
+    evidence_json = finding.get("evidence_json") or {}
+    excerpt = str(evidence_json.get("excerpt") or finding.get("evidence") or "")
+    return re.sub(r"[\d\s]+", "", excerpt.lower())[:600]
 
 
 def same_issue(a: dict, b: dict) -> bool:
@@ -103,7 +113,14 @@ def same_issue(a: dict, b: dict) -> bool:
     ratio = SequenceMatcher(
         None, _normalize_title(a.get("title", "")), _normalize_title(b.get("title", ""))
     ).ratio()
-    return ratio >= _TITLE_SIMILARITY
+    if ratio >= _TITLE_SIMILARITY:
+        return True
+    # 同類型、不同端點，但擷取到的回應幾乎一樣（同一個 WAF 攔截頁從 /.git/HEAD 與 /.env 各觸發
+    # 一次，只差時間戳）＝同一件事（2026-10-19 實掃報告 4.1／4.2 列了兩次）
+    excerpt_a, excerpt_b = _normalize_excerpt(a), _normalize_excerpt(b)
+    if len(excerpt_a) < 40 or len(excerpt_b) < 40:
+        return False
+    return SequenceMatcher(None, excerpt_a, excerpt_b).ratio() >= _EXCERPT_SIMILARITY
 
 
 def rank(finding: dict) -> tuple[int, int]:

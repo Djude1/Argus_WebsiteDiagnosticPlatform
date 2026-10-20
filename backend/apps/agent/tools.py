@@ -992,6 +992,21 @@ def _truncate(text: str, limit: int = MAX_TEXT_BYTES) -> str:
     return text[:limit] + f"...[truncated {len(text) - limit} chars]"
 
 
+# 「IP 外洩」型觀察的判斷字樣；證據中的 IP 全是掃描器出口時降為資訊提示
+_IP_DISCLOSURE_RE = re.compile(r"\bip\b|位址|address", re.IGNORECASE)
+SCANNER_IP_NOTE = (
+    "\n證據中的 IP 全部是 Argus 掃描器自己的出口位址（WAF 或錯誤頁回顯訪客來源 IP），"
+    "不構成伺服器內部 IP 外洩；本項依此降為資訊提示，攔截頁是否該回顯來源 IP 仍可自行評估。"
+)
+
+
+def scanner_ip_disclosure(title: str, description: str, evidence: str) -> bool:
+    """觀察在講 IP 外洩、而證據裡的 IP 全是掃描器自己的出口位址。"""
+    from apps.scans.security.ip_context import only_scanner_ips
+
+    return bool(_IP_DISCLOSURE_RE.search(f"{title} {description}")) and only_scanner_ips(evidence)
+
+
 class ToolExecutor:
     """把 LLM 的 tool call 轉成 Playwright 動作。
 
@@ -2177,6 +2192,11 @@ class ToolExecutor:
         hostname = urlparse(url or getattr(self.scan_job, "normalized_url", "") or "").hostname
         ip_notes = describe_ips(evidence, hostname or "")
         ip_text = ("\n證據中的 IP 自動核對：" + "；".join(ip_notes) + "。") if ip_notes else ""
+        # 觀察的重點是「IP 外洩」、證據裡的 IP 卻全部是 Argus 自己的出口位址（WAF／錯誤頁回顯
+        # 訪客來源 IP）：不是伺服器內部位址外洩，降為資訊提示並說明（2026-10-19 實掃誤報）
+        if severity != "info" and scanner_ip_disclosure(title, description, evidence):
+            severity = "info"
+            ip_text += SCANNER_IP_NOTE
         finding = make_finding(
             category="security",
             severity=severity,

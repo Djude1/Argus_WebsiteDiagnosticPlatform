@@ -4,7 +4,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urldefrag, urljoin, urlparse
+from urllib.parse import parse_qsl, urldefrag, urlencode, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 from config.egress import playwright_launch_kwargs
@@ -598,7 +598,10 @@ async def collect_mobile_layout(page) -> dict:
 # 觸控目標的最小建議尺寸（Argus 易用性建議，非 WCAG 合規門檻）。
 # WCAG 2.2 的 2.5.5（AAA）建議 44×44 CSS px、2.5.8（AA）最低 24×24 且有間距例外；
 # 這裡取 40px 當門檻，避免把邊界值一律當缺陷洗版。
+# 查詢參數裡的語系鍵：`?Lang=zh-tw`／`?lang=en`／`?locale=ja` 只是同一篇內容的語言版
+_LANGUAGE_QUERY_KEYS = frozenset({"lang", "language", "locale", "hl", "lng"})
 _MIN_TAP_TARGET_PX = 40
+_WCAG_AA_TAP_TARGET_PX = 24  # WCAG 2.2 AA（2.5.8）：短邊達 24 且長邊夠長的橫條不算過小
 _MAX_UX_OFFENDERS = 8
 
 
@@ -613,7 +616,7 @@ async def collect_ux_signals(page) -> dict:
         return await asyncio.wait_for(
             page.evaluate(
                 r"""
-                ({ minTap, maxOffenders }) => {
+                ({ minTap, minAa, maxOffenders }) => {
                     const result = { small_tap_targets: [], unlabeled_fields: [] };
                     if (!document.body) return result;
                     // 文件座標（含捲動位移），對得上行動版整頁截圖，可直接框出元素
@@ -667,7 +670,12 @@ async def collect_ux_signals(page) -> dict:
                         const rect = tapRect(el);
                         if (!isVisible(el, el.getBoundingClientRect())) continue;
                         if (inlineInSentence(el)) continue;
-                        if (rect.width >= minTap && rect.height >= minTap) continue;
+                        // 寬高都達 40 才算夠大；但短邊 ≥ 24（WCAG 2.5.8）且長邊 ≥ 40 的橫條
+                        //（345×39 的標題連結）手指點得到，不列（2026-10-19 實掃差 1px 被列）
+                        const shortSide = Math.min(rect.width, rect.height);
+                        const longSide = Math.max(rect.width, rect.height);
+                        if (shortSide >= minTap) continue;
+                        if (shortSide >= minAa && longSide >= minTap) continue;
                         const rawLabel =
                             el.innerText || el.value || el.getAttribute("aria-label") || "";
                         const label = rawLabel.trim().slice(0, 40);
@@ -716,7 +724,8 @@ async def collect_ux_signals(page) -> dict:
                     return result;
                 }
                 """,
-                {"minTap": _MIN_TAP_TARGET_PX, "maxOffenders": _MAX_UX_OFFENDERS},
+                {"minTap": _MIN_TAP_TARGET_PX, "minAa": _WCAG_AA_TAP_TARGET_PX,
+                 "maxOffenders": _MAX_UX_OFFENDERS},
             ),
             timeout=10,
         )
@@ -1057,6 +1066,9 @@ class _CrawlState:
     throttle_waits: int = 0
     throttle_wait_seconds: float = 0.0
     page_seconds: list = field(default_factory=list)  # [(秒數, 網址)]
+    # 同路徑只差語系參數的網址：先記鍵，其他語言版延後（2026-10-20）
+    variant_keys: set[str] = field(default_factory=set)
+    language_variants: deque = field(default_factory=deque)
     render_ready: list = field(default_factory=list)  # [(狀態, 毫秒, 網址)]
 
     def take_accessibility_slot(self) -> bool:
@@ -1070,7 +1082,11 @@ class _CrawlState:
 
     def next_target(self, robot_parser: RobotFileParser, respect_robots: bool):
         """取下一個要爬的 (url, depth)；已造訪、超過深度或被 robots.txt 禁止的直接略過。"""
-        while self.queue and len(self.pages) < self.max_pages:
+        while (self.queue or self.language_variants) and len(self.pages) < self.max_pages:
+            if not self.queue:
+                # 新內容都爬完了，才輪到其他語言版
+                self.queue.append(self.language_variants.popleft())
+                self.links_queued += 1
             url, depth = self.queue.popleft()
             if url in self.visited:
                 continue
@@ -1102,14 +1118,33 @@ class _CrawlState:
         self.seeds["sitemap"] += added
         return added
 
+    def _variant_key(self, url: str) -> str:
+        """去掉語系查詢參數後的網址：`?Lang=zh-tw` 與 `?Lang=en` 是同一篇內容的兩個語言版。"""
+        parts = urlsplit(url)
+        kept = [
+            (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if k.lower() not in _LANGUAGE_QUERY_KEYS
+        ]
+        if len(kept) == len(parse_qsl(parts.query, keep_blank_values=True)):
+            return ""
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(kept), ""))
+
     def enqueue_links(self, links: list[str], depth: int) -> None:
         # 已在佇列裡的不重複排入：重複項目會佔掉頁數上限的名額，把沒排到的新頁面擠掉
         # （2026-10-08 爬取預算紀錄發現 sitemap 已排入的頁面又被首頁連結排一次）
+        # 同一篇內容的其他語言版（只差 Lang／lang／locale 參數）排在所有新內容之後：
+        # 2026-10-19 實掃 50 頁額度有一半花在 zh-tw／en 兩份一樣的頁面，389 個新頁面沒排到
         queued = {url for url, _ in self.queue}
         for link in links:
             if link in self.visited or link in queued:
                 continue
             queued.add(link)
+            variant = self._variant_key(link)
+            if variant and variant in self.variant_keys:
+                self.language_variants.append((link, depth + 1))
+                continue
+            if variant:
+                self.variant_keys.add(variant)
             if len(self.pages) + len(self.queue) < self.max_pages:
                 self.queue.append((link, depth + 1))
                 self.links_queued += 1
@@ -1127,6 +1162,7 @@ class _CrawlState:
             "seeds": dict(self.seeds),
             "links_queued": self.links_queued,
             "links_dropped_limit": self.links_dropped_limit,
+            "language_variants_deferred": len(self.language_variants),
             "skipped_depth": self.skipped_depth,
             "skipped_robots": sum(
                 1 for row in self.warnings["blocked_urls"] if row.get("reason") == "robots.txt"

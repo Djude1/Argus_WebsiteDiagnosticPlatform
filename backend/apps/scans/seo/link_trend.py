@@ -54,6 +54,37 @@ def link_coverage(report: dict) -> dict[str, int]:
     return counts
 
 
+# 站內連結「無法確認」佔已嘗試檢查的比例超過這個值（且至少 CAVEAT_MIN 個）時，多半不是連結壞了，
+# 而是網站的 WAF／速率限制擋下自動檢查（2026-10-19 cs.ntust.edu.tw 實掃：242 個站內 113 個無法確認、
+# 掃描範圍表寫「無法連線 138」，報告沒把因果連起來，讀者會以為網站壞了一半）
+CAVEAT_RATIO = 0.5
+CAVEAT_MIN = 10
+_UNCONFIRMED = {"restricted": "對方限制檢查", "timeout": "逾時", "error": "無法連線"}
+
+
+def unconfirmed_caveat(rows: list[dict]) -> str:
+    """站內連結多數無法確認時回一段說明，否則回空字串。rows 是 seo/report 的連結列。"""
+    internal = [r for r in rows if r.get("type") == "internal" and r.get("verdict") != "unchecked"]
+    unconfirmed = [r for r in internal if r.get("verdict") in _UNCONFIRMED]
+    if len(unconfirmed) < CAVEAT_MIN or len(unconfirmed) < CAVEAT_RATIO * len(internal):
+        return ""
+    kinds: dict[str, int] = {}
+    for row in unconfirmed:
+        label = _UNCONFIRMED[row["verdict"]]
+        if row.get("status"):
+            label = f"HTTP {row['status']}"
+        kinds[label] = kinds.get(label, 0) + 1
+    detail = "、".join(
+        f"{label} {count} 個" for label, count in sorted(kinds.items(), key=lambda kv: -kv[1])[:3]
+    )
+    share = round(100 * len(unconfirmed) / len(internal))
+    return (
+        f"站內連結有 {len(unconfirmed)} 個（{share}%）無法確認（{detail}）。爬蟲造訪頁面時正常，"
+        "比較可能是網站的 WAF 或速率限制擋下了自動檢查請求，不代表這些連結失效；"
+        "可把 Argus 的掃描來源加入允許清單後重新掃描確認。"
+    )
+
+
 def coverage_text(counts: dict[str, int]) -> str:
     """覆蓋摘要：只列沒有明確結果的狀態，例如「逾時 2、超過數量上限 30」。"""
     return "、".join(

@@ -220,6 +220,29 @@ class ReportDetailFixesTests(TestCase):
         headings = [line for line in appendix.splitlines() if line.startswith("7.")]
         self.assertTrue(headings[-1].endswith("免責與報告產生方式"))
 
+    def test_evidence_entities_restored_and_truncation_marked(self):
+        # 2026-10-19 報告審查：4.2 證據顯示成 &lt;html&gt;、4.1 硬切在「with a stat」
+        self._finding("agent-observed-security-1", "A",
+                      evidence="&lt;div class=&quot;waferr&quot;&gt;x")
+        self._finding("agent-observed-security-2", "B", evidence="y" * 400)
+        by_title = {f["title"]: f for f in build_report_payload(self.scan_job)["findings"]}
+        self.assertEqual(by_title["A"]["evidence"], '<div class="waferr">x')
+        self.assertTrue(by_title["B"]["evidence"].endswith("…"))
+        self.assertLessEqual(len(by_title["B"]["evidence"]), 300)
+
+    def test_why_matters_uses_category_consequence_not_first_rule(self):
+        # 第 3 章 SEO 列曾變成「title 太短…」的規則文案
+        self._finding("SEO_META_TITLE_X", "Meta title 長度不理想", category="seo", severity="low")
+        payload = build_report_payload(self.scan_job)
+        rows = {r["category"]: r["consequence"] for r in payload["why_matters"]}
+        self.assertNotIn("title", rows["SEO 搜尋引擎最佳化"].lower())
+
+    def test_tech_stack_is_not_a_scan_warning(self):
+        self.scan_job.warning_summary = {"tech_stack": ["HSTS", "PHP:8.1.34"]}
+        self.scan_job.save()
+        payload = build_report_payload(self.scan_job)
+        self.assertNotIn("技術棧", " ".join(payload["scan_info"].get("warnings") or []))
+
     def test_long_cve_lists_are_collapsed(self):
         cves = "、".join(f"CVE-2021-{4000 + i}" for i in range(20))
         self._finding("service-known-cve", "過時的 Apache", description=f"已知漏洞：{cves}。")
@@ -234,9 +257,16 @@ class ReportDetailFixesTests(TestCase):
             self._finding("geo-json-ld", "缺少結構化資料", page=Page.objects.get(
                 scan_job=self.scan_job, url=f"https://example.com{path}"),
                 evidence="json_ld_blocks=0", category="geo", severity="low")
+        # axe：同一顆輪播按鈕，但某一頁多列了一個元素——第一個元素相同就是同一處
+        second = "\n.owl-dot:nth-child(2)｜<button>2</button>"
+        for path, extra in (("/", ""), ("/a", ""), ("/b", second)):
+            self._finding("axe-aria-required-parent", "無障礙：ARIA 父元素", category="ux",
+                          page=Page.objects.get(scan_job=self.scan_job, url=f"https://example.com{path}"),
+                          evidence=".active.owl-dot｜<button role=\"tab\">1</button>" + extra)
         scopes = {f["title"]: f["scope"] for f in build_report_payload(self.scan_job)["findings"]}
         self.assertEqual(scopes["觸控目標過小"], "全站共用元件（3 個頁面出現同一處）")
         self.assertEqual(scopes["缺少結構化資料"], "影響 3 個頁面")
+        self.assertEqual(scopes["無障礙：ARIA 父元素"], "全站共用元件（3 個頁面出現同一處）")
 
     def test_previous_scan_date_uses_full_date(self):
         from datetime import timedelta

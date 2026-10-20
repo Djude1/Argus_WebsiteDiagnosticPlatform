@@ -752,6 +752,8 @@ def _links_section(doc, links, ch):
                "不一定是失效；「未檢查」是超過檢查數量或時間上限。", keep_next=True)
     if "link_matrix" in ch:
         add_image(doc, ch["link_matrix"], 5.2)
+    if links.get("caveat"):
+        _note(doc, links["caveat"])
     if links.get("broken"):
         add_para(doc, [{"text": f"失效連結（{links['broken_total']} 個）", "size": T.TYPE["label"],
                         "color": "B91C1C", "bold": True}], before=6, after=3, keep_next=True)

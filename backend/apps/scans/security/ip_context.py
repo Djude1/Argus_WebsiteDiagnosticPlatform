@@ -42,14 +42,49 @@ def _is_internal(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return addr.is_private or addr.is_loopback or addr.is_link_local
 
 
-def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
-    """回傳每個 IP 的判讀句；沒有 IP 時回空 list。"""
+def _scanner_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """`ARGUS_SCANNER_EGRESS_IPS`（與公開頁「掃描來源說明」同一份設定）解析成網段。
+
+    格式由 scans.E003 把關；這裡遇到壞值直接略過。"""
+    from django.conf import settings
+
+    networks = []
+    for item in getattr(settings, "ARGUS_SCANNER_EGRESS_IPS", []) or []:
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            continue
+    return networks
+
+
+def is_scanner_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return any(addr in network for network in _scanner_networks())
+
+
+def _found_ips(text: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     found = []
     for raw in dict.fromkeys(_IPV4.findall(text or "")):
         try:
             found.append(ipaddress.ip_address(raw))
         except ValueError:
             continue
+    return found
+
+
+def only_scanner_ips(text: str) -> bool:
+    """文字裡至少有一個 IP，而且全部都是 Argus 掃描器自己的出口位址。
+
+    WAF 攔截頁、錯誤頁回顯的是訪客來源 IP；掃描器看到自己的 IP 不是伺服器內部位址外洩
+    （2026-10-19 cs.ntust.edu.tw 實掃：Agent 把 WAF 406 頁回顯的出口 IP 報成「後端內部 IP 外洩」，
+    使用者確認 211.75.1.199 是 Argus 的出口）。設定沒填出口 IP 時一律 False。
+    """
+    found = _found_ips(text)
+    return bool(found) and all(is_scanner_ip(addr) for addr in found)
+
+
+def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
+    """回傳每個 IP 的判讀句；沒有 IP 時回空 list。"""
+    found = _found_ips(text)
     if not found:
         return []
     resolved = _resolve(hostname) if hostname else set()
@@ -57,6 +92,11 @@ def describe_ips(text: str, hostname: str, *, limit: int = 5) -> list[str]:
     for addr in found[:limit]:
         if addr.is_unspecified:
             verdict = "未指定位址（0.0.0.0／::），通常是空值預設，不是內部 IP 外洩"
+        elif is_scanner_ip(addr):
+            verdict = (
+                "是 Argus 掃描器自己的出口位址（WAF 或錯誤頁回顯了訪客來源 IP），"
+                "不是伺服器內部 IP 外洩"
+            )
         elif _is_internal(addr):
             verdict = "私有／內部網段位址，出現在對外回應中屬於內部網路資訊外洩"
         elif str(addr) in resolved:

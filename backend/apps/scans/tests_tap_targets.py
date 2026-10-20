@@ -22,6 +22,8 @@ HTML = """<html><body style="margin:0;font-size:14px">
   <label style="display:flex;min-height:44px;width:300px">
     <input type="checkbox" name="ok">我同意</label>
   <input type="checkbox" name="bare">
+  <a id="bar" href="/bar" style="display:block;width:300px;height:39px">寬橫條</a>
+  <a id="tiny" href="/tiny" style="display:inline-block;width:30px;height:30px">小</a>
 </body></html>"""
 
 
@@ -47,6 +49,12 @@ class InlineLinkTapTargetTests(SimpleTestCase):
         labels = [t["label"] for t in self._signals().get("small_tap_targets", [])]
         self.assertNotIn("聯絡我們", labels)
         self.assertIn("服務條款", labels)
+
+    def test_wide_bar_is_not_small_but_square_under_40_is(self):
+        # 短邊 39 ≥ 24 且長邊 300 ≥ 40 的橫條點得到；30×30 兩邊都不到 40 仍列
+        labels = [t["label"] for t in self._signals().get("small_tap_targets", [])]
+        self.assertNotIn("寬橫條", labels)
+        self.assertIn("小", labels)
 
     def test_checkbox_wrapped_in_large_label_is_exempt(self):
         selectors = [t["selector"] for t in self._signals().get("small_tap_targets", [])]

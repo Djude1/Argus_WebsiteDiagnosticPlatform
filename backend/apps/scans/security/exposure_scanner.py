@@ -606,13 +606,21 @@ async def probe_paths(
     robots_disallow: list[str] | None = None,
     api_path_prefixes: list[str] | None = None,
     extra_paths: list[str] | None = None,
+    stats: dict | None = None,
 ) -> list[dict]:
     """重用 Playwright（繞 CF）探測敏感路徑，回傳 raw 結果。任何例外回 []（不影響主掃描）。
 
     優先重用主爬蟲取得的 robots.txt Disallow；沒有傳入時才自行抓取。
     套用 active 模式速率限制與取消檢查點。流程：robots → soft-404 基準 → 逐路徑探測，
     三段共用 _PacedRequester 的速率時鐘。
+
+    `stats`（2026-10-20）：傳入 dict 時回填 `targets`（要探的路徑數）、`unreachable`（連線失敗／
+    被轉址、沒有結果的路徑數）、`error`（整段中止的例外類別）——「探測 0 路徑」原本與
+    「探了 60 條全部正常」一樣標 completed，覆蓋契約分不出 WAF 把探針全擋掉。
     """
+    if stats is None:
+        stats = {}
+    stats.update({"targets": 0, "unreachable": 0, "error": ""})
     from playwright.async_api import async_playwright  # 延遲匯入，避免無 worker 環境 import 失敗
 
     results: list[dict] = []
@@ -638,17 +646,20 @@ async def probe_paths(
                     api_path_prefixes=api_path_prefixes,
                     extra_paths=extra_paths,
                 )
+                stats["targets"] = len(targets)
                 baselines = await _soft_404_baselines(requester, origin)
                 for url in targets:
                     result = await _probe_one(requester, url, baselines)
                     if result is not None:
                         results.append(result)
+                    else:
+                        stats["unreachable"] += 1
             finally:
                 await context.close()
                 await browser.close()
     except ScanCancelled:
         raise
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — 探測失敗不影響主掃描，但要讓覆蓋契約知道
+        stats["error"] = exc.__class__.__name__
         return results
-    return results
     return results

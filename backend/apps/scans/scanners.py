@@ -813,7 +813,8 @@ def _ux_tap_targets(page_input: PageAnalysisInput) -> list[dict]:
             title="觸控目標過小",
             description=(
                 f"頁面有 {len(offenders)} 個可點元素（連結、按鈕或表單控制項）在 "
-                "行動版視窗下的寬或高小於 40px（Argus 易用性建議），過小會讓使用者誤點或點不到。"
+                "行動版視窗下短邊小於 24px、或寬高都小於 40px（Argus 易用性建議），"
+                "過小會讓使用者誤點或點不到。"
                 f"{wcag_note}"
                 "WCAG 2.2 AAA（2.5.5）的建議是 44×44px。"
             ),
@@ -2096,16 +2097,27 @@ def calculate_scores(
         for finding in deduped
         if finding["severity"] != Finding.Severity.INFO
     ]
+    # 報告標榜「嚴重度 × 影響範圍」：先比嚴重度，同級再比出現頁數，最後才是規則自訂的
+    # priority_score（2026-10-19 實掃：只影響 2 頁的 JS 渲染排在影響 47 頁的 ARIA／CLS 前面）
+    occurrences: dict[tuple[str, str], int] = {}
+    for finding in findings:
+        key = _finding_key(finding)
+        occurrences[key] = occurrences.get(key, 0) + 1
     top_actions = [
         {
             "title": finding["title"],
             "category": finding["category"],
             "severity": finding["severity"],
             "priority_score": finding.get("priority_score") or 0,
+            "pages": occurrences.get(_finding_key(finding), 1),
         }
         for finding in sorted(
             actionable,
-            key=lambda item: item.get("priority_score") or 0,
+            key=lambda item: (
+                SEVERITY_PENALTY.get(item["severity"], 0),
+                occurrences.get(_finding_key(item), 1),
+                item.get("priority_score") or 0,
+            ),
             reverse=True,
         )[:5]
     ]

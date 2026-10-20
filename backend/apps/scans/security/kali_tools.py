@@ -28,7 +28,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 
 from apps.scans.cancellation import ScanCancelled
-from apps.scans.scan_logger import append_log
+from apps.scans.scan_logger import already_logged, append_log
 from apps.scans.scanners import make_finding
 
 from .kali_contracts import (
@@ -307,9 +307,12 @@ def _log_kali_decision(
     內部的固定列舉字串（kali_disabled / scan_mode_not_active / backend_misconfigured
     等），不與不可信輸入拼接。
     """
-    append_log(
-        scan_job_id, f"Kali sqlmap 已略過（{reason}）", level=level,
-    )
+    # 同一個原因這次掃描只記一次：agent 的 probe_sql_injection、批次驗證與 stage_kali
+    # 各呼叫一次，log 連出三行一樣的「已略過（kali_disabled）」（2026-10-19 實掃）
+    message = f"Kali sqlmap 已略過（{reason}）"
+    if already_logged(scan_job_id, message):
+        return
+    append_log(scan_job_id, message, level=level)
 
 
 def run_sqlmap(target_url: str, scan_job_id: int) -> dict:

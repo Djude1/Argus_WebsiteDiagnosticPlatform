@@ -15,10 +15,10 @@ from django.core.cache import cache
 from apps.scans.models import Page, ScanJob, SiteProject
 from apps.scans.seo.keywords import declared_keywords, keyword_report
 from apps.scans.seo.link_check import classify_link, robots_blocks
-from apps.scans.seo.link_trend import link_coverage
+from apps.scans.seo.link_trend import link_coverage, unconfirmed_caveat
 from apps.scans.seo.page_audit import GENERIC_ANCHORS, audit_page
 
-CACHE_VERSION = 3  # 3：keyword_index 加 meta_keywords
+CACHE_VERSION = 4  # 4：links 加 caveat；3：keyword_index 加 meta_keywords
 CACHE_SECONDS = 3600
 LEVEL_ORDER = {"critical": 0, "warning": 1, "notice": 2, "pass": 3}
 MAX_ISSUE_PAGES = 100
@@ -291,6 +291,8 @@ def _analysis(scan: ScanJob) -> dict:
             or None,
             "limit": seo_report.get("limit"),
             "counts": link_counts,
+            # 多數站內連結無法確認＝WAF／速率限制擋檢查，不是連結壞了
+            "caveat": unconfirmed_caveat(link_rows),
             "rows": link_rows,
             "anchor_issues": anchor_issues,
         },

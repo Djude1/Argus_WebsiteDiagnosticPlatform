@@ -21,6 +21,19 @@ class SecurityRedactionTests(SimpleTestCase):
             "/api/items?token=%5BREDACTED%5D&email=%5BREDACTED%5D",
         )
 
+    def test_keeps_obviously_harmless_routing_values(self):
+        # 2026-10-19 實掃 log：50 頁全成 index.php?Lang=[REDACTED]，看不出是哪一頁
+        redacted = redact_url_query_values(
+            "/app/index.php?Plugin=news&Action=view&Lang=zh-tw&ad=10304&token=abc123def456"
+        )
+        self.assertEqual(
+            redacted,
+            "/app/index.php?Plugin=news&Action=view&Lang=zh-tw&ad=10304&token=%5BREDACTED%5D",
+        )
+        # 名稱安全但值不像路由字詞（太長、像 email）仍遮
+        self.assertIn("%5BREDACTED%5D", redact_url_query_values("/?lang=person@example.com"))
+        self.assertIn("%5BREDACTED%5D", redact_url_query_values("/?page=" + "a" * 40))
+
     def test_redacts_pii_in_arbitrary_text(self):
         redacted = redact_pii_in_text(
             "email=person@example.com phone=0912-345-678 id=A123456789"

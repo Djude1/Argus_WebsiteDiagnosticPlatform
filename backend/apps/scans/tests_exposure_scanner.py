@@ -315,3 +315,50 @@ class TestProbePacing(SimpleTestCase):
 
         self.assertEqual(request.get.await_count, 3)
         self.assertEqual(sleep.await_count, 2)
+
+
+class ExposureProbeStatusTests(SimpleTestCase):
+    """探針全被擋時不能標 completed（2026-10-19 實掃「探測 0 路徑」卻完成）。"""
+
+    def test_status_from_stats(self):
+        from apps.scans.coverage import BLOCKED, COMPLETED, FAILED, PARTIAL
+        from apps.scans.tasks import _exposure_probe_status
+
+        self.assertEqual(_exposure_probe_status({"targets": 0, "unreachable": 0}, 0)[0], COMPLETED)
+        self.assertEqual(_exposure_probe_status({"targets": 60, "unreachable": 60}, 0)[0], BLOCKED)
+        status, reason = _exposure_probe_status({"targets": 60, "unreachable": 35}, 25)
+        self.assertEqual(status, PARTIAL)
+        self.assertIn("35／60", reason)
+        ok = _exposure_probe_status({"targets": 60, "unreachable": 3}, 57)
+        self.assertEqual(ok[0], COMPLETED)
+        failed = _exposure_probe_status({"error": "TimeoutError"}, 0)
+        self.assertEqual(failed, (FAILED, "TimeoutError"))
+
+    async def test_probe_paths_fills_stats(self):
+        request = MagicMock()
+        request.get = AsyncMock(side_effect=RuntimeError("connection reset"))
+        context = MagicMock(request=request)
+        context.close = AsyncMock()
+        browser = MagicMock()
+        browser.new_context = AsyncMock(return_value=context)
+        browser.close = AsyncMock()
+        playwright = MagicMock()
+        playwright.chromium.launch = AsyncMock(return_value=browser)
+        manager = MagicMock()
+        manager.__aenter__ = AsyncMock(return_value=playwright)
+        manager.__aexit__ = AsyncMock(return_value=False)
+        stats: dict = {}
+        with (
+            patch("playwright.async_api.async_playwright", return_value=manager),
+            patch(
+                "apps.scans.security.exposure_scanner.build_probe_targets",
+                return_value=["https://example.com/.env", "https://example.com/.git/HEAD"],
+            ),
+            patch("apps.scans.security.exposure_scanner.is_cancelled", return_value=False),
+            patch("apps.scans.security.exposure_scanner.asyncio.sleep", new=AsyncMock()),
+        ):
+            results = await exp.probe_paths(
+                "https://example.com/", "https://example.com", 1, robots_disallow=[], stats=stats,
+            )
+        self.assertEqual(results, [])
+        self.assertEqual((stats["targets"], stats["unreachable"], stats["error"]), (2, 2, ""))

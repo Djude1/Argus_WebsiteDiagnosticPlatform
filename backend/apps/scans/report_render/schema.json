@@ -99,7 +99,8 @@
           "broken": {"type": "array", "items": {"type": "object", "required": ["url", "status", "type", "sources"]}},
           "broken_total": {"type": "integer"},
           "external": {"type": "array", "items": {"type": "object", "required": ["url", "status", "sources"]}},
-          "external_total": {"type": "integer"}, "unchecked": {"type": "integer"}}},
+          "external_total": {"type": "integer"}, "unchecked": {"type": "integer"},
+          "caveat": {"type": "string"}}},
         "search": {"type": "object", "properties": {
           "note": {"type": "string"}, "property": {"type": "string"}, "period": {"type": "string"},
           "fetched_at": {"type": "string"},
