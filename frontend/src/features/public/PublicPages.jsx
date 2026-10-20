@@ -9,6 +9,7 @@ import { useArgusStore } from "../../store";
 import brandLogo from "../../assets/brand-logo.webp";
 import argusEyeStill from "../../assets/argus-eye-still.webp";
 import argusEye from "../../assets/argus-eye.webp";
+import argusWordmark from "../../assets/argus-wordmark.png";
 import { HomeSections } from "../../components/public/home/HomeSections.jsx";
 import { apiErrorMessage, useInstallPrompt } from "../../shared/AppShared.jsx";
 import TechMarquee from "../../components/public/TechMarquee.jsx";
@@ -155,7 +156,7 @@ const HOME_FAQ = [
     a: "每份報告都有唯一編號與 SHA-256 指紋，任何人都能在「報告查驗」頁輸入編號核對，不需要登入。",
   },
   {
-    q: "為什麼 JavaScript 動態載入的內容不會被檢測到呢？",
+    q: "為什麼 JavaScript 動態載入的內容不會被檢測到？",
     a: "因為稽核主要模擬搜尋引擎與 AI 爬蟲直接透過 HTTP 取得網頁原始內容的情境，不會像完整瀏覽器一樣執行 JavaScript 並等待動態內容載入。如果重要文字、FAQ、產品資訊或結構化內容只有在 JavaScript 執行後才出現，部分搜尋引擎或 AI 爬蟲可能無法穩定取得這些資訊。因此，這類內容未被檢測到時，往往也代表網站在 SEO、AEO 或 GEO 上可能存在可見性風險。",
   },
   {
@@ -195,11 +196,13 @@ function ProjectPage() {
               <source media="(prefers-reduced-motion: reduce)" srcSet={argusEyeStill} />
               <img src={argusEye} alt="" width="256" height="202" />
             </picture>
-            <span className="public-hero-wordmark" aria-label="ARGUS">
-              {"ARGUS".split("").map((ch, i) => (
-                <span key={`${ch}-${i}`} style={{ animationDelay: `${i * 0.08}s` }}>{ch}</span>
-              ))}
-            </span>
+            <img
+              className="public-hero-wordmark"
+              src={argusWordmark}
+              alt="ARGUS"
+              width="720"
+              height="108"
+            />
           </div>
           <span className="public-hero-eyebrow">掃描 · 洞察 · 證據</span>
           <h1 className="public-hero-title">

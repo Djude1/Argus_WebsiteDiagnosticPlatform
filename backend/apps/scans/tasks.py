@@ -567,6 +567,15 @@ def stage_crawl(ctx: ScanRunContext) -> None:
     )
     if _runs_zap_active(scan_job):
         ctx.har_dir = Path(tempfile.mkdtemp(prefix=f"argus-har-{scan_job_id}-"))
+    # 提供測試帳密時先登入、整站以登入狀態爬取（帳密只解密注入 Playwright，不落 log／DB）
+    from apps.scans.models import decrypt_test_auth
+    _login_email = decrypt_test_auth(scan_job.test_auth_email_encrypted)
+    _login_password = decrypt_test_auth(scan_job.test_auth_password_encrypted)
+    login_credentials = (
+        (_login_email, _login_password) if _login_email and _login_password else None
+    )
+    if login_credentials:
+        append_log(scan_job_id, "偵測到測試帳號，將先登入再以登入狀態爬取")
     crawled_pages, warnings, site_signals, discovered_endpoints = _run_async(
         lambda: crawl_site(
             start_url=scan_job.normalized_url,
@@ -579,8 +588,24 @@ def stage_crawl(ctx: ScanRunContext) -> None:
             progress_callback=_crawl_progress,
             run_accessibility=_runs_accessibility(scan_job),
             har_dir=ctx.har_dir,
+            login_credentials=login_credentials,
         )
     )
+    if login_credentials:
+        auth_info = (warnings or {}).get("authenticated_crawl") or {}
+        if auth_info.get("ok"):
+            append_log(
+                scan_job_id,
+                f"測試帳號登入成功（登入頁 {auth_info.get('login_url') or '未知'}），"
+                "後續頁面以登入狀態爬取",
+            )
+        else:
+            append_log(
+                scan_job_id,
+                f"測試帳號登入未成功（{auth_info.get('reason') or '原因不明'}），"
+                "改以未登入狀態繼續掃描",
+                level="warn",
+            )
     ctx.crawled_pages = crawled_pages
     ctx.warnings = redact_warning_summary(warnings)
     ctx.site_signals = site_signals

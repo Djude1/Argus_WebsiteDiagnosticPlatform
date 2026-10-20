@@ -15,6 +15,7 @@ from playwright.async_api import async_playwright
 
 from apps.scans.accessibility import run_axe
 from apps.scans.cancellation import ScanCancelled
+from apps.scans.crawler_auth import login_candidate_urls
 from apps.scans.scanners import is_binary_resource
 from apps.scans.services import (
     PublicScanTargetError,
@@ -925,11 +926,15 @@ async def _enforce_public_websocket(websocket_route, origin: str | None = None):
     websocket_route.connect_to_server()
 
 
-async def _make_context(browser, origin: str, har_path: Path | None = None):
+async def _make_context(
+    browser, origin: str, har_path: Path | None = None, storage_state: dict | None = None,
+):
     """建立標準 scanner 瀏覽器 context（user-agent + viewport）。
 
     har_path：給 ZAP 被動分析用（security/zap_passive.py），只錄同 origin 的請求與回應，
     在 context 關閉時寫檔；不會多發任何請求。
+    storage_state：登入後取得的 cookies／localStorage（2026-10-20）；有值時每個 context 都帶
+    著它，整站以登入狀態爬取。只在記憶體中傳遞，不落 log／DB。
     """
     har_kwargs = {}
     if har_path is not None:
@@ -938,6 +943,8 @@ async def _make_context(browser, origin: str, har_path: Path | None = None):
             "record_har_content": "embed",
             "record_har_url_filter": re.compile("^" + re.escape(origin) + "(?:[/?#]|$)"),
         }
+    if storage_state is not None:
+        har_kwargs["storage_state"] = storage_state
     context = await browser.new_context(
         user_agent=settings.ARGUS_SCANNER_USER_AGENT,
         viewport={"width": 1440, "height": 1000},
@@ -1643,16 +1650,18 @@ def _record_page_failure(
 
 
 async def _recycle_context(
-    browser, context, origin: str, state: _CrawlState, url: str, har_path: Path | None = None
+    browser, context, origin: str, state: _CrawlState, url: str,
+    har_path: Path | None = None, storage_state: dict | None = None,
 ):
     """每爬 _CONTEXT_RECYCLE_EVERY 頁換一個 browser context（釋放記憶體）。
 
     回傳新的 context；browser process 已死、開不出新 context 時回 None，
     呼叫端以目前已收集的頁面正常結束，不讓例外害已爬到的頁面全部遺失。
+    storage_state：登入態沿用到換過的新 context，否則重建後就登出了。
     """
     try:
         await context.close()
-        return await _make_context(browser, origin, har_path)
+        return await _make_context(browser, origin, har_path, storage_state)
     except Exception as exc:
         state.warnings["failed_urls"].append(
             {"url": url, "reason": f"context_recycle_failed:{exc.__class__.__name__}"}
@@ -1673,6 +1682,135 @@ async def _report_progress(state: _CrawlState, progress_callback) -> None:
         pass
 
 
+async def _attempt_form_login(page, email: str, password: str) -> bool:
+    """在目前頁面找登入表單、填入帳密並送出。回傳是否「看起來登入成功」。
+
+    只操作 Playwright 欄位，帳密不進 log／DB。成功判定：送出後頁面不再出現可見密碼欄位。
+    """
+    pwd = page.locator('input[type="password"]:visible').first
+    try:
+        if await pwd.count() == 0:
+            return False
+    except Exception:
+        return False
+    # 帳號欄位：同一個表單裡的 email／text 欄位優先，否則退回整頁第一個
+    form = pwd.locator("xpath=ancestor::form[1]")
+    user = None
+    try:
+        if await form.count() > 0:
+            user = form.locator(
+                'input[type="email"]:visible, input[type="text"]:visible, '
+                'input:not([type]):visible'
+            ).first
+    except Exception:
+        user = None
+    if user is None or await user.count() == 0:
+        user = page.locator(
+            'input[type="email"]:visible, input[type="text"]:visible'
+        ).first
+    try:
+        if await user.count() > 0:
+            await user.fill(email, timeout=5000)
+        await pwd.fill(password, timeout=5000)
+    except Exception:
+        return False
+    # 送出：優先點表單內的 submit 按鈕，否則在密碼欄按 Enter
+    try:
+        submit = (form if await form.count() > 0 else page).locator(
+            'button[type="submit"], input[type="submit"], button:has-text("登入"), '
+            'button:has-text("登録"), button:has-text("Login"), button:has-text("Sign in")'
+        ).first
+        if await submit.count() > 0:
+            await submit.click(timeout=5000)
+        else:
+            await pwd.press("Enter", timeout=5000)
+    except Exception:
+        try:
+            await pwd.press("Enter", timeout=5000)
+        except Exception:
+            return False
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=8000)
+    except Exception:
+        pass
+    # 成功啟發式：畫面不再有可見的密碼欄位（還停在登入表單＝失敗）
+    try:
+        return await page.locator('input[type="password"]:visible').count() == 0
+    except Exception:
+        return False
+
+
+async def establish_login_state(
+    browser, origin: str, start_url: str, email: str, password: str, scan_job_id: int,
+) -> dict:
+    """用測試帳密登入，回傳 {ok, reason, login_url, storage_state}。
+
+    依序試候選登入網址（同源），找到密碼欄位就填帳密送出；成功（登入後 cookie 變多或不再有
+    密碼欄位）即回傳該 context 的 storage_state 供整站爬取沿用。任何失敗都只回 ok=False，
+    不中斷掃描；帳密絕不進 log。
+    """
+    context = await _make_context(browser, origin)
+    try:
+        try:
+            cookies_before = len(await context.cookies() or [])
+        except Exception:
+            cookies_before = 0
+        # 先抓起始頁，從中找登入連結，再併入常見登入路徑
+        start_html = ""
+        try:
+            probe = await context.new_page()
+            try:
+                await probe.goto(start_url, wait_until="domcontentloaded", timeout=15000)
+                start_html = await probe.content()
+            finally:
+                await probe.close()
+        except ScanCancelled:
+            raise
+        except Exception:
+            start_html = ""
+        candidates = login_candidate_urls(start_url, origin, start_html)
+        for raw in candidates:
+            try:
+                safe = assert_public_http_url(raw)
+            except Exception:
+                continue
+            page = await context.new_page()
+            try:
+                await page.goto(safe, wait_until="domcontentloaded", timeout=15000)
+                try:
+                    await page.wait_for_selector(
+                        'input[type="password"]', timeout=4000, state="visible"
+                    )
+                except Exception:
+                    continue  # 這頁沒有登入表單
+                ok = await _attempt_form_login(page, email, password)
+            except ScanCancelled:
+                raise
+            except Exception:
+                ok = False
+            finally:
+                await page.close()
+            try:
+                cookies_after = len(await context.cookies() or [])
+            except Exception:
+                cookies_after = cookies_before
+            if ok or cookies_after > cookies_before:
+                storage_state = await context.storage_state()
+                return {
+                    "ok": True, "reason": "", "login_url": urlparse(safe).path or "/",
+                    "storage_state": storage_state,
+                }
+        return {"ok": False, "reason": "找不到可用的登入表單或登入未成功",
+                "login_url": "", "storage_state": None}
+    except ScanCancelled:
+        raise
+    except Exception as exc:  # noqa: BLE001 — 登入失敗不中斷掃描
+        return {"ok": False, "reason": exc.__class__.__name__,
+                "login_url": "", "storage_state": None}
+    finally:
+        await context.close()
+
+
 async def crawl_site(
     *,
     start_url: str,
@@ -1685,6 +1823,7 @@ async def crawl_site(
     progress_callback=None,
     run_accessibility: bool = False,
     har_dir: Path | None = None,
+    login_credentials: tuple[str, str] | None = None,
 ) -> tuple[list[dict], dict, dict, list[str]]:
     """爬整站（同網域 BFS）。
 
@@ -1732,7 +1871,22 @@ async def crawl_site(
             har_count += 1
             return har_dir / f"context-{har_count}.har"
 
-        context = await _make_context(browser, origin, _next_har())
+        # 提供測試帳密時先登入，整站以登入狀態爬取（2026-10-20）
+        storage_state: dict | None = None
+        if login_credentials and login_credentials[0] and login_credentials[1]:
+            login_result = await establish_login_state(
+                browser, origin, start_url,
+                login_credentials[0], login_credentials[1], scan_job_id,
+            )
+            storage_state = login_result.get("storage_state")
+            state.warnings["authenticated_crawl"] = {
+                "attempted": True,
+                "ok": bool(login_result.get("ok")),
+                "login_url": login_result.get("login_url", ""),
+                "reason": login_result.get("reason", ""),
+            }
+
+        context = await _make_context(browser, origin, _next_har(), storage_state)
         pages_in_context = 0
         crawl_started = time.perf_counter()
         stop_reason = "queue_exhausted"
@@ -1768,7 +1922,7 @@ async def crawl_site(
                     pages_in_context += 1
                     if pages_in_context >= _CONTEXT_RECYCLE_EVERY:
                         new_context = await _recycle_context(
-                            browser, context, origin, state, url, _next_har()
+                            browser, context, origin, state, url, _next_har(), storage_state
                         )
                         if new_context is None:
                             context_broken = True

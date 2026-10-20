@@ -348,6 +348,12 @@ function ReviewsPage() {
   const ratingDescId = useId();
   const accessToken = useArgusStore((state) => state.accessToken);
   const theme = useArgusStore((state) => state.theme);
+  // 預先渲染（Node 無 localStorage，主題一律 dark）的 HTML 必須與 hydrate 後的首次 render 一致，
+  // 否則 React 會整塊重畫（畫面跑板、並被記成 JS 執行期錯誤）。掛載前用與伺服器相同的預設主題，
+  // 掛載後才切到使用者實際主題。
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const activeTheme = mounted ? theme : "dark";
   const [summary, setSummary] = useState({ total: 0, average: null, distribution: {} });
   const [listData, setListData] = useState({ reviews: [], total: 0, total_pages: 1, page: 1 });
   const [mineInfo, setMineInfo] = useState(null);
@@ -524,11 +530,20 @@ function ReviewsPage() {
   }
 
   return (
-    <div className={`review-next-page ${theme === "dark" ? "review-next-night" : "review-next-day"}`}>
+    <div className={`review-next-page ${activeTheme === "dark" ? "review-next-night" : "review-next-day"}`}>
       <div className="review-next-main">
         <section className="review-next-hero" aria-labelledby="review-next-title">
           <div className="review-next-hero-copy">
             <h1 id="review-next-title">使用者怎麼評價 <span>Argus</span></h1>
+            <p>
+              這裡匯集完成網站健檢後的 Argus 使用者所留下的真實評價。
+              每一則評論都來自實際用過平台、且通過掃描體驗驗證的帳號，
+              公開頁只顯示匿名或遮罩後的身分，不會揭露電子郵件等個資。
+            </p>
+            <p>
+              你可以依 1 到 5 顆星篩選評論、對有幫助的評論按讚，或檢舉不當內容；
+              完成過一次網站掃描後，也能在這裡留下自己的使用心得。
+            </p>
           </div>
 
           <div className="review-next-score-card" aria-label="評論總覽">
