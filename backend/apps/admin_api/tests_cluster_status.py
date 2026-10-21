@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 
 from apps.admin_api import cluster_status
@@ -212,3 +213,58 @@ class ClusterCollectTests(SimpleTestCase):
         data = cluster_status.collect(core_api=Core(), custom_api=Custom())
         self.assertTrue(data["available"])
         self.assertEqual(data["metrics"]["reason"], "叢集沒有安裝 metrics-server")
+
+
+class ClusterSnapshotTests(SimpleTestCase):
+    """讀取失敗時用最近一次成功的快照墊著（2026-10-21）：健康頁每 15 秒輪詢，API Server
+    偶發慢回應就整塊變「無法取得叢集狀態」，像叢集壞了。"""
+
+    def setUp(self):
+        cache.delete(cluster_status.SNAPSHOT_CACHE_KEY)
+
+    class _Good:
+        def list_node(self, **_):
+            return SimpleNamespace(
+                items=[_node("master", role_label="node-role.kubernetes.io/master")]
+            )
+
+        def list_pod_for_all_namespaces(self, **_):
+            return SimpleNamespace(items=[])
+
+    class _Timeout:
+        def list_node(self, **_):
+            raise TimeoutError()
+
+        def list_pod_for_all_namespaces(self, **_):
+            raise TimeoutError()
+
+    def test_success_is_cached_and_marked_fresh(self):
+        data = cluster_status.collect(core_api=self._Good(), custom_api=None)
+        self.assertTrue(data["available"])
+        self.assertFalse(data["stale"])
+        self.assertIn("snapshot_at", data)
+        self.assertEqual(cache.get(cluster_status.SNAPSHOT_CACHE_KEY)["totals"]["nodes"], 1)
+
+    def test_failure_falls_back_to_snapshot_with_reason(self):
+        cluster_status.collect(core_api=self._Good(), custom_api=None)
+        data = cluster_status.collect(core_api=self._Timeout(), custom_api=None)
+        self.assertTrue(data["available"])
+        self.assertTrue(data["stale"])
+        self.assertIn("TimeoutError", data["stale_reason"])
+        self.assertEqual(data["totals"]["nodes"], 1)
+        check = cluster_status.health_check(data)
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("最近一次讀取失敗", check["detail"])
+        self.assertIn("快照", check["detail"])
+
+    def test_failure_without_snapshot_is_unavailable(self):
+        data = cluster_status.collect(core_api=self._Timeout(), custom_api=None)
+        self.assertFalse(data["available"])
+        self.assertIn("TimeoutError", data["reason"])
+        self.assertEqual(cluster_status.health_check(data)["status"], "unknown")
+
+    def test_timeout_is_connect_and_read_pair(self):
+        connect, read = cluster_status.REQUEST_TIMEOUT
+        self.assertLessEqual(connect, 5)
+        self.assertGreaterEqual(read, 5)
+

@@ -154,11 +154,13 @@ export function AdminHealthPage() {
                 )}
               </h3>
               <span className="admin-cell-secondary">
-                {data.cluster?.available
-                  ? data.cluster.metrics?.available
-                    ? "CPU／記憶體為 metrics-server 的實際用量"
-                    : `CPU／記憶體為 pod requests 佔可分配量的比例（${data.cluster.metrics?.reason || "沒有 metrics-server"}）`
-                  : "需要在 Kubernetes 內執行"}
+                {data.cluster?.stale
+                  ? `最近一次讀取失敗（${data.cluster.stale_reason || "原因不明"}），顯示 ${formatDateTime(data.cluster.snapshot_at)} 的快照`
+                  : data.cluster?.available
+                    ? data.cluster.metrics?.available
+                      ? "CPU／記憶體為 metrics-server 的實際用量"
+                      : `CPU／記憶體為 pod requests 佔可分配量的比例（${data.cluster.metrics?.reason || "沒有 metrics-server"}）`
+                    : "需要在 Kubernetes 內執行"}
               </span>
             </div>
             {data.cluster?.available ? (

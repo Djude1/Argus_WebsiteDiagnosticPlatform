@@ -10,7 +10,11 @@ CrashLoopBackOff，舊頁面一樣全綠。
   RBAC 在 k8s/13-cluster-status-rbac.yaml。
 - 不在 Kubernetes 內（本機 runserver、CI）時回 ``available=False`` 並寫明原因，不噴錯。
 - API 物件只走屬性存取，測試用 SimpleNamespace 假物件即可，不需要真叢集。
-- 每次呼叫都是即時探測，逾時短（``REQUEST_TIMEOUT_SECONDS``），避免健康頁被 API Server 卡住。
+- 每次呼叫都是即時探測，逾時短（``REQUEST_TIMEOUT``），避免健康頁被 API Server 卡住。
+- **讀取失敗時顯示最近一次成功的快照**（2026-10-21）：健康頁每 15 秒輪詢，API Server 偶發慢回應
+  （原本 3 秒逾時）就整塊變成「無法取得叢集狀態」，像叢集壞了。現在連線 3 秒／讀取 10 秒，
+  失敗時回最近 10 分鐘內的成功快照並標 ``stale=True``＋原因與快照時間，檢查項降為 warn；
+  沒有快照才回 ``available=False``。
 """
 
 from __future__ import annotations
@@ -20,11 +24,16 @@ import os
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from django.core.cache import cache
 from kubernetes.utils import parse_quantity
 
 logger = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT_SECONDS = 3
+# (連線, 讀取) 秒數：連線要快、讀取給 API Server 一點餘裕（全叢集 pod 清單偶爾要幾秒）
+REQUEST_TIMEOUT = (3, 10)
+# 最近一次成功結果的快照：讀取失敗時拿來墊著顯示，超過這個時間就不用了
+SNAPSHOT_CACHE_KEY = "admin_api:cluster_status:last_good"
+SNAPSHOT_TTL_SECONDS = 600
 # 這些 namespace 的 pod 列為「Argus 工作負載」；其他 namespace 的 pod 只計入節點負載
 ARGUS_NAMESPACES = ("argus", "argus-zap", "argus-kali")
 # 節點標籤：有任一就是 control plane
@@ -144,7 +153,7 @@ def _node_metrics(custom_api) -> tuple[dict[str, dict], dict]:
             "metrics.k8s.io",
             "v1beta1",
             "nodes",
-            _request_timeout=REQUEST_TIMEOUT_SECONDS,
+            _request_timeout=REQUEST_TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001 — 任何失敗都只影響「用量」欄位，不影響整頁
         status_code = getattr(exc, "status", None)
@@ -294,8 +303,24 @@ def summarize(nodes_list, pods_list, metrics_usage: dict[str, dict], metrics_inf
     }
 
 
+def _snapshot_age_text(cluster: dict) -> str:
+    """快照距今多久（給人看的短句）。"""
+    raw = cluster.get("snapshot_at")
+    try:
+        taken = datetime.fromisoformat(raw) if raw else None
+    except ValueError:
+        taken = None
+    if taken is None:
+        return "稍早"
+    seconds = max(0, int((datetime.now(UTC) - taken).total_seconds()))
+    return f"{seconds} 秒前" if seconds < 120 else f"{seconds // 60} 分鐘前"
+
+
 def health_check(cluster: dict) -> dict:
-    """給 system_health 的 checks 列一項：節點是否全部 Ready、工作負載是否都就緒。"""
+    """給 system_health 的 checks 列一項：節點是否全部 Ready、工作負載是否都就緒。
+
+    快照（``stale``）仍照快照內容判定，但最高只到 warn——現在的狀態沒確認到。
+    """
     if not cluster.get("available"):
         return {
             "key": "cluster",
@@ -326,6 +351,13 @@ def health_check(cluster: dict) -> dict:
             f"{totals['nodes_ready']}/{totals['nodes']} 個節點 Ready，"
             f"Argus {totals['argus_pods']} 個 pod 全部就緒"
         )
+    if cluster.get("stale"):
+        if status == "ok":
+            status = "warn"
+        detail = (
+            f"最近一次讀取失敗（{cluster.get('stale_reason') or '原因不明'}），"
+            f"以 {_snapshot_age_text(cluster)}的快照判定：{detail}"
+        )
     return {
         "key": "cluster",
         "label": "Kubernetes 叢集",
@@ -335,8 +367,17 @@ def health_check(cluster: dict) -> dict:
     }
 
 
+def _unavailable_or_snapshot(reason: str) -> dict:
+    """API 失敗：有最近的成功快照就回快照（標 stale），沒有才回 available=False。"""
+    snapshot = cache.get(SNAPSHOT_CACHE_KEY)
+    if isinstance(snapshot, dict) and snapshot.get("available"):
+        return {**snapshot, "stale": True, "stale_reason": reason}
+    return {"available": False, "reason": reason}
+
+
 def collect(core_api=None, custom_api=None) -> dict:
-    """即時讀取叢集狀態。不在叢集內、沒權限或 API 失敗時回 available=False＋原因。"""
+    """即時讀取叢集狀態。不在叢集內、沒權限時回 available=False＋原因；
+    API 讀取失敗時回最近一次成功的快照（``stale=True``），沒有快照才回 available=False。"""
     if core_api is None:
         if not in_cluster():
             return {"available": False, "reason": "未在 Kubernetes 內執行（本機或 CI）"}
@@ -349,8 +390,8 @@ def collect(core_api=None, custom_api=None) -> dict:
         except Exception as exc:  # noqa: BLE001 — 設定載入失敗也要誠實回報，不噴 500
             return {"available": False, "reason": f"無法載入 in-cluster 設定：{type(exc).__name__}"}
     try:
-        nodes = core_api.list_node(_request_timeout=REQUEST_TIMEOUT_SECONDS).items
-        pods = core_api.list_pod_for_all_namespaces(_request_timeout=REQUEST_TIMEOUT_SECONDS).items
+        nodes = core_api.list_node(_request_timeout=REQUEST_TIMEOUT).items
+        pods = core_api.list_pod_for_all_namespaces(_request_timeout=REQUEST_TIMEOUT).items
     except Exception as exc:  # noqa: BLE001
         status_code = getattr(exc, "status", None)
         if status_code == 403:
@@ -360,6 +401,13 @@ def collect(core_api=None, custom_api=None) -> dict:
         else:
             reason = f"Kubernetes API 讀取失敗：{type(exc).__name__}"
         logger.warning("cluster status unavailable: %s", exc)
-        return {"available": False, "reason": reason}
+        return _unavailable_or_snapshot(reason)
     usage, metrics_info = _node_metrics(custom_api)
-    return summarize(nodes, pods, usage, metrics_info)
+    data = summarize(nodes, pods, usage, metrics_info)
+    data["stale"] = False
+    data["snapshot_at"] = datetime.now(UTC).isoformat()
+    try:
+        cache.set(SNAPSHOT_CACHE_KEY, data, SNAPSHOT_TTL_SECONDS)
+    except Exception:  # noqa: BLE001 — 快取壞掉不影響即時結果
+        logger.warning("cluster status snapshot not cached", exc_info=True)
+    return data
