@@ -60,6 +60,15 @@ _INTERNAL_KEYS = re.compile(
 )
 # 一定敏感的欄位：出現就直接 high
 _SENSITIVE_KEYS = re.compile(r"(password|passwd|pwd|token|secret|身分證|idcard|id_card|ssn)", re.I)
+# 登入帳號欄位：成批外洩的是「登入系統用的帳號」本身（憑證的一半），比單純姓名目錄嚴重得多。
+# 只在 qualifies（身分＋內部欄位＝後台名單）成立時用來把嚴重度升到 high，公開姓名目錄不受影響。
+_LOGIN_ACCOUNT_KEYS = re.compile(
+    r"(useraccount|user_account|loginid|login_id|loginname|login_name"
+    r"|username|user_name|登入帳號|帳號|acct)",
+    re.I,
+)
+# 管理／特權角色關鍵字：外洩的名單含管理員帳號時另外點明（不改嚴重度，high 已封頂）
+_ADMIN_HINT = re.compile(r"(admin|administrator|superuser|root|管理員|系統管理|後台)", re.I)
 # 內部檔案路徑：受保護資源或伺服器檔案系統絕對路徑（公開圖片 /images/x.png 不算）
 _INTERNAL_PATH_RE = re.compile(
     r"(/file/protected/|/(?:home|var|usr|opt|srv|root|app|www|data|storage|uploads?)/[\w./-]+"
@@ -169,8 +178,20 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
 
         url = r.get("url") or ""
         safe_url = redact_pii_in_text(redact_url_query_values(str(url)))
+        # 成批外洩的是「登入帳號」本身（憑證的一半、可直接拿去撞庫／社工），且已確定是後台名單
+        # （qualifies）時升 high——匿名就能撈走全體帳號、尤其含管理員帳號，是嚴重的存取控制缺失。
+        has_login_account = qualifies and bool(_LOGIN_ACCOUNT_KEYS.search(keys_blob))
+        has_admin_account = has_login_account and bool(_ADMIN_HINT.search(body))
         severity = (
-            "high" if (pii_total > 0 or has_sensitive_keys or strong_pii or has_infra) else "medium"
+            "high"
+            if (
+                pii_total > 0
+                or has_sensitive_keys
+                or strong_pii
+                or has_infra
+                or has_login_account
+            )
+            else "medium"
         )
 
         sample_keys = sorted(keys)[:15]
@@ -187,12 +208,25 @@ def analyze_unauthorized_results(results: list[dict]) -> list[dict]:
             evidence_parts.append(
                 "回應夾帶私有／內部網段 IP：" + "、".join(infra_ips[:5])
             )
+        if has_login_account:
+            evidence_parts.append(
+                "回傳欄位含登入帳號（如 userAccount／username／帳號），"
+                + ("且名單中出現管理／特權帳號。" if has_admin_account else "等同整份帳號清單。")
+            )
         if infra_path:
             evidence_parts.append("回應夾帶內部檔案路徑（見回應片段）。")
         if excerpt:
             evidence_parts.append("回應片段（個資與秘鑰已遮罩）：\n" + excerpt)
 
-        if qualifies:
+        if qualifies and has_login_account:
+            description = (
+                f"API 端點 {safe_url} 無需任何登入憑證即回傳成批後台帳號記錄"
+                f"（約 {len(objects)} 筆），且欄位直接包含登入帳號"
+                + ("（名單中還有管理／特權帳號）" if has_admin_account else "")
+                + "。登入帳號是憑證的一半，匿名可取得全體帳號清單代表存取控制缺失，"
+                "攻擊者可據此對後台（尤其管理員）發動撞庫、密碼噴灑與社交工程。"
+            )
+        elif qualifies:
             description = (
                 f"API 端點 {safe_url} 無需任何登入憑證即回傳成批記錄"
                 f"（約 {len(objects)} 筆，含個資或內部帳號資料）。"

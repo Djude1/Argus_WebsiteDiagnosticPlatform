@@ -257,6 +257,32 @@ class ScanTaskPlanIntegrationTests(TransactionTestCase):
         self.mocks["agent"].assert_called_once()
         self.mocks["kali"].assert_called_once()
 
+    def test_deep_agent_requests_both_security_and_ux(self):
+        # 勾了深度 AI Agent（active＋授權＋deep_agent_requested）且預設含 UX 維度：
+        # 傳給 runner 的 run_ux 應為 True，代表資安滲透與 UX 測試兩者都要跑。
+        scan = self._create_scan(single_page=False, active=True)
+        scan.deep_agent_requested = True
+        scan.save(update_fields=["deep_agent_requested"])
+
+        run_scan_job.run(scan.id)
+
+        self.mocks["agent"].assert_called_once()
+        _, called_kwargs = self.mocks["agent"].call_args
+        self.assertTrue(called_kwargs.get("run_ux"))
+
+    def test_deep_agent_without_ux_category_passes_run_ux_false(self):
+        # 勾了深度 AI Agent 但取消 UX 維度：仍跑深度資安，但 run_ux=False（不跑 UX）。
+        scan = self._create_scan(single_page=False, active=True)
+        scan.deep_agent_requested = True
+        scan.categories = ["security"]
+        scan.save(update_fields=["deep_agent_requested", "categories"])
+
+        run_scan_job.run(scan.id)
+
+        self.mocks["agent"].assert_called_once()
+        _, called_kwargs = self.mocks["agent"].call_args
+        self.assertFalse(called_kwargs.get("run_ux"))
+
     def test_exposure_cancellation_immediately_enters_cancelled_branch(self):
         scan = self._create_scan(single_page=False, active=True)
         self.mocks["exposure"].side_effect = ScanCancelled()

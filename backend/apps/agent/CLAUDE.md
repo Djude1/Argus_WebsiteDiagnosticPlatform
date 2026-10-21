@@ -14,6 +14,12 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
 - **資安（deep_mode＝active＋authorized＋`deep_agent_requested` 才全開；2026-10-18 起加上 opt-in 閘）**：recon agent → orchestrator agent
   （subagent 派工）→ specialist subagent（8 角色：auth_idor/injection/logic_abuse/
   info_leak/xss_hunter/jwt_token_abuse/file_upload/crypto）。
+- **資安與 UX 不互斥（2026-10-21）**：deep_mode 與 UX 由兩道獨立閘門控制，可同時成立。
+  勾了深度 AI Agent 又勾了 `ux` 維度時，`run_agent_for_scan` 先跑完整條資安滲透鏈，
+  再跑一個擬真使用者 UX session（`deep_tools=False` 掛 UX 工具集）併入結果——**兩者都要有**。
+  由 `tasks.stage_agent` 以 `run_agent_for_scan(run_ux=plan.run_agent_ux)` 傳入；
+  進度分母 `agent_total` 把兩種 session 的步數估計各自累加。先前 `elif deep_mode` 分支會略過 UX，
+  造成「點了 AI Agent 反而沒有 UX 測試」。
 - **擬真使用者 UX 測試（passive 也跑）**：全網站掃描且勾選 `ux` 維度時（`scan_plan.run_agent_ux`）
   走 `DEFAULT_TASK_PROMPT_TEMPLATE` 單 session，像真實使用者操作找可用性問題，產生
   `report_ux_issue`（UX 類 finding）。**不需要主動授權**，但 `may_submit_forms` 閘門決定能否

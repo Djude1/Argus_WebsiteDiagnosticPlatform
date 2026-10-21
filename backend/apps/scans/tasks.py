@@ -1687,6 +1687,39 @@ def _previous_deterministic_endpoints(scan_job) -> dict[str, tuple[str, str]]:
         return {}
 
 
+def _previous_agent_security_endpoints(scan_job) -> list[str]:
+    """上一次完成掃描『AI Agent 觀察』到、帶端點路徑的資安發現端點清單（2026-10-21）。
+
+    Agent 偶然打到的未授權 API（如 /members/all）rule_id 是會漂的雜湊、嚴重度封頂且不計分，
+    下次掃描若 Agent 沒再打到就整個消失或只剩一筆中風險——這正是使用者看到的「不穩定」。
+    把這些端點餵回本次確定性 authz 探測：一旦被任何一層發現過，之後每次掃描都由確定性層重探，
+    仍存在就穩定報成 security-unauth-api-records（計分、嚴重度由資料內容決定）。
+    只讀路徑、無副作用；失敗回空不影響主掃描。
+    """
+    try:
+        from apps.scans.projects import previous_completed
+
+        project = scan_job.project
+        if project is None:
+            return []
+        previous = previous_completed(project, scan_job)
+        if previous is None:
+            return []
+        paths: list[str] = []
+        rows = previous.findings.filter(
+            category="security", rule_id__startswith="agent-observed-security",
+        ).values_list("evidence_json", flat=True)
+        for evidence_json in rows:
+            endpoint = (evidence_json or {}).get("observed_endpoint") or (
+                evidence_json or {}
+            ).get("endpoint")
+            if endpoint and "#" not in str(endpoint):
+                paths.append(str(endpoint))
+        return list(dict.fromkeys(paths))
+    except Exception:  # noqa: BLE001 — 重探前置失敗不影響主掃描
+        return []
+
+
 def _mark_reverify_resolved(
     ctx: ScanRunContext, prev_endpoints: dict[str, str], results: list[dict]
 ) -> None:
@@ -1745,6 +1778,11 @@ def _run_authz_probe(
         if source == "authz_probe" and "#" not in path  # IDOR 模板（含 #）無法直接重探
     }
     candidates.extend(f"{origin}/{path.lstrip('/')}" for path in authz_prev.values())
+    # 上一次 Agent 觀察到、帶端點的資安發現也併入（漏報自癒：Agent 偶然打到的沉澱成確定性重探）
+    candidates.extend(
+        f"{origin}/{path.lstrip('/')}"
+        for path in _previous_agent_security_endpoints(ctx.scan_job)
+    )
     if not candidates and not write_targets:
         ctx.coverage.mark("authz_probe", SKIPPED, "沒有發現可探測的 API 端點")
         return
@@ -2038,8 +2076,12 @@ def stage_agent(ctx: ScanRunContext) -> None:
     # 以最壞情況總步數當分母，再由 runner 每步回報累計步數，進度條才會動、看得出活著（2026-10-18）。
     # 深度資安是 recon＋orchestrator＋多專家的最壞估計；UX 只有單一 session，分母用 UX 估計，
     # 否則沒勾深度資安的掃描會顯示像在跑數百步的資安 agent（2026-10-18）。
+    # 深度資安與 UX 可同時跑（勾了 AI Agent＝兩者都做）；分母各自累加，
+    # 進度條分母才涵蓋實際會跑的 session 數（2026-10-21）
     agent_total = max(
-        max_total_steps_estimate() if plan.run_agent else ux_steps_estimate(), 1
+        (max_total_steps_estimate() if plan.run_agent else 0)
+        + (ux_steps_estimate() if plan.run_agent_ux else 0),
+        1,
     )
     agent_steps_seen = {"n": 0}
 
@@ -2081,6 +2123,7 @@ def stage_agent(ctx: ScanRunContext) -> None:
                 may_submit_forms=may_submit_forms,
                 known_findings=known_findings,
                 progress_cb=_report_agent_step,
+                run_ux=plan.run_agent_ux,
             )
         )
         ctx.agent_result = agent_result

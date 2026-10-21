@@ -171,6 +171,40 @@ def _scan(user, **kw) -> ScanJob:
     return ScanJob.objects.create(**base)
 
 
+class PreviousAgentEndpointsTests(TestCase):
+    """Fix 2（2026-10-21）：上一次 Agent 觀察到、帶端點的資安發現，餵回本次確定性 authz 探測，
+    讓 /members/all 這類端點被任何一層發現過後，之後每次掃描都由確定性層穩定重探。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="prev-agent", password="safe-test-password")
+
+    def _completed(self, days_ago):
+        return _scan(
+            self.user, status=ScanJob.Status.COMPLETED,
+            completed_at=timezone.now() - timezone.timedelta(days=days_ago),
+        )
+
+    def test_collects_agent_endpoints_from_previous_scan(self):
+        previous = self._completed(7)
+        Finding.objects.create(
+            scan_job=previous, category="security", severity="medium",
+            title="未授權成員清單", rule_id="agent-observed-security-abc123",
+            evidence_json={"observed_endpoint": "/api_proxy/members/all"},
+        )
+        Finding.objects.create(
+            scan_job=previous, category="security", severity="low",
+            title="無端點的觀察", rule_id="agent-observed-security-def456",
+            evidence_json={},
+        )
+        current = self._completed(0)
+        paths = tasks._previous_agent_security_endpoints(current)
+        self.assertEqual(paths, ["/api_proxy/members/all"])
+
+    def test_no_previous_scan_returns_empty(self):
+        current = self._completed(0)
+        self.assertEqual(tasks._previous_agent_security_endpoints(current), [])
+
+
 class CompareIssuesCoverageTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="cov-cmp", password="safe-test-password")

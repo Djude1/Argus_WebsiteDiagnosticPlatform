@@ -39,6 +39,21 @@ class AnalyzeUnauthorizedResultsTests(SimpleTestCase):
         # 名單無 email／電話 → medium（保守）
         self.assertEqual(findings[0]["severity"], "medium")
 
+    def test_login_account_dump_escalates_to_high(self):
+        # /members/all 匿名回傳全體後台登入帳號（userAccount），含管理員帳號 → high（2026-10-21）
+        body = {
+            "result": True,
+            "data": [
+                {"memberId": "M001", "name": "葉教授", "userAccount": "bircadmin",
+                 "roleId": 1, "roleName": "教授兼系主任", "enable": True},
+                {"memberId": "M002", "name": "林助理", "userAccount": "lily_chang",
+                 "roleId": 3, "roleName": "行政人員", "enable": True},
+            ],
+        }
+        findings = analyze_unauthorized_results([_result(body)])
+        self.assertEqual(findings[0]["severity"], "high")
+        self.assertIn("登入帳號", findings[0]["evidence"])
+
     def test_pii_escalates_to_high(self):
         body = {
             "data": [

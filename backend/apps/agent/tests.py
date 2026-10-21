@@ -1719,3 +1719,90 @@ class CapUxSeverityTests(TestCase):
         }])
         self.assertEqual(len(created), 1)
         self.assertEqual(created[0].severity, "high")
+
+
+class _RecordingAgent:
+    """假 HermesAgent：記下每個 session 的 task_prompt，不碰瀏覽器或模型。"""
+
+    runs: list[str] = []
+
+    def __init__(self, **kwargs):
+        pass
+
+    async def run(self, task_prompt: str):
+        from apps.agent.loop import AgentRunResult
+
+        _RecordingAgent.runs.append(task_prompt)
+        return AgentRunResult(
+            session_id=1, status="completed", steps=1, total_tokens=0
+        )
+
+
+class _FakePlaywrightCM:
+    """假 async_playwright()：`async with` 回傳可啟動瀏覽器的 stub。"""
+
+    async def __aenter__(self):
+        pw = MagicMock()
+        browser = MagicMock()
+        browser.close = AsyncMock()
+        pw.chromium.launch = AsyncMock(return_value=browser)
+        return pw
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+@override_settings(ARGUS_AGENT_ENABLED=True)
+class RunAgentForScanBranchTests(TransactionTestCase):
+    """勾了 AI Agent（深度資安）時，資安滲透與 UX 測試兩者都要跑（2026-10-21）。
+
+    過去 run_agent_for_scan 的 `elif deep_mode` 分支會略過 UX session，
+    造成「點了 AI Agent 反而沒有 UX 測試」。本檔鎖定：run_ux=True 時深度模式
+    會額外跑一個擬真使用者 UX session；run_ux=False 時不跑。"""
+
+    _UX_MARKER = "擬真使用者的 UX"
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="run-agent-branch", password="safe-test-password"
+        )
+        self.scan = ScanJob.objects.create(
+            user=self.user,
+            original_url="https://example.com/",
+            normalized_url="https://example.com/",
+            origin="https://example.com",
+            scan_mode=ScanJob.ScanMode.ACTIVE,
+            active_testing_authorized=True,
+            deep_agent_requested=True,  # 深度 AI Agent（deep_mode=True）
+        )
+        _RecordingAgent.runs = []
+
+    def _run(self, *, run_ux: bool):
+        from apps.agent import runner
+
+        page = MagicMock(final_url="https://example.com/", url="https://example.com/")
+        context = MagicMock()
+        context.new_page = AsyncMock(return_value=MagicMock(goto=AsyncMock()))
+        with (
+            patch.object(runner, "_pick_starting_page", return_value=page),
+            patch.object(runner, "build_default_chain", return_value=MagicMock()),
+            patch.object(runner, "async_playwright", return_value=_FakePlaywrightCM()),
+            patch.object(
+                runner, "_make_agent_context", new=AsyncMock(return_value=context)
+            ),
+            patch.object(runner, "ToolExecutor", MagicMock()),
+            patch.object(runner, "HermesAgent", _RecordingAgent),
+        ):
+            asyncio.run(runner.run_agent_for_scan(self.scan, run_ux=run_ux))
+
+    def test_deep_mode_with_run_ux_also_runs_ux_session(self):
+        self._run(run_ux=True)
+        ux_sessions = [p for p in _RecordingAgent.runs if self._UX_MARKER in p]
+        self.assertEqual(len(ux_sessions), 1, _RecordingAgent.runs)
+
+    def test_deep_mode_without_run_ux_skips_ux_session(self):
+        self._run(run_ux=False)
+        ux_sessions = [p for p in _RecordingAgent.runs if self._UX_MARKER in p]
+        self.assertEqual(ux_sessions, [])
+        # 深度資安鏈本身仍有跑（recon／orchestrator／安全網專家）
+        self.assertTrue(_RecordingAgent.runs)

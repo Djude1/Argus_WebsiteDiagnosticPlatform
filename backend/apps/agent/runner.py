@@ -588,6 +588,7 @@ async def run_agent_for_scan(
     may_submit_forms: bool = False,
     known_findings: list[dict] | None = None,
     progress_cb: Callable[[str, int], None] | None = None,
+    run_ux: bool = False,
 ) -> AgentRunResult | None:
     """對已完成爬取的 ScanJob 啟動 Hermes-Agent 動態 UX 測試。
 
@@ -596,6 +597,11 @@ async def run_agent_for_scan(
     may_submit_forms：被動 UX 測試時是否允許實際送出表單。預設 False——
     未通過網域所有權驗證的目標，agent 只填入示意資料觀察表單可用性，
     不按送出，避免在他人網站留下測試資料。deep_mode（主動授權）一律 True。
+
+    run_ux：是否跑擬真使用者 UX 測試（對應 scan_plan.run_agent_ux）。
+    - 沒勾深度 AI Agent（deep_mode=False）：只跑 UX，等同 run_ux。
+    - 勾了深度 AI Agent（deep_mode=True）：先跑資安滲透鏈，若 run_ux 另外再跑一個
+      UX session 併入結果——兩者都要有（使用者勾 AI Agent＝資安＋UX 都做）。
     """
     if not settings.ARGUS_AGENT_ENABLED:
         return None
@@ -622,9 +628,14 @@ async def run_agent_for_scan(
         specialist_dispatcher=None,
         allow_form_submit: bool = True,
         max_tokens: int | None = None,
+        deep_tools: bool | None = None,
     ) -> AgentRunResult:
         """單一 session：獨立 browser context（乾淨 localStorage／cookie）
-        與獨立 LLM messages。orchestrator=True 時只掛調度工具（不親自測試）。"""
+        與獨立 LLM messages。orchestrator=True 時只掛調度工具（不親自測試）。
+
+        deep_tools：覆寫這個 session 要不要掛深度資安工具；None＝沿用本次掃描的
+        deep_mode。深度資安掃描若同時要跑 UX 測試，UX session 要用 deep_tools=False
+        掛擬真使用者工具集，不要給它資安滲透工具。"""
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(
                 headless=True,
@@ -647,7 +658,7 @@ async def run_agent_for_scan(
                     executor=executor,
                     chain=chain,
                     tool_schemas=build_tool_schemas(
-                        deep_mode,
+                        deep_mode if deep_tools is None else deep_tools,
                         orchestrator=orchestrator,
                         specialist_roles=(
                             SPECIALIST_ROLES if orchestrator else None
@@ -694,6 +705,28 @@ async def run_agent_for_scan(
             error="; ".join(
                 f"role{idx}:{r.error}" for idx, r in enumerate(results) if r.error
             ),
+        )
+
+    async def _run_ux_session() -> AgentRunResult:
+        """擬真使用者 UX 測試 session：掛 UX 工具（deep_tools=False），
+        送出授權依 allow_form_submit。深度資安掃描若同時要跑 UX 也用這個。"""
+        submit_clause = (
+            "3. 若進入表單或結帳流程，請嘗試填入示意資料（test@example.com），"
+            "並送出觀察結果。"
+            if allow_form_submit
+            else "3. 若進入表單或結帳流程，請填入示意資料（test@example.com）觀察"
+            "欄位與驗證提示是否清楚，但**不要按下送出／提交**——這個網站尚未通過"
+            "所有權驗證，不應留下測試資料。"
+        )
+        ux_prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
+            origin=scan_job.origin, url=target_url, submit_clause=submit_clause
+        )
+        return await _run_session(
+            ux_prompt,
+            role_label="ux",
+            allow_form_submit=allow_form_submit,
+            max_tokens=settings.ARGUS_AGENT_UX_MAX_TOKENS,
+            deep_tools=False,
         )
 
     if task_prompt is not None:
@@ -819,25 +852,14 @@ async def run_agent_for_scan(
                     )
                 )
 
-        result = _merge([recon_result, orchestrator_result, *specialist_results])
+        sessions = [recon_result, orchestrator_result, *specialist_results]
+        # 勾了深度 AI Agent 且有勾 UX：資安滲透跑完後，再跑一個擬真使用者 UX
+        # session 併入——使用者勾 AI Agent 代表資安與 UX 兩種測試都要有（2026-10-21）
+        if run_ux:
+            sessions.append(await _run_ux_session())
+        result = _merge(sessions)
     else:
-        submit_clause = (
-            "3. 若進入表單或結帳流程，請嘗試填入示意資料（test@example.com），"
-            "並送出觀察結果。"
-            if allow_form_submit
-            else "3. 若進入表單或結帳流程，請填入示意資料（test@example.com）觀察"
-            "欄位與驗證提示是否清楚，但**不要按下送出／提交**——這個網站尚未通過"
-            "所有權驗證，不應留下測試資料。"
-        )
-        prompt = DEFAULT_TASK_PROMPT_TEMPLATE.format(
-            origin=scan_job.origin, url=target_url, submit_clause=submit_clause
-        )
-        result = await _run_session(
-            prompt,
-            role_label="ux",
-            allow_form_submit=allow_form_submit,
-            max_tokens=settings.ARGUS_AGENT_UX_MAX_TOKENS,
-        )
+        result = await _run_ux_session()
 
     if result and result.issues:
         await sync_to_async(persist_agent_issues)(scan_job, result.issues)
