@@ -102,7 +102,7 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
                 "finding_id": row["id"],
                 "description": row["description"],
                 "remediation": row["remediation"],
-                # 代表 finding 的「複製給 AI 的提示詞」，問題分析頁每列可一鍵複製（與掃描詳情同一份）
+                # 代表 finding 的「複製給 AI 的提示詞」，問題分析頁每列可一鍵複製
                 "ai_handoff_prompt": row["ai_handoff_prompt"],
                 "occurrences": 0,
                 "_urls": [],
