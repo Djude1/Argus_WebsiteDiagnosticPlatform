@@ -114,7 +114,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        # 把 Vite build 出的 index.html 視為 Django 可渲染的模板，讓 runserver 一個命令就能服務 SPA
+        # 把 Vite build 出的 index.html 視為 Django 可渲染的模板，讓 runserver 一個命令就可以服務 SPA
         "DIRS": [PROJECT_ROOT / "frontend" / "dist"],
         "APP_DIRS": True,
         "OPTIONS": {
