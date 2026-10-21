@@ -1048,8 +1048,44 @@ class ToolExecutor:
         # 原本只看上面的集合非空，任何一個工具成功過，之後每一筆回報都算已驗證——
         # ntubimdbirc.tw 實測只是讀取公開 sitemap 也被寫成「以主動工具重現並確認可被利用」。
         self._confirmed_paths: set[str] = set()
+        # 點擊後開出的新分頁／視窗（2026-10-21）：目標網址依序記錄，click 工具據此回報
+        # opened_new_tab；新分頁隨即關閉，agent 一律留在原本的分頁操作。
+        self._popups: list[str] = []
+        # 哪些 selector 點了會開新分頁：report_ux_issue 對這些元素的 blocking 回報不採信。
+        self._opened_by_selector: dict[str, list[str]] = {}
         if scan_job is not None:
             self.page.on("response", self._on_network_response)
+        try:
+            self.page.context.on("page", self._on_new_page)
+        except Exception:  # noqa: BLE001 — 測試替身沒有 context
+            pass
+
+    async def _on_new_page(self, new_page) -> None:
+        """新分頁／popup：記下目標網址後關掉，讓 agent 留在原分頁。
+
+        跨源主文件會被 context route 擋下（頁面停在 about:blank），所以優先取第一個導覽
+        請求的網址，拿不到才用 page.url。
+        """
+        target = ""
+
+        def _remember(request) -> None:
+            nonlocal target
+            try:
+                if not target and request.is_navigation_request():
+                    target = request.url
+            except Exception:  # noqa: BLE001
+                pass
+
+        try:
+            new_page.on("request", _remember)
+            await asyncio.sleep(0.5)
+            if not target:
+                target = new_page.url or ""
+            if target and target != "about:blank":
+                self._popups.append(target)
+            await new_page.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _on_network_response(self, response) -> None:
         """收集 same-origin XHR/fetch 進 network log；任何例外靜默忽略。"""
@@ -1196,14 +1232,42 @@ class ToolExecutor:
                 result={"error": exc.__class__.__name__, "detail": str(exc)[:200]},
             )
 
+    async def _opened_urls(self) -> list[str]:
+        """頁面透過 window.open 開過的網址（由 context init script 記錄）。"""
+        try:
+            opened = await self.page.evaluate("() => window.__argusOpened || []")
+        except Exception:  # noqa: BLE001
+            return []
+        return [str(u) for u in (opened or []) if u]
+
     async def _click(self, selector: str) -> ToolOutcome:
         if not selector:
             return ToolOutcome(ok=False, result={"error": "empty_selector"})
         loc = self.page.locator(selector).first
+        url_before = self.page.url
+        opened_before = len(await self._opened_urls())
+        popups_before = len(self._popups)
         await loc.click(timeout=self.action_timeout_ms)
         await self.page.wait_for_load_state("domcontentloaded", timeout=self.action_timeout_ms)
+        # 給 popup 事件與 window.open 鉤子一點時間
+        await asyncio.sleep(0.6)
         url = self.page.url
-        return ToolOutcome(ok=True, result={"clicked": selector, "url_after": url})
+        result: dict[str, Any] = {
+            "clicked": selector,
+            "url_after": url,
+            "url_changed": url != url_before,
+        }
+        opened = (await self._opened_urls())[opened_before:] + self._popups[popups_before:]
+        # 去重、保序
+        opened = list(dict.fromkeys(u for u in opened if u))
+        if opened:
+            result["opened_new_tab"] = opened
+            result["note"] = (
+                "點擊開啟了新分頁／視窗（目標見 opened_new_tab；外站不會跟過去，新分頁已關閉）。"
+                "這代表按鈕有效，不是死按鈕。"
+            )
+            self._opened_by_selector.setdefault(selector, []).extend(opened)
+        return ToolOutcome(ok=True, result=result)
 
     async def _type_text(self, selector: str, text: str) -> ToolOutcome:
         if not selector:
@@ -1875,6 +1939,15 @@ class ToolExecutor:
             return ToolOutcome(ok=False, result={"error": "missing_title_or_description"})
 
         blocking = bool(args.get("blocking"))
+        # 點了會開新分頁的元素不是死按鈕：agent 仍堅持 blocking 時不採信，降回一般 UX 觀察
+        opened = self._opened_by_selector.get(selector) if selector else None
+        blocking_note = ""
+        if blocking and opened:
+            blocking = False
+            blocking_note = (
+                "系統核對：該元素點擊後開啟了新分頁（" + "、".join(opened[:3]) + "），"
+                "不是無反應的死按鈕，blocking 不採信。"
+            )
         payload = {
             "severity": cap_ux_severity(severity, blocking=blocking),
             "blocking": blocking,
@@ -1884,6 +1957,13 @@ class ToolExecutor:
             "selector": selector,
             "url": self.page.url,
         }
+        if blocking_note:
+            payload["description"] = f"{description}\n\n{blocking_note}"[:5000]
+            return ToolOutcome(
+                ok=True,
+                result={"reported": True, "title": title, "blocking_rejected": blocking_note},
+                issue=payload,
+            )
         return ToolOutcome(ok=True, result={"reported": True, "title": title}, issue=payload)
 
     async def _probe_unauthorized_access(self, url: str) -> ToolOutcome:

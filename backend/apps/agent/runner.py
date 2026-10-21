@@ -52,6 +52,8 @@ DEFAULT_TASK_PROMPT_TEMPLATE = """\
 4. 過程中任何 UX 問題（按鈕無反應、流程斷裂、文案歧義、看不到必要回饋、
    找不到返回路徑等），請呼叫 report_ux_issue，並提供修補方向（不要給程式碼）；
    核心任務被完全卡死、根本無法完成（如登入頁打不了字／按鈕點了沒反應）時設 blocking=true。
+   click 回傳 opened_new_tab 代表按鈕有效（開了新分頁／外站，本代理不會跟過去），
+   不是死按鈕，不要回報「點擊沒反應」。
 5. 完成或無法繼續時呼叫 finish，並附短總結。
 
 這是純使用體驗測試：不要嘗試繞過驗證、不要送出任何攻擊性或破壞性內容、不要操作他站資源。"""
@@ -491,12 +493,30 @@ async def _enforce_agent_websocket(websocket_route, origin: str):
     websocket_route.connect_to_server()
 
 
+# 記錄頁面呼叫 window.open 的目標網址（2026-10-21）：CTA 用 JS 開新分頁到外站（如 Instagram）時，
+# 目前分頁的網址與網路紀錄都不會變，agent 看不到任何反應就判成「死按鈕」並以 blocking 回報高風險
+# （ntubimdbirc.tw「加入我們」實掃誤報）。鉤子只記錄、不改行為，原本的 popup 仍照常開（跨源主文件
+# 會被 _enforce_agent_request 擋掉，但 click 工具已能回報「點擊開了新分頁到 <網址>」）。
+_WINDOW_OPEN_HOOK_JS = """
+(() => {
+  if (window.__argusOpened) return;
+  window.__argusOpened = [];
+  const original = window.open;
+  window.open = function (url, ...rest) {
+    try { window.__argusOpened.push(String(url || "")); } catch (e) {}
+    return original ? original.apply(this, [url, ...rest]) : null;
+  };
+})();
+"""
+
+
 async def _make_agent_context(browser, origin: str):
     context = await browser.new_context(
         user_agent=settings.ARGUS_SCANNER_USER_AGENT,
         ignore_https_errors=True,
         service_workers="block",
     )
+    await context.add_init_script(_WINDOW_OPEN_HOOK_JS)
     await context.route(
         "**/*",
         lambda route, request: _enforce_agent_request(route, request, origin),

@@ -106,6 +106,7 @@ class AgentBrowserBoundaryTests(TestCase):
         context = MagicMock()
         context.route = AsyncMock()
         context.route_web_socket = AsyncMock()
+        context.add_init_script = AsyncMock()
         browser = MagicMock()
         browser.new_context = AsyncMock(return_value=context)
 
@@ -119,6 +120,9 @@ class AgentBrowserBoundaryTests(TestCase):
         )
         context.route.assert_awaited_once()
         context.route_web_socket.assert_awaited_once()
+        # window.open 鉤子（2026-10-21）：記錄 CTA 開新分頁的目標，避免誤判死按鈕
+        context.add_init_script.assert_awaited_once()
+        self.assertIn("__argusOpened", context.add_init_script.await_args.args[0])
 
     def test_request_policy_blocks_private_and_cross_origin_document(self):
         private_route = MagicMock()
@@ -1603,6 +1607,84 @@ class PersistAgentIssuesTests(TestCase):
         ]
         created = persist_agent_issues(self.scan_job, issues)
         self.assertEqual(created, [])
+
+
+class ClickOpensNewTabTests(TestCase):
+    """click 工具要回報「點擊開了新分頁」（2026-10-21）：CTA 用 window.open 開外站時，目前分頁
+    網址不變、網路紀錄也沒東西，agent 看不到反應就判成死按鈕（ntubimdbirc.tw「加入我們」誤報
+    為 blocking 高風險、UX 51→30）。"""
+
+    def _make_executor(self, opened_after=None):
+        page = MagicMock()
+        page.url = "https://example.com/member"
+        page.locator.return_value.first.click = AsyncMock()
+        page.wait_for_load_state = AsyncMock()
+        # 第一次 evaluate：點擊前 window.__argusOpened 為空；第二次：點擊後
+        page.evaluate = AsyncMock(side_effect=[[], opened_after or []])
+        return ToolExecutor(page=page, screenshot_dir="/tmp/agent", action_timeout_ms=1000), page
+
+    def test_window_open_target_is_reported_and_not_a_dead_button(self):
+        executor, _ = self._make_executor(opened_after=["https://www.instagram.com/ntub_imd_birc/"])
+        outcome = asyncio.run(executor.run("click", {"selector": "nav button.join"}))
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.result["opened_new_tab"], ["https://www.instagram.com/ntub_imd_birc/"])
+        self.assertFalse(outcome.result["url_changed"])
+        self.assertIn("不是死按鈕", outcome.result["note"])
+
+    def test_popup_recorded_by_context_listener_is_reported(self):
+        executor, page = self._make_executor()
+
+        async def _click_opens_popup(**_kwargs):
+            # 模擬 <a target=_blank>：點擊期間 context 的 page 事件記下新分頁
+            executor._popups.append("https://example.com/popup")
+
+        page.locator.return_value.first.click = AsyncMock(side_effect=_click_opens_popup)
+        outcome = asyncio.run(executor.run("click", {"selector": "a.external"}))
+        self.assertEqual(outcome.result["opened_new_tab"], ["https://example.com/popup"])
+
+    def test_plain_click_has_no_new_tab_fields(self):
+        executor, _ = self._make_executor()
+        outcome = asyncio.run(executor.run("click", {"selector": "a.internal"}))
+        self.assertNotIn("opened_new_tab", outcome.result)
+        self.assertNotIn("note", outcome.result)
+
+    def test_blocking_report_on_element_that_opened_new_tab_is_rejected(self):
+        executor, _ = self._make_executor(opened_after=["https://www.instagram.com/x/"])
+        asyncio.run(executor.run("click", {"selector": "nav button.join"}))
+        outcome = asyncio.run(
+            executor.run(
+                "report_ux_issue",
+                {
+                    "severity": "medium",
+                    "title": "主要 CTA 點擊完全無反應",
+                    "description": "點了四次都沒反應",
+                    "selector": "nav button.join",
+                    "blocking": True,
+                },
+            )
+        )
+        self.assertFalse(outcome.issue["blocking"])
+        self.assertEqual(outcome.issue["severity"], "medium")
+        self.assertIn("blocking 不採信", outcome.issue["description"])
+        self.assertIn("blocking_rejected", outcome.result)
+
+    def test_blocking_report_on_other_element_still_promotes(self):
+        executor, _ = self._make_executor(opened_after=["https://www.instagram.com/x/"])
+        asyncio.run(executor.run("click", {"selector": "nav button.join"}))
+        outcome = asyncio.run(
+            executor.run(
+                "report_ux_issue",
+                {
+                    "severity": "medium",
+                    "title": "登入按鈕沒反應",
+                    "description": "輸入後按登入沒有任何反應",
+                    "selector": "form button.login",
+                    "blocking": True,
+                },
+            )
+        )
+        self.assertTrue(outcome.issue["blocking"])
+        self.assertEqual(outcome.issue["severity"], "high")
 
 
 class CapUxSeverityTests(TestCase):

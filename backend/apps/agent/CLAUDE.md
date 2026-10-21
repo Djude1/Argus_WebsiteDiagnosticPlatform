@@ -23,7 +23,7 @@ Claude Code 進 `backend/apps/agent/` 工作時，本檔在專案層 `CLAUDE.md`
   （`findings.cap_ux_severity`，2026-10-10）；**例外 `blocking`（2026-10-20）**：工具多一個 `blocking`
   旗標＝核心任務被完全卡死、根本無法完成（登入頁打不了字／按鈕點了沒反應、結帳送不出去，不是繞得過去
   的困擾），設 true 時 `cap_ux_severity(severity, blocking=True)` 允許升到 **high**（仍封頂 high、不給
-  critical）；一般卡住仍 medium 上限。1D47 報告「登入頁完全壞掉」只給中風險偏輕，故開此窄例外。
+  critical）；一般卡住仍 medium 上限。1D47 報告「登入頁完全壞掉」只給中風險偏輕，故開此窄例外。**開新分頁不是死按鈕（2026-10-21）**：6821 報告把「加入我們」（`<button>` 用 `window.open` 開 Instagram）判成「點擊完全無反應」並以 blocking 回報高風險，UX 51→30。`_make_agent_context` 掛 init script 鉤住 `window.open` 記錄目標（`_WINDOW_OPEN_HOOK_JS`），`ToolExecutor` 另聽 context `page` 事件記下 popup 目標後關閉；`click` 結果多 `url_changed`、`opened_new_tab`（網址清單）與 note「這代表按鈕有效，不是死按鈕」；`report_ux_issue` 對點過會開新分頁的 selector 不採信 `blocking`（降回一般 UX 觀察、描述附系統核對註記、result 回 `blocking_rejected`）。提示詞同步寫明。
   token 上限另用 `ARGUS_AGENT_UX_MAX_TOKENS`（120000），
   用完時覆蓋紀錄標 partial。
 
