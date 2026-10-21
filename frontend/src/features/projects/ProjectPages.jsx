@@ -1302,7 +1302,7 @@ function ProjectPagesPage() {
     <div className="project-page">
       <ProjectHeader
         project={project}
-        section="頁面"
+        section="頁面分析"
         description="這次掃描實際檢查的每個頁面：狀態碼、載入時間與問題數。按「優化此頁」可依診斷產生優化版，並分享連結給設計或工程師。"
         aside={<ScanTimeCard completed={completed} current={data.scan} value={scanParam} onChange={(value) => setParam("scan", value)} />}
       />

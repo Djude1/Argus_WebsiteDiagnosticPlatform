@@ -17,7 +17,7 @@ const SECTIONS = [
   { key: "seo", label: "SEO 分析" },
   { key: "security", label: "資安分析" },
   { key: "issues", label: "問題分析" },
-  { key: "pages", label: "頁面" },
+  { key: "pages", label: "頁面分析" },
   { key: "aeo", label: "AEO 問答" },
   { key: "settings", label: "專案設定" },
 ];

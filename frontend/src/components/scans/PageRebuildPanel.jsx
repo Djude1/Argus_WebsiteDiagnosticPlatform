@@ -9,7 +9,7 @@ const POLL_INTERVAL_MS = 5000;
 const IN_PROGRESS = new Set(["pending", "snapshotting", "optimizing", "asking"]);
 
 /**
- * 「頁面」分頁每一列的「優化此頁」。
+ * 「頁面分析」分頁每一列的「優化此頁」。
  *
  * 只放決策需要的資訊：會得到什麼、要花多少、進度、成果摘要；完整的前後比較、
  * 修改清單與分享都在成果頁（/scans/:scanId/rebuild/:rebuildId）。

@@ -311,7 +311,7 @@ function AppShell({ googleOAuthEnabled }) {
               <Route path="/scans/:scanId/fixes" element={<ScanSubpathRedirect to="" />} />
             </Route>
           </Route>
-          {/* 頁面優化成果頁：屬於「頁面」分頁，不顯示掃描報告的子分頁 */}
+          {/* 頁面優化成果頁：屬於「頁面分析」分頁，不顯示掃描報告的子分頁 */}
           <Route
             element={
               <RequireAuth>

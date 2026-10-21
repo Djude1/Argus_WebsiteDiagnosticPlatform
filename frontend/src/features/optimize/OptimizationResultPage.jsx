@@ -255,7 +255,7 @@ function OptimizationResultPage() {
           <span className="opt-progress-dot" aria-hidden="true" />
           <div>
             <p className="opt-progress-title">{STATUS_LABEL[rebuild.status]}</p>
-            <p className="opt-muted">{currentAction(rebuild)} 通常需要 1～3 分鐘，可以先離開，完成後回到「頁面」分頁查看。</p>
+            <p className="opt-muted">{currentAction(rebuild)} 通常需要 1～3 分鐘，可以先離開，完成後回到「頁面分析」分頁查看。</p>
           </div>
         </section>
       )}

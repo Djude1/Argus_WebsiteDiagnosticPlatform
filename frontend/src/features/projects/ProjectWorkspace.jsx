@@ -35,7 +35,7 @@ const SECTIONS = [
   { key: "seo", label: "SEO 分析", hint: "頁面內容、連結、關鍵字", Icon: MagnifierIcon },
   { key: "security", label: "資安分析", hint: "標頭等第、問題類型與修法", Icon: ShieldIcon },
   { key: "issues", label: "問題分析", hint: "新增、持續、未出現", Icon: FlagIcon },
-  { key: "pages", label: "頁面", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
+  { key: "pages", label: "頁面分析", hint: "每頁狀態、速度與問題", Icon: BrowserIcon },
   { key: "aeo", label: "AEO 問答", hint: "問題能否在網站找到答案", Icon: ChatIcon },
   { key: "settings", label: "專案設定", hint: "預設掃描、網址、封存", Icon: GearIcon },
 ];

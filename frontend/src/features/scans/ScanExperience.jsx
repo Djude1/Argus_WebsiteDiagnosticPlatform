@@ -1794,11 +1794,11 @@ function FindingsWorkspace({ scan }) {
             selectedFinding={selectedFinding}
             onSelectFinding={selectFinding}
           />
-          {/* 頁面優化（複刻＋依診斷優化）2026-10-06 移到專案側邊欄的「頁面」分頁 */}
+          {/* 頁面優化（複刻＋依診斷優化）2026-10-06 移到專案側邊欄的「頁面分析」分頁 */}
           {!scan.is_demo && scan.project && pages.length > 0 && (
             <p className="scan-inspector-hint">
               想依這些問題產生優化版頁面？到{" "}
-              <Link to={`/projects/${scan.project}/pages?scan=${scan.id}`}>「頁面」分頁</Link>
+              <Link to={`/projects/${scan.project}/pages?scan=${scan.id}`}>「頁面分析」分頁</Link>
               選擇要優化的頁面。
             </p>
           )}
@@ -1851,7 +1851,7 @@ function ScanLogPanel({ entries, live = false }) {
 
 // 掃描詳情的外框：外層 ProjectScanShell 已顯示所屬網站專案的側邊欄，這裡只放返回與分頁。
 // 2026-10-06：「網站優勢」「網站架構」（含網站結構圖）獨立成分頁；修正產出移除——
-// 它產生的 JSON-LD／OG／FAQ 片段與「頁面」分頁的頁面優化重疊，而頁面優化直接給整頁成品。
+// 它產生的 JSON-LD／OG／FAQ 片段與「頁面分析」分頁的頁面優化重疊，而頁面優化直接給整頁成品。
 // 2026-10-10：「網站架構」再拆成「架構與信任」（流量路徑、技術、安全標頭、信任輪廓、AI 爬蟲政策；
 // 網址沿用 architecture）與「網站拓撲」（結構圖，網址 topology）。
 const SCAN_TABS = [

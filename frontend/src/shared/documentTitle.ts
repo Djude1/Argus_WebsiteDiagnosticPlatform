@@ -46,7 +46,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/projects\/[^/]+\/seo\/?$/, "SEO 分析"],
   [/^\/projects\/[^/]+\/security\/?$/, "資安分析"],
   [/^\/projects\/[^/]+\/issues\/?$/, "問題分析"],
-  [/^\/projects\/[^/]+\/pages\/?$/, "頁面"],
+  [/^\/projects\/[^/]+\/pages\/?$/, "頁面分析"],
   [/^\/projects\/[^/]+\/aeo\/?$/, "AEO 問答"],
   [/^\/projects\/[^/]+\/settings\/?$/, "專案設定"],
   [/^\/projects\/[^/]+\/?$/, "專案總覽"],
