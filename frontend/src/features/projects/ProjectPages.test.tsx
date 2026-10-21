@@ -15,6 +15,9 @@ import {
 vi.mock("../../api", () => ({ api: { get: vi.fn() }, setAccessToken: vi.fn() }));
 const { api } = vi.mocked(await import("../../api"));
 
+vi.mock("../../shared/clipboard", () => ({ copyToClipboard: vi.fn(async () => true) }));
+const { copyToClipboard } = vi.mocked(await import("../../shared/clipboard"));
+
 const PROJECT = { id: 7, name: "a.example", hostname: "a.example", origin: "https://a.example" };
 
 function page(id: number, overrides: Record<string, unknown>) {
@@ -77,7 +80,7 @@ beforeEach(() => {
 function issue(key: string, overrides: Record<string, unknown>) {
   return {
     key, rule_id: key, status: "new", streak: 1, pages: 1, urls: ["https://a.example/"], description: "說明",
-    remediation: "修法", ...overrides,
+    remediation: "修法", ai_handoff_prompt: `prompt-${key}`, ...overrides,
   };
 }
 
@@ -138,6 +141,15 @@ describe("ProjectPagesPage", () => {
     await user.click(screen.getByRole("button", { name: /載入時間/ }));
     expect(within(screen.getAllByRole("row")[1]!).getByText("頁 1")).toBeInTheDocument();
   });
+
+  it("頁面網址是可點擊、在新分頁開啟的連結", async () => {
+    renderPagesTab();
+    await screen.findAllByRole("row");
+    const link = screen.getByRole("link", { name: "https://a.example/p2" });
+    expect(link).toHaveAttribute("href", "https://a.example/p2");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+  });
 });
 
 describe("ProjectIssuesPage", () => {
@@ -167,6 +179,17 @@ describe("ProjectIssuesPage", () => {
     await user.click(within(document.querySelector(".issue-summary-sev") as HTMLElement).getByRole("button", { name: /低/ }));
     expect(screen.getByText("缺少 canonical")).toBeInTheDocument();
     expect(screen.queryByText("缺少 CSP")).not.toBeInTheDocument();
+  });
+
+  it("每個問題都有 AI 提示詞複製按鈕，點擊複製該問題的提示詞", async () => {
+    const user = userEvent.setup();
+    renderIssuesTab();
+    await screen.findByText("缺少 CSP");
+    const buttons = screen.getAllByRole("button", { name: /複製 AI 提示詞/ });
+    expect(buttons).toHaveLength(3);
+    // 第一個問題（缺少 CSP，key=a）複製它自己的提示詞
+    await user.click(buttons[0]!);
+    expect(copyToClipboard).toHaveBeenCalledWith("prompt-a");
   });
 });
 

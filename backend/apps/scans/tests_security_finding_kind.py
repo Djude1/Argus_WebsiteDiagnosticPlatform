@@ -101,6 +101,8 @@ class SecurityKindSurfacesTests(TestCase):
         groups = issue_groups(self.scan)
         kinds = {g["title"]: g["security_kind_label"] for g in groups.values()}
         self.assertEqual(kinds, {"nginx 1.18 有已知漏洞": "疑似弱點", "缺少 title": ""})
+        # 每個問題帶代表 finding 的「複製給 AI 的提示詞」，供問題分析頁一鍵複製
+        self.assertTrue(all(g["ai_handoff_prompt"] == "p" for g in groups.values()))
 
         payload = build_report_payload(self.scan)
         traces = {f["title"]: f["trace"] for f in payload["findings"]}

@@ -601,6 +601,7 @@ def analyze_ux(page_input: PageAnalysisInput) -> list[dict]:
     findings.extend(_ux_tap_targets(page_input))
     findings.extend(_ux_unlabeled_fields(page_input))
     findings.extend(_ux_fake_buttons(page_input))
+    findings.extend(_ux_inert_auth_form(page_input))
     findings.extend(_ux_js_errors(page_input))
     findings.extend(_ux_axe(page_input))
     return findings
@@ -647,6 +648,181 @@ def _ux_fake_buttons(page_input: PageAnalysisInput) -> list[dict]:
             impact_area="accessibility",
             priority_score=40,
             evidence_type="html",
+        )
+    ]
+
+
+# 疑似未接上功能的登入／註冊表單（2026-10-21）：靜態訊號補位。AI UX agent 每次探索路徑
+# 不固定，像 /management/login 這種「輸入框打不了字、按鈕點了沒反應」的未完成佔位頁，不一定
+# 每次都被 agent 走到。這裡用從渲染後 DOM 就能確定的結構訊號補一個 UX 項目——但刻意保守：
+# React 等 SPA 的事件處理（onClick／onChange）不會序列化進 HTML，無法只憑 HTML 斷定「死按鈕」，
+# 只有同時滿足多個「未完成」結構訊號時才報，且一律低風險並標明需互動確認，把誤報壓到最低。
+# 登入／註冊意圖：按鈕文字或網址路徑。涵蓋註冊／signup——未完成的註冊表單同樣是可用性問題。
+_AUTH_INTENT_RE = re.compile(
+    r"登入|登錄|登录|註冊|注冊|注册|sign\s?in|sign\s?up|log\s?in|signin|signup|login|register",
+    re.I,
+)
+_AUTH_URL_RE = re.compile(
+    r"/(?:login|signin|sign-in|log-in|signup|sign-up|register|auth|登入|註冊)", re.I
+)
+# 可讓使用者輸入的欄位型別（排除 hidden／checkbox／button 等）
+_TYPEABLE_INPUT_TYPES = {"", "text", "password", "email", "tel", "search", "number"}
+_AUTH_CAPTION_CHARS = 20
+
+
+class _AuthFormParser(HTMLParser):
+    """抽出判斷「登入／註冊表單是否接上功能」需要的結構訊號（純解析、零請求）。"""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.inputs: list[dict[str, str]] = []
+        self.has_form = False
+        self.form_has_action = False
+        self.has_submit = False  # <input type=submit> 或 <button type=submit>
+        self.button_texts: list[str] = []
+        self.submit_values: list[str] = []
+        self._in_button = False
+        self._button_text: list[str] = []
+        self._last_text = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {name.lower(): (value or "") for name, value in attrs}
+        if tag == "form":
+            self.has_form = True
+            if values.get("action", "").strip():
+                self.form_has_action = True
+        elif tag == "input":
+            itype = values.get("type", "").strip().lower()
+            if itype in {"submit", "image"}:
+                self.has_submit = True
+                if values.get("value"):
+                    self.submit_values.append(values["value"])
+            else:
+                values["_preceding"] = self._last_text
+                self._last_text = ""
+                self.inputs.append(values)
+        elif tag == "button":
+            if values.get("type", "submit").strip().lower() == "submit":
+                self.has_submit = True
+            self._in_button = True
+            self._button_text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "button" and self._in_button:
+            self.button_texts.append(" ".join(self._button_text).strip())
+            self._in_button = False
+
+    def handle_data(self, data: str) -> None:
+        text = data.strip()
+        if self._in_button:
+            self._button_text.append(text)
+        if text:
+            self._last_text = text
+
+
+def _is_password_like_field(field: dict[str, str]) -> bool:
+    """欄位看起來是密碼欄（型別或給人看的文字）。沿用 form_scanner 的密碼判定字庫。"""
+    from apps.scans.security.form_scanner import _LABEL_RE, _NAME_RE, _NOT_PASSWORD_RE
+
+    itype = field.get("type", "").strip().lower()
+    if itype == "password":
+        return True
+    if itype not in {"", "text"}:
+        return False
+    caption = field.get("_preceding", "")
+    human = " ".join([
+        field.get("placeholder", ""),
+        field.get("aria-label", ""),
+        caption if len(caption) <= _AUTH_CAPTION_CHARS else "",
+    ])
+    if _NOT_PASSWORD_RE.search(human):
+        return False
+    identifiers = f" {field.get('name', '')} {field.get('id', '')} "
+    return bool(_NAME_RE.search(identifiers) or _LABEL_RE.search(human))
+
+
+def _ux_inert_auth_form(page_input: PageAnalysisInput) -> list[dict]:
+    """登入／註冊表單疑似未接上功能（輸入框無綁定、沒有可運作的提交路徑）。
+
+    只有在**多個「未完成」結構訊號同時成立**時才報，避免把正常 SPA 表單誤判：
+    1. 是登入／註冊頁（網址路徑或按鈕文字）。
+    2. 有一個像密碼的欄位，且至少 2 個可輸入欄位（帳號＋密碼的表單形狀）。
+    3. 這些可輸入欄位**完全沒有** name／id／autocomplete——接不上狀態或密碼管理員，
+       是未接線佔位頁的特徵（正常表單至少會有其一）。
+    4. **沒有可運作的原生提交路徑**：沒有帶 action 的 <form>，也沒有 submit 控制項——
+       若 JS 事件又沒綁好就真的送不出去。
+
+    一律低風險並標明「需互動確認」：onClick／onChange 等事件不會序列化進 HTML，
+    靜態無法 100% 斷定死按鈕；此處只做高機率的結構訊號補位，實際可用性仍以互動測試為準。
+    """
+    html = page_input.html or ""
+    if not html or not _AUTH_INTENT_RE.search(html):
+        return []
+    parser = _AuthFormParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001 — 壞掉的 HTML 不影響其他 UX 檢查
+        return []
+
+    url_path = page_input.final_url or page_input.url or ""
+    button_blob = " ".join(parser.button_texts + parser.submit_values)
+    is_auth_page = bool(_AUTH_URL_RE.search(url_path)) or bool(
+        _AUTH_INTENT_RE.search(button_blob)
+    )
+    if not is_auth_page:
+        return []
+
+    typeable = [
+        f for f in parser.inputs
+        if f.get("type", "").strip().lower() in _TYPEABLE_INPUT_TYPES
+    ]
+    if len(typeable) < 2 or not any(_is_password_like_field(f) for f in typeable):
+        return []
+    # 完全沒有 name／id／autocomplete＝接不上任何狀態
+    unbound = all(
+        not (f.get("name") or f.get("id") or f.get("autocomplete")) for f in typeable
+    )
+    if not unbound:
+        return []
+    # 沒有 <form>＝沒有原生提交路徑，100% 依賴 JS。有 <form> 時 Enter／submit 至少能原生
+    # 送出（即使只是導回同頁），不列入；正常以 <form onSubmit> 實作的 SPA 表單也因此被排除。
+    if parser.has_form:
+        return []
+
+    return [
+        make_finding(
+            category=Finding.Category.UX,
+            severity=Finding.Severity.LOW,
+            rule_id="ux-auth-form-inert",
+            title="登入／註冊表單疑似未接上功能",
+            description=(
+                f"這一頁是登入／註冊頁，有 {len(typeable)} 個輸入欄位（含密碼欄），但這些欄位"
+                "完全沒有 name／id／autocomplete，頁面也沒有任何 <form> 元素（沒有原生提交"
+                "路徑）。這通常是「尚未接上後端」的未完成佔位頁特徵：若 JavaScript 沒有正確綁定"
+                "輸入與送出事件，使用者將打不了字、按了登入也沒有反應。"
+                "（這是從頁面結構判斷的高機率訊號，實際是否可用請以互動測試為準。）"
+            ),
+            remediation=(
+                "確認登入／註冊表單已接上功能：輸入欄位要有受控的 value／onChange（或原生 "
+                "name），送出要有可運作的按鈕（<button type=\"submit\"> 或綁好 onClick）並實際"
+                "送出 API 請求；密碼欄請用 <input type=\"password\"> 搭配 autocomplete。"
+            ),
+            evidence=(
+                f"頁面：{url_path}\n可輸入欄位 {len(typeable)} 個皆無 name／id／autocomplete；"
+                f"頁面無任何 <form> 元素（無原生提交路徑）。"
+                + (f"\n按鈕文字：{button_blob[:80]}" if button_blob else "")
+            ),
+            impact_area="usability",
+            priority_score=48,
+            evidence_type="html",
+            evidence_json={
+                "type": "html",
+                "url": url_path,
+                "typeable_fields": len(typeable),
+                "has_form": parser.has_form,
+                "has_submit": parser.has_submit,
+            },
         )
     ]
 

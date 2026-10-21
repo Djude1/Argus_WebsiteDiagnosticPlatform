@@ -78,6 +78,7 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
             "title",
             "description",
             "remediation",
+            "ai_handoff_prompt",
             "evidence",
             "owasp_category",
             "cwe_id",
@@ -101,6 +102,8 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
                 "finding_id": row["id"],
                 "description": row["description"],
                 "remediation": row["remediation"],
+                # 代表 finding 的「複製給 AI 的提示詞」，問題分析頁每列可一鍵複製（與掃描詳情同一份）
+                "ai_handoff_prompt": row["ai_handoff_prompt"],
                 "occurrences": 0,
                 "_urls": [],
                 # 跨掃描正典身分集合（ADR-0006 第 2 刀，compare_issues 比較用；回傳前清掉）
@@ -121,6 +124,7 @@ def issue_groups(scan: ScanJob) -> dict[str, dict]:
             group["finding_id"] = row["id"]
             group["description"] = row["description"]
             group["remediation"] = row["remediation"]
+            group["ai_handoff_prompt"] = row["ai_handoff_prompt"]
     for group in groups.values():
         urls = group.pop("_urls")
         group["pages"] = len(urls)

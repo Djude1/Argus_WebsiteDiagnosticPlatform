@@ -160,6 +160,7 @@ AEO 分數主要來自後面的「AEO 問答檢測」。
 | 觸控目標過小 | 手機上可點的按鈕或連結**短邊小於 24px，或寬高都小於 40px**（2026-10-20 前是「寬或高小於 40」，345×39 的標題橫條差 1px 就被列）；5 個以上升為中（另註明 WCAG 2.2 的 24px／44px 標準）。句子中的文字連結不算（WCAG 2.5.8 例外）；包在 `<label>` 裡的勾選框以整個 label 計算 | 低／中 |
 | 表單欄位缺標籤 | input、select、textarea 沒有 label、aria-label、title 或 placeholder | 中 |
 | 假按鈕（div／span 當按鈕） | 用 onclick 掛在 `<div>`／`<span>` 上當按鈕、卻沒有 role：螢幕報讀者唸不出、鍵盤 Tab 不到、AI 代理也看不到（有 role 代表作者有意識處理，不列入） | 低 |
+| 登入／註冊表單疑似未接上功能 | 登入／註冊頁上，可輸入欄位（含密碼欄）完全沒有 name／id／autocomplete，且頁面沒有任何 `<form>`（無原生提交路徑）：常見於尚未接上後端的未完成佔位頁（輸入框打不了字、按鈕沒反應）。因 onClick／onChange 不會寫進 HTML，無法只憑結構斷定「死按鈕」，一律低風險並標明需互動確認；正常 SPA 表單（有 `<form onSubmit>` 或帶 name/autocomplete）不列入 | 低 |
 | JavaScript 錯誤 | 頁面有未捕捉的例外 | 中 |
 | WCAG 無障礙（axe-core） | 色彩對比不足、按鈕或連結沒有名稱、頁面語言未設定、圖片缺替代文字等；axe 的 critical、serious 判中，moderate、minor 判低 | 低／中 |
 

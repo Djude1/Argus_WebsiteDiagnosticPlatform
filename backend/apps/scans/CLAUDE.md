@@ -378,6 +378,16 @@ Agent UX 測試（`run_agent_ux`，全網站＋勾 UX 才跑，預設總開關�
   `<div>`／`<span>`／`<li>` 掛 `onclick` 但**完全沒有 `role` 屬性**（`_FAKE_BUTTON_RE`）→
   `ux-fake-button`（LOW）。螢幕報讀者唸不出、鍵盤 Tab 不到、AI 代理從可及性樹看不到。有 role 的
   不列入（作者已有意識處理語意，壓低誤報）；與 axe 的 button-name（看「有沒有名稱」）互補、不重複。
+- **登入／註冊表單疑似未接上功能（`scanners._ux_inert_auth_form`，2026-10-21）**：靜態補位 AI UX
+  agent 的覆蓋率隨機性——像 `/management/login` 這種「輸入框打不了字、按鈕點了沒反應」的未完成
+  佔位頁，agent 每次探索路徑不固定、不一定走到。只在**多個「未完成」結構訊號同時成立**時才報
+  `ux-auth-form-inert`（LOW、`impact_area=usability`）：(1) 登入／註冊頁（網址或按鈕文字，
+  `_AUTH_URL_RE`／`_AUTH_INTENT_RE`）；(2) ≥2 個可輸入欄位且有一個像密碼的欄位（沿用
+  `form_scanner` 的密碼判定字庫）；(3) 這些欄位**完全沒有** name／id／autocomplete（接不上狀態
+  或密碼管理員）；(4) 頁面**沒有任何 `<form>`**（無原生提交路徑，100% 依賴 JS）。onClick／onChange
+  不會序列化進 HTML，無法只憑 HTML 斷定「死按鈕」，故一律低風險並在描述標明「需互動確認」；
+  正常以 `<form onSubmit>` 或帶 name/autocomplete 的受控欄位實作的 SPA 表單都被排除，把誤報壓到最低。
+  與 `form-password-unmasked`（資安、看密碼明文）各自獨立、角度不同；此為 UX 類不進 `cross_layer` 去重。
 - **未捕捉的 JS 例外**（`pageerror` 監聽 → `page["js_errors"]`）：頁面 console 未攔截的
   例外列為 MEDIUM，證據上限 `_MAX_JS_ERROR_EVIDENCE_CHARS`（800）。
 - **axe-core WCAG 自動化檢查（2026-10-07，roadmap P1，`accessibility.py`）**：勾 UX 且

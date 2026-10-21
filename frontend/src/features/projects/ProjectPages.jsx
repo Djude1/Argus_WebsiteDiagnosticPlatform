@@ -18,6 +18,7 @@ import { ScoreRing } from "../../components/projects/OverviewWidgets.jsx";
 import ProjectHeader from "../../components/projects/ProjectHeader.jsx";
 import ScanDefaultsFields from "../../components/projects/ScanDefaultsFields.jsx";
 import AeoAnswerPanel from "../../components/scans/AeoAnswerPanel.jsx";
+import { CopyButton } from "../../components/scans/CopyButton";
 import PageRebuildPanel from "../../components/scans/PageRebuildPanel.jsx";
 import { ScanStatusBadge, ScoreBadge } from "../../components/scans/ScanBadges.jsx";
 import {
@@ -630,9 +631,19 @@ function IssueRow({ issue, scanId, open, onToggle }) {
           )}
         </td>
         <td className="issue-col-action">
-          <button type="button" className="project-text-link" aria-expanded={open} onClick={onToggle}>
-            {open ? "收合" : "查看詳情"} →
-          </button>
+          <div className="issue-row-actions">
+            <button type="button" className="project-text-link" aria-expanded={open} onClick={onToggle}>
+              {open ? "收合" : "查看詳情"} →
+            </button>
+            {issue.ai_handoff_prompt && (
+              <CopyButton
+                className="issue-ai-copy"
+                text={issue.ai_handoff_prompt}
+                label="複製 AI 提示詞"
+                title="複製這個問題、證據與修法，貼給 ChatGPT／Claude 取得更深入的說明與修法"
+              />
+            )}
+          </div>
         </td>
       </tr>
       {open && (
@@ -1399,7 +1410,20 @@ function ProjectPagesPage() {
                       <tr className={open ? "is-open" : ""}>
                         <td className="project-page-cell">
                           <span className="project-page-title-text">{page.title || "（無標題）"}</span>
-                          <span className="project-page-url">{page.url}</span>
+                          {/* 頁面網址可點擊，在新分頁開啟實際頁面（示範專案是虛構網站，連不到，維持純文字） */}
+                          {project.is_demo ? (
+                            <span className="project-page-url">{page.url}</span>
+                          ) : (
+                            <a
+                              className="project-page-url project-page-url-link"
+                              href={page.final_url || page.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="在新分頁開啟這個頁面"
+                            >
+                              {page.url}
+                            </a>
+                          )}
                         </td>
                         <td>
                           <span className={`project-status ${statusTone(page)}`} title={page.blocked_reason || undefined}>

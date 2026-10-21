@@ -842,6 +842,13 @@
 .project-page-url {
   @apply block truncate text-xs text-slate-500;
 }
+/* 頁面網址可點擊（新分頁開啟實際頁面）：沿用藍字連結樣式，仍維持截斷 */
+a.project-page-url-link {
+  @apply text-sky-700 no-underline;
+}
+a.project-page-url-link:hover {
+  @apply underline;
+}
 .project-status {
   @apply inline-flex rounded-full px-2 py-0.5 text-xs font-bold;
 }
@@ -1576,6 +1583,15 @@ a.project-change-chip {
 }
 .issue-col-action {
   @apply text-right;
+  white-space: nowrap;
+}
+/* 查看詳情連結與「複製 AI 提示詞」按鈕直向排列，按鈕靠右對齊 */
+.issue-row-actions {
+  @apply flex flex-col items-end gap-1.5;
+}
+/* 問題列的 AI 提示詞複製鈕做小一號，塞進操作欄不撐寬表格 */
+.issue-ai-copy.copy-feedback-button {
+  @apply px-2 py-1 text-xs;
   white-space: nowrap;
 }
 .issue-group-row td {
