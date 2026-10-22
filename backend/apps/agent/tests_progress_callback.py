@@ -10,7 +10,7 @@ from unittest import mock
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.agent.loop import HermesAgent
 from apps.agent.providers import ChatResponse
@@ -69,6 +69,22 @@ class AgentStepCallbackTests(TestCase):
 class MaxTotalStepsEstimateTests(TestCase):
     def test_estimate_is_positive(self):
         self.assertGreater(max_total_steps_estimate(), 0)
+
+    @override_settings(
+        ARGUS_AGENT_MAX_STEPS=20,
+        ARGUS_AGENT_MAX_SPECIALIST_DISPATCH=6,
+        ARGUS_AGENT_SPECIALIST_MAX_STEPS=30,
+    )
+    def test_specialist_step_cap_is_env_tunable(self):
+        from apps.agent.runner import ux_steps_estimate
+
+        # 每位專家 30 步：20×2 ＋ 6×30 ＝ 220；UX 單一 session 上限同專家步數＝30
+        self.assertEqual(max_total_steps_estimate(), 220)
+        self.assertEqual(ux_steps_estimate(), 30)
+
+    @override_settings(ARGUS_AGENT_SPECIALIST_MAX_STEPS=60, ARGUS_AGENT_MAX_SPECIALIST_DISPATCH=6)
+    def test_larger_cap_raises_estimate(self):
+        self.assertEqual(max_total_steps_estimate(), 40 + 6 * 60)
 
 
 class _RecordingChain:

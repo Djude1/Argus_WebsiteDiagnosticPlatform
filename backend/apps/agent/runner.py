@@ -340,25 +340,29 @@ FILE_UPLOAD_AGENT_PROMPT = """你正在對 {origin} 進行【已授權的主動�
 
 # specialist 步數盒：強制在有限步數內收斂（#30~#32：無限深挖是
 # findings 流失主因，token 上限加多大都會爆）
-_SPECIALIST_MAX_STEPS = 60
+# 每位專家／recon／UX session 的步數上限，可用 ARGUS_AGENT_SPECIALIST_MAX_STEPS 調（預設 30；
+# 2026-10-22 由寫死的 60 改為環境變數）。步數是 agent 階段時間與成本的主要旋鈕，權衡見 settings。
+def _specialist_max_steps() -> int:
+    return settings.ARGUS_AGENT_SPECIALIST_MAX_STEPS
 
 
 def max_total_steps_estimate() -> int:
     """agent 這一階段最壞情況的總步數估計，給進度條當分母用（只求讓進度條會動、
     不是精確值）：recon ＋ orchestrator 各一個子 session（各 ARGUS_AGENT_MAX_STEPS 步）
-    ＋ 最多派 ARGUS_AGENT_MAX_SPECIALIST_DISPATCH 位專家，每位最多 _SPECIALIST_MAX_STEPS 步。"""
+    ＋ 最多派 ARGUS_AGENT_MAX_SPECIALIST_DISPATCH 位專家，每位最多專家步數上限
+    （ARGUS_AGENT_SPECIALIST_MAX_STEPS）。"""
     return (
         settings.ARGUS_AGENT_MAX_STEPS * 2
-        + settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH * _SPECIALIST_MAX_STEPS
+        + settings.ARGUS_AGENT_MAX_SPECIALIST_DISPATCH * _specialist_max_steps()
     )
 
 
 def ux_steps_estimate() -> int:
-    """擬真使用者 UX 測試的步數估計（給進度條分母用）：單一 session，上限 _SPECIALIST_MAX_STEPS。
+    """擬真使用者 UX 測試的步數估計（給進度條分母用）：單一 session，上限同專家步數。
 
     UX 只跑一個 session，不做 recon／orchestrator／specialist 派工，所以分母不是資安滲透的最壞估計
-    （max_total_steps_estimate），否則沒勾深度資安的掃描會顯示像在跑 400 步的資安 agent。"""
-    return _SPECIALIST_MAX_STEPS
+    （max_total_steps_estimate），否則沒勾深度資安的掃描會顯示像在跑數百步的資安 agent。"""
+    return _specialist_max_steps()
 
 SPECIALIST_ROLES: dict[str, dict[str, str]] = {
     "auth_idor": {
@@ -668,7 +672,7 @@ async def run_agent_for_scan(
                     # specialist 步數時間盒（#32 實測 token 上限非解，
                     # 步數收斂才是）；orchestrator 首步強制派工
                     max_steps=(
-                        _SPECIALIST_MAX_STEPS if not orchestrator else None
+                        _specialist_max_steps() if not orchestrator else None
                     ),
                     forced_first_tool=(
                         "dispatch_specialist" if orchestrator else None

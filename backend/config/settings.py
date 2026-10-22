@@ -448,6 +448,12 @@ ARGUS_AGENT_MAX_STEPS = int(os.getenv("ARGUS_AGENT_MAX_STEPS", "20"))
 # 深度資安 deep_mode：指揮官最多可派出幾次專家（2026-10-07）。每位專家各有 token 上限，
 # 不設派工上限時單次掃描最壞約 1.3M token；6 次可覆蓋典型需求並讓成本有上界。
 ARGUS_AGENT_MAX_SPECIALIST_DISPATCH = int(os.getenv("ARGUS_AGENT_MAX_SPECIALIST_DISPATCH", "6"))
+# 每位資安專家（recon 與各 specialist）單一 session 的步數上限（observe→think→act 迴圈數）。
+# 也是 UX session 的步數上限與進度條分母用的每位專家估計。步數是時間與成本的主要旋鈕
+# （深度資安最壞分母＝MAX_STEPS×2＋MAX_SPECIALIST_DISPATCH×本值）：調大更能組出多步攻擊鏈
+# （登入→枚舉→越權→驗證常要 15–25 步），調小更快但深的鏈狀漏洞可能來不及做完就被砍。
+# 預設 30（2026-10-22 由 60 下修，換取較短的 agent 階段時間；可用 env 再調）。
+ARGUS_AGENT_SPECIALIST_MAX_STEPS = int(os.getenv("ARGUS_AGENT_SPECIALIST_MAX_STEPS", "30"))
 ARGUS_AGENT_MAX_TOKENS = int(os.getenv("ARGUS_AGENT_MAX_TOKENS", "60000"))
 # 擬真使用者 UX 測試另設預算：單一 session 要走多個頁面與流程，6 萬約 14 步就用完
 # （2026-10-10 實測）；資安各角色仍用上面的 ARGUS_AGENT_MAX_TOKENS
