@@ -12,14 +12,13 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
   Star,
   ThumbsUp,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { api } from "../../api";
 import brandLogo from "../../assets/brand-logo.webp";
@@ -211,13 +210,12 @@ function ContentActions({ count, active, loggedIn, label, onHelpful, onReport })
       <button
         type="button"
         className={`review-next-entry-action is-helpful ${active ? "is-active" : ""}`}
-        aria-label={`按讚${label}，目前 ${count || 0} 個讚`}
+        aria-label={`有幫助，${label}目前 ${count || 0} 個讚`}
         aria-pressed={active}
         title={!loggedIn ? "登入後可按讚" : `按讚${label}`}
         onClick={onHelpful}
       >
-        <ThumbsUp aria-hidden="true" />
-        <strong>{count || 0}</strong>
+        <ThumbsUp aria-hidden="true" />有幫助 <strong>{count || 0}</strong>
       </button>
       <button
         type="button"
@@ -226,7 +224,7 @@ function ContentActions({ count, active, loggedIn, label, onHelpful, onReport })
         title={`檢舉${label}`}
         onClick={onReport}
       >
-        <Flag aria-hidden="true" />
+        <Flag aria-hidden="true" />檢舉
       </button>
     </div>
   );
@@ -273,37 +271,28 @@ function ExpandableReviewText({ text, label }) {
   );
 }
 
-function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions = true }) {
+function ReviewCard({ review, loggedIn, onHelpful, onReport, showActions = true }) {
   const response = review.response;
   const date = new Date(review.created_at).toLocaleDateString("zh-Hant", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
-  const initial = Array.from(review.user_display || "訪")[0];
-
   return (
-    <article className={`review-next-card ${review.is_mine ? "is-mine" : ""}`} style={{ "--review-card-index": index }}>
-      <header className="review-next-card-head">
-        <div className="review-next-avatar" aria-hidden="true">
-          <span>{initial}</span>
-          {review.verified_experience && <BadgeCheck />}
-        </div>
-        <div className="review-next-author">
-          <div>
+    <article className={`reviews-entry ${review.is_mine ? "is-mine" : ""}`}>
+      <header className="reviews-entry-meta">
+        <div>
+          <div className="reviews-entry-author">
             <strong>{review.user_display}</strong>
-            {review.is_mine && <span className="review-next-owner-chip">我的評論</span>}
+            {review.verified_experience && <span><BadgeCheck aria-hidden="true" />已完成健檢</span>}
           </div>
-          {/* 只有後端標記為已驗證體驗時才顯示（改版前一律顯示，屬錯誤標示） */}
-          {review.verified_experience && <span><BadgeCheck aria-hidden="true" />已驗證</span>}
-        </div>
-        <div className="review-next-card-rating">
-          <ReadonlyStars value={review.rating} compact />
           <time dateTime={review.created_at}>{date}{review.updated_at !== review.created_at ? " · 已編輯" : ""}</time>
         </div>
+        <ReadonlyStars value={review.rating} compact />
       </header>
 
-      <div className="review-next-card-content">
+      <div className="reviews-entry-body">
+        {review.title && <h3>{review.title}</h3>}
         <ExpandableReviewText text={review.comment} label="使用者評論" />
         {showActions && (
           <ContentActions
@@ -345,7 +334,9 @@ function ReviewCard({ review, loggedIn, index, onHelpful, onReport, showActions 
 }
 
 function ReviewsPage() {
-  const ratingDescId = useId();
+  const navigate = useNavigate();
+  const distributionToggle = useRef(null);
+  const [distributionOpen, setDistributionOpen] = useState(false);
   const accessToken = useArgusStore((state) => state.accessToken);
   const theme = useArgusStore((state) => state.theme);
   // 預先渲染（Node 無 localStorage，主題一律 dark）的 HTML 必須與 hydrate 後的首次 render 一致，
@@ -410,8 +401,7 @@ function ReviewsPage() {
     () => listData.reviews.filter((review) => !review.is_mine),
     [listData.reviews],
   );
-  const mineMatchesFilter = Boolean(mine && (!ratingFilter || mine.rating === ratingFilter));
-  const visibleTotal = Math.max(0, listData.total - (mineMatchesFilter ? 1 : 0));
+  const canSort = visibleReviews.length > 0 || listData.total_pages > 1;
 
   function openComposer() {
     if (mine || eligibility?.eligible) {
@@ -451,7 +441,7 @@ function ReviewsPage() {
 
   async function toggleHelpful(review, target) {
     if (!accessToken) {
-      notifyDialog("請先登入後再按讚");
+      navigate("/login?next=%2Freviews");
       return;
     }
     if (target === "review" && review.is_mine) return;
@@ -492,7 +482,7 @@ function ReviewsPage() {
 
   function openReport(review, target) {
     if (!accessToken) {
-      notifyDialog("請先登入後再檢舉內容");
+      navigate("/login?next=%2Freviews");
       return;
     }
     setReportDraft({
@@ -527,58 +517,27 @@ function ReviewsPage() {
   function selectRating(star) {
     setRatingFilter((current) => current === star ? null : star);
     setPage(1);
+    if (distributionToggle.current?.getClientRects().length) {
+      setDistributionOpen(false);
+      distributionToggle.current.focus({ preventScroll: true });
+    }
   }
 
   return (
-    <div className={`review-next-page ${activeTheme === "dark" ? "review-next-night" : "review-next-day"}`}>
-      <div className="review-next-main">
-        <section className="review-next-hero" aria-labelledby="review-next-title">
-          <div className="review-next-hero-copy">
-            <h1 id="review-next-title">使用者怎麼評價 <span>Argus</span></h1>
-            <p>
-              這裡匯集完成網站健檢後的 Argus 使用者所留下的真實評價。
-              每一則評論都來自實際用過平台、且通過掃描體驗驗證的帳號，
-              公開頁只顯示匿名或遮罩後的身分，不會揭露電子郵件等個資。
-            </p>
-            <p>
-              你可以依 1 到 5 顆星篩選評論、對有幫助的評論按讚，或檢舉不當內容；
-              完成過一次網站掃描後，也能在這裡留下自己的使用心得。
-            </p>
-          </div>
-
-          <div className="review-next-score-card" aria-label="評論總覽">
-            <div className="review-next-score-head">
-              <span>整體評分</span>
-              <strong>{summary.total.toLocaleString()} 則評論</strong>
-            </div>
-            <div className="review-next-score-main">
-              <strong>{summary.average ?? "—"}</strong>
-              <div>
-                <ReadonlyStars value={summary.average || 0} />
-              </div>
-            </div>
-            <div className="review-next-rating-bars">
-              {distribution.map((item) => (
-                <button
-                  key={item.star}
-                  type="button"
-                  className={ratingFilter === item.star ? "is-active" : ""}
-                  aria-pressed={ratingFilter === item.star}
-                  // 名稱就是看得到的「星等 數量」（WCAG 2.5.3），完整說明放在描述
-                  aria-describedby={`${ratingDescId}-${item.star}`}
-                  onClick={() => selectRating(item.star)}
-                >
-                  <span>{item.star}<Star aria-hidden="true" /></span>
-                  <i aria-hidden="true"><b style={{ "--review-next-percent": `${item.percent}%` }} /></i>
-                  <strong>{item.count}</strong>
-                  <span id={`${ratingDescId}-${item.star}`} hidden>
-                    {`${item.star} 星，共 ${item.count} 則評論${ratingFilter === item.star ? "，目前已篩選" : ""}`}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
+    <div className="review-next-page reviews-reader" data-review-theme={activeTheme}>
+      <div className="reviews-inner">
+        <header className="reviews-heading">
+          <h1 id="review-next-title">使用者評論</h1>
+          {!composerOpen && !mine && (
+            !accessToken ? (
+              <Link className="reviews-write" to="/login?next=%2Freviews"><Pencil aria-hidden="true" />寫下評論</Link>
+            ) : eligibility && !eligibility.eligible ? (
+              <Link className="reviews-write" to="/scans">完成健檢後評論</Link>
+            ) : (
+              <button type="button" className="reviews-write" onClick={openComposer}><Pencil aria-hidden="true" />寫下評論</button>
+            )
+          )}
+        </header>
 
         {feedback && (
           <div className={`review-next-feedback tone-${feedback.tone}`} role="status" aria-live="polite">
@@ -597,113 +556,113 @@ function ReviewsPage() {
           />
         )}
 
-        {!composerOpen && !mine && (
-          <section className="review-next-compose-entry" aria-label="撰寫評論">
-            <span aria-hidden="true"><UserRound /></span>
-            {!accessToken ? (
-              <Link to="/login?next=%2Freviews">寫下你的評論</Link>
-            ) : eligibility && !eligibility.eligible ? (
-              <Link to="/scans">評論前先完成一次掃描</Link>
-            ) : (
-              <button type="button" onClick={openComposer}>寫下你的評論</button>
-            )}
-            <MessageSquareText aria-hidden="true" />
-          </section>
-        )}
-
-        {mine && !composerOpen && (
-          <section className="review-next-my-review" aria-labelledby="review-next-my-title">
-            <header>
-              <div>
-                <UserRound aria-hidden="true" />
-                <h2 id="review-next-my-title">我的評論</h2>
+        <div className="reviews-columns">
+          <section className="reviews-overview" aria-labelledby="reviews-score-heading">
+            <div className="reviews-score">
+              <h2 id="reviews-score-heading">整體評分</h2>
+              <div className="reviews-average"><strong>{summary.average == null ? "—" : Number(summary.average).toFixed(1)}</strong><span>/ 5</span></div>
+              <div className="reviews-sample">
+                {summary.total > 0 && <ReadonlyStars value={summary.average} />}
+                <span>共 {summary.total.toLocaleString()} 則評分</span>
               </div>
-              <div>
-                <button type="button" className="review-next-button is-secondary" onClick={() => setComposerOpen(true)}>
-                  <Pencil aria-hidden="true" />編輯
-                </button>
-                <button type="button" className="review-next-button is-danger" onClick={deleteMine}>
-                  <Trash2 aria-hidden="true" />刪除
-                </button>
-              </div>
-            </header>
-            <ReviewCard
-              review={mine}
-              loggedIn
-              index={0}
-              onHelpful={toggleHelpful}
-              onReport={openReport}
-              showActions={false}
-            />
-          </section>
-        )}
-
-        <section className="review-next-content" id="review-next-list" aria-labelledby="review-next-list-title">
-          <div className="review-next-toolbar">
-            <div>
-              <h2 id="review-next-list-title">使用者評論</h2>
-              {ratingFilter && <p>{ratingFilter} 星評論</p>}
             </div>
-            <div className="review-next-toolbar-controls">
-              {ratingFilter && (
-                <button type="button" className="review-next-filter-chip" onClick={() => selectRating(ratingFilter)}>
-                  {ratingFilter} 星 · 清除篩選<X aria-hidden="true" />
-                </button>
-              )}
-              <label className="review-next-sort">
-                <SlidersHorizontal aria-hidden="true" />
-                <span>排序</span>
-                <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
-                  <option value="helpful">熱門</option>
-                  <option value="newest">最新</option>
-                </select>
-                <ChevronDown aria-hidden="true" />
-              </label>
-            </div>
-          </div>
-
-          <div className="review-next-result-count" aria-live="polite">
-            共 <strong>{visibleTotal}</strong> 則{ratingFilter ? ` ${ratingFilter} 星` : ""}評論
-          </div>
-
-          <div className="review-next-list" aria-busy={loading}>
-            {loading && [1, 2, 3].map((item) => <div className="review-next-skeleton" key={item} />)}
-            {!loading && visibleReviews.map((review, index) => (
-              <ReviewCard
-                key={review.id}
-                review={review}
-                loggedIn={Boolean(accessToken)}
-                index={index}
-                onHelpful={toggleHelpful}
-                onReport={openReport}
-              />
-            ))}
-            {!loading && visibleReviews.length === 0 && (
-              <div className="review-next-empty">
-                <div><MessageSquareText aria-hidden="true" /></div>
-                <h3>{ratingFilter ? `目前沒有 ${ratingFilter} 星評論` : "目前還沒有評論"}</h3>
-                <p>{ratingFilter ? "清除篩選或選擇其他星等" : "目前還沒有公開評論"}</p>
-                {ratingFilter && (
-                  <button type="button" className="review-next-button is-secondary" onClick={() => selectRating(ratingFilter)}>
-                    清除星等篩選
+            <button ref={distributionToggle} type="button" className="reviews-bars-toggle" aria-expanded={distributionOpen} aria-controls="reviews-distribution" onClick={() => setDistributionOpen(!distributionOpen)}>
+              星等分布<ChevronDown aria-hidden="true" />
+            </button>
+            <div id="reviews-distribution" className="reviews-distribution" data-open={distributionOpen}>
+              <div className="reviews-bars-heading" aria-hidden="true"><span>依星等篩選</span><span>則數</span></div>
+              <div role="group" aria-label="依星等篩選評論">
+                {distribution.map((item) => (
+                  <button key={item.star} type="button" className="reviews-rating-row" aria-label={`${item.star} 星，${item.count} 則評論`} aria-pressed={ratingFilter === item.star} onClick={() => selectRating(item.star)}>
+                    <span>{item.star} 星</span>
+                    <span className="reviews-track" aria-hidden="true"><span style={{ width: `${item.percent}%` }} /></span>
+                    <span>{item.count.toLocaleString()}</span>
                   </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <div className="reviews-feed">
+            {mine && !composerOpen && (
+              <section className="review-next-my-review" aria-labelledby="review-next-my-title">
+                <header>
+                  <div>
+                    <UserRound aria-hidden="true" />
+                    <h2 id="review-next-my-title">我的評論</h2>
+                  </div>
+                  <div>
+                    <button type="button" className="review-next-button is-secondary" onClick={() => setComposerOpen(true)}>
+                      <Pencil aria-hidden="true" />編輯
+                    </button>
+                    <button type="button" className="review-next-button is-danger" onClick={deleteMine}>
+                      <Trash2 aria-hidden="true" />刪除
+                    </button>
+                  </div>
+                </header>
+                <ReviewCard
+                  review={mine}
+                  loggedIn
+                  onHelpful={toggleHelpful}
+                  onReport={openReport}
+                  showActions={false}
+                />
+              </section>
+            )}
+
+            <section id="review-next-list" aria-labelledby="review-next-list-title">
+              <h2 id="review-next-list-title" className="sr-only">評論列表</h2>
+              {(ratingFilter || canSort) && (
+                <div className="reviews-tools">
+                  {ratingFilter && (
+                    <button type="button" className="reviews-clear" onClick={() => selectRating(ratingFilter)}>
+                      清除 {ratingFilter} 星篩選<X aria-hidden="true" />
+                    </button>
+                  )}
+                  {canSort && (
+                    <div className="reviews-sort" role="group" aria-label="排序方式">
+                      {[["helpful", "熱門"], ["newest", "最新"]].map(([value, label]) => (
+                        <button key={value} type="button" aria-pressed={sort === value} onClick={() => { setSort(value); setPage(1); }}>{label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="sr-only" role="status">
+                {loading ? "正在載入評論" : `本頁 ${visibleReviews.length} 則評論，依${sort === "helpful" ? "熱門程度" : "最新時間"}排序`}
+              </p>
+              <div className="reviews-list" aria-busy={loading}>
+                {loading && [1, 2, 3].map((item) => <div className="review-next-skeleton" key={item} />)}
+                {!loading && visibleReviews.map((review) => (
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    loggedIn={Boolean(accessToken)}
+                    onHelpful={toggleHelpful}
+                    onReport={openReport}
+                  />
+                ))}
+                {!loading && visibleReviews.length === 0 && (
+                  <p className="reviews-empty">
+                    {mine ? "沒有其他符合條件的評論" : ratingFilter ? "這個星等還沒有評論" : "目前還沒有公開評論"}
+                  </p>
                 )}
               </div>
-            )}
-          </div>
 
-          {listData.total_pages > 1 && (
-            <nav className="review-next-pagination" aria-label="評論分頁">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
-                <ArrowLeft aria-hidden="true" />上一頁
-              </button>
-              <span>第 <strong>{listData.page}</strong> 頁，共 {listData.total_pages} 頁</span>
-              <button type="button" disabled={page >= listData.total_pages} onClick={() => setPage((value) => value + 1)}>
-                下一頁<ArrowRight aria-hidden="true" />
-              </button>
-            </nav>
-          )}
-        </section>
+              {listData.total_pages > 1 && (
+                <nav className="review-next-pagination" aria-label="評論分頁">
+                  <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+                    <ArrowLeft aria-hidden="true" />上一頁
+                  </button>
+                  <span>第 <strong>{listData.page}</strong> 頁，共 {listData.total_pages} 頁</span>
+                  <button type="button" disabled={page >= listData.total_pages} onClick={() => setPage((value) => value + 1)}>
+                    下一頁<ArrowRight aria-hidden="true" />
+                  </button>
+                </nav>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
 
       {reportDraft && (
