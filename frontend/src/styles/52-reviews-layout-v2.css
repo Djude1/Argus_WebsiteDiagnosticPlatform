@@ -1303,7 +1303,7 @@
   --review-next-cyan-strong: var(--reader-accent);
   min-height: 60vh;
   color: var(--reader-text);
-  background: var(--reader-bg);
+  background: transparent;
   font-family: system-ui, "Microsoft JhengHei UI", "PingFang TC", "Noto Sans TC", sans-serif;
 }
 /* 主題只定義色彩，評分、評論與填寫表單共用下方樣式。 */
